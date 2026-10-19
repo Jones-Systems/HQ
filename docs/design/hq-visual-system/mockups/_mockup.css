@@ -10,8 +10,8 @@
 /* Design (illustrative landing) */
 .mock-design-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--hq-space-xl); align-items: start; }
 .mock-design-side { display: grid; gap: var(--hq-space-xl); }
-.mock-design-grid [data-hq-preserve] { aspect-ratio: 16 / 10; }
-.mock-design-side .mock-mark [data-hq-preserve] { aspect-ratio: 16 / 9; }
+.mock-design-grid [data-hq-content] { aspect-ratio: 16 / 10; }
+.mock-design-side .mock-mark [data-hq-content] { aspect-ratio: 16 / 9; }
 .mock-design-side .mock-mark img { width: 34%; }
 @media (max-width: 959px) { .mock-design-grid { grid-template-columns: minmax(0, 1fr); } .mock-design-side { grid-template-columns: 1fr 1fr; } }
 

@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="../components/hq-components.css">
   <style>
     /* 1:1 display from the capture's top-left corner: no resampling, so pixels can be compared with the source. */
-    .hq-well > [data-hq-preserve].at-1x > img { width: 100%; height: 100%; max-width: none; object-fit: none; object-position: 0 0; }
+    .hq-well > [data-hq-content].at-1x > img { width: 100%; height: 100%; max-width: none; object-fit: none; object-position: 0 0; }
   </style>
 </head>
 <!-- Evidence page: identical artwork inside light and dark chrome. Landing captures are shown 1:1 (no resampling) so
@@ -27,16 +27,16 @@
     <p class="hq-muted" style="margin:0">Chrome follows Light/Dark/System. Captures, exports and artwork sit on a fixed matte and are never filtered, blended or re-themed.</p>
   </header>
   <figure class="hq-well">
-    <div data-hq-preserve data-evidence="well-light" class="at-1x" style="--hq-preserve-scheme: light; height: 420px"><img src="assets/larkspur-landing-light.png" alt="Fictional landing page, light capture, shown at 1:1 from its top-left corner" width="1440" height="900"></div>
+    <div data-hq-content="captured" data-evidence="well-light" class="at-1x" style="--hq-content-scheme: light; height: 420px"><img src="assets/larkspur-landing-light.png" alt="Fictional landing page, light capture, shown at 1:1 from its top-left corner" width="1440" height="900"></div>
     <figcaption><span class="hq-heading">Landing — hero</span><span class="hq-chip">LIGHT</span><span class="hq-chip">1:1</span><span class="hq-meta">rev 7c41e2a</span></figcaption>
   </figure>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
     <figure class="hq-well">
-      <div data-hq-preserve data-evidence="well-dark" class="at-1x" style="--hq-preserve-scheme: dark; height: 205px"><img src="assets/larkspur-landing-dark.png" alt="Fictional landing page, dark capture, shown at 1:1 from its top-left corner" width="1440" height="900"></div>
+      <div data-hq-content="captured" data-evidence="well-dark" class="at-1x" style="--hq-content-scheme: dark; height: 205px"><img src="assets/larkspur-landing-dark.png" alt="Fictional landing page, dark capture, shown at 1:1 from its top-left corner" width="1440" height="900"></div>
       <figcaption><span class="hq-heading">Dark variant</span><span class="hq-chip">DARK</span><span class="hq-chip">1:1</span></figcaption>
     </figure>
     <figure class="hq-well">
-      <div data-hq-preserve="transparent" data-evidence="well-mark" style="aspect-ratio: 16/10"><img src="assets/larkspur-mark.png" alt="Fictional leaf mark with transparency" width="512" height="512" style="width:46%"></div>
+      <div data-hq-content="captured" data-hq-matte="checker" data-evidence="well-mark" style="aspect-ratio: 16/10"><img src="assets/larkspur-mark.png" alt="Fictional leaf mark with transparency" width="512" height="512" style="width:46%"></div>
       <figcaption><span class="hq-heading">Mark</span><span class="hq-chip">ALPHA</span></figcaption>
     </figure>
   </div>

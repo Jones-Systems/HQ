@@ -123,6 +123,10 @@
       <span class="hq-save hq-save--unsaved">Unsaved changes</span>
       <span class="hq-fresh hq-fresh--unavailable"><b>Unavailable</b> host offline</span>
       <span class="hq-save hq-save--failed">Not saved · <button>Retry</button></span>
+      <span></span>
+      <span class="hq-save hq-save--offline"><svg viewBox="0 0 24 24"><path d="M4 4l16 16M8 8a5 5 0 0 0-1 9.5h9M12 6.5a5 5 0 0 1 5.5 4 3.5 3.5 0 0 1 2 5.5"/></svg>Offline · kept on this device</span>
+      <span></span>
+      <span class="hq-save hq-save--unknown">Save result unknown · <button>Check</button></span>
     </div>
   </section>
 
@@ -137,11 +141,14 @@
   </section>
 
   <section class="sheet-section">
-    <header><span class="hq-heading">Empty, loading, error</span></header>
+    <header><span class="hq-heading">Empty, loading, error, offline, unavailable, unknown</span></header>
     <div class="sheet-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch">
       <section class="hq-panel"><div class="hq-empty"><span class="hq-empty-glyph"><svg viewBox="0 0 24 24"><path d="M4 13h4l1.5 2.5h5L16 13h4M4 13l2.5-7h11L20 13v6H4z"/></svg></span><strong>Inbox is clear</strong><p>Captured ideas land here until you sort them.</p><button class="hq-btn hq-btn--secondary hq-btn--sm">Capture</button></div></section>
       <section class="hq-panel" aria-busy="true"><div class="hq-panel-body" style="display:grid;gap:10px"><span class="hq-save hq-save--saving"><span class="hq-spinner"></span>Loading references</span><span class="hq-skeleton" style="width:80%"></span><span class="hq-skeleton" style="width:95%"></span><span class="hq-skeleton" style="width:60%"></span><span class="hq-skeleton" style="width:70%"></span></div></section>
-      <section class="hq-panel"><div class="hq-empty"><span class="hq-empty-glyph" style="border-color:var(--hq-danger);color:var(--hq-danger)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v5M12 16h.01"/></svg></span><strong>Couldn't load drafts</strong><p>The Social store did not respond. Nothing was changed.</p><button class="hq-btn hq-btn--secondary hq-btn--sm">Try again</button></div></section>
+      <section class="hq-panel"><div class="hq-empty"><span class="hq-empty-glyph hq-empty-glyph--danger"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v5M12 16h.01"/></svg></span><strong>Couldn't load drafts</strong><p>The Social store did not respond. Nothing was changed.</p><button class="hq-btn hq-btn--secondary hq-btn--sm">Try again</button></div></section>
+      <section class="hq-panel"><div class="hq-empty"><span class="hq-empty-glyph"><svg viewBox="0 0 24 24"><path d="M4 4l16 16M8 8a5 5 0 0 0-1 9.5h9M12 6.5a5 5 0 0 1 5.5 4 3.5 3.5 0 0 1 2 5.5"/></svg></span><strong>You're offline</strong><p>Showing what was saved on this device at 14:02. Changes wait until you reconnect.</p><button class="hq-btn hq-btn--secondary hq-btn--sm">Retry connection</button></div></section>
+      <section class="hq-panel"><div class="hq-empty"><span class="hq-empty-glyph hq-empty-glyph--unavailable"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/></svg></span><strong>Planning service unavailable</strong><p>No planning service is configured in this build. Nothing can be read or changed.</p></div></section>
+      <section class="hq-panel"><div class="hq-empty"><span class="hq-empty-glyph hq-empty-glyph--unknown"><svg viewBox="0 0 24 24"><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg></span><strong>Result unknown</strong><p>The last move may not have saved. Checking before any retry.</p><button class="hq-btn hq-btn--secondary hq-btn--sm">Check status</button></div></section>
     </div>
   </section>
 

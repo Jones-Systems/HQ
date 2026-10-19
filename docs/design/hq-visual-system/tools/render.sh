@@ -60,7 +60,7 @@ work-light-1440|work.html?theme=light|1440,900|light
 work-dark-760|work.html?theme=dark|760,560|light
 social-dark-1280|social.html?theme=dark|1280,820|light
 social-light-1280|social.html?theme=light|1280,820|light
-states-1440|states.html|1440,2400|light
+states-1440|states.html|1440,2664|light
 artwork-invariance-1440|artwork.html|1440,900|light
 EOF
     ;;

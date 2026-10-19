@@ -188,21 +188,22 @@
   :root { --hq-duration-fast: 0ms; --hq-duration-base: 0ms; --hq-duration-slow: 0ms; }
 }
 
-/* Preserved content: captured screenshots, exported evidence, artwork and producer previews.
-   Chrome theme must not reach these pixels. The owner sets --hq-preserve-scheme from the content's recorded
-   theme (light | dark); the default 'normal' keeps the HQ chrome theme from reaching an embedded document. */
-[data-hq-preserve] {
-  color-scheme: var(--hq-preserve-scheme, normal);
+/* Preserved content (spec RS-2 marker data-hq-content="captured" | "producer" | "export"): captured screenshots,
+   exported evidence, artwork and producer previews. Chrome theme must not reach these pixels. The owner sets
+   --hq-content-scheme from the content's recorded theme (light | dark); the default 'normal' keeps the HQ chrome
+   theme from reaching an embedded document. data-hq-matte="checker" shows transparency on a fixed grid. */
+[data-hq-content] {
+  color-scheme: var(--hq-content-scheme, normal);
   background: var(--hq-artwork-matte);
   forced-color-adjust: none;
   filter: none;
   mix-blend-mode: normal;
   opacity: 1;
 }
-[data-hq-preserve] > img, [data-hq-preserve] > iframe, [data-hq-preserve] > canvas, [data-hq-preserve] > video {
+[data-hq-content] > img, [data-hq-content] > iframe, [data-hq-content] > canvas, [data-hq-content] > video {
   display: block; filter: none; mix-blend-mode: normal; opacity: 1;
 }
-[data-hq-preserve="transparent"] {
+[data-hq-content][data-hq-matte="checker"] {
   background-color: var(--hq-artwork-checker-b);
   background-image: conic-gradient(var(--hq-artwork-checker-a) 25%, var(--hq-artwork-checker-b) 0 50%, var(--hq-artwork-checker-a) 0 75%, var(--hq-artwork-checker-b) 0);
   background-size: calc(2 * var(--hq-artwork-checker-size)) calc(2 * var(--hq-artwork-checker-size));
