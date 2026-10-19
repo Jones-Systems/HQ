@@ -18,8 +18,8 @@ export type BlobDigest = Brand<'BlobDigest'>;
 /** Normalized lowercase tag. */
 export type ReferenceTag = Brand<'ReferenceTag'>;
 
-export const LIBRARY_SCHEMA = 'hq.design.references/v1';
-export const EXPORT_SCHEMA = 'hq.design.references-export/v1';
+export const LIBRARY_SCHEMA = 'hq.design.references/v1' as const;
+export const EXPORT_SCHEMA = 'hq.design.references-export/v1' as const;
 export const LIBRARY_DOCUMENT_KEY = 'design/references/library';
 
 /** How the reference was captured. This is provenance, never an execution claim. */

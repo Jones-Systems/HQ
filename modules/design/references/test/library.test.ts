@@ -53,7 +53,7 @@ describe('validation and normalization', () => {
       kind: 'hologram', source: { kind: 'url', url: 'ftp://x' }, capturedAt: 'yesterday', capturedBy: 'me', title: '',
     });
     assert.equal(outcome.status, 'rejected');
-    const fields = (outcome as { issues: { field: string }[] }).issues.map((issue) => issue.field);
+    const fields = (outcome as { issues: readonly { field: string }[] }).issues.map((issue) => issue.field);
     assert.deepEqual(fields, ['kind', 'source.url', 'capturedAt', 'capturedBy', 'title']);
     assert.equal(ports.storage.operations.some((op) => op.op === 'writeDocument' || op.op === 'putBlob'), false);
   });

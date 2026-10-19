@@ -1,0 +1,72 @@
+# Design references (T8 / HQD-07)
+
+Reference library for websites and native apps: collections, stable IDs,
+provenance, rights flags, search and tags, and explicit "use in project" links.
+Plan: `spec.hq-design#task.references.001`, tests `spec.hq-design#test.references.001`.
+
+Status: independent first deliverable over labelled fake ports. Not integrated
+into the desktop shell, not connected to the real store, and not proof of any
+real capture or native runtime.
+
+## Layout
+
+- `src/contract.ts` — section-local types and ports (`ReferenceStoragePort`, `ClockPort`, `IdPort`).
+- `src/provenance.ts` — URL/app source normalization, native-evidence and rights validation,
+  stable ID derivation and the derived evidence label.
+- `src/library.ts` — pure reducers: import, edits, tags, rights, collections, tombstones, project links.
+- `src/search.ts` — free-text and structured search (`tag:`, `kind:`, `is:publishable`).
+- `src/export.ts` — `hq.design.references-export/v1` with publishable/internal modes.
+- `src/persist.ts` — strict `hq.design.references/v1` document validation.
+- `src/service.ts` — `ReferenceLibrary`: serialized CAS commits over injected ports.
+- `src/envelope.ts` — `ReferenceEnvelope` for a use-in-project link.
+- `src/fakes.ts` — `fake:`-labelled ports for tests and previews. Not exported from `src/index.ts`.
+- `ui/` — pure view model plus `ReferenceLibraryView` and `ReferenceLibraryPanel`.
+
+## Invariants
+
+- **Stable ID.** `ref_` + SHA-256 of the JCS identity `{v, source, kind, asset digest}`.
+  The source is a normalized URL (lowercase scheme/host, no default port or fragment;
+  credentials rejected) or `{platform, appId, screen}`. Titles, notes, capture time and
+  app display names never participate. Re-importing the same identity keeps the ID and
+  never overwrites title, notes, tags, rights or capture provenance; an identical
+  repeat writes nothing. A tombstoned match stays tombstoned until explicitly restored.
+- **Evidence.** `kind` is capture provenance. The execution label is derived, never
+  supplied. Only `native` references with an app source and validated native evidence
+  are native execution. A screenshot, recording or web prototype that claims native
+  evidence is rejected at import and at document load.
+- **Rights.** Missing rights are `unknown`. `permitted` needs a stated basis. A
+  `publishable` export contains only permitted, live references and their blobs, omits
+  notes and project links, and lists every exclusion. Importer rights are recorded as
+  `agent-reported` unless the capture is `owner-judged`; `setRights` records `owner-judged`.
+- **Deletion.** Deleting a collection or reference sets `tombstonedAt`. Membership is kept
+  for restore. The storage port has no blob deletion.
+- **Use in project.** A link is data only. Repeating the same link returns the existing
+  one; it never sends, launches or navigates.
+- **Persistence.** One workspace document (`design/references/library`) committed with
+  compare-and-swap. A conflict is a known no-effect and is reapplied once on reloaded
+  state. A thrown write is an unknown effect: the library fences writes until `reload()`
+  reads authoritative state. A newer schema or an invalid document opens read-only and is
+  never repaired or written.
+
+## Checks
+
+From the HQ root, with one serial process under the shared check lock:
+
+```sh
+node --test 'modules/design/references/**/*.test.ts'
+npx tsc -p modules/design/references/tsconfig.json --noEmit
+npx vitest run --config modules/design/references/vitest.config.ts
+```
+
+The rendered checks use `react-dom/server` markup. They prove rendered structure and
+labels, not browser layout, interaction or Electron capture.
+
+## Integration notes
+
+- HQD-12 imports pass `ReferenceImportCandidate`s to `ReferenceLibrary.importReference` /
+  `importMany`. Imported examples arrive at their own claim level and never become
+  owner judgments.
+- Root opens `ReferenceLibrary.open({ storage, clock, ids })` with the store's workspace
+  namespace and mounts `ReferenceLibraryPanel` with `currentProject` and a sandboxed
+  `previewUrl`. The section's JCS/SHA-256 helper is local until T1 promotes one shared
+  implementation.

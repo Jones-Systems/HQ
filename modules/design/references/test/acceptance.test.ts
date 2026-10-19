@@ -41,7 +41,7 @@ describe('re-importing the same reference keeps its ID', () => {
     }));
     assert.equal(again.status, 'observed-again');
     assert.equal((again as { id: string }).id, id);
-    assert.deepEqual((again as { differences: string[] }).differences, ['capturedAt']);
+    assert.deepEqual((again as { differences: readonly string[] }).differences, ['capturedAt']);
     const record = library.state.references[id]!;
     assert.equal(record.importCount, 2);
     assert.equal(record.capturedAt, '2026-02-01T10:00:00.000Z', 'earliest capture is preserved');
@@ -54,7 +54,7 @@ describe('re-importing the same reference keeps its ID', () => {
     assert.equal((await library.setTags(id, ['owner-tag'])).ok, true);
     const again = await library.importReference(screenshot({ title: 'Importer title', tags: ['importer'] }));
     assert.equal(again.status, 'observed-again');
-    assert.deepEqual((again as { differences: string[] }).differences, ['title', 'notes', 'tags']);
+    assert.deepEqual((again as { differences: readonly string[] }).differences, ['title', 'notes', 'tags']);
     const record = library.state.references[id]!;
     assert.equal(record.title, 'Owner title');
     assert.equal(record.notes, 'owner note');
@@ -113,7 +113,7 @@ describe('a screenshot is never labelled native execution', () => {
     const evidence = { platform: 'ios', runtime: 'device', buildRef: 'b', claim: 'observed' };
     const shot = await library.importReference(appScreenshot({ nativeEvidence: evidence }));
     assert.equal(shot.status, 'rejected');
-    assert.deepEqual((shot as { issues: unknown[] }).issues, [{ field: 'nativeEvidence', code: 'screenshot-cannot-claim-native-execution' }]);
+    assert.deepEqual((shot as { issues: readonly unknown[] }).issues, [{ field: 'nativeEvidence', code: 'screenshot-cannot-claim-native-execution' }]);
     const recording = await library.importReference(appScreenshot({ kind: 'recording', nativeEvidence: evidence, asset: { bytes: bytes('rec'), mediaType: 'video/mp4' } }));
     assert.equal(recording.status, 'rejected');
     assert.equal(ports.storage.blobs.size, 0, 'rejected imports store nothing');
