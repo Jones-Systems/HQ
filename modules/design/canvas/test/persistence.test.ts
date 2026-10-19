@@ -80,6 +80,8 @@ test('a future schema opens read-only, is never rewritten, and the canvas refuse
   assert.equal(conflict.status, 'conflict');
   assert.equal(storage.writes.length, 0);
   assert.equal(storage.documents.get(`workspace:${arrangementKey(CANVAS)}`), future);
+  const readOnly = createCanvasState(sampleArrangement(), { readOnly: true });
+  assert.equal(reduceCanvas(readOnly, { type: 'edit', edit: { kind: 'move', ids: [B], dx: 5, dy: 5 } }), readOnly);
 });
 
 test('strict decode rejects unknown fields, dangling artboards, duplicates and non-finite geometry without repair', () => {

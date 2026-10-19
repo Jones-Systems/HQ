@@ -20,8 +20,8 @@ const noop = () => {};
 
 describe('CanvasView markup', () => {
   it('renders items through providers with a camera transform and roving focus', () => {
-    const base = createCanvasState(sampleArrangement(), { camera: { x: 100, y: 50, zoom: 2 } });
-    const { state, registry } = setup(reduceCanvas(reduceCanvas(base, { type: 'select', ids: [B, C] }), { type: 'focus', id: C }));
+    const focused = reduceCanvas(reduceCanvas(createCanvasState(sampleArrangement()), { type: 'select', ids: [B, C] }), { type: 'focus', id: C });
+    const { state, registry } = setup(reduceCanvas(focused, { type: 'camera', camera: { x: 100, y: 50, zoom: 2 } }));
     const html = renderToStaticMarkup(<CanvasView state={state} dispatch={noop} registry={registry} platform="other" />);
     expect(html).toContain('transform:translate(-200px, -100px) scale(2)');
     expect(html).toContain('aria-label="Home v1"');

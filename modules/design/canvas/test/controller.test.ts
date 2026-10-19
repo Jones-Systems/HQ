@@ -7,12 +7,12 @@ import {
 import { findNode } from '../src/arrangement.ts';
 import { screenToWorld } from '../src/geometry.ts';
 import { encodeArrangement } from '../src/codec.ts';
-import type { KeyInput } from '../src/input.ts';
+import type { KeyInput, Platform } from '../src/input.ts';
 import { A, B, BOARD, C, close, rect, sampleArrangement } from './fixtures.ts';
 
 const run = (state: CanvasState, ...actions: CanvasAction[]) => actions.reduce(reduceCanvas, state);
-const key = (key: string, extra: Partial<KeyInput> = {}): CanvasAction => ({
-  type: 'key', platform: 'other',
+const key = (key: string, extra: Partial<KeyInput> = {}, platform: Platform = 'other'): CanvasAction => ({
+  type: 'key', platform,
   input: { key, code: extra.code ?? '', shiftKey: false, altKey: false, ctrlKey: false, metaKey: false, ...extra },
 });
 const fresh = () => createCanvasState(sampleArrangement(), { viewport: { width: 1000, height: 700 } });
@@ -62,8 +62,8 @@ test('undo/redo restores the exact arrangement record and is symmetric', () => {
   assert.equal(redoAvailable(redone), false);
   const keyboard = run(edited, key('z', { ctrlKey: true }), key('z', { ctrlKey: true, shiftKey: true }), key('y', { ctrlKey: true }));
   assert.equal(keyboard.history.past.length, edited.history.past.length);
-  const mac = run(edited, { ...key('z'), platform: 'mac', input: { ...(key('z') as Extract<CanvasAction, { type: 'key' }>).input, metaKey: true } });
-  assert.equal(mac.history.past.length, edited.history.past.length - 1);
+  const mac = run(edited, key('z', { metaKey: true }, 'mac'), key('z', { ctrlKey: true }, 'mac'));
+  assert.equal(mac.history.past.length, edited.history.past.length - 1, 'Ctrl+Z is not undo on macOS');
 });
 
 test('undo drops selection of nodes that no longer exist; camera is not history', () => {
