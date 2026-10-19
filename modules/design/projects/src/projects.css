@@ -1,0 +1,75 @@
+/* Projects section. Uses the shell's --background/--surface/--text/--muted/--line/--selected/--accent tokens.
+   Captured thumbnails keep their own colors; only chrome follows Light/Dark. */
+.hqp-root { display: flex; flex-direction: column; gap: 16px; min-height: 0; height: 100%; color: var(--text); }
+.hqp-toolbar { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+.hqp-registry-note { margin: 0; font-size: 11px; color: var(--muted); }
+.hqp-switcher, .hqp-filters, .hqp-inline-form, .hqp-forms { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.hqp-forms { gap: 18px; }
+.hqp-field { display: grid; gap: 5px; font-size: 11px; color: var(--muted); }
+.hqp-field-grow { flex: 1 1 200px; }
+.hqp-root input, .hqp-root select, .hqp-root button { font: inherit; font-size: 12px; color: var(--text); }
+.hqp-root input, .hqp-root select { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 7px 8px; min-width: 0; }
+.hqp-root select { width: auto; }
+.hqp-root button { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 11px; }
+.hqp-root button:hover:not(:disabled) { background: var(--selected); }
+.hqp-root button:disabled { opacity: .5; cursor: default; }
+.hqp-root :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hqp-kinds { display: flex; flex-wrap: wrap; gap: 10px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px 7px; margin: 0; font-size: 12px; }
+.hqp-kinds legend { font-size: 11px; color: var(--muted); padding: 0 4px; }
+.hqp-kinds label { display: flex; gap: 4px; align-items: center; }
+
+.hqp-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.hqp-badge { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; font-size: 10px; color: var(--muted); white-space: nowrap; }
+.hqp-badge-workspace, .hqp-badge-linked { color: var(--accent); border-color: currentColor; }
+.hqp-badge-warning { color: #9a5b00; border-color: currentColor; }
+:root[data-theme="dark"] .hqp-badge-warning { color: #f0b45c; }
+.hqp-fresh-fresh { color: #2f7a4a; border-color: currentColor; }
+.hqp-fresh-stale, .hqp-fresh-partial { color: #8a6a00; border-color: currentColor; }
+.hqp-fresh-offline, .hqp-fresh-timeout, .hqp-fresh-error, .hqp-fresh-missing-at-source { color: #a33a3a; border-color: currentColor; }
+:root[data-theme="dark"] .hqp-fresh-fresh { color: #7fd29d; }
+:root[data-theme="dark"] .hqp-fresh-stale, :root[data-theme="dark"] .hqp-fresh-partial { color: #e2c45a; }
+:root[data-theme="dark"] .hqp-fresh-offline, :root[data-theme="dark"] .hqp-fresh-timeout,
+:root[data-theme="dark"] .hqp-fresh-error, :root[data-theme="dark"] .hqp-fresh-missing-at-source { color: #f19a9a; }
+
+.hqp-gallery { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1; }
+.hqp-scroller { position: relative; overflow: auto; flex: 1; min-height: 320px; height: 70vh; outline: none; }
+.hqp-canvas { position: relative; width: 100%; margin: 0; padding: 0; }
+.hqp-cell { position: absolute; top: 0; left: 0; }
+.hqp-cell-header { width: 100%; }
+.hqp-group { margin: 0; padding-top: 10px; font-size: 13px; font-weight: 600; letter-spacing: 0; }
+.hqp-group button, .hqp-view-title button { display: inline-flex; align-items: center; gap: 8px; border: 0 !important; background: transparent !important; padding: 4px 2px !important; font-weight: 600; }
+.hqp-chevron { width: 12px; color: var(--muted); }
+.hqp-count { font-weight: 400; color: var(--muted); font-size: 11px; }
+
+.hqp-tile, .hqp-version { display: grid; grid-template-rows: 1fr auto auto auto; gap: 5px; width: 100%; height: 100%; text-align: left;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 8px; overflow: hidden; }
+.hqp-root .hqp-tile { padding: 8px; }
+.hqp-tile-source { border-style: dashed; }
+.hqp-version { width: 200px; height: 180px; grid-template-rows: 1fr auto auto; }
+.hqp-version[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--selected); }
+.hqp-thumb { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 0; object-fit: cover;
+  border-radius: 5px; background: var(--selected); font-size: 11px; color: var(--muted); image-rendering: auto; }
+.hqp-thumb-pending { animation: hqp-pulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .hqp-thumb-pending { animation: none; } }
+@keyframes hqp-pulse { 50% { opacity: .55; } }
+.hqp-tile-title { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hqp-tile-meta { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hqp-empty { font-size: 13px; color: var(--muted); margin: 6px 0; }
+.hqp-error { color: #a33a3a; font-size: 12px; margin: 0; }
+.hqp-note { font-size: 11px; color: var(--muted); margin: 10px 0 0; }
+
+.hqp-detail { display: flex; flex-direction: column; gap: 14px; min-height: 0; flex: 1; }
+.hqp-detail-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.hqp-detail-header h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.3px; }
+.hqp-detail-body { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; min-height: 0; flex: 1; }
+@media (max-width: 900px) { .hqp-detail-body { grid-template-columns: 1fr; } }
+.hqp-detail-scroller { overflow: auto; height: 62vh; min-height: 280px; display: grid; align-content: start; gap: 14px; padding-right: 4px; }
+.hqp-view { border-top: 1px solid var(--line); padding-top: 6px; }
+.hqp-view-title { margin: 0 0 8px; font-size: 13px; }
+.hqp-versions { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+.hqp-side { display: grid; align-content: start; gap: 16px; }
+.hqp-selection, .hqp-links { border: 1px solid var(--line); border-radius: 9px; padding: 12px; background: var(--surface); font-size: 12px; }
+.hqp-selection h3, .hqp-links h3 { margin: 0 0 10px; font-size: 12px; }
+.hqp-selection dl { margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: 96px 1fr; gap: 6px; font-size: 11px; }
+.hqp-links ul { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.hqp-links li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
