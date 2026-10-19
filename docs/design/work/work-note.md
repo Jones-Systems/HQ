@@ -68,6 +68,16 @@ Material conflicts, each resolved toward the narrower rule:
 Future HQ handoffs and any authorized descendants of this lane must carry the
 same Codex V3 root-guidance bootstrap, in addition to HQ target rules.
 
+**Shared enrollment: unavailable.** After this branch was cut, PR #5 merged
+into `work/hq-foundation` at `35f9a3e1fd0561335737ea47f6a680e74a5ad0e7`. It
+adds an HQ `AGENTS.md` rule to read the locally delivered
+`.agents/shared-guidance.md` bridge, and adds `docs/shared-agent-guidance.md`.
+Both were read. The bridge file is absent in this worktree, so shared
+enrollment is reported as unavailable, as the rule requires. Nothing was
+installed or registered. The Codex V3 root guidance above was read directly
+from its exact revision. The change does not affect `packages/contracts`, whose
+SHA-256 is unchanged at `35f9a3e`.
+
 ## Bindings
 
 | Item | Identity |
