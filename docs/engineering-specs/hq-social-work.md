@@ -72,7 +72,7 @@ A Social tool run is the only execution-class call in this plan. It happens only
 - feature sections;
 - a domain descriptor `index.tsx` that mounts through T0's module registry.
 
-Shared presentation lives in `packages/hq-ui/`. Live service access goes through the main process via a root-owned, typed desktop capability (`iface.service-bridge.001`). The renderer never receives a service address or token and cannot name arbitrary URLs.
+Shared presentation lives in `packages/hq-ui/`. Live service access goes through the main process via a root-owned, typed desktop capability (`iface.service-bridge.001`). The T0 candidate's CSP sets `connect-src 'none'`, so the renderer cannot fetch directly. The renderer never receives a service address or token and cannot name arbitrary URLs.
 
 **Non-goals:** a Design feature; a replacement of Fieldnotes or the Planner service; data migration; service/schema changes in either private repository; posting, collection or account connection; a task scheduler or execution from cards; Trello import; CI workflows; signing, installation or deployment.
 
@@ -82,16 +82,21 @@ Shared presentation lives in `packages/hq-ui/`. Live service access goes through
 ## Requirements
 
 <!-- codex-section:begin id="spec.hq-social-work#req.foundation-binding.001" -->
-- **RF-1.** Lanes consume T0's published, root-accepted baseline. That covers npm workspaces, `apps/desktop/src/modules.tsx` or its registry equivalent, and the `@hq/contracts` domain, appearance, project-context, module-port and read-only platform/version types. No lane edits root manifests, the lockfile, configuration, `apps/desktop/` or `packages/contracts/` without explicit single-writer custody.
-- **RF-2.** Literal paths in this plan are rebound mechanically by the root if T0's accepted layout differs, for example if modules live under `apps/desktop/src/modules/`. The root records the rebind as a versioned plan delta before dependent lanes mutate.
+- **RF-1.** Lanes consume T0's published, root-accepted baseline. The published candidate is `33dfe44d6786b40ac8a5dcb5442d85c20da38c67` (draft PR #2, not yet accepted). It provides:
+  - an explicit npm workspaces list;
+  - the registry `apps/desktop/src/modules.tsx`, a `MODULES` record of `ComponentType<ModulePort>`;
+  - `@hq/contracts` exports `DomainId`, `Appearance`, `ResolvedAppearance`, `ProjectContext`, `DomainDestination`, `ReferenceEnvelope`, `DesktopPort`, `ModulePort`, `parseReference` and `isDestination`.
+
+  No lane edits root manifests, the lockfile, configuration, `apps/desktop/` or `packages/contracts/` without explicit single-writer custody.
+- **RF-2.** Literal paths in this plan are bound to the T0 candidate `33dfe44`. The root rebinds them mechanically if the accepted commit differs. The root records the rebind as a versioned plan delta before dependent lanes mutate.
 - **RF-3.** No duplicate contracts. Domain-specific types stay inside the domain. Shared-contract additions go through the root as a proposal.
 <!-- codex-section:end id="spec.hq-social-work#req.foundation-binding.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#req.shell.001" -->
-- **RS-1.** `packages/hq-ui` defines CSS custom-property tokens for the foundation's semantic roles: base/raised surfaces, primary/muted text, border, accent and accent text, focus, success, warning and danger. Each role has light and dark values selected by the shell's appearance state. Final values come from T2's visual system. Modules use only these roles plus documented domain roles.
+- **RS-1.** `packages/hq-ui` defines CSS custom-property tokens for the foundation's semantic roles: base/raised surfaces, primary/muted text, border, accent and accent text, focus, success, warning and danger. Each role has light and dark values selected by the shell's `data-theme` attribute on `document.documentElement`, which T0's candidate sets to `light` or `dark`. A `prefers-color-scheme` fallback applies before that attribute is set. Final values come from T2's visual system. Modules use only these roles plus documented domain roles.
 - **RS-2.** Tokens never apply to captured or producer content. Elements marked `data-hq-content="captured"` and images or iframes of evidence get no filter, blend or recolor. The dark theme changes chrome only.
 - **RS-3.** `packages/hq-ui` provides accessible primitives: Button, IconButton, Menu with roving focus, Dialog with focus trap and Escape, Toast with an action (Undo), Tabs, StatusChip with a text label (never color alone), SaveIndicator (saving / saved / not saved / offline / unknown) and StateView (empty / loading / error / offline / unavailable / unknown). All are keyboard operable with a visible focus ring in both themes and respect reduced motion.
-- **RS-4.** After explicit custody transfer only, the shell chrome adopts these tokens: slim rail Design → Social → Work, project context, appearance control. Rail order, per-domain destination restoration and appearance persistence keep T0's behavior.
+- **RS-4.** After explicit custody transfer only, the shell chrome (`apps/desktop/src/App.tsx`, `apps/desktop/src/styles.css`) adopts these tokens, replacing T0's `--background`, `--surface`, `--text`, `--muted`, `--line`, `--selected` and `--accent` variables. It covers: slim rail Design → Social → Work, project context, appearance control. Rail order, per-domain destination restoration and appearance persistence keep T0's behavior.
 <!-- codex-section:end id="spec.hq-social-work#req.shell.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#req.social-content.001" -->
@@ -103,7 +108,7 @@ Shared presentation lives in `packages/hq-ui/`. Live service access goes through
   - planned date: `YYYY-MM-DD` or empty;
   - archived flag;
   - integer version.
-- **RC-2.** Saves send the record's current version. A version conflict shows "Changed elsewhere" and lets the user reopen the latest copy or copy their text out. The draft is never silently overwritten. Unsaved editor text survives domain switches.
+- **RC-2.** Saves send the record's current version. A version conflict shows "Changed elsewhere" and lets the user reopen the latest copy or copy their text out. The draft is never silently overwritten. Unsaved editor text survives domain switches. T0 remounts the module on every switch (`<main key=…>`), so this state lives in a module-level store outside React components (see `iface.domain-module.001`).
 - **RC-3.** Brands: list and add (name 1–80 characters). The built-in default brand is shown as present, not created.
 - **RC-4.** Editorial calendar: a month view of drafts by planned date, plus an undated tray. Moving a draft changes only its planned date, through one versioned save, with undo. The planned date is labeled as a planning label, never "scheduled" or "approved". It is independent of Work planning dates.
 - **RC-5.** Social secondary navigation (Library, Calendar, Workbench, Runs, Brands) restores its last section, filters and selection after a domain switch.
@@ -193,7 +198,15 @@ The root has recorded the accepted T0 commit, the actual workspace globs, the mo
 <!-- codex-section:end id="spec.hq-social-work#ac.foundation-baseline.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.workspace-skeleton.001" -->
-`modules/social`, `modules/work` and `packages/hq-ui` exist as workspaces, each with a package manifest, a TypeScript configuration and a passing empty test. They come from one root-owned commit with one lockfile regeneration. Fresh `npm install`, `npm run typecheck`, `npm test` and `npm run build` pass. Each module renders an "available, no data" stub in its rail slot.
+`modules/social`, `modules/work` and `packages/hq-ui` exist as workspaces, each with a package manifest, a TypeScript configuration and a passing empty test. The root makes these changes:
+
+- Add the three workspaces to the root workspaces list.
+- Add their sources to the root `tsconfig.json` `include`.
+- Extend `vitest.config.ts` to `modules/**/*.test.{ts,tsx}` and `packages/hq-ui/**/*.test.{ts,tsx}`, with a DOM environment for `.tsx` tests.
+- Add the batched DOM-testing devDependencies.
+- Add `@hq/social` and `@hq/work` as `apps/desktop` dependencies.
+
+These come from one root-owned commit with one lockfile regeneration. Fresh `npm install`, `npm run typecheck`, `npm test` and `npm run build` pass. Each module renders an "available, no data" stub through `MODULES`.
 <!-- codex-section:end id="spec.hq-social-work#ac.workspace-skeleton.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.ui-kit.001" -->
@@ -281,6 +294,7 @@ On the integrated candidate:
 | HQ shared foundation v0.3 | Uncommitted source, SHA-256 `a0d4e678…e33271`; public copy at `docs/design/hq-shared-foundation.md` | Domain boundaries, appearance, references and the three state kinds. Zero execution calls from cards. Planner is the authority. |
 | HQ Design PRD | `work/hq-design-plan` at `149d84377ef1e7b72d9df92189f6f9bf83801898`, `docs/prds/design.md` | Design scope and its separate owner. |
 | Design lane draft (uncommitted, read-only) | Design plan worktree `docs/design-lanes.json` | Design uses `modules/design/<section>/`, `packages/design-store/`, `ShellContextPort`, `StoragePort`, renderer-glob registration. Social/Work mirror the `modules/<domain>/` layout. |
+| HQ T0 candidate | `work/hq-foundation` at `33dfe44d6786b40ac8a5dcb5442d85c20da38c67`, draft PR #2 (unaccepted), read back after first plan publication | Contracts, registry, shell, state, styles, Electron security and the scripts quoted in `req.foundation-binding.001` and `iface.*`. |
 | Root instruction | Root coordinator message | T0 is expected to provide npm workspaces `apps/desktop` + `packages/contracts`, the registry `apps/desktop/src/modules.tsx`, and `@hq/contracts` domain/theme/project/ModulePort plus read-only platform/version. Not yet accepted or frozen. |
 | Manual Planner | Private `Jones-Systems/Codex-V3` at `4beb491c44551b6e4207adcc7459c4b11407bcbc`, `apps/manual-planner/` (MIT licensed, private repository) | Model, API, conflict/idempotency, save states, undo, views, keyboard model and tokens summarized in `req.work-*`. Pure logic lives in `public/js/ordering.js`, `dates.js` and `model.js`. The authoritative validation is Python `planning/validation.py` and `dates.py`. |
 | Social workspace (Fieldnotes) | Private Social tools repository at merged `main` `3f647daced7fa12f4885222a22ec542bbae6d4e1`: `apps/social_dashboard/`, `docs/social-growth-dashboard.md` | SQLite tables brands/content/runs. JSON routes `GET /api/workspace` (includes `csrf`), `GET /api/sample/<tool>`, `GET /api/runs/<id>`, `POST /api/content`, `POST /api/brands`, `POST /api/runs`. Same-origin Host/Origin checks and an `X-Workspace-Token` header on mutations. One queued worker with resource limits. Interrupted on restart, never retried. |
@@ -298,12 +312,12 @@ The parallel mockup lanes T2 (visual system), T3 (Social) and T4 (Work) had publ
 1. **Caller view and rationale.**
    - Users reach Social and Work through the rail, then domain navigation.
    - Domain code calls only its own port.
-   - Fixture adapters live in the renderer. Live adapters call `window.hq.services.<domain>.<route>`, which is main-process IPC.
+   - Fixture adapters live in the renderer. Live adapters call `window.hqServices.<domain>.call(route, params)`, which is main-process IPC alongside T0's `window.hqDesktop`.
    - The present boundary exists because both authorities are private Python services with same-origin HTTP guards. A Node main-process request sends no Origin or `Sec-Fetch-Site` header and a correct Host, so it passes the existing guards. Neither service needs to change for read/write parity. This is an inference from source; it is proved only by the live-adapter tests in a scratch instance.
 2. **State and ownership.**
    - Planner items, settings, history and backups: the Planner service.
    - Drafts, brands, runs and receipts: Fieldnotes.
-   - UI state (view, filters, selection, unsaved editor text, board presets): the HQ domain module, through T0's storage/shell port. If T0 supplies none, module-scoped local storage holds it. This is gap G-3.
+   - UI state (view, filters, selection, unsaved editor text, board presets): the HQ domain module. The candidate `ModulePort` has no storage, so the module holds this state in an in-memory store until G-3 is resolved.
    - Invalid states rejected client-side and again by the authority: a date precision/time mismatch, a non-http reference, an unknown channel or brand, a stale version.
 3. **Consumers and hidden impact.**
    - Direct: the shell registry, `@hq/contracts`, `packages/hq-ui`, and both services' HTTP APIs.
@@ -336,9 +350,11 @@ The parallel mockup lanes T2 (visual system), T3 (Social) and T4 (Work) had publ
 
 ### Gaps that hold only their dependents
 
-- **G-1.** T0 code is unpublished. Exact registry, contracts and scripts are unknown, so no compiler-validated runnable implementation is claimed.
+- **G-1.** T0 code is published as candidate `33dfe44` but not accepted or frozen. The plan is bound to it; acceptance and any delta are confirmed in `task.bind-foundation.001`. No compiler-validated runnable implementation is claimed for module code.
 - **G-2.** T2, T3 and T4 mockups are unpublished. Token values and layouts are pending. They block visual acceptance, not core start.
-- **G-3.** UI-state storage port: pending T0.
+- **G-3.** UI-state storage. `ModulePort` has no storage member, and T0 remounts modules on every domain switch.
+  - **Default:** a module-level in-memory store that survives remounts within the session, plus destination strings for restorable location.
+  - **Proposed to the root:** a namespaced `storage` member on `ModulePort`, needed for restoration across restarts.
 - **G-4.** HQ has no `tests/check-groups.toml`. The catalog in `ctx.check-catalog.001` is proposed bytes for the root to adopt.
 <!-- codex-section:end id="spec.hq-social-work#ctx.research-decision-basis.001" -->
 
@@ -349,8 +365,8 @@ The parallel mockup lanes T2 (visual system), T3 (Social) and T4 (Work) had publ
 
 | Lane / owner | Literal write scope | Never writes |
 | --- | --- | --- |
-| **HQ root (integration owner)** | `package.json`, `package-lock.json`, root configs, `modules/social/package.json`, `modules/social/tsconfig.json`, `modules/work/package.json`, `modules/work/tsconfig.json`, `packages/hq-ui/package.json`, `packages/hq-ui/tsconfig.json`, `apps/desktop/src/modules.tsx`, `packages/contracts/src/services.ts`, `apps/desktop/src/main/services/`, `apps/desktop/src/preload/services.ts`, `docs/evidence/hq-social-work/integration/` | Module feature code |
-| **UI** (HQ-UI lane) | `packages/hq-ui/src/`, `packages/hq-ui/test/`, `packages/hq-ui/README.md`, `docs/evidence/hq-social-work/ui/`; after custody transfer: `apps/desktop/src/shell/` | Contracts, root files, `modules/**` |
+| **HQ root (integration owner)** | `package.json`, `package-lock.json`, root configs, `modules/social/package.json`, `modules/social/tsconfig.json`, `modules/work/package.json`, `modules/work/tsconfig.json`, `packages/hq-ui/package.json`, `tsconfig.json`, `vitest.config.ts`, `apps/desktop/package.json`, `apps/desktop/src/modules.tsx`, `apps/desktop/src/environment.d.ts`, `packages/contracts/src/index.ts`, `packages/contracts/src/services.ts`, `apps/desktop/electron/services.ts`, `apps/desktop/electron/services.test.ts`, `apps/desktop/electron/main.ts`, `apps/desktop/electron/preload.cts`, `docs/evidence/hq-social-work/foundation/`, `docs/evidence/hq-social-work/integration/`, `docs/evidence/hq-social-work/verification/` | Module feature code |
+| **UI** (HQ-UI lane) | `packages/hq-ui/src/`, `packages/hq-ui/test/`, `packages/hq-ui/README.md`, `docs/evidence/hq-social-work/ui/`; after custody transfer: `apps/desktop/src/App.tsx`, `apps/desktop/src/styles.css` | Contracts, root files, `modules/**` |
 | **SOC-C** (Social content lane) | `modules/social/core/`, `modules/social/content/`, `modules/social/index.tsx`, `modules/social/nav/`, `modules/social/live/` (when activated), `docs/evidence/hq-social-work/social-content/` | `modules/social/workbench/` |
 | **SOC-W** (Social workbench lane) | `modules/social/workbench/`, `docs/evidence/hq-social-work/social-workbench/` | `modules/social/core/` (proposes changes to SOC-C) |
 | **WRK-P** (Work planner lane) | `modules/work/core/`, `modules/work/views/`, `modules/work/live/` (when activated), `docs/evidence/hq-social-work/work-planner/` | `modules/work/board/` |
@@ -374,20 +390,19 @@ The parallel mockup lanes T2 (visual system), T3 (Social) and T4 (Work) had publ
 ## Interface Contracts
 
 <!-- codex-section:begin id="spec.hq-social-work#iface.domain-module.001" -->
-**Domain module consumption (expected T0 surface; bound at `ac.foundation-baseline.001`).**
+**Domain module consumption** (bound to T0 candidate `33dfe44`, confirmed at `ac.foundation-baseline.001`).
 
-Each domain exports a default descriptor from `modules/<domain>/index.tsx` that conforms to T0's `ModulePort`, with:
+- **Entry point.** Each domain's package (`@hq/social` in `modules/social`, `@hq/work` in `modules/work`) default-exports a `ComponentType<ModulePort>` from `index.tsx`. Integration replaces the slot in `MODULES` in `apps/desktop/src/modules.tsx` with that import.
+- **What `ModulePort` supplies:** `context: ProjectContext`, `destination: string`, `appearance: ResolvedAppearance`, `desktop: DesktopPort` and `navigate(destination)`.
+- **Destinations.** They are module-local opaque strings that must pass `isDestination`: no URL scheme, no leading `//`, at most 512 characters. The shell stores one destination per domain and defaults it to `home`. Each module maps `home` to its landing view and serializes its location into the destination through `navigate`.
+- **State across switches.** T0 remounts the module on every domain switch. Selection, filters, scroll and unsaved text therefore live in a module-level store keyed by `context.id`, which survives remounts within the session. Persistence across restarts waits for G-3.
+- **Rules.** Modules never read the OS theme; they use `appearance` and the root `data-theme` tokens. They never change project silently and never touch another domain's state.
 
-- `id: 'social' | 'work'`;
-- a label;
-- destinations under `/social/*` or `/work/*`;
-- `render(context)`, where `context` carries the appearance, project context, a storage namespace and a navigation callback.
+Social destinations: `home` (Library), `library`, `library/<draftId>`, `calendar`, `calendar/<YYYY-MM>`, `workbench`, `workbench/<toolId>`, `runs`, `runs/<runId>`, `brands`.
 
-Domains never read OS theme directly. They never change the project silently. They never write another domain's namespace. If T0's names differ, the root rebinds the names; the semantics stay as written.
+Work destinations: `home` (Board), `glance`, `board`, `list`, `calendar`, `calendar/<YYYY-MM>`, `timeline`, `review`, `lists`, `archive`, `item/<itemId>`.
 
-Social destinations: `/social/library`, `/social/library/:draftId`, `/social/calendar`, `/social/workbench`, `/social/workbench/:toolId`, `/social/runs`, `/social/runs/:runId`, `/social/brands`.
-
-Work destinations: `/work/glance`, `/work/board`, `/work/list`, `/work/calendar`, `/work/timeline`, `/work/review`, `/work/lists`, `/work/archive`, `/work/item/:itemId`.
+Cross-domain links use T0's `ReferenceEnvelope` and `parseReference`. A module renders unknown or unresolvable references read-only, with their title and provenance.
 <!-- codex-section:end id="spec.hq-social-work#iface.domain-module.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#iface.social-port.001" -->
@@ -460,13 +475,13 @@ interface PlannerPort {
 <!-- codex-section:begin id="spec.hq-social-work#iface.service-bridge.001" -->
 **Proposed shared contract: desktop domain-service bridge** (owner: root; implementer: the root-designated shared writer; activation: `ac.service-bridge-approval.001`).
 
-- **Contract.** `packages/contracts/src/services.ts` declares closed route unions:
+- **Contract.** `packages/contracts/src/services.ts`, re-exported from `packages/contracts/src/index.ts`, declares closed route unions:
   - Social: `workspace`, `sample`, `run`, `saveContent`, `addBrand`, `submitRun`;
   - Work: `state`, `version`, `item`, `history`, `create`, `patch`, `move`, `archive`, `restore`, `reviewed`, `settings`.
 
   Each route has typed parameters and response envelopes `{ ok: true, status, body } | { ok: false, kind: 'unavailable'|'unknown'|'http', status? }`.
-- **Preload.** It exposes `window.hq.services.social.call(route, params)` and `window.hq.services.work.call(route, params)`. There is no URL, header or method argument.
-- **Main process.**
+- **Preload.** `apps/desktop/electron/preload.cts` exposes `window.hqServices.social.call(route, params)` and `window.hqServices.work.call(route, params)` next to the existing `hqDesktop` object. There is no URL, header or method argument. Types are declared in `apps/desktop/src/environment.d.ts`.
+- **Main process** (`apps/desktop/electron/services.ts`, registered from `main.ts` through `ipcMain.handle`).
   - It maps each route to a fixed method and path and validates parameters (ID charset, body size up to 2 MB).
   - It reads the endpoint per domain from main-only configuration that the user enters in an HQ settings dialog. The endpoint is stored outside the repository and never logged.
   - Social: it obtains and caches the workspace token from `workspace` and attaches `X-Workspace-Token`, refreshing once on 403.
@@ -482,7 +497,7 @@ interface PlannerPort {
 <!-- codex-section:begin id="spec.hq-social-work#iface.ui-kit.001" -->
 **`@hq/ui`** (owner UI lane).
 
-- **Tokens.** `packages/hq-ui/src/tokens.css` sets `--hq-surface-base`, `--hq-surface-raised`, `--hq-text`, `--hq-text-muted`, `--hq-border`, `--hq-accent`, `--hq-accent-text`, `--hq-focus`, `--hq-success`, `--hq-warning` and `--hq-danger`, plus the `-soft` variants of the last four. They are scoped by `[data-hq-appearance="light"|"dark"]` on the shell root, which T0 sets from its resolved appearance.
+- **Tokens.** `packages/hq-ui/src/tokens.css` sets `--hq-surface-base`, `--hq-surface-raised`, `--hq-text`, `--hq-text-muted`, `--hq-border`, `--hq-accent`, `--hq-accent-text`, `--hq-focus`, `--hq-success`, `--hq-warning` and `--hq-danger`, plus the `-soft` variants of the last four. They are scoped by `:root[data-theme="light"|"dark"]`, which T0 sets on `document.documentElement`, with a `prefers-color-scheme` fallback matching T0's `styles.css`.
 - **TypeScript names.** `packages/hq-ui/src/tokens.ts` exports the token names; values live only in CSS.
 - **Domain roles.** These are module-local: Work `--work-st-<status>` and `--work-dk-<datekind>`, Social `--social-channel-<id>`. Each needs a light and a dark value.
 - **Components.** `packages/hq-ui/src/components/` exports the RS-3 set.
@@ -495,7 +510,7 @@ Token names may be renamed only before the first consumer lands.
 <!-- codex-section:begin id="spec.hq-social-work#ctx.check-catalog.001" -->
 ### Proposed affected-check catalog (G-4)
 
-The plan binds these exact bytes. The root may adopt them at `tests/check-groups.toml` in HQ. The commands reflect T0's expected scripts and are re-bound at `ac.foundation-baseline.001`.
+The plan binds these exact bytes. The root may adopt them at `tests/check-groups.toml` in HQ. The commands use T0 candidate scripts (`typecheck`, `test` = `vitest run`, `build`) and vitest path filters. They are confirmed at `ac.foundation-baseline.001`.
 
 ```toml
 schema = "codex.v3-check-groups/v1"
@@ -507,15 +522,15 @@ command = "npm test"
 [groups.hq-build]
 command = "npm run build"
 [groups.hq-ui]
-command = "npm test -w packages/hq-ui"
+command = "npx vitest run packages/hq-ui"
 [groups.social-module]
-command = "npm test -w modules/social"
+command = "npx vitest run modules/social"
 [groups.work-module]
-command = "npm test -w modules/work"
+command = "npx vitest run modules/work"
 [groups.desktop-bridge]
-command = "npm test -w apps/desktop -- services"
+command = "npx vitest run apps/desktop/electron/services"
 [groups.shell-integration]
-command = "npm test -w apps/desktop"
+command = "npx vitest run apps/desktop"
 [groups.visual-evidence]
 command = "manual: light and dark captures of touched surfaces with fictional fixtures"
 ```
@@ -527,7 +542,7 @@ command = "manual: light and dark captures of touched surfaces with fictional fi
 **Environments:**
 
 - Node with T0's test runner for pure logic.
-- The DOM test environment that T0 provides, or the one the root adds in the skeleton task, for components.
+- For components, the DOM test environment that the root adds in the skeleton task. T0's candidate has none: `vitest.config.ts` includes only `*.test.ts`.
 - The Electron dev app or the Vite renderer with fixture adapters for visual evidence.
 - Live-adapter contract tests against hand-written synthetic HTTP exchanges.
 - Optionally, a task-owned scratch instance of each private service with synthetic data, started from its source checkout with an explicit scratch data directory, and removed after the test. This is never the live service.
@@ -645,7 +660,7 @@ Merge is held.
   "kind": "verification",
   "profile_role": "verifier",
   "accountable_owner": "hq-root",
-  "objective": "Read back the accepted T0 baseline: commit, workspace globs, module registry path and mechanism, @hq/contracts export names, test runner and npm scripts. Publish any RF-2 path or name rebind as a versioned plan delta before dependent lanes mutate.",
+  "objective": "Confirm the accepted T0 baseline against the bound candidate 33dfe44: commit, workspaces list, MODULES registry in apps/desktop/src/modules.tsx, @hq/contracts exports, vitest configuration and npm scripts. Publish any RF-2 path or name rebind as a versioned plan delta before dependent lanes mutate.",
   "context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
@@ -730,6 +745,9 @@ Merge is held.
   "write_scope": [
     "package.json",
     "package-lock.json",
+    "tsconfig.json",
+    "vitest.config.ts",
+    "apps/desktop/package.json",
     "modules/social/package.json",
     "modules/social/tsconfig.json",
     "modules/work/package.json",
@@ -816,8 +834,12 @@ Merge is held.
   ],
   "write_scope": [
     "packages/contracts/src/services.ts",
-    "apps/desktop/src/main/services",
-    "apps/desktop/src/preload/services.ts"
+    "packages/contracts/src/index.ts",
+    "apps/desktop/electron/services.ts",
+    "apps/desktop/electron/services.test.ts",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.cts",
+    "apps/desktop/src/environment.d.ts"
   ],
   "requires": [
     "spec.hq-social-work#req.safety.001"
@@ -967,7 +989,8 @@ Merge is held.
     "docs/design/hq-visual-system"
   ],
   "write_scope": [
-    "apps/desktop/src/shell"
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/styles.css"
   ],
   "requires": [
     "spec.hq-social-work#req.shell.001"
@@ -2157,7 +2180,7 @@ Merge is held.
     ]
   },
   "target_hints": [
-    "apps/desktop/src/main/services/"
+    "apps/desktop/electron/services.test.ts"
   ],
   "affected_check_groups": [
     "desktop-bridge",
@@ -2233,7 +2256,8 @@ Merge is held.
     ]
   },
   "target_hints": [
-    "apps/desktop/src/shell/"
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/styles.css"
   ],
   "affected_check_groups": [
     "shell-integration",
