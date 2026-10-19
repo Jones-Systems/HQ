@@ -33,7 +33,7 @@ The shared shell places Design before Social and Work, supports Light/Dark/Syste
 
 Deliver a useful local vertical slice before claiming full parity: create/switch project and view; arrange and compare two versions; add a revision-bound annotation and text citation; save/reopen; freeze/export a request; exercise a qualified existing-thread handoff or visibly report it unavailable; attach and compare a returned candidate. Independent modules can land before this cumulative integration passes, but are not individually the finished product.
 
-Local persistence plus explicit export/import is the initial working assumption, pending the owner's cross-device preference. No private owner dataset ships in the public repository. Use synthetic fixtures. No remote-service migration, credential enrollment, signing, notarization, release or installation follows from source implementation authority.
+HQ is piloted from the laptop. Show projects across enrolled devices through a locally cached catalog and background refresh; fetch previews and needed content on demand and retain local working copies for responsiveness. The laptop owns editable Design state initially; two-way synchronization is not required. Warm project navigation must not wait for network. Preserve source identity, provenance, freshness and stale/offline states. Explicit export/import remains useful for backups. No private owner dataset ships in the public repository. Use synthetic fixtures. No remote-service migration, credential enrollment, signing, notarization, release or installation follows from source implementation authority.
 
 ## Technical slices
 
