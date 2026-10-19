@@ -245,7 +245,7 @@ test('items without permitted rights or with unsafe content reject the whole imp
   const bad = source(0);
   const cases = [
     { ...bad.items[0]!, rights: { basis: 'unknown', holder: 'x' } as never },
-    { ...bad.items[0]!, rights: { basis: 'licensed', holder: 'x' } },
+    { ...bad.items[0]!, rights: { basis: 'licensed', holder: 'x' } as never },
     { ...bad.items[0]!, payload: { kind: 'png' as const, bytes: new Uint8Array(40) } },
     { ...bad.items[2]!, payload: { kind: 'html-bundle' as const, entry: 'index.html', files: [{ path: '../index.html', mediaType: 'text/html', bytes: new Uint8Array(1) }] } },
     { ...bad.items[3]!, payload: { kind: 'url' as const, url: 'https://user:pw@example.com/' } },

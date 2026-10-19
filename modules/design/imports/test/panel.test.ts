@@ -23,7 +23,8 @@ test('panel renders unavailable capabilities and the default backup choice', () 
   assert.match(html, /<button type="button" disabled="" aria-describedby="hqd-imports-pick-unavailable">Choose files…<\/button>/u);
   assert.match(html, /File selection is unavailable in this build\./u);
   assert.match(html, /Saving to disk is unavailable in this build\./u);
-  assert.match(html, /value="backup" checked=""/u);
+  assert.match(html, /<input type="radio" name="hqd-imports-export"(?=[^>]*value="backup")(?=[^>]*checked="")[^>]*\/>/u);
+  assert.doesNotMatch(html, /<input type="radio"(?=[^>]*value="export")(?=[^>]*checked="")[^>]*\/>/u);
   assert.doesNotMatch(html, /type="checkbox"/u, 'private confirmation only appears for the draft backup');
 });
 

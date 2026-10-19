@@ -411,15 +411,16 @@ async function buildPlan(
 }
 
 export interface ApplyResult {
+  readonly ok: true;
   readonly applied: boolean;
   readonly manifest: ImportManifest;
 }
 
 /** One atomic commit; a stale plan fails compare-and-swap and writes nothing. */
 export async function applyImport(deps: ImportDeps, plan: ImportPlan): Promise<ApplyResult> {
-  if (plan.noop) return { applied: false, manifest: plan.manifest };
+  if (plan.noop) return { ok: true, applied: false, manifest: plan.manifest };
   await deps.storage.commit(plan.ops);
-  return { applied: true, manifest: plan.manifest };
+  return { ok: true, applied: true, manifest: plan.manifest };
 }
 
 export async function runImport(deps: ImportDeps, request: ImportRequest): Promise<ApplyResult | Rejection> {
