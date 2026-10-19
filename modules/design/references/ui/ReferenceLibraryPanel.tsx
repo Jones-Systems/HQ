@@ -17,8 +17,10 @@ export interface ReferenceLibraryPanelProps {
 /** Connects the library service to the view. Selection and query are view-local state. */
 export function ReferenceLibraryPanel({ library, currentProject, previewUrl, onError }: ReferenceLibraryPanelProps) {
   const subscribe = useCallback((listener: () => void) => library.subscribe(listener), [library]);
-  const state = useSyncExternalStore(subscribe, () => library.state);
-  const access = useSyncExternalStore(subscribe, () => library.access);
+  const readState = () => library.state;
+  const readAccess = () => library.access;
+  const state = useSyncExternalStore(subscribe, readState, readState);
+  const access = useSyncExternalStore(subscribe, readAccess, readAccess);
   const [selection, setSelection] = useState<ViewSelection>({ query: '', collectionId: null, selectedId: null });
   const view = useMemo(() => buildLibraryView(state, access, selection, currentProject), [state, access, selection, currentProject]);
   const report = (result: Promise<{ ok: boolean; code?: string }>) => {
