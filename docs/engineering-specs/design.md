@@ -164,7 +164,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/projects/"
+    "modules/design/projects"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -267,7 +267,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/canvas/"
+    "modules/design/canvas"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -370,7 +370,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/compare/"
+    "modules/design/compare"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -473,7 +473,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/annotations/"
+    "modules/design/annotations"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -582,7 +582,7 @@ Amendment: atomic freeze uses one record for packet plus draft-consumed marker; 
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/requests/"
+    "modules/design/requests"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -690,7 +690,7 @@ Amendment: build/render new HQ rating controls for owner acceptance; automatic g
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/taste/"
+    "modules/design/taste"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -793,7 +793,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/references/"
+    "modules/design/references"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -896,7 +896,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "packages/design-store/"
+    "packages/design-store"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -999,7 +999,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/components/"
+    "modules/design/components"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -1102,7 +1102,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/flows/"
+    "modules/design/flows"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -1209,7 +1209,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/connector/"
+    "modules/design/connector"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -1312,7 +1312,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/imports/"
+    "modules/design/imports"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -1415,7 +1415,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/ui/"
+    "modules/design/ui"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
@@ -1518,7 +1518,7 @@ Apply the common interface/testing/delivery clauses. Local models/ports/fakes ca
     "packages/contracts/"
   ],
   "write_scope": [
-    "modules/design/discovery/"
+    "modules/design/discovery"
   ],
   "requires": [
     "spec.hq-design#req.requirements.001"
