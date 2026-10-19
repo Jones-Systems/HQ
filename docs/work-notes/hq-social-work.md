@@ -25,7 +25,7 @@ Planning delivered on branch `work/hq-social-work-plan`:
 - the implementation plan, `docs/engineering-specs/hq-social-work.md`, whose 17 tasks and 17 Test Intents were parsed and wave-compiled by the real Codex V3 helpers;
 - this note.
 
-The plan proposes five implementation lanes (UI, SOC-C, SOC-W, WRK-P, WRK-B) plus root-owned serialized shared tasks. Implementation is **not** runnable yet: it waits for the root-accepted T0 baseline (`ac.foundation-baseline.001`). No code, root file, contract, Design document or other lane's file was changed. No lane was launched.
+The plan proposes five implementation lanes (UI, SOC-C, SOC-W, WRK-P, WRK-B) plus root-owned serialized shared tasks. Implementation is **not** runnable yet: it waits for the root-accepted T0 baseline (`ac.foundation-baseline.001`). The plan is already bound to T0's published candidate `work/hq-foundation` `33dfe44d6786b40ac8a5dcb5442d85c20da38c67` (draft PR #2), which was read back after the first plan push. No code, root file, contract, Design document or other lane's file was changed. No lane was launched.
 <!-- codex-section:end id="worknote.hq-social-work#ctx.outcome.001" -->
 
 ## Current State And Evidence
@@ -64,9 +64,9 @@ The plan proposes five implementation lanes (UI, SOC-C, SOC-W, WRK-P, WRK-B) plu
 
 **Helper validation record.**
 
-- Spec commit `cdf6eaae3270a6f5f141b528123736d57242a59d`, spec blob `52afa277218e966c952d9db867e5a16a5dfbd064`. An earlier run at `041d868…` (blob `bab93de…`) gave identical rounds; the only change since then is a one-line prose generalization.
+- Spec commit `6e1b904f8a202ba15c986f413503fe151f0ba0a0`, spec blob `855da7633318a982a5759d5ef2babd005c365f28`. This revision is bound to the T0 candidate. Earlier runs at `041d868…` and `cdf6eaa…`, made before the T0 path binding, gave the same ready sets.
 - `parse_engineering_spec_plan` parsed 17 tasks and 17 intents.
-- Catalog binding: proposed manifest bytes from `spec.hq-social-work#ctx.check-catalog.001`, SHA-256 `3740aec9e7cab9add1eaa565c90142c9ce98ab083c0f7cd91373c9323aed47a2`, nine groups. This manifest is **not** present in HQ (gap G-4).
+- Catalog binding: proposed manifest bytes from `spec.hq-social-work#ctx.check-catalog.001`, SHA-256 `02323e45f1c92c8a7c31478099d463fe3e1927f5b4db84fa960e4cacd95873b0`, nine groups. This manifest is **not** present in HQ (gap G-4).
 - `compile_ready_wave` was iterated with labeled **projection fixtures**: synthetic accepted results and, in the second projection, fixture-satisfied activation evidence. These are not project evidence. Model requests were `claude-opus-5-5`/high under `claude_frontier`.
 - Every round compiled capsule and assignment drafts with no writer collision:
 
@@ -104,7 +104,13 @@ The draft counts per round matched the ready sets: 1, 1, 3, 4, 2, 1, 1 in the un
 ## Blocker Or Decision
 
 <!-- codex-section:begin id="worknote.hq-social-work#ctx.blocker-decision.001" -->
-- **Implementation gate.** T0 code is unpublished and unaccepted (G-1). Literal paths and contract names are expected values, not verified ones. No compiler-validated runnable implementation is claimed.
+- **Implementation gate.** T0 code is published as candidate `33dfe44` but unaccepted (G-1). Literal paths and contract names are bound to that candidate and are confirmed only at acceptance. No compiler-validated runnable implementation is claimed for module code.
+- **T0 facts with plan impact:**
+  - modules are remounted on every domain switch;
+  - `ModulePort` has no storage (G-3);
+  - the vitest include covers `*.test.ts` only, with no DOM environment;
+  - workspaces and `tsconfig` includes are explicit lists, so the skeleton task must edit them;
+  - CSP `connect-src 'none'` forces live access through the bridge.
 - **Owner decisions** (defaults allow progress):
   - D-1: selected-file import of the Planner's pure logic;
   - D-2: the live service bridge;
