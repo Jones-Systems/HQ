@@ -38,7 +38,11 @@
 .hqp-cell-header { width: 100%; }
 .hqp-group { margin: 0; padding-top: 10px; font-size: 13px; font-weight: 600; letter-spacing: 0; }
 .hqp-group button, .hqp-view-title button { display: inline-flex; align-items: center; gap: 8px; border: 0 !important; background: transparent !important; padding: 4px 2px !important; font-weight: 600; }
-.hqp-chevron { width: 12px; color: var(--muted); }
+/* Drawn with borders so it never depends on a font glyph. */
+.hqp-chevron { display: inline-block; width: 0; height: 0; margin: 0 3px; border-style: solid; border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent var(--muted); transform: rotate(90deg); transition: transform .12s; }
+[aria-expanded="false"] > .hqp-chevron { transform: none; }
+@media (prefers-reduced-motion: reduce) { .hqp-chevron { transition: none; } }
 .hqp-count { font-weight: 400; color: var(--muted); font-size: 11px; }
 
 .hqp-tile, .hqp-version { display: grid; grid-template-rows: 1fr auto auto auto; gap: 5px; width: 100%; height: 100%; text-align: left;
@@ -67,7 +71,11 @@
 .hqp-view { border-top: 1px solid var(--line); padding-top: 6px; }
 .hqp-view-title { margin: 0 0 8px; font-size: 13px; }
 .hqp-versions { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
-.hqp-side { display: grid; align-content: start; gap: 16px; }
+.hqp-side { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 16px; min-width: 0; }
+.hqp-side > * { min-width: 0; }
+.hqp-selection dd { overflow-wrap: anywhere; }
+.hqp-links select { width: 100%; }
+.hqp-links .hqp-inline-form { flex-wrap: nowrap; }
 .hqp-selection, .hqp-links { border: 1px solid var(--line); border-radius: 9px; padding: 12px; background: var(--surface); font-size: 12px; }
 .hqp-selection h3, .hqp-links h3 { margin: 0 0 10px; font-size: 12px; }
 .hqp-selection dl { margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: 96px 1fr; gap: 6px; font-size: 11px; }

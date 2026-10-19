@@ -37,15 +37,18 @@ export function usePrefetch(loader: ThumbnailLoader, refs: readonly PreviewRef[]
   }, [loader, key]);
 }
 
-/** Element client size via ResizeObserver; `fallback` is used before measurement and on the server. */
-export function useSize(element: RefObject<HTMLElement | null>, fallback: { readonly width: number; readonly height: number }): { width: number; height: number } {
-  const [size, setSize] = useState({ width: fallback.width, height: fallback.height });
+/**
+ * Element client size via ResizeObserver. `fallback` is used before measurement
+ * and on the server; `measured` turns true once the real size is known.
+ */
+export function useSize(element: RefObject<HTMLElement | null>, fallback: { readonly width: number; readonly height: number }): { width: number; height: number; measured: boolean } {
+  const [size, setSize] = useState({ width: fallback.width, height: fallback.height, measured: false });
   useLayoutEffect(() => {
     const node = element.current;
     if (!node) return undefined;
     const measure = () => setSize((previous) => {
-      const next = { width: node.clientWidth || fallback.width, height: node.clientHeight || fallback.height };
-      return next.width === previous.width && next.height === previous.height ? previous : next;
+      const next = { width: node.clientWidth || fallback.width, height: node.clientHeight || fallback.height, measured: true };
+      return next.width === previous.width && next.height === previous.height && previous.measured ? previous : next;
     });
     measure();
     if (typeof ResizeObserver === 'undefined') return undefined;

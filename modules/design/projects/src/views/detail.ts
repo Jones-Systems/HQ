@@ -2,6 +2,7 @@ import { createElement as h, useLayoutEffect, useRef, useState } from 'react';
 import { VIEW_KINDS, versionsOf, type ProjectContent, type VersionRecord, type ViewKind, type ViewRecord } from '../content.ts';
 import type { ProjectsController, ProjectsSnapshot } from '../controller.ts';
 import { memoryFor } from '../session.ts';
+import { count } from './gallery.ts';
 import { useThumbnail } from './hooks.ts';
 
 function VersionCard({ controller, version, selected }: { controller: ProjectsController; version: VersionRecord; selected: boolean }) {
@@ -26,8 +27,8 @@ function ViewSection({ controller, content, view, collapsed, selectedVersion }: 
   return h('section', { className: 'hqp-view', 'data-view': view.id },
     h('h3', { className: 'hqp-view-title' },
       h('button', { type: 'button', 'aria-expanded': !collapsed, 'aria-controls': bodyId, onClick: () => controller.toggleView(view.id) },
-        h('span', { className: 'hqp-chevron', 'aria-hidden': true }, collapsed ? '▸' : '▾'),
-        view.title, h('span', { className: 'hqp-badge' }, view.kind), h('span', { className: 'hqp-count' }, `${versions.length} versions`))),
+        h('span', { className: 'hqp-chevron', 'aria-hidden': true }),
+        view.title, h('span', { className: 'hqp-badge' }, view.kind), h('span', { className: 'hqp-count' }, count(versions.length, 'version')))),
     collapsed ? null : h('div', { id: bodyId, className: 'hqp-versions' },
       versions.length === 0 ? h('p', { className: 'hqp-empty' }, 'No versions yet.') : null,
       versions.map((version) => h(VersionCard, { key: version.id, controller, version, selected: version.id === selectedVersion }))));

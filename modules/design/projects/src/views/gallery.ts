@@ -14,13 +14,15 @@ export interface GalleryViewOptions {
   readonly maxPrefetch?: number;
 }
 
+export const count = (value: number, noun: string): string => `${value} ${noun}${value === 1 ? '' : 's'}`;
+
 const FRESHNESS_LABELS: Record<FreshnessStatus, string> = {
   fresh: 'Fresh', stale: 'Stale', offline: 'Offline', timeout: 'Timed out', error: 'Refresh failed',
   partial: 'Partial', 'missing-at-source': 'Missing at source',
 };
 
-function Thumbnail({ controller, item, priority }: { controller: ProjectsController; item: GalleryItem; priority: Priority }) {
-  const state = useThumbnail(controller.thumbnails, item.thumbnail, priority);
+function Thumbnail({ controller, item, priority, live }: { controller: ProjectsController; item: GalleryItem; priority: Priority; live: boolean }) {
+  const state = useThumbnail(controller.thumbnails, live ? item.thumbnail : undefined, priority);
   if (!item.thumbnail) return h('div', { className: 'hqp-thumb hqp-thumb-empty', 'aria-hidden': true }, 'No preview');
   if (state.status === 'ready') {
     return h('img', { className: 'hqp-thumb', src: state.value, alt: '', decoding: 'async', draggable: false,
@@ -30,15 +32,17 @@ function Thumbnail({ controller, item, priority }: { controller: ProjectsControl
     state.status === 'error' ? 'Preview unavailable' : '');
 }
 
-function Tile({ controller, item, position, total, priority }: {
+function Tile({ controller, item, position, total, priority, live }: {
   controller: ProjectsController; item: GalleryItem; position: number; total: number; priority: Priority;
+  /** False until the grid is measured, so a provisional first layout requests nothing. */
+  live: boolean;
 }) {
   const projectId = item.kind === 'workspace' ? item.projectId : null;
   const hasSummary = item.kind === 'workspace' && item.summary !== undefined;
-  useEffect(() => (projectId && !hasSummary ? controller.requestSummary(projectId, priority) : undefined), [controller, projectId, hasSummary, priority]);
-  const thumb = h(Thumbnail, { controller, item, priority });
+  useEffect(() => (live && projectId && !hasSummary ? controller.requestSummary(projectId, priority) : undefined), [controller, projectId, hasSummary, priority, live]);
+  const thumb = h(Thumbnail, { controller, item, priority, live });
   if (item.kind === 'workspace') {
-    const meta = item.summary ? `${item.summary.viewCount} views · ${item.summary.versionCount} versions` : 'Loading details…';
+    const meta = item.summary ? `${count(item.summary.viewCount, 'view')} · ${count(item.summary.versionCount, 'version')}` : 'Loading details…';
     return h('button', {
       type: 'button', className: 'hqp-tile', 'data-key': item.key, 'aria-posinset': position, 'aria-setsize': total,
       onClick: () => controller.openProject(item.projectId),
@@ -89,7 +93,7 @@ function Header({ controller, block }: { controller: ProjectsController; block: 
   const { group } = block;
   return h('h2', { className: 'hqp-group' },
     h('button', { type: 'button', 'aria-expanded': !group.collapsed, onClick: () => controller.toggleGroup(group.key) },
-      h('span', { className: 'hqp-chevron', 'aria-hidden': true }, group.collapsed ? '▸' : '▾'),
+      h('span', { className: 'hqp-chevron', 'aria-hidden': true }),
       group.label, h('span', { className: 'hqp-count' }, String(group.total))));
 }
 
@@ -97,13 +101,13 @@ function Header({ controller, block }: { controller: ProjectsController; block: 
 export function GalleryView({ controller, snapshot, options = {} }: { controller: ProjectsController; snapshot: ProjectsSnapshot; options?: GalleryViewOptions }) {
   const viewport = options.initialViewport ?? { width: 960, height: 720 };
   const scroller = useRef<HTMLDivElement | null>(null);
-  const { width, height } = useSize(scroller, viewport);
+  const { width, height, measured } = useSize(scroller, viewport);
   const [scrollTop, setScrollTop] = useState(snapshot.session.gallery.scroll);
   const layout = useMemo(() => layoutGrid(snapshot.gallery, { width, ...DEFAULT_GRID_METRICS }), [snapshot.gallery, width]);
   const blocks = visibleBlocks(layout, scrollTop, height, DEFAULT_GRID_METRICS.tileHeight);
   const visibleRange = visibleBlocks(layout, scrollTop, height);
   const plan = planThumbnails(layout, scrollTop, height, { prefetchRows: options.prefetchRows ?? 2, maxPrefetch: options.maxPrefetch ?? 12 });
-  usePrefetch(controller.thumbnails, plan.prefetch);
+  usePrefetch(controller.thumbnails, measured ? plan.prefetch : []);
 
   useLayoutEffect(() => {
     const node = scroller.current;
@@ -143,6 +147,6 @@ export function GalleryView({ controller, snapshot, options = {} }: { controller
           : { transform: `translate(0px, ${block.y}px)`, height: `${block.height}px` },
       }, block.type === 'tile'
         ? h(Tile, { controller, item: block.item, position: tileIndex.get(block.key) ?? 0, total,
-          priority: visibleKeys.has(block.key) ? 'visible' : 'prefetch' })
+          priority: visibleKeys.has(block.key) ? 'visible' : 'prefetch', live: measured })
         : h(Header, { controller, block }))))));
 }
