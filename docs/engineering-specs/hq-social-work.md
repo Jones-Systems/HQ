@@ -657,11 +657,11 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/"
+    "packages/contracts",
+    "apps/desktop"
   ],
   "write_scope": [
-    "docs/evidence/hq-social-work/foundation/"
+    "docs/evidence/hq-social-work/foundation"
   ],
   "requires": [
     "spec.hq-social-work#req.foundation-binding.001"
@@ -724,8 +724,8 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/"
+    "packages/contracts",
+    "apps/desktop"
   ],
   "write_scope": [
     "package.json",
@@ -811,12 +811,12 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/"
+    "packages/contracts",
+    "apps/desktop"
   ],
   "write_scope": [
     "packages/contracts/src/services.ts",
-    "apps/desktop/src/main/services/",
+    "apps/desktop/src/main/services",
     "apps/desktop/src/preload/services.ts"
   ],
   "requires": [
@@ -887,15 +887,15 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/",
-    "docs/design/hq-visual-system/"
+    "packages/contracts",
+    "apps/desktop",
+    "docs/design/hq-visual-system"
   ],
   "write_scope": [
-    "packages/hq-ui/src/",
-    "packages/hq-ui/test/",
+    "packages/hq-ui/src",
+    "packages/hq-ui/test",
     "packages/hq-ui/README.md",
-    "docs/evidence/hq-social-work/ui/"
+    "docs/evidence/hq-social-work/ui"
   ],
   "requires": [
     "spec.hq-social-work#req.shell.001"
@@ -962,12 +962,12 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/",
-    "docs/design/hq-visual-system/"
+    "packages/contracts",
+    "apps/desktop",
+    "docs/design/hq-visual-system"
   ],
   "write_scope": [
-    "apps/desktop/src/shell/"
+    "apps/desktop/src/shell"
   ],
   "requires": [
     "spec.hq-social-work#req.shell.001"
@@ -1042,11 +1042,11 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/"
+    "packages/contracts",
+    "apps/desktop"
   ],
   "write_scope": [
-    "modules/social/core/"
+    "modules/social/core"
   ],
   "requires": [
     "spec.hq-social-work#req.social-content.001",
@@ -1115,13 +1115,13 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/",
-    "docs/design/social/"
+    "packages/contracts",
+    "apps/desktop",
+    "docs/design/social"
   ],
   "write_scope": [
-    "modules/social/content/",
-    "docs/evidence/hq-social-work/social-content/"
+    "modules/social/content",
+    "docs/evidence/hq-social-work/social-content"
   ],
   "requires": [
     "spec.hq-social-work#req.social-content.001"
@@ -1202,14 +1202,14 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/",
-    "docs/design/social/",
-    "modules/social/core/"
+    "packages/contracts",
+    "apps/desktop",
+    "docs/design/social",
+    "modules/social/core"
   ],
   "write_scope": [
-    "modules/social/workbench/",
-    "docs/evidence/hq-social-work/social-workbench/"
+    "modules/social/workbench",
+    "docs/evidence/hq-social-work/social-workbench"
   ],
   "requires": [
     "spec.hq-social-work#req.social-research.001",
@@ -1291,13 +1291,13 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/",
-    "modules/social/workbench/"
+    "packages/contracts",
+    "apps/desktop",
+    "modules/social/workbench"
   ],
   "write_scope": [
     "modules/social/index.tsx",
-    "modules/social/nav/"
+    "modules/social/nav"
   ],
   "requires": [
     "spec.hq-social-work#req.social-content.001",
@@ -1381,11 +1381,11 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/"
+    "packages/contracts",
+    "apps/desktop"
   ],
   "write_scope": [
-    "modules/social/live/"
+    "modules/social/live"
   ],
   "requires": [
     "spec.hq-social-work#req.safety.001",
@@ -1470,11 +1470,11 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/"
+    "packages/contracts",
+    "apps/desktop"
   ],
   "write_scope": [
-    "modules/work/core/"
+    "modules/work/core"
   ],
   "requires": [
     "spec.hq-social-work#req.work-core.001",
@@ -1542,13 +1542,13 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/",
-    "docs/design/work/"
+    "packages/contracts",
+    "apps/desktop",
+    "docs/design/work"
   ],
   "write_scope": [
-    "modules/work/views/",
-    "docs/evidence/hq-social-work/work-planner/"
+    "modules/work/views",
+    "docs/evidence/hq-social-work/work-planner"
   ],
   "requires": [
     "spec.hq-social-work#req.work-views.001"
@@ -1629,16 +1629,16 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/",
-    "docs/design/work/",
-    "modules/work/core/"
+    "packages/contracts",
+    "apps/desktop",
+    "docs/design/work",
+    "modules/work/core"
   ],
   "write_scope": [
-    "modules/work/board/",
-    "modules/work/detail/",
-    "modules/work/capture/",
-    "docs/evidence/hq-social-work/work-board/"
+    "modules/work/board",
+    "modules/work/detail",
+    "modules/work/capture",
+    "docs/evidence/hq-social-work/work-board"
   ],
   "requires": [
     "spec.hq-social-work#req.work-views.001",
@@ -1720,13 +1720,13 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/",
-    "modules/work/views/"
+    "packages/contracts",
+    "apps/desktop",
+    "modules/work/views"
   ],
   "write_scope": [
     "modules/work/index.tsx",
-    "modules/work/nav/"
+    "modules/work/nav"
   ],
   "requires": [
     "spec.hq-social-work#req.work-views.001",
@@ -1810,11 +1810,11 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/"
+    "packages/contracts",
+    "apps/desktop"
   ],
   "write_scope": [
-    "modules/work/live/"
+    "modules/work/live"
   ],
   "requires": [
     "spec.hq-social-work#req.work-core.001",
@@ -1898,12 +1898,12 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/"
+    "packages/contracts",
+    "apps/desktop"
   ],
   "write_scope": [
     "apps/desktop/src/modules.tsx",
-    "docs/evidence/hq-social-work/integration/"
+    "docs/evidence/hq-social-work/integration"
   ],
   "requires": [
     "spec.hq-social-work#req.foundation-binding.001",
@@ -1996,11 +1996,11 @@ Merge is held.
     "docs/engineering-specs/hq-social-work.md",
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
-    "packages/contracts/",
-    "apps/desktop/"
+    "packages/contracts",
+    "apps/desktop"
   ],
   "write_scope": [
-    "docs/evidence/hq-social-work/verification/"
+    "docs/evidence/hq-social-work/verification"
   ],
   "requires": [
     "spec.hq-social-work#req.safety.001"
