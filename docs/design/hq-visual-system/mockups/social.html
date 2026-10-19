@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HQ mockup — Social (illustrative chrome)</title>
+  <link rel="stylesheet" href="_mockup.css">
+  <link rel="stylesheet" href="../tokens/hq-tokens.css">
+  <link rel="stylesheet" href="../components/hq-components.css">
+</head>
+<!-- Illustrative only. Social owns its sections. Fictional drafts; there is no account connection, collection or posting. -->
+<body data-domain="social" data-crumb="Drafts" data-save="unsaved">
+<template id="secnav">
+  <div class="hq-secnav-head"><span class="hq-eyebrow">Social</span><span class="hq-heading">Content</span></div>
+  <div class="hq-nav-group">
+    <span class="hq-eyebrow">Plan</span>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>Overview</a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></svg>Research</a>
+    <a class="hq-nav-item" href="#" aria-current="page"><svg viewBox="0 0 24 24"><path d="M5 19h4L19 9l-4-4L5 15z"/></svg>Drafts<span class="hq-count">4</span></a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="1.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Calendar</a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2"/><path d="M8.2 8.2a5.4 5.4 0 0 0 0 7.6M15.8 8.2a5.4 5.4 0 0 1 0 7.6"/></svg>Channels</a>
+  </div>
+  <div class="hq-nav-group">
+    <span class="hq-eyebrow">Tools</span>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/></svg>Workbenches</a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M12 7.5V12l3 2"/><circle cx="12" cy="12" r="8.5"/></svg>Run history</a>
+  </div>
+  <div class="hq-secnav-foot"><p class="mock-note">Illustrative. Social owns this navigation and its sections.</p></div>
+</template>
+
+<template id="main">
+  <div class="hq-page">
+    <div class="hq-page-head">
+      <div>
+        <span class="hq-eyebrow">Drafts</span>
+        <h1 class="hq-display">Spring tasting drafts</h1>
+        <span class="hq-meta">4 drafts · 1 with unsaved changes</span>
+      </div>
+      <div class="hq-actions">
+        <button class="hq-btn hq-btn--secondary" disabled aria-disabled="true" title="Connect a channel first. No channels are connected in this build.">Schedule</button>
+        <button class="hq-btn hq-btn--primary"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New draft</button>
+      </div>
+    </div>
+    <div class="mock-social">
+      <div class="mock-rows" role="table" aria-label="Drafts">
+        <div class="mock-row is-head" role="row"><span class="hq-eyebrow">Draft</span><span class="hq-eyebrow">Channel</span><span class="hq-eyebrow">State</span></div>
+        <div class="mock-row" role="row"><div><strong>Spring tasting teaser</strong><span class="hq-meta">edited 17 Oct · 2 variants</span></div><span class="hq-small hq-muted">Short video</span><span class="hq-save hq-save--unsaved">Unsaved changes</span></div>
+        <div class="mock-row" role="row"><div><strong>Meet the growers — carousel</strong><span class="hq-meta">edited 16 Oct · 5 slides</span></div><span class="hq-small hq-muted">Carousel</span><span class="hq-save"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Saved 16 Oct</span></div>
+        <div class="mock-row" role="row"><div><strong>Seat reservations open</strong><span class="hq-meta">edited 15 Oct</span></div><span class="hq-small hq-muted">Newsletter</span><span class="hq-save hq-save--failed">Not saved · <button>Retry</button></span></div>
+        <div class="mock-row" role="row"><div><strong>Steeping guide thread</strong><span class="hq-meta">edited 12 Oct · 7 posts</span></div><span class="hq-small hq-muted">Thread</span><span class="hq-save"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Saved 12 Oct</span></div>
+      </div>
+      <div class="mock-stack">
+        <section class="hq-panel">
+          <header class="hq-panel-head"><span class="hq-heading">Channel insights</span><span class="hq-fresh hq-fresh--stale" style="margin-left:auto"><b>Stale</b> 3 days</span></header>
+          <div class="hq-panel-body">
+            <div class="hq-banner hq-banner--warning">
+              <svg viewBox="0 0 24 24"><path d="M12 4 21 19H3z"/><path d="M12 10v4M12 17h.01"/></svg>
+              <div><strong>Insights source unavailable</strong><p>Last observed 16 Oct 09:40. Showing that snapshot; nothing was retried.</p></div>
+              <button class="hq-btn hq-btn--ghost hq-btn--sm">Check</button>
+            </div>
+          </div>
+        </section>
+        <section class="hq-panel" aria-busy="true">
+          <header class="hq-panel-head"><span class="hq-heading">Research digest</span><span class="hq-save hq-save--saving" style="margin-left:auto"><span class="hq-spinner"></span>Loading</span></header>
+          <div class="hq-panel-body" style="display:grid;gap:10px">
+            <span class="hq-skeleton" style="width:72%"></span><span class="hq-skeleton" style="width:94%"></span><span class="hq-skeleton" style="width:58%"></span>
+          </div>
+        </section>
+        <section class="hq-panel">
+          <header class="hq-panel-head"><span class="hq-heading">This week</span></header>
+          <div class="hq-empty">
+            <span class="hq-empty-glyph"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="1.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></span>
+            <strong>Nothing planned this week</strong>
+            <p>Drafts with a planned date appear here. Planning a date does not post anything.</p>
+            <button class="hq-btn hq-btn--secondary hq-btn--sm">Open calendar</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</template>
+<script src="_shell.js"></script>
+</body>
+</html>

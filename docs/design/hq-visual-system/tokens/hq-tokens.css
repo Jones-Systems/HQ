@@ -1,0 +1,209 @@
+/* HQ visual-system tokens. Generated from hq-tokens.json by tools/hq_tokens.py build; edit the JSON, not this file.
+   Scheme: the shell writes its resolved theme to <html data-theme="light|dark">. Without the attribute the OS preference
+   applies. Colour roles are light-dark() pairs, so a [data-theme] subtree resolves its own scheme. */
+
+:root { color-scheme: light dark; }
+[data-theme="light"] { color-scheme: light; }
+[data-theme="dark"] { color-scheme: dark; }
+
+:root {
+  /* Colour roles: light-dark(light, dark) */
+  --hq-canvas: light-dark(#E6E5DD, #0B0C0A);
+  --hq-nav: light-dark(#F0EFE8, #121311);
+  --hq-surface: light-dark(#FAF9F5, #171815);
+  --hq-surface-raised: light-dark(#FFFFFF, #1E1F1B);
+  --hq-surface-overlay: light-dark(#FFFFFF, #262722);
+  --hq-surface-sunken: light-dark(#F0EFE9, #0F100E);
+  --hq-surface-hover: light-dark(rgba(25, 26, 22, 0.055), rgba(237, 236, 229, 0.06));
+  --hq-surface-pressed: light-dark(rgba(25, 26, 22, 0.10), rgba(237, 236, 229, 0.11));
+  --hq-surface-selected: light-dark(rgba(25, 26, 22, 0.075), rgba(237, 236, 229, 0.085));
+  --hq-border: light-dark(#DEDDD4, #2B2C27);
+  --hq-border-strong: light-dark(#C8C7BD, #3B3C36);
+  --hq-border-control: light-dark(#8A897F, #6A6A61);
+  --hq-text: light-dark(#191A16, #EDECE5);
+  --hq-text-muted: light-dark(#52534B, #ABAAA0);
+  --hq-text-subtle: light-dark(#65665D, #8F8E84);
+  --hq-text-disabled: light-dark(#A3A299, #5E5E57);
+  --hq-accent: light-dark(#C6F04D, #C6F04D);
+  --hq-accent-hover: light-dark(#B8E43A, #D4F86E);
+  --hq-accent-pressed: light-dark(#A8D42A, #B5DE3B);
+  --hq-accent-edge: light-dark(rgba(38, 50, 0, 0.42), rgba(198, 240, 77, 0));
+  --hq-on-accent: light-dark(#151905, #151905);
+  --hq-accent-text: light-dark(#4A6407, #C6F04D);
+  --hq-accent-strong: light-dark(#557300, #C6F04D);
+  --hq-accent-soft: light-dark(rgba(85, 115, 0, 0.11), rgba(198, 240, 77, 0.12));
+  --hq-focus: light-dark(#3F5A00, #C6F04D);
+  --hq-selection: light-dark(rgba(85, 115, 0, 0.20), rgba(198, 240, 77, 0.24));
+  --hq-success: light-dark(#16754B, #5DD39E);
+  --hq-success-soft: light-dark(rgba(22, 117, 75, 0.11), rgba(93, 211, 158, 0.13));
+  --hq-warning: light-dark(#8A5500, #F0B54F);
+  --hq-warning-soft: light-dark(rgba(176, 112, 0, 0.12), rgba(240, 181, 79, 0.13));
+  --hq-danger: light-dark(#BB2E1D, #FF7D6E);
+  --hq-danger-soft: light-dark(rgba(187, 46, 29, 0.10), rgba(255, 125, 110, 0.13));
+  --hq-danger-fill: light-dark(#BB2E1D, #C43C2C);
+  --hq-on-danger: light-dark(#FFFFFF, #FFFFFF);
+  --hq-info: light-dark(#2156B5, #8DBBFF);
+  --hq-info-soft: light-dark(rgba(33, 86, 181, 0.10), rgba(141, 187, 255, 0.13));
+  --hq-skeleton: light-dark(rgba(25, 26, 22, 0.07), rgba(237, 236, 229, 0.07));
+  --hq-skeleton-sheen: light-dark(rgba(25, 26, 22, 0.12), rgba(237, 236, 229, 0.12));
+  --hq-scrim: light-dark(rgba(25, 26, 22, 0.34), rgba(0, 0, 0, 0.58));
+
+  /* Invariant: identical in every chrome theme. Never wrap these in light-dark(). */
+  --hq-artwork-matte: #8C8C8C;
+  --hq-artwork-checker-a: #D6D6D6;
+  --hq-artwork-checker-b: #BDBDBD;
+  --hq-artwork-checker-size: 8px;
+
+  /* Typography */
+  --hq-font-family-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --hq-font-family-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --hq-font-weight-regular: 400;
+  --hq-font-weight-medium: 500;
+  --hq-font-weight-semibold: 600;
+  --hq-type-display: 600 24px/30px var(--hq-font-family-sans);
+  --hq-type-display-tracking: -0.015em;
+  --hq-type-title: 600 17px/24px var(--hq-font-family-sans);
+  --hq-type-title-tracking: -0.01em;
+  --hq-type-heading: 600 14px/20px var(--hq-font-family-sans);
+  --hq-type-heading-tracking: -0.005em;
+  --hq-type-body: 400 13px/20px var(--hq-font-family-sans);
+  --hq-type-body-tracking: 0;
+  --hq-type-small: 400 12px/16px var(--hq-font-family-sans);
+  --hq-type-small-tracking: 0;
+  --hq-type-label: 500 12px/16px var(--hq-font-family-sans);
+  --hq-type-label-tracking: 0;
+  --hq-type-rail: 500 10.5px/12px var(--hq-font-family-sans);
+  --hq-type-rail-tracking: 0.01em;
+  --hq-type-eyebrow: 500 10.5px/14px var(--hq-font-family-mono);
+  --hq-type-eyebrow-tracking: 0.08em;
+  --hq-type-meta: 400 11px/16px var(--hq-font-family-mono);
+  --hq-type-meta-tracking: 0;
+
+  /* Space, radius, size */
+  --hq-space-3xs: 2px;
+  --hq-space-2xs: 4px;
+  --hq-space-xs: 6px;
+  --hq-space-sm: 8px;
+  --hq-space-md: 12px;
+  --hq-space-lg: 16px;
+  --hq-space-xl: 20px;
+  --hq-space-2xl: 24px;
+  --hq-space-3xl: 32px;
+  --hq-space-4xl: 48px;
+  --hq-radius-xs: 3px;
+  --hq-radius-sm: 5px;
+  --hq-radius-md: 7px;
+  --hq-radius-lg: 10px;
+  --hq-radius-sheet: 12px;
+  --hq-radius-pill: 999px;
+  --hq-size-titlebar-height: 40px;
+  --hq-size-titlebar-inset-mac: 78px;
+  --hq-size-titlebar-inset-other: 12px;
+  --hq-size-rail-width: 64px;
+  --hq-size-rail-item-width: 52px;
+  --hq-size-rail-item-height: 48px;
+  --hq-size-rail-indicator: 3px;
+  --hq-size-secnav-width: 232px;
+  --hq-size-secnav-width-medium: 204px;
+  --hq-size-drawer-width: 264px;
+  --hq-size-inspector-width: 320px;
+  --hq-size-control-sm: 24px;
+  --hq-size-control-md: 30px;
+  --hq-size-control-lg: 36px;
+  --hq-size-icon-sm: 14px;
+  --hq-size-icon-md: 16px;
+  --hq-size-icon-lg: 20px;
+  --hq-size-hit-min: 24px;
+  --hq-size-focus-width: 2px;
+  --hq-size-focus-offset: 2px;
+  --hq-size-content-max: 1120px;
+  --hq-size-window-min-width: 760px;
+  --hq-size-window-min-height: 560px;
+
+  /* Motion and layering */
+  --hq-duration-fast: 90ms;
+  --hq-duration-base: 160ms;
+  --hq-duration-slow: 240ms;
+  --hq-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --hq-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --hq-z-sticky: 10;
+  --hq-z-drawer: 30;
+  --hq-z-popover: 40;
+  --hq-z-dialog: 50;
+  --hq-z-toast: 60;
+  --hq-z-tooltip: 70;
+
+  /* Component roles */
+  --hq-rail-item-fg: var(--hq-text-muted);
+  --hq-rail-item-fg-hover: var(--hq-text);
+  --hq-rail-item-fg-selected: var(--hq-text);
+  --hq-rail-item-bg-hover: var(--hq-surface-hover);
+  --hq-rail-item-bg-selected: var(--hq-surface-selected);
+  --hq-rail-item-indicator: var(--hq-accent-strong);
+  --hq-rail-item-fg-unavailable: var(--hq-text-disabled);
+  --hq-nav-item-fg: var(--hq-text-muted);
+  --hq-nav-item-fg-selected: var(--hq-text);
+  --hq-nav-item-bg-selected: var(--hq-surface-selected);
+  --hq-nav-item-indicator: var(--hq-accent-strong);
+  --hq-button-primary-bg: var(--hq-accent);
+  --hq-button-primary-bg-hover: var(--hq-accent-hover);
+  --hq-button-primary-bg-pressed: var(--hq-accent-pressed);
+  --hq-button-primary-fg: var(--hq-on-accent);
+  --hq-button-primary-edge: var(--hq-accent-edge);
+  --hq-button-secondary-bg: var(--hq-surface-raised);
+  --hq-button-secondary-fg: var(--hq-text);
+  --hq-button-secondary-edge: var(--hq-border-control);
+  --hq-button-ghost-fg: var(--hq-text-muted);
+  --hq-button-danger-bg: var(--hq-danger-fill);
+  --hq-button-danger-fg: var(--hq-on-danger);
+  --hq-input-bg: var(--hq-surface-sunken);
+  --hq-input-edge: var(--hq-border-control);
+  --hq-input-edge-invalid: var(--hq-danger);
+  --hq-card-bg: var(--hq-surface-raised);
+  --hq-card-edge: var(--hq-border-strong);
+  --hq-card-edge-selected: var(--hq-accent-strong);
+  --hq-toast-bg: var(--hq-surface-overlay);
+}
+
+/* Shadows cannot use light-dark(); they follow the same scheme selection explicitly. */
+:root, [data-theme="light"] {
+  --hq-shadow-raised: 0 1px 2px rgba(25, 26, 22, 0.06);
+  --hq-shadow-overlay: 0 12px 32px rgba(25, 26, 22, 0.16), 0 0 0 1px rgba(25, 26, 22, 0.06);
+  --hq-shadow-drag: 0 14px 28px rgba(25, 26, 22, 0.20);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --hq-shadow-raised: none;
+    --hq-shadow-overlay: 0 14px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(237, 236, 229, 0.07);
+    --hq-shadow-drag: 0 16px 32px rgba(0, 0, 0, 0.60);
+  }
+}
+[data-theme="dark"] {
+  --hq-shadow-raised: none;
+  --hq-shadow-overlay: 0 14px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(237, 236, 229, 0.07);
+  --hq-shadow-drag: 0 16px 32px rgba(0, 0, 0, 0.60);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --hq-duration-fast: 0ms; --hq-duration-base: 0ms; --hq-duration-slow: 0ms; }
+}
+
+/* Preserved content: captured screenshots, exported evidence, artwork and producer previews.
+   Chrome theme must not reach these pixels. The owner sets --hq-preserve-scheme from the content's recorded
+   theme (light | dark); the default 'normal' keeps the HQ chrome theme from reaching an embedded document. */
+[data-hq-preserve] {
+  color-scheme: var(--hq-preserve-scheme, normal);
+  background: var(--hq-artwork-matte);
+  forced-color-adjust: none;
+  filter: none;
+  mix-blend-mode: normal;
+  opacity: 1;
+}
+[data-hq-preserve] > img, [data-hq-preserve] > iframe, [data-hq-preserve] > canvas, [data-hq-preserve] > video {
+  display: block; filter: none; mix-blend-mode: normal; opacity: 1;
+}
+[data-hq-preserve="transparent"] {
+  background-color: var(--hq-artwork-checker-b);
+  background-image: conic-gradient(var(--hq-artwork-checker-a) 25%, var(--hq-artwork-checker-b) 0 50%, var(--hq-artwork-checker-a) 0 75%, var(--hq-artwork-checker-b) 0);
+  background-size: calc(2 * var(--hq-artwork-checker-size)) calc(2 * var(--hq-artwork-checker-size));
+}

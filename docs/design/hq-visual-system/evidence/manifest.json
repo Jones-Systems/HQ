@@ -1,0 +1,218 @@
+{
+  "schema": "hq-visual-evidence/v1",
+  "authority_effect": "none",
+  "generator": "tools/render.sh evidence; tools/compare_regions.py",
+  "renderer": "headless Chromium, device scale factor 1",
+  "plex_fonts_loaded": {
+    "artwork-invariance-1440": true,
+    "design-dark-1280": true,
+    "design-dark-760": true,
+    "design-dark-t0-slots-1280": true,
+    "design-light-1280": true,
+    "design-light-760-drawer": true,
+    "design-system-os-dark-1280": true,
+    "design-system-os-light-1280": true,
+    "social-dark-1280": true,
+    "social-light-1280": true,
+    "states-1440": true,
+    "work-dark-1440": true,
+    "work-dark-760": true,
+    "work-light-1440": true
+  },
+  "checks": [
+    {
+      "check": "artwork page well-light: light chrome == dark chrome",
+      "pass": true,
+      "crop_light": [
+        30,
+        156,
+        690,
+        564
+      ],
+      "crop_dark": [
+        750,
+        156,
+        1410,
+        564
+      ],
+      "sha256_light": "91adcd50702afbdbb3e18c7a0da9f20fdd60d3b07fe5018b70da63f6b7f80b75",
+      "sha256_dark": "91adcd50702afbdbb3e18c7a0da9f20fdd60d3b07fe5018b70da63f6b7f80b75"
+    },
+    {
+      "check": "artwork page well-dark: light chrome == dark chrome",
+      "pass": true,
+      "crop_light": [
+        30,
+        626,
+        346,
+        819
+      ],
+      "crop_dark": [
+        750,
+        626,
+        1066,
+        819
+      ],
+      "sha256_light": "e15b2ddc11a48bfa98859affc8b7e1eaa686bc991ee43c9633317427aa7b7033",
+      "sha256_dark": "e15b2ddc11a48bfa98859affc8b7e1eaa686bc991ee43c9633317427aa7b7033"
+    },
+    {
+      "check": "artwork page well-mark: light chrome == dark chrome",
+      "pass": true,
+      "crop_light": [
+        374,
+        626,
+        690,
+        819
+      ],
+      "crop_dark": [
+        1094,
+        626,
+        1410,
+        819
+      ],
+      "sha256_light": "479f52f86ba51c5ce9cb09ae6547f14103e3970977837985ed7a75b947d79fec",
+      "sha256_dark": "479f52f86ba51c5ce9cb09ae6547f14103e3970977837985ed7a75b947d79fec"
+    },
+    {
+      "check": "artwork page well-light in light chrome == source larkspur-landing-light.png",
+      "pass": true,
+      "crop": [
+        30,
+        156,
+        690,
+        564
+      ],
+      "sha256_shown": "91adcd50702afbdbb3e18c7a0da9f20fdd60d3b07fe5018b70da63f6b7f80b75",
+      "sha256_source": "91adcd50702afbdbb3e18c7a0da9f20fdd60d3b07fe5018b70da63f6b7f80b75"
+    },
+    {
+      "check": "artwork page well-light in dark chrome == source larkspur-landing-light.png",
+      "pass": true,
+      "crop": [
+        750,
+        156,
+        1410,
+        564
+      ],
+      "sha256_shown": "91adcd50702afbdbb3e18c7a0da9f20fdd60d3b07fe5018b70da63f6b7f80b75",
+      "sha256_source": "91adcd50702afbdbb3e18c7a0da9f20fdd60d3b07fe5018b70da63f6b7f80b75"
+    },
+    {
+      "check": "artwork page well-dark in light chrome == source larkspur-landing-dark.png",
+      "pass": true,
+      "crop": [
+        30,
+        626,
+        346,
+        819
+      ],
+      "sha256_shown": "e15b2ddc11a48bfa98859affc8b7e1eaa686bc991ee43c9633317427aa7b7033",
+      "sha256_source": "e15b2ddc11a48bfa98859affc8b7e1eaa686bc991ee43c9633317427aa7b7033"
+    },
+    {
+      "check": "artwork page well-dark in dark chrome == source larkspur-landing-dark.png",
+      "pass": true,
+      "crop": [
+        750,
+        626,
+        1066,
+        819
+      ],
+      "sha256_shown": "e15b2ddc11a48bfa98859affc8b7e1eaa686bc991ee43c9633317427aa7b7033",
+      "sha256_source": "e15b2ddc11a48bfa98859affc8b7e1eaa686bc991ee43c9633317427aa7b7033"
+    },
+    {
+      "check": "design page well-light: dark chrome == light chrome",
+      "pass": true,
+      "crop": [
+        335,
+        218,
+        922,
+        580
+      ],
+      "sha256_dark": "cadee407eeb421e9c0d0ef5d31add1923d071eca9b154c99346ded961947ad0f",
+      "sha256_light": "cadee407eeb421e9c0d0ef5d31add1923d071eca9b154c99346ded961947ad0f"
+    },
+    {
+      "check": "design page well-dark: dark chrome == light chrome",
+      "pass": true,
+      "crop": [
+        955,
+        218,
+        1241,
+        393
+      ],
+      "sha256_dark": "c2c58795a9015f2ee381d4b7b2ddbe5b40ccfa5a5e943bfdfe3a44714e084556",
+      "sha256_light": "c2c58795a9015f2ee381d4b7b2ddbe5b40ccfa5a5e943bfdfe3a44714e084556"
+    },
+    {
+      "check": "design page well-mark: dark chrome == light chrome",
+      "pass": true,
+      "crop": [
+        955,
+        452,
+        1241,
+        607
+      ],
+      "sha256_dark": "32589e2f63d75b07c5b8c861f67ebe1ceb9ad938f666364d6e62757f3ae78429",
+      "sha256_light": "32589e2f63d75b07c5b8c861f67ebe1ceb9ad938f666364d6e62757f3ae78429"
+    },
+    {
+      "check": "System with OS dark renders as explicit dark",
+      "pass": true,
+      "resolved_theme": "dark",
+      "pixels_identical_outside_control": true,
+      "masked": [
+        1180,
+        5,
+        1270,
+        35
+      ]
+    },
+    {
+      "check": "System with OS light renders as explicit light",
+      "pass": true,
+      "resolved_theme": "light",
+      "pixels_identical_outside_control": true,
+      "masked": [
+        1180,
+        5,
+        1270,
+        35
+      ]
+    },
+    {
+      "check": "negative control: chrome differs between dark and light",
+      "pass": true,
+      "crop": [
+        200,
+        4,
+        900,
+        36
+      ]
+    }
+  ],
+  "files": {
+    "artwork-invariance-1440.png": "aa1eb820ecef6e9b9dd28b9c3540945a59d9dce826629716622b5953849ddea4",
+    "design-dark-1280.png": "abdbf52719ff9ef02179eb87c19211ab432657394fd70ac6e3a62ee6ff4e443f",
+    "design-dark-760.png": "6fd03d09d5cf13460600ccfaf42d191653e9c26801112cc93eae3d9ea3375d58",
+    "design-dark-t0-slots-1280.png": "7e7d329129f4dda1e71669205366077cf6eeee95aa8c776900a5adb5423b82c2",
+    "design-light-1280.png": "7dbd67c4a75a863042c190bdbd6da38be1ff05ee62c616887517feae11d75c01",
+    "design-light-760-drawer.png": "cc8575a9efa6fdd677756a8b821f16a00afbccca6ec875ce704696e856365c6c",
+    "design-system-os-dark-1280.png": "f4735504e55592239697962cbdf9dbbabb8b24b3c6cb19b56099543e9da2a286",
+    "design-system-os-light-1280.png": "643315ac084202ac39a4322426b07f575bac5c9565d594061e7913a8991d5544",
+    "live-preview-760-drawer-keyboard.png": "239f19293766aaaedc787f763cb89ca3cce89a725352e84fd9dfdaa7213a4349",
+    "social-dark-1280.png": "77b004728412b44f1fb19d8f2a6835c172ade1d38058070a4fb8b5380058626f",
+    "social-light-1280.png": "b5629e537377c1fea6f797e9b6b8fb232faecfa3f7cc6ea55bd8d9da979165c1",
+    "states-1440.png": "f4c9651d5759458ef5021d3273d07170753ac940871a3550a75e6e5879660e6f",
+    "work-dark-1440.png": "ad7dd98751626563f9a67ccdd858d1ca60de16d700b1ae6ddb45e46df2eb316e",
+    "work-dark-760.png": "996a6ec997430065f1f00500193babec83d896829d60625578bec740db12da4d",
+    "work-light-1440.png": "45dfe7fc119b44bad80589a76f0fb333fbde1c86ff689db70e99c24433b107cc"
+  },
+  "artwork": {
+    "larkspur-landing-dark.png": "2419450c13dddcbf5e8dce175c92043f32462939979b90a92bab7e93b3c3a1d5",
+    "larkspur-landing-light.png": "0bf7af93294b6352ff10cab91e8fa91a8f3541c6438c3b2775482d459dbaa8c4",
+    "larkspur-mark.png": "aa7a59478ed6015c2fac09c9603286dbb01a5aab56e9a58b43a69b0a50967b5c"
+  }
+}

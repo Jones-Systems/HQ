@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HQ mockup — Design (illustrative chrome)</title>
+  <link rel="stylesheet" href="_mockup.css">
+  <link rel="stylesheet" href="../tokens/hq-tokens.css">
+  <link rel="stylesheet" href="../components/hq-components.css">
+</head>
+<!-- Illustrative only. Design owns its navigation, sections and canvas; this page demonstrates HQ chrome and
+     preserved-artwork wells with fictional content. -->
+<body data-domain="design" data-crumb="Overview" data-save="saved">
+<template id="secnav">
+  <div class="hq-secnav-head"><span class="hq-eyebrow">Design</span><span class="hq-heading">Spring tasting launch</span></div>
+  <div class="hq-nav-group">
+    <span class="hq-eyebrow">Views</span>
+    <a class="hq-nav-item" href="#" aria-current="page"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>Overview</a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M4 7.5h16M4 16.5h16M7.5 4v16M16.5 4v16"/></svg>Canvas</a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="m3.5 15 5-4 4 3 3-2 5 4"/></svg>Gallery<span class="hq-count">12</span></a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="7" height="14" rx="1"/><rect x="13.5" y="5" width="7" height="14" rx="1"/></svg>Compare</a>
+  </div>
+  <div class="hq-nav-group">
+    <span class="hq-eyebrow">Sources</span>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M6 4h9l3 3v13H6z"/><path d="M9 11h6M9 15h6"/></svg>References</a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="3.5"/><rect x="13" y="13" width="7" height="7" rx="1"/><path d="M13 7.5h4.5v3M11 16.5H6.5v-3"/></svg>Components</a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="6" height="5" rx="1"/><rect x="14.5" y="15" width="6" height="5" rx="1"/><path d="M9.5 6.5h3a2 2 0 0 1 2 2v6.5"/></svg>Flows</a>
+  </div>
+  <div class="hq-nav-group">
+    <span class="hq-eyebrow">Handoffs</span>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Requests<span class="hq-count">2</span></a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Returned<span class="hq-count">1</span></a>
+  </div>
+  <div class="hq-secnav-foot"><p class="mock-note">Illustrative. Design owns this navigation and its sections.</p></div>
+</template>
+
+<template id="main">
+  <div class="hq-page">
+    <div class="hq-page-head">
+      <div>
+        <span class="hq-eyebrow">Overview</span>
+        <h1 class="hq-display">Spring tasting launch</h1>
+        <span class="hq-meta">3 views · 12 captures · last capture 18 Oct 2026 14:02</span>
+      </div>
+      <div class="hq-actions">
+        <button class="hq-btn hq-btn--secondary">Compare</button>
+        <button class="hq-btn hq-btn--primary">Open canvas</button>
+      </div>
+    </div>
+    <div class="hq-toolbar">
+      <div class="hq-segmented" role="radiogroup" aria-label="Show">
+        <button role="radio" aria-checked="true">All</button><button role="radio" aria-checked="false">Captures</button><button role="radio" aria-checked="false">Prototypes</button>
+      </div>
+      <span class="hq-spacer" style="flex:1"></span>
+      <span class="hq-fresh hq-fresh--fresh"><b>Fresh</b> preview source · observed 2 min ago</span>
+    </div>
+    <div class="mock-design-grid">
+      <figure class="hq-well">
+        <div data-hq-preserve style="--hq-preserve-scheme: light" data-evidence="well-light"><img src="assets/larkspur-landing-light.png" alt="Fictional Larkspur Tea landing page, light variant" width="1440" height="900"></div>
+        <figcaption><span class="hq-heading">Landing — hero</span><span class="hq-chip">LIGHT</span><span class="hq-chip">1440×900</span><span class="hq-meta">rev 7c41e2a · 18 Oct 14:02</span></figcaption>
+      </figure>
+      <div class="mock-design-side">
+        <figure class="hq-well">
+          <div data-hq-preserve style="--hq-preserve-scheme: dark" data-evidence="well-dark"><img src="assets/larkspur-landing-dark.png" alt="Fictional Larkspur Tea landing page, dark variant" width="1440" height="900"></div>
+          <figcaption><span class="hq-heading">Landing — dark variant</span><span class="hq-chip">DARK</span><span class="hq-meta">rev 7c41e2a</span></figcaption>
+        </figure>
+        <figure class="hq-well mock-mark">
+          <div data-hq-preserve="transparent" data-evidence="well-mark"><img src="assets/larkspur-mark.png" alt="Fictional Larkspur leaf mark on transparency grid" width="512" height="512"></div>
+          <figcaption><span class="hq-heading">Mark</span><span class="hq-chip">PNG · ALPHA</span><span class="hq-meta">rev 2f90b11</span></figcaption>
+        </figure>
+      </div>
+    </div>
+    <div class="hq-banner hq-banner--info" style="margin-top: var(--hq-space-2xl)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></svg>
+      <div><strong>Captures keep their own colours.</strong><p>Switching HQ between Light, Dark and System restyles this chrome only. A capture's recorded theme is shown on its label.</p></div>
+    </div>
+  </div>
+</template>
+<script src="_shell.js"></script>
+</body>
+</html>
