@@ -45,6 +45,11 @@ describe('dispatchLifecycle stage from the dispatch alone', () => {
     assert.equal(none.dispatchId, null);
     assert.equal(none.route, null);
     assert.deepEqual(none.send, { status: 'open', code: null, confirmationAfter: null });
+    const manual = syntheticManualHandoff({ packetId: 'pkt.p1' as never, packetDigest: `sha256:${'0'.repeat(64)}` as never });
+    const fenced = dispatchLifecycle(null, [], { manualHandoffs: [manual] });
+    assert.equal(fenced.stage, 'not-sent');
+    assert.equal(fenced.routeHistory.acknowledgementRequired, true, 'history is shown before any dispatch exists');
+    assert.deepEqual(fenced.routeHistory.sources, [{ kind: 'manual', recordId: manual.recordId, recordedAt: manual.recordedAt }]);
     const chosen = dispatchLifecycle(null, [], { catalogDestination: syntheticDestination() });
     assert.equal(chosen.route?.source, 'catalog-selection');
     assert.equal(chosen.route?.model?.model, 'synthetic-model-1');

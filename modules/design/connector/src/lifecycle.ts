@@ -182,7 +182,11 @@ export function dispatchLifecycle(
       dispatchId: null, stage: 'not-sent', resolution: 'none', attemptOrdinal: null, basis: null, updatedAt: null, fake: false,
       route: options.catalogDestination ? selectedRouteOf(options.catalogDestination) : null,
       send: sendFence(null),
-      routeHistory: { acknowledgementRequired: false, sources: [] },
+      // No record means no packet ID here; the caller scopes `manualHandoffs` to the packet, so all of it counts.
+      routeHistory: {
+        acknowledgementRequired: manual.length > 0,
+        sources: manual.map((item): RouteSource => ({ kind: 'manual', recordId: item.recordId, recordedAt: item.recordedAt })),
+      },
       evidence: { counted: 0, latest: null, ignored: [] },
       anomalies: [],
     };

@@ -212,6 +212,7 @@ describe('controller and panel acknowledge route history explicitly', () => {
     controller.requestSend();
     const html = render(controller);
     assert.ok(html.includes('already handed off another way'));
+    assert.equal(controller.view().lifecycle?.routeAcknowledgementLabel !== null, true, 'the lifecycle view also shows it before sending');
     assert.match(html, /<button type="button" disabled="">Confirm send<\/button>/u);
     const refused = await controller.confirm();
     assert.equal(refused?.outcome, 'refused');

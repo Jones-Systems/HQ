@@ -260,7 +260,7 @@ export interface LifecycleView {
 export function lifecycleView(lifecycle: DispatchLifecycle): LifecycleView {
   const copy = STAGE_COPY[lifecycle.stage];
   const latest = lifecycle.evidence.latest;
-  const sendLabel = lifecycle.send.status === 'open' ? 'Ready to send after you confirm.'
+  const sendLabel = lifecycle.send.status === 'open' ? (lifecycle.routeHistory.acknowledgementRequired ? 'Ready to send after you confirm and acknowledge the earlier handoff.' : 'Ready to send after you confirm.')
     : lifecycle.send.status === 'needs-fresh-confirmation' ? 'A new attempt needs a fresh confirmation made after the last result.'
       : lifecycle.send.code === 'unresolved-attempt' ? 'Send is fenced: the last attempt has an unknown effect.'
         : 'Send is fenced: the receiver already has this request.';
