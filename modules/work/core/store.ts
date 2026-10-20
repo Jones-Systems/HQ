@@ -1,16 +1,20 @@
 import { formatClock, resolveZone } from './upstream/manual-planner/dates.js';
 import { projectMove } from './upstream/manual-planner/ordering.js';
 import { restoreAnchor } from './planning';
-import { newRequestId, plannerErrorOf, type Anchor, type PlannerError, type PlannerPort, type Snapshot, type WriteResult } from './port';
+import {
+  newRequestId, plannerErrorOf, recoveryErrorOf,
+  type Anchor, type IndeterminateReason, type PlannerError, type PlannerPort, type PlannerRecovery, type PlannerRecoveryError,
+  type Snapshot, type WriteResult,
+} from './port';
 import { HQ_REFERENCES_FEATURE, type Item, type ItemPatch, type NewItemFields, type PatchField, type Settings, type Status } from './types';
 import { normalizeFields, stripDerived } from './validation';
 
 // The Work state store (RW-5, RW-8, RW-9). It lives at module level, outside
 // React, so it survives T0's remount of the module on every domain switch. All
-// writes go through the PlannerPort; nothing here executes or dispatches work.
+// writes go through the PlannerPort; nothing here executes or dispatches work. A write whose outcome is unknown is
+// never re-sent automatically or through its ordinary route: only the user's explicit Check (a replay lookup) and,
+// once that proves it never landed, the explicit Apply (a replay resend) touch it, through the PlannerRecovery.
 
-/** The service remembers this many request IDs; past it a replay may be gone. */
-export const REPLAY_WINDOW = 2_000;
 export const UNDO_LIMIT = 40;
 /** The unconfirmed queue is in memory until a shell storage member exists (G-3). */
 export const UNCONFIRMED_SCOPE_NOTE = 'Unconfirmed changes are kept for this session only.';
@@ -23,19 +27,28 @@ export type WriteOp =
   | { op: 'markReviewed'; id: string; revision: number }
   | { op: 'updateSettings'; settings: Settings };
 
+/** The answer of the last explicit Check of an unconfirmed write. */
+export type RecoveryState =
+  /** Provably not applied when checked; the user may Apply it, which the service applies at most once. */
+  | { kind: 'not_applied'; checkedAt: string }
+  /** Whether it was applied cannot be determined; read the board back. Nothing is sent for it. */
+  | { kind: 'indeterminate'; reason: IndeterminateReason; checkedAt: string };
+
 export interface UnconfirmedWrite {
   requestId: string;
-  /** The exact body; reconciliation re-sends it unchanged with the same request ID. */
+  /** The intent as first sent. It is never re-sent through its ordinary route. */
   write: WriteOp;
   attemptedAt: string;
   /** The last confirmed state version before the attempt. */
   baseVersion: number;
   /**
-   * `unconfirmed`: will be re-sent while its replay record is provably kept.
-   * `awaiting_decision`: the record may have expired; only the user re-sends.
+   * `unconfirmed`: not yet checked, or the last check could not reach the Planner.
+   * `awaiting_decision`: checked; `recovery` says whether Apply is possible or a read-back is needed.
    * `held`: the service reported request_id_reused, a defect; the queue stops.
    */
   state: 'unconfirmed' | 'awaiting_decision' | 'held';
+  /** Set by an explicit Check; absent until then. */
+  recovery?: RecoveryState;
   /** Heuristic flags (same title, created since the attempt). Never proof either way. */
   possiblySavedIds: string[];
 }
@@ -72,6 +85,8 @@ export interface WorkState {
   notices: Notice[];
   save: SaveState;
   lastSyncedAt: string | null;
+  /** A confirmed write could not read back its neighbours; the next poll refreshes even if the version is unchanged. */
+  refreshDue?: boolean;
 }
 
 export interface SettingsResult { settings: Settings; stateVersion: number }
@@ -90,7 +105,12 @@ export type UndoOutcome =
 export interface WorkStoreOptions {
   now?: () => Date;
   newRequestId?: () => string;
+  /** Replay-aware recovery for unknown writes. Without it, Check sends nothing and asks for a read-back. */
+  recovery?: PlannerRecovery;
 }
+
+/** What one explicit Check or Apply did. `refused` and `missing` sent nothing. */
+export type RecoveryOutcome = 'confirmed' | 'not_applied' | 'indeterminate' | 'still_unknown' | 'stopped' | 'resolved' | 'refused' | 'missing';
 
 const FIELD_LABEL: Record<PatchField, string> = {
   title: 'Title', kind: 'Kind', motivation: 'Why', horizon: 'Horizon', priority: 'Priority', area: 'Area',
@@ -137,6 +157,7 @@ export type WorkStore = ReturnType<typeof createWorkStore>;
 export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {}) {
   const now = options.now ?? (() => new Date());
   const nextRequestId = options.newRequestId ?? newRequestId;
+  const recovery = options.recovery ?? null;
   const listeners = new Set<() => void>();
   const chains = new Map<string, Promise<unknown>>();
   let offline = false;
@@ -208,6 +229,8 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
     if (!confirmed) return;
     const known = confirmed.stateVersion;
     const replayed = 'replayed' in result && result.replayed;
+    const stale = 'stale' in result && result.stale === true;
+    if (stale) set({ refreshDue: true });
     // A replay carries the originally recorded items, which may be stale.
     if (!replayed && result.stateVersion > known) {
       let items = confirmed.items;
@@ -217,7 +240,7 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
       }
       set({ confirmed: { ...confirmed, items, stateVersion: result.stateVersion, settings: 'settings' in result ? result.settings : confirmed.settings } });
     }
-    if (replayed || result.stateVersion !== known + 1) void refresh();
+    if (replayed || stale || result.stateVersion !== known + 1) void refresh();
   }
 
   async function refresh(): Promise<boolean> {
@@ -225,7 +248,7 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
       const snapshot = await port.snapshot();
       if (state.confirmed && snapshot.stateVersion < state.confirmed.stateVersion) return true;
       offline = false;
-      set({ confirmed: snapshot, load: 'ready', lastSyncedAt: snapshot.observedAt });
+      set({ confirmed: snapshot, load: 'ready', lastSyncedAt: snapshot.observedAt, refreshDue: false });
       flagPossiblySaved();
       return true;
     } catch {
@@ -399,63 +422,90 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
 
   // -------------------------------------------------------- reconciliation
 
-  async function resend(entry: UnconfirmedWrite): Promise<'confirmed' | 'still_unknown' | 'stopped' | 'resolved'> {
-    try {
-      const result = await send(entry.write, entry.requestId);
-      offline = false;
-      savedAt = stamp();
-      set({ unconfirmed: state.unconfirmed.filter((u) => u.requestId !== entry.requestId) });
-      absorb(result);
-      void refresh();
-      notify('info', 'replayed' in result && result.replayed ? 'An unconfirmed change was already saved; confirmed.' : 'An unconfirmed change is now saved.');
-      return 'confirmed';
-    } catch (reason) {
-      const error = plannerErrorOf(reason, entry.requestId);
-      if (error.kind === 'unknown') return 'still_unknown';
-      if (error.kind === 'unavailable') {
+  function updateEntry(requestId: string, change: (entry: UnconfirmedWrite) => UnconfirmedWrite) {
+    set({ unconfirmed: state.unconfirmed.map((u) => u.requestId === requestId ? change(u) : u) });
+  }
+
+  function confirm(entry: UnconfirmedWrite, result: WriteResult | SettingsResult, message: string): RecoveryOutcome {
+    offline = false;
+    savedAt = stamp();
+    set({ unconfirmed: state.unconfirmed.filter((u) => u.requestId !== entry.requestId) });
+    absorb(result);
+    void refresh();
+    notify('info', message);
+    return 'confirmed';
+  }
+
+  function recoveryFailure(entry: UnconfirmedWrite, error: PlannerRecoveryError): RecoveryOutcome {
+    switch (error.kind) {
+      case 'replay_indeterminate':
+        offline = false;
+        updateEntry(entry.requestId, (u) => ({ ...u, state: 'awaiting_decision', recovery: { kind: 'indeterminate', reason: error.reason, checkedAt: stamp() } }));
+        return 'indeterminate';
+      case 'unavailable':
         offline = true;
         set({});
         return 'stopped';
+      case 'unknown': {
+        // An apply whose answer was lost may have landed just now: back to unconfirmed, and Apply needs a new Check.
+        offline = false;
+        updateEntry(entry.requestId, ({ recovery: _previous, ...u }) => ({ ...u, state: 'unconfirmed' }));
+        return 'still_unknown';
       }
-      if (error.kind === 'request_id_reused') {
+      case 'request_id_reused':
         set({
           unconfirmed: state.unconfirmed.map((u) => u.requestId === entry.requestId ? { ...u, state: 'held' } : u),
           held: { requestId: entry.requestId, reason: 'The Planner reports this request ID was already used for a different change. This is a defect; the queue is held.' },
         });
         return 'stopped';
-      }
-      set({ unconfirmed: state.unconfirmed.filter((u) => u.requestId !== entry.requestId) });
-      applyError(entry.write, entry.requestId, error);
-      if (error.kind === 'revision_conflict') notify('warning', 'An unconfirmed change could not be confirmed: the item changed since. Its current version is shown; it may or may not include your change.');
-      else if (error.kind !== 'order_conflict') notify('danger', 'An unconfirmed change was rejected by the Planner.');
-      return 'resolved';
+      default:
+        // An apply the service refused rolled back: it did not land, now or before.
+        set({ unconfirmed: state.unconfirmed.filter((u) => u.requestId !== entry.requestId) });
+        applyError(entry.write, entry.requestId, error);
+        if (error.kind === 'revision_conflict') notify('warning', 'An unconfirmed change was not applied: the item changed since. Its current version is shown.');
+        else if (error.kind !== 'order_conflict') notify('danger', 'An unconfirmed change was rejected by the Planner.');
+        return 'resolved';
     }
   }
 
+  /** The explicit Check: a replay lookup. It never applies or re-sends the write. */
+  async function check(entry: UnconfirmedWrite): Promise<RecoveryOutcome> {
+    if (!recovery) return recoveryFailure(entry, { kind: 'replay_indeterminate', requestId: entry.requestId, reason: 'unsupported' });
+    try {
+      const answer = await recovery.check(entry.requestId);
+      if (answer.outcome === 'replayed') return confirm(entry, answer.result, 'An unconfirmed change was already saved; confirmed.');
+      offline = false;
+      updateEntry(entry.requestId, (u) => ({ ...u, state: 'awaiting_decision', recovery: { kind: 'not_applied', checkedAt: stamp() } }));
+      return 'not_applied';
+    } catch (reason) {
+      return recoveryFailure(entry, recoveryErrorOf(reason, entry.requestId, 'check'));
+    }
+  }
+
+  /** The explicit Apply: a replay resend, offered only after a Check proved the write never landed. */
+  async function apply(entry: UnconfirmedWrite): Promise<RecoveryOutcome> {
+    if (!recovery || entry.recovery?.kind !== 'not_applied') return 'refused';
+    try {
+      const answer = await recovery.apply(entry.requestId);
+      return confirm(entry, answer.result, answer.outcome === 'applied_now' ? 'An unconfirmed change is now saved.' : 'An unconfirmed change was already saved; confirmed.');
+    } catch (reason) {
+      return recoveryFailure(entry, recoveryErrorOf(reason, entry.requestId, 'apply'));
+    }
+  }
+
+  /** A Check can still change the answer: unchecked, not applied, or the Planner lacked the replay route. */
+  const checkable = (u: UnconfirmedWrite) => u.state === 'unconfirmed'
+    || (u.state === 'awaiting_decision' && (u.recovery?.kind === 'not_applied' || (u.recovery?.kind === 'indeterminate' && u.recovery.reason === 'unsupported')));
+
+  /** Check now: looks up every checkable unconfirmed write, one at a time. Sends no write. */
   async function reconcile(): Promise<void> {
     if (state.held) return;
     flagPossiblySaved();
-    for (const entry of [...state.unconfirmed]) {
+    for (const { requestId } of [...state.unconfirmed]) {
       if (state.held) return;
-      if (entry.state !== 'unconfirmed') continue;
-      if (entry.write.op === 'create' || entry.write.op === 'updateSettings') {
-        // No revision guards these. Re-send only while the replay record is provably kept.
-        let current: number;
-        try {
-          current = await port.version();
-        } catch {
-          offline = true;
-          set({});
-          return;
-        }
-        if (current - entry.baseVersion >= REPLAY_WINDOW) {
-          set({ unconfirmed: state.unconfirmed.map((u) => u.requestId === entry.requestId ? { ...u, state: 'awaiting_decision' } : u) });
-          flagPossiblySaved();
-          continue;
-        }
-      }
-      const outcome = await resend(entry);
-      if (outcome === 'stopped' || outcome === 'still_unknown') return;
+      const entry = state.unconfirmed.find((u) => u.requestId === requestId);
+      if (!entry || !checkable(entry)) continue;
+      if (await check(entry) === 'stopped') return;
     }
   }
 
@@ -481,12 +531,13 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
         set({});
         return;
       }
-      if (offline || !state.confirmed || current !== state.confirmed.stateVersion) await refresh();
+      if (offline || !state.confirmed || state.refreshDue || current !== state.confirmed.stateVersion) await refresh();
       else {
         offline = false;
         set({ lastSyncedAt: stamp() });
       }
-      if (state.unconfirmed.length) await reconcile();
+      // Unconfirmed writes are only flagged here; checking them waits for the user.
+      if (state.unconfirmed.length) flagPossiblySaved();
     },
 
     /** Creates at the top of its status (default Inbox). */
@@ -525,14 +576,27 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
     },
 
     reconcile,
-    /** The user's explicit choice to re-send one unconfirmed request, same ID and body. */
-    async retryUnconfirmed(requestId: string): Promise<'confirmed' | 'still_unknown' | 'stopped' | 'resolved' | 'missing'> {
+    /** The explicit Check of one unconfirmed write: a lookup only. */
+    async checkUnconfirmed(requestId: string): Promise<RecoveryOutcome> {
       const entry = state.unconfirmed.find((u) => u.requestId === requestId);
       if (!entry || entry.state === 'held') return 'missing';
-      return resend(entry);
+      return check(entry);
     },
+    /**
+     * The user's explicit Apply of one unconfirmed write that a Check proved never landed. It goes through the replay
+     * route with the original intent and baseline, so the service applies it at most once. Otherwise nothing is sent.
+     */
+    async retryUnconfirmed(requestId: string): Promise<RecoveryOutcome> {
+      const entry = state.unconfirmed.find((u) => u.requestId === requestId);
+      if (!entry || entry.state === 'held') return 'missing';
+      return apply(entry);
+    },
+    /** True when Apply may be offered for this write: a Check proved it never landed. */
+    canApply: (requestId: string): boolean => recovery !== null
+      && state.unconfirmed.some((u) => u.requestId === requestId && u.state === 'awaiting_decision' && u.recovery?.kind === 'not_applied'),
     /** Stops tracking one unconfirmed request; its effect stays unknown. Releases a hold it caused. */
     dismissUnconfirmed(requestId: string): void {
+      recovery?.release(requestId);
       set({
         unconfirmed: state.unconfirmed.filter((u) => u.requestId !== requestId),
         held: state.held?.requestId === requestId ? null : state.held,

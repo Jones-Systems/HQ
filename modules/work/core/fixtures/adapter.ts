@@ -8,6 +8,9 @@ import { normalizeFields, normalizeSettings, randomEntryId, stripDerived, wallTi
 // creates, target-only renumbering, and request-ID idempotency with a bounded
 // 2,000-entry replay record (same ID and body replays; a different body is
 // `request_id_reused`). A failed call records nothing and changes nothing.
+// Like the service, an ordinary same-ID send after its record is evicted is
+// applied again. The service's retention-aware replay route is `control.replay`,
+// with the eviction floor that proves "never applied" (requests.replay).
 
 export const MAX_REMEMBERED_REQUESTS = 2_000;
 export const POSITION_STEP = 1024;
@@ -29,6 +32,40 @@ export interface FixtureControl {
   requestRecordCount(): number;
   hasRequestRecord(requestId: string): boolean;
   stateVersion(): number;
+  /** The highest state version of any evicted request record; it only rises. */
+  evictedThroughVersion(): number;
+  /** The service's replay route (`POST /api/requests/replay`). Reach it only through a transport, never from the UI. */
+  replay(request: FixtureReplayRequest): Promise<FixtureReplayOutcome>;
+}
+
+/** One write as first sent, in the bridge's typed form. */
+export interface FixtureWriteCall {
+  route: 'create' | 'patch' | 'move' | 'archive' | 'restore' | 'reviewed' | 'settings';
+  params: { requestId: string; id?: string; [key: string]: unknown };
+}
+
+export interface FixtureReplayRequest {
+  mode: 'lookup' | 'resend';
+  requestId: string;
+  original: FixtureWriteCall;
+  sentAfterVersion?: number;
+}
+
+export type FixtureReplayOutcome =
+  | { outcome: 'replayed'; response: WriteResult | { settings: Settings; stateVersion: number } }
+  | { outcome: 'not_applied' }
+  | { outcome: 'applied_now'; response: WriteResult | { settings: Settings; stateVersion: number } };
+
+/** The service's 409 `replay_indeterminate`: no record, and no proof the write never landed. Nothing changed. */
+export class ReplayIndeterminateError extends Error {
+  readonly sentAfterVersion: number | null;
+  readonly evictedThroughVersion: number;
+  constructor(sentAfterVersion: number | null, evictedThroughVersion: number) {
+    super('replay_indeterminate');
+    this.name = 'ReplayIndeterminateError';
+    this.sentAfterVersion = sentAfterVersion;
+    this.evictedThroughVersion = evictedThroughVersion;
+  }
 }
 
 type Recorded = { fingerprint: string; response: unknown };
@@ -74,6 +111,7 @@ export function createFixturePlanner(options: FixtureOptions = {}): { port: Plan
   const features = [...(options.features ?? [])];
   let settings: Settings = { ...(options.settings ?? DEFAULT_SETTINGS) };
   let version = options.stateVersion ?? 0;
+  let evictedThrough = 0;
   const items = new Map<string, Item>();
   for (const raw of options.items ?? []) items.set(raw.id, { ...clone(raw), dates: raw.dates.map(stripDerived) });
   const requests = new Map<string, Recorded>();
@@ -123,7 +161,11 @@ export function createFixturePlanner(options: FixtureOptions = {}): { port: Plan
     version += 1;
     const response = { ...payload, stateVersion: version } as R;
     requests.set(requestId, { fingerprint, response: clone(response) });
-    while (requests.size > MAX_REMEMBERED_REQUESTS) requests.delete(requests.keys().next().value!);
+    while (requests.size > MAX_REMEMBERED_REQUESTS) {
+      const [oldest, evicted] = requests.entries().next().value!;
+      evictedThrough = Math.max(evictedThrough, (evicted.response as { stateVersion: number }).stateVersion);
+      requests.delete(oldest);
+    }
     return response;
   }
 
@@ -132,6 +174,30 @@ export function createFixturePlanner(options: FixtureOptions = {}): { port: Plan
 
   // The service fingerprints method, path and body bytes; this keys on the same parts.
   const fingerprintOf = (route: string, body: unknown) => `${route}\n${JSON.stringify(body)}`;
+  /** The method, path and body of a typed write, as the service fingerprints it. Throws for a non-replayable route. */
+  function fingerprintFor(call: FixtureWriteCall): string {
+    const p = call.params as Record<string, unknown> & { id?: string };
+    switch (call.route) {
+      case 'create': return fingerprintOf('POST /api/items', { fields: p.fields });
+      case 'patch': return fingerprintOf(`PATCH /api/items/${p.id}`, { revision: p.revision, patch: p.patch });
+      case 'move': return fingerprintOf(`POST /api/items/${p.id}/move`, { revision: p.revision, status: p.status, ...(p.anchor as object) });
+      case 'archive': case 'restore': case 'reviewed': return fingerprintOf(`POST /api/items/${p.id}/${call.route}`, { revision: p.revision });
+      case 'settings': return fingerprintOf('PUT /api/settings', { settings: p.settings });
+      default: return fail({ kind: 'invalid', errors: [{ field: 'path', message: 'not_replayable' }] });
+    }
+  }
+
+  function dispatch(call: FixtureWriteCall): Promise<WriteResult | { settings: Settings; stateVersion: number }> {
+    const p = call.params as Record<string, never> & { requestId: string; id: string; revision: number };
+    switch (call.route) {
+      case 'create': return port.create(p.fields, p.requestId);
+      case 'patch': return port.patch(p.id, p.revision, p.patch, p.requestId);
+      case 'move': return port.move(p.id, p.revision, p.status, p.anchor, p.requestId);
+      case 'archive': case 'restore': return port.setArchived(p.id, p.revision, call.route === 'archive', p.requestId);
+      case 'reviewed': return port.markReviewed(p.id, p.revision, p.requestId);
+      case 'settings': return port.updateSettings(p.settings, p.requestId);
+    }
+  }
 
   const port: PlannerPort = {
     async snapshot(): Promise<Snapshot> {
@@ -145,7 +211,7 @@ export function createFixturePlanner(options: FixtureOptions = {}): { port: Plan
     async create(fields, requestId) {
       checkRequestId(requestId);
       const values = validated(fields, true);
-      return write(requestId, fingerprintOf('POST /api/items', { fields }), () => {
+      return write(requestId, fingerprintFor({ route: 'create', params: { requestId, fields } }), () => {
         const at = stamp();
         const status = values.status!;
         const created: Item = {
@@ -164,7 +230,7 @@ export function createFixturePlanner(options: FixtureOptions = {}): { port: Plan
     async patch(id, revision, patch, requestId) {
       checkRequestId(requestId);
       const values = validated(patch, false);
-      return write(requestId, fingerprintOf(`PATCH /api/items/${id}`, { revision, patch }), () => {
+      return write(requestId, fingerprintFor({ route: 'patch', params: { requestId, id, revision, patch } }), () => {
         const stored = guard(id, revision);
         // The service compares against the item as read, so a supplied timed
         // date list always counts as changed (its derived fields differ).
@@ -185,11 +251,10 @@ export function createFixturePlanner(options: FixtureOptions = {}): { port: Plan
     async move(id, revision, status, anchor: Anchor, requestId) {
       checkRequestId(requestId);
       if (!(STATUS_IDS as readonly string[]).includes(status)) fail({ kind: 'invalid', errors: [{ field: 'status', message: 'Unknown status.' }] });
-      const body = { revision, status, ...anchor };
       const a = anchor as { after_id?: string; before_id?: string; place?: string };
       if (a.after_id != null && a.before_id != null) fail({ kind: 'invalid', errors: [{ field: 'body', message: 'Give either after_id or before_id, not both.' }] });
       if (a.place !== undefined && a.place !== 'top' && a.place !== 'bottom') fail({ kind: 'invalid', errors: [{ field: 'body', message: 'place must be top or bottom.' }] });
-      return write(requestId, fingerprintOf(`POST /api/items/${id}/move`, body), () => {
+      return write(requestId, fingerprintFor({ route: 'move', params: { requestId, id, revision, status, anchor } }), () => {
         const stored = guard(id, revision);
         const ids = ordered([...items.values()].filter((i) => i.status === status && i.id !== id)).map((i) => i.id);
         const target = a.after_id ?? a.before_id;
@@ -223,7 +288,7 @@ export function createFixturePlanner(options: FixtureOptions = {}): { port: Plan
 
     async setArchived(id, revision, archived, requestId) {
       checkRequestId(requestId);
-      return write(requestId, fingerprintOf(`POST /api/items/${id}/${archived ? 'archive' : 'restore'}`, { revision }), () => {
+      return write(requestId, fingerprintFor({ route: archived ? 'archive' : 'restore', params: { requestId, id, revision } }), () => {
         const stored = guard(id, revision);
         if (Boolean(stored.archived_at) === archived) return { item: read(stored), changed: [] };
         const at = stamp();
@@ -236,7 +301,7 @@ export function createFixturePlanner(options: FixtureOptions = {}): { port: Plan
 
     async markReviewed(id, revision, requestId) {
       checkRequestId(requestId);
-      return write(requestId, fingerprintOf(`POST /api/items/${id}/reviewed`, { revision }), () => {
+      return write(requestId, fingerprintFor({ route: 'reviewed', params: { requestId, id, revision } }), () => {
         const stored = guard(id, revision);
         const next = { ...stored, reviewed_at: stamp(), revision: stored.revision + 1 };
         items.set(id, next);
@@ -252,7 +317,7 @@ export function createFixturePlanner(options: FixtureOptions = {}): { port: Plan
 
     async updateSettings(next, requestId) {
       checkRequestId(requestId);
-      return mutate(requestId, fingerprintOf('PUT /api/settings', { settings: next }), () => {
+      return mutate(requestId, fingerprintFor({ route: 'settings', params: { requestId, settings: next } }), () => {
         const result = normalizeSettings(next, settings);
         if (!result.ok) fail({ kind: 'invalid', errors: result.errors });
         else settings = result.value;
@@ -266,6 +331,24 @@ export function createFixturePlanner(options: FixtureOptions = {}): { port: Plan
     requestRecordCount: () => requests.size,
     hasRequestRecord: (requestId) => requests.has(requestId),
     stateVersion: () => version,
+    evictedThroughVersion: () => evictedThrough,
+    async replay({ mode, requestId, original, sentAfterVersion }) {
+      checkRequestId(requestId);
+      if (original.params.requestId !== requestId) fail({ kind: 'invalid', errors: [{ field: 'request_id', message: 'The replayed request ID must match the original.' }] });
+      if (sentAfterVersion !== undefined && (!Number.isInteger(sentAfterVersion) || sentAfterVersion < 0 || sentAfterVersion > version)) {
+        fail({ kind: 'invalid', errors: [{ field: 'sent_after_version', message: 'Must be a whole state version no later than the current one.' }] });
+      }
+      const fingerprint = fingerprintFor(original);
+      const record = requests.get(requestId);
+      if (record) {
+        if (record.fingerprint !== fingerprint) fail({ kind: 'request_id_reused' });
+        return { outcome: 'replayed', response: clone(record.response) as WriteResult };
+      }
+      // Without a record, only a baseline at or above the eviction floor proves the original never committed.
+      if (sentAfterVersion === undefined || evictedThrough > sentAfterVersion) throw new ReplayIndeterminateError(sentAfterVersion ?? null, evictedThrough);
+      if (mode === 'lookup') return { outcome: 'not_applied' };
+      return { outcome: 'applied_now', response: await dispatch(original) };
+    },
   };
   return { port, control };
 }

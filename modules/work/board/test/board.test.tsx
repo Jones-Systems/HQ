@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createWorkStore, PLANNER_PORT_KEYS, type PlannerPort, type Status } from '../../core';
-import { OFFLINE_BANNER, POSSIBLY_SAVED_NOTE } from '../SyncStatus';
+import { APPLY_LABEL, OFFLINE_BANNER, POSSIBLY_SAVED_NOTE } from '../SyncStatus';
 import { PROJECT_SCOPE_NOTE } from '../StatusBoard';
 import { createFeedback } from '../feedback';
 import { moveShape, setup, writes, type PortCall } from './fixtures';
@@ -278,18 +278,20 @@ describe('states (ctx.test-plan.001 matrix)', () => {
     expect(within(card('it-kite')).queryByText('Saving…')).toBeNull();
   });
 
-  it('unknown: a lost response stays Unconfirmed and is reconciled only with the same request ID and body', async () => {
+  it('unknown: a lost response stays Unconfirmed; Check never re-sends it, and without a replay check asks for a read-back', async () => {
     const env = await setup();
     render(<Host store={env.store} feedback={env.feedback} />);
     env.faults.next('lose-response');
     await keyboard('it-kite', 'ArrowRight');
     expect(within(card('it-kite')).getByText('Unconfirmed')).toBeTruthy();
     expect(screen.getByText(/Move of “Sketch a kite frame” to Considering/)).toBeTruthy();
-    const first = writes(env.calls).at(-1)!;
+    expect(screen.getByText(/Check asks the Planner whether it was saved; nothing is re-sent/)).toBeTruthy();
+    const sent = writes(env.calls).length;
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Check now' })); });
-    const resent = writes(env.calls).at(-1)!;
-    expect(resent).toEqual(first);
-    expect(screen.queryByText('Unconfirmed')).toBeNull();
+    expect(writes(env.calls)).toHaveLength(sent);
+    expect(within(card('it-kite')).getByText('Unconfirmed')).toBeTruthy();
+    expect(screen.getByText(/Cannot be checked · this Planner offers no replay check\. Read the board back/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: APPLY_LABEL })).toBeNull();
   });
 
   it('a same-title item after a lost create is flagged as possibly saved, never as proof', async () => {

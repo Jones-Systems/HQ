@@ -7,7 +7,10 @@ export * from './validation';
 export * from './planning';
 export * from './store';
 export { useWorkState, VERSION_POLL_MS } from './hook';
-export { createFixturePlanner, MAX_REMEMBERED_REQUESTS, POSITION_STEP, withDerived, type FixtureControl, type FixtureOptions } from './fixtures/adapter';
+export {
+  createFixturePlanner, MAX_REMEMBERED_REQUESTS, POSITION_STEP, ReplayIndeterminateError, withDerived,
+  type FixtureControl, type FixtureOptions, type FixtureReplayOutcome, type FixtureReplayRequest, type FixtureWriteCall,
+} from './fixtures/adapter';
 export { withFaults, type FaultControl, type WriteFault } from './fixtures/faults';
 export { EXAMPLE_SETTINGS, exampleItems } from './fixtures/examples';
 export {

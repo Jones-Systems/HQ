@@ -3,16 +3,22 @@ import { createFeedback, DEFAULT_COLLAPSED, type Feedback } from '../board';
 import { createDraftStore, type DraftStore } from '../capture';
 import {
   createFixturePlanner, createWorkStore, EMPTY_FILTERS, EXAMPLE_SETTINGS, plannerToday,
-  type DateInput, type Filters, type PlannerPort, type Status, type WorkStore,
+  type DateInput, type Filters, type PlannerPort, type PlannerRecovery, type Status, type WorkStore,
 } from '../core';
 import { createDetailState, type DetailState } from '../detail';
+import { bridgeTransport, createPlannerLive, isWorkBridge, type PlannerLive } from '../live';
 import { viewItems } from '../views/fixtures';
 
 // The Work session (RW-5, RV-6, iface.domain-module.001). T0 remounts the module on every domain switch, so
 // everything Work keeps lives here, at module level and keyed by `context.id`: one Planner store shared by the
 // board, the planning views, the card detail and capture, plus the toasts, HQ drafts, unsaved detail text and the
-// page state (last page, filters, collapsed columns, scroll and unsaved capture text). It is in memory for this
-// session only; persistence across a restart waits for a shell storage member (G-3).
+// page state (last page, filters, collapsed columns, scroll and unsaved capture text).
+//
+// The Planner is chosen once per renderer: the live Planner when the desktop bridge (`window.hqServices.work`) is
+// present, otherwise the labelled fictional example. A live Planner that is unconfigured or unreachable never falls
+// back to the example; the domain says it is not connected. Live Planner records persist in the Planner service.
+// Everything else here, including unsaved text and unconfirmed writes, is in memory for this session only and labelled
+// so; persistence across a restart waits for a shell storage member (G-3).
 
 export interface ScrollPosition { readonly top: number; readonly left: number; readonly columns: number }
 
@@ -78,30 +84,54 @@ export function examplePlanner(now: Date = new Date()): PlannerPort {
   return createFixturePlanner({ items: viewItems(plannerToday(EXAMPLE_SETTINGS, now)), settings: { ...EXAMPLE_SETTINGS } }).port;
 }
 
-let override: { port: PlannerPort; example: boolean } | null = null;
+interface PlannerChoice { port: PlannerPort; recovery: PlannerRecovery | null; example: boolean }
+
+let override: PlannerChoice | null = null;
+/** The live Planner, chosen at most once; `null` means no bridge, `undefined` not chosen yet. */
+let live: PlannerLive | null | undefined;
 const sessions = new Map<string, WorkSession>();
+
+/** The live Planner over the desktop bridge, created once; `null` when the renderer has no Work bridge. */
+function livePlanner(): PlannerLive | null {
+  if (live === undefined) {
+    const work = (globalThis as { hqServices?: { work?: unknown } }).hqServices?.work;
+    live = isWorkBridge(work) ? createPlannerLive(bridgeTransport(work)) : null;
+  }
+  return live;
+}
+
+function choosePlanner(): PlannerChoice | null {
+  if (override) return override;
+  const planner = livePlanner();
+  return planner ? { port: planner.port, recovery: planner.recovery, example: false } : null;
+}
 
 /** One session per HQ project for the life of the renderer; a remount gets the same session back. */
 export function workSession(contextId: string): WorkSession {
   let session = sessions.get(contextId);
   if (!session) {
-    const port = override?.port ?? examplePlanner();
+    const chosen = choosePlanner();
+    const port = chosen?.port ?? examplePlanner();
     sessions.set(contextId, session = {
-      store: createWorkStore(port), feedback: createFeedback(), drafts: createDraftStore(), detail: createDetailState(),
-      ui: createUiState(), example: override?.example ?? true,
+      store: createWorkStore(port, chosen?.recovery ? { recovery: chosen.recovery } : {}), feedback: createFeedback(),
+      drafts: createDraftStore(), detail: createDetailState(), ui: createUiState(), example: chosen?.example ?? true,
     });
   }
   return session;
 }
 
-/** Test seam: the Planner port new sessions use (`null` restores the example Planner). Live access stays held. */
-export function setWorkSessionPort(port: PlannerPort | null, options: { example?: boolean } = {}): void {
-  override = port ? { port, example: options.example ?? true } : null;
+/**
+ * Test seam: the Planner port new sessions use, ahead of the bridge (`null` restores the production choice). A
+ * `recovery` resolves unknown writes for that port; without one, Check sends nothing.
+ */
+export function setWorkSessionPort(port: PlannerPort | null, options: { example?: boolean; recovery?: PlannerRecovery } = {}): void {
+  override = port ? { port, recovery: options.recovery ?? null, example: options.example ?? true } : null;
 }
 
-/** Test seam: forget every session. */
+/** Test seam: forget every session and the Planner choice. */
 export function resetWorkSessions(): void {
   sessions.clear();
+  live = undefined;
 }
 
 export function useWorkUi(ui: WorkUi): WorkUiState {
