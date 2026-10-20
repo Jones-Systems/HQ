@@ -150,3 +150,8 @@ it('transport rejection never retries and preserves write/replay uncertainty', a
   expect(await svc.work('replay', { requestId: original.params.requestId, original, mode: 'resend' })).toEqual({ ok: false, kind: 'unknown' });
   expect(transport).toHaveBeenCalledTimes(4);
 });
+it('invalid outbound headers fail before send and clear the timeout', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  expect(await sendHttp(new URL('http://127.0.0.1:1'), { method: 'POST', path: '/', body: '{}', headers: { 'X-Workspace-Token': '\u1234' }, loss: 'unknown' })).toEqual(unavailable);
+  expect(vi.getTimerCount()).toBe(0);
+});

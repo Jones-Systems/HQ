@@ -89,13 +89,15 @@ export const sendHttp: Transport = (url, call) => new Promise<ServiceResponse>(r
   let sent = false, settled = false;
   const finish = (value: ServiceResponse) => { if (!settled) { settled = true; clearTimeout(timer); resolve(value); } };
   const fail = () => finish({ ok: false, kind: sent ? call.loss : 'unavailable' });
-  const timer = setTimeout(() => { fail(); req.destroy(); }, call.method === 'GET' ? 10_000 : 20_000);
-  const req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, { method: call.method, headers: { ...call.headers, ...(call.body === undefined ? {} : { 'Content-Length': String(Buffer.byteLength(call.body)) }) } }, res => {
+  let req: ReturnType<typeof httpRequest> | undefined;
+  const timer = setTimeout(() => { fail(); req?.destroy(); }, call.method === 'GET' ? 10_000 : 20_000);
+  try {
+  req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, { method: call.method, headers: { ...call.headers, ...(call.body === undefined ? {} : { 'Content-Length': String(Buffer.byteLength(call.body)) }) } }, res => {
     sent = true;
     const chunks: Buffer[] = []; let length = 0;
     res.on('data', (chunk: Buffer) => {
       length += chunk.length;
-      if (length > LIMITS.response) { fail(); res.destroy(); req.destroy(); } else chunks.push(chunk);
+      if (length > LIMITS.response) { fail(); res.destroy(); req?.destroy(); } else chunks.push(chunk);
     });
     res.on('error', fail); res.on('aborted', fail);
     res.on('end', () => {
@@ -109,6 +111,7 @@ export const sendHttp: Transport = (url, call) => new Promise<ServiceResponse>(r
   req.on('finish', () => { sent = true; });
   req.on('error', fail);
   req.end(call.body);
+  } catch { fail(); }
 }).catch(() => unavailable());
 export function createServices(config: ServiceConfig, transport: Transport = sendHttp) {
   const tokens = new Map<string, string>();
