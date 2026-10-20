@@ -212,6 +212,7 @@ describe('production entry, compose and descriptors are renderer-safe', () => {
   it('actually walked the production graph (the proof is not vacuous)', () => {
     const names = analysis.files.map((file) => relative(DESIGN, file));
     for (const expected of [
+      'app/compose/reference-reads.ts',
       'app/index.ts', 'app/compose/workspace.ts', 'app/compose/bridge-documents.ts', 'app/storage/index.ts', 'app/storage/projects.ts', 'app/compose/storage-seam.ts', 'app/compose/views/CanvasView.tsx',
       'ui/src/registry-glob.ts', 'canvas/design-module.ts', 'imports/design-module.ts',
       'requests/design-module.ts', 'connector/design-module.ts', 'references/design-module.ts',

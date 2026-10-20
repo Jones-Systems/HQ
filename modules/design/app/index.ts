@@ -23,6 +23,7 @@ import { createProductionDesignDomain } from '../ui/index.ts';
 import { createDeactivate, guardedLocalStorage } from './compose/session.ts';
 import './compose/chrome-reset.css';
 import { createBridgeWorkspaceDocuments } from './compose/bridge-documents.ts';
+import { createDesignReferenceReads } from './compose/reference-reads.ts';
 import { createDesignWorkspace } from './compose/workspace.ts';
 import { DesignWorkspaceContext } from './compose/workspace-context.tsx';
 
@@ -30,6 +31,7 @@ const transport = globalThis.window?.hqServices?.design;
 const documents = typeof transport === 'object' && transport !== null && typeof transport.call === 'function'
   ? createBridgeWorkspaceDocuments(transport) : null;
 const workspace = createDesignWorkspace(documents);
+export const designReferenceReads = createDesignReferenceReads(documents);
 const domain = createProductionDesignDomain({ storage: guardedLocalStorage() });
 const Component: ComponentType<ModulePort> = (props) => createElement(DesignWorkspaceContext.Provider, { value: workspace }, createElement(domain.Component, props));
 export const designDomain: DesignDomain<ComponentType<ModulePort>> = { ...domain, Component };
