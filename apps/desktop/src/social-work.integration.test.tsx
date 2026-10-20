@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import SocialDefault, { SocialModule } from '@hq/social';
 import WorkDefault, { WorkModule } from '@hq/work';
 import { App } from './App';
-import { MODULES } from './modules';
-import { designDomain } from '../../../modules/design/app/index.ts';
+import { MODULES, designDomain } from './modules';
+import { designDomain as defaultDesignDomain } from '../../../modules/design/app/index.ts';
 import { APPEARANCE_KEY } from './state';
 import { CALL_CLASSES, FIXTURE_IDS, resetSocialSessions, type PortMethod, type SocialWorkspacePort } from '../../../modules/social/core';
 import { NAV_ITEMS as SOCIAL_NAV, setSocialWorkspacePort } from '../../../modules/social/nav';
@@ -194,6 +194,7 @@ describe('Social and Work mounted in the T0 shell', () => {
     expect(MODULES.work).toBe(SERVICE_DOMAINS.Work);
     expect(WorkDefault).toBe(WorkModule);
     expect(MODULES.design).toBe(designDomain.Component);
+    expect(MODULES.design).not.toBe(defaultDesignDomain.Component);
   });
 
   it('opens on Design and mounts both domains with labelled fictional data and no execution', async () => {

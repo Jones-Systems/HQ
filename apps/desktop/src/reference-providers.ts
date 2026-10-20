@@ -1,13 +1,14 @@
 import type { WorkServiceTransport } from '@hq/contracts/services';
 import type { ReferenceProvider } from '@hq/contracts/references';
-import { createDesignReferenceProvider, designReferenceReads } from '../../../modules/design/app/index.ts';
+import { createDesignReferenceProvider } from '../../../modules/design/app/index.ts';
+import { designReferenceReads } from './modules';
 import { createSocialReferenceProvider } from '../../../modules/social/references';
 import { createLiveSocialPort } from '../../../modules/social/live';
 import { createWorkReferenceProvider } from '@hq/work';
 import { bridgeTransport, createPlannerLive } from '../../../modules/work/live';
 
-// Matches the shell's single current project. Providers retain read capabilities only;
-// absent or failed bridges stay unavailable, never an example-store fallback.
+// Social and Work retain their service workspace binding; Design reads use the selected composition.
+// Failed bridges stay unavailable, never an example-store fallback.
 const projectId = 'hq-local';
 const now = () => new Date();
 const social = createLiveSocialPort({

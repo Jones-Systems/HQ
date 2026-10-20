@@ -4,6 +4,7 @@ import { REFERENCE_PROVIDERS } from './reference-providers';
 import type { ReturnContext } from '@hq/contracts/references';
 import type { ShellState } from './state';
 import { Splitter } from '@hq/ui';
+import { deactivateDesktopPreview, overlayDesktopPreview, subscribeDesktopProject } from './interactive-runtime';
 import { Connections } from './Connections';
 import { ServiceSettings } from './ServiceSettings';
 import { DataSourcesProvider } from './settings/DataSources';
@@ -19,6 +20,11 @@ function storagePort(): StoragePort { try { return window.localStorage; } catch 
 
 function WorkspaceApp() {
   const [storage] = useState(storagePort);
+  const [context, setContext] = useState(CONTEXT);
+  const contextRef = useRef(context); contextRef.current = context;
+  useEffect(() => subscribeDesktopProject(project => {
+    void deactivateDesktopPreview(); setContext(project); setState(readNavigation(storage, project.id)); setReturnFrame(null); setReferenceNotice(null);
+  }), [storage]);
   const [rail, setRail] = useState(() => readRail(storage));
   const compact = rail.width <= RAIL_COMPACT_MAX;
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -30,6 +36,7 @@ function WorkspaceApp() {
     setSettingsTarget(target); setSettingsOpen(true);
   };
   const closeSettings = () => setSettingsOpen(false);
+  useEffect(() => { void overlayDesktopPreview(settingsOpen); }, [settingsOpen]);
   useEffect(() => {
     if (wasSettingsOpen.current && !settingsOpen) settingsOpener.current?.focus();
     wasSettingsOpen.current = settingsOpen;
@@ -53,7 +60,7 @@ function WorkspaceApp() {
   const [returnFrame, setReturnFrame] = useState<{ context: ReturnContext; state: ShellState } | null>(null);
   const [referenceNotice, setReferenceNotice] = useState<ReferenceNotice | null>(null);
   const [references] = useState(() => createReferencePort(REFERENCE_PROVIDERS, {
-    projectId: () => CONTEXT.id,
+    projectId: () => contextRef.current.id,
     notice: setReferenceNotice,
     open(envelope, destination, context) {
       settingsOpener.current = null; setSettingsOpen(false);
@@ -67,6 +74,7 @@ function WorkspaceApp() {
     if (returnFrame) setState(returnFrame.state);
     setReturnFrame(null); setReferenceNotice(null);
   };
+  useEffect(() => { if (state.domain !== 'design') void deactivateDesktopPreview(); }, [state.domain]);
   const fill = MODULE_PRESENTATION[state.domain] === 'fill';
 
   useEffect(() => {
@@ -78,11 +86,11 @@ function WorkspaceApp() {
   }, []);
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => {
-    const navigationSaved = persist(storage, navigationKey(CONTEXT.id), JSON.stringify(state));
+    const navigationSaved = persist(storage, navigationKey(context.id), JSON.stringify(state));
     const appearanceSaved = persist(storage, APPEARANCE_KEY, appearance);
     const railSaved = persist(storage, RAIL_KEY, JSON.stringify(rail));
     setStorageAvailable(navigationSaved && appearanceSaved && railSaved);
-  }, [storage, state, appearance, rail]);
+  }, [storage, state, appearance, rail, context.id]);
 
   return <div className="shell" data-hq-chrome>
     <aside className={`rail${compact ? " is-compact" : ""}`} ref={element => { element?.style.setProperty("width", `${rail.width}px`); }} aria-label="HQ navigation">
@@ -113,17 +121,17 @@ function WorkspaceApp() {
     </aside>
     <Splitter label="Primary navigation width" value={rail.width} min={RAIL_MIN} max={RAIL_MAX}
       onResize={width => setRail(previous => resizeRail(previous, width))} onToggle={() => setRail(toggleRail)} />
-    <div className={fill ? 'workspace is-fill' : 'workspace'}>
+    <div className={fill ? 'workspace is-fill' : 'workspace'} data-hq-overlay={settingsOpen ? 'open' : undefined}>
       {returnFrame && <button hidden={settingsOpen} onClick={goBack}>Back to {returnFrame.context.label}</button>}
       {referenceNotice && <section hidden={settingsOpen} role="status" aria-label="Read-only reference"><strong>{referenceNotice.title}</strong><p>{referenceNotice.message}</p><button onClick={() => setReferenceNotice(null)}>Dismiss reference</button></section>}
-      <main hidden={settingsOpen} className={fill ? 'is-fill' : undefined} key={`${CONTEXT.id}:${state.domain}`}>
-        <Module context={CONTEXT} destination={state.destinations[state.domain]} appearance={theme} desktop={window.hqDesktop ?? BROWSER_PORT}
+      <main hidden={settingsOpen} className={fill ? 'is-fill' : undefined} key={`${context.id}:${state.domain}`}>
+        <Module context={context} destination={state.destinations[state.domain]} appearance={theme} desktop={window.hqDesktop ?? BROWSER_PORT}
           references={references} {...(returnFrame ? { returnContext: returnFrame.context } : {})}
           navigate={destination => { references.cancelOpen(); setState(previous => navigate(previous, state.domain, destination)); }} />
       </main>
       {settingsOpen && <ServiceSettings config={window.hqServices?.config} onClose={closeSettings}
         returnLabel={DOMAIN_LABELS[state.domain]} target={settingsTarget} appearance={appearance} onAppearanceChange={setAppearance} />}
-      <footer className="context-footer" aria-label="Workspace context"><span>{CONTEXT.name}</span><span>{DOMAIN_LABELS[state.domain]}</span></footer>
+      <footer className="context-footer" aria-label="Workspace context"><span>{context.name}</span><span>{DOMAIN_LABELS[state.domain]}</span></footer>
       {!storageAvailable && <p className="storage-notice" role="status">Preferences are available for this session. Local storage is unavailable.</p>}
     </div>
   </div>;

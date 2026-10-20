@@ -76,3 +76,26 @@ export interface CatalogValues {
   readonly 'catalog.snapshot': CatalogSnapshot;
   readonly 'catalog.preview': Uint8Array;
 }
+
+export interface SourceStatus {
+  readonly sourceId: string; readonly kind: 'local' | 'gallery' | 'jones'; readonly label: string;
+  readonly hostId: string; readonly rootId: string; readonly state: 'ready' | 'partial' | 'stale' | 'unavailable' | 'not-configured';
+  readonly generation: number; readonly lastSuccessAt: string | null; readonly detail?: string;
+}
+export interface SourceCatalogItem { readonly entry: CatalogEntry; readonly hostLabel: string; readonly freshness: string }
+export interface SourceParams {
+  readonly status: Record<string, never>;
+  readonly list: Record<string, never>;
+  readonly chooseLocal: Record<string, never>;
+  readonly enrollGallery: { readonly baseUrl: string; readonly label: string };
+  readonly enrollJones: { readonly label: string };
+  readonly refresh: { readonly sourceId: string };
+  readonly remove: { readonly sourceId: string };
+}
+export interface SourceValues {
+  readonly status: readonly SourceStatus[]; readonly list: readonly SourceCatalogItem[];
+  readonly chooseLocal: readonly SourceStatus[]; readonly enrollGallery: readonly SourceStatus[];
+  readonly enrollJones: readonly SourceStatus[]; readonly refresh: readonly SourceStatus[]; readonly remove: readonly SourceStatus[];
+}
+export type SourceResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly kind: 'invalid' | 'unavailable' | 'stale' };
+export interface SourceTransport { call<R extends keyof SourceParams>(route: R, params: SourceParams[R]): Promise<SourceResult<SourceValues[R]>> }

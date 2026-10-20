@@ -8406,15 +8406,15 @@ Research found existing interactive web presentations and a hashed gallery regis
 
 Architecture screen: registration metadata is consumed by Discovery, the desktop host and Design composition, so identities and experience classification are explicit. Host/root/project identities remain opaque; remote/path similarity only suggests a link. The existing SourceAdapter is read-only and never executes or clones a project. Compatibility is carried as bounded flat metadata until the single shared contract owner promotes it. Network fetching and credentials stay in main. Snapshots retain last-good state, and only complete snapshots can mark omissions missing. New module mappers require no shared runtime change.
 
-Web prototypes are the first interactive target. Native simulator execution needs a separately qualified toolchain, synthetic backend and device-control/streaming capability; it is not supplied by this plan. No measured native build-memory or build-time claim is available. Ordinary preview clicks must not rebuild an application.
+Web prototypes are the first interactive target. Native simulator execution needs a separately qualified toolchain, synthetic backend and device-control/streaming capability; it is not supplied by the web preview. The owner has subsequently requested a measured native pilot on both Macs and authorized its necessary setup and installation. Results must bind the actual source, toolchain, device and workload; resource or remote-control claims require measurements. Ordinary preview clicks must not rebuild an application.
 
 Preview targets keep HTTPS or loopback HTTP. Existing remote plain-HTTP deployments require an approved supported route; this amendment does not relax that policy. The existing gallery's ephemeral in-page comments and paired Send control are distinct from HQ's canonical durable annotations and explicit dispatch. Existing gallery-comment import is a follow-on compatibility mapping.
 
 Source tasks can proceed before host qualification. Production dispatch defaults to an honest disconnected state and accepts an injected qualified port; explicit example mode remains visibly simulated. No transport, reload, navigation, annotation or project enrollment triggers execution. Existing unknown outcomes remain lookup-only, never blind resend.
 
-Writer allocation: root owns Git, this amendment and check catalog; registry adapters own only new mapper/test files; Runs owns only its section. Shared T2 and preview composition scopes remain held until their existing custody is reconciled in #50. PR #95 touches cache/discovery/view-model and #99 touches requests; neither intersects these two new module cones. The current foundation has advanced, so any publication must qualify the actual target-base integration without rewriting unrelated work.
+Writer allocation: root owns Git, this amendment and check catalog. The mapper and Runs slices have landed. Under the owner's subsequent explicit completion direction, the laptop coordinator binds one serialized successor desktop/contracts/root writer and a disjoint Design composition writer in its isolated task worktree, recorded in #50 and the existing Work Note. The old remote release remains unknown and is not retried, resent or resumed; retained remote worktrees and their lifecycle stay untouched. A later overlapping candidate requires fresh source reconciliation before landing. PR #95 touches cache/discovery/view-model and #99 touches requests; their independently owned source stays outside this assignment. Any publication must qualify the actual target-base integration without rewriting unrelated work.
 
-Source delivery remains non-draft PRs with exact-head CI; integration merges remain held. Full acceptance still requires the existing S1, U1, S2/OS-MAC1, install and enablement predicates. Text-only handoff contains route, selector, quoted text, proposals and capture digest; image attachments require a coordinated follow-on contract and must not be implied.
+Source delivery remains non-draft PRs with exact-head CI. The owner's subsequent explicit instruction releases the integration merge hold and authorizes the local HQ update after verification. Full acceptance still requires the existing S1, U1, S2/OS-MAC1, install and enablement predicates. Text-only handoff contains route, selector, quoted text, proposals and capture digest; image attachments require a coordinated follow-on contract and must not be implied.
 
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.project-experience-workflow.001" -->
 
@@ -8789,8 +8789,11 @@ One synthetic end-to-end scenario enrolls a gallery and Jones list, opens a full
     "apps/desktop/electron/sources",
     "packages/contracts/src/catalog.ts",
     "apps/desktop/electron/main.ts",
-    "apps/desktop/electron/preload.ts",
-    "apps/desktop/src/environment.d.ts"
+    "apps/desktop/electron/preload.cts",
+    "apps/desktop/src/environment.d.ts",
+    "apps/desktop/src/ServiceSettings.tsx",
+    "packages/contracts/src/services.ts",
+    "packages/contracts/src/index.ts"
   ],
   "requires": [
     "spec.hq-integration-parallel-execution#req.project-experience-workflow.001"
