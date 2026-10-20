@@ -185,7 +185,11 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
 
 **Revision 5 (2026-10-20): the Design-first scout is consumed.** The root's read-only scout result (SHA-256 `2bd169a8…`) is encoded at `7ab7f2e5517dcfee2334548e0a27d78f1921d5e7`, spec blob `d38be0f9`, and validated with the real helpers (`docs/evidence/hq-social-work/integration/integration-plan-validation.md`).
 
-- **Joint continuation.** It is one additive branch at the exact accepted, published Design head D, with a normal merge of the accepted Social+Work head S. Its PR is based on the Design branch that contains D. All prior PR refs are preserved, with no rebase, force push or mass retarget.
+- **Joint continuation.** It is one additive branch on the supported native child route. C's checkout and branch are generated at the committed plan head P, because `delegate_task` cannot select D. In its own branch, C normally merges exact D and then exact S, and proves both are ancestors. Its PR is based on the Design branch that contains D. All prior PR refs are preserved, with no rebase, force push or mass retarget.
+- **Root corrections at `7ab7f2e` (closed before C):**
+  - the joint read scopes now include Design, Social/Work and UI sources, the lane and Design evidence, and the root configs;
+  - `joint-root-checks` may make bounded npm dependency or lockfile updates inside the named custody, and holds outside it;
+  - the start-at-D wording is replaced by the native merge route above.
 - **Unbound activation bindings:** D, S, Design wiring, root-file custody (with a `vite.config.ts` decision) and C's release. No Design assembly parent is published; the local head is not a parent.
 - **No native GitHub stacks exist.** `PullRequest.stack` is null on all 24 open PRs, so every chain is a base-branch chain.
 - **Ownership.** Future C is the proposed sole writer of the six R0 root paths, plus `apps/desktop/src/joint.integration.test.tsx` and the joint evidence. `vite.config.ts` is unassigned. App, styles, contracts and IPC stay held. No workflow custody is implied: Design owns its workflows and the check catalog. B's new test stays an immutable dependency.

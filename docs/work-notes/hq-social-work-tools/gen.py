@@ -43,7 +43,7 @@ def norm(groups, extra=()):
     return out or ["hq-foundation"]
 
 def task(key, *, kind="implementation", role="builder", owner, objective, ctx=(), read=(), write, req,
-         produces=(), deps=(), inputs=(), activation=None, ac, tests, groups, extra_stops=()):
+         produces=(), deps=(), inputs=(), activation=None, ac, tests, groups, extra_stops=(), stops=None):
     value = {
         "schema_version": 1, "kind": kind, "profile_role": role, "accountable_owner": owner,
         "objective": objective, "context_refs": [*COMMON_CTX, *ctx],
@@ -54,12 +54,22 @@ def task(key, *, kind="implementation", role="builder", owner, objective, ctx=()
         "acceptance_refs": list(ac), "test_refs": [X(t) for t in tests],
         "affected_check_groups": norm(groups, EXTRA.get(key, ())),
         "result_fields": RESULT_VER if kind == "verification" else RESULT_IMPL,
-        "preserved_boundaries": BOUNDS, "stop_conditions": [*STOPS, *extra_stops],
+        "preserved_boundaries": BOUNDS, "stop_conditions": [*(STOPS if stops is None else stops), *extra_stops],
     }
     return T(key), value
 
 def explicit(key): return {"mode": "explicit", "predicate_ref": r("ac", key)}
 CORE_IN = ["produced_refs", "candidate_binding"]
+JOINT_READ = ["modules/design/", "packages/design-store/", "modules/social/", "modules/work/", "packages/hq-ui/",
+              "docs/evidence/hq-social-work/", "docs/engineering-specs/design.md", "docs/prds/design.md", "docs/design-lanes.json",
+              "docs/planning-evidence/", "tests/check-groups.toml", ".github/workflows/"]
+ROOT_FILES = ["package.json", "package-lock.json", "tsconfig.json", "vitest.config.ts"]
+JOINT_ROUTE = ("in its own native child checkout and branch generated at T1's committed plan head P (no base override, prompt cd or branch switch), "
+               "normally merge with --no-ff exactly the accepted published Design head D and then exactly the accepted published Social+Work head S, "
+               "and prove both D and S are ancestors of the branch head")
+JOINT_STOPS = ["accepted T0 baseline or required rebind is missing",
+               "a change outside write_scope is required, or a dependency/lockfile change outside the named root-file custody or of unknown provenance",
+               "an unknown prior Git, GitHub or service effect is unreconciled"]
 
 TASKS = [
  task("bind-foundation", kind="verification", role="verifier", owner="hq-root",
@@ -179,8 +189,8 @@ TASKS = [
                    "a root package, config, lockfile, App, styles, contracts, IPC, Design or catalog change would be needed",
                    "live endpoints, installs, services or sudo would be needed to produce evidence"]),
  task("joint-root-checks", owner="hq-root",
-      objective="Future child C only, after every ac.joint-integration-gate.001 binding is exact: create the joint branch at exactly the accepted published Design head D, normally merge the accepted published Social+Work head S with --no-ff, then as sole writer of the six R0 root paths extend root discovery so npm run typecheck and npm test also cover each Design section's TypeScript project and declared test commands (Node .test.mjs, tsx, section Vitest configs where they exist), calling Design configs unchanged; dependency or lockfile changes only through npm with a fresh npm ci and the full check set; prove discovery by an inventory of unique Node, DOM and section test files and their actual configs, never summed counts.",
-      ctx=[r("ctx", "integration-stages")], write=["package.json", "package-lock.json", "tsconfig.json", "vitest.config.ts", "apps/desktop/package.json"],
+      objective="Future child C only, after every ac.joint-integration-gate.001 binding is exact: " + JOINT_ROUTE + "; then, as sole writer of the six R0 root paths extend root discovery so npm run typecheck and npm test also cover each Design section's TypeScript project and declared test commands (Node .test.mjs, tsx, section Vitest configs where they exist), calling Design configs unchanged; dependency or lockfile changes only through npm with a fresh npm ci and the full check set; prove discovery by an inventory of unique Node, DOM and section test files and their actual configs, never summed counts. Inside that named custody, bounded npm dependency or lockfile updates proceed; anything outside it or of unknown provenance holds.",
+      ctx=[r("ctx", "integration-stages")], read=JOINT_READ, write=[*ROOT_FILES, "apps/desktop/package.json"], stops=JOINT_STOPS,
       req=[r("req", "foundation-binding"), r("req", "safety")], deps=["domain-integration"], inputs=[("domain-integration", CORE_IN)],
       activation=explicit("joint-integration-gate"), ac=[r("ac", "joint-root-checks")], tests=["joint-root-checks"],
       groups=["hq-foundation", "shell-integration"],
@@ -188,8 +198,9 @@ TASKS = [
                    "a Design section's own files or configs would need editing",
                    "apps/desktop/vite.config.ts would need a change before its owner is assigned"]),
  task("joint-assembly", owner="hq-root",
-      objective="Future child C only, on the joint branch from task.joint-root-checks.001 (exactly D plus a normal merge of S): apply Design's wiring patch at its exact revision to the Design slot of MODULES only (or keep T0's placeholder by explicit Design decision), add the new apps/desktop/src/joint.integration.test.tsx proving Design, Social and Work restoration with Design's tests unchanged and B's test untouched, run the inventoried combined checks on the exact head, and publish one additive non-draft merge-held PR whose base is the published Design branch containing D, preserving every prior PR ref and history with no rebase, force push or retarget.",
-      ctx=[r("ctx", "integration-stages")], write=["apps/desktop/src/modules.tsx", "apps/desktop/src/joint.integration.test.tsx", "docs/evidence/hq-social-work/integration/joint/"],
+      objective="Future child C only, on the same native joint branch from task.joint-root-checks.001 (generated at plan head P, with exact D then exact S normally merged and both proven ancestors): apply Design's wiring patch at its exact revision to the Design slot of MODULES only (or keep T0's placeholder by explicit Design decision), add the new apps/desktop/src/joint.integration.test.tsx proving Design, Social and Work restoration with Design's tests unchanged and B's test untouched, run the inventoried combined checks on the exact head, and publish one additive non-draft merge-held PR whose base is the published Design branch containing D, preserving every prior PR ref and history with no rebase, force push or retarget.",
+      ctx=[r("ctx", "integration-stages")], read=[*JOINT_READ, *ROOT_FILES],
+      write=["apps/desktop/src/modules.tsx", "apps/desktop/src/joint.integration.test.tsx", "docs/evidence/hq-social-work/integration/joint/"],
       req=[r("req", "foundation-binding"), r("req", "shell"), r("req", "safety")], deps=["domain-integration", "joint-root-checks"],
       inputs=[("domain-integration", CORE_IN), ("joint-root-checks", CORE_IN)], activation=explicit("joint-integration-gate"),
       ac=[r("ac", "joint-assembly"), r("ac", "integration")], tests=["joint-assembly"], groups=["shell-integration"],
@@ -429,14 +440,14 @@ INTENTS = [
         hints=["docs/evidence/hq-social-work/references/"], groups=["shell-integration", "social-module", "work-module", "hq-ui"],
         required_at="integration-and-candidate"),
  intent("joint-root-checks", kind="integration", validates=[r("req", "foundation-binding")],
-        scenario="On the joint branch at D with S merged, npm run typecheck and npm test discover every Design section and test file named by Design's accepted plan through its actual config or command (including sections without a vitest.config.ts), plus every Social/Work test file from S.",
+        scenario="On the native joint branch (generated at plan head P, with exact D then exact S normally merged and both proven ancestors), npm run typecheck and npm test discover every Design section and test file named by Design's accepted plan through its actual config or command (including sections without a vitest.config.ts), plus every Social/Work test file from S.",
         predicate="An inventory of unique Node, DOM and section test files with their discovering configs matches by identity; a fresh npm ci, typecheck, full suite and build pass.",
         invalid="Discovery is claimed from summed counts or a Design section file was edited.",
         unknown="Design's accepted plan or assembly head is absent.", env=[NODE],
         owner_task="joint-root-checks", acceptance_owner="hq-root", after=["domain-integration"],
         hints=["vitest.config.ts", "tsconfig.json"], groups=["hq-foundation", "shell-integration"]),
  intent("joint-assembly", kind="integration", validates=[r("req", "shell"), r("req", "safety")],
-        scenario="On the joint head (D plus S plus C's compatibility commits), apps/desktop/src/joint.integration.test.tsx drives the real App mounting Design, Social and Work; round trips restore each domain; Design's tests and B's integration test run unchanged alongside Social/Work tests; the PR base is the published Design branch containing D.",
+        scenario="On the joint head (plan head P plus normal merges of exact D and exact S, plus C's compatibility commits), apps/desktop/src/joint.integration.test.tsx drives the real App mounting Design, Social and Work; round trips restore each domain; Design's tests and B's integration test run unchanged alongside Social/Work tests; the PR base is the published Design branch containing D.",
         predicate="ac.integration.001 holds with real Design and the deduplicated discovered union passes on the exact head.",
         invalid="Design-owned adapters, storage or tests were edited.",
         unknown="Design's accepted assembly head is unavailable.", env=[DOM, VIS],

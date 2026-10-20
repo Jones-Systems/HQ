@@ -489,7 +489,7 @@ Design's own predecessor PRs need not merge before this stacked continuation; th
 <!-- codex-section:end id="spec.hq-social-work#ac.joint-integration-gate.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.joint-root-checks.001" -->
-In the joint branch, C creates the branch at exactly D, normally merges S with `--no-ff`, and then extends root discovery as sole writer of the six R0 root paths. Design's section files and configs are called unchanged.
+On the joint branch (route in `ac.joint-assembly.001`), C extends root discovery as sole writer of the six R0 root paths. Design's section files and configs are read and called unchanged.
 
 - `npm run typecheck` covers each Design section's TypeScript project named by Design's accepted plan.
 - `npm test` runs each section's tests through its declared commands: Node `.test.mjs` tests, `tsx` cases, and Vitest where a section has its own config. Some Design sections (connector, discovery, flows, imports, projects) and `packages/design-store` have no `vitest.config.ts`. Their actual commands are used, and no config is invented for them.
@@ -502,16 +502,18 @@ In the joint branch, C creates the branch at exactly D, normally merges S with `
 
 Summed counts are never closure.
 
-A dependency or lockfile change is made only by C through `npm`, followed by a fresh `npm ci` and the full check set. A needed `apps/desktop/vite.config.ts` change stops until its owner is assigned.
+**Dependencies.** Inside the named root-file custody, C may make bounded dependency or lockfile updates through `npm`, followed by a fresh `npm ci` and the full check set. A change outside that custody, or of unknown provenance, holds. A needed `apps/desktop/vite.config.ts` change stops until its owner is assigned.
 <!-- codex-section:end id="spec.hq-social-work#ac.joint-root-checks.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.joint-assembly.001" -->
-The joint continuation is **one additive branch**:
+The joint continuation is **one additive branch**, on the supported native child route:
 
-- it starts at exactly D;
-- it contains S through a normal `--no-ff` merge;
-- C's compatibility commits sit on top;
-- it is published as one non-draft, merge-held PR whose base is the published Design branch that contains D. Its diff then shows only Social/Work content plus compatibility.
+- C's native worktree child checkout and branch are generated at T1's committed local plan head P. The installed `delegate_task` worktree isolation cannot select D. No base override exists, and a prompt-level `cd` or branch switch would not bind it.
+- In that own branch, C normally merges (`--no-ff`) exactly D, then exactly S, and proves both are ancestors of the head.
+- C's compatibility commits sit on top.
+- It is published as one non-draft, merge-held PR whose base is the published Design branch that contains D, so the diff shows only Social/Work content plus compatibility.
+
+The history is stated truthfully: D is an ancestor reached by merge, not the literal first-parent origin. The owner's stack-on-Design requirement is met through that ancestry and the PR base. Starting at D directly would need an explicitly bound ordinary `t3_thread_launch` workspace strategy from the HQ project. That is neither needed nor preferred while the native child route works.
 
 All prior PR refs and history are preserved. There is no rebase, no force push and no mass retarget of PR #3 or #24–#29, and Design is never merged into PR #3.
 
@@ -916,7 +918,7 @@ Both use `claudeAgent` / `claude-opus-5-5` / `high` / `fastMode: false` and star
 
 Integration happens in **isolated assembly branches** owned by the assembly owner, using ordinary local merges of exact accepted heads. Lane branches stay frozen, and lane PRs are not merged into one another. Local assembly merges are not PR merges.
 
-**Owner direction (2026-10-20).** The Social/Work stack sits on top of the Local Design Hub stack, and its content is made compatible on the Design shared base through the joint continuation (`ac.joint-assembly.001`).
+**Owner direction (2026-10-20).** The Social/Work stack sits on top of the Local Design Hub stack, and its content is made compatible on the Design shared base through the joint continuation (`ac.joint-assembly.001`). That continuation is a native child branch from plan head P with normal merges of exact D and S, and a PR based on the Design branch containing D.
 
 **Branch chains and native stacks are recorded separately.** Every chain here is a published base-branch chain. GitHub's `PullRequest.stack` is null on all 24 open PRs (scout read, 2026-10-20), so no native stack exists. Any grouping of our PRs is derived, not native.
 
@@ -930,7 +932,7 @@ Integration happens in **isolated assembly branches** owned by the assembly owne
 | --- | --- | --- | --- |
 | Work domain | `task.work-domain.001` | Now: board `3ca74d7` is accepted | A Work-domain candidate (`ctx.child-launch-containment.001`) |
 | Social+Work assembly | `task.domain-integration.001` | `ui-kit`, `social-domain` and `work-domain` are accepted | A merge-held assembly PR with the Design placeholder, combined checks and an early walkthrough (`ac.sw-assembly.001`) |
-| Joint root checks (future C) | `task.joint-root-checks.001` (explicit) | Every binding in `ac.joint-integration-gate.001` | Joint branch at D with S merged; root discovery inventory |
+| Joint root checks (future C) | `task.joint-root-checks.001` (explicit) | Every binding in `ac.joint-integration-gate.001` | Native joint branch from P with exact D then S merged; root discovery inventory |
 | Joint assembly (future C) | `task.joint-assembly.001` (explicit) | The same gate, plus the root checks | One additive merge-held PR based on the Design branch containing D |
 | Electron smoke | `task.joint-electron-smoke.001` | Joint assembly accepted | Fixture-only Electron evidence |
 | CI adoption | `task.joint-ci.001` (explicit) | `ac.ci-adoption.001`, plus the root checks | A PR workflow |
@@ -1295,7 +1297,7 @@ Machine Test Intents follow as `test.*` blocks.
 
 Revision 4 assigns `task.work-domain.001` to a fresh Opus child, not to the completed WRK-B thread (`ctx.child-launch-containment.001`). It adds root-owned integration tasks: `joint-root-checks`, `joint-assembly`, `joint-electron-smoke` and `joint-ci` (`ctx.integration-stages.001`).
 
-Revision 5 (2026-10-20) consumes the read-only Design-first stack scout. The joint tasks become a future child C's **one additive continuation**: a branch at the exact accepted, published Design head D, with a normal merge of the accepted Social+Work head S, and a PR based on the Design branch that contains D. D, S, Design wiring, root-file custody and C's release are explicit unbound activation bindings (`ac.joint-integration-gate.001`). `vite.config.ts` is named as unassigned, and no workflow custody is implied. The A→B chain is unchanged.
+Revision 5 (2026-10-20) consumes the read-only Design-first stack scout. The joint tasks become a future child C's **one additive continuation**: a native child branch generated at plan head P, with normal merges of the exact accepted, published Design head D and then the accepted Social+Work head S, and a PR based on the Design branch that contains D. D, S, Design wiring, root-file custody and C's release are explicit unbound activation bindings (`ac.joint-integration-gate.001`). `vite.config.ts` is named as unassigned, and no workflow custody is implied. The A→B chain is unchanged.
 
 The D-4 references add work to existing lanes, not new lanes:
 
@@ -2794,7 +2796,7 @@ No merge order is adopted. Merge is held.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "hq-root",
-  "objective": "Future child C only, after every ac.joint-integration-gate.001 binding is exact: create the joint branch at exactly the accepted published Design head D, normally merge the accepted published Social+Work head S with --no-ff, then as sole writer of the six R0 root paths extend root discovery so npm run typecheck and npm test also cover each Design section's TypeScript project and declared test commands (Node .test.mjs, tsx, section Vitest configs where they exist), calling Design configs unchanged; dependency or lockfile changes only through npm with a fresh npm ci and the full check set; prove discovery by an inventory of unique Node, DOM and section test files and their actual configs, never summed counts.",
+  "objective": "Future child C only, after every ac.joint-integration-gate.001 binding is exact: in its own native child checkout and branch generated at T1's committed plan head P (no base override, prompt cd or branch switch), normally merge with --no-ff exactly the accepted published Design head D and then exactly the accepted published Social+Work head S, and prove both D and S are ancestors of the branch head; then, as sole writer of the six R0 root paths extend root discovery so npm run typecheck and npm test also cover each Design section's TypeScript project and declared test commands (Node .test.mjs, tsx, section Vitest configs where they exist), calling Design configs unchanged; dependency or lockfile changes only through npm with a fresh npm ci and the full check set; prove discovery by an inventory of unique Node, DOM and section test files and their actual configs, never summed counts. Inside that named custody, bounded npm dependency or lockfile updates proceed; anything outside it or of unknown provenance holds.",
   "context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
@@ -2807,7 +2809,19 @@ No merge order is adopted. Merge is held.
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
     "packages/contracts",
-    "apps/desktop"
+    "apps/desktop",
+    "modules/design",
+    "packages/design-store",
+    "modules/social",
+    "modules/work",
+    "packages/hq-ui",
+    "docs/evidence/hq-social-work",
+    "docs/engineering-specs/design.md",
+    "docs/prds/design.md",
+    "docs/design-lanes.json",
+    "docs/planning-evidence",
+    "tests/check-groups.toml",
+    ".github/workflows"
   ],
   "write_scope": [
     "package.json",
@@ -2864,7 +2878,7 @@ No merge order is adopted. Merge is held.
   ],
   "stop_conditions": [
     "accepted T0 baseline or required rebind is missing",
-    "a change outside write_scope or a dependency/lockfile change is required",
+    "a change outside write_scope is required, or a dependency/lockfile change outside the named root-file custody or of unknown provenance",
     "an unknown prior Git, GitHub or service effect is unreconciled",
     "any ac.joint-integration-gate.001 binding (D, S, Design wiring, root-file custody, C release) is missing, moving or local-only",
     "a Design section's own files or configs would need editing",
@@ -2881,7 +2895,7 @@ No merge order is adopted. Merge is held.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "hq-root",
-  "objective": "Future child C only, on the joint branch from task.joint-root-checks.001 (exactly D plus a normal merge of S): apply Design's wiring patch at its exact revision to the Design slot of MODULES only (or keep T0's placeholder by explicit Design decision), add the new apps/desktop/src/joint.integration.test.tsx proving Design, Social and Work restoration with Design's tests unchanged and B's test untouched, run the inventoried combined checks on the exact head, and publish one additive non-draft merge-held PR whose base is the published Design branch containing D, preserving every prior PR ref and history with no rebase, force push or retarget.",
+  "objective": "Future child C only, on the same native joint branch from task.joint-root-checks.001 (generated at plan head P, with exact D then exact S normally merged and both proven ancestors): apply Design's wiring patch at its exact revision to the Design slot of MODULES only (or keep T0's placeholder by explicit Design decision), add the new apps/desktop/src/joint.integration.test.tsx proving Design, Social and Work restoration with Design's tests unchanged and B's test untouched, run the inventoried combined checks on the exact head, and publish one additive non-draft merge-held PR whose base is the published Design branch containing D, preserving every prior PR ref and history with no rebase, force push or retarget.",
   "context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
@@ -2894,7 +2908,23 @@ No merge order is adopted. Merge is held.
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
     "packages/contracts",
-    "apps/desktop"
+    "apps/desktop",
+    "modules/design",
+    "packages/design-store",
+    "modules/social",
+    "modules/work",
+    "packages/hq-ui",
+    "docs/evidence/hq-social-work",
+    "docs/engineering-specs/design.md",
+    "docs/prds/design.md",
+    "docs/design-lanes.json",
+    "docs/planning-evidence",
+    "tests/check-groups.toml",
+    ".github/workflows",
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    "vitest.config.ts"
   ],
   "write_scope": [
     "apps/desktop/src/modules.tsx",
@@ -4604,7 +4634,7 @@ No merge order is adopted. Merge is held.
   "validates": [
     "spec.hq-social-work#req.foundation-binding.001"
   ],
-  "scenario": "On the joint branch at D with S merged, npm run typecheck and npm test discover every Design section and test file named by Design's accepted plan through its actual config or command (including sections without a vitest.config.ts), plus every Social/Work test file from S.",
+  "scenario": "On the native joint branch (generated at plan head P, with exact D then exact S normally merged and both proven ancestors), npm run typecheck and npm test discover every Design section and test file named by Design's accepted plan through its actual config or command (including sections without a vitest.config.ts), plus every Social/Work test file from S.",
   "evidence": {
     "predicate": "An inventory of unique Node, DOM and section test files with their discovering configs matches by identity; a fresh npm ci, typecheck, full suite and build pass.",
     "invalid": "Discovery is claimed from summed counts or a Design section file was edited.",
@@ -4643,7 +4673,7 @@ No merge order is adopted. Merge is held.
     "spec.hq-social-work#req.shell.001",
     "spec.hq-social-work#req.safety.001"
   ],
-  "scenario": "On the joint head (D plus S plus C's compatibility commits), apps/desktop/src/joint.integration.test.tsx drives the real App mounting Design, Social and Work; round trips restore each domain; Design's tests and B's integration test run unchanged alongside Social/Work tests; the PR base is the published Design branch containing D.",
+  "scenario": "On the joint head (plan head P plus normal merges of exact D and exact S, plus C's compatibility commits), apps/desktop/src/joint.integration.test.tsx drives the real App mounting Design, Social and Work; round trips restore each domain; Design's tests and B's integration test run unchanged alongside Social/Work tests; the PR base is the published Design branch containing D.",
   "evidence": {
     "predicate": "ac.integration.001 holds with real Design and the deduplicated discovered union passes on the exact head.",
     "invalid": "Design-owned adapters, storage or tests were edited.",
