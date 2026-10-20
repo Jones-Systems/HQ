@@ -73,3 +73,10 @@ Exact current native inspection resolved the retained integration representative
 
 The compiled-spec registration returned `registration_unavailable`, `effect: none`, reason `endpoint_unavailable`. No registry repair was attempted. Installed HQ remains at the earlier verified foundation payload; this source candidate has not been installed or represented as a completed interactive workflow.
 <!-- codex-section:end id="worknote.hq-interactive-projects#ctx.source-checkpoint.001" -->
+
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.ci-compatibility.001" -->
+## Composition Compatibility Check
+
+The first hosted candidate passed every check except the app composition group and its aggregate. The failing bridge test expected production to have an implicit simulated receiver. The coordinator owns a bounded compatibility edit to `modules/design/app/compose/test/bridge-records.test.ts` only: assert the real workspace has no destination, then construct the simulation with explicit `mode: example` over the same bridge stores. The shared production composition is unchanged. All 169 composition tests and its typecheck pass locally after this correction. Current-head hosted CI must be read back separately; the merge and runtime holds remain.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.ci-compatibility.001" -->

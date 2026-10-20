@@ -6,6 +6,7 @@ import { createRequestsStoragePort } from '../../storage/index.ts';
 import { createDesignWorkspace } from '../workspace.ts';
 import { brandId as requestId } from '../../../requests/src/validate.ts';
 import { SIMULATED_DESTINATION } from '../../sections/runs/pipeline.ts';
+import { createRunsEnvironment } from '../../sections/runs/env.ts';
 import { brandId as connectorId } from '../../../connector/src/ids.ts';
 import { sha256Hex } from '../canonical.ts';
 import type { DesignServiceParams, DesignServiceRoute, JsonValue } from '@hq/contracts/services';
@@ -101,7 +102,14 @@ describe('production record bridge', () => {
   it('persists the simulated send and evidence through the bridge without dispatch on navigation', async () => {
     const d = recordsDouble(); const workspace = createDesignWorkspace(createBridgeWorkspaceDocuments(d.transport));
     const requests = workspace.closure.requests;
-    const runs = await workspace.closure.runs();
+    const disconnected = await workspace.closure.runs();
+    assert.equal(disconnected.catalog.destinations.length, 0);
+    let sequence = 0;
+    const runs = await createRunsEnvironment({
+      mode: 'example', requests, outboxStore: workspace.closure.outboxStore,
+      evidenceStore: workspace.closure.evidenceStore, clock: requests.clock, compareSlot: requests.compareSlot,
+      ids: { label: 'fake:bridge-example', next: (kind) => `example-${kind}-${++sequence}` },
+    });
     assert.equal(d.calls.some((call) => ['doc.put', 'blob.put', 'event.append'].includes(call.route)), false);
     const session = await requests.create({ title: 'Synthetic closure', sources: [{ projectId: requestId('synthetic-project'),
       viewId: requestId('synthetic-view'), versionId: requestId('synthetic-version'), sourceRevision: 'synthetic-revision' }] });
