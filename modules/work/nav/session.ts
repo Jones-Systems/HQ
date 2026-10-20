@@ -121,8 +121,12 @@ export function workSession(contextId: string): WorkSession {
 }
 
 /**
- * Test seam: the Planner port new sessions use, ahead of the bridge (`null` restores the production choice). A
- * `recovery` resolves unknown writes for that port; without one, Check sends nothing.
+ * Production shell injection: call once before the first Work session with the configured live Planner and its
+ * `recovery`, using `example: false`. Only explicitly unconfigured settings select `examplePlanner()` with
+ * `example: true`; live errors must never trigger a fixture fallback. Keep this source fixed for the renderer:
+ * settings changes use the shell's labelled reload, never a reset of productive sessions.
+ * New sessions use this port ahead of the bridge (`null` restores legacy selection); existing sessions are unchanged.
+ * A `recovery` resolves unknown writes for that port; without one, Check sends nothing.
  */
 export function setWorkSessionPort(port: PlannerPort | null, options: { example?: boolean; recovery?: PlannerRecovery } = {}): void {
   override = port ? { port, recovery: options.recovery ?? null, example: options.example ?? true } : null;
