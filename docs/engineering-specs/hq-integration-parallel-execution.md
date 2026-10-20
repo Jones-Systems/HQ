@@ -955,6 +955,17 @@ T6 is ready now from foundation, which already contains the Wiki contract, core 
 
 The native harness checkpoint (#53) has landed. T7 extends it with integrated scenarios as their source lands, runs the import/export and capability-closure qualifications, the held-gate qualifications once their predicates hold, and final acceptance. HQ's layout is not changed to suit the Jones Code harness, and the harness stays separate from Design production code and tests.
 
+**Acceptance infrastructure first.** A new task, `acceptance-infrastructure`, prepares only the harness infrastructure that the landed services, wiring and Wiki mount already support. It does not reuse the landed `acceptance-harness` task. Its machine block gives its seven literal paths and exact boundaries. It adds:
+- per-row results;
+- harness-generated userData configuration;
+- closed synthetic Work and Social HTTP fixtures with a request ledger;
+- a synthetic isolated Wiki corpus;
+- complete cleanup of every resource it owns.
+
+It writes no scenario or preview suite, adds no qualification switch, and activates nothing. `acceptance-scenarios` keeps every existing dependency and also waits for `infrastructure-landing`, because both write `tests/acceptance`.
+
+The new task may self-test its fixtures and cleanup without Electron. Its native checks then run only as separately bound checks on its exact candidate: the unchanged shell checkpoint, and full mode reporting a gap for every scenario row not yet implemented. That full-mode gap outcome is evidence that those rows are held. It is never integrated or full acceptance.
+
 After the integrated scenarios land, T7 writes the preview and component suites of `ctx.preview-qualification.001` (`preview-scenarios`) in the same harness. It then runs them as `preview-s2-qualification` and `component-containment-gate` once T1 binds the head and the native check host.
 
 The U1 gate (`new-thread-u1-qualification`) also follows `new-thread-landing`, so it runs against landed HQ source, and only under `ac.new-thread-u1-binding.001`.
@@ -1115,7 +1126,8 @@ The machine `task.*` blocks are authoritative. In summary:
 | `connector-resolve-unknown` (CN-U1) → `connector-resolve-landing` | T8 → T1 | — |
 | `new-thread-transport` → `new-thread-landing` | T2 → T1 | `preview-host-landing`, `connector-resolve-landing` |
 | `preview-compose` (PV-M3) → `preview-compose-landing` | T8 → T1 | `design-compose-landing`, `preview-host-landing`, `preview-compare-landing` |
-| `acceptance-scenarios` → `scenarios-landing` | T7 → T1 | `harness-landing`, `wiring-landing`, `wiki-mount-landing`, `round-trip-landing`, `design-compose-landing`, `work-export-landing` |
+| `acceptance-infrastructure` → `infrastructure-landing` | T7 → T1 | `harness-landing`, `wiring-landing`, `wiki-mount-landing` |
+| `acceptance-scenarios` → `scenarios-landing` | T7 → T1 | `harness-landing`, `wiring-landing`, `wiki-mount-landing`, `round-trip-landing`, `design-compose-landing`, `work-export-landing`, `infrastructure-landing` |
 | `preview-scenarios` → `preview-scenarios-landing` | T7 → T1 | `scenarios-landing`, `preview-host-landing` |
 | `import-export-qualification` → `import-export-enablement` → `enablement-landing` | T7 → T8 → T1 | `design-storage-landing`, `r3-landing`, `design-compose-landing`; enablement predicate |
 | `closure-qualification` | T7 | all closure landings, including `preview-compose-landing`, `preview-scenarios-landing` and `new-thread-landing` |
@@ -1126,6 +1138,16 @@ The machine `task.*` blocks are authoritative. In summary:
 **Ready at publication:** K1, K2 and K3 became ready at the previous revision; K3 has since landed as #57. This revision adds `work-session-injection` and the three preview module lanes (`preview-agent`, `preview-compare`, `component-runner-port`). Their write scopes are disjoint from each other and from every task that can be ready with them. The only existing task that gains a dependency is live wiring, on the Work seam it consumes. No other dependency changes for live wiring, the Wiki mount, K1–K4, r3 or the D-4 lanes, so there is no new barrier. `reference-ui` and the T10/T11 tasks wait for actual custody binding. The U1 follow-on revision adds `connector-resolve-unknown`, ready at its publication with a scope disjoint from every task that can be ready with it, and `new-thread-transport`, which waits for `preview-host-landing` and `connector-resolve-landing`. Only `new-thread-u1-qualification` and `closure-qualification` gain a dependency, `new-thread-landing`; no other dependency changes.
 
 **Reference-source scheduling amendment:** Social and Work reference source tasks consume the landed UI structural types and unchanged reference specification, so they can run in parallel with r3 after their existing UI/domain/custody prerequisites. Their `r3-landing` dependency moves to each source-landing task; integration order is preserved. No shared write scope, test intent, reference contract, round-trip dependency or native gate changes. Work Export UI still waits for the actual r3 export seam and its existing dependencies. Use sibling PRs against foundation because unfinished r3 host source is not an upstream source input.
+
+**Acceptance-infrastructure amendment:** this revision adds three things:
+- `acceptance-infrastructure` (T7, building, Astra/medium);
+- its T1 landing, `infrastructure-landing`;
+- its Test Intent `test.acceptance-infrastructure.001`, covered by `hq-electron-acceptance`.
+
+The new task depends only on `harness-landing`, `wiring-landing` and `wiki-mount-landing`.
+- **Dependencies.** Only `acceptance-scenarios` gains a dependency, the new landing; it keeps all six of its existing dependencies. No other task changes.
+- **Write scope.** The new task's scope lies inside T7's existing `tests/acceptance` and `docs/evidence/hq-integration/acceptance`. The new dependency serializes it ahead of `acceptance-scenarios` and, through `scenarios-landing`, ahead of `preview-scenarios`, so no two tasks that can be ready together share a path.
+- **Unchanged.** Every source scope, interface, check group, native flag, held gate, reviewer disposition, the Work restart contract and the finish line stay as they are.
 
 **Model hints (claude_frontier; the native tuple is recorded per task in the compile projection):**
 - Building defaults to Astra/medium.
@@ -4127,6 +4149,148 @@ No lane relays status through the owner.
 ```
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#task.receiver-landing.001" -->
 
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.acceptance-infrastructure.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t7",
+  "objective": "Prepare only the landed native harness's infrastructure before the integrated scenarios; do not reuse the landed acceptance-harness task. Add per-row pass/fail/gap/held/unmeasured results, harness-generated userData configuration, loopback synthetic Work and Social HTTP fixtures with a request ledger over the landed closed routes, a synthetic isolated Wiki corpus, and complete cleanup of every owned resource. Write no scenario or preview suite; this task does not activate acceptance-scenarios. Add no npm dependency or script; run with node.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t7.001",
+    "spec.hq-integration-parallel-execution#iface.service-response.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "tests/acceptance/run.mjs",
+    "tests/acceptance/runtime.mjs",
+    "tests/acceptance/cleanup.test.mjs",
+    "tests/acceptance/cleanup-fixture.mjs",
+    "tests/acceptance/README.md",
+    "tests/acceptance/fixtures",
+    "docs/evidence/hq-integration/acceptance"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.acceptance.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.harness-landing.001",
+    "spec.hq-integration-parallel-execution#task.wiring-landing.001",
+    "spec.hq-integration-parallel-execution#task.wiki-mount-landing.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.working-app.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.acceptance-infrastructure.001"
+  ],
+  "affected_check_groups": [
+    "hq-electron-acceptance"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect.",
+    "Scope: only the five named tests/acceptance files, new files under tests/acceptance/fixtures, and docs/evidence/hq-integration/acceptance. Nothing under tests/acceptance/scenarios or tests/acceptance/preview, and no other file under tests/acceptance.",
+    "Environment: keep stripping every inherited HQ_* variable. Pass only the harness-generated HQ_USER_DATA_DIR for the owned profile, which main honours only when unpackaged. Add no HQ_QUALIFY_* or other qualification-switch allowance; packaged-mode ignore rules stay unchanged.",
+    "Per-row results: each row records pass, fail, gap, held or unmeasured with its prerequisite evidence, and an unavailable prerequisite is never a pass. Full mode never reports a full pass while any scenario row is missing, unimplemented or held. Checkpoint mode keeps its existing semantics and outcome.",
+    "Service fixtures: loopback-only synthetic Work and Social HTTP servers on harness-chosen ports, using only the closed routes and wire shapes of the landed services.ts and the landed Work and Social live adapters. A fixture self-test binds the Work codec read-only to the landed Planner contract exchanges. Module source and module tests are neither imported nor edited.",
+    "Ledger and failure modes: fixtures record method, path, canonical body, request ID and count for every request. They induce applied-but-response-lost, not-applied, malformed, unavailable and indeterminate outcomes only as iface.service-response.001 and the landed adapters define them.",
+    "Work restart contract unchanged: fixtures model Planner-persisted service state only. They neither provide nor assert durability of in-session unresolved write intent, which spec.hq-social-work RW-9 and G-3 keep session-only.",
+    "Wiki corpus: an owned synthetic committed Git corpus shaped like the checked-in synthetic corpus, with isolated Git configuration and owned commits, plus the owned profile's wiki/config.json. No private corpus, remote, fetch or provenance substitution.",
+    "Cleanup: register every fixture server, socket, process, profile and temporary corpus or export tree before startup. Remove exactly those on success, deliberate failure (preserving the original error), SIGINT, SIGTERM and partial startup, with concurrent invocations isolated. Preserve bounded evidence first; a cleanup failure is a failure. No broad /tmp or process cleanup.",
+    "Checks: fixture and cleanup self-tests run without Electron. Native checks run only as separately bound checks on this task's exact candidate, each after a fresh CPU admission sample taken apart from the command: the unchanged shell checkpoint, and full mode recording a gap for every unimplemented scenario row. That full-mode outcome is held-row evidence, never integrated or full acceptance.",
+    "No real endpoint, owner configuration, canary, public network, host installation, display or network reconfiguration, packet capture or credential.",
+    "No product, shared-contract, apps, modules, packages, root-script, dependency, lockfile or workflow change. No native save-dialog driver, main-process or API monkeypatch, generic filesystem IPC, reference-provider registration, or fake or simulated qualification.",
+    "This task neither activates nor satisfies acceptance-scenarios, preview-scenarios or any qualification gate, and its evidence substitutes for none of them."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "A needed path outside the seven write-scope entries, a qualification switch, a native-dialog driver, or a landed wire shape the fixtures cannot bind exactly; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.acceptance-infrastructure.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.infrastructure-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the test-only acceptance-infrastructure PR, merges it into work/hq-foundation and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "tests/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.acceptance-infrastructure.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.infrastructure-landing.001" -->
+
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.acceptance-scenarios.001" -->
 ```json
 {
@@ -4165,7 +4329,8 @@ No lane relays status through the owner.
     "spec.hq-integration-parallel-execution#task.wiki-mount-landing.001",
     "spec.hq-integration-parallel-execution#task.round-trip-landing.001",
     "spec.hq-integration-parallel-execution#task.design-compose-landing.001",
-    "spec.hq-integration-parallel-execution#task.work-export-landing.001"
+    "spec.hq-integration-parallel-execution#task.work-export-landing.001",
+    "spec.hq-integration-parallel-execution#task.infrastructure-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -7391,6 +7556,40 @@ No lane relays status through the owner.
 }
 ```
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#test.receiver-adapter.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.acceptance-infrastructure.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "integration",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.acceptance.001"
+  ],
+  "scenario": "Fixture and cleanup self-tests run without Electron. Then, as separately bound native checks on the exact candidate, the unchanged shell checkpoint passes and a full-mode run records a gap for every unimplemented scenario row.",
+  "evidence": {
+    "predicate": "Self-tests pass. Fixtures bind the landed closed codecs and record exact request ledgers. Cleanup leaves no owned profile, process, listener, socket or tree on any exit path. Checkpoint mode passes unchanged, and full mode records per-row gaps and no full pass. The full-mode gaps are held-row evidence, not integrated or full acceptance.",
+    "invalid": "A full pass with any missing scenario row, an unavailable prerequisite counted as a pass, an inherited HQ_* variable or a qualification switch passed through, a real endpoint contacted, or a leaked resource.",
+    "unknown": "No display is available on the host for the native checks; record it as a platform gap."
+  },
+  "environment": [
+    "Node 24 for the self-tests; built app on the check host for the separately bound native checks"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.acceptance-infrastructure.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.acceptance-infrastructure.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "tests/acceptance/"
+  ],
+  "affected_check_groups": [
+    "hq-electron-acceptance"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.acceptance-infrastructure.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.acceptance-scenarios.001" -->
 ```json
