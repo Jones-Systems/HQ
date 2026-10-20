@@ -167,3 +167,49 @@ test('rich sequential results larger than the spec-file bound remain resumable w
   assert.equal(result.exitCode, 0, JSON.stringify(result));
   assert.equal(result.result.data.results.length, 30); assert.equal(resumed.writes().length, 0);
 });
+
+test('sequential preflight rejects an oversized later request before any commit or duplicate on corrected retry', async t => {
+  const f = await scratch(t);
+  const spec = batchSpec([{ client_key: 'first', title: 'First' }, { title: 'Second', references: [{ id: 'ref00001', kind: 'url', url: 'https://example.com', label: 'x'.repeat(270 * 1024) }] }]);
+  const file = await f.write('batch.json', spec);
+  assert.ok(Buffer.byteLength(JSON.stringify(spec)) < 4 * 1024 * 1024);
+  const committed = [];
+  const h = server(call => { committed.push(call.parsed.fields.title); return json({ item: frozenItem(call.parsed.fields, committed.length), state_version: 9 }); });
+  const rejected = await run(['planner', 'items', 'create-batch', '--spec-file', file, '--mode', 'sequential'], h.deps);
+  assert.equal(rejected.exitCode, 2, JSON.stringify(rejected));
+  assert.match(rejected.result.error.message, /256 KiB/);
+  assert.equal(rejected.result.effect, 'none');
+  assert.equal(h.writes().length, 0, 'No-effect rejection must precede every write');
+  spec.items[1].references[0].label = 'Corrected';
+  await f.write('batch.json', spec);
+  const corrected = await run(['planner', 'items', 'create-batch', '--spec-file', file, '--mode', 'sequential'], h.deps);
+  assert.equal(corrected.exitCode, 0, JSON.stringify(corrected));
+  assert.deepEqual(committed, ['First', 'Second']);
+  assert.equal(conforms(schema, corrected.result), true);
+});
+
+test('sequential later document preparation failure preserves receipts and resumes without duplicating the prefix', async t => {
+  const f = await scratch(t);
+  const file = await f.write('batch.json', batchSpec([{ title: 'First' }, { title: 'Second' }]));
+  const h = server(call => json({ item: frozenItem(call.parsed.fields, 0), state_version: 9 }));
+  const now = new Date('2026-11-01T03:30:00Z'); let documents = 0;
+  now.toISOString = () => { if (++documents === 2) throw new Error('Synthetic document preparation failure'); return '2026-11-01T03:30:00.000Z'; };
+  const failed = await run(['planner', 'items', 'create-batch', '--spec-file', file, '--mode', 'sequential', '--request-id', 'request-1234'], { ...h.deps, clock: () => now });
+  assert.equal(failed.exitCode, 8, JSON.stringify(failed)); assert.equal(failed.result.effect, 'partial');
+  assert.equal(failed.result.request_id, 'request-1234'); assert.equal(h.writes().length, 1);
+  const progress = failed.result.error.details.batch;
+  assert.deepEqual(progress.results.map(r => r.status), ['created', 'not_attempted']);
+  assert.equal(progress.results[0].item.id, 'item0000'); assert.equal(progress.sent_after_version, 8);
+  assert.equal(progress.results[0].replay.request_id, 'request-1234-0');
+  assert.equal(conforms(schema, failed.result), true);
+  const prior = await f.write('prior.json', failed.result);
+  const resumed = server(call => {
+    assert.equal(call.path, '/api/requests/replay'); assert.equal(call.parsed.request_id, 'request-1234-1');
+    assert.equal(call.parsed.sent_after_version, 8);
+    assert.equal(Buffer.from(call.parsed.body_b64, 'base64').toString(), '{"fields":{"title":"Second"}}');
+    return json({ outcome: 'applied_now', status: 201, response: { item: frozenItem({ title: 'Second' }, 1), state_version: 10 } });
+  }, { ...info, state_version: 9 });
+  const result = await run(['planner', 'items', 'create-batch', '--resume-from', prior], resumed.deps);
+  assert.equal(result.exitCode, 0, JSON.stringify(result)); assert.equal(resumed.writes().length, 1);
+  assert.deepEqual(result.result.data.results.map(r => r.item.id), ['item0000', 'item0001']);
+});

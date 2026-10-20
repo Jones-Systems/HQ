@@ -204,12 +204,16 @@ async function batch(invocation: Invocation, deps: Dependencies, now: Date): Pro
   }
   delete data.validation;
   let changed = false, replayed = false;
+  let preparedBodies: string[] | undefined;
   for (let index = 0; index < data.results.length; index++) {
     const entry = data.results[index];
     if (['created', 'replayed'].includes(entry.status)) continue;
-    const doc = entry.replay ?? document(client, 'POST', '/api/items', bytes({ fields: withoutKey(spec.items[index]) }), `${rid}-${index}`, V, now);
+    let doc: Replay | undefined = entry.replay;
     let attempted = false;
     try {
+      // Validate every request before the first send and reuse those frozen bytes.
+      preparedBodies ??= spec.items.map((item: any) => bytes({ fields: withoutKey(item) }));
+      doc ??= document(client, 'POST', '/api/items', preparedBodies![index], `${rid}-${index}`, V, now);
       if (index > 0) info = await preRead(client);
       requireReferences(info, [spec.items[index]]);
       const modern = (info.features ?? []).includes('requests.replay');
@@ -225,7 +229,7 @@ async function batch(invocation: Invocation, deps: Dependencies, now: Date): Pro
       changed ||= response.effect === 'applied'; replayed ||= response.effect === 'replayed';
       persist(input.intent_file, success(command.id, data, changed ? 'applied' : replayed ? 'replayed' : 'none', rid).result);
     } catch (error) {
-      const e = error instanceof CliError ? error : uncertain('write_unknown', 'Sequential item outcome is unknown.');
+      const e = error instanceof CliError ? error : attempted ? uncertain('write_unknown', 'Sequential item outcome is unknown.') : new CliError('internal_error', 'Sequential item preparation failed; no write was sent for this item.', 1);
       if (attempted && !['created', 'replayed'].includes(entry.status)) { entry.status = e.effect === 'unknown' ? 'unknown' : 'failed'; entry.error = errorValue(e); entry.replay = doc; }
       const completed = data.results.some((r: any) => ['created', 'replayed'].includes(r.status));
       if (e.exitCode !== 7 && completed && !(e.code === 'version_unavailable' && !changed && !replayed)) { e.exitCode = 8; e.effect = 'partial'; }
