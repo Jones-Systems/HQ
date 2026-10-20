@@ -32,6 +32,13 @@ Contract-coupled implementation waits for the existing install-flow work's stabl
 interface and HQ's shared-file custody agreement through [coordination issue #50](https://github.com/Jones-Systems/HQ/issues/50).
 There is no replacement updater implementation in this change.
 
+**Implementation stage:** this PR adds one specification document. It supplies no
+packager, distributable HQ binary, update feed, in-app update control, install
+transaction or recovery executable. The local native testing route exercises the
+existing application; it is not an installer. Passing repository checks on this
+PR establish source compatibility, not any of the updater test intents below.
+Accepting this document would integrate the preparation only.
+
 macOS arm64 is the existing installation target. Linux x64 is the demonstrated
 native test platform and a distribution qualification candidate; its binary and
 update mechanism still need qualification. Other platforms and architectures
@@ -64,6 +71,19 @@ At intake [foundation PR #2](https://github.com/Jones-Systems/HQ/pull/2) remaine
 25 successful checks at that head; `main` remained `bc8202a9731d51922c7cddde91f6ada0074adc1d`.
 These observations do not select an eventual release build: refresh source,
 integration acceptance and checks when constructing that candidate.
+
+Currentness refresh: foundation advanced to
+`3e76fb24d35ac9883f2da0e3b0ab26d47f8cf116`, tree
+`fb8c0081d8957bd8650c9f24490739e5e6dcdf7b`, through merged
+[settings/calendar/reference refinement PR #116](https://github.com/Jones-Systems/HQ/pull/116).
+This task branch incorporates that foundation through a normal merge. The new
+base changes renderer/domain UI and tests; manifests, lockfile, Electron main and
+preload, contracts and workflows are unchanged from the original observation.
+No packaging/updater source, published release or Actions artifact appeared in
+the refresh. The earlier native evidence remains bound to `214c884...`; it is not
+a native test of the refreshed branch. The separate install-flow dependency's
+latest result is still a research recommendation, not a delivered reusable
+interface, so its implementation prerequisite remains open.
 
 - Root and desktop manifests have no packaging/updater configuration. The desktop
   version is `0.1.0`; the current desktop metadata port exposes platform and
@@ -260,7 +280,7 @@ provider is part of this work.
 No updater test intent above is claimed passing by the baseline below.
 <!-- codex-section:end id="spec.hq-native-updates#test.qualification.001" -->
 
-## Current baseline evidence
+## Historical native baseline evidence
 
 At clean source `214c884319cd4783da266fcc6124112f59cdd2db`, pinned Node `24.19.0`,
 npm `11.17.0`, Electron `44.9.0`:
