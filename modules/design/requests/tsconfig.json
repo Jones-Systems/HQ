@@ -17,5 +17,5 @@
     "skipLibCheck": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "test", "ui", "vitest.config.ts"]
+  "include": ["src", "test", "ui", "harness", "vitest.config.ts"]
 }

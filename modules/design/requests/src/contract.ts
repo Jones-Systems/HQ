@@ -26,7 +26,7 @@ export type ReviewEventId = Brand<'ReviewEventId'>;
 /** `sha256:` followed by 64 lowercase hex digits. */
 export type Digest = Brand<'Digest'>;
 
-export type IdKind = 'request' | 'draft' | 'packet' | 'attachment' | 'clarification' | 'review-event';
+export type IdKind = 'request' | 'draft' | 'packet' | 'attachment' | 'clarification' | 'review-event' | 'candidate' | 'send';
 
 // ---------------------------------------------------------------------------
 // Types consumed from other sections (types only; never imported at runtime).
@@ -141,6 +141,8 @@ export const PACKET_SCHEMA = 'hq.design.decision-packet/v1' as const;
 export const FREEZE_SCHEMA = 'hq.design.request-freeze/v1' as const;
 export const REVIEW_EVENT_SCHEMA = 'hq.design.request-review-event/v1' as const;
 export const EXPORT_SCHEMA = 'hq.design.requests-export/v1' as const;
+export const SEND_SCHEMA = 'hq.design.request-send/v1' as const;
+export const HANDOFF_STATUS_SCHEMA = 'hq.design.request-handoff-status/v1' as const;
 
 export type DraftPhase = 'draft' | 'clarify';
 
@@ -222,20 +224,48 @@ export interface CandidateClaim {
   readonly evidence: readonly EvidenceRef[];
 }
 
+/** Where a returned candidate came from. Absent on v1 inputs, which are treated as connector returns. */
+export const RETURN_ORIGINS = ['connector', 'owner-reported'] as const;
+export type ReturnOrigin = (typeof RETURN_ORIGINS)[number];
+
+/**
+ * Producer identity as reported with a return. Nothing is inferred: a missing
+ * host or model stays missing and is never replaced by a fallback.
+ */
+export interface CandidateProvenance {
+  readonly origin: ReturnOrigin;
+  readonly host?: string;
+  readonly model?: string;
+}
+
+/** The only observed status an owner-reported return may carry. */
+export const OWNER_REPORTED_STATUS = 'owner-reported' as const;
+
+/** Evidence kinds an owner-reported return may carry. It cannot carry observations or HQ-made candidate evidence. */
+export const OWNER_REPORTED_EVIDENCE_KINDS = ['note', 'capture'] as const;
+
 /** A returned candidate as supplied by the connector/results section (HQD-11). */
 export interface ReturnedCandidate {
   readonly candidateId: CandidateId;
   readonly packet: PacketLink;
   readonly baselineVersionId: VersionId;
-  readonly candidateVersionId: VersionId;
+  /**
+   * Null when the producer returned artifacts without a comparable version.
+   * No version is invented: the review shows the artifacts and provenance and
+   * the compare slot is not rendered.
+   */
+  readonly candidateVersionId: VersionId | null;
   readonly claims: readonly CandidateClaim[];
   /** Observed execution status as reported, with its own freshness. */
   readonly observedStatus: string;
   readonly observedAt: string;
   readonly evidence: readonly EvidenceRef[];
+  /** Optional; absent on v1 inputs. */
+  readonly provenance?: CandidateProvenance;
 }
 
-export const REVIEW_DECISIONS = ['accept', 'revise', 'defer'] as const;
+/** `reject` was added after the first release; the first three keep their order. A reject never creates a draft or an execution. */
+export const REVIEW_DECISIONS = ['accept', 'revise', 'defer', 'reject'] as const;
 export type ReviewDecision = (typeof REVIEW_DECISIONS)[number];
 
 export interface ClaimJudgment {
@@ -295,7 +325,88 @@ export interface SchedulerPort {
  * from an explicit owner Send action, and never interpret receipts.
  */
 export interface DispatchSlot {
-  requestSend(packet: PacketLink): void;
+  /**
+   * `binding` is supplied by the send gate after the send record is durable. A
+   * v1 implementation that ignores the second argument stays assignable.
+   */
+  requestSend(packet: PacketLink, binding?: SendBinding): void;
+}
+
+/** The destination and single-use identity a send is bound to. */
+export interface SendBinding {
+  readonly sendId: string;
+  readonly destinationId: string;
+  readonly destinationLabel: string;
+}
+
+// ---------------------------------------------------------------------------
+// Handoff status and returns (read-only ports; neither can send)
+
+export const HANDOFF_STATES = ['not-sent', 'submitting', 'unknown', 'queued', 'held', 'running', 'returned', 'failed', 'cancelled'] as const;
+export type HandoffState = (typeof HANDOFF_STATES)[number];
+
+/** Host and model, exactly as pinned or reported. Never defaulted. */
+export interface HostModel {
+  readonly host?: string;
+  readonly model?: string;
+}
+
+/**
+ * Per-packet status as the connector reports it. The composition layer maps the
+ * connector's dispatch lifecycle onto these states; requests never imports it.
+ */
+export interface HandoffStatus {
+  readonly schema: typeof HANDOFF_STATUS_SCHEMA;
+  readonly packet: PacketLink;
+  readonly state: HandoffState;
+  /** When the connector last observed this state: the status's freshness. */
+  readonly observedAt: string;
+  readonly destination?: { readonly destinationId: string; readonly label: string };
+  /** What the send asked for. */
+  readonly pinned?: HostModel;
+  /** What the receiver reports it ran on. */
+  readonly actual?: HostModel;
+  readonly detail?: string;
+}
+
+/**
+ * Read-only status readback. It deliberately has no send method, and the
+ * session hands it nothing else, so polling can never dispatch.
+ */
+export interface HandoffStatusPort {
+  read(packet: PacketLink): Promise<HandoffStatus | null>;
+}
+
+/** Read-only readback of returned candidates. Values are untrusted and re-validated. */
+export interface ReturnsPort {
+  list(requestId: RequestId): Promise<readonly unknown[]>;
+}
+
+/** The durable record written before a send reaches transport. One per packet, ever. */
+export interface SendRecord {
+  readonly schema: typeof SEND_SCHEMA;
+  readonly sendId: string;
+  readonly requestId: RequestId;
+  readonly packet: PacketLink;
+  readonly destination: { readonly destinationId: string; readonly label: string };
+  readonly at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Navigation-only intents
+
+/**
+ * Pure navigation requests emitted by the requests views. Their shapes carry no
+ * payload that could name a send, and `NavigationPort` has no dispatch method.
+ */
+export type NavigationIntent =
+  | { readonly type: 'open-request'; readonly requestId: RequestId }
+  | { readonly type: 'open-packet'; readonly requestId: RequestId; readonly packetId: PacketId }
+  | { readonly type: 'open-returned'; readonly requestId: RequestId; readonly candidateId: CandidateId }
+  | { readonly type: 'open-runs'; readonly requestId: RequestId };
+
+export interface NavigationPort {
+  navigate(intent: NavigationIntent): void;
 }
 
 /** Before/after rendering is owned by the compare section. */

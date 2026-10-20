@@ -1,12 +1,15 @@
 import type {
-  ClaimJudgment, DecisionPacket, ReturnedCandidate, ReviewDecision, ReviewEvent, RequestDraft, RequestId, SchedulerPort,
+  ClaimJudgment, DecisionPacket, DispatchSlot, HandoffStatus, HandoffStatusPort, PacketId, ReturnedCandidate, ReturnsPort,
+  ReviewDecision, ReviewEvent, RequestDraft, RequestId, SchedulerPort, SendRecord,
 } from './contract.ts';
-import { applyEdit, freezeBlockers, type DraftEdit } from './draft.ts';
+import { applyEdit, freezeBlockers, linkOf, type DraftEdit } from './draft.ts';
+import { handoffView, type HandoffView } from './handoff.ts';
+import { inboxOf, type InboxItem } from './inbox.ts';
 import { canonicalBytes } from './jcs.ts';
 import {
-  FreezeBlockedError, OutcomeUnknownError, StaleDraftError, type RequestSnapshot, type RequestStore,
+  FreezeBlockedError, OutcomeUnknownError, SendBlockedError, StaleDraftError, type RequestSnapshot, type RequestStore,
 } from './store.ts';
-import { brandId } from './validate.ts';
+import { ValidationError, brandId } from './validate.ts';
 
 export type SaveStatus = 'saved' | 'unsaved' | 'saving' | 'error';
 
@@ -16,9 +19,17 @@ export interface SessionState {
   readonly packets: readonly DecisionPacket[];
   readonly reviews: readonly ReviewEvent[];
   readonly candidates: readonly ReturnedCandidate[];
+  /** Durable send records; a packet with one can never be sent again. */
+  readonly sends: readonly SendRecord[];
+  /** Last connector status stored per packet. */
+  readonly statuses: readonly HandoffStatus[];
+  /** Packets whose transport call returned in this session (submitting until the connector reports). */
+  readonly handedOff: readonly PacketId[];
+  /** Why the last status or returns readback was not applied; the last-known values stay. */
+  readonly readbackNotes: readonly string[];
   readonly save: SaveStatus;
   readonly savedAt: string | null;
-  readonly busy: 'freezing' | 'reviewing' | null;
+  readonly busy: 'freezing' | 'reviewing' | 'sending' | null;
   readonly error: string | null;
   /** Freeze reasons for the current draft; empty when it can be frozen. */
   readonly blockers: readonly string[];
@@ -61,7 +72,8 @@ export class RequestSession {
   private fromSnapshot(snapshot: RequestSnapshot): SessionState {
     return {
       requestId: snapshot.requestId, draft: snapshot.draft, packets: snapshot.packets, reviews: snapshot.reviews,
-      candidates: snapshot.candidates, save: 'saved', savedAt: null, busy: null, error: null,
+      candidates: snapshot.candidates, sends: snapshot.sends, statuses: snapshot.handoff, handedOff: [], readbackNotes: [],
+      save: 'saved', savedAt: null, busy: null, error: null,
       blockers: snapshot.draft ? freezeBlockers(snapshot.draft, snapshot.packets.at(-1) ?? null) : [],
       readOnly: snapshot.readOnly, unknown: false, recovered: snapshot.recovered,
     };
@@ -93,6 +105,22 @@ export class RequestSession {
     const state = this.value;
     return state.draft !== null && state.busy === null && state.readOnly === null && !state.unknown;
   }
+
+  /** Combined handoff state for one packet; `now` is supplied so rendering stays deterministic. */
+  handoffView(packetId: PacketId, now: string): HandoffView | null {
+    const state = this.value;
+    const packet = state.packets.find((item) => item.packetId === packetId);
+    if (!packet) return null;
+    return handoffView({
+      packet, isHead: state.packets.at(-1)?.packetId === packetId,
+      send: state.sends.find((item) => item.packet.packetId === packetId) ?? null,
+      status: state.statuses.find((item) => item.packet.packetId === packetId) ?? null,
+      candidates: state.candidates, now, handedThisSession: state.handedOff.includes(packetId),
+    });
+  }
+
+  /** The returned-work inbox for this request. */
+  get inbox(): InboxItem[] { return inboxOf(this.value.candidates, this.value.reviews); }
 
   /** Applies an edit and schedules autosave. Returns false while edits are held. */
   edit(edit: DraftEdit): boolean {
@@ -170,11 +198,11 @@ export class RequestSession {
   private fail(error: unknown): void {
     if (error instanceof OutcomeUnknownError) this.set({ busy: null, unknown: true, error: error.message });
     else if (error instanceof FreezeBlockedError) this.set({ busy: null, error: error.reasons.join(' ') });
-    else if (error instanceof StaleDraftError) this.set({ busy: null, error: error.message });
+    else if (error instanceof StaleDraftError || error instanceof SendBlockedError) this.set({ busy: null, error: error.message });
     else this.set({ busy: null, error: error instanceof Error ? error.message : String(error) });
   }
 
-  /** Appends an accept / revise / defer event. Revise replaces the draft with a linked revision draft. */
+  /** Appends an accept / revise / defer / reject event. Only revise creates a draft; reject creates no draft and no execution. Revise replaces the draft with a linked revision draft. */
   review(candidate: ReturnedCandidate, decision: ReviewDecision, note = '', judgments: readonly ClaimJudgment[] = []): Promise<ReviewEvent | null> {
     if (this.value.busy || this.value.readOnly || this.value.unknown) return Promise.resolve(null);
     // Autosave stays scheduled: a queued flush reads the draft current at run time.
@@ -190,6 +218,106 @@ export class RequestSession {
         });
         if (result.draft && result.cleanup === 'pending') this.schedule();
         return result.event;
+      } catch (error) {
+        this.fail(error);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * The explicit, confirmed Send. The send record is durable before the
+   * transport call, so a crash or an exception afterwards leaves a fence, never
+   * a resendable packet. `confirmedDestinationId` is the destination the owner
+   * saw and confirmed; a different destination is refused.
+   */
+  send(dispatch: DispatchSlot, packetId: PacketId, confirmedDestinationId: string): Promise<'sent' | 'blocked' | 'unknown'> {
+    if (this.value.busy || this.value.readOnly || this.value.unknown) return Promise.resolve('blocked');
+    this.set({ busy: 'sending', error: null });
+    return this.enqueue(async () => {
+      let begun;
+      try {
+        begun = await this.store.beginSend({ requestId: this.value.requestId, packetId, expectedDestinationId: confirmedDestinationId });
+      } catch (error) {
+        this.fail(error);
+        return error instanceof OutcomeUnknownError ? 'unknown' as const : 'blocked' as const;
+      }
+      this.set({ sends: [...this.value.sends, begun.record] });
+      try {
+        dispatch.requestSend(begun.link, begun.binding);
+      } catch (error) {
+        // The record stays: the packet reads as unknown and cannot be resent.
+        this.set({ busy: null, error: `Handoff outcome is unknown: ${error instanceof Error ? error.message : String(error)}. Check the connector status; do not resend.` });
+        return 'unknown' as const;
+      }
+      this.set({ busy: null, handedOff: [...this.value.handedOff, packetId] });
+      return 'sent' as const;
+    });
+  }
+
+  /**
+   * Reads each packet's status through the read-only port and stores the last
+   * known value. The port has no send method and nothing else is passed to it.
+   * A failed or rejected reading keeps the last-known status and says why.
+   */
+  refreshHandoff(port: HandoffStatusPort): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.value.readOnly || this.value.unknown) return;
+      const notes: string[] = [];
+      for (const packet of this.value.packets) {
+        let raw;
+        try { raw = await port.read(linkOf(packet)); } catch (error) {
+          notes.push(`Status for packet #${packet.lineage.sequence} could not be read: ${error instanceof Error ? error.message : String(error)}`);
+          continue;
+        }
+        if (raw === null) continue;
+        try {
+          const result = await this.store.recordHandoffStatus(this.value.requestId, raw);
+          if (result.stored && result.status) {
+            const status = result.status;
+            this.set({ statuses: [...this.value.statuses.filter((item) => item.packet.packetId !== status.packet.packetId), status] });
+          } else if (result.reason) notes.push(`Status for packet #${packet.lineage.sequence} ignored: ${result.reason}.`);
+        } catch (error) {
+          notes.push(`Status for packet #${packet.lineage.sequence} rejected: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      this.set({ readbackNotes: notes });
+    });
+  }
+
+  /** Reads returned candidates through the read-only port; invalid items are skipped and reported. */
+  refreshReturns(port: ReturnsPort): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.value.readOnly || this.value.unknown) return;
+      const notes: string[] = [];
+      let items: readonly unknown[];
+      try { items = await port.list(this.value.requestId); } catch (error) {
+        this.set({ readbackNotes: [`Returned work could not be read: ${error instanceof Error ? error.message : String(error)}`] });
+        return;
+      }
+      for (const raw of items) {
+        try {
+          const { candidate, added } = await this.store.ingestCandidate(this.value.requestId, raw);
+          if (added) this.set({ candidates: [...this.value.candidates, candidate] });
+        } catch (error) {
+          if (error instanceof OutcomeUnknownError) { this.fail(error); return; }
+          notes.push(`A returned item was skipped: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      this.set({ readbackNotes: notes });
+    });
+  }
+
+  /** Records an owner-reported return. Write-once, labelled, and never counted as an observation. */
+  reportReturn(input: { readonly packetId: PacketId; readonly claims: readonly string[]; readonly artifacts?: readonly { readonly kind: 'note' | 'capture'; readonly label: string }[]; readonly host?: string; readonly model?: string }): Promise<ReturnedCandidate | null> {
+    if (this.value.busy || this.value.readOnly || this.value.unknown) return Promise.resolve(null);
+    return this.enqueue(async () => {
+      try {
+        const packet = this.value.packets.find((item) => item.packetId === input.packetId);
+        if (!packet) throw new ValidationError('packet', 'unknown packet');
+        const candidate = await this.store.reportOwnerReturn({ ...input, requestId: this.value.requestId, packet: linkOf(packet) });
+        this.set({ candidates: [...this.value.candidates, candidate], error: null });
+        return candidate;
       } catch (error) {
         this.fail(error);
         return null;

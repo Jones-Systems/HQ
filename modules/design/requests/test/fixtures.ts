@@ -2,7 +2,9 @@
 import type {
   AnnotationRef, CandidateId, ClaimId, EvidenceRef, PacketLink, RequestId, ReturnedCandidate, SourceRef, VersionId,
 } from '../src/contract.ts';
-import { CrashingStorageFake, DispatchSpyFake, ManualSchedulerFake, SequentialIdsFake, StepClockFake } from '../src/fakes.ts';
+import {
+  CrashingStorageFake, DispatchSpyFake, LifecycleConnectorFake, ManualSchedulerFake, SequentialIdsFake, StepClockFake,
+} from '../src/fakes.ts';
 import { RequestSession } from '../src/session.ts';
 import { RequestStore } from '../src/store.ts';
 import { brandId } from '../src/validate.ts';
@@ -52,10 +54,11 @@ export function env() {
   const ids = new SequentialIdsFake();
   const scheduler = new ManualSchedulerFake();
   const dispatch = new DispatchSpyFake();
+  const connector = new LifecycleConnectorFake();
   const store = new RequestStore({ storage, clock, ids });
   const options = { now: () => clock.now(), debounceMs: 400 };
   return {
-    storage, clock, ids, scheduler, dispatch, store, options,
+    storage, clock, ids, scheduler, dispatch, connector, store, options,
     /** Simulates an app restart: new store and session instances over the same durable storage. */
     async restart(requestId: RequestId) {
       storage.restart();
@@ -69,14 +72,40 @@ export function env() {
 export type Env = ReturnType<typeof env>;
 
 /** A request whose draft is ready to freeze. */
-export async function readyDraft(e: Env) {
+export const DESTINATION = { kind: 'existing-thread', destinationId: 'dest-1', label: 'Fixture thread' } as const;
+
+export async function readyDraft(e: Env, options: { readonly destination?: boolean } = {}) {
   const created = await e.store.createRequest({ title: 'Tighten home heading', sources: [source()] });
   const session = await e.open(created.requestId);
   session.edit({ type: 'set-intent', intent: 'Reduce the gap above the second heading.\nKeep the hero unchanged — “exactly”. 🎯' });
   session.edit({ type: 'add-annotation', annotation: annotation('A') });
   session.edit({ type: 'add-evidence', evidence: evidence() });
+  if (options.destination) session.edit({ type: 'set-destination', destination: DESTINATION });
   await session.flush();
   return { requestId: created.requestId, session };
 }
 
 export const decoder = new TextDecoder();
+
+/** A connector-style return with a comparable version and producer provenance. */
+export function connectorReturn(packet: PacketLink, id = 'cand-c1'): ReturnedCandidate {
+  return { ...candidate(packet, id), provenance: { origin: 'connector', host: 'fixture-host-a', model: 'fixture-model-1' } };
+}
+
+/** A return with artifacts but no comparable version. */
+export function versionless(packet: PacketLink, id = 'cand-v0'): ReturnedCandidate {
+  return { ...candidate(packet, id), candidateVersionId: null, claims: candidate(packet, id).claims.slice(0, 1) };
+}
+
+export const sendKey = (requestId: string, packetId: string) => `design/requests/${requestId}/sends/${packetId}`;
+export const handoffKey = (requestId: string, packetId: string) => `design/requests/${requestId}/handoff/${packetId}`;
+export const draftKeyOf = (requestId: string) => `design/requests/${requestId}/draft`;
+
+/** Frozen request with a destination, ready for the lifecycle tests. */
+export async function frozenWithDestination() {
+  const e = env();
+  const ready = await readyDraft(e, { destination: true });
+  const packet = (await ready.session.freeze())!;
+  const link = { packetId: packet.packetId, authoringDigest: packet.authoringDigest };
+  return { e, ...ready, packet, link };
+}

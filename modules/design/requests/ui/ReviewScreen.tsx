@@ -14,6 +14,7 @@ const DECISIONS: readonly { readonly decision: ReviewDecision; readonly label: s
   { decision: 'accept', label: 'Accept' },
   { decision: 'revise', label: 'Revise' },
   { decision: 'defer', label: 'Defer' },
+  { decision: 'reject', label: 'Reject' },
 ];
 
 export function ReviewScreen({ session, state, candidate, CompareSlot }: ReviewScreenProps) {
@@ -40,10 +41,26 @@ export function ReviewScreen({ session, state, candidate, CompareSlot }: ReviewS
         {review.decision && <> · latest decision <strong>{review.decision}</strong></>}</p>
     </header>
 
-    <div className="hqr-compare">
-      <CompareSlot baselineVersionId={candidate.baselineVersionId} candidateVersionId={candidate.candidateVersionId}
-        label={`Before (${candidate.baselineVersionId}) and after (${candidate.candidateVersionId})`} />
-    </div>
+    {candidate.provenance?.origin === 'owner-reported' && <p className="hqr-alert" role="note">
+      Reported by you, outside HQ. It is not verified, and none of it counts as observed.</p>}
+    <dl className="hqr-facts" aria-label="Provenance">
+      <dt>Source</dt><dd>{candidate.provenance?.origin === 'owner-reported' ? 'Owner-reported' : 'Connector'}</dd>
+      <dt>Host</dt><dd>{candidate.provenance?.host ?? 'not reported'}</dd>
+      <dt>Model</dt><dd>{candidate.provenance?.model ?? 'not reported'}</dd>
+    </dl>
+
+    {candidate.candidateVersionId === null
+      ? <div className="hqr-compare" data-versionless="true">
+        <p>No comparable version was returned, so there is no before/after. The artifacts below are shown as returned.</p>
+        {candidate.evidence.length === 0 ? <p className="hqr-empty">No artifacts were returned.</p>
+          : <ul className="hqr-list" aria-label="Returned artifacts">{candidate.evidence.map((item) => <li key={item.evidenceId}>
+            <span className="hqr-badge hqr-badge-quiet">{item.kind}</span> {item.label}
+          </li>)}</ul>}
+      </div>
+      : <div className="hqr-compare">
+        <CompareSlot baselineVersionId={candidate.baselineVersionId} candidateVersionId={candidate.candidateVersionId}
+          label={`Before (${candidate.baselineVersionId}) and after (${candidate.candidateVersionId})`} />
+      </div>}
 
     {CLAIM_LEVELS.map((level) => <div key={level} className="hqr-claims" data-level={level}>
       <h3>{CLAIM_LEVEL_LABELS[level].title} <span className="hqr-muted">{review.claims[level].length}</span></h3>
@@ -72,7 +89,7 @@ export function ReviewScreen({ session, state, candidate, CompareSlot }: ReviewS
       {DECISIONS.map((item) => <button key={item.decision} type="button" disabled={disabled} className={item.decision === 'accept' ? 'hqr-primary' : undefined}
         onClick={() => { void decide(item.decision); }}>{item.label}</button>)}
     </div>
-    <p className="hqr-hint">Decisions are appended to this request's history. Revise starts a new linked draft and keeps all evidence.</p>
+    <p className="hqr-hint">Decisions are appended to this request's history. Revise starts a new linked draft and keeps all evidence. Reject records that you declined the result; it starts no draft and no work.</p>
 
     {review.history.length > 0 && <>
       <h3>Decision history</h3>
