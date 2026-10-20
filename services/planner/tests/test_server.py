@@ -370,6 +370,61 @@ class HandlerTransport(AppTestCase):
         self.assertIn("411", status)
         self.assertEqual(len(self.store.snapshot()["items"]), 1)
 
+    def post(self, payload: bytes, *header_lines: str, target: str = "/api/items") -> tuple[str, dict, bytes]:
+        head = "".join(f"{line}\r\n" for line in header_lines)
+        return self.raw((f"POST {target} HTTP/1.1\r\nHost: {HOST}\r\nContent-Type: application/json\r\n"
+                         f"X-Planning-Request: 1\r\n{head}Connection: close\r\n\r\n").encode() + payload)
+
+    def test_body_shorter_than_content_length_is_not_applied(self):
+        # The client stopped early; the bytes that did arrive happen to parse.
+        payload = b'{"fields": {"title": "Cut short"}}  '
+        status, headers, body = self.post(payload, f"Content-Length: {len(payload) + 20}")
+        self.assertIn("400", status)
+        self.assertEqual(headers["connection"], "close")
+        self.assertEqual(json.loads(body)["error"], "bad_request")
+        self.assertEqual(self.store.snapshot()["items"], [])
+
+    def test_malformed_or_repeated_framing_headers_are_refused(self):
+        payload = b'{"fields": {"title": "Framed"}}'
+        n = len(payload)
+        cases = {"abc": [f"Content-Length: {n}x"], "sign": [f"Content-Length: +{n}"],
+                 "negative": ["Content-Length: -1"], "underscore": [f"Content-Length: {n // 10}_{n % 10}"],
+                 "repeated": [f"Content-Length: {n}", "Content-Length: 0"],
+                 "repeated host": [f"Host: {HOST}"]}
+        for name, lines in cases.items():
+            with self.subTest(name):
+                status, headers, body = self.post(payload, *lines)
+                self.assertIn("400", status)
+                self.assertEqual(headers["connection"], "close")
+                self.assertEqual(json.loads(body)["error"], "bad_request")
+        self.assertEqual(self.store.snapshot()["items"], [])
+        status, _, _ = self.post(payload, f"Content-Length:  {n} ")
+        self.assertIn("201", status)
+
+    def test_absolute_form_target_gets_the_route_body_limit(self):
+        padded = json.dumps({"data": self.store.export()}).encode() + b" " * MAX_BODY
+        status, _, body = self.post(padded, f"Content-Length: {len(padded)}",
+                                    target=f"http://{HOST}/api/import/preview")
+        self.assertIn("200", status, body[:200])
+
+    def test_protocol_errors_are_json_with_security_headers(self):
+        status, headers, body = self.raw(f"OPTIONS /api/items HTTP/1.1\r\nHost: {HOST}\r\n"
+                                         f"Origin: http://evil.example\r\n"
+                                         f"Access-Control-Request-Method: POST\r\n\r\n".encode())
+        self.assertIn("501", status)
+        self.assertTrue(headers["content-type"].startswith("application/json"))
+        self.assertEqual(headers["x-content-type-options"], "nosniff")
+        self.assertIn("default-src 'self'", headers["content-security-policy"])
+        self.assertEqual(headers["connection"], "close")
+        self.assertFalse(any(k.startswith("access-control-") for k in headers))
+        self.assertEqual(json.loads(body)["error"], "not_implemented")
+        self.assertNotIn(b"OPTIONS", body)
+        status, headers, body = self.raw(f"GET / HTTP/1.1\r\nHost: {HOST}\r\n"
+                                         f"X-Filler: {'x' * 70_000}\r\n\r\n".encode())
+        self.assertIn("431", status)
+        self.assertEqual(headers["x-content-type-options"], "nosniff")
+        self.assertEqual(json.loads(body)["error"], "bad_request")
+
 
 class CliGuards(StoreTestCase):
     """Refusals happen before any socket is bound."""

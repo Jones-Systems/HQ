@@ -7,6 +7,9 @@ Security boundary (keep in sync with README "Security"):
 - Mutations require ``Content-Type: application/json``, the custom
   ``X-Planning-Request: 1`` header (forces a CORS preflight that is never
   granted), a same-origin ``Origin`` when present, and a bounded body.
+- Framing is strict: one ``Host``, at most one all-digit ``Content-Length``, no
+  chunked bodies, and the whole declared body must arrive. Protocol errors are
+  answered as JSON with the same security headers.
 - Static files are served only from ``public/`` with an extension allow-list;
   the SQLite file and backups live outside it and are never served.
 """
@@ -53,6 +56,7 @@ SECURITY_HEADERS = {
 }
 _ITEM_RE = re.compile(r"^/api/items/([A-Za-z0-9_-]{6,40})(/[a-z]+)?$")
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+_CONTENT_LENGTH_RE = re.compile(r"[0-9]{1,16}")
 
 
 class Response:
@@ -71,6 +75,15 @@ def json_response(status: int, payload, headers: dict | None = None) -> Response
 
 def error(status: int, code: str, message: str, **extra) -> Response:
     return json_response(status, {"error": code, "message": message, **extra})
+
+
+def body_limit(path: str) -> int:
+    """Largest request body accepted for a parsed request path."""
+    if path == "/api/requests/replay":
+        return REPLAY_MAX_BODY
+    if path in ("/api/import", "/api/import/preview"):
+        return MAX_IMPORT_BODY
+    return MAX_BODY
 
 
 def is_loopback_host(host: str) -> bool:
@@ -265,10 +278,7 @@ class PlanningApp:
         fetch_site = headers.get("sec-fetch-site")
         if fetch_site is not None and fetch_site not in ("same-origin", "none"):
             return error(403, "forbidden", "Cross-site changes are not accepted.")
-        limit = MAX_IMPORT_BODY if path in ("/api/import", "/api/import/preview") else MAX_BODY
-        if path == "/api/requests/replay":
-            limit = REPLAY_MAX_BODY
-        if len(body) > limit:
+        if len(body) > body_limit(path):
             return error(413, "too_large", "Request body is too large.")
         return None
 
@@ -284,17 +294,20 @@ def make_handler(app: PlanningApp):
             if "transfer-encoding" in headers:
                 self._send(error(411, "length_required", "Chunked bodies are not accepted."), method, close=True)
                 return
-            try:
-                length = int(headers.get("content-length", "0") or "0")
-            except ValueError:
-                length = -1
-            limit = MAX_IMPORT_BODY if self.path.startswith("/api/import") else MAX_BODY
-            if urlsplit(self.path).path == "/api/requests/replay":
-                limit = REPLAY_MAX_BODY
-            if length < 0 or length > limit:
+            # Strict framing: one Host and at most one all-digit Content-Length.
+            lengths = self.headers.get_all("content-length") or []
+            if (len(self.headers.get_all("host") or []) > 1 or len(lengths) > 1 or
+                    (lengths and not _CONTENT_LENGTH_RE.fullmatch(lengths[0].strip(" \t")))):
+                self._send(error(400, "bad_request", "Malformed request headers."), method, close=True)
+                return
+            length = int(lengths[0]) if lengths else 0
+            if length > body_limit(urlsplit(self.path).path):
                 self._send(error(413, "too_large", "Request body is too large."), method, close=True)
                 return
             body = self.rfile.read(length) if length else b""
+            if len(body) != length:
+                self._send(error(400, "bad_request", "Request body ended early."), method, close=True)
+                return
             try:
                 response = app.handle(method, self.path, headers, body)
             except Exception:  # noqa: BLE001 - never leak internals to the client
@@ -313,6 +326,19 @@ def make_handler(app: PlanningApp):
             self.end_headers()
             if method != "HEAD":
                 self.wfile.write(response.body)
+
+        def send_error(self, code, message=None, explain=None):
+            # Protocol errors raised by BaseHTTPRequestHandler itself (bad request
+            # line, oversized headers, unsupported method such as an OPTIONS
+            # preflight) get the same JSON shape and security headers, and do
+            # not echo the request back.
+            self.log_error("code %d, message %s", code, message)
+            try:
+                phrase = HTTPStatus(code).phrase
+            except ValueError:
+                phrase = "Error"
+            code_name = "not_implemented" if code == HTTPStatus.NOT_IMPLEMENTED else "bad_request"
+            self._send(error(code, code_name, f"{phrase}."), self.command or "", close=True)
 
         def do_GET(self):  # noqa: N802
             self._serve("GET")
