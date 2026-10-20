@@ -21,7 +21,7 @@ export function jsonValue(v: unknown, seen = new Set<object>()): boolean {
   seen.delete(v); return valid;
 }
 interface Encoded { method: 'GET' | 'POST' | 'PATCH' | 'PUT'; path: string; body?: string; requestId?: string; loss: 'unavailable' | 'unknown' }
-export const WORK_METHODS = { state: 'GET', version: 'GET', item: 'GET', history: 'GET', create: 'POST', patch: 'PATCH', move: 'POST', archive: 'POST', restore: 'POST', reviewed: 'POST', settings: 'PUT', replay: 'POST' } as const satisfies Record<WorkServiceRoute, string>;
+export const WORK_METHODS = { state: 'GET', version: 'GET', item: 'GET', history: 'GET', create: 'POST', patch: 'PATCH', move: 'POST', archive: 'POST', restore: 'POST', reviewed: 'POST', settings: 'PUT', replay: 'POST', export: 'GET' } as const satisfies Record<WorkServiceRoute, string>;
 export const SOCIAL_PATHS = { workspace: '/api/workspace', sample: '/api/sample/', run: '/api/runs/', saveContent: '/api/content', addBrand: '/api/brands', submitRun: '/api/runs' } as const satisfies Record<SocialServiceRoute, string>;
 /** Fixed ordering recursively makes persisted originals independent of object insertion order. */
 function canonical(v: unknown): string {
@@ -35,6 +35,7 @@ export function encodeWork(route: unknown, params: unknown): Encoded | null {
   const method = WORK_METHODS[route as WorkServiceRoute];
   if (route === 'state' || route === 'version') return keys(p, []) ? { method: 'GET', path: `/api/${route}`, loss: 'unavailable' } : null;
   if (route === 'item' || route === 'history') return keys(p, ['id']) && id(p.id) ? { method: 'GET', path: `/api/items/${p.id}${route === 'history' ? '/history' : ''}`, loss: 'unavailable' } : null;
+  if (route === 'export') return null; // The byte-preserving export uses its own bounded reader.
   if (!requestId(p.requestId)) return null;
   if (route === 'replay') {
     if (!keys(p, ['mode', 'requestId', 'original'], ['sentAfterVersion']) || !['lookup', 'resend'].includes(String(p.mode)) || (Object.hasOwn(p, 'sentAfterVersion') && !integer(p.sentAfterVersion)) || !record(p.original) || !keys(p.original, ['route', 'params']) || !record(p.original.params) || p.original.params.requestId !== p.requestId || !['create', 'patch', 'move', 'archive', 'restore', 'reviewed', 'settings'].includes(String(p.original.route))) return null;
