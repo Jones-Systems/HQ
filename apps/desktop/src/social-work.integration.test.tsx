@@ -1,3 +1,4 @@
+import { SERVICE_DOMAINS } from './services/domains';
 /// <reference path="./environment.d.ts" />
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -10,7 +11,7 @@ import { designDomain } from '../../../modules/design/app/index.ts';
 import { APPEARANCE_KEY } from './state';
 import { CALL_CLASSES, FIXTURE_IDS, resetSocialSessions, type PortMethod, type SocialWorkspacePort } from '../../../modules/social/core';
 import { NAV_ITEMS as SOCIAL_NAV, setSocialWorkspacePort } from '../../../modules/social/nav';
-import { createWorkbenchFixture } from '../../../modules/social/workbench/fixtures/examples';
+const { createWorkbenchFixture } = await vi.importActual<typeof import('../../../modules/social/workbench/fixtures/examples')>('../../../modules/social/workbench/fixtures/examples');
 import { createFixturePlanner, EXAMPLE_SETTINGS, PLANNER_PORT_KEYS, type PlannerPort } from '../../../modules/work/core';
 import { NAV_ITEMS as WORK_NAV, resetWorkSessions, setWorkSessionPort, workSession } from '../../../modules/work/nav';
 import { resetViewMemory } from '../../../modules/work/views/env';
@@ -63,6 +64,11 @@ function expectNoExecution() {
 }
 
 beforeEach(() => {
+  Object.defineProperty(window, 'hqServices', { configurable: true, value: {
+    config: { status: async () => ({ configured: false, policy: 'ok', transport: null }) },
+    social: { call: async () => ({ ok: false, kind: 'unavailable' }) },
+    work: { call: async () => ({ ok: false, kind: 'unavailable' }) },
+  } });
   // Only Date is faked, so the Work example planning and Social calendar land on the fixtures' fixed day.
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(VIEW_NOW));
@@ -71,6 +77,7 @@ beforeEach(() => {
   resetSocialSessions();
   const socialPort = spyPort<SocialWorkspacePort, PortMethod>(createWorkbenchFixture().port, SOCIAL_METHODS);
   social = socialPort.spies;
+  fixtureRecorder.port = socialPort.port;
   setSocialWorkspacePort(socialPort.port);
 
   resetWorkSessions();
@@ -78,10 +85,12 @@ beforeEach(() => {
   const fixture = createFixturePlanner({ items: viewItems(VIEW_TODAY), settings: { ...EXAMPLE_SETTINGS } });
   const plannerPort = spyPort<PlannerPort, (typeof PLANNER_PORT_KEYS)[number]>(fixture.port, PLANNER_PORT_KEYS);
   planner = plannerPort.spies;
+  plannerRecorder.port = plannerPort.port;
   setWorkSessionPort(plannerPort.port);
 });
 
 afterEach(() => {
+  Reflect.deleteProperty(window, 'hqServices');
   cleanup();
   resetSocialSessions();
   setSocialWorkspacePort(null);
@@ -180,9 +189,9 @@ async function expectWorkRestored() {
 
 describe('Social and Work mounted in the T0 shell', () => {
   it('registers the accepted domain descriptors and Design’s production entry', () => {
-    expect(MODULES.social).toBe(SocialModule);
+    expect(MODULES.social).toBe(SERVICE_DOMAINS.Social);
     expect(SocialDefault).toBe(SocialModule);
-    expect(MODULES.work).toBe(WorkModule);
+    expect(MODULES.work).toBe(SERVICE_DOMAINS.Work);
     expect(WorkDefault).toBe(WorkModule);
     expect(MODULES.design).toBe(designDomain.Component);
   });
@@ -532,4 +541,36 @@ describe('Design shell presentation and leave persistence', () => {
     expect(screen.getByRole('button', { name: 'Sidebar' }).getAttribute('aria-pressed')).toBe(String(changedPressed));
     expectNoExecution();
   });
+});
+
+// The shell caches its example port; delegate each call to this test's current recorder.
+const fixtureRecorder = vi.hoisted(() => ({ port: null as import('../../../modules/social/core').SocialWorkspacePort | null }));
+vi.mock('../../../modules/social/workbench/fixtures/examples', async (importActual) => {
+  const actual = await importActual<typeof import('../../../modules/social/workbench/fixtures/examples')>();
+  const port = new Proxy({} as import('../../../modules/social/core').SocialWorkspacePort, {
+    get(_target, key) {
+      return (...args: unknown[]) => {
+        const current = fixtureRecorder.port;
+        if (!current) throw new Error('Social test recorder is not installed');
+        return Reflect.apply(current[key as keyof typeof current], current, args);
+      };
+    },
+  });
+  return { ...actual, createWorkbenchFixture: (...args: Parameters<typeof actual.createWorkbenchFixture>) => ({ ...actual.createWorkbenchFixture(...args), port }) };
+});
+
+// The first Work example must use the same recorder as subsequent test sessions.
+const plannerRecorder = vi.hoisted(() => ({ port: null as PlannerPort | null }));
+vi.mock('@hq/work', async (importActual) => {
+  const actual = await importActual<typeof import('@hq/work')>();
+  const port = new Proxy({} as PlannerPort, {
+    get(_target, key) {
+      return (...args: unknown[]) => {
+        const current = plannerRecorder.port;
+        if (!current) throw new Error('Work test recorder is not installed');
+        return Reflect.apply(current[key as keyof typeof current], current, args);
+      };
+    },
+  });
+  return { ...actual, examplePlanner: () => port };
 });

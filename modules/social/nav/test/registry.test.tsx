@@ -1,13 +1,14 @@
+import { SERVICE_DOMAINS } from '../../../../apps/desktop/src/services/domains';
 /// <reference path="../../../../apps/desktop/src/environment.d.ts" />
 import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SocialDefault, { SocialModule } from '@hq/social';
 import { App } from '../../../../apps/desktop/src/App';
 import { MODULES } from '../../../../apps/desktop/src/modules';
 import { localToday, monthLabel, shiftMonth } from '../../content';
 import { FIXTURE_IDS, recordCalls, resetSocialSessions, type RecordedPort } from '../../core';
-import { createWorkbenchFixture } from '../../workbench/fixtures/examples';
+const { createWorkbenchFixture } = await vi.importActual<typeof import('../../workbench/fixtures/examples')>('../../workbench/fixtures/examples');
 import { setSocialWorkspacePort } from '..';
 
 /**
@@ -19,13 +20,20 @@ import { setSocialWorkspacePort } from '..';
 let recorded: RecordedPort;
 
 beforeEach(() => {
+  Object.defineProperty(window, 'hqServices', { configurable: true, value: {
+    config: { status: async () => ({ configured: false, policy: 'ok', transport: null }) },
+    social: { call: async () => ({ ok: false, kind: 'unavailable' }) },
+    work: { call: async () => ({ ok: false, kind: 'unavailable' }) },
+  } });
   window.localStorage.clear();
   resetSocialSessions();
   recorded = recordCalls(createWorkbenchFixture().port);
+  fixtureRecorder.port = recorded.port;
   setSocialWorkspacePort(recorded.port);
 });
 
 afterEach(() => {
+  Reflect.deleteProperty(window, 'hqServices');
   cleanup();
   resetSocialSessions();
   setSocialWorkspacePort(null);
@@ -61,7 +69,7 @@ async function roundTrip(check: () => Promise<void> | void) {
 
 describe('Social descriptor in the T0 registry', () => {
   it('is the registry entry for the social domain, as a named and a default export', () => {
-    expect(MODULES.social).toBe(SocialModule);
+    expect(MODULES.social).toBe(SERVICE_DOMAINS.Social);
     expect(SocialDefault).toBe(SocialModule);
   });
 
@@ -147,4 +155,20 @@ describe('Social descriptor in the T0 registry', () => {
     await act(async () => {});
     expect(recorded.callsOf('execution')).toHaveLength(0);
   });
+});
+
+// The shell caches its example port; delegate each call to this test's current recorder.
+const fixtureRecorder = vi.hoisted(() => ({ port: null as import('../../core').SocialWorkspacePort | null }));
+vi.mock('../../workbench/fixtures/examples', async (importActual) => {
+  const actual = await importActual<typeof import('../../workbench/fixtures/examples')>();
+  const port = new Proxy({} as import('../../core').SocialWorkspacePort, {
+    get(_target, key) {
+      return (...args: unknown[]) => {
+        const current = fixtureRecorder.port;
+        if (!current) throw new Error('Social test recorder is not installed');
+        return Reflect.apply(current[key as keyof typeof current], current, args);
+      };
+    },
+  });
+  return { ...actual, createWorkbenchFixture: (...args: Parameters<typeof actual.createWorkbenchFixture>) => ({ ...actual.createWorkbenchFixture(...args), port }) };
 });
