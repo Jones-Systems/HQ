@@ -66,6 +66,45 @@ describe('ReferenceLibraryView rendered markup', () => {
     expect(html).toContain('No image');
   });
 
+  test('search and import share the header and linked references expose a state instead of an action', async () => {
+    const { library, ids } = await seeded();
+    await library.useInProject(ids[0]!, 'project-alpha');
+    const view = buildLibraryView(library.state, library.access,
+      { query: '', collectionId: null, selectedId: null }, { id: 'project-alpha', name: 'Alpha' });
+    const html = renderToStaticMarkup(<ReferenceLibraryView view={view} previewUrl={() => null}
+      importControls={<button type="button">Import screenshots</button>} {...actions} />);
+    const header = html.match(/<header[^>]*>(.*?)<\/header>/u)?.[1] ?? '';
+    expect(header).toContain('Search references');
+    expect(header).toContain('Import screenshots');
+    expect(header).toMatch(/<label[^>]*class="hq-sr-only"[^>]*>Search references<\/label>/u);
+    expect(html).toContain('3 shown');
+    expect(html).toMatch(/<b[^>]*>Used in Alpha<\/b>/u);
+    expect(html).not.toMatch(/<button[^>]*>Used in Alpha<\/button>/u);
+  });
+
+  test('long source text remains complete in details with every supplied provenance row', async () => {
+    const library = await ReferenceLibrary.open(fakePorts());
+    const screen = `Synthetic editor ${'long source description '.repeat(8)}${'a'.repeat(40)}`;
+    const result = await library.importReference(appScreenshot({
+      source: { kind: 'app', platform: 'ios', appId: 'com.example.notes', appName: 'Example Notes', screen },
+      rights: { status: 'permitted', basis: 'Synthetic CC0', attribution: 'Example contributor' },
+    }));
+    const id = (result as { id: ReferenceId }).id;
+    const view = buildLibraryView(library.state, library.access,
+      { query: '', collectionId: null, selectedId: id }, null);
+    const html = renderToStaticMarkup(<ReferenceLibraryView view={view} previewUrl={() => null} {...actions} />);
+    const detail = html.match(/<aside[^>]*aria-label="Reference details"[^>]*>(.*?)<\/aside>/u)?.[1] ?? '';
+    expect(detail).toContain('<h4>Provenance</h4>');
+    expect(detail).toContain(screen);
+    for (const row of view.detail!.provenance) {
+      expect(detail).toContain(`<dt>${row.term}</dt>`);
+      expect(detail).toContain(`<dd>${row.value}</dd>`);
+    }
+    expect(detail).toMatch(/<h3[^>]*tabindex="-1"/u);
+    expect(detail).toContain('aria-label="Close reference details"');
+    expect(html).toContain(`title="${view.cards[0]!.sourceLabel}"`);
+  });
+
   test('without a project, use-in-project is disabled; banner explains read-only state', async () => {
     const { library } = await seeded();
     const view = buildLibraryView(library.state, { mode: 'read-only', reason: 'future-schema', detail: 'hq.design.references/v2' },

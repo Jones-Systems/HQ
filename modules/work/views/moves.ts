@@ -111,9 +111,9 @@ export function stepHorizon(current: Horizon | null, delta: -1 | 1): Horizon | n
 
 export const TIMELINE_QUARTERS = 8;
 
-/** Eight quarters starting with today's, with their inclusive day bounds. */
-export function timelineQuarters(today: string): { value: string; bounds: [string, string] }[] {
-  const start = Number(today.slice(0, 4)) * 4 + Math.floor((Number(today.slice(5, 7)) - 1) / 3);
+/** Eight quarters starting at today's quarter plus an optional whole-quarter offset, with inclusive day bounds. */
+export function timelineQuarters(today: string, offset = 0): { value: string; bounds: [string, string] }[] {
+  const start = Number(today.slice(0, 4)) * 4 + Math.floor((Number(today.slice(5, 7)) - 1) / 3) + offset;
   return Array.from({ length: TIMELINE_QUARTERS }, (_, i) => {
     const value = `${Math.floor((start + i) / 4)}-Q${((start + i) % 4) + 1}`;
     return { value, bounds: periodBounds('quarter', value)! };
@@ -129,8 +129,8 @@ export interface TimelineMark {
   width: number;
 }
 
-function timelineRange(today: string) {
-  const quarters = timelineQuarters(today);
+function timelineRange(today: string, offset = 0) {
+  const quarters = timelineQuarters(today, offset);
   const rangeStart = dayNum(quarters[0]!.bounds[0]);
   const rangeEnd = dayNum(quarters[quarters.length - 1]!.bounds[1]) + 1;
   const pct = (iso: string, end = false) => ((dayNum(iso) + (end ? 1 : 0) - rangeStart) / (rangeEnd - rangeStart)) * 100;
@@ -138,8 +138,8 @@ function timelineRange(today: string) {
 }
 
 /** The scale row: each quarter's left and width, and today's line, in percent of the eight quarters. */
-export function timelineScale(today: string) {
-  const { quarters, pct } = timelineRange(today);
+export function timelineScale(today: string, offset = 0) {
+  const { quarters, pct } = timelineRange(today, offset);
   return {
     quarters: quarters.map((q) => ({ ...q, left: pct(q.bounds[0]), width: pct(q.bounds[1], true) - pct(q.bounds[0]) })),
     today: pct(today),
@@ -150,8 +150,8 @@ export function timelineScale(today: string) {
  * A row's geometry, in percent of the eight-quarter range. A bar joins a start date to the next later
  * non-start date only when the owner set both ends; nothing gets an invented duration.
  */
-export function timelineGeometry(item: Pick<Item, 'dates'>, today: string) {
-  const { rangeStart, rangeEnd, pct } = timelineRange(today);
+export function timelineGeometry(item: Pick<Item, 'dates'>, today: string, offset = 0) {
+  const { rangeStart, rangeEnd, pct } = timelineRange(today, offset);
   const clamp = (v: number) => Math.max(0, Math.min(100, v));
   const entries = item.dates.map((entry) => ({ entry, bounds: periodBounds(entry.precision, entry.value) }))
     .filter((x): x is { entry: PlanningDate; bounds: [string, string] } => x.bounds !== null);

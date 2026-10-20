@@ -7,3 +7,7 @@
 .soc-calendar-layout[data-tray-collapsed] > .soc-tray { padding: 4px; }
 .soc-calendar-layout[data-tray-collapsed] > .soc-tray h3 { writing-mode: vertical-rl; margin: 12px auto; }
 .soc-calendar-layout .hq-calendar-all-day .soc-chip { white-space: normal; }
+
+.soc-day-head { display: flex; align-items: center; width: 100%; min-height: 28px; cursor: pointer; }
+.soc-day-number { border: 0; background: transparent; padding: 2px 4px; color: inherit; cursor: pointer; }
+.soc-day-number:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 2px; border-radius: var(--hq-radius-sm); }

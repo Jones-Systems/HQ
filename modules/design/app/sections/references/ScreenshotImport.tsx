@@ -56,6 +56,7 @@ export function ScreenshotImport({ env, disabled }: { readonly env: ReferencesEn
         event.currentTarget.value = '';
       }} />
     <Button variant="primary" disabled={disabled || busy || needsReload} onClick={() => chooser.current?.click()}>Import screenshots</Button>
+    <div className="hq-refs-import-panel">
     {feedback && <p className="hq-refs-import-feedback" role={feedback.error ? 'alert' : 'status'}>{feedback.message}</p>}
     {needsReload && <Button disabled={busy} onClick={() => {
       setBusy(true);
@@ -84,5 +85,6 @@ export function ScreenshotImport({ env, disabled }: { readonly env: ReferencesEn
         <Button type="button" variant="secondary" disabled={busy} onClick={() => setFile(null)}>Cancel</Button>
       </div>
     </form>}
+    </div>
   </div>;
 }

@@ -10,6 +10,7 @@ export interface MenuItem {
   /** Disabled items stay focusable (so they can be discovered) but never activate. */
   readonly disabled?: boolean;
   readonly tone?: 'danger';
+  readonly checked?: boolean;
 }
 
 export interface MenuProps {
@@ -121,13 +122,15 @@ export function Menu({ trigger, triggerLabel, items, variant = 'secondary', size
             <li
               key={item.id}
               ref={(node) => { itemRefs.current[index] = node; }}
-              role="menuitem"
+              role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+              aria-checked={item.checked}
               tabIndex={index === active ? 0 : -1}
               aria-disabled={item.disabled || undefined}
               className={cx('hq-menu-item', item.tone === 'danger' && 'hq-menu-item--danger')}
               onClick={() => activate(item)}
               onPointerMove={() => { if (index !== active) setActive(index); }}
             >
+              {item.checked !== undefined && <span className="hq-menu-check" aria-hidden="true">{item.checked ? '✓' : ''}</span>}
               {item.label}
             </li>
           ))}
