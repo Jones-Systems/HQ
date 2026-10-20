@@ -33,6 +33,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
   const [reconciliation, setReconciliation] = useState<Reconciliation | null>(null);
   const [confirm, setConfirm] = useState<'discard' | 'load-theirs' | null>(null);
   const [copied, setCopied] = useState<'copied' | 'select' | null>(null);
+  const [loadNote, setLoadNote] = useState<string | null>(null);
   const { fields, status, error } = editor;
   const field = invalidField(error);
   const busy = status === 'saving';
@@ -45,7 +46,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
   };
 
   async function save() {
-    if (busy || paused) return null;
+    if (busy || paused || (error?.kind === 'unknown' && reconciliation?.kind !== 'not-applied')) return null;
     setReconciliation(null);
     const saved = await session.saveEditor(port, editorKey);
     if (saved) onSaved?.(saved.id);
@@ -61,6 +62,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
   }
 
   async function saveCopy() {
+    if (paused || (error?.kind === 'unknown' && reconciliation?.kind !== 'changed' && reconciliation?.kind !== 'not-applied')) return;
     setReconciliation(null);
     const saved = await session.saveAsCopy(port, editorKey);
     if (saved) onSaved?.(saved.id);
@@ -75,6 +77,15 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
     } catch {
       setCopied('select');
     }
+  }
+
+  /** Replaces the text only with a newer stored version from a fresh read; otherwise the text and conflict stay. */
+  async function loadTheirs() {
+    setConfirm(null);
+    setLoadNote(null);
+    if (await session.reopenLatest(port, editorKey)) return;
+    const load = session.getState().workspace;
+    setLoadNote(`Could not load their version. ${load.status === 'error' ? `${errorText(load.error)} ` : ''}Your text is kept here.`);
   }
 
   function onKeyDown(event: KeyboardEvent) {
@@ -102,10 +113,10 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
               {fields.archived === 1 ? 'Restore' : 'Archive'}
             </Button>
           )}
-          <Button variant="primary" size="sm" busy={busy} busyLabel="Saving…" onClick={() => void save()} disabled={Boolean(paused)} aria-keyshortcuts="Control+S Meta+S">
+          <Button variant="primary" size="sm" busy={busy} busyLabel="Saving…" onClick={() => void save()} disabled={Boolean(paused) || (error?.kind === 'unknown' && reconciliation?.kind !== 'not-applied')} aria-keyshortcuts="Control+S Meta+S">
             Save
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => (status === 'editing' && !isNew && saveStateOf(editor) === 'saved' ? onClose() : setConfirm('discard'))}>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => (status === 'editing' && !isNew && saveStateOf(editor) === 'saved' ? onClose() : setConfirm('discard'))}>
             Close
           </Button>
         </span>
@@ -124,6 +135,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
           </span>
           {copied === 'copied' && <span role="status"> Copied.</span>}
           {copied === 'select' && <span role="status"> Copying is unavailable here; select the text below and copy it.</span>}
+          {loadNote && <span role="status"> {loadNote}</span>}
         </div>
       )}
 
@@ -153,7 +165,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
           <label htmlFor={`${id}-title`}>Title</label>
           <input
             id={`${id}-title`} value={fields.title} onChange={(event) => edit({ title: event.target.value })}
-            aria-invalid={field === 'title' || undefined} aria-describedby={describedBy('title')} disabled={busy}
+            aria-invalid={field === 'title' || undefined} aria-describedby={describedBy('title')} readOnly={busy}
           />
           <small id={`${id}-title-hint`} className="hq-meta">{codePoints(fields.title)} / {LIMITS.title} characters</small>
         </div>
@@ -179,7 +191,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
           <span className="soc-inline">
             <input
               id={`${id}-planned`} type="date" value={fields.planned_date} onChange={(event) => edit({ planned_date: event.target.value })}
-              aria-invalid={field === 'planned_date' || undefined} aria-describedby={describedBy('planned_date')} disabled={busy}
+              aria-invalid={field === 'planned_date' || undefined} aria-describedby={describedBy('planned_date')} readOnly={busy}
             />
             {fields.planned_date && <Button size="sm" variant="ghost" onClick={() => edit({ planned_date: '' })} disabled={busy}>Clear date</Button>}
           </span>
@@ -193,7 +205,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
           <label htmlFor={`${id}-body`}>Body</label>
           <textarea
             id={`${id}-body`} rows={10} value={fields.body} onChange={(event) => edit({ body: event.target.value })}
-            aria-invalid={field === 'body' || undefined} aria-describedby={describedBy('body')} disabled={busy}
+            aria-invalid={field === 'body' || undefined} aria-describedby={describedBy('body')} readOnly={busy}
           />
           <small id={`${id}-body-hint`} className="hq-meta">{codePoints(fields.body)} / {LIMITS.body} characters · one body for every channel</small>
         </div>
@@ -226,7 +238,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
         title="Load their version?" description="Your text in this editor will be replaced by the stored version. Copy it or save it as a copy first if you need it."
         actions={<>
           <Button variant="secondary" onClick={() => setConfirm(null)}>Cancel</Button>
-          <Button variant="danger" onClick={() => { setConfirm(null); void session.reopenLatest(port, editorKey); }}>Load their version</Button>
+          <Button variant="danger" onClick={() => void loadTheirs()}>Load their version</Button>
         </>}
       />
     </section>
