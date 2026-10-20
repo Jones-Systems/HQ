@@ -129,3 +129,32 @@ Unreleased: none. Joint tasks wait on the Social+Work assembly. `campaign-verifi
 | From scratch, fixture-satisfied | rounds 1–2, then the same typed `reference_bound_exceeded` counterfactual stop at round 3 | — |
 
 **What `capsule_sha256` covers.** The `work-domain` and `domain-integration` capsule digests are unchanged (`071dbea0…`, `3d935de4…`) because their task blocks are unchanged. The digest covers the capsule body. The resolved context bytes differ (the writer map changed), and those are carried in the capsule draft's resolved-context records. Child A was compiled and launched at `72854ab` and keeps that binding. B will compile at the plan head current at its launch.
+
+### Revision 5 root corrections (closed before any C release)
+
+The root pinned-read `7ab7f2e` and named three executable capsule inconsistencies in the joint tasks. A and B are unaffected.
+
+1. **Read scopes.** Both joint tasks now read:
+   - Design, Social/Work and UI sources: `modules/design`, `packages/design-store`, `modules/social`, `modules/work`, `packages/hq-ui`;
+   - lane evidence, `docs/evidence/hq-social-work`;
+   - Design's planning artifacts: `docs/engineering-specs/design.md`, `docs/prds/design.md`, `docs/design-lanes.json`, `docs/planning-evidence`;
+   - `tests/check-groups.toml`, `.github/workflows`, and the root configs (`joint-assembly` reads them; `joint-root-checks` writes them).
+
+   No write scope widened.
+2. **Lockfile stop.** For `joint-root-checks` only, the inherited "a dependency/lockfile change is required" stop becomes: hold on a change outside `write_scope`, or on a dependency or lockfile change outside the named root-file custody or of unknown provenance. Bounded `npm` updates inside custody proceed.
+3. **Route.** The start-at-D wording is replaced throughout by the supported native child route:
+   - C's checkout and branch are generated at T1's committed plan head P, since `delegate_task` worktree isolation cannot select D;
+   - C normally merges exact D, then exact S;
+   - C proves both are ancestors;
+   - the PR is based on the published Design branch containing D.
+
+   The history is stated truthfully: D is reached by merge, not as the first-parent origin.
+
+**Identities.** Commit `2d606fc0d00645133e1e51e884844f6ca8e0b017`, spec blob `4c6214654f07ce0dc9377d07c49943996936b884`, file SHA-256 `8233c7aba4b4e1c8d824f5f2cfcb1b0333107e7aec00a2be72e6720905ee0e51`. Telemetry was CPU 17.08% used, 39.74 GiB available.
+
+**Results.**
+
+- Parse: 27 tasks and 27 intents. Every context is ≤ 32 KiB; `joint-assembly` is at 31,640.
+- **Actual, unbound:** work-domain, then domain-integration. The capsule digests are unchanged (`071dbea0…`, `3d935de4…`).
+- **Actual, fixture-satisfied:** the same five rounds as above, with `joint-root-checks` `0ccfd071…` (context 27,192) and `joint-assembly` `8fadffa4…` (context 31,640). No writer collisions.
+- **From scratch:** unbound gives six rounds; fixture-satisfied hits the same round-3 counterfactual stop.
