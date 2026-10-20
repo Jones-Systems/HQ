@@ -1054,6 +1054,8 @@ It adds explicit exports to `src/index.ts`. Shared r3 proves the copies are assi
 
 Custody stays with the original Social content owner, bound at launch.
 
+Source work may proceed alongside r3 using the landed `@hq/ui` exports `ReferenceStatus`, `REFERENCE_STATUSES`, `ReferenceResolution`, `ReturnContext` and `ReferencePort`. Its module-local `ReferenceProvider` and optional `references`/`returnContext` props must match the unchanged `spec.hq-social-work#iface.references.001` exactly; props may structurally extend `ModulePort`. It must not edit shared contracts or depend on an unfinished r3 branch. The module candidate may be published and checked before r3, but its foundation landing still waits for `r3-landing`. Canonical assignability, shell provider registration, round-trip and native qualification remain later integration obligations. Source fixture/recorder checks prove only the module source boundary.
+
 - **Provider:** a read-only provider for drafts, runs and brands.
 - **Link editor:** in content. Persistence is gated: without `hq-references-v1`, links show "not saved — needs Social service support" and are never dropped.
 - **Mount plumbing:** passes the optional `references` and `returnContext` through the index and nav files only.
@@ -1064,6 +1066,8 @@ Custody stays with the original Social content owner, bound at launch.
 ## T11 Work References And Export
 
 Custody stays with the original Work board owner, bound at launch.
+
+Source work may proceed alongside r3 using the landed `@hq/ui` exports `ReferenceStatus`, `REFERENCE_STATUSES`, `ReferenceResolution`, `ReturnContext` and `ReferencePort`. Its module-local `ReferenceProvider` and optional `references`/`returnContext` props must match the unchanged `spec.hq-social-work#iface.references.001` exactly; props may structurally extend `ModulePort`. It must not edit shared contracts or depend on an unfinished r3 branch. The module candidate may be published and checked before r3, but its foundation landing still waits for `r3-landing`. Canonical assignability, shell provider registration, round-trip and native qualification remain later integration obligations. Source fixture/recorder checks prove only the module source boundary.
 
 1. **References first:**
    - a provider covering items, including archived and missing;
@@ -1094,8 +1098,8 @@ The machine `task.*` blocks are authoritative. In summary:
 | `wiki-mount` → `wiki-mount-landing` | T2 → T1 | `live-wiring`, `wiki-landing`; + `wiring-landing` |
 | `design-reference-provider` (K4) → `design-provider-landing` | T8 → T1 | `r3-landing` |
 | `design-compose-mount` (CL1b) → `design-compose-landing` | T8 → T1 | `bridge-landing`, `r3-landing`, K1/K2/K4 landings |
-| `social-references` → `social-references-landing` | T10 → T1 | custody, `r3-landing`, `reference-ui-landing`, `social-landing` |
-| `work-references` → `work-references-landing` | T11 → T1 | custody, `r3-landing`, `reference-ui-landing`, `work-landing` |
+| `social-references` → `social-references-landing` | T10 → T1 | custody, `reference-ui-landing`, `social-landing`; + `r3-landing` |
+| `work-references` → `work-references-landing` | T11 → T1 | custody, `reference-ui-landing`, `work-landing`; + `r3-landing` |
 | `work-export-ui` → `work-export-landing` | T11 → T1 | `work-references`, `r3-landing`; + `work-references-landing` |
 | `reference-round-trip` → `round-trip-landing` | T2 → T1 | `r3-landing`, `social-references-landing`, `work-references-landing`, `design-compose-landing`, `work-export-landing` |
 | `cli-planner-ci` → `cli-ci-landing` | T2 → T1 | `design-sections-landing` |
@@ -1114,6 +1118,8 @@ The machine `task.*` blocks are authoritative. In summary:
 | `final-acceptance` → `main-delivery` | T7 → T1 | `closure-qualification`, `scenarios-landing`, `wiki-mount-landing`, every gate, the three enabling landings, `install-route` |
 
 **Ready at publication:** K1, K2 and K3 became ready at the previous revision; K3 has since landed as #57. This revision adds `work-session-injection` and the three preview module lanes (`preview-agent`, `preview-compare`, `component-runner-port`). Their write scopes are disjoint from each other and from every task that can be ready with them. The only existing task that gains a dependency is live wiring, on the Work seam it consumes. No other dependency changes for live wiring, the Wiki mount, K1–K4, r3 or the D-4 lanes, so there is no new barrier. `reference-ui` and the T10/T11 tasks wait for actual custody binding. The U1 follow-on revision adds `connector-resolve-unknown`, ready at its publication with a scope disjoint from every task that can be ready with it, and `new-thread-transport`, which waits for `preview-host-landing` and `connector-resolve-landing`. Only `new-thread-u1-qualification` and `closure-qualification` gain a dependency, `new-thread-landing`; no other dependency changes.
+
+**Reference-source scheduling amendment:** Social and Work reference source tasks consume the landed UI structural types and unchanged reference specification, so they can run in parallel with r3 after their existing UI/domain/custody prerequisites. Their `r3-landing` dependency moves to each source-landing task; integration order is preserved. No shared write scope, test intent, reference contract, round-trip dependency or native gate changes. Work Export UI still waits for the actual r3 export seam and its existing dependencies. Use sibling PRs against foundation because unfinished r3 host source is not an upstream source input.
 
 **Model hints (claude_frontier; the native tuple is recorded per task in the compile projection):**
 - Building defaults to Astra/medium.
@@ -3382,7 +3388,6 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.r3-landing.001",
     "spec.hq-integration-parallel-execution#task.reference-ui-landing.001",
     "spec.hq-integration-parallel-execution#task.social-landing.001"
   ],
@@ -3443,7 +3448,8 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.social-references.001"
+    "spec.hq-integration-parallel-execution#task.social-references.001",
+    "spec.hq-integration-parallel-execution#task.r3-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -3512,7 +3518,6 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.r3-landing.001",
     "spec.hq-integration-parallel-execution#task.reference-ui-landing.001",
     "spec.hq-integration-parallel-execution#task.work-landing.001"
   ],
@@ -3573,7 +3578,8 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.work-references.001"
+    "spec.hq-integration-parallel-execution#task.work-references.001",
+    "spec.hq-integration-parallel-execution#task.r3-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
