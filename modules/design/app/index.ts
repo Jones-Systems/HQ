@@ -9,19 +9,28 @@
  * Built once at module scope so chrome state outlives every mount of the view (keep-alive). Renderer/Vite
  * only: the section registry is the build-time glob of `modules/design/<id>/design-module.ts`.
  *
- * Registered capabilities: none. There is no transport, dispatch slot for requests, discovery source
- * adapter, refresh-on-open, preview, preload bridge, credential or durable store. Chrome state persists
+ * Document storage uses the desktop bridge when present. Transport and dispatch remain none;
+ * discovery source adapters and refresh-on-open remain unavailable. Chrome state persists
  * through a guarded `window.localStorage` (null when access throws, which T14 reports and survives).
- * Sections run over their own labelled in-memory fakes until the store adapters are wired.
+ * Six sections use device storage when bridged; otherwise they retain labelled in-memory fakes.
  */
-import type { ComponentType } from 'react';
+import { createElement, type ComponentType } from 'react';
 import type { ModulePort } from '@hq/contracts';
 import type { DesignDomain } from '../ui/contract.ts';
 import { createProductionDesignDomain } from '../ui/index.ts';
 import { createDeactivate, guardedLocalStorage } from './compose/session.ts';
 import './compose/chrome-reset.css';
+import { createBridgeWorkspaceDocuments } from './compose/bridge-documents.ts';
+import { createDesignWorkspace } from './compose/workspace.ts';
+import { DesignWorkspaceContext } from './compose/workspace-context.tsx';
 
-export const designDomain: DesignDomain<ComponentType<ModulePort>> = createProductionDesignDomain({ storage: guardedLocalStorage() });
+const transport = globalThis.window?.hqServices?.design;
+const documents = typeof transport === 'object' && transport !== null && typeof transport.call === 'function'
+  ? createBridgeWorkspaceDocuments(transport) : null;
+const workspace = createDesignWorkspace(documents);
+const domain = createProductionDesignDomain({ storage: guardedLocalStorage() });
+const Component: ComponentType<ModulePort> = (props) => createElement(DesignWorkspaceContext.Provider, { value: workspace }, createElement(domain.Component, props));
+export const designDomain: DesignDomain<ComponentType<ModulePort>> = { ...domain, Component };
 
 export const designPresentation = designDomain.presentation;
 

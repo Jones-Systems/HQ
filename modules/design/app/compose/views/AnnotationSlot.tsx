@@ -5,7 +5,8 @@ import { resolveForDisplay } from '../../../annotations/src/resolution.ts';
 import type { Tool } from '../../../annotations/src/editor.ts';
 import { AnnotationOverlay } from '../../../annotations/src/ui/AnnotationOverlay.tsx';
 import { adaptCompareFrame } from '../review-slots.ts';
-import { annotationsEnv } from '../workspace.ts';
+
+import { useDesignWorkspace } from '../workspace-context.tsx';
 
 export type DrawTool = Extract<Tool, 'ink' | 'box' | 'arrow' | 'eraser'>;
 
@@ -29,19 +30,25 @@ function Layer({ controller, tool, overlay, display, readOnlyReason }: {
  * marks are unavailable instead of anchoring to nothing.
  */
 export function AnnotationSlot({ frame, tool }: { readonly frame: CompareFrame; readonly tool: DrawTool | null }) {
+  const workspace = useDesignWorkspace();
+  const { annotationsEnv } = workspace;
   const adapted = adaptCompareFrame(frame);
+  const [error, setError] = useState(false);
   const [controller, setController] = useState<AnnotationController | null>(null);
   const source = adapted.status === 'ready' ? adapted.source : null;
   useEffect(() => {
     if (source === null) { setController(null); return undefined; }
     let current = true;
+    setError(false);
+    setController(null);
     void annotationsEnv().controllerFor(source.versionId).then((next) => {
       if (!current) return;
       next.setFrame(source);
       setController(next);
-    });
+    }).catch(() => { if (current) setError(true); });
     return () => { current = false; };
   }, [source?.versionId, source?.route, source?.state, source?.captureDigest, source?.viewport.w, source?.viewport.h, source?.viewport.dpr, source?.scroll.x, source?.scroll.y]);
+  if (error) return <span role="alert">Annotations unavailable.</span>;
   if (adapted.status === 'unavailable') return <span className="hqd-compose-note" role="note" style={{ position: 'absolute', left: 8, top: 8 }}>{adapted.message}</span>;
   if (controller === null) return null;
   const { content, overlay, display } = adapted;
