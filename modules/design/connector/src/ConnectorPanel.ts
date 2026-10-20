@@ -12,6 +12,8 @@ import type { DestinationId } from './ids.ts';
 
 export interface ConnectorPanelProps {
   readonly view: ConnectorView;
+  readonly onRequestResolveUnknown?: () => void;
+  readonly onConfirmResolveUnknown?: () => void;
   readonly onSelect: (destinationId: DestinationId) => void;
   readonly onRequestSend: () => void;
   readonly onConfirm: () => void;
@@ -53,9 +55,9 @@ function DestinationList({ view, onSelect }: Pick<ConnectorPanelProps, 'view' | 
     row.disabledReason ? h('p', { id: reasonId(row.destinationId), className: 'hq-connector__reason' }, row.disabledReason) : null)));
 }
 
-function NewThread({ view }: Pick<ConnectorPanelProps, 'view'>): ReactElement {
+function NewThread({ view, onSelect }: Pick<ConnectorPanelProps, 'view' | 'onSelect'>): ReactElement {
   return h('div', { className: 'hq-connector__new-thread' },
-    h('button', { type: 'button', disabled: true, 'aria-describedby': 'hq-connector-new-thread-reason' }, view.newThread.label),
+    h('button', { type: 'button', disabled: !view.newThread.enabled || view.busy, onClick: () => { if (view.newThread.destinationId) onSelect(view.newThread.destinationId); }, 'aria-describedby': 'hq-connector-new-thread-reason' }, view.newThread.label),
     h('p', { id: 'hq-connector-new-thread-reason', className: 'hq-connector__reason' }, view.newThread.reason));
 }
 
@@ -150,6 +152,21 @@ function Evidence({ view }: Pick<ConnectorPanelProps, 'view'>): ReactElement | n
       h('span', { className: 'hq-connector__meta' }, `${row.executionLabel} · ${row.packetLabel}`)))));
 }
 
+function ResolveUnknown({ view, onRequestResolveUnknown, onConfirmResolveUnknown, onCancel }: ConnectorPanelProps): ReactElement | null {
+  if (view.status?.state !== 'unknown') return null;
+  return h('section', { 'aria-label': 'Resolve unknown', className: 'hq-connector__confirm' },
+    view.resolveUnknown.confirming
+      ? h('div', null,
+        h('h3', null, 'Confirm resolve unknown'),
+        h('p', null, 'HQ asks the receiver to make this attempt permanently unable to run.'),
+        h('p', null, 'If it already ran, HQ records that instead. Nothing is resent.'),
+        h('button', { type: 'button', onClick: onConfirmResolveUnknown, disabled: view.busy || !onConfirmResolveUnknown }, 'Confirm resolve unknown'),
+        h('button', { type: 'button', onClick: onCancel, disabled: view.busy }, 'Cancel'))
+      : h('div', null,
+        h('button', { type: 'button', onClick: onRequestResolveUnknown, disabled: !view.resolveUnknown.available || !onRequestResolveUnknown }, 'Resolve unknown…'),
+        view.resolveUnknown.reason ? h('p', null, view.resolveUnknown.reason) : null));
+}
+
 export function ConnectorPanel(props: ConnectorPanelProps): ReactElement {
   const { view } = props;
   return h('section', { className: 'hq-connector', 'aria-labelledby': 'hq-connector-title', 'aria-busy': view.busy },
@@ -158,7 +175,7 @@ export function ConnectorPanel(props: ConnectorPanelProps): ReactElement {
       h('p', { className: 'hq-connector__meta' }, view.packetLabel ?? 'No frozen request selected')),
     view.fakeBanner ? h('p', { className: 'hq-connector__fake', role: 'note' }, view.fakeBanner) : null,
     h(DestinationList, { view, onSelect: props.onSelect }),
-    h(NewThread, { view }),
+    h(NewThread, { view, onSelect: props.onSelect }),
     h('div', { className: 'hq-connector__actions' },
       h('button', {
         type: 'button',
@@ -168,6 +185,7 @@ export function ConnectorPanel(props: ConnectorPanelProps): ReactElement {
       }, 'Send…'),
       view.sendDisabledReason ? h('p', { id: 'hq-connector-send-reason', className: 'hq-connector__reason' }, view.sendDisabledReason) : null),
     h(Route, { view }),
+    h(ResolveUnknown, props),
     h(Confirmation, {
       view, onConfirm: props.onConfirm, onCancel: props.onCancel,
       ...(props.onAcknowledgeRouteHistory ? { onAcknowledgeRouteHistory: props.onAcknowledgeRouteHistory } : {}),
@@ -185,6 +203,8 @@ export function ConnectorPanelHost({ controller }: { readonly controller: Connec
     view,
     onSelect: (id) => { void controller.select(id); },
     onRequestSend: () => controller.requestSend(),
+    onRequestResolveUnknown: () => controller.requestResolveUnknown(),
+    onConfirmResolveUnknown: () => { void controller.confirmResolveUnknown(); },
     onConfirm: () => { void controller.confirm(); },
     onCancel: () => controller.cancel(),
     onCheckStatus: () => { void controller.checkStatus(); },

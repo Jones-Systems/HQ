@@ -6,7 +6,7 @@
 
 import type { Digest } from './canonical.ts';
 import type { AttemptId, DestinationId, DispatchId, EvidenceId, HostId, PacketId, ReceiptId, ReceiverId, ThreadRef } from './ids.ts';
-import type { DestinationEndpoint, ModelPin, TransportKind } from './host-catalog.ts';
+import type { DestinationEndpoint, DestinationMode, ModelPin, TransportKind } from './host-catalog.ts';
 import type { DispatchRecord, Provenance, Receipt } from './dispatch.ts';
 import type { EvidenceEntry } from './evidence.ts';
 
@@ -46,6 +46,7 @@ export type TransportQualification =
   | { readonly level: 'unqualified'; readonly reason: string };
 
 export interface TransportDescriptor {
+  readonly modes?: readonly DestinationMode[];
   readonly kind: TransportKind;
   readonly label: string;
   readonly provenance: Provenance;
@@ -86,7 +87,14 @@ export interface ReadbackPort {
   lookup(query: { readonly endpoint: DestinationEndpoint; readonly idempotencyKey: string }, signal: AbortSignal): Promise<LookupOutcome>;
 }
 
+export type FenceOutcome =
+  | { readonly kind: 'found'; readonly receipt: Receipt }
+  | { readonly kind: 'no-effect'; readonly basis: string }
+  | { readonly kind: 'unavailable'; readonly detail: string };
+
 export interface TransportPort extends ReadbackPort {
+  /** Owner-confirmed resolution only; never exposed through a readback port. */
+  fence?(query: { readonly endpoint: DestinationEndpoint; readonly idempotencyKey: string }, signal: AbortSignal): Promise<FenceOutcome>;
   /** Read-only identity probe of the receiver behind an endpoint. */
   identify(endpoint: DestinationEndpoint, signal: AbortSignal): Promise<ObservedIdentity>;
   /** The execution effect. Called at most once per attempt, only after `submitting` is durable. */

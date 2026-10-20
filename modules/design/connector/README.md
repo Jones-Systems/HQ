@@ -18,7 +18,8 @@ Governing task: `spec.hq-design#task.connector.001`
 | React panel | Implemented; server-render checks in the repo (browser evidence for the expansion flow is reported with the PR, not committed) |
 | Transport | **Labelled fake receiver only.** No real Jones adapter exists here |
 | Real Jones existing-thread send | Not qualified — needs S1 and a public wire contract (HQD-11b) |
-| New-thread launch | Disabled with reason — needs U1 idempotent launch/lookup |
+| New-thread eligibility | Requires existing qualification plus explicit `modes: ['new-thread']`; the control selects only. No live new-thread transport is implemented here |
+| Resolve unknown | Owner-confirmed, one-use TTL fence for unknown new-thread attempts; labelled fake and flat Node tests only |
 | Root composition (StoragePort, IPC, shell) | Not done; root wires the ports |
 
 ## Formats
@@ -49,7 +50,7 @@ one shared implementation.
 
 - Eligibility is not reachability. Only a transport registered as a labelled
   fake (`fake-receiver`) or one carrying qualification evidence can send. Real
-  Jones is shown **Not qualified**. New-thread destinations are refused.
+  Jones is shown **Not qualified**. New-thread destinations also require an explicit declared mode.
 - The owner's **Confirm send** is the execution boundary. A confirmation binds
   the packet digest and the destination identity the owner saw, is single-use
   and expires (default two minutes).
@@ -72,6 +73,28 @@ one shared implementation.
 - Evidence is rejected unless packet ID and digest, attempt, receipt, host,
   receiver, pinned model and provenance all match. Receivers cannot claim
   `owner-judged`. Fake evidence stays labelled fake.
+
+## Resolve unknown
+
+`spec.hq-integration-parallel-execution#iface.resolve-unknown.001` governs the
+optional transport `modes` and `fence` members. Only an explicit confirmation
+can reach `outbox.resolveUnknown`. The controller opens a card explaining the
+permanent fence, recording a prior run instead, and that nothing is resent.
+`ConnectorPanelHost` wires both actions without host or compose changes.
+
+A confirmation binds dispatch, attempt, idempotency key and readback generation,
+with the existing two-minute default TTL. A CAS consumes that generation before
+the fence, preserving one use across processes and restart without adding a
+persisted field, state or basis. The result is saved by a second CAS; conflicts
+are reported, never overwritten or retried. A found receipt maps to accepted or
+held; authoritative no-effect names the owner-confirmed fence. Throws, timeouts,
+unavailable and malformed answers leave unknown with detail. Reads, recovery,
+refresh, selection and the evidence feed never call `fence`.
+
+The fake fence retains fake provenance and never qualifies Jones. Tests exercise
+controller-driven events through `ConnectorPanelHost` in a simulated DOM. Server
+rendering alone cannot exercise the card interaction; neither check proves live
+browser layout, Electron integration or an installed transport.
 
 ## Request lifecycle (expansion)
 

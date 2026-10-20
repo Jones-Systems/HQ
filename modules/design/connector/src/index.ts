@@ -36,3 +36,6 @@ export type * from './controller.ts';
 export { createConnectorController } from './controller.ts';
 export type { ConnectorPanelProps } from './ConnectorPanel.ts';
 export { ConnectorPanel, ConnectorPanelHost } from './ConnectorPanel.ts';
+
+export type * from './resolve-unknown.ts';
+export { createResolveUnknownConfirmation } from './resolve-unknown.ts';

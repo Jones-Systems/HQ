@@ -72,13 +72,16 @@ export function destinationRows(catalog: HostCatalog, transports: TransportRegis
 }
 
 export interface NewThreadControl {
-  readonly enabled: false;
+  readonly enabled: boolean;
+  readonly destinationId?: DestinationId;
   readonly label: string;
   readonly reason: string;
 }
 
-/** New-thread launch stays disabled until U1 qualifies an idempotent launch/lookup contract. */
-export function newThreadControl(): NewThreadControl {
+/** Selection only: eligibility still requires declared modes and qualification. */
+export function newThreadControl(rows: readonly DestinationRow[] = []): NewThreadControl {
+  const row = rows.find((item) => item.selectable && item.modeLabel === 'New thread');
+  if (row) return { enabled: true, destinationId: row.destinationId, label: 'Start a new thread', reason: 'Select this destination; sending needs a separate confirmation.' };
   return { enabled: false, label: 'Start a new thread', reason: NEW_THREAD_REASON };
 }
 
