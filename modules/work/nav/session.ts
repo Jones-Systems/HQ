@@ -24,6 +24,8 @@ export interface CaptureDraft {
   /** The Planner was unreachable at the last explicit capture, so keeping an HQ draft is offered. */
   readonly unavailable: boolean;
   readonly error: string | null;
+  /** A toolbar capture is being sent. Kept with the text, so a remounted toolbar cannot send the same text again. */
+  readonly sending: boolean;
 }
 
 export interface WorkUiState {
@@ -35,7 +37,7 @@ export interface WorkUiState {
   readonly capture: CaptureDraft;
 }
 
-export const EMPTY_CAPTURE: CaptureDraft = { text: '', date: null, unavailable: false, error: null };
+export const EMPTY_CAPTURE: CaptureDraft = { text: '', date: null, unavailable: false, error: null, sending: false };
 
 function createUiState() {
   let state: WorkUiState = { lastPage: 'board', filters: EMPTY_FILTERS, collapsed: DEFAULT_COLLAPSED, scroll: {}, capture: EMPTY_CAPTURE };
