@@ -63,6 +63,13 @@ export function createPreviewHost(options: {
     if (live.value.generation !== generation || live.view.webContents.getURL() !== url) throw Error('Navigation changed');
     return { ...(value as unknown as CaptureReading), generation, url };
   }
+  async function emulate(live: Live, scale = 1) {
+    if (live.closing || live.view.webContents.isDestroyed()) throw Error('Preview closed');
+    const debuggerPort = live.view.webContents.debugger;
+    if (!debuggerPort.isAttached()) debuggerPort.attach('1.3');
+    const { w, h, dpr } = live.value.viewport;
+    await debuggerPort.sendCommand('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: dpr, mobile: false, scale });
+  }
   async function pixels(live: Live, scroll: { x: number; y: number }) {
     const contents = live.view.webContents;
     if (!contents.debugger.isAttached()) contents.debugger.attach('1.3');
@@ -130,6 +137,7 @@ export function createPreviewHost(options: {
       visible: false, mode: 'off', events: [], sequence: 0, draining: false, timer: undefined as never, closing: false, epoch: 0, queue: Promise.resolve() };
     sessions.set(id, live);
     const contents = made.view.webContents, targetSession = made.session;
+    let initializing = true;
     targetSession.setPermissionRequestHandler((_wc, _permission, callback) => { denials.permissions++; callback(false); });
     targetSession.setPermissionCheckHandler(() => { denials.permissions++; return false; }); targetSession.setDevicePermissionHandler(() => { denials.devices++; return false; });
     targetSession.setDisplayMediaRequestHandler((_request, callback) => { denials.display++; callback({}); });
@@ -152,13 +160,19 @@ export function createPreviewHost(options: {
     contents.on('select-bluetooth-device', (event, _devices, callback) => { denials.devices++; event.preventDefault(); callback(''); });
     contents.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if (mainFrame) fence(live); });
     contents.on('did-navigate-in-page', (_event, _url, mainFrame) => { if (mainFrame) void install(live).catch(() => {}); });
-    contents.on('dom-ready', () => { void install(live).catch(() => { live.blocked = 'agent-unavailable'; }); });
+    contents.on('dom-ready', () => { if (!initializing) void install(live).catch(() => { live.blocked = 'agent-unavailable'; }); });
     contents.on('render-process-gone', () => { fence(live); live.value = { ...live.value, status: 'crashed' }; });
-    contents.enableDeviceEmulation({ screenPosition: 'desktop', screenSize: { width: params.viewport.w, height: params.viewport.h }, viewPosition: { x: 0, y: 0 }, viewSize: { width: params.viewport.w, height: params.viewport.h }, deviceScaleFactor: params.viewport.dpr, scale: 1 });
     made.view.setBounds({ x: 0, y: 0, width: params.viewport.w, height: params.viewport.h }); made.view.setVisible(false);
     window.contentView.addChildView(made.view);
     live.timer = setInterval(() => { void drain(live); }, 100);
-    try { await contents.loadURL(target.href); await install(live); return ok(current(live)); }
+    try {
+      // Electron 44's direct emulation dereferences the native view without a null guard.
+      // Initialize an inert view, then retain CDP metrics across target renderer changes.
+      await contents.loadURL('about:blank');
+      await emulate(live);
+      initializing = false;
+      await contents.loadURL(target.href); await install(live); return ok(current(live));
+    }
     catch { await close(id); return fail('unavailable', 'load'); }
   }
   app.on('certificate-error', (event, contents, _url, _error, _certificate, callback) => { if ([...sessions.values()].some(live => live.view.webContents === contents)) { denials.certificateErrors++; event.preventDefault(); callback(false); } });
@@ -199,7 +213,7 @@ export function createPreviewHost(options: {
           const old = live.view.getBounds();
           if (old.width !== Math.round(rect.width) || old.height !== Math.round(rect.height)) { fence(live); await install(live); }
           live.view.setBounds({ x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) });
-          live.view.webContents.enableDeviceEmulation({ screenPosition: 'desktop', screenSize: { width: live.value.viewport.w, height: live.value.viewport.h }, viewPosition: { x: 0, y: 0 }, viewSize: { width: live.value.viewport.w, height: live.value.viewport.h }, deviceScaleFactor: live.value.viewport.dpr, scale: Math.max(0.01, Math.min(rect.width / live.value.viewport.w, rect.height / live.value.viewport.h)) });
+          await emulate(live, Math.max(0.01, Math.min(rect.width / live.value.viewport.w, rect.height / live.value.viewport.h)));
           live.view.setVisible(visible); live.visible = visible; return ok(current(live));
         }
         if (route === 'navigate') {
