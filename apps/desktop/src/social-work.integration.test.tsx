@@ -6,6 +6,7 @@ import SocialDefault, { SocialModule } from '@hq/social';
 import WorkDefault, { WorkModule } from '@hq/work';
 import { App } from './App';
 import { MODULES } from './modules';
+import { designDomain } from '../../../modules/design/app/index.ts';
 import { APPEARANCE_KEY } from './state';
 import { CALL_CLASSES, FIXTURE_IDS, resetSocialSessions, type PortMethod, type SocialWorkspacePort } from '../../../modules/social/core';
 import { NAV_ITEMS as SOCIAL_NAV, setSocialWorkspacePort } from '../../../modules/social/nav';
@@ -17,7 +18,7 @@ import { VIEW_NOW, VIEW_TODAY, viewItems } from '../../../modules/work/views/fix
 
 /**
  * test.domain-integration.001 (ac.sw-assembly.001, ac.integration.001): the accepted Social and Work domains mounted
- * through T0's registry in the real shell (`App` → `MODULES`), with T0's Design placeholder, on fictional example data.
+ * through T0's registry in the real shell (`App` → `MODULES`), next to the mounted Design domain, on fictional example data.
  * Every method of both domain ports is a spy, including Social's execution-class `submitRun`, so each scenario counts
  * reads, planning or content writes and execution calls exactly.
  *
@@ -87,6 +88,7 @@ afterEach(() => {
   setWorkSessionPort(null);
   resetWorkSessions();
   resetViewMemory();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.restoreAllMocks();
   window.localStorage.clear();
@@ -177,20 +179,18 @@ async function expectWorkRestored() {
 }
 
 describe('Social and Work mounted in the T0 shell', () => {
-  it('registers the accepted domain descriptors and keeps T0’s Design placeholder', () => {
+  it('registers the accepted domain descriptors and Design’s production entry', () => {
     expect(MODULES.social).toBe(SocialModule);
     expect(SocialDefault).toBe(SocialModule);
     expect(MODULES.work).toBe(WorkModule);
     expect(WorkDefault).toBe(WorkModule);
-    expect(MODULES.design).not.toBe(SocialModule);
-    expect(MODULES.design).not.toBe(WorkModule);
+    expect(MODULES.design).toBe(designDomain.Component);
   });
 
-  it('opens on the Design placeholder and mounts both domains with labelled fictional data and no execution', async () => {
+  it('opens on Design and mounts both domains with labelled fictional data and no execution', async () => {
     render(<App />);
     expect(rail().getByRole('button', { name: 'Design' }).getAttribute('aria-current')).toBe('page');
-    expect(screen.getByRole('heading', { level: 1, name: 'A place for Design.' })).toBeTruthy();
-    expect(screen.getByText('Awaiting module integration')).toBeTruthy();
+    expect(await screen.findByRole('navigation', { name: 'Design' })).toBeTruthy();
 
     await openSocial();
     expect(screen.getByText(/^Fictional example workspace/u)).toBeTruthy();
@@ -220,7 +220,7 @@ describe('cross-domain round trips', () => {
     expect(plannerWrites()).toBe(0);
 
     await switchDomain('Design');
-    expect(screen.getByRole('heading', { level: 1, name: 'A place for Design.' })).toBeTruthy();
+    expect(await screen.findByRole('navigation', { name: 'Design' })).toBeTruthy();
     let previous = main().firstElementChild;
     for (const domain of ['Social', 'Work', 'Social', 'Work'] as const) {
       await switchDomain(domain);
@@ -236,7 +236,7 @@ describe('cross-domain round trips', () => {
       }
     }
     await switchDomain('Design');
-    expect(screen.getByRole('heading', { level: 1, name: 'A place for Design.' })).toBeTruthy();
+    expect(await screen.findByRole('navigation', { name: 'Design' })).toBeTruthy();
     await settle();
 
     // Remounts reuse each domain's session: no new read, no write, no execution in either port.
@@ -496,6 +496,40 @@ describe('appearance', () => {
     expect(allCalls()).toBe(callsBefore);
     expect(socialWrites()).toBe(0);
     expect(plannerWrites()).toBe(0);
+    expectNoExecution();
+  });
+});
+
+
+describe('Design shell presentation and leave persistence', () => {
+  it('fills only Design and flushes changed chrome synchronously when leaving', async () => {
+    // Freeze the debounce: no timer is advanced during the leave/restore proof.
+    vi.useFakeTimers();
+    // happy-dom does no layout and its ResizeObserver reports width 0.
+    vi.stubGlobal('ResizeObserver', undefined);
+    await act(async () => { render(<App />); });
+    expect(main().classList.contains('is-fill')).toBe(true);
+    const sidebar = screen.getByRole('button', { name: 'Sidebar' });
+    const wasPressed = sidebar.getAttribute('aria-pressed') === 'true';
+    await act(async () => { fireEvent.click(sidebar); });
+    const changedPressed = sidebar.getAttribute('aria-pressed') === 'true';
+    expect(changedPressed).toBe(!wasPressed);
+    const key = 'hq.design.ui-session.v1:hq-local';
+    // The module-scoped session can predate this test; only this change matters.
+    window.localStorage.removeItem(key);
+    await act(async () => { fireEvent.click(rail().getByRole('button', { name: 'Social' })); });
+    expect(main().classList.contains('is-fill')).toBe(false);
+    const saved = window.localStorage.getItem(key);
+    expect(saved).not.toBeNull();
+    expect(JSON.parse(saved!)).toMatchObject({
+      schema: 'hq.design.ui-session/v1', projectId: 'hq-local',
+      panels: { sidebar: { collapsed: !changedPressed } },
+    });
+    await act(async () => { fireEvent.click(rail().getByRole('button', { name: 'Work' })); });
+    expect(main().classList.contains('is-fill')).toBe(false);
+    await act(async () => { fireEvent.click(rail().getByRole('button', { name: 'Design' })); });
+    expect(main().classList.contains('is-fill')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Sidebar' }).getAttribute('aria-pressed')).toBe(String(changedPressed));
     expectNoExecution();
   });
 });

@@ -1,0 +1,25 @@
+schema = "codex.v3-check-groups/v1"
+
+[groups.planner-service]
+summary = "Planner selected-file import, references and replay preservation."
+covers = ["byte/blob baseline equality", "schema-1 state and retention-aware replay", "HQ reference/vector/exchange parity"]
+direct_surfaces = ["services/planner"]
+tests = ["services/planner/tests/test_store.py", "services/planner/tests/test_server.py", "services/planner/tests/app_smoke.test.mjs", "services/planner/tests/client_logic.test.mjs", "services/planner/tests/display_zone.test.mjs", "services/planner/tests/render_smoke.test.mjs"]
+
+[groups.hq-cli]
+summary = "Standalone CLI regression and in-tree service E2E."
+covers = ["all existing 70 cases retained", "HQ reference input/output schemas", "synthetic owner-example and replay E2E"]
+direct_surfaces = ["tools/hq-cli"]
+tests = ["tools/hq-cli/test/core.test.mjs", "tools/hq-cli/test/reads.test.mjs", "tools/hq-cli/test/transport.test.mjs", "tools/hq-cli/test/writes.test.mjs", "tools/hq-cli/test/write-dates.test.mjs", "tools/hq-cli/test/replay.test.mjs", "tools/hq-cli/test/batch.test.mjs"]
+
+[groups.work-live]
+summary = "Work live-port contract and mounted-module composite proof."
+covers = ["HTTP envelope/unknown mapping", "exchange SHA drift and reference feature gate", "identical IDs, dates and refresh through mounted module"]
+direct_surfaces = ["modules/work/live"]
+tests = ["modules/work/core/test/conformance.test.ts"]
+
+[groups.repository-integrity]
+summary = "Retirement repository integrity and dangling-link checks in Codex-V3."
+covers = ["source-pointer correctness", "retirement scope and exact-main readback"]
+direct_surfaces = ["apps/manual-planner", "docs/operations/manual-planner-hosting.md"]
+tests = ["tests/test_repository_ignore_rules.py", "tests/test_parallel_project_plan_skill.py", "tests/test_wait_and_reassess.py", "tests/test_assess_wheel_spinning_skill.py", "tests/test_split_pr_review_skill.py", "tests/test_provider_update_operations_skill.py", "tests/test_efficiency.py", "tests/test_diagnosis.py", "tests/test_check_groups.py", "tests/test_sections_cli.py", "tests/test_ci_workflow.py", "tests/test_shard_weights_refresh.py", "tests/test_implementation_planning_skill.py", "tests/test_host_operations_skill.py", "tests/test_model_selection.py", "tests/test_package.py", "tests/test_specification_plan.py", "tests/test_wave_compiler.py", "tests/test_agent_librarian_evaluation.py", "tests/test_chat_on_steroids_handoff.py", "tests/test_timing_budget.py", "tests/test_t3_thread_cleanup.py"]
