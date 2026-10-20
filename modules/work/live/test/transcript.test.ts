@@ -115,16 +115,35 @@ describe('golden recovery mapping through the replay route', () => {
     expect(t.remaining()).toBe(0);
   });
 
-  it('20-22: lookup proves not applied, apply applies now, and a repeat apply replays', async () => {
+  it('20-21: lookup proves not applied, an explicit apply applies now, and asking again is a read-only lookup', async () => {
     const t = strictTransport([
       { exchange: exchange('01-version') }, { route: 'create', respond: LOST },
-      { exchange: exchange('20-replay-not-applied') }, { exchange: exchange('21-replay-apply') }, { exchange: exchange('22-replay-apply-repeated') },
+      { exchange: exchange('20-replay-not-applied') }, { exchange: exchange('21-replay-apply') },
+      // Once settled, a repeated Apply is answered by a lookup, never a second resend.
+      { route: 'replay', respond: answer(exchange('22-replay-apply-repeated')) },
+    ]);
+    const { port, recovery } = createPlannerLive(t.transport);
+    await port.version();
+    await failure(port.create(fieldsOf(create) as never, 'contract-unseen'));
+    // No Apply before the Check: nothing is sent.
+    expect(await failure(recovery.apply('contract-unseen'))).toEqual({ kind: 'unknown', requestId: 'contract-unseen' });
+    expect(await recovery.check('contract-unseen')).toEqual({ outcome: 'not_applied' });
+    expect(await recovery.apply('contract-unseen')).toMatchObject({ outcome: 'applied_now', result: { item: { id: '0000000000000004' }, stateVersion: 9, replayed: false } });
+    const sent = t.calls.length;
+    expect(await recovery.apply('contract-unseen')).toMatchObject({ outcome: 'replayed', result: { item: { id: '0000000000000004' }, replayed: true } });
+    expect((t.calls[sent]!.params as { mode: string }).mode).toBe('lookup');
+    expect(t.remaining()).toBe(0);
+  });
+
+  it('22: an authorized apply the service answers as already applied is confirmed as replayed', async () => {
+    const t = strictTransport([
+      { exchange: exchange('01-version') }, { route: 'create', respond: LOST },
+      { exchange: exchange('20-replay-not-applied') }, { exchange: exchange('22-replay-apply-repeated') },
     ]);
     const { port, recovery } = createPlannerLive(t.transport);
     await port.version();
     await failure(port.create(fieldsOf(create) as never, 'contract-unseen'));
     expect(await recovery.check('contract-unseen')).toEqual({ outcome: 'not_applied' });
-    expect(await recovery.apply('contract-unseen')).toMatchObject({ outcome: 'applied_now', result: { item: { id: '0000000000000004' }, stateVersion: 9, replayed: false } });
     expect(await recovery.apply('contract-unseen')).toMatchObject({ outcome: 'replayed', result: { item: { id: '0000000000000004' }, replayed: true } });
     expect(t.remaining()).toBe(0);
   });

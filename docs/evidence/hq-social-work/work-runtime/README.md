@@ -82,7 +82,7 @@ All paths are under `modules/work/`.
 - **Refused locally:**
   - a malformed entity ID (`^[A-Za-z0-9_-]{6,40}$`) or request ID (`^[A-Za-z0-9-]{8,64}$`);
   - a reused request ID with a different body.
-- **No automatic retry.** An `unknown` write stays unresolved until an explicit Check (lookup), or an explicit Apply (resend) after a lookup proved `not_applied`.
+- **No automatic retry.** An `unknown` write stays unresolved until an explicit Check (lookup), or an explicit Apply (resend) after a lookup proved `not_applied`. The adapter itself enforces this; see [Explicit Apply authorization](#explicit-apply-authorization).
 - **Lost recovery answers.** A lookup whose answer is lost is `unavailable`; a resend whose answer is lost is `unknown`.
 - **The baseline never moves.** `sentAfterVersion` is never raised after the fact, and the recorded intent is never mutated; both are proved in `live/test/adapter.test.ts`.
 - **No guessing by title.** A found record is never matched to an intent by its title.
@@ -154,6 +154,16 @@ These are the runs for PR #51 at `bb42ee9` on 2026-10-20. About 39 GiB of RAM wa
 
 About 40–41 GiB of RAM was available for each run.
 
+**Explicit Apply authorization successor, final candidate (2026-10-20).** These ran once, deduplicated: the full suite includes the Work tests.
+
+| Time (local) | CPU before the run | Check | Result |
+| --- | --- | --- | --- |
+| 09:59:37 | 29.56% | `npx vitest run` (full suite) | 53 files; 938 passed, 1 skipped (the upstream drift check, `unavailable`) |
+| 09:59:46 | 24.69% | `npm run typecheck` | exit 0 |
+| 09:59:48 | 41.72% | `npm run build` | exit 0 (the existing chunk-size warning only) |
+
+While iterating, `npx vitest run modules/work/live` gave 4 files: 168 passed, 1 skipped (09:59:11, CPU 21.84%). The five new regressions were also run against the previous adapter from `ecd5486`, at 09:59:19 (CPU 18.93%). All five failed there.
+
 ## Dispositions
 
 - **No second task store.** The live port feeds the existing `createWorkStore`.
@@ -196,6 +206,42 @@ It showed a concrete incompatibility in this lane's transport: `move` was `{…,
 **Out-of-repo check.** In a temporary directory outside the repository (since deleted), the local types were compared with the frozen object. The comparison covered every route's params, `WorkMutationCall`, `ServiceResponse` and `ServiceResponse<string>`, both route unions, `WorkServiceTransport` and `WORK_SERVICE_ROUTES`. All were mutually identical. A negative control confirmed that the old nested-anchor shape is rejected.
 
 Identity with the shared file itself, on the combined base, remains integration work.
+
+## Explicit Apply authorization
+
+This closes a replay-contract gap that remained at `ecd5486`. It is part of the settled boundary: a separate explicit Apply, and no ordinary resubmit of an unknown write. It is not a severity-based repair.
+
+At `ecd5486` there were two holes:
+
+- In `live/adapter.ts`, `write()` answered a repeated ordinary port call for an already recorded intent with `replay('resend')`.
+- `recovery.apply` resent with no proof, held by the adapter, of a prior `not_applied` Check. Only the store's own UI path guarded this.
+
+**Now:**
+
+- **A repeated ordinary call never sends a mutation.** The same intent under the same request ID sends nothing while unresolved, and fails as `unknown` (held) with its requestId. Once settled, it is answered by a read-only lookup of the recorded response. A different body under that ID is still `request_id_reused`, refused locally.
+- **Apply needs this adapter's own Check.** Each unresolved ledger entry carries `applyAuthorized`. Only this adapter's own lookup answering `not_applied` sets it. Every lookup clears it before sending, and every resend consumes it before sending. So:
+  - an Apply with no such Check sends nothing and fails as `unknown`;
+  - an uncertain Apply (lost or malformed answer) needs a new `not_applied` Check before another Apply;
+  - a failed, unavailable or indeterminate Check withdraws the authorization;
+  - an Apply on a settled intent is a read-only lookup, never a second resend.
+- **Unchanged:**
+  - the feature gate, the recorded intent and baseline, the request-ID rules and the eviction proof;
+  - the service still rechecks every replay against its own record, and stays authoritative;
+  - the store is unchanged: it already returns an `unknown` Apply to Unconfirmed, needing a new Check.
+
+**Regressions.** They are in `live/test/adapter.test.ts`, under "explicit Apply needs this adapter's own not_applied Check". Each one failed against the `ecd5486` adapter:
+
+1. A dropped create, repeated as the same ordinary call, makes zero extra transport calls.
+2. A direct Apply before any Check sends nothing.
+3. A `not_applied` Check, then an explicit Apply, saves the write once. Repeating it by Apply or by the ordinary call gives read-only lookups.
+4. An uncertain Apply needs a new Check before any further Apply.
+5. A failed or indeterminate Check after `not_applied` withdraws the authorization.
+
+**Other updated tests:**
+
+- Four existing tests now take a Check before their Apply, or expect no send: the "dropped write", "evicted", "lost recovery answers" and "refused resend" cases.
+- The transcript's 20–22 case now shows that no Apply is sent before the Check, and that a repeat after `applied_now` is a lookup.
+- A new transcript case maps golden exchange 22 to an authorized Apply that the service answers as already applied. Its request bytes are still checked strictly.
 
 ## Deferred findings (out of cone, original severity)
 

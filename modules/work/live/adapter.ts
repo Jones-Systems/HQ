@@ -18,9 +18,11 @@ import {
 // Replay safety: before a write is first sent, its typed intent is frozen into a session ledger with the state
 // version observed before the send (the replay baseline, never raised later). A write whose outcome is unknown is never
 // re-sent through its ordinary route and never retried automatically: the service's request record can be evicted, and
-// an ordinary same-ID send after eviction would apply it a second time. It is resolved only by an explicit check
-// (lookup) or apply (resend) through the closed replay route, with the recorded intent and baseline. Without
-// `requests.replay`, a recorded intent or a baseline, nothing is sent and the outcome stays indeterminate.
+// an ordinary same-ID send after eviction would apply it a second time. Repeating the same ordinary call sends nothing.
+// It is resolved only through the closed replay route, with the recorded intent and baseline: an explicit check
+// (lookup), and then an explicit apply (resend), allowed only once after this adapter's own check proved it
+// `not_applied`. Without `requests.replay`, a recorded intent or a baseline, nothing is sent and the outcome stays
+// indeterminate. The service still rechecks every replay against its own record.
 
 /** Unresolved intents the ledger holds. Past it, a new write is refused before it is sent; none is forgotten. */
 export const UNRESOLVED_LIMIT = 200;
@@ -35,6 +37,12 @@ interface LedgerEntry {
   readonly key: string;
   readonly sentAfterVersion: number;
   state: 'unresolved' | 'settled';
+  /**
+   * Set only by this adapter's own Check answering `not_applied` for an unresolved intent; it authorizes exactly one
+   * explicit Apply. Any later Check clears it before sending, and an Apply consumes it before sending, so an
+   * uncertain Apply or a failed or indeterminate Check needs a new `not_applied` Check first.
+   */
+  applyAuthorized: boolean;
 }
 
 /** A read-only view of recorded intents, for tests and diagnostics; deliberately not part of the port. */
@@ -173,13 +181,23 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
     const entry = ledger.get(requestId);
     if (!entry) return fail({ kind: 'replay_indeterminate', requestId, reason: 'no_intent' });
     if (!(observedFeatures ?? []).includes(REPLAY_FEATURE)) return fail({ kind: 'replay_indeterminate', requestId, reason: 'unsupported' });
+    if (mode === 'resend') {
+      // Only the adapter's own prior `not_applied` Check of this unresolved intent allows a resend; otherwise the
+      // outcome stays unknown and nothing is sent.
+      if (entry.state !== 'unresolved' || !entry.applyAuthorized) return fail({ kind: 'unknown', requestId });
+    }
+    entry.applyAuthorized = false;
     const lost: PlannerRecoveryError = mode === 'lookup' ? { kind: 'unavailable' } : { kind: 'unknown', requestId };
     const response = await call('replay', { mode, requestId, original: entry.call, sentAfterVersion: entry.sentAfterVersion });
     if (!response.ok) return fail(response.kind === 'unavailable' ? { kind: 'unavailable' } : lost);
     if (is2xx(response.status)) {
       const decoded = decodeReplay(response.body);
       if (!decoded) return fail(lost);
-      if (decoded.outcome === 'not_applied') return mode === 'lookup' ? { outcome: 'not_applied' } : fail(lost);
+      if (decoded.outcome === 'not_applied') {
+        if (mode !== 'lookup') return fail(lost);
+        entry.applyAuthorized = entry.state === 'unresolved';
+        return { outcome: 'not_applied' };
+      }
       // A lookup never applies; an `applied_now` answer to one is a defect whose effect is unknown.
       if (decoded.outcome === 'applied_now' && mode === 'lookup') return fail({ kind: 'unknown', requestId });
       const output = await result(entry, decoded.response, decoded.outcome === 'replayed');
@@ -199,6 +217,12 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
     return fail(error);
   }
 
+  /** A settled intent asked again: a read-only lookup of its recorded response. Never a resend. */
+  async function settledAnswer(requestId: string): Promise<ApplyResult> {
+    const answer = await replay('lookup', requestId);
+    return answer.outcome === 'replayed' ? answer : fail({ kind: 'unknown', requestId });
+  }
+
   async function write(call0: WorkMutationCall): Promise<WriteOutput> {
     const { requestId } = call0.params;
     if (!REQUEST_ID_PATTERN.test(requestId)) return fail(invalid('requestId', 'Malformed X-Request-Id.'));
@@ -209,14 +233,16 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
     const existing = ledger.get(requestId);
     if (existing) {
       if (existing.key !== key) return fail({ kind: 'request_id_reused' });
-      // The same intent again is never an ordinary resubmit: only the replay route may answer it.
-      return (await replay('resend', requestId) as ApplyResult).result;
+      // The same intent again is never an ordinary resubmit, and never sends a mutation: an unresolved one stays
+      // unknown until an explicit Check, and a settled one is answered by a read-only lookup.
+      if (existing.state === 'unresolved') return fail({ kind: 'unknown', requestId });
+      return (await settledAnswer(requestId)).result;
     }
     if ([...ledger.values()].filter((e) => e.state === 'unresolved').length >= UNRESOLVED_LIMIT) {
       return fail(invalid('body', 'Too many unconfirmed changes are waiting. Check or stop tracking some before saving more.'));
     }
     const sentAfterVersion = observedVersion ?? await readVersion();
-    const entry: LedgerEntry = { call: deepFreeze(structuredClone(call0)), key, sentAfterVersion, state: 'unresolved' };
+    const entry: LedgerEntry = { call: deepFreeze(structuredClone(call0)), key, sentAfterVersion, state: 'unresolved', applyAuthorized: false };
     ledger.set(requestId, entry);
     const response = await call(entry.call.route, entry.call.params as never);
     if (!response.ok) {
@@ -280,7 +306,8 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
 
   const recovery: PlannerRecovery = {
     check: (requestId) => replay('lookup', requestId) as Promise<CheckResult>,
-    apply: (requestId) => replay('resend', requestId) as Promise<ApplyResult>,
+    // A settled intent is answered read-only; an unresolved one resends only with this adapter's own `not_applied` Check.
+    apply: (requestId) => (ledger.get(requestId)?.state === 'settled' ? settledAnswer(requestId) : replay('resend', requestId) as Promise<ApplyResult>),
     release(requestId) {
       const entry = ledger.get(requestId);
       if (entry) settle(entry);

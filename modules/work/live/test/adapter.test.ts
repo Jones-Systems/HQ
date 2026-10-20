@@ -188,11 +188,12 @@ describe('unknown writes: no automatic retry, recovery only through the replay r
     expect(fixture.control.stored().filter((i) => i.title === 'Seed order')).toHaveLength(0);
     const applied = await recovery.apply(requestId);
     expect(applied).toMatchObject({ outcome: 'applied_now', result: { item: { title: 'Seed order' }, replayed: false } });
+    // Asked again once settled, it is answered by a read-only lookup, never a second resend.
     expect(await recovery.apply(requestId)).toMatchObject({ outcome: 'replayed' });
     expect(fixture.control.stored().filter((i) => i.title === 'Seed order')).toHaveLength(1);
     // No ordinary create was ever sent twice; the apply went through the replay route.
     expect(wire.calls.filter((c) => c.route === 'create' && (c.params as { requestId: string }).requestId === requestId)).toHaveLength(1);
-    expect(wire.calls.filter((c) => c.route === 'replay').map((c) => (c.params as WorkParams['replay']).mode)).toEqual(['lookup', 'resend', 'resend']);
+    expect(wire.calls.filter((c) => c.route === 'replay').map((c) => (c.params as WorkParams['replay']).mode)).toEqual(['lookup', 'resend', 'lookup']);
   });
 
   it('is indeterminate and changes nothing once the record may be evicted (test eviction)', async () => {
@@ -204,12 +205,13 @@ describe('unknown writes: no automatic retry, recovery only through the replay r
     for (let i = 0; i < MAX_REMEMBERED_REQUESTS + 1; i += 1) item = (await device.markReviewed(item.id, item.revision, rid())).item!;
     const version = fixture.control.stateVersion();
     expect(await failure(recovery.check(requestId))).toEqual({ kind: 'replay_indeterminate', requestId, reason: 'evicted' });
-    expect(await failure(recovery.apply(requestId))).toEqual({ kind: 'replay_indeterminate', requestId, reason: 'evicted' });
-    // Re-calling the port with the same intent goes to the replay route too, never the ordinary one.
-    expect(await failure(port.create({ title: 'Book the hall' }, requestId))).toMatchObject({ kind: 'replay_indeterminate', reason: 'evicted' });
+    // An indeterminate Check authorizes no Apply, and re-calling the port with the same intent sends nothing.
+    expect(await failure(recovery.apply(requestId))).toEqual({ kind: 'unknown', requestId });
+    expect(await failure(port.create({ title: 'Book the hall' }, requestId))).toEqual({ kind: 'unknown', requestId });
     expect(fixture.control.stored().filter((i) => i.title === 'Book the hall')).toHaveLength(0);
     expect(fixture.control.stateVersion()).toBe(version);
     expect(wire.calls.filter((c) => c.route === 'create' && (c.params as { requestId: string }).requestId === requestId)).toHaveLength(1);
+    expect(wire.calls.filter((c) => c.route === 'replay').map((c) => (c.params as WorkParams['replay']).mode)).toEqual(['lookup']);
   });
 
   it('refuses a differing body under a recorded ID locally, and maps the service saying so', async () => {
@@ -243,6 +245,7 @@ describe('unknown writes: no automatic retry, recovery only through the replay r
     await failure(port.markReviewed(a.id, a.revision, requestId));
     wire.next('replay', 'drop');
     expect(await failure(recovery.check(requestId))).toEqual({ kind: 'unavailable' });
+    expect(await recovery.check(requestId)).toEqual({ outcome: 'not_applied' });
     wire.next('replay', 'lose-response');
     expect(await failure(recovery.apply(requestId))).toEqual({ kind: 'unknown', requestId });
     wire.next('replay', { instead: http(503, null) });
@@ -255,6 +258,7 @@ describe('unknown writes: no automatic retry, recovery only through the replay r
     const requestId = rid();
     await failure(port.patch(a.id, a.revision, { notes: 'mine' }, requestId));
     await device.patch(a.id, a.revision, { notes: 'theirs' }, rid());
+    expect(await recovery.check(requestId)).toEqual({ outcome: 'not_applied' });
     expect(await failure(recovery.apply(requestId))).toMatchObject({ kind: 'revision_conflict', current: { notes: 'theirs' } });
     expect(planner.ledger.unresolved()).toEqual([]);
   });
@@ -265,6 +269,82 @@ describe('unknown writes: no automatic retry, recovery only through the replay r
     const requestId = rid();
     expect(await failure(port.markReviewed(a.id, a.revision, requestId))).toEqual({ kind: 'unknown', requestId });
     expect(await recovery.check(requestId)).toMatchObject({ outcome: 'replayed' });
+  });
+});
+
+describe('explicit Apply needs this adapter\'s own not_applied Check', () => {
+  const modes = (wire: { calls: { route: WorkRoute; params: unknown }[] }) =>
+    wire.calls.filter((c) => c.route === 'replay').map((c) => (c.params as WorkParams['replay']).mode);
+
+  it('a dropped create repeated as the same ordinary call makes no transport call at all', async () => {
+    const { port, wire, fixture } = await live();
+    wire.next('create', 'drop');
+    const requestId = rid();
+    expect(await failure(port.create({ title: 'Paint the fence' }, requestId))).toEqual({ kind: 'unknown', requestId });
+    const before = wire.calls.length;
+    expect(await failure(port.create({ title: 'Paint the fence' }, requestId))).toEqual({ kind: 'unknown', requestId });
+    expect(wire.calls.length).toBe(before);
+    expect(fixture.control.stored().filter((i) => i.title === 'Paint the fence')).toHaveLength(0);
+  });
+
+  it('a direct Apply before any Check sends nothing', async () => {
+    const { port, recovery, wire, fixture } = await live();
+    wire.next('create', 'drop');
+    const requestId = rid();
+    await failure(port.create({ title: 'Fix the latch' }, requestId));
+    const before = wire.calls.length;
+    expect(await failure(recovery.apply(requestId))).toEqual({ kind: 'unknown', requestId });
+    expect(wire.calls.length).toBe(before);
+    expect(fixture.control.stored().filter((i) => i.title === 'Fix the latch')).toHaveLength(0);
+  });
+
+  it('Check not_applied then an explicit Apply saves it once; the authorization is used up', async () => {
+    const { port, recovery, wire, fixture } = await live();
+    wire.next('create', 'drop');
+    const requestId = rid();
+    await failure(port.create({ title: 'Mend the net' }, requestId));
+    expect(await recovery.check(requestId)).toEqual({ outcome: 'not_applied' });
+    expect(await recovery.apply(requestId)).toMatchObject({ outcome: 'applied_now', result: { item: { title: 'Mend the net' } } });
+    // Repeated afterwards, by Apply or by the same ordinary call: read-only lookups, never another resend.
+    expect(await recovery.apply(requestId)).toMatchObject({ outcome: 'replayed', result: { item: { title: 'Mend the net' }, replayed: true } });
+    expect(await port.create({ title: 'Mend the net' }, requestId)).toMatchObject({ item: { title: 'Mend the net' }, replayed: true });
+    expect(modes(wire)).toEqual(['lookup', 'resend', 'lookup', 'lookup']);
+    expect(fixture.control.stored().filter((i) => i.title === 'Mend the net')).toHaveLength(1);
+  });
+
+  it('an uncertain Apply needs a new Check before any further Apply', async () => {
+    const { port, recovery, wire, fixture } = await live();
+    wire.next('create', 'drop');
+    const requestId = rid();
+    await failure(port.create({ title: 'Stack the logs' }, requestId));
+    expect(await recovery.check(requestId)).toEqual({ outcome: 'not_applied' });
+    wire.next('replay', 'lose-response');
+    expect(await failure(recovery.apply(requestId))).toEqual({ kind: 'unknown', requestId });
+    const before = wire.calls.length;
+    expect(await failure(recovery.apply(requestId))).toEqual({ kind: 'unknown', requestId });
+    expect(wire.calls.length).toBe(before);
+    // The lost Apply had landed: the next Check confirms it, and nothing was applied twice.
+    expect(await recovery.check(requestId)).toMatchObject({ outcome: 'replayed' });
+    expect(modes(wire)).toEqual(['lookup', 'resend', 'lookup']);
+    expect(fixture.control.stored().filter((i) => i.title === 'Stack the logs')).toHaveLength(1);
+  });
+
+  it('a failed or indeterminate Check after not_applied withdraws the authorization', async () => {
+    const { port, recovery, wire, fixture, device, a } = await live();
+    wire.next('create', 'drop');
+    const requestId = rid();
+    await failure(port.create({ title: 'Clear the gutter' }, requestId));
+    expect(await recovery.check(requestId)).toEqual({ outcome: 'not_applied' });
+    wire.next('replay', 'drop');
+    expect(await failure(recovery.check(requestId))).toEqual({ kind: 'unavailable' });
+    expect(await failure(recovery.apply(requestId))).toEqual({ kind: 'unknown', requestId });
+    expect(await recovery.check(requestId)).toEqual({ outcome: 'not_applied' });
+    let item = fixture.control.stored().find((i) => i.id === a.id)!;
+    for (let i = 0; i < MAX_REMEMBERED_REQUESTS + 1; i += 1) item = (await device.markReviewed(item.id, item.revision, rid())).item!;
+    expect(await failure(recovery.check(requestId))).toEqual({ kind: 'replay_indeterminate', requestId, reason: 'evicted' });
+    expect(await failure(recovery.apply(requestId))).toEqual({ kind: 'unknown', requestId });
+    expect(modes(wire)).toEqual(['lookup', 'lookup', 'lookup', 'lookup']);
+    expect(fixture.control.stored().filter((i) => i.title === 'Clear the gutter')).toHaveLength(0);
   });
 });
 
