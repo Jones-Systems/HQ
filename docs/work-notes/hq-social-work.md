@@ -191,6 +191,7 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
 - **Ownership.** Future C is the proposed sole writer of the six R0 root paths, plus `apps/desktop/src/joint.integration.test.tsx` and the joint evidence. `vite.config.ts` is unassigned. App, styles, contracts and IPC stay held. No workflow custody is implied: Design owns its workflows and the check catalog. B's new test stays an immutable dependency.
 - **Root interpretations.** The hold is on PR merge, not on publishing an authorized, scoped PR. Design's predecessor PRs need not merge before stacked work. The Design coordinator is not contacted, and cross-owner proposals go to issue #1 only.
 - **Unchanged:** A→B, and the child allowance of A+B. No C checkout and no C source edit.
+- **Cross-owner proposal.** Posted on issue #1, comment 6283473057, as a proposal only: joint-phase root-file writer, `vite.config.ts` owner, wiring patch revision, and discovery approach. No custody is claimed.
 
 **T1 (now):** fan in A, then launch B, fan in B, keep PR #3 current, and hold after B's published candidate.
 
