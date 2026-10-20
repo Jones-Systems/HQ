@@ -20,6 +20,9 @@ const MAX_DELIMITER_RUNS = 2000;
 const MAX_SCAN_STEPS = 4_000_000;
 const MAX_EMPHASIS_DEPTH = 24;
 const MAX_WIKI_LENGTH = 1024;
+// A definition label is at most 999 characters or escape pairs (see DEFINITION), so 1998 code units.
+// Longer bracket text can never name a definition and is not normalised, which keeps nested brackets linear.
+const MAX_REF_LABEL_UNITS = 1998;
 const SAFE_SCHEMES = new Set(['http', 'https', 'mailto']);
 const SCHEME_LIKE = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 const AUTOLINK = /<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*)>/y;
@@ -30,6 +33,11 @@ const WHITESPACE = /[\s ]/;
 /** Normalise a reference label: collapse whitespace, NFC, lowercase. */
 export function normalizeRefLabel(label: string): string {
   return label.replace(/\s+/g, ' ').trim().normalize('NFC').toLowerCase();
+}
+
+function lookupDefinition(defs: ReadonlyMap<string, string>, label: string): string | undefined {
+  if (defs.size === 0 || label.length > MAX_REF_LABEL_UNITS) return undefined;
+  return defs.get(normalizeRefLabel(label));
 }
 
 function unescape(text: string): string {
@@ -336,6 +344,8 @@ export function parseInline(text: string, ctx: InlineContext, inLink: boolean): 
   const pairs = text.includes('[') ? matchBrackets(text, ticks) : new Int32Array(0);
   let delimiterRuns = 0;
   let i = 0;
+  // Start of a pending run of spaces/tabs, held back so a line break can drop it without rescanning buffer.
+  let spaceStart = -1;
 
   const makeLink = (dest: string, label: string, start: number, end: number): boolean => {
     const link = classifyDestination(dest);
@@ -349,6 +359,15 @@ export function parseInline(text: string, ctx: InlineContext, inLink: boolean): 
 
   while (i < text.length) {
     const ch = text[i] as string;
+    if (ch === ' ' || ch === '\t') {
+      if (spaceStart < 0) spaceStart = i;
+      i++;
+      continue;
+    }
+    if (spaceStart >= 0) {
+      if (ch !== '\n') buffer += text.slice(spaceStart, i);
+      spaceStart = -1;
+    }
     switch (ch) {
       case '\\': {
         const next = text[i + 1];
@@ -474,7 +493,7 @@ export function parseInline(text: string, ctx: InlineContext, inLink: boolean): 
           const refClose = pairs[close + 1] as number;
           if (refClose > 0) {
             const refLabel = text.slice(close + 2, refClose);
-            const def = ctx.defs.get(normalizeRefLabel(refLabel === '' ? label : refLabel));
+            const def = lookupDefinition(ctx.defs, refLabel === '' ? label : refLabel);
             if (def !== undefined) {
               makeLink(def, label, i, refClose + 1);
               i = refClose + 1;
@@ -482,7 +501,7 @@ export function parseInline(text: string, ctx: InlineContext, inLink: boolean): 
             }
           }
         } else {
-          const def = ctx.defs.get(normalizeRefLabel(label));
+          const def = lookupDefinition(ctx.defs, label);
           if (def !== undefined) {
             makeLink(def, label, i, close + 1);
             i = close + 1;
@@ -519,7 +538,7 @@ export function parseInline(text: string, ctx: InlineContext, inLink: boolean): 
         break;
       }
       case '\n': {
-        buffer = buffer.replace(/[ \t]+$/, '') + '\n';
+        buffer += '\n';
         i++;
         while (i < text.length && (text[i] === ' ' || text[i] === '\t')) i++;
         break;
@@ -529,6 +548,7 @@ export function parseInline(text: string, ctx: InlineContext, inLink: boolean): 
         i++;
     }
   }
+  if (spaceStart >= 0) buffer += text.slice(spaceStart);
   flush();
   const result = processEmphasis(items);
   if (emphasisDepth(result) > MAX_EMPHASIS_DEPTH) throw new Overflow();

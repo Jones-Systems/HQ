@@ -17,6 +17,9 @@ import { buildAliasMap, type PageDirectory } from './resolver.ts';
 import type { IndexSnapshot, SnapshotPage } from './snapshot.ts';
 import { cleanLabel, compareUnits, fnv64Hex, normalizeAlias, slugify, truncateUnits } from './text.ts';
 
+/** Label for a directory whose name and path clean to nothing (for example only whitespace). */
+const UNNAMED_FOLDER_LABEL = '(unnamed folder)';
+
 export const BM25_K1 = 1.2;
 export const BM25_B = 0.75;
 export const TITLE_WEIGHT = 2;
@@ -107,7 +110,7 @@ function directoryTopicDrafts(pages: readonly IndexedPage[]): TopicDraft[] {
       const key = segments.slice(0, depth + 1).join('/');
       let draft = drafts.get(key);
       if (draft === undefined) {
-        draft = { key, label: cleanLabel(segments[depth] as string) || key, parentKey: depth === 0 ? null : segments.slice(0, depth).join('/'), depth, members: [] };
+        draft = { key, label: cleanLabel(segments[depth] as string) || cleanLabel(key) || UNNAMED_FOLDER_LABEL, parentKey: depth === 0 ? null : segments.slice(0, depth).join('/'), depth, members: [] };
         drafts.set(key, draft);
       }
       if (depth === segments.length - 1) draft.members.push(page);
