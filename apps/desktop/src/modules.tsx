@@ -1,5 +1,7 @@
 import type { ComponentType } from 'react';
 import type { DomainId, ModulePort } from '@hq/contracts';
+import { SocialModule } from '@hq/social';
+import { WorkModule } from '@hq/work';
 
 export const DOMAIN_LABELS: Record<DomainId, string> = { design: 'Design', social: 'Social', work: 'Work' };
 
@@ -15,6 +17,6 @@ function ModuleSlot({ domain, destination }: ModulePort & { domain: DomainId }) 
 /** Integration owner replaces a slot with the independently owned module entry. */
 export const MODULES: Readonly<Record<DomainId, ComponentType<ModulePort>>> = {
   design: (props) => <ModuleSlot {...props} domain="design" />,
-  social: (props) => <ModuleSlot {...props} domain="social" />,
-  work: (props) => <ModuleSlot {...props} domain="work" />,
+  social: SocialModule,
+  work: WorkModule,
 };

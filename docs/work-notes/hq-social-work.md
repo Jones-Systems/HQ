@@ -1,0 +1,339 @@
+# Work Note — HQ Social and Work planning
+
+<!-- codex-section:begin id="worknote.hq-social-work#ctx.artifact-header.001" -->
+Artifact Type: `work-note`
+
+Artifact ID: `worknote.hq-social-work`
+
+Purpose: Continuity for the HQ Social/Work implementation plan: evidence, validation record, decisions pending and next responsible actor.
+
+Governing artifact: `spec.hq-social-work`
+
+Continuity owner: HQ Social/Work planner lane (T1); launch and integration custody stay with the HQ root coordinator
+
+Consumers: HQ root coordinator, Social/Work/UI lanes, reviewers
+
+Authority effect: none
+<!-- codex-section:end id="worknote.hq-social-work#ctx.artifact-header.001" -->
+
+## Outcome
+
+<!-- codex-section:begin id="worknote.hq-social-work#ctx.outcome.001" -->
+Planning delivered on branch `work/hq-social-work-plan`:
+
+- the public-safe shared foundation copy, `docs/design/hq-shared-foundation.md`;
+- the implementation plan, `docs/engineering-specs/hq-social-work.md`;
+- this note;
+- the plan tooling, `docs/work-notes/hq-social-work-tools/`.
+
+The plan's revision 3 (2026-10-20) adds:
+
+- the D-4 cross-domain reference plan (`req.references.001`, `iface.references.001`, `iface.service-reference-extensions.001`, six tasks);
+- the Operator Interaction Inventory;
+- the R0 binding record and RF-2 delta (`ctx.foundation-binding-record.001`);
+- the D-1 import record (`ctx.d1-import.001`);
+- the T2, T3 and T4 design bindings (`ctx.visual-system-binding.001`, `ctx.social-design-reconciliation.001`, `ctx.work-design-binding.001`);
+- the check-catalog proposal, rewritten as an additive delta in the Codex V3 trusted-group schema.
+
+The plan has 23 tasks and 23 Test Intents. They were parsed and wave-compiled by the real Codex V3 helpers at the committed revision.
+
+R0 (`task.bind-foundation.001`) is complete: a read-only binding with no rebind (`docs/evidence/hq-social-work/foundation/r0-binding.md`).
+
+R1 (`task.workspace-skeleton.001`) is complete at `cfdab378e28940662ddb6e731264afca164a1957`, on a normal merge of the foundation `35f9a3e` (`ff5ad79`). Fresh `npm ci`, typecheck, 30 tests in 6 files, and build all pass, with 0 vulnerabilities (`docs/evidence/hq-social-work/integration/r1-workspace-skeleton.md`).
+
+No module feature code was written by T1.
+
+**Revision 4 (2026-10-20, integration phase)** consumes the advisory integration-planner result, the root's supervision record and the root's corrections. It adds:
+
+- the accepted lane bindings and topology (`ctx.integration-bindings.001`);
+- native child containment (`ctx.child-launch-containment.001`);
+- the integration stages, Design-owned inputs, custody, verification semantics, no adopted merge order and the shared-boundary unknowns (`ctx.integration-stages.001`);
+- the expanded `ac.work-domain.001`, the Social+Work assembly (`ac.sw-assembly.001`) and the gated joint tasks: root checks, assembly, Electron smoke and CI.
+
+The plan now has 27 tasks and 27 Test Intents. It was validated at `7468e8844c2455e52afc5ddabf8d434454972caa` (`docs/evidence/hq-social-work/integration/integration-plan-validation.md`).
+<!-- codex-section:end id="worknote.hq-social-work#ctx.outcome.001" -->
+
+## Current State And Evidence
+
+<!-- codex-section:begin id="worknote.hq-social-work#ctx.evidence.001" -->
+**Guidance adopted (owner-directed, 2026-10-20).**
+
+- Codex V3 root guidance: `Jones-Systems/Codex-V3`, `AGENTS.md` at `4beb491c44551b6e4207adcc7459c4b11407bcbc`, blob `3402719bc3a09e7e08ed113425d7137818eda25c`, 30,716 bytes, SHA-256 `1238a90adbf10ea8f2359f90ed0c7bf99fc1121589dcde5b99881fd247e87ce6`. All 444 lines were read.
+- HQ `AGENTS.md` was read at both `33dfe44` and the guidance-only `35f9a3e`. At `35f9a3e`, `AGENTS.md`, `CLAUDE.md` and `docs/shared-agent-guidance.md` route startup to `.agents/shared-guidance.md`. That file is **absent** in this checkout, so shared enrollment is reported unavailable, and the local agreements plus the Codex V3 read above apply.
+- Triggered workflows loaded:
+  - parallel-project-plan and its handoffs reference;
+  - build-implementation-plan;
+  - specification-artifacts template (header, Work Note, Engineering Spec);
+  - research-first hidden-impact screen;
+  - Linux telemetry admission;
+  - register-thread and the thread-registration route;
+  - model-selection precedence (Claude Frontier);
+  - operate-t3-threads (send rules);
+  - frontend-home pointer.
+
+**Material conflicts, resolved in favor of the stricter task rules.**
+
+1. **Delegation.** The Codex V3 delegation default conflicts with this task's no-descendants rule.
+2. **Delivery.** The Codex V3 delivery default (non-draft PR, then merge) conflicts with the held merge.
+3. **Model routing.** Claude Frontier routing is overridden by the explicit owner instruction `claude-opus-5-5`/high.
+4. **Native IDs vs public repository.** Codex V3 asks contributors to record native IDs, but this repository is public. Public artifacts carry only T-labels and roles; native identities go to the root through native messages.
+
+**Sources.** Every source was read-only, with no live data. The table is in `spec.hq-social-work#ctx.research-decision-basis.001`. These revision-3 inputs were read at immutable commits and are recorded in their spec sections:
+
+- T0 `35f9a3e`;
+- the D-1 files at Codex-V3 `4beb491c`;
+- T2 `f3c1daff`, T3 `8f91f6b2` and T4 `1bb550de`;
+- Design PR #4's catalog at `fa244847`.
+
+**Contributors.**
+
+- T1 planner, `claude-opus-5-5`/high.
+- One read-only Explore sub-agent that inventoried the Manual Planner source. Its model is per its agent definition and was not separately observed. It completed and mutated nothing. It was launched before T1 noticed the no-descendant restriction. That is a deviation from the capsule; its result was reused and nothing else was delegated.
+
+**Telemetry before the helper batches.** Linux admission: CPU 7.21% used, 45.92 GiB available, one full core is 6.25% of capacity, batch ceiling 10, one serial test process. Load average was rechecked before each compile batch. The helper runs are single-process Python with no test or install.
+
+**Helper validation record (revision 3).**
+
+- Spec commit `fb884229aea8afd5ad9b4ed8d93cd08644043ef2`, spec blob `66688efcce330a8a66d8020f447626ed0d3f283b`, file SHA-256 `1a18acbe44480ff95a629bf8b0d700ac41c621e74d00198f6ad803531ad825c8`.
+- Intermediate commits `3a9035c4` (references) and `2a72f5a2` (T2) also parsed and compiled.
+- `codex_v3.sections_cli check`: valid.
+- `parse_engineering_spec_plan` parsed 23 tasks and 23 intents.
+- **Catalog binding:** a **projection** of the proposed additive delta in `spec.hq-social-work#ctx.check-catalog.001`. The manifest is SHA-256 `7ed3bfcbdb954543e30d419cef46f37c8d8ba6c1530df1c16be7eb930b6019cb`, with five groups: `hq-foundation`, `hq-ui`, `shell-integration`, `social-module`, `work-module`. It is **not** HQ's `tests/check-groups.toml`. That file is owned by the Design plan (PR #4) and is not transferred to T1. Affected-check claims stay held until its owner merges the delta.
+- **Context bound.** Every task's resolved context is within the compiler's default 32 KiB bound; the largest is `work-core`, at 32,023 bytes. The foundation binding record moved from the default context to the root tasks so that `social-references` and `work-references` fit. `context_sizes.py` reports this.
+- `compile_ready_wave` was iterated with labeled **projection fixtures**: synthetic accepted results and, in the second projection, fixture-satisfied activation evidence. These are not project evidence. Model requests were `claude-opus-5-5`/high under `claude_frontier`. Every round compiled capsule and assignment drafts with no writer collision.
+
+| Round | Explicit predicates unbound | All predicates fixture-satisfied |
+| --- | --- | --- |
+| 1 | bind-foundation | bind-foundation |
+| 2 | workspace-skeleton | workspace-skeleton |
+| 3 | social-core, ui-kit, work-core | adds reference-contract, service-bridge |
+| 4 | social-content, social-workbench, work-board, work-views | adds reference-shell, reference-ui, social-live-adapter, work-live-adapter |
+| 5 | social-domain, work-domain | adds shell-chrome |
+| 6 | domain-integration | adds social-references, work-references |
+| 7 | — | reference-integration |
+| 8 | — | campaign-verification |
+| Unreleased | reference-contract, reference-shell, reference-ui, social-references, work-references, reference-integration, service-bridge, shell-chrome, social-live-adapter, work-live-adapter, campaign-verification | none |
+
+Draft counts matched the ready sets in every round. With predicates unbound, `campaign-verification` is unreleased because it depends on `reference-integration`. The campaign is therefore not verifiable until the reference contract's custody arrives. That is a truthful gate, not a defect.
+
+**Helper validation record (revision 4).** The record is in `docs/evidence/hq-social-work/integration/integration-plan-validation.md`.
+
+- `parse_engineering_spec_plan` parsed 27 tasks and 27 intents at `7468e88`.
+- Every context is ≤ 32 KiB.
+- The actual round, using the ten root-accepted results, releases exactly `work-domain`. Its capsule SHA is `071dbea0…`.
+- Both from-actual projections compile with no writer collision, and the activated one releases everything by round 5.
+- The from-scratch activated counterfactual stops in round 3 with `reference_bound_exceeded`. That wave cannot occur, because three of its five tasks are accepted.
+
+**Thread registration.** Request `hq-t1-social-work-plan-20261020-r1` returned `registration_unavailable` with `effect: none`. This is nonfatal, and it was not retried. The identity arguments are withheld from this public note.
+
+**Scratch.** All helper scripts now live in `docs/work-notes/hq-social-work-tools/`. They read the catalog projection from the committed spec, and they write no scratch. The earlier task-owned `/tmp` scratch directory was removed after the move.
+<!-- codex-section:end id="worknote.hq-social-work#ctx.evidence.001" -->
+
+## Next Action
+
+<!-- codex-section:begin id="worknote.hq-social-work#ctx.next-action.001" -->
+**Owner execution direction (relayed by the root, 2026-10-20).** The owner explicitly authorizes proceeding through the Work domain to a usable, published Social+Work integration branch, in Claude Frontier mode. This supersedes only T1's earlier docs-only finish and no-descendants restriction. T1 is the HQ-native mechanical launch parent and bounded fan-in owner for **exactly two** fresh implementation children. Every new worker runs `claudeAgent` / `claude-opus-5-5` / `high` / `fastMode: false`. Both launch via `delegate_task` (role implementation, async, worktree isolation) from T1's committed, published plan head.
+
+1. **A: `task.work-domain.001`.** Request ID `hq-work-domain-impl-20261020-r1`.
+   - It merges exactly `3ca74d7479283d8ac7acf7c363bd262f34578ed4` into its own branch.
+   - Scope is exactly `modules/work/index.tsx`, `modules/work/nav/**`, `modules/work/skeleton.test.ts` and `docs/evidence/hq-social-work/work-domain/**`.
+   - Behavior follows `ac.work-domain.001`.
+   - It publishes a non-draft PR against `work/hq-work-board` and does not advance the board, planner or plan branches.
+2. **B: `task.domain-integration.001`.** Request ID `hq-sw-assembly-impl-20261020-r1`.
+   - It launches **only after** T1 has inspected A's published candidate and accepted it.
+   - It merges exactly `9735b741e94baad83d9f7dc5f3bb8ce9c3778b2d` and A's accepted head.
+   - Its authored paths are the new `apps/desktop/src/social-work.integration.test.tsx`, `docs/evidence/hq-social-work/integration/social-work/**`, and `apps/desktop/src/modules.tsx` only if needed.
+   - It proves `ac.sw-assembly.001` and publishes one non-draft PR against `work/hq-social-work-plan`.
+
+**Constraints on both children:**
+
+- no other children, reviewers or top-level threads;
+- children have no descendants and never write in T1's checkout;
+- no PR merge, bots, timers, PR monitors, Design messaging or joint Design integration;
+- App, styles, contracts, storage, IPC and catalog stay held;
+- launches are admitted by fresh telemetry: none at CPU ≥ 90% or RAM ≤ 3 GiB, and tests only below 85% CPU, serially.
+
+Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, checks and cleanliness. Its acceptance is bounded fixture/source acceptance, not independent review or green CI. A material blocker goes once to the root; T1 makes no P2–P4 fixes.
+
+**Execution log.**
+
+- Revision 4 was published at plan head `72854ab6a7c78306dbf078d9b5db7412e4a13ab9`; its spec blob `aabcf8a1` is the validated one.
+- Thread registration request `hq-t1-social-work-plan-20261020-r4` returned `registration_unavailable` (`endpoint_unavailable`), with `effect: none`. It was not retried.
+- **A launched** on 2026-10-20 at 04:23Z.
+  - Route: `delegate_task` (implementation, async, worktree), request `hq-work-domain-impl-20261020-r1`, target `claudeAgent` / `claude-opus-5-5` / `high` / `fastMode: false`.
+  - Admission telemetry: CPU 19.50%, 44.23 GiB available.
+  - Before any write, the child read back its binding: a separate native HQ worktree on its own branch at `72854ab`, clean. Its capsule is the compiled `071dbea0…`.
+  - Native identities went to the root by native message only.
+- **A completed and was accepted by T1's fan-in** (2026-10-20) for bounded fixture/source use. This is not independent review or green CI.
+  - Candidate: PR #31, native branch `t3/work-domain-integration`, head `3426da769ca6a5cf1ba561859039b14fc745457a`, base `work/hq-work-board` at `3ca74d7`. Open, non-draft and mergeable; merge held.
+  - Inspection: the remote head equals local, and the worktree is clean. Its ancestors include `72854ab`, `3ca74d7`, `8a3261d` and `935dedf`, with normal merge `8c2f841`. All 22 authored paths since that merge are in scope.
+  - Identity: the core, views, board, detail, capture, UI, contracts, apps and root trees are byte-identical to `3ca74d7`. The only other differences are T1 plan documents byte-identical to `72854ab`, the immutable PR #3 dependency.
+  - Evidence: a README and six light/dark/remount screenshots under the app CSP.
+  - Author-reported checks: `npm ci` with the lockfile unchanged; typecheck; Work 391 tests in 23 files; full 465 in 33; build.
+  - Deferred, not fixed: WD-1/WD-2 (P3) and WD-3 to WD-10 (P4). WD-1/2 were checked: a domain switch commits only an already pending explicit detail edit, and with none pending a switch writes nothing (asserted by `domain.test.tsx`).
+- **WK-C launched** (2026-10-20), under a separate bounded root release that extends the allowance to A+B+WK-C.
+  - Route: `delegate_task`, request `hq-wiki-contract-impl-20261020-r1`, target `claude-sonnet-5-5` / high, at `c67c23cd`.
+  - Cone: exactly `modules/wiki/contract/**`, read from the immutable PR #30 plan without merging it. Its PR goes against this branch.
+  - Acceptance belongs to the Wiki continuity owner.
+- **WK-C completed** (2026-10-20). This is not acceptance: the result was relayed to the root for the Wiki owner.
+  - PR #34: head branch `t3/50386c27` (remote), head `76a1dbc6dd8ed1eb56400fbb9e18bc4e621038a9`, base this branch at `a385a6f` (merge base `c67c23cd`). Open, non-draft and mergeable, with no checks; merge held.
+  - Branch identities (read back by the root and T1): the physical checkout `HQ/t3-50386c27` is on local `t3/wiki-contract-implementation` at `76a1dbc`, clean, and matches the native label. The remote and PR head branch is `t3/50386c27` at the same `76a1dbc`. There is no local `t3/50386c27` and no remote `t3/wiki-contract-implementation`. So the author's statement that the physical branch is `t3/50386c27` is stale. The content is identical. Both refs are kept, and no rename, reset or retarget is made.
+  - T1's read-only check: the remote head equals the reported one, and all 22 authored paths are under `modules/wiki/contract/**`. Each of its three commits has a trailer.
+  - Author-reported checks: `node --test` gave 73 of 73 passing, and `tsc -p modules/wiki/contract` exited 0. T1 did not rerun them. Root `typecheck` and `test` do not include `modules/wiki`.
+  - Deferred, not fixed: the AST vocabulary and the chosen structural bounds (P3); 2 MiB for "2 MB" and the single-quote URL rejection (P4).
+- **Wiki Core and UI launched** (2026-10-20). Under a root release, the Wiki owner accepted PR #34 at `76a1dbc` as their dependency. WK-C became a launch-only parent through its post-completion follow-up and launched exactly two Sonnet 5.5 / high builders from PR #30 plan `61fbcdb` (spec blob `c3525d0d`). The allowance is now A, B and WK-C (complete) plus `lane-wiki-core` and `lane-wiki-ui`.
+  - Follow-up taskId: `node:delegated-task:command%3Amcp%3Afaf8c6d3-d325-40fe-aef1-84ea725dffd2%3Athread-send%3Ahq-wiki-contract-launch-only-followup-20261020-r1`, run ordinal 2 of WK-C's child thread. WK-C's own report mislabelled this identity with the original request ID.
+  - Core:
+    - taskId `node:delegated-task:command%3Amcp%3Ac26ffaa0-0c91-43c7-89a4-f1c229aae49d%3Adelegate-task%3Ahq-wiki-core-impl-20261020-r1`
+    - childThreadId `thread:delegated-task:command%3Amcp%3Ac26ffaa0-0c91-43c7-89a4-f1c229aae49d%3Adelegate-task%3Ahq-wiki-core-impl-20261020-r1`
+    - worktree `HQ/t3-1c3e216d`, branch `t3/wiki-core-implementation`, start `76a1dbc`
+  - UI:
+    - taskId and childThreadId use the same two prefixes, with `hq-wiki-ui-impl-20261020-r1`
+    - worktree `HQ/t3-4e8c30c1`, branch `t3/implement-wiki-ui`, start `76a1dbc`
+  - Both report to WK-C's thread. The root confirmed both running, with their own pre-write binding checks passed.
+  - **Receipt correction 1:** the taskId and childThreadId are distinct (`node:` versus `thread:` prefix). An earlier T1 relay conflated them as "task and thread".
+  - **Receipt correction 2:** WK-C's claim of no Git effect is too broad. During the reconcile it ran `git fetch -q origin refs/heads/work/hq-expansion-plan` without `--no-write-fetch-head`. That is a bounded, incidental effect on shared Git metadata and `FETCH_HEAD`, and T1's follow-up brief had asked for that fetch. The root verified that the parent's branch, HEAD, index and tracked tree are still clean at `76a1dbc`, and that the published contract ref is unchanged. `FETCH_HEAD` is not restored, and nothing is reset, cleaned or repeated. Future launch-only parents read pinned objects that are already present, without fetching.
+  - Custody: T1 keeps lifecycle and fan-in. A completed launcher turn is not completed source work, so T1 checks each child's `workState` and pending runs.
+- **Wiki Core and UI delivered** (2026-10-20). These are candidates only: not feature acceptance, CI, the mounted shell, a private corpus or native proof. Both are open, non-draft, mergeable and merge-held, based on `t3/50386c27` at `76a1dbc`, with zero checks. T1 read them back read-only:
+  - **Core: PR #39**, `t3/wiki-core-implementation` at `b57bcd234d11270df4d045d8d24136b150456c3d`.
+    - Diff: the full PR diff is 32 files, all inside the core cone, and the contract tree is unchanged.
+    - Author checks: 214 Node tests in 9 files, plus `tsc`.
+    - Disclosures: it did not read the Codex-V3 AGENTS in that session; one `tsc` run came before admission; and an accidental test run was timed out and its `/tmp` output deleted. So T1 does not claim clean preflight compliance.
+  - **UI: PR #38**, `t3/implement-wiki-ui` at `014593b033b4eaa523c4dc5f35159639d2081d04`.
+    - Diff: the full PR diff is 56 files, all inside `modules/wiki/ui/`, and the contract tree is unchanged.
+    - Author checks: 105 Node tests in 10 files, plus `tsc`.
+    - Browser evidence: 19 synthetic loopback captures in T3 Browser at `cbd71af`. From `cbd71af` to `014593b`, only the README and evidence files change.
+    - Packaging obligations for the held integration owner: the CSS file under CSP, Node tests kept out of Vitest, Node ≥ 22.18, and no implicit shared seam.
+  - Deferred, not repaired: the original P2 (destination length) and P3 (null-key presence). UI adds new P3s and P4s.
+  - **Wiki continuity owner disposition: ACCEPTED SOURCE ONLY**, for exactly `task.wiki-core.001` (PR #39 at `b57bcd234d11270df4d045d8d24136b150456c3d`) and `task.wiki-ui.001` (PR #38 at `014593b033b4eaa523c4dc5f35159639d2081d04`).
+    - Basis (the owner's read-only review):
+      - the PR #30 plan at `61fbcdb`: requirements, interface, tasks, tests and capsules;
+      - both finals and READMEs, plus a bounded source inspection;
+      - the exact `76a1dbc` base, open non-draft state, the 32- and 56-file cones, ancestry and contract identity;
+      - for UI, the served `cbd71af` source, fixture, test and harness trees equal `014593b`, and the evidence README plus representative light and dark captures were inspected.
+    - Checks are author-reported: 214 Node tests in 9 files plus `tsc` (Core); 105 Node tests in 10 files plus `tsc`, mutation probes and 19 synthetic captures (UI). The owner ran no tests or Browser, and zero CI is not green CI.
+    - Not covered: independent review, and full Wiki, app or private acceptance.
+    - Core departures, kept as reported: it omitted the mandated Codex-V3 AGENTS read; it ran an exploratory `tsc` before admission; and an accidental `/tmp/dummy` run timed out, with removal reported by the author. No clean-preflight claim, rollback or repair.
+    - Findings, deferred and unrepaired at original severity:
+      - original P2 (destination 512 vs 16,384) and P3 (null-presence loss);
+      - UI at `014593b`, P3: topic cycles; filter and disambiguation cannot be restored;
+      - UI at `014593b`, P4: path-only labels, the echo heuristic, the empty-destination notice, unmeasured large render cost, and no screen-reader or narrow-viewport evidence.
+    - Packaging obligations kept:
+      - the CSS file under CSP;
+      - workspace, package and tsconfig wiring;
+      - Node tests excluded from Vitest, with Node ≥ 22.18;
+      - possible contract-import promotion;
+      - a closed seven-method preload/IPC with host-only refresh and the `home` migration.
+    - Still held: no further work is released. C, the shared seam, private validation, corpus, config, repairs, merge, live and install all stay held; PR #41's publication does not release C. The common accepted Design+Social/Work base and the named shared-writer prerequisites remain.
+  - Lifecycle gap: both children report to WK-C's thread. T1's `task_status` returns `task_not_found` for these grandchildren, so T1 read their results through WK-C's follow-up runs and the children's native threads.
+- **Owner supersession: working-app assignment** (2026-10-20, relayed by the root from the portfolio root's owner message).
+  - The earlier project-level holds on joint work, merge and install are superseded.
+  - The portfolio root alone owns every PR merge, plus base and stack metadata.
+  - Design owns C's seven root files and the specifically bounded App, styles and deactivate work.
+  - Social/Work owns module and runtime repairs only, with no shared-file edits.
+  - S (`562986d`) and all earlier candidates are preserved.
+- **Social runtime builder released** (one child, the third new descendant under the cap of 12). It continues `task.social-live-adapter.001` as module source readiness over an injected closed transport.
+  - Route: B's post-completion follow-up makes B a launch-only coordinator. B makes no source, Git, test or fetch effects. The child starts at S through native worktree isolation.
+  - Target: Opus 5.5 / high / `fastMode: false`. No further descendants.
+  - Writer cone:
+    - `modules/social/live/**`;
+    - `modules/social/nav/workspace.ts`;
+    - `modules/social/index.tsx`;
+    - module-owned selection tests in `modules/social/nav/test/**`;
+    - `docs/evidence/hq-social-work/social-runtime/**`.
+  - Widening into Social core or session needs a proposed exact delta first.
+  - Design:
+    - `createLiveSocialPort(transport)` over a local structural mirror of `iface.service-bridge.001`. HTTP failures keep their body.
+    - No renderer endpoint or token. `submitRun` is never retried, and malformed results or exceptions yield `unknown`.
+    - The source is chosen once per window, with no silent fallback from live to fixture, and no endpoint-settings or status method.
+  - Research reads Git objects only, from `growth-intel` at `3f647dac` (`apps/social_dashboard/` and `docs/social-growth-dashboard.md`). No `data/`, no private records and no copied code.
+  - PR: one open, non-draft, cone-only PR based on `t3/social-work-domain-assembly` at S.
+  - Unverified: Electron, the real bridge or service, and persistence.
+  - Still not released: another Work child, whose exact capsule is to follow. The root keeps the shared-bridge agreement and the portfolio fan-in.
+- **B released** after A's acceptance. Its compiled capsule is `3d935de4…` at plan head `00afa36e`, with the actual ready set exactly `{domain-integration}`.
+- **B completed; the root accepted it as S** (2026-10-20) for bounded fixture/source use. This is not independent review, native proof or green CI.
+  - Candidate: PR #36, branch `t3/social-work-domain-assembly` (local, remote and PR head all agree), head `562986d1852d7b4ef101ff6d4c9340c3751c727a`. Its base is this branch, which was at `cec5d07` when it opened; B started at `a385a6f`. Open, non-draft and mergeable, with zero configured checks; merge held.
+  - Merges: `dc6402c` ← Social `9735b74`, then `55b751b` ← Work `3426da7`, with no conflicts.
+  - T1 inspection: ancestry includes `a385a6f`, `9735b74`, `3426da7`, `935dedf`, `3ca74d7`, `8a3261d` and `35f9a3e`. The 19 authored paths since `55b751b` are the new `apps/desktop/src/social-work.integration.test.tsx`, which did not exist before, plus 18 files under `docs/evidence/hq-social-work/integration/social-work/`. `modules/social`, `modules/work` and `packages/hq-ui` are byte-identical to their sources. The root files, contracts, `apps/desktop` (apart from the new test) and T1's plan docs are byte-identical to `a385a6f`. `modules.tsx` is unchanged.
+  - Checks: the author reported `npm ci` with the lockfile unchanged, typecheck, 748 tests in 47 files, and a build. Before the root's acceptance arrived, T1 had already rerun `npm test` once on the exact head, at 20.44% CPU: 748 passed in 47 files.
+  - Evidence: the browser production renderer under the app's CSP, in light and dark at two sizes, with round-trip restoration and theme persistence. Electron is **unverified**: the doctor probe rejected the worktree.
+  - Accuracy boundary kept: zero-write navigation is proven for clean paths only. Under WD-1/WD-2, leaving a dirty card-detail field flushes exactly one pending explicit edit.
+  - Deferred, not fixed: SWA-1 to SWA-4 (P3) and SWA-5 (P4).
+
+**Owner direction delta (relayed by the root, 2026-10-20).** The Social/Work stack is to sit on top of the Local Design Hub stack, with all our content made compatible on the Design shared base, not merely handed off in documentation.
+
+- **A and B continue unchanged** under their exact scopes, so the usable source candidate is still produced. Child A keeps its model and worktree.
+- **Read-only scout.** The root is launching one read-only Design-parent scout.
+- **Before any Design-parent integration or PR retarget,** T1 consumes the scout's exact Design assembly branch, head and ownership evidence, and extends this same progressive spec. There is no second plan.
+- **Preferred shape:** one additive joint continuation based on the verified Design assembly parent, containing our accepted assembly.
+  - Published branch chains are recorded separately from native GitHub stack membership.
+  - Existing PR refs and history stay intact, and merges stay held.
+  - No mass rebase, force push or retarget.
+  - No overlapping Design, App, styles, config, contracts or catalog writes.
+- **Limits.** A future source child C needs an exact plan, base and ownership release from the root; the current allowance stays A+B. No Wiki work now.
+
+**Prerequisite observed by T1 (read-only, 2026-10-20).**
+
+- No published Design assembly parent exists yet. Origin has `work/hq-design-plan` at `fa244847` but no `work/hq-design-integration*` branch, and no open PR has such a head.
+- A local Design integration checkout exists. It is unpublished, so it is not a usable parent.
+
+**Revision 5 (2026-10-20): the Design-first scout is consumed.** The root's read-only scout result (SHA-256 `2bd169a8…`) is encoded at `7ab7f2e5517dcfee2334548e0a27d78f1921d5e7`, spec blob `d38be0f9`, and validated with the real helpers (`docs/evidence/hq-social-work/integration/integration-plan-validation.md`).
+
+- **Joint continuation.** It is one additive branch on the supported native child route. C's checkout and branch are generated at the committed plan head P, because `delegate_task` cannot select D. In its own branch, C normally merges exact D and then exact S, and proves both are ancestors. Its PR is based on the Design branch that contains D. All prior PR refs are preserved, with no rebase, force push or mass retarget.
+- **Root corrections at `7ab7f2e` (closed before C):**
+  - the joint read scopes now include Design, Social/Work and UI sources, the lane and Design evidence, and the root configs;
+  - `joint-root-checks` may make bounded npm dependency or lockfile updates inside the named custody, and holds outside it;
+  - the start-at-D wording is replaced by the native merge route above.
+- **Unbound activation bindings:** D, S, Design wiring, root-file custody (with a `vite.config.ts` decision) and C's release. No Design assembly parent is published; the local head is not a parent.
+- **No native GitHub stacks exist.** `PullRequest.stack` is null on all 24 open PRs, so every chain is a base-branch chain.
+- **Ownership.** Future C is the proposed sole writer of the six R0 root paths, plus `apps/desktop/src/joint.integration.test.tsx` and the joint evidence. `vite.config.ts` is unassigned. App, styles, contracts and IPC stay held. No workflow custody is implied: Design owns its workflows and the check catalog. B's new test stays an immutable dependency.
+- **Root interpretations.** The hold is on PR merge, not on publishing an authorized, scoped PR. Design's predecessor PRs need not merge before stacked work. The Design coordinator is not contacted, and cross-owner proposals go to issue #1 only.
+- **Unchanged:** A→B, and the child allowance of A+B. No C checkout and no C source edit.
+- **Cross-owner proposal.** Posted on issue #1, comment 6283473057, as a proposal only: joint-phase root-file writer, `vite.config.ts` owner, wiring patch revision, and discovery approach. No custody is claimed.
+
+**T1 (now):** A, B and WK-C are complete and S is bound. Holding after B's published candidate; nothing is launchable without a new root release.
+
+**Root coordinator:** decide the remaining shared gates:
+  - the catalog delta merge, with Design;
+  - reference contract and `App.tsx` custody;
+  - contracts/IPC custody for the bridge;
+  - a named UI owner for the shell chrome;
+  - the G-3 storage member;
+  - the font provenance check.
+<!-- codex-section:end id="worknote.hq-social-work#ctx.next-action.001" -->
+
+## Blocker Or Decision
+
+<!-- codex-section:begin id="worknote.hq-social-work#ctx.blocker-decision.001" -->
+**Owner decisions received (2026-10-20):**
+
+- D-1: approved for three checked files;
+- D-2: source bridge next, with custody still required;
+- D-3: deferred;
+- D-4: core reference plan now.
+
+All four are recorded in `spec.hq-social-work#ctx.research-decision-basis.001`.
+
+**Remaining gates:**
+
+- `tests/check-groups.toml` is Design-owned. Only the additive delta is proposed. Affected-check validation stays a projection until the delta merges.
+- `App.tsx` and `styles.css` are released by T0 but unassigned. Shell chrome and the reference shell wait for a named owner.
+- Shared contracts, preload, main and the bridge are outside every current transfer.
+- Live data, service schema changes and deployment are held behind `ctx.operator-interaction-inventory.001`.
+- Merge is held.
+
+**Root decisions still open:**
+
+- name the UI-state storage port (G-3);
+- accept or amend `iface.references.001` and `iface.service-bridge.001`;
+- the font OFL provenance check.
+<!-- codex-section:end id="worknote.hq-social-work#ctx.blocker-decision.001" -->
+
+## Deferred findings
+
+<!-- codex-section:begin id="worknote.hq-social-work#ctx.deferred-findings.001" -->
+- **Codex V3 planning helpers, P3 tooling inconsistency.** Against source `4beb491c44551b6e4207adcc7459c4b11407bcbc`, `specification_plan._scope_paths` accepts a trailing `/` on write-scope literals. But `wave_compiler._reject_writer_collisions` passes the raw literal to `portable_collision_key`, which rejects a trailing `/`. The result is `ValueError` at compile time. This plan works around it with slash-free directory literals. Not fixed here: it is outside this writer cone, and P2–P4 findings are not implemented without owner direction.
+- **Codex V3 planning helpers, P4 context bound.** Against `4beb491c…`, `compile_ready_wave` enforces a default 32 KiB resolved-context bound per task, which includes default context. This plan fits by moving the foundation binding record out of the default context. Recorded only.
+- **Codex V3 planning helpers, P4 wave aggregate bound.** Against `4beb491c…`, `compile_ready_wave` resolves one combined section request per wave under `ResolutionLimits.max_selected_bytes` (64 KiB by default). A from-scratch, all-predicates-satisfied round 3 of this plan therefore stops with `reference_bound_exceeded` at 66,117 bytes, even though every task is within its own 32 KiB bound. Live-path waves fit. Recorded only.
+- **Codex V3 planning helpers, P4 ergonomics.** `compile_ready_wave` requires model requests that exactly cover the ready set, so the caller must supply an expected ready set for the compiler to confirm. This matches the helper's own conformance tests. Recorded only.
+<!-- codex-section:end id="worknote.hq-social-work#ctx.deferred-findings.001" -->

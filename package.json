@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/desktop", "packages/contracts"],
+  "workspaces": ["apps/desktop", "packages/contracts", "packages/hq-ui", "modules/social", "modules/work"],
   "engines": { "node": ">=22.12.0" },
   "scripts": {
     "dev": "npm run build:electron && concurrently --kill-others --success first \"npm run dev:web\" \"wait-on tcp:127.0.0.1:5173 && cross-env HQ_DEV_SERVER_URL=http://127.0.0.1:5173 electron apps/desktop/dist-electron/main.js\"",
@@ -16,12 +16,16 @@
     "preview": "vite preview --config apps/desktop/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort"
   },
   "devDependencies": {
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
     "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "concurrently": "10.0.6",
     "cross-env": "10.1.0",
     "electron": "44.9.0",
+    "happy-dom": "21.0.3",
     "typescript": "7.0.2",
     "vite": "8.3.4",
     "vitest": "5.0.5",

@@ -1,0 +1,184 @@
+{
+  "meta": {
+    "name": "HQ visual system tokens",
+    "version": "0.1.0-draft",
+    "status": "preliminary design artifact; not a published package or frozen contract",
+    "modes": ["light", "dark"],
+    "cssPrefix": "hq",
+    "generatedCss": "hq-tokens.css",
+    "notes": [
+      "Colour roles hold one value per mode and are emitted as CSS light-dark() pairs keyed on color-scheme.",
+      "The shell's resolved theme on <html data-theme=\"light|dark\"> selects the scheme; without the attribute the OS preference applies.",
+      "Invariant tokens are deliberately identical in both modes and are never emitted through light-dark()."
+    ]
+  },
+  "color": {
+    "canvas":          { "light": "#E6E5DD", "dark": "#0B0C0A", "use": "Window backdrop: titlebar and rail bezel" },
+    "nav":             { "light": "#F0EFE8", "dark": "#121311", "use": "Secondary navigation column" },
+    "surface":         { "light": "#FAF9F5", "dark": "#171815", "use": "Base working surface (foundation: base surface)" },
+    "surface-raised":  { "light": "#FFFFFF", "dark": "#1E1F1B", "use": "Panels, cards, menus (foundation: raised surface)" },
+    "surface-overlay": { "light": "#FFFFFF", "dark": "#262722", "use": "Popovers, dialogs, toasts" },
+    "surface-sunken":  { "light": "#F0EFE9", "dark": "#0F100E", "use": "Inputs, wells, code" },
+    "surface-hover":   { "light": "rgba(25, 26, 22, 0.055)", "dark": "rgba(237, 236, 229, 0.06)", "use": "Hover overlay on any surface" },
+    "surface-pressed": { "light": "rgba(25, 26, 22, 0.10)", "dark": "rgba(237, 236, 229, 0.11)", "use": "Pressed overlay" },
+    "surface-selected":{ "light": "rgba(25, 26, 22, 0.075)", "dark": "rgba(237, 236, 229, 0.085)", "use": "Selected rail/nav item fill (paired with an indicator bar)" },
+
+    "border":          { "light": "#DEDDD4", "dark": "#2B2C27", "use": "Hairline dividers (foundation: border)" },
+    "border-strong":   { "light": "#C8C7BD", "dark": "#3B3C36", "use": "Panel and card outlines" },
+    "border-control":  { "light": "#8A897F", "dark": "#6A6A61", "use": "Input and control boundaries (3:1 non-text)" },
+
+    "text":            { "light": "#191A16", "dark": "#EDECE5", "use": "Primary text (foundation: primary text)" },
+    "text-muted":      { "light": "#52534B", "dark": "#ABAAA0", "use": "Secondary text (foundation: muted text)" },
+    "text-subtle":     { "light": "#65665D", "dark": "#8F8E84", "use": "Metadata and placeholders; still 4.5:1" },
+    "text-disabled":   { "light": "#A3A299", "dark": "#5E5E57", "use": "Disabled labels (exempt from contrast minimums; never the only state cue)" },
+
+    "accent":          { "light": "#C6F04D", "dark": "#C6F04D", "use": "Signal fill: primary action, selected indicator in dark" },
+    "accent-hover":    { "light": "#B8E43A", "dark": "#D4F86E", "use": "Primary action hover" },
+    "accent-pressed":  { "light": "#A8D42A", "dark": "#B5DE3B", "use": "Primary action pressed" },
+    "accent-edge":     { "light": "rgba(38, 50, 0, 0.42)", "dark": "rgba(198, 240, 77, 0)", "use": "Primary action outline so lime reads on paper" },
+    "on-accent":       { "light": "#151905", "dark": "#151905", "use": "Text and icons on accent fill (foundation: accent text on fill)" },
+    "accent-text":     { "light": "#4A6407", "dark": "#C6F04D", "use": "Accent as foreground on surfaces (foundation: accent text)" },
+    "accent-strong":   { "light": "#557300", "dark": "#C6F04D", "use": "Selection indicator bars and active marks" },
+    "accent-soft":     { "light": "rgba(85, 115, 0, 0.11)", "dark": "rgba(198, 240, 77, 0.12)", "use": "Accent tint backgrounds" },
+    "focus":           { "light": "#3F5A00", "dark": "#C6F04D", "use": "Keyboard focus ring (foundation: focus)" },
+    "selection":       { "light": "rgba(85, 115, 0, 0.20)", "dark": "rgba(198, 240, 77, 0.24)", "use": "Text selection highlight" },
+
+    "success":         { "light": "#16754B", "dark": "#5DD39E", "use": "Success text/icon (foundation: success)" },
+    "success-soft":    { "light": "rgba(22, 117, 75, 0.11)", "dark": "rgba(93, 211, 158, 0.13)", "use": "Success tint" },
+    "warning":         { "light": "#8A5500", "dark": "#F0B54F", "use": "Warning text/icon (foundation: warning)" },
+    "warning-soft":    { "light": "rgba(176, 112, 0, 0.12)", "dark": "rgba(240, 181, 79, 0.13)", "use": "Warning tint" },
+    "danger":          { "light": "#BB2E1D", "dark": "#FF7D6E", "use": "Danger text/icon (foundation: danger)" },
+    "danger-soft":     { "light": "rgba(187, 46, 29, 0.10)", "dark": "rgba(255, 125, 110, 0.13)", "use": "Danger tint" },
+    "danger-fill":     { "light": "#BB2E1D", "dark": "#C43C2C", "use": "Destructive button fill" },
+    "on-danger":       { "light": "#FFFFFF", "dark": "#FFFFFF", "use": "Text on danger fill" },
+    "info":            { "light": "#2156B5", "dark": "#8DBBFF", "use": "Informational text/icon" },
+    "info-soft":       { "light": "rgba(33, 86, 181, 0.10)", "dark": "rgba(141, 187, 255, 0.13)", "use": "Informational tint" },
+
+    "skeleton":        { "light": "rgba(25, 26, 22, 0.07)", "dark": "rgba(237, 236, 229, 0.07)", "use": "Loading placeholder blocks" },
+    "skeleton-sheen":  { "light": "rgba(25, 26, 22, 0.12)", "dark": "rgba(237, 236, 229, 0.12)", "use": "Loading placeholder highlight" },
+    "scrim":           { "light": "rgba(25, 26, 22, 0.34)", "dark": "rgba(0, 0, 0, 0.58)", "use": "Behind drawers and dialogs" }
+  },
+  "invariant": {
+    "artwork-matte":     { "value": "#8C8C8C", "use": "Neutral matte around preserved artwork; identical in every chrome theme" },
+    "artwork-checker-a": { "value": "#D6D6D6", "use": "Transparency checkerboard, light square" },
+    "artwork-checker-b": { "value": "#BDBDBD", "use": "Transparency checkerboard, dark square" },
+    "artwork-checker-size": { "value": "8px", "use": "Checkerboard square size" }
+  },
+  "shadow": {
+    "raised":  { "light": "0 1px 2px rgba(25, 26, 22, 0.06)", "dark": "none", "use": "Cards; dark mode relies on borders" },
+    "overlay": { "light": "0 12px 32px rgba(25, 26, 22, 0.16), 0 0 0 1px rgba(25, 26, 22, 0.06)", "dark": "0 14px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(237, 236, 229, 0.07)", "use": "Popovers, dialogs, toasts" },
+    "drag":    { "light": "0 14px 28px rgba(25, 26, 22, 0.20)", "dark": "0 16px 32px rgba(0, 0, 0, 0.60)", "use": "Item being dragged" }
+  },
+  "font": {
+    "family-sans": { "value": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "use": "Interface text. Bundle OFL woff2 under font-src 'self'; system fallback is acceptable." },
+    "family-mono": { "value": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace", "use": "Provenance, identifiers, revisions, timestamps, eyebrows" },
+    "weight-regular": { "value": "400" },
+    "weight-medium":  { "value": "500" },
+    "weight-semibold":{ "value": "600" }
+  },
+  "type": {
+    "display": { "family": "sans", "size": "24px", "line": "30px", "weight": "600", "tracking": "-0.015em", "use": "Domain landing title" },
+    "title":   { "family": "sans", "size": "17px", "line": "24px", "weight": "600", "tracking": "-0.01em", "use": "Page and panel titles" },
+    "heading": { "family": "sans", "size": "14px", "line": "20px", "weight": "600", "tracking": "-0.005em", "use": "Section headings, card titles" },
+    "body":    { "family": "sans", "size": "13px", "line": "20px", "weight": "400", "tracking": "0", "use": "Default interface text" },
+    "small":   { "family": "sans", "size": "12px", "line": "16px", "weight": "400", "tracking": "0", "use": "Secondary lines" },
+    "label":   { "family": "sans", "size": "12px", "line": "16px", "weight": "500", "tracking": "0", "use": "Controls and nav items" },
+    "rail":    { "family": "sans", "size": "10.5px", "line": "12px", "weight": "500", "tracking": "0.01em", "use": "Rail labels under glyphs" },
+    "eyebrow": { "family": "mono", "size": "10.5px", "line": "14px", "weight": "500", "tracking": "0.08em", "use": "Uppercase section labels" },
+    "meta":    { "family": "mono", "size": "11px", "line": "16px", "weight": "400", "tracking": "0", "use": "Provenance, revisions, timestamps (tabular)" }
+  },
+  "space": {
+    "3xs": "2px", "2xs": "4px", "xs": "6px", "sm": "8px", "md": "12px",
+    "lg": "16px", "xl": "20px", "2xl": "24px", "3xl": "32px", "4xl": "48px"
+  },
+  "radius": {
+    "xs": "3px", "sm": "5px", "md": "7px", "lg": "10px", "sheet": "12px", "pill": "999px"
+  },
+  "size": {
+    "titlebar-height": "40px",
+    "titlebar-inset-mac": "78px",
+    "titlebar-inset-other": "12px",
+    "rail-width": "64px",
+    "rail-item-width": "52px",
+    "rail-item-height": "48px",
+    "rail-indicator": "3px",
+    "secnav-width": "232px",
+    "secnav-width-medium": "204px",
+    "drawer-width": "264px",
+    "inspector-width": "320px",
+    "control-sm": "24px",
+    "control-md": "30px",
+    "control-lg": "36px",
+    "icon-sm": "14px",
+    "icon-md": "16px",
+    "icon-lg": "20px",
+    "hit-min": "24px",
+    "focus-width": "2px",
+    "focus-offset": "2px",
+    "content-max": "1120px",
+    "window-min-width": "760px",
+    "window-min-height": "560px"
+  },
+  "breakpoint": {
+    "compact-max": { "value": "959px", "use": "Below 960px the secondary nav becomes a drawer opened from the titlebar" },
+    "wide-min":    { "value": "1280px", "use": "From 1280px the secondary nav uses its full width" }
+  },
+  "motion": {
+    "duration-fast": "90ms",
+    "duration-base": "160ms",
+    "duration-slow": "240ms",
+    "ease-standard": "cubic-bezier(0.2, 0, 0, 1)",
+    "ease-exit": "cubic-bezier(0.4, 0, 1, 1)"
+  },
+  "z": {
+    "sticky": "10", "drawer": "30", "popover": "40", "dialog": "50", "toast": "60", "tooltip": "70"
+  },
+  "component": {
+    "rail-item-fg":            "{text-muted}",
+    "rail-item-fg-hover":      "{text}",
+    "rail-item-fg-selected":   "{text}",
+    "rail-item-bg-hover":      "{surface-hover}",
+    "rail-item-bg-selected":   "{surface-selected}",
+    "rail-item-indicator":     "{accent-strong}",
+    "rail-item-fg-unavailable":"{text-disabled}",
+    "nav-item-fg":             "{text-muted}",
+    "nav-item-fg-selected":    "{text}",
+    "nav-item-bg-selected":    "{surface-selected}",
+    "nav-item-indicator":      "{accent-strong}",
+    "button-primary-bg":       "{accent}",
+    "button-primary-bg-hover": "{accent-hover}",
+    "button-primary-bg-pressed":"{accent-pressed}",
+    "button-primary-fg":       "{on-accent}",
+    "button-primary-edge":     "{accent-edge}",
+    "button-secondary-bg":     "{surface-raised}",
+    "button-secondary-fg":     "{text}",
+    "button-secondary-edge":   "{border-control}",
+    "button-ghost-fg":         "{text-muted}",
+    "button-danger-bg":        "{danger-fill}",
+    "button-danger-fg":        "{on-danger}",
+    "input-bg":                "{surface-sunken}",
+    "input-edge":              "{border-control}",
+    "input-edge-invalid":      "{danger}",
+    "card-bg":                 "{surface-raised}",
+    "card-edge":               "{border-strong}",
+    "card-edge-selected":      "{accent-strong}",
+    "toast-bg":                "{surface-overlay}"
+  },
+  "contrast": [
+    { "fg": "text",         "on": ["canvas", "nav", "surface", "surface-raised", "surface-overlay", "surface-sunken"], "min": 4.5 },
+    { "fg": "text-muted",   "on": ["canvas", "nav", "surface", "surface-raised", "surface-overlay", "surface-sunken"], "min": 4.5 },
+    { "fg": "text-subtle",  "on": ["nav", "surface", "surface-raised", "surface-sunken"], "min": 4.5 },
+    { "fg": "text",         "on": ["surface-selected@nav", "surface-selected@canvas", "surface-hover@surface"], "min": 4.5 },
+    { "fg": "accent-text",  "on": ["nav", "surface", "surface-raised", "accent-soft@surface"], "min": 4.5 },
+    { "fg": "on-accent",    "on": ["accent", "accent-hover", "accent-pressed"], "min": 4.5 },
+    { "fg": "on-danger",    "on": ["danger-fill"], "min": 4.5 },
+    { "fg": "success",      "on": ["surface", "surface-raised", "success-soft@surface-raised"], "min": 4.5 },
+    { "fg": "warning",      "on": ["surface", "surface-raised", "warning-soft@surface-raised"], "min": 4.5 },
+    { "fg": "danger",       "on": ["surface", "surface-raised", "danger-soft@surface-raised"], "min": 4.5 },
+    { "fg": "info",         "on": ["surface", "surface-raised", "info-soft@surface-raised"], "min": 4.5 },
+    { "fg": "focus",        "on": ["canvas", "nav", "surface", "surface-raised", "surface-overlay"], "min": 3.0 },
+    { "fg": "accent-strong","on": ["canvas", "nav", "surface", "surface-selected@nav"], "min": 3.0 },
+    { "fg": "border-control","on": ["surface", "surface-raised", "nav"], "min": 3.0 },
+    { "fg": "text-muted",   "on": ["surface-selected@canvas"], "min": 4.5 }
+  ]
+}
