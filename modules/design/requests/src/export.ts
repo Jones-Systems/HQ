@@ -12,7 +12,7 @@ export interface ExportedBlob {
 }
 
 export interface OmittedStore {
-  readonly store: 'drafts' | 'draft-history' | 'unselected-attachments' | 'cache' | 'sends' | 'handoff' | 'missing-blobs';
+  readonly store: 'drafts' | 'draft-history' | 'unselected-attachments' | 'cache' | 'sends' | 'handoff-status' | 'missing-blobs';
   readonly count: number;
   readonly reason: string;
 }
@@ -70,7 +70,7 @@ export async function exportRequests(snapshots: readonly RequestSnapshot[], stor
     { store: 'unselected-attachments', count: unselected.size, reason: 'Only attachments explicitly selected into a packet are exported.' },
     { store: 'cache', count: 0, reason: 'The cache namespace is never exported.' },
     { store: 'sends', count: sends, reason: 'Send records are local fences against resending; the connector owns receipts.' },
-    { store: 'handoff', count: handoff, reason: 'Handoff statuses are a local copy of connector state; the connector owns the truth.' },
+    { store: 'handoff-status', count: handoff, reason: 'Handoff statuses are a local copy of connector state; the connector owns the truth.' },
   ];
   if (missing > 0) omitted.push({ store: 'missing-blobs', count: missing, reason: 'Selected images whose bytes are not stored locally.' });
   const bundle: RequestsExport = {
