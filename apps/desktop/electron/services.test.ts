@@ -92,6 +92,40 @@ it('Social non-token 403 never refreshes, failed refresh preserves original 403,
   const retry = vi.fn<Transport>().mockResolvedValueOnce(ok({ csrf: 'one' })).mockResolvedValueOnce(rejection).mockResolvedValueOnce(ok({ csrf: 'two' })).mockResolvedValue({ ok: false, kind: 'unknown' });
   expect(await createServices(config, retry).social('addBrand', { name: 'Example' })).toEqual({ ok: false, kind: 'unknown' }); expect(retry).toHaveBeenCalledTimes(4);
 });
+const socialMutations = [
+  ['saveContent', { title: 'Draft', body: '', brand_id: '', channel: '', planned_date: '', archived: 0 }],
+  ['addBrand', { name: 'Example' }],
+  ['submitRun', { tool: 'x-studio', input: {}, is_example: true }],
+] as const;
+it.each([['workspace', {}], ['sample', { tool: 'x-studio' }], ['run', { id: 'run123' }]])('Social %s thrown transport is unavailable', async (route, params) => {
+  const transport = vi.fn<Transport>().mockRejectedValue(new Error('lost after send'));
+  expect(await createServices(config, transport).social(route, params)).toEqual(unavailable);
+  expect(transport).toHaveBeenCalledTimes(1);
+});
+it.each(socialMutations)('Social %s initial token loss never sends a mutation', async (route, params) => {
+  const transport = vi.fn<Transport>().mockRejectedValue(new Error('token GET lost'));
+  expect(await createServices(config, transport).social(route, params)).toEqual(unavailable);
+  expect(transport).toHaveBeenCalledTimes(1);
+  expect(transport.mock.calls[0]![1]).toMatchObject({ method: 'GET', path: '/api/workspace', loss: 'unavailable' });
+});
+it.each(socialMutations)('Social %s mutation loss remains unknown with no resend', async (route, params) => {
+  const transport = vi.fn<Transport>().mockResolvedValueOnce(ok({ csrf: 'one' })).mockRejectedValue(new Error('POST lost'));
+  expect(await createServices(config, transport).social(route, params)).toEqual({ ok: false, kind: 'unknown' });
+  expect(transport).toHaveBeenCalledTimes(2);
+  expect(transport.mock.calls[1]![1].method).toBe('POST');
+});
+it.each(socialMutations.slice(0, 2))('Social %s failed refresh preserves original 403 without resend', async (route, params) => {
+  const rejection = ok({ error: 'Reload the workspace before saving' }, 403);
+  for (const failure of ['lost', 'non-2xx', 'no-token']) {
+    const transport = vi.fn<Transport>().mockResolvedValueOnce(ok({ csrf: 'one' })).mockResolvedValueOnce(rejection);
+    if (failure === 'lost') transport.mockRejectedValueOnce(new Error('refresh lost'));
+    else transport.mockResolvedValueOnce(failure === 'non-2xx' ? ok({ csrf: 'invalid' }, 500) : ok({}));
+    expect(await createServices(config, transport).social(route, params)).toEqual(rejection);
+    expect(transport).toHaveBeenCalledTimes(3);
+    expect(transport.mock.calls.map(([, call]) => call.method)).toEqual(['GET', 'POST', 'GET']);
+    expect(transport.mock.calls[2]![1].loss).toBe('unavailable');
+  }
+});
 it('endpoint policy and persisted status expose neither origin nor URL', async () => {
   for (const value of ['https://example.test', 'http://localhost:9000', 'http://127.0.0.1:9000', 'http://[::1]:9000']) expect(endpoint(value)).not.toBeNull();
   for (const value of ['http://example.test', 'http://127.0.0.2', 'file:///x', 'https://user:pass@example.test', 'https://example.test?q=1']) expect(endpoint(value)).toBeNull();
@@ -122,11 +156,28 @@ describe('actual loopback HTTP transport', () => {
     const srv = await server((req, res) => { received.push(req.url!); expect(req.headers.cookie).toBeUndefined(); const status = Number(req.url!.slice(1)); res.writeHead(status, { 'X-Replayed': '1', Location: '/200', 'Set-Cookie': 'secret=x' }); res.end(status === 204 ? '' : JSON.stringify({ status })); });
     try { for (const status of [200, 204, 302, 400, 403, 404, 409, 422, 500]) expect(await sendHttp(new URL('/' + status, srv.url), { method: 'GET', path: '', headers: {}, loss: 'unavailable' })).toEqual({ ok: true, status, body: status === 204 ? null : { status }, replayed: true }); expect(received).toHaveLength(9); } finally { await srv.close(); }
   });
-  it('malformed, oversized and reset Work reads unavailable, writes unknown; Social reads unknown after send', async () => {
+  it('malformed, oversized and reset Work reads unavailable, writes unknown; Social reads unavailable after send', async () => {
     for (const payload of ['not json', 'x'.repeat(LIMITS.response + 1), null]) {
       const srv = await server((_req, res) => { if (payload === null) res.destroy(); else res.end(payload); });
-      try { for (const [method, loss] of [['GET', 'unavailable'], ['POST', 'unknown'], ['GET', 'unknown']] as const) expect(await sendHttp(srv.url, { method, path: '/', headers: {}, loss })).toEqual({ ok: false, kind: loss }); } finally { await srv.close(); }
+      try {
+        for (const [method, loss] of [['GET', 'unavailable'], ['POST', 'unknown']] as const) expect(await sendHttp(srv.url, { method, path: '/', headers: {}, loss })).toEqual({ ok: false, kind: loss });
+        for (const [route, params, loss] of [['workspace', {}, 'unavailable'], ['sample', { tool: 'x-studio' }, 'unavailable'], ['run', { id: 'run123' }, 'unavailable'], ...socialMutations.map(([route, params]) => [route, params, 'unknown'])] as const) {
+          const encoded = encodeSocial(route, params)!;
+          expect(await sendHttp(new URL(encoded.path, srv.url), { ...encoded, headers: {} })).toEqual({ ok: false, kind: loss });
+        }
+      } finally { await srv.close(); }
     }
+  });
+  it.each([['workspace', {}], ['sample', { tool: 'x-studio' }], ['run', { id: 'run123' }]])('Social %s post-send timeout is unavailable', async (route, params) => {
+    let arrived!: () => void; const incoming = new Promise<void>(r => { arrived = r; });
+    const srv = await server(() => arrived());
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const encoded = encodeSocial(route, params)!;
+      const result = sendHttp(new URL(encoded.path, srv.url), { ...encoded, headers: {} });
+      await incoming; await vi.advanceTimersByTimeAsync(10_000);
+      expect(await result).toEqual(unavailable);
+    } finally { vi.useRealTimers(); await srv.close(); }
   });
   it('connection refused before send is unavailable even for writes', async () => {
     const srv = await server((_req, res) => res.end('{}')); const url = srv.url; await srv.close();
