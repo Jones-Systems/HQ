@@ -1,3 +1,4 @@
+import { SERVICE_DOMAINS } from '../../../../apps/desktop/src/services/domains';
 /// <reference path="../../../../apps/desktop/src/environment.d.ts" />
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -18,11 +19,17 @@ let recorded: RecordedPlanner;
 let device: ReturnType<typeof installPlanner>['device'];
 
 beforeEach(() => {
+  Object.defineProperty(window, 'hqServices', { configurable: true, value: {
+    config: { status: async () => ({ configured: false, policy: 'ok', transport: null }) },
+    social: { call: async () => ({ ok: false, kind: 'unavailable' }) },
+    work: { call: async () => ({ ok: false, kind: 'unavailable' }) },
+  } });
   window.localStorage.clear();
   ({ recorded, device } = installPlanner());
 });
 
 afterEach(() => {
+  Reflect.deleteProperty(window, 'hqServices');
   cleanup();
   uninstallPlanner();
   delete document.documentElement.dataset.theme;
@@ -66,7 +73,7 @@ async function roundTrip(check: () => Promise<void> | void) {
 
 describe('Work descriptor in the T0 registry', () => {
   it('is the registry entry for the work domain, as a named and a default export', () => {
-    expect(MODULES.work).toBe(WorkModule);
+    expect(MODULES.work).toBe(SERVICE_DOMAINS.Work);
     expect(WorkDefault).toBe(WorkModule);
   });
 
