@@ -174,6 +174,58 @@ try {
     assert.ok(Object.values(globals).every(v => v === 'undefined')); return globals;
   }));
   if(args.includes('--stop-after-first-preview'))throw new PlannedStop('Stopped after first native preview lifecycle');
+  if (args.includes('--diagnose-capture-control')) {
+    const diagnose = async phase => {
+      let failed = false;
+      await withPreview(async ({session, cdp}) => {
+        const windows = await main.evaluate("process.getBuiltinModule('module').createRequire(process.cwd()+'/package.json')('electron').BrowserWindow.getAllWindows().map(w=>({id:w.id,visible:w.isVisible(),minimized:w.isMinimized(),focused:w.isFocused(),destroyed:w.isDestroyed()}))");
+        const document = await cdp.evaluate('({visibility:document.visibilityState,focus:document.hasFocus(),width:innerWidth,height:innerHeight,dpr:devicePixelRatio})');
+        await emit({type:'capture-diagnostic-state',phase,windows,document,sessions:await hook('sessions()'),stats:await hook('stats()')});
+        for (const [stage, operation] of [
+          ['agent-resolve', () => api('resolve',{sessionId:session.sessionId,generation:session.generation,requests:[{kind:'element',path:'#target'}]}).then(value)],
+          ['host-capture', () => capture(session).then(value)],
+          ['direct-screenshot', async () => {const shot=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{x:0,y:0,width:1280,height:800,scale:1}});const bytes=Buffer.from(shot.data,'base64');await writeFile(join(evidence,phase+'.png'),bytes);return {digest:digest(bytes),width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20)};}],
+        ]) {
+          await emit({type:'capture-diagnostic-stage-start',phase,stage});
+          try { const observed=await operation();await emit({type:'capture-diagnostic-stage-end',phase,stage,outcome:'passed',observed}); }
+          catch(error){assertNative();failed=true;await emit({type:'capture-diagnostic-stage-end',phase,stage,outcome:'failed',error:error.stack});}
+        }
+      });
+      if(failed)throw new Error('Capture diagnostic failed at '+phase+'; remaining phases not run');
+    };
+    await diagnose('before-control');
+    await emit({type:'capture-diagnostic-control-start'});
+    await hook(`createNetworkControl(${JSON.stringify(origin+'/network-control')})`);
+    try {
+      await diagnose('during-control');
+      if (args.includes('--diagnose-network-workloads')) {
+        const target=await until(async()=>(await(await fetch(`http://${new URL(endpoint).host}/json/list`)).json()).find(t=>t.url===origin+'/network-control'),'diagnostic control target');
+        const control=await connect(target.webSocketDebuggerUrl,runtime);
+        try {
+          for(const [name,url] of [['literal',canaries.http],['alias',canaries.alias],['redirect',origin+'/redirect'],...(canaries.privateUrl?[['private',canaries.privateUrl]]:[])]) {
+            await emit({type:'capture-diagnostic-workload-start',name});
+            await canaries.nodeControl();
+            const before=await canaries.httpProbe(control,url,'diagnostic-before-'+name);
+            const observed=await withPreview(({cdp})=>canaries.httpProbe(cdp,url,'diagnostic-preview-'+name));
+            const after=await canaries.httpProbe(control,url,'diagnostic-after-'+name);
+            await canaries.nodeControl();
+            await emit({type:'capture-diagnostic-workload-end',name,before,observed,after});
+            await diagnose('after-'+name);
+          }
+          await emit({type:'capture-diagnostic-workload-start',name:'turn'});
+          await canaries.nodeControl();const before=await canaries.turnProbe(control);
+          const observed=await withPreview(({cdp})=>canaries.turnProbe(cdp));
+          const after=await canaries.turnProbe(control);await canaries.nodeControl();
+          await emit({type:'capture-diagnostic-workload-end',name:'turn',before,observed,after});
+          await diagnose('after-turn');
+        } finally {control.close();}
+      }
+    }
+    finally {await hook('closeNetworkControl()');await emit({type:'capture-diagnostic-control-closed'});}
+    await diagnose('after-control');
+    throw new PlannedStop('Bounded capture-control diagnosis completed; full matrix not executed');
+  }
+
   if (report.hooksAvailable) await check('Q-PV0', 'Unregistered contents with main preload are quarantined', async () => {
     value(await shell.evaluate("window.hqServices.design.call('blob.has',{digest:'sha256:'+'0'.repeat(64)})"));
     const result = await hook("trustProbe('same-preload')");
@@ -265,10 +317,11 @@ try {
       try {
         await cdp.send('BluetoothEmulation.enable', { state: 'powered-on', leSupported: true });
         await cdp.send('BluetoothEmulation.simulatePreconnectedPeripheral', { address: '00:00:00:00:00:01', name: 'HQ synthetic peripheral', manufacturerData: [], knownServiceUuids: [] });
-      } catch (error) { throw new Unmeasured('Native CDP Bluetooth emulation unavailable: ' + error.message); }
+      } catch (error) { await emit({type:'bluetooth-emulation-unavailable',error:error.message,next:'Bounded real request; no device selection or permission changes'}); }
     }
     const before = report.hooksAvailable ? await hook('stats()') : null;
-    const response = await cdp.send('Runtime.evaluate',{expression:`(async()=>{try{return await (${expression})}catch(e){return 'unsupported:'+e.name}})()`,returnByValue:true,awaitPromise:true,userGesture:true});
+    const boundedExpression = name === 'bluetooth' ? `Promise.race([(${expression}),new Promise(resolve=>setTimeout(()=>resolve('unsupported:request-timeout-no-permission-change'),3000))])` : expression;
+    const response = await cdp.send('Runtime.evaluate',{expression:`(async()=>{try{return await (${boundedExpression})}catch(e){return 'unsupported:'+e.name}})()`,returnByValue:true,awaitPromise:true,userGesture:true});
     const result=response.result?.value;
     if(typeof result !== 'string' || result.startsWith('unsupported:')) throw new Unmeasured(`${name}: ${result ?? 'no result'}`);
     assert.ok(result==='denied' || result.startsWith('denied:'),String(result));
