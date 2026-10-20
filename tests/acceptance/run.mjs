@@ -32,7 +32,7 @@ try {
   for (const key of Object.keys(env)) if (key.startsWith('HQ_')) delete env[key];
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.NODE_OPTIONS;
-  const wrapped = (command, args, options = {}) => runtime.spawn('bwrap', ['--die-with-parent', '--unshare-user', '--unshare-pid', '--bind', '/', '/', '--bind', join(runtime.root, 'tmp'), '/tmp', '--proc', '/proc', '--dev', '/dev', command, ...args], { cwd: repo, env, ...options });
+  const wrapped = (command, args, options = {}) => runtime.spawn('bwrap', ['--die-with-parent', '--unshare-user', '--unshare-pid', '--bind', '/', '/', '--bind', join(runtime.root, 'tmp'), '/tmp', '--bind', repo, repo, '--proc', '/proc', '--dev', '/dev', command, ...args], { cwd: repo, env, ...options });
   let display = '';
   const xvfb = wrapped('/usr/bin/Xvfb', ['-displayfd', '3', '-screen', '0', '1280x900x24', '-nolisten', 'tcp'], { stdio: ['ignore', 'ignore', 'pipe', 'pipe'] });
   xvfb.stdio[3].on('data', data => { display += data; });

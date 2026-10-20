@@ -41,7 +41,9 @@ Final acceptance requires T1's exact assembled candidate and a fresh build.
 
 Each invocation allocates a unique profile and temporary root under
 `.t3/acceptance-scratch/`. Bubblewrap maps its temporary directory to `/tmp` for
-Xvfb and Electron and provides private PID/user namespaces and device nodes. CDP
+Xvfb and Electron and provides private PID/user namespaces and device nodes. The
+checkout is then bound back at its own path, so a checkout under `/tmp` still
+works. CDP
 uses an ephemeral loopback port. All inherited `HQ_*` configuration is removed;
 this runner must never contact owner-configured services. It does not inspect
 installation/authentication state.
