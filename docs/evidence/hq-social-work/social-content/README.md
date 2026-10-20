@@ -224,3 +224,191 @@ npx vite preview --config modules/social/content/preview/vite.config.ts    # htt
 - **P4.** The move dialog defaults an undated draft to the first of the visible month, not today.
 - **P4.** Unknown-save reconciliation for a *new* draft can only offer an exact-text possible match; it cannot prove the match.
 - **P3.** The pointer drag has no auto-scroll and no live drop-target highlight. The keyboard dialog is the complete alternative.
+
+# Social domain (`task.social-domain.001`)
+
+Authority effect: none. This is the evidence for `spec.hq-social-work#ac.social-domain.001` and `spec.hq-social-work#test.social-domain.001`. It covers `req.social-content.001` RC-5 to RC-7, `req.foundation-binding.001` and the SOC-1 and SOC-8 slices of `ctx.social-design-reconciliation.001`.
+
+## Binding
+
+| Item | Value |
+| --- | --- |
+| Base | `work/hq-social-workbench` at `bffd43343e83173f6814db7771ca6f5b70536494` (SOC-W `task.social-workbench.001`, PR #27), root-accepted. It contains the accepted content `5f5df2a`, core `83dafc5` and UI kit `935dedf`, all verified as ancestors. |
+| Task branch | `work/hq-social-domain`, created fresh at `bffd433` with `git switch --no-track -c` in the same physical worktree, `/home/malcolmjones/.t3/worktrees/HQ/work-hq-social-content`. |
+| Native binding | The native T3 thread still labels this worktree `work/hq-social-content` (same physical path). Root accepted the physical branch under decision `hq-social-domain-physical-binding-acceptance-20261020-r1`: the label is stale metadata, not a second writer. It was not repaired. Every Git operation used `git -C <path>` with the symbolic HEAD and status verified first. |
+| Untouched refs | Local and origin `work/hq-social-content` stay at `5f5df2a`. Origin `work/hq-social-workbench` stays at `bffd433`. PR #25 and PR #27 are untouched. |
+| Write scope | `modules/social/index.tsx`, `modules/social/nav/**` and this evidence section. Root later transferred the R1 integration test `modules/social/skeleton.test.ts`, which pinned the replaced stub, to this task. Core, content, workbench, UI, apps, contracts, config and lock are unchanged against `bffd433`. |
+| Plan | Sections read at `bffd433`: `task.social-domain.001`, `test.social-domain.001`, `ac.social-domain.001`, `iface.domain-module.001`, `iface.ui-kit.001`, `req.social-content.001`, `req.safety.001`, `req.foundation-binding.001`, `ctx.social-design-reconciliation.001`, `ctx.check-catalog.001` and `ctx.test-plan.001`. T3 design input read-only at `8f91f6b2…`. |
+
+## What it provides
+
+| Path | What it is |
+| --- | --- |
+| `modules/social/index.tsx` | `SocialModule(props: ModulePort)`, the registry entry (named export, as `apps/desktop/src/modules.tsx` imports it, and default export, per `iface.domain-module.001`). It takes exactly T0's `ModulePort`, with no added members. It mounts `SocialDomain` on the one module-level workspace port. |
+| `nav/SocialDomain.tsx` | Secondary navigation (Overview, Sources *Proposed*, Workbenches, Library, Calendar, Run history; *Later*: Channels & accounts), the brand switcher, the project-mismatch banner, and the section for the destination. It mounts the existing `SocialContent` (`library…`, `calendar…`) and `WorkbenchSection` (`workbenches…`, `runs…`) without copying either. |
+| `nav/routes.ts` | Destinations reconciled with T3: `home` and `overview`, `sources[/<id>]`, `workbenches[/<toolId>]`, `library[/<draftId>]`, `calendar[/<YYYY-MM>]`, `runs[/<runId>]` and `channels`. Workbench and content destinations are parsed by their sections' own helpers. |
+| `nav/brand.ts` | Domain view state in the Social session: the chosen brand and each section's last destination. Also the proposed brand ↔ project link. |
+| `nav/Overview.tsx` | The capability strip, the delivered-limits banner, *Coming up*, *Needs attention* (session-unsaved drafts, failed and interrupted runs, and *Unknown* for active runs while offline), *Recent research* and *Linked across HQ*. Each card shows its freshness. |
+| `nav/Sources.tsx` | A reserved page: *Proposed — needs the Social service source registry (SOC-6)*. It shows no fixture source list. |
+| `nav/Channels.tsx` | An honest capability page. *Connect account…* is `aria-disabled` and says that nothing changed. |
+| `nav/workspace.ts` | `socialWorkspacePort()`: one module-level fictional example workspace, labelled *Example data*, because no Social service is reachable yet. `setSocialWorkspacePort` is for test and evidence harnesses only. |
+
+## Decisions and recorded behavior
+
+1. **One session, one port.** Every section uses `useSocialSession(context.id)` and the same port. There is no parallel store. A remount reuses the session's snapshot, so a domain round trip makes **no** port call at all.
+2. **Restoration.**
+   - The shell restores the destination: page and selection.
+   - The Social session restores:
+     - filters (`library`) and the calendar brand;
+     - the domain brand;
+     - each section's last destination (so the Calendar item returns to the month left open);
+     - unsaved editor text;
+     - workbench drafts.
+   - All of this is kept for the session only; persistence across restarts waits for G-3.
+3. **Brand switcher.** Choosing a brand scopes Overview and the project check. It is applied once to the Library and Calendar brand filters, which stay independently adjustable. Brands are managed from the switcher in a dialog (`BrandManager`). There is no `brands` page, so `brands` shows *This Social page doesn't exist*.
+4. **Brand ↔ HQ project (RC-7).**
+   - The link is read only under the proposed `hq-brand-project-v1`.
+   - Without that feature, the switcher says the link needs Social service support, and no banner is shown.
+   - With it, a mismatching brand shows a banner. The banner names the proposed project ID and says HQ did not switch and nothing is saved in HQ.
+   - *Switch HQ project* is `disabled`, with the reason in `aria-describedby`.
+   - The banner never navigates and never switches.
+5. **Honesty.** The domain never says *scheduled*, *published*, *posted*, *live* or *connected* for anything; a test checks the Channels page. Links show *Not checked*, because owner readback (`iface.references.001`) is held. Only Social run links open, and they open by navigating.
+6. **Execution.** Only the workbench's explicit Run calls `submitRun`. Navigation, the brand switch, opening rows and links, *Connect account…* and remounts make no execution call and no write.
+
+## Calls per interaction
+
+| Interaction | Port calls |
+| --- | --- |
+| First Social mount in a session | `snapshot` |
+| Design → Social → Work → Social remounts | none |
+| Secondary navigation, brand switch, opening rows and links | none (opening a run receipt reads it with `run`) |
+| *Check again* on an offline Overview | `snapshot` |
+| *Connect account…*, *Switch HQ project* | none |
+
+## No-execution round-trip proof
+
+`nav/test/registry.test.tsx` renders the real shell, `apps/desktop/src/App.tsx`. The shell mounts `MODULES.social` from the real registry, and the test asserts that `MODULES.social === SocialModule`. The test clicks the rail through Design → Social → Work → Social and asserts that `<main>`'s child is a new element each time, which proves the remount happened. Every port call goes through the core recorder.
+
+- **Library round trip.** The test chooses Larkspur, opens Library, sets the channel filter to LinkedIn and the search to "autumn", opens *Autumn blend tasting notes* and types into the body. After both returns to Social, it asserts that every one of these is restored with the *Unsaved changes* state. Across the round trip the recorder shows **zero new calls**: exactly one `snapshot` in the whole test, zero writes and zero `execution` calls.
+- **Workbench round trip.** Writing studio *Rough notes* text is restored, and the Calendar item returns to the month left open. There are zero writes and zero `execution` calls.
+
+## Checks
+
+These ran on the candidate tree after fresh telemetry admission (CPU 15.24% used, 45.60 GiB RAM available), as one serial process.
+
+| Command | Result |
+| --- | --- |
+| `npm run typecheck` | Pass |
+| `npx tsc -p modules/social/tsconfig.json --noEmit` | Pass |
+| `npx vitest run modules/social --maxWorkers=1` (literal `social-module` projection) | Pass: 272 tests in 14 files, including 28 domain tests in 4 files (`nav/test/registry`, `nav/test/domain`, `nav/test/boundary`, `skeleton.test.ts`) |
+| `npm test -- --maxWorkers=1` | Pass: 346 tests in 24 files |
+| `npm run build` | Pass |
+
+**Boundary.** `nav/test/boundary.test.ts` scans every production `.ts`/`.tsx` file under `modules/social`. It excludes tests, `preview/` and harness directories. Imports from outside the package are only `@hq/contracts`, `@hq/ui` and `react`.
+
+**Mutation checks** (each reverted afterwards):
+
+- Enabling *Switch HQ project* failed the mismatch test.
+- Disabling section-destination memory failed the navigation test and the workbench round trip.
+- Reloading the workspace on every mount failed the zero-new-calls round trip.
+
+**Skeleton test.** `modules/social/skeleton.test.ts` keeps its package-name dependency check, the DOM environment and cleanup. Its stub assertions are replaced with these checks:
+
+- the descriptor mounts under the shell context;
+- Overview is current and the example workspace is labelled;
+- the default export is the named export;
+- `navigate` is not called on mount.
+
+**Projection.** The `social-module` group is a projection of `ctx.check-catalog.001`. `tests/check-groups.toml` is untouched.
+
+## Visual evidence
+
+The evidence page is `modules/social/nav/preview/`. It runs under the exact CSP of `apps/desktop/index.html`. It mounts `SocialDomain` on the module-level port that the registry entry uses, with a fixed clock (2026-10-20 12:00 UTC), and drives each state with real DOM events.
+
+```sh
+npx vite build --config modules/social/nav/preview/vite.config.ts      # writes the ignored preview/dist/
+npx vite preview --config modules/social/nav/preview/vite.config.ts    # http://127.0.0.1:4189/?theme=light|dark&view=<name>
+```
+
+**Views:**
+
+- `overview`
+- `overview-brand`: proposed link matches
+- `mismatch`
+- `sources`
+- `channels`: after *Connect account…*
+- `library`: unsaved text
+- `calendar`
+- `workbenches`
+- `runs`
+- `offline`
+- `loading`
+- `error`
+- `not-found`
+- `brands`: the *Manage brands* dialog
+
+**Capture method.**
+
+- Headless Chromium 155.0.8059.79 with `--screenshot` and `--virtual-time-budget=4000`, without an automation protocol.
+- Every view reached its ready marker under `--dump-dom`, with no evidence error.
+- Captures are 1280×800 in light and dark, plus 900×700 for Overview, Mismatch, Channels and Library, where navigation runs across the top.
+- The loopback server was stopped afterwards.
+
+![Project mismatch: HQ does not switch (dark)](captures/domain-mismatch-dark.png)
+
+![Overview offline: last synced data, Unknown runs (light)](captures/domain-offline-light.png)
+
+![Channels & accounts at 900 px (light)](captures/domain-channels-light-900.png)
+
+| File | SHA-256 |
+| --- | --- |
+| `captures/domain-brands-dark.png` | `6bc51d3b607a996f7627007c532beb40841f22df26a6c8c70ed714d65cee7961` |
+| `captures/domain-brands-light.png` | `59f77d8f9b75a63f00a16fee4a7d7012496272e69fcf94fd6017d8005d3e91f2` |
+| `captures/domain-calendar-dark.png` | `cf8dad2fd39f9f5039fb872eb02758ce11fcd79207b2d076719178ba9b13bd27` |
+| `captures/domain-calendar-light.png` | `320960cc4e96ec206c1db224887daf3a3f1d6e7a12de9da72b0703c2cd186e48` |
+| `captures/domain-channels-dark-900.png` | `770e79d677b58320f8260f75546289c3a21dfe4707005260045c2a2f12cd99ba` |
+| `captures/domain-channels-dark.png` | `45f5ff314032b8a0da5d6e60004f063b6d6668244c1f678f2bf40b34c3d8e5d0` |
+| `captures/domain-channels-light-900.png` | `97997c7a884fc92fe9dccce3d88372d09741d5f70513a8a6fddb6a1d749785c0` |
+| `captures/domain-channels-light.png` | `377be7e83532bb0070a588b6173082cbc1e06ebec9d14a18191027d1a0138a21` |
+| `captures/domain-error-dark.png` | `fa64d1eefe99bf531a72240b40a5ebae8cc0fbb6bb113a34a9a010502aefbfae` |
+| `captures/domain-error-light.png` | `7608de56bc31e14ae5ae03dd9d67f962c89529c78a00245dfac611e3f4faf059` |
+| `captures/domain-library-dark-900.png` | `ad81dbc8be3395a0cde67b0cb1c0d09cdb268991c3ef9cb6b2e9f763e4afe643` |
+| `captures/domain-library-dark.png` | `f2a2dbf6b69df652ce4b6d1ae6c57fd5aca9512e2f292ea3140a17163aecf0b7` |
+| `captures/domain-library-light-900.png` | `b8d3b1ec346c500db7ea471c400be04fb19385db2068a515da92f76bc56d3cae` |
+| `captures/domain-library-light.png` | `5b2b749a21e9be84427f4ec7787fc65edcb60c37851625943ac88e17e10f0587` |
+| `captures/domain-loading-dark.png` | `f4e9edc2c65a6f455125bdc3999cc8694dfee99becb79dcaa30f2f45e3799734` |
+| `captures/domain-loading-light.png` | `d518934c60d9686ee0cb7475a004d5ac55df140c15d6c95b475cc7958a6ba4dc` |
+| `captures/domain-mismatch-dark-900.png` | `c11b74e60acfbc87200f13ebeb72f48d3425073e73d86ee60b81e4455ec7cd65` |
+| `captures/domain-mismatch-dark.png` | `a2d11fccc986bbae4ac8f661affc1a59c187fed62bd3b18686f7738ddd474eda` |
+| `captures/domain-mismatch-light-900.png` | `0cf54418ade69d20eea2e88c2eee782893542c5363042d03693866780a180ff1` |
+| `captures/domain-mismatch-light.png` | `05adf07f49b6158076496ae98bc3932c8a446dfdcc33667411d7dd3674a34d4a` |
+| `captures/domain-not-found-dark.png` | `ea91f715d81a6b45324794b7d751507720badd9db9a7b7c78bc2c1aa6ccbcf60` |
+| `captures/domain-not-found-light.png` | `50524aa38909555c1af24ecb3f94b739a08fe530087a0a35ee9d4b74d42ee685` |
+| `captures/domain-offline-dark.png` | `c7ac11d75b645cfe414ed462c3df6935acabad499f05d614a863d15e4404e494` |
+| `captures/domain-offline-light.png` | `81b141832303be1c6b5055b964fce0b3f7e0f3500f48600534c75c2f8736d084` |
+| `captures/domain-overview-brand-dark.png` | `7c799140e59c6a5c14c7a58d41d2e03427951f5c7c8c600eec25feb1078d6929` |
+| `captures/domain-overview-brand-light.png` | `42ef8b372389491156302100e9360941e54119286e0ece0dc7d8beae87a327db` |
+| `captures/domain-overview-dark-900.png` | `4568736c197df9afde6e43b13ecfc1c9446c4d2dd808084728e56d17e5dc10e9` |
+| `captures/domain-overview-dark.png` | `01966023400c42d463a5e783736059a102c62137bbdbb499bf55e9da255d0c9a` |
+| `captures/domain-overview-light-900.png` | `ab90dff53d81c12be04d7d9b1467f72689a30603fb60478fe2647bcbe7230d57` |
+| `captures/domain-overview-light.png` | `a40bf720dbd82aa5cab81e7a44f85a0b6f4b01c139fcf63ef31e360269f0b159` |
+| `captures/domain-runs-dark.png` | `c80292681b8398d1cad6553bbdeee8e4da338e46c616e153e192c112ef45909a` |
+| `captures/domain-runs-light.png` | `be4c8faa548a0c3dee81b7ac7136d6a8147878acddefa76b7ee801cd185e25eb` |
+| `captures/domain-sources-dark.png` | `4d1596dd8a1dcb1b6d174c03d4c445afa854b3ce381605f2a6eb3c798d9128a9` |
+| `captures/domain-sources-light.png` | `dc78ac45b641110346cfa35b9a641ca46c8e32705ec5e5e4296a6abf96fe3c3d` |
+| `captures/domain-workbenches-dark.png` | `a0491095dd429f0e5d3e142432f57919d9548c2a5b68afe91dba439397edc62b` |
+| `captures/domain-workbenches-light.png` | `c18cc0e620d44e58624fd93878c52ea6999c0b4f94e06c471003a7907f11a93b` |
+
+**Not covered.**
+
+- **Fonts.** The kit's font gate is unchanged, so the host renders a fallback face.
+- **Scale, platform and motion.** No 2× capture, no Electron or macOS, and no reduced-motion render.
+- **Assistive technology.** No screen reader and no axe audit. Roles, names, `aria-current` and keyboard paths are asserted in happy-dom only.
+- **Shell chrome.** The captures frame the module without the T0 rail. The real-shell mount is proved by the registry test, not by a capture.
+
+## Deferred
+
+- **P3.** The *Linked across HQ* card cannot open Design or Work records. That needs the held `ModulePort.references` proposal (`iface.references.001`); links stay readable snapshots with *Not checked*.
+- **P4.** The example workspace has no worker, so a run started from the example workspace stays *Queued* until a Social service is connected. The banner says so. The workbench receipt's basis line ("local Social service, network off") is SOC-W copy, which this task may not edit.
+- **P4.** The brand switch is applied once to the Library and Calendar brand filters. If a filter is changed later, the switcher keeps showing the domain brand.
+- **P4.** Shortcuts (`N` for a new draft, `?`) from T3 are not implemented.
