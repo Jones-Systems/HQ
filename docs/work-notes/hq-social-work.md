@@ -37,7 +37,11 @@ The plan's revision 3 (2026-10-20) adds:
 
 The plan has 23 tasks and 23 Test Intents. They were parsed and wave-compiled by the real Codex V3 helpers at the committed revision.
 
-R0 (`task.bind-foundation.001`) is complete as a read-only binding. R1 (`task.workspace-skeleton.001`) is assigned to T1 and is next. No module feature code was written, and no lane was launched.
+R0 (`task.bind-foundation.001`) is complete: a read-only binding with no rebind (`docs/evidence/hq-social-work/foundation/r0-binding.md`).
+
+R1 (`task.workspace-skeleton.001`) is complete at `cfdab378e28940662ddb6e731264afca164a1957`, on a normal merge of the foundation `35f9a3e` (`ff5ad79`). Fresh `npm ci`, typecheck, 30 tests in 6 files, and build all pass, with 0 vulnerabilities (`docs/evidence/hq-social-work/integration/r1-workspace-skeleton.md`).
+
+No module feature code was written, and no lane was launched.
 <!-- codex-section:end id="worknote.hq-social-work#ctx.outcome.001" -->
 
 ## Current State And Evidence
@@ -113,17 +117,14 @@ Draft counts matched the ready sets in every round. With predicates unbound, `ca
 <!-- codex-section:begin id="worknote.hq-social-work#ctx.next-action.001" -->
 **T1 (assigned):**
 
-1. **R1, `task.workspace-skeleton.001`.**
-   - Merge `35f9a3e` normally into this branch.
-   - Edit only the released paths plus the new workspace stubs.
-   - Take fresh telemetry admission.
-   - Run `npm install`, `npm run typecheck`, `npm test` and `npm run build`.
-   - Publish, then send the root the exact passing commit and the per-dependent gates.
-2. Post the additive catalog delta and the content-scheme pin requirement on coordination issue #1.
+- R1 is done. The coordination comment on issue #1 is posted (6280106200).
+- T1 is idle on this branch until root-requested plan deltas arrive or fan-in accounting is requested.
 
 **Root coordinator:**
 
-- At R1 readiness, launch UI, SOC-C, SOC-W, WRK-P and WRK-B from the capsules in `spec.hq-social-work#ctx.lane-capsules.001`.
+- Launch UI, SOC-C, SOC-W, WRK-P and WRK-B on skeleton commit `cfdab378` from the capsules in `spec.hq-social-work#ctx.lane-capsules.001`.
+- Ready now: `ui-kit`, `social-core` and `work-core`.
+- SOC-W and WRK-B prepare first. Their first gates are `social-core` + `ui-kit`, and `work-core` + `ui-kit`.
 - Decide the remaining shared gates:
   - the catalog delta merge, with Design;
   - reference contract and `App.tsx` custody;
