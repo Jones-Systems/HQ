@@ -2,6 +2,8 @@
 
 One Electron desktop workspace for Design, Social, Work and Wiki. The shared shell mounts each independently owned domain module through the module ports below. Backend service source lives in [`services/`](services/README.md) (Planner) and the agent CLI in [`tools/hq-cli`](tools/hq-cli/README.md); neither is installed or started by the desktop commands here.
 
+UI contributors: start with the [partial UI map](docs/ui-map/README.md) for known view entry points, synthetic verification recipes and the maintained shared guidance route.
+
 Requires Node.js 22.18+ (the `engines` floor; CI uses Node 24.19) and npm. Run all commands from the repository root; there is one npm workspace install and lockfile.
 
 ```sh
