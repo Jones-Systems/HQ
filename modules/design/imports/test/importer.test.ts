@@ -140,6 +140,31 @@ test('explicit conflict resolution: keep-current is sticky; take-incoming rebind
   await assert.rejects(resolveConflict(deps, flow.recordId, 'keep-current'), /No open conflict/u);
 });
 
+test('a source that reverts withdraws the stale open conflict so take-incoming cannot apply it', async () => {
+  const { storage, deps, clock } = setup();
+  await apply(deps, 0);
+  const home = (await listRecords(deps, PROJECT)).find((record) => record.itemKey === 'screens/home.png')!;
+  await editImportedRecord(deps, home.recordId, { notes: 'Owner annotation' });
+  clock.tick();
+  await apply(deps, 1);
+  assert.equal((await listOpenConflicts(deps)).length, 1);
+  const baselineVersion = (await listRecords(deps, PROJECT)).find((record) => record.recordId === home.recordId)!.versionId;
+
+  clock.tick();
+  const { applied, manifest } = await apply(deps, 0);
+  assert.equal(applied, true, 'withdrawing the stale conflict is a write');
+  assert.equal(manifest.counts.conflicts, 0);
+  assert.deepEqual(await listOpenConflicts(deps), []);
+  const conflict = (await storage.getDocument('workspace', KEYS.conflict(home.recordId)))!.value as Record<string, unknown>;
+  assert.equal(conflict.status, 'withdrawn');
+  assert.equal(conflict.resolvedAt, manifest.importedAt);
+  await assert.rejects(resolveConflict(deps, home.recordId, 'take-incoming'), /No open conflict/u);
+  const after = (await listRecords(deps, PROJECT)).find((record) => record.recordId === home.recordId)!;
+  assert.equal(after.versionId, baselineVersion);
+  assert.equal(after.notes, 'Owner annotation');
+  assert.equal((await planImport(deps, { projectId: PROJECT, source: source(0) }) as ImportPlan).noop, true, 'settled again');
+});
+
 test('undo tombstones only untouched records and is itself idempotent', async () => {
   const { storage, deps, clock } = setup();
   const { manifest } = await apply(deps);
