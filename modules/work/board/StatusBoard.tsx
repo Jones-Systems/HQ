@@ -284,7 +284,7 @@ export function StatusBoard({
           <h2>Status board</h2>
           <p className="work-board-note">{PROJECT_SCOPE_NOTE}</p>
         </div>
-        <p className="work-board-hint" id="work-board-keys">Drag a card, or use its ⋯ menu. On a focused card: Alt+←/→ changes status, Alt+↑/↓ reorders, M opens the move menu, Enter opens it.</p>
+        <p className="work-board-hint" id="work-board-keys">Drag a card, or use its Move menu. On a focused card: Alt+←/→ changes status, Alt+↑/↓ reorders, M opens the move menu, Enter opens it.</p>
         <SaveState store={store} state={state} />
       </header>
       {live === 0 && (
@@ -325,7 +325,7 @@ export function StatusBoard({
                   <p className="work-col-hint">{status === 'inbox' ? 'Status · captured, not yet sorted' : hint}</p>
                   <button type="button" className="work-add" onClick={() => onCapture(status)}>
                     <span aria-hidden="true">+ </span>{status === 'inbox' ? 'Capture to Inbox' : 'Add a card'}
-                    <span className="hq-sr-only"> in {label} (adds to the top)</span>
+                    <span className="hq-sr-only">{status === 'inbox' ? '' : ` in ${label}`} (adds to the top)</span>
                   </button>
                   <ol className="work-col-list">
                     {cards.map((item) => {

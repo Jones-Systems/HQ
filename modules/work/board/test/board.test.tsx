@@ -182,6 +182,7 @@ describe('Undo is consumed once (RW-8)', () => {
     await act(async () => { fireEvent.keyDown(card('it-kite'), { key: 'z', ctrlKey: true }); });
     await waitFor(() => expect(env.layout()).toEqual(before));
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(screen.getByText('Undone: Moved “Sketch a kite frame” to Considering')).toBeTruthy();
     expect(writes(env.calls.slice(start))).toHaveLength(1);
     await act(async () => { fireEvent.keyDown(card('it-kite'), { key: 'z', metaKey: true }); });
     expect(writes(env.calls.slice(start))).toHaveLength(1);

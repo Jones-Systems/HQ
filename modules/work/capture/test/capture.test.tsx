@@ -79,7 +79,8 @@ describe('quick capture (RV-2)', () => {
   it('Add a card in a column captures into that status, still at the top', async () => {
     const env = await setup();
     render(<Host store={env.store} feedback={env.feedback} />);
-    fireEvent.click(screen.getByRole('button', { name: /Add a card in Next/ }));
+    expect(screen.getByRole('button', { name: 'Capture to Inbox (adds to the top)' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add a card in Next (adds to the top)' }));
     const dialog = screen.getByRole('dialog', { name: 'Capture' });
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Title' }), { target: { value: 'Prune the roses' } });
     await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'Save' })); });

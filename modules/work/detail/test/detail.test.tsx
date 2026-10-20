@@ -181,6 +181,7 @@ describe('card detail status and Undo', () => {
       ['it-zine', 2, { motivation: 'exploring' }],
     ]);
     expect(env.byId('it-zine').motivation).toBe('exploring');
+    expect(screen.getByText('Undone: Saved why')).toBeTruthy();
   });
 });
 

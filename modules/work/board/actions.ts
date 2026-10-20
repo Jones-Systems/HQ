@@ -62,9 +62,11 @@ function reportUndo(feedback: Feedback, outcome: UndoOutcome, label: string): vo
 /** Ctrl/⌘+Z: consumes the newest undo entry once and removes the toast that offered it. */
 export async function undoLatest(store: WorkStore, feedback: Feedback): Promise<UndoOutcome> {
   const entry = store.getState().undo.at(-1);
+  // Name the change in the words its own toast used; the core's entry label is generic.
+  const label = entry && (feedback.getState().find((toast) => toast.undoId === entry.id)?.message ?? entry.label);
   if (entry) feedback.dismissUndo(entry.id);
   const outcome = await store.undo();
-  if (entry) reportUndo(feedback, outcome, entry.label);
+  if (entry) reportUndo(feedback, outcome, label!);
   return outcome;
 }
 
@@ -72,7 +74,7 @@ export async function undoLatest(store: WorkStore, feedback: Feedback): Promise<
 export async function undoFromToast(store: WorkStore, feedback: Feedback, toast: WorkToast): Promise<UndoOutcome> {
   feedback.dismiss(toast.id);
   if (!toast.undoId) return { status: 'empty' };
-  const label = store.getState().undo.find((entry) => entry.id === toast.undoId)?.label ?? 'Change';
+  const label = toast.message || (store.getState().undo.find((entry) => entry.id === toast.undoId)?.label ?? 'Change');
   const outcome = await store.undoEntry(toast.undoId);
   reportUndo(feedback, outcome, label);
   return outcome;
