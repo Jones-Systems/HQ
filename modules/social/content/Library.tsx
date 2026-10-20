@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Button, Menu, StateView, StatusChip } from '@hq/ui';
+import { Button, Menu, StateView, StatusChip, type ReferencePort } from '@hq/ui';
 import {
   CHANNELS, DEFAULT_BRAND_ID, isDirty,
   type Channel, type Draft, type DraftFields, type SocialSession, type SocialSessionState, type SocialWorkspacePort, type WorkspaceSnapshot,
@@ -9,6 +9,8 @@ import { DraftEditor } from './DraftEditor';
 import { DEFAULT_FILTERS, NEW_DRAFT_KEY, contentDestination, dateLabel, filterDrafts, isLibraryFilters, type LibraryFilters } from './model';
 
 export interface LibraryProps {
+  readonly projectId?: string;
+  readonly references?: ReferencePort;
   readonly session: SocialSession;
   readonly state: SocialSessionState;
   readonly port: SocialWorkspacePort;
@@ -24,7 +26,7 @@ export function newDraftFields(snapshot: WorkspaceSnapshot, brand: string): Draf
   return { title: '', body: '', brand_id: brandId, channel: 'General', planned_date: '', archived: 0 };
 }
 
-export function Library({ session, state, port, snapshot, draftId, navigate, paused }: LibraryProps) {
+export function Library({ session, state, port, snapshot, draftId, navigate, paused, projectId, references }: LibraryProps) {
   const id = useId();
   const stored = state.view.library;
   const filters: LibraryFilters = isLibraryFilters(stored) ? stored : DEFAULT_FILTERS;
@@ -132,7 +134,7 @@ export function Library({ session, state, port, snapshot, draftId, navigate, pau
       <div className="soc-pane">
         {draftId && editor ? (
           <DraftEditor
-            key={draftId} session={session} port={port} editorKey={draftId} editor={editor}
+            key={draftId} projectId={projectId} references={references} session={session} port={port} editorKey={draftId} editor={editor}
             brands={snapshot.brands} features={snapshot.features} paused={paused}
             onSaved={(savedId) => {
               // A new draft or a saved copy now rests on a different record; its clean editor

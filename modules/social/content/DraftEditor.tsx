@@ -1,13 +1,17 @@
 import { useId, useState, type KeyboardEvent } from 'react';
-import { Button, Dialog, SaveIndicator, StatusChip } from '@hq/ui';
+import { Button, Dialog, SaveIndicator, StatusChip, type ReferencePort } from '@hq/ui';
 import {
-  CHANNELS, FEATURE_HQ_REFERENCES, LIMITS, codePoints,
+  CHANNELS, FEATURE_HQ_REFERENCES, FEATURE_HQ_BRAND_PROJECT, LIMITS, MESSAGES, codePoints,
   type Brand, type Channel, type DraftEditor as Editor, type SocialSession, type SocialWorkspacePort,
 } from '../core';
 import { errorText, invalidField, reconcileUnknownSave, saveStateOf, type Reconciliation } from './actions';
+import { DraftLinks } from './DraftLinks';
+import { referenceSavePort, UNSAVED_LINKS } from './links';
 import { dateLabel } from './model';
 
 export interface DraftEditorProps {
+  readonly projectId?: string;
+  readonly references?: ReferencePort;
   readonly session: SocialSession;
   readonly port: SocialWorkspacePort;
   readonly editorKey: string;
@@ -28,8 +32,12 @@ function savedAtLabel(editor: Editor): string | undefined {
   return `· version ${editor.base.version}${clock}`;
 }
 
-export function DraftEditor({ session, port, editorKey, editor, brands, features, paused, onSaved, onClose, onOpenDraft }: DraftEditorProps) {
+export function DraftEditor({ session, port, editorKey, editor, brands, features, paused, onSaved, onClose, onOpenDraft, projectId, references }: DraftEditorProps) {
   const id = useId();
+  const [linkError, setLinkError] = useState('');
+  const brandProject = features.includes(FEATURE_HQ_BRAND_PROJECT) ? brands.find((brand) => brand.id === editor.fields.brand_id)?.project_id : undefined;
+  const mismatch = Boolean(references && projectId && brandProject && projectId !== brandProject);
+  if (mismatch) paused = 'Another project: this draft is read-only. The project has not changed.';
   const [reconciliation, setReconciliation] = useState<Reconciliation | null>(null);
   const [confirm, setConfirm] = useState<'discard' | 'load-theirs' | null>(null);
   const [copied, setCopied] = useState<'copied' | 'select' | null>(null);
@@ -45,9 +53,11 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
   };
 
   async function save() {
-    if (busy || paused) return null;
+    if (busy || paused || (error?.kind === 'unknown' && reconciliation?.kind !== 'not-applied')) return null;
+    if (linksUnsupported) { setLinkError(MESSAGES.linksUnsupported); return null; }
+    setLinkError('');
     setReconciliation(null);
-    const saved = await session.saveEditor(port, editorKey);
+    const saved = await session.saveEditor(referenceSavePort(port, features), editorKey);
     if (saved) onSaved?.(saved.id);
     return saved;
   }
@@ -61,8 +71,10 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
   }
 
   async function saveCopy() {
+    if (paused || (error?.kind === 'unknown' && reconciliation?.kind !== 'changed' && reconciliation?.kind !== 'not-applied')) return;
+    if (linksUnsupported) { setLinkError(MESSAGES.linksUnsupported); return; }
     setReconciliation(null);
-    const saved = await session.saveAsCopy(port, editorKey);
+    const saved = await session.saveAsCopy(referenceSavePort(port, features), editorKey);
     if (saved) onSaved?.(saved.id);
   }
 
@@ -113,7 +125,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
 
       {paused && <p className="soc-note soc-note--warning" role="note">{paused}</p>}
 
-      {status === 'conflict' && (
+      {(status === 'conflict' || reconciliation?.kind === 'changed') && (
         <div className="soc-banner soc-banner--danger" role="alert">
           <strong>Changed elsewhere.</strong>
           <span> Someone saved this draft in another window. Nothing was overwritten, and your text is kept here.</span>
@@ -148,7 +160,8 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
         </p>
       )}
 
-      <div className="soc-fields">
+      {linkError && <p role="alert">{linkError}</p>}
+      <fieldset className="soc-fields" disabled={mismatch} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
         <div className="soc-field soc-field--wide">
           <label htmlFor={`${id}-title`}>Title</label>
           <input
@@ -197,9 +210,9 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
           />
           <small id={`${id}-body-hint`} className="hq-meta">{codePoints(fields.body)} / {LIMITS.body} characters · one body for every channel</small>
         </div>
-      </div>
+      </fieldset>
 
-      {(fields.links?.length ?? 0) > 0 && (
+      {references && projectId ? <DraftLinks session={session} port={port} editorKey={editorKey} editor={editor} features={features} projectId={projectId} references={references} paused={paused} /> : (fields.links?.length ?? 0) > 0 && (
         <section className="soc-links" aria-labelledby={`${id}-links`}>
           <h3 id={`${id}-links`}>Linked across HQ</h3>
           <ul>
@@ -209,7 +222,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
               </li>
             ))}
           </ul>
-          {linksUnsupported && <StatusChip tone="warning" label="Not saved" detail="needs Social service support (hq-references-v1)" />}
+          {linksUnsupported && <><StatusChip tone="warning" label="Not saved" /><p>{UNSAVED_LINKS}</p></>}
         </section>
       )}
 
