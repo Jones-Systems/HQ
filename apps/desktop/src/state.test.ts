@@ -36,7 +36,7 @@ describe('independent domain destinations', () => {
     state = navigate(state, 'social', 'calendar');
     state = navigate(state, 'work', 'board/review');
     state = navigate(state, 'design');
-    expect(state.destinations).toEqual({ design: 'decisions/one', social: 'calendar', work: 'board/review' });
+    expect(state.destinations).toEqual({ design: 'decisions/one', social: 'calendar', work: 'board/review', wiki: 'home' });
     persist(storage, navigationKey('a'), JSON.stringify(state));
     expect(readNavigation(storage, 'a')).toEqual(state);
     expect(navigate(readNavigation(storage, 'a'), 'work').destinations.work).toBe('board/review');
@@ -51,4 +51,17 @@ describe('independent domain destinations', () => {
   it('rejects executable navigation without changing state', () => {
     expect(navigate(DEFAULT_STATE, 'design', 'javascript:run()')).toBe(DEFAULT_STATE);
   });
+});
+
+it('migrates legacy home to Wiki while preserving the other domain destinations', () => {
+  const storage = memoryStorage();
+  storage.setItem(navigationKey('legacy'), JSON.stringify({ domain: 'home', destinations: { design: 'projects', social: 'calendar', work: 'board' } }));
+  expect(readNavigation(storage, 'legacy')).toEqual({ domain: 'wiki', destinations: { design: 'projects', social: 'calendar', work: 'board', wiki: 'home' } });
+});
+it('adds Wiki home to old three-domain state and preserves current Wiki destinations', () => {
+  const storage = memoryStorage();
+  storage.setItem(navigationKey('a'), JSON.stringify({ domain: 'work', destinations: { design: 'home', social: 'calendar', work: 'board' } }));
+  expect(readNavigation(storage, 'a').destinations.wiki).toBe('home');
+  const current = navigate(readNavigation(storage, 'a'), 'wiki', 'topics/bl');
+  persist(storage, navigationKey('a'), JSON.stringify(current)); expect(readNavigation(storage, 'a')).toEqual(current);
 });

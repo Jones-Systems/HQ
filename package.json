@@ -3,14 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/desktop", "packages/contracts", "packages/hq-ui", "modules/social", "modules/work"],
-  "engines": { "node": ">=22.12.0" },
+  "workspaces": [
+    "apps/desktop",
+    "packages/contracts",
+    "packages/hq-ui",
+    "modules/social",
+    "modules/work",
+    "modules/wiki"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "dev": "npm run build:electron && concurrently --kill-others --success first \"npm run dev:web\" \"wait-on tcp:127.0.0.1:5173 && cross-env HQ_DEV_SERVER_URL=http://127.0.0.1:5173 electron apps/desktop/dist-electron/main.js\"",
     "dev:web": "vite --config apps/desktop/vite.config.ts",
-    "typecheck": "tsc --noEmit && tsc -p apps/desktop/tsconfig.electron.json --noEmit && tsc -p apps/desktop/tsconfig.design-host.json --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p apps/desktop/tsconfig.electron.json --noEmit && tsc -p apps/desktop/tsconfig.design-host.json --noEmit && tsc -p apps/desktop/tsconfig.wiki-host.json --noEmit && npm run typecheck --workspace @hq/wiki",
     "test": "npm run build:electron && vitest run",
-    "build:electron": "tsc -p apps/desktop/tsconfig.electron.json && tsc -p apps/desktop/tsconfig.design-host.json",
+    "build:electron": "tsc -p apps/desktop/tsconfig.electron.json && tsc -p apps/desktop/tsconfig.design-host.json && tsc -p apps/desktop/tsconfig.wiki-host.json",
     "build": "npm run typecheck && vite build --config apps/desktop/vite.config.ts && npm run build:electron",
     "start": "electron apps/desktop/dist-electron/main.js",
     "preview": "vite preview --config apps/desktop/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort"

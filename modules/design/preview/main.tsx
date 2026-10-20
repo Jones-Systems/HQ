@@ -73,7 +73,7 @@ Object.assign(window, {
   __hqdPreview: { fake: true, candidate: __HQD_CANDIDATE__, shell, domain, registry, writes, projectRequests, egress, cones: CONES },
 });
 
-const LABELS: Record<DomainId, string> = { design: 'Design', social: 'Social', work: 'Work' };
+const LABELS: Record<DomainId, string> = { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' };
 const CLASSES: readonly EgressClass[] = ['same-origin', 'loopback', 'inline', 'unexpected'];
 
 function EgressSummary() {

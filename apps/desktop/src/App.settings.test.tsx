@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { HqServices } from '@hq/contracts/services';
-vi.mock('./modules', () => ({ DOMAIN_LABELS: { design: 'Design', social: 'Social', work: 'Work' }, MODULES: { design: () => <div>Design stub</div> }, MODULE_PRESENTATION: {} }));
+vi.mock('./modules', () => ({ DOMAIN_LABELS: { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' }, MODULES: { design: () => <div>Design stub</div>, wiki: () => <div>Wiki home stub</div> }, MODULE_PRESENTATION: {} }));
 import { App } from './App';
 afterEach(() => { cleanup(); delete (window as { hqServices?: HqServices }).hqServices; });
 it('settings rail action is absent in browser preview; explicit opening is required on desktop', async () => {
