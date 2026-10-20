@@ -1,0 +1,76 @@
+name: HQ CLI and Planner
+
+on:
+  pull_request:
+    branches: [work/hq-foundation]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hq-cli-planner-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cli:
+    name: CLI Node tests and synthetic Planner E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+      - name: Use Python 3
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13.5'
+      - name: Install locked Node dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      # Planner uses only the Python standard library; there are no pip requirements.
+      - name: Test CLI including the disposable in-tree Planner
+        working-directory: tools/hq-cli
+        run: HQ_CLI_E2E=1 npm test
+
+  planner:
+    name: Planner contract, Python and Node tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+      - name: Use Python 3
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13.5'
+      - name: Install locked Node dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      # Planner uses only the Python standard library; there are no pip requirements.
+      - name: Check Planner contract drift
+        working-directory: services/planner
+        run: PYTHONDONTWRITEBYTECODE=1 python3 contract/generate.py --check
+      - name: Test Planner Python service
+        working-directory: services/planner
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -t tests
+      - name: Test Planner Node client
+        working-directory: services/planner
+        run: node --test --test-concurrency=1 'tests/*.test.mjs'
