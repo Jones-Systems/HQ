@@ -114,7 +114,7 @@ test('isolation probe, Node adapters, producer, preview agent, app entry and the
   const outside = paths.filter((path) => path.startsWith('../'));
   assert.ok(outside.includes('../../packages/contracts/src/index.ts'));
   assert.ok(outside.includes('../../packages/hq-ui/src/index.ts'));
-  assert.deepEqual(outside.filter((path) => path !== '../../packages/contracts/src/index.ts' && !path.startsWith('../../packages/hq-ui/src/')), [],
+  assert.deepEqual(outside.filter((path) => !['index.ts', 'catalog.ts', 'jones-code.ts', 'preview.ts'].some(name => path === `../../packages/contracts/src/${name}`) && !path.startsWith('../../packages/hq-ui/src/')), [],
     'only shared contracts and scanned UI kit source load outside modules/design; the Node store does not');
 });
 

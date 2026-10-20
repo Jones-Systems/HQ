@@ -5,7 +5,7 @@ import { join } from 'node:path';
 const fake = vi.hoisted(() => ({ call: vi.fn(), inspect: vi.fn() }));
 vi.mock('./wire', () => ({ createMcpClient: () => fake }));
 vi.mock('./oauth', () => ({ authorizeJones: async (base: string) => ({ base, accessToken: 'synthetic-only', expiresAt: Date.now() + 60000, sessionLabel: 'synthetic-session' }) }));
-vi.mock('electron', () => ({ app: { isPackaged: false }, safeStorage: { isEncryptionAvailable: () => true, encryptString: (value: string) => Buffer.from(value), decryptString: (value: Buffer) => value.toString() }, shell: { openExternal: vi.fn() } }));
+vi.mock('electron', () => ({ app: { isPackaged: false }, safeStorage: { isEncryptionAvailable: () => true, getSelectedStorageBackend: () => 'gnome_libsecret', encryptString: (value: string) => Buffer.from(value), decryptString: (value: Buffer) => value.toString() }, shell: { openExternal: vi.fn() } }));
 import { createJonesHost } from './host';
 import type { JonesSelection, JonesStatus } from '@hq/contracts/jones-code';
 const roots: string[] = [];
@@ -30,8 +30,9 @@ it('enrolls an unsupported profile but rejects before launch even under native q
   const host = createJonesHost(userData);
   try {
     await host.call('jonesCode.configure', { baseUrl: 'https://unsupported.example/', label: 'Older server' });
-    await host.call('jonesCode.authorize', {});
+    expect(await host.call('jonesCode.authorize', {})).toMatchObject({ ok: true, value: { state: 'connected' } });
     const choices = await host.call('jonesCode.projects', {}) as { ok: true; value: JonesSelection[] };
+    expect(choices).toMatchObject({ ok: true, value: [{ kind: 'project', label: 'Project' }] });
     expect(choices.value[0]?.label).toBe('Project');
     const bound = await host.call('jonesCode.bind', { token: choices.value[0]!.token, mode: 'new-thread', label: 'Destination' }) as { ok: true; value: JonesStatus };
     const destination = bound.value.destinations[0]!;
