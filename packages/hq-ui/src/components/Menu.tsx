@@ -80,7 +80,7 @@ export function Menu({ trigger, triggerLabel, items, variant = 'secondary', size
       case 'ArrowUp': event.preventDefault(); setActive((i) => (i <= 0 ? last : i - 1)); return;
       case 'Home': event.preventDefault(); setActive(0); return;
       case 'End': event.preventDefault(); setActive(last); return;
-      case 'Escape': event.preventDefault(); close(true); return;
+      case 'Escape': event.preventDefault(); event.stopPropagation(); close(true); return;
       case 'Tab': close(false); return;
       case 'Enter': case ' ': {
         event.preventDefault();

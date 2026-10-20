@@ -16,7 +16,7 @@ export interface ToastRegionProps {
 export function ToastRegion({ label, children, className }: ToastRegionProps) {
   return (
     <section className={cx('hq-toast-region', className)} aria-label={label}>
-      <div role="status" aria-live="polite" className="hq-toast-stack">{children}</div>
+      <div role="status" aria-live="polite" aria-atomic="false" className="hq-toast-stack">{children}</div>
     </section>
   );
 }
