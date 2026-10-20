@@ -25,25 +25,25 @@ Authority effect: none
 
 **Finish line:** `work/hq-foundation` holds every landed slice. Final acceptance passes on that exact head, and T1 merges #2 into `main` last with readback. Accepting source alone does not deliver it.
 
-**Amends, does not replace:** `spec.hq-bootstrap`, `spec.hq-design`, `spec.hq-social-work` and `spec.hq-expansion` keep their requirements and acceptance. This artifact adds lane ownership, shared contracts and landing order. It is the only shared plan; lanes do not write duplicate project plans. This revision adds the required-capability closure: Design closure K1–K4 and CL1b, shared r3, D-4 references, Work export, hosted CLI/Planner CI, closure qualification, and the held-capability gates.
+**Amends, does not replace:** `spec.hq-bootstrap`, `spec.hq-design`, `spec.hq-social-work` and `spec.hq-expansion` keep their requirements and acceptance. This artifact adds lane ownership, shared contracts and landing order. It is the only shared plan; lanes do not write duplicate project plans. The closure revision added the required-capability closure: Design closure K1–K4 and CL1b, shared r3, D-4 references, Work export, hosted CLI/Planner CI, closure qualification, and the held-capability gates. This revision adds the source construction of the S2 preview host and the contained component runner (`req.preview-component.001`), and the Work session-injection seam that live wiring consumes. Native qualification and production enabling of the preview and components stay explicit.
 
 **Lanes:**
 
 | Lane | Owner | Outcome |
 | --- | --- | --- |
 | T1 | Integration root | Continuity, shared-ref landings, plan amendments, #2 delivery |
-| T2 | Existing Design coordinator (shared writer) | F2 shared bridge (active), then shared r3, live wiring, Wiki mount, reference round trip, CLI/Planner CI |
+| T2 | Existing Design coordinator (shared writer) | F2 shared bridge (landed), then shared r3, live wiring, Wiki mount, reference round trip, CLI/Planner CI, receiver, the preview/component host and its enabling commits |
 | T3 | Existing Social builder | Social live adapter #48 — landed |
-| T4 | Existing Work runtime builder | Work live runtime #51 — landed |
+| T4 | Existing Work runtime owner | Work live runtime #51 — landed; then the bounded Work session-injection seam |
 | T5 | — | CLI stack #46 merged; no lane |
 | T6 | Wiki builder | Wiki module assembly #54 — landed |
-| T7 | Acceptance builder/verifier | Native harness #53 landed; integrated scenarios, qualifications, final acceptance |
-| T8 | Existing Design coordinator (Design closure) | K1 storage engine, K2 app sections, K3 local catalog, K4 reference provider, CL1b mount, import/export enablement |
+| T7 | Acceptance builder/verifier | Native harness #53 landed; integrated scenarios, preview/component suites, qualifications, final acceptance |
+| T8 | Existing Design coordinator (Design closure) | K1 storage engine, K2 app sections, K3 local catalog, K4 reference provider, CL1b mount, import/export enablement, preview module lanes and compose adapters |
 | T9 | Original `@hq/ui` owner custody | Reference UI kit |
 | T10 | Original Social content owner custody | Read-only Social reference provider and link editor |
 | T11 | Original Work board owner custody | Work reference provider, Links section, then RW-6 Export UI |
 
-**No goal reduction:** every requirement and protected gate in the existing specs remains a completion obligation. Six capabilities stay held behind their own native, privacy or authority gates, encoded as explicit-activation qualification tasks: live S1 receiver qualification (native OAuth consent), new-thread launch U1 (a missing Jones Code contract), the S2 preview surface, component-execution containment, Wiki private validation, and service enablement (Planner revision, Social `hq-references-v1`, live conformance). Laptop installation is a seventh gate. The existing-thread receiver is planned, required source work: its contract framing is complete, and `receiver-adapter` builds it and qualifies it against fixtures without native OAuth. Only live S1 qualification waits for the owner's consent. Signing, notarization, release and deployment were never authorized.
+**No goal reduction:** every requirement and protected gate in the existing specs remains a completion obligation. Six capabilities stay held behind their own native, privacy or authority gates, encoded as explicit-activation qualification tasks: live S1 receiver qualification (native OAuth consent), new-thread launch U1 (a missing Jones Code contract), the S2 preview surface, component-execution containment, Wiki private validation, and service enablement (Planner revision, Social `hq-references-v1`, live conformance). Laptop installation is a seventh gate. The existing-thread receiver is planned, required source work: its contract framing is complete, and `receiver-adapter` builds it and qualifies it against fixtures without native OAuth. Only live S1 qualification waits for the owner's consent. The S2 preview host and the component runner are likewise planned source work; only their native qualification and production enabling wait. Signing, notarization, release and deployment were never authorized.
 
 While any required capability is held, final reports say exactly that. They never call the app "working" or "complete", and fakes, fixtures or previews never count as production qualification.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.project-summary.001" -->
@@ -127,6 +127,18 @@ Hosted checks run the root build, every Design section cone including the new ap
 The live S1 receiver loop, new-thread launch U1, the S2 preview surface, component execution, Wiki private validation, service enablement and laptop installation remain required. Each is qualified only through its own gate task, at real native evidence. While any is unqualified, the final report lists it as held. A fake, fixture, preview or labelled simulation never stands in for its qualification.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#req.held-capabilities.001" -->
 
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#req.preview-component.001" -->
+## Preview And Component Requirement
+
+These close CL-6 and CL-12 while keeping `prd.hq-design` and `spec.hq-design` intact:
+
+- **S2 preview (CL-6).** A live preview of a chosen target site runs in a main-owned, preload-free, sandboxed view with its own in-memory session, as `iface.preview-host.001` defines. Pick and Cite run as the existing annotations agent in an isolated world. Every pick and capture binds to route, state, viewport, DPR, scroll and a coherent capture digest. The main-renderer CSP is unchanged.
+- **Preview claim.** The preview claims isolation from HQ only (C1–C6 in `iface.preview-host.001`). The previewed site keeps ordinary browser network reach on this host; HQ discloses that reach and makes no destination-containment claim for previews.
+- **Components (CL-12).** One contained runner under `iface.component-runner.001` has two required tiers: Tier S static rendering and Tier X scripted execution. Tier X requires full zero-egress qualification. Tier S is the first stage and never closes the component goal on its own.
+- **Activation.** Each capability stays disabled in production until its qualification gate and its own enabling predicate. Source construction never waits for native activation, and native activation never follows from source alone.
+- **PV-D1 (closed for v1).** Previews are ephemeral only. A persistent or credential-bearing preview profile is not built; it would need a new owner decision. No PRD line requires authenticated previews.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#req.preview-component.001" -->
+
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.source-landing.001" -->
 ## Source Landing Acceptance
 
@@ -195,8 +207,21 @@ The final candidate is installed and launched on the laptop through the proved r
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.capability-closure.001" -->
 ## Capability Closure Acceptance
 
-On one exact `work/hq-foundation` head, a typed matrix classifies each requirement in `req.design-closure.001`, `req.references-closure.001`, `req.work-export.001`, `req.hosted-ci.001` and `req.held-capabilities.001` as closed, with its suite and evidence, or held, with its gate. A missing implementation or suite is a failure, never a hold.
+On one exact `work/hq-foundation` head, a typed matrix classifies each requirement in `req.design-closure.001`, `req.references-closure.001`, `req.work-export.001`, `req.hosted-ci.001`, `req.preview-component.001` and `req.held-capabilities.001` as closed, with its suite and evidence, or held, with its gate. A missing implementation or suite is a failure, never a hold.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.capability-closure.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.preview-component-source.001" -->
+## Preview And Component Source Acceptance
+
+Source construction passes when these run green at the candidate head, without Electron:
+
+- **Module lanes:** the preview agent ignores untrusted events, tags every event with its generation, exposes the bounded queue shim and returns identity, text and rects in one re-resolution call. Compare reports host-surface placement and a `stale` session state and never creates an iframe. Components expose `ComponentRunnerPort` with labelled fakes and declarative prop slots, and production mounts a held placeholder instead of `srcdoc` frames when no runner is injected.
+- **Host:** scheme-policy and hygiene classification tables; route validation with exact keys and bounds; the fence and PV-COHERE state machine, including blob-write-after-accept ordering and every `stale` reason; capture-record JCS golden vectors; the PV-TRUST factory and registry, including the identical-preload untrusted case; qualification-switch gating, where packaged builds ignore every switch; and the Tier S document builder, which emits no `<script>` and the exact header CSP.
+- **Invariants:** every preview and component route returns `unavailable` with reason `disabled` while its status constant is false; all four status constants are false; the main-renderer CSP string equals the one at `73a6532`; `allowedSender` is unchanged.
+- **Compose:** the adapters bind the routes to `PreviewCapability`, `AgentChannelPort` and `ComponentRunnerPort` with no generic invoke, URL fetch or path, and the renderer-safe walk passes.
+
+Source acceptance is never native qualification and never enables a capability.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.preview-component-source.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.reference-lane-custody.001" -->
 ## Reference Lane Custody Predicate
@@ -231,15 +256,38 @@ Explicit activation predicate: Jones Code exposes a client-callable launch that 
 ## Preview S2 Binding Predicate
 
 Explicit activation predicate:
-- T1 accepts a concrete containment design for a separate preload-free preview view, including its source, CSP or surface rebind, within the owner's existing HQ permission;
-- its implementation is landed through a later amendment.
+- T1 accepted a concrete containment design for a separate preload-free preview view, including its source and surface rebind, within the owner's existing HQ permission. For source construction this is satisfied by T1's acceptance of the preview/component contract framing revision 2, encoded in `iface.preview-host.001`. That acceptance is not native activation.
+- Its implementation has landed through this amendment: `preview-agent`, `preview-compare`, `preview-host`, `preview-compose` and `preview-scenarios`. The task's dependencies enforce this.
+- T1 has bound one exact `work/hq-foundation` head containing that implementation and a T7 native check host (ordinary user, a display, the pinned Electron 44.9.0 and the built app, no sudo and no credentials), and recorded the binding in the coordination channel.
+
+Binding activates the qualification run only. The preview stays disabled until `ac.preview-enablement.001`.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.preview-s2-binding.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.component-containment-binding.001" -->
 ## Component Containment Binding Predicate
 
-Explicit activation predicate: the Design components owner has a containment design and native host evidence, and T1 accepted the enabling change. Until then, component execution stays disabled.
+Explicit activation predicate: the Design components containment design is `iface.component-runner.001`, accepted by T1 for source construction with the framing revision 2. The runner (`preview-host`), `component-runner-port`, `preview-compose` and `preview-scenarios` have landed, and T1 has bound one exact head and a T7 native check host as in `ac.preview-s2-binding.001`.
+
+Binding activates the Tier S and Tier X qualification runs only. Component execution stays disabled until `ac.component-static-enablement.001` (Tier S) and `ac.component-scripted-enablement.001` (Tier X); each needs T1's acceptance of its own enabling change.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.component-containment-binding.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.preview-enablement.001" -->
+## Preview Enablement Predicate
+
+Explicit activation predicate: `preview-s2-qualification` ran every preview row in `ctx.preview-qualification.001` and the public-website smoke at one exact head; C1–C6 passed there; and T1 accepted the claim set and its disclosed network reach for that head. `PREVIEW_PICK_QUALIFIED` may become true only if Q-PV4 and every Q-PV6 row passed at the same head; otherwise picks stay `stale` and unqualified. This qualifies Linux only; macOS waits for OS-MAC1. The owner's existing HQ fix and activation permission covers this; no further owner approval is required.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.preview-enablement.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.component-static-enablement.001" -->
+## Component Static Enablement Predicate
+
+Explicit activation predicate: Q-CS1–4 passed natively under the static qualification switch at one exact head, with zero canary hits on every row whose positive control hit, and T1 accepted that evidence for that head. This enables Tier S only and never closes the component goal.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.component-static-enablement.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.component-scripted-enablement.001" -->
+## Component Scripted Enablement Predicate
+
+Explicit activation predicate: Q-CX1–6 already ran under the scripted qualification switch, before any production activation, with zero hits on every positively controlled row in all three repetitions, and T1 accepted that evidence for that head. A measured hit has no residual-acceptance path. An unmeasured row keeps this predicate unsatisfied unless T1 and the owner accept that row explicitly by name. Until then Tier X stays disabled, required and reported held.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.component-scripted-enablement.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.wiki-private-validation-binding.001" -->
 ## Wiki Private Validation Binding Predicate
@@ -273,18 +321,23 @@ No new broad research. This amendment encodes accepted, already-settled sources:
 - the requirements closure audit;
 - the Design owner's closure disposition (K1/K2/K3/K4, shared r3, CL1b; Opus 5.5/high, accepted by the root);
 - the Social owner's accepted D-4/RW-6 ownership from `spec.hq-social-work` at `6ef007fbc36c13351dc305db1989579f413da343` (spec blob `6e44e24c58d79bfe4b638570eef97626ad306792`, unchanged at current foundation);
+- the preview/component contract framing, revision 2 (sha256 `d8804828ad32ba905febb17feee3e5f0535912f1d386f3a62e1d9068ddba4a52`), accepted by T1 for bounded source construction, not native activation, including its three P1 corrections (PV-COR-01 trust by creation identity, PV-COR-02 the settled network claim, PV-COR-03 coherent capture) and its qualification-switch clarification;
+- T1's settled Work session-injection rebind for live wiring, published in the coordination channel;
 - current native GitHub reads.
 
 **Landed (read back 2026-10-20).** `work/hq-foundation` = `d9f9682d43cc36b234248c7375018d067bbd3ca5`, after #49 (C), #52 (plan and main sync), #48 (Social live), #53 (native harness checkpoint), #51 (Work runtime) and #54 (Wiki assembly). All original PRs except #2 are actually merged. `main` = `bc8202a9731d51922c7cddde91f6ada0074adc1d`.
 
-**Shared bridge candidate:** the runtime host candidate `73a6532159686c769ba6e39d8070907b2a9b021e` is published as branch `work/hq-design-runtime-host`. It holds F1, r2, F2 composition and the shared services host, merged with foundation `d9f9682`. It is ready for its root-owned PR publication and `bridge-landing`, independently of the K tasks. F2's scope is preserved and it is not restarted.
+**Landed since (read back 2026-10-20).** `work/hq-foundation` = `9badd4f16b55e14a52e91cff95f6a5d6f20ec584` (tree `eb87c4ad09c43cc34b7607e8116dda2b9ee763319`), after #55 (the runtime host candidate) and #57 (K3 local catalog). Landing records stay with T1. Between `73a6532` and `9badd4f`, main, security, preload, the contract services and the annotations, compare and components modules are byte-unchanged, so the framing's source facts hold at that foundation. The foundation has since advanced to `43658bfad026ebe7fadba57ef1d92eceb1d7fd0d` after #59 (K1) and #60 (T9). Lanes base on the read-back successor.
+
+**Shared bridge candidate:** the runtime host candidate `73a6532159686c769ba6e39d8070907b2a9b021e`, published as branch `work/hq-design-runtime-host`, held F1, r2, F2 composition and the shared services host, merged with foundation `d9f9682`. It landed as #55. F2's scope was preserved and it was not restarted.
 - The F2 host already implements ServiceSettings and the exact Social 403 refresh (only `saveContent`/`addBrand`, status 403 with the exact reload body, one refresh, one resend, `submitRun` never resent). No lane duplicates either.
 - F2's r2 contract has no blob, event, transaction, export, catalog, Work export or reference routes; those are r3.
 
 **Decisions:**
 - **Cones:** K1 is the sole writer of `modules/design/app/storage`. K2 is the sole editor of `design-sections.yml` until it lands.
 - **Base:** K1, K2 and K3 branch from the runtime host candidate `73a6532`, so all three land after `bridge-landing`.
-- **Shared writer:** shared r3 is the single shared writer after F2. It imports K1's main-only transaction and export and K3's Node snapshot builder, so it starts after their landings. It also follows the Wiki mount landing, because it shares files with live wiring and the Wiki mount. Live wiring and the Wiki mount keep their original dependencies, so no new barrier is added.
+- **Shared writer:** shared r3 is the single shared writer after F2. It imports K1's main-only transaction and export and K3's Node snapshot builder, so it starts after their landings. It also follows the Wiki mount landing, because it shares files with live wiring and the Wiki mount. The Wiki mount keeps its original dependencies, so no new barrier is added.
+- **Work session injection:** live wiring stopped with clean source at `9badd4f` because the Work package exports only `WorkModule`, and its session always chooses the bridge, even when unconfigured. The existing `setWorkSessionPort(port, {example, recovery})` was documented only as a test seam reached by deep import. T1 settled a bounded Work-owner promotion of that seam to a public production entry, with no algorithm or signature change. Its landing is live wiring's one added dependency: a consumed interface, not a K barrier. Live wiring keeps every other dependency, and the live-wiring-before-Wiki order stays.
 - **CL1b** binds everything after r3.
 - **Receiver:** the existing-thread receiver is implementable now against Jones Code `76fb3dc2bfc4d05b6681ec93de7abab18fb79356`, with no Jones Code change, as framed in the receiver contract framing record.
   - HQ main acts as an OAuth PKCE MCP client of `/mcp`, sends with `t3_thread_send` in `queue` mode, and uses the attempt key as `clientRequestId`.
@@ -295,12 +348,28 @@ No new broad research. This amendment encodes accepted, already-settled sources:
   - The Design connector contract is unchanged.
   - The receiver is a T2 serialized successor after r3. Fixture qualification (Q-S) does not wait for OAuth; live S1 does.
 - **CLI/Planner CI** is a separate workflow written by T2 after K2 returns workflow custody, so it races neither K2 nor the Wiki mount.
+- **Preview and components:**
+  - T1 accepts the C1–C6 native isolation claim with truthful ordinary browser network reach. No universal zero egress is claimed or required for web previews.
+  - Component Tier X still requires full containment and stays held until native proof.
+  - The module lanes PV-M1, PV-M2 and CC-M1 start at this revision's publication over structural ports.
+  - The native host is T2 step 7, after `receiver-landing`, because it shares main, preload and contracts with the earlier steps.
+  - PV-M3 compose adapters go to the CL1b owner after CL1b and the host land, so compose never has two writers.
+  - The T7 suites follow the integrated scenarios because they share `tests/acceptance`.
+  - Each production enabling commit waits for its own explicit predicate.
 
 **Unknowns:**
 - Laptop target and install route.
 - Native OAuth consent for the receiver, and the U1 Jones Code contract.
 - MCP session framing and `queue`-on-idle behaviour (proved by S1 Q0/Q3).
-- S2 containment.
+- Electron 44.9.0 behaviours that the framing marks unverified and native qualification must prove or record:
+  - separate-session process separation;
+  - isolated-world injection without a preload under `sandbox:true`;
+  - `insertCSS` and preferred size with JavaScript disabled;
+  - WebRTC TCP and TURN under `disable_non_proxied_udp`, with and without H-PROXY and `<-loopback>`;
+  - a qualification-only host-resolver mapping;
+  - synchronous `web-contents-created` firing;
+  - file-chooser behaviour;
+  - `capturePage` determinism under software rendering.
 - Wiki privacy scope.
 - Service enablement envelopes.
 - A shared project registry: open owner decision; the single fixed context stays, with project mismatch read-only.
@@ -312,21 +381,27 @@ No new broad research. This amendment encodes accepted, already-settled sources:
 Only one writer owns a path at a time. Each task block's `write_scope` gives its literal paths. No two tasks that can be ready together share a path.
 
 - **T2 (one shared owner, serialized):** root manifests, scripts and lockfile, `tsconfig.json`, `vitest.config.ts`, `.github/workflows/foundation.yml`, the new `.github/workflows/cli-planner.yml`, `apps/desktop/**` (including the Design host compatibility layer, `apps/desktop/tsconfig.design-host.json` and ServiceSettings) and `packages/contracts/**`.
-  - F2 also holds `modules/design/app/compose/**` and `modules/design/app/index.ts` until it hands them off to CL1b at `bridge-landing`.
+  - F2 also held `modules/design/app/compose/**` and `modules/design/app/index.ts` until it handed them to CL1b at `bridge-landing`.
   - Shared r3 owns `apps/desktop/src/reference-providers.ts` and `apps/desktop/src/references.ts`. After that, the reference round trip writes only the provider registrations, its integration test, and the Work export client mount in `apps/desktop/src/modules.tsx`.
   - The receiver writes `apps/desktop/electron/jones-code/**` plus its closed route registration. A separate bounded main-subdirectory writer is allowed only if the Design coordinator accepts an explicit non-overlap rebind.
-- **T8 (Design closure; each a new Design descendant in its own worktree):**
+  - The preview/component host writes `apps/desktop/electron/contents-factory.ts`, `apps/desktop/electron/{preview,components}/**`, its main, preload, security and contract entries, `apps/desktop/src/environment.d.ts`, the root `build:preview-agent` script and its Vite configuration. Each later enabling commit writes only its own status file and status test. `apps/desktop/index.html`, which holds the CSP, is in no scope.
+- **T4 (the existing Work owner, bounded successor):** `modules/work/nav/session.ts` (production documentation only), the named exports and entry documentation in `modules/work/index.tsx`, `modules/work/nav/test/live-selection.test.tsx`, and its own evidence file. No Work core or live adapter, shared contract or root file.
+- **T8 (Design closure; each a Design descendant in its own worktree):**
   - K1: `modules/design/app/storage/**`.
   - K2: `modules/design/app/sections/**` and `.github/workflows/design-sections.yml`.
   - K3: `modules/design/discovery/{node,src/adapters,test}/**`.
   - K4: `modules/design/app/references-provider/**`.
   - CL1b: `modules/design/{requests,connector,references}/design-module.ts`, `modules/design/app/compose/**` and `modules/design/app/index.ts`.
+  - PV-M1: `modules/design/annotations/src/preview-agent/**` and `modules/design/annotations/test/**`.
+  - PV-M2: `modules/design/compare/src/**`.
+  - CC-M1: `modules/design/components/{src,ui,tests}/**`.
+  - PV-M3: the CL1b owner's `modules/design/app/compose/**`, after CL1b.
   - Enablement: the two status constants only.
   - `packages/design-store` stays frozen.
 - **T9:** `packages/hq-ui/src/references/**`, `packages/hq-ui/test/references/**`, the explicit exports in `packages/hq-ui/src/index.ts`, and evidence.
 - **T10:** `modules/social/references/**` and `modules/social/content/**`, plus the explicit mount plumbing in `modules/social/index.tsx`, `modules/social/nav/SocialDomain.tsx` and `modules/social/nav/index.ts`, and evidence.
-- **T11:** `modules/work/references/**` and `modules/work/detail/**`, then `modules/work/export/**`, plus the explicit mount plumbing in `modules/work/index.tsx`, `modules/work/nav/WorkDomain.tsx` and `modules/work/nav/index.ts`, and evidence. It never edits the landed `live` or `core` runtime.
-- **T7:** `tests/acceptance/**` and `docs/evidence/hq-integration/acceptance/**`.
+- **T11:** `modules/work/references/**` and `modules/work/detail/**`, then `modules/work/export/**`, plus the explicit mount plumbing in `modules/work/index.tsx`, `modules/work/nav/WorkDomain.tsx` and `modules/work/nav/index.ts`, and evidence. It never edits the landed `live` or `core` runtime. Its entry and navigation edits come after the Work session-injection seam, which the r3-after-Wiki order already guarantees.
+- **T7:** `tests/acceptance/**` (the preview and component suites after the integrated scenarios land), `docs/evidence/hq-integration/acceptance/**` and `docs/evidence/hq-integration/preview/**`.
 - **T1:** shared refs and PR bases, this spec, and `tests/check-groups.toml`.
 
 A needed edit outside a lane's scope goes to T1 as a rebind request. Module lanes do not edit `packages/contracts`. They declare structurally identical module-local types, and T2 proves those types are assignable to the canonical ones. No module imports another domain.
@@ -335,12 +410,15 @@ A needed edit outside a lane's scope goes to T1 as a rebind request. Module lane
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#iface.contracts.001" -->
 ## Interface Contracts
 
-Five shared contracts govern concurrent lanes:
+Eight shared contracts govern concurrent lanes:
 - `iface.service-response.001`: owned by T2 in `packages/contracts`; consumed by T3, T4, T7 and T11.
 - `iface.wiki-host-ipc.001`: owned by T2 in main/preload; consumed by T6 and T7.
 - `iface.shared-r3.001`: owned by T2; consumed by T7, T8, T10 and T11. It also covers the receiver's closed `design.jonesCode.*` route family (`status`, `authorize`, `identify`, `send`, `lookup`, `readEvidence`, `listThreads`), whose names are reconciled with r3. That family maps to the unchanged Design connector `TransportPort`/`EvidenceReadbackPort` for `transport:"jones-code"` and stays `unqualified` until S1 evidence.
 - `spec.hq-social-work#iface.references.001`, unchanged: owned by T2 at `@hq/contracts/references`; consumed by T7, T8, T9, T10 and T11.
 - The Design lane contracts already at the runtime host parent: owned by the Design coordinator.
+- `iface.preview-host.001`: owned by T2 in main, preload and `packages/contracts`; consumed by T7 and T8.
+- `iface.component-runner.001`: owned by T2; consumed by T7 and T8.
+- The Work session-injection seam, `setWorkSessionPort(port, {example, recovery})` and `examplePlanner` from the `modules/work` public entry: owned by T4 with its signature and algorithm unchanged; consumed by T2's live wiring. `resetWorkSessions` stays test-only and unexported.
 
 Changing any of them needs a T1 rebind of every consumer.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.contracts.001" -->
@@ -410,6 +488,99 @@ Closed, typed routes are added by one writer, with no generic filesystem, shell 
   - assignability tests for the module-local structural types.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.shared-r3.001" -->
 
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#iface.preview-host.001" -->
+## Preview Host Contract
+
+Owned by T2; consumed by T7 and T8. The main-renderer CSP and `allowedSender` are unchanged, and the renderer never frames content.
+
+- **View (PV-ARCH):**
+  - Main owns at most four live preview views per window. Each is a `WebContentsView` child of the HQ window.
+  - Each view has no preload. `sandbox`, `contextIsolation` and `webSecurity` are on; `nodeIntegration`, `nodeIntegrationInSubFrames`, `webviewTag`, `allowRunningInsecureContent`, `experimentalFeatures`, `plugins`, `spellcheck`, `enableWebSQL` and `navigateOnDragDrop` are off; `disableDialogs` is on; devtools exist only unpackaged.
+  - Each preview session has a fresh partition without the `persist:` prefix, so its storage is in memory.
+  - Child views draw above the renderer, so the renderer reports a placeholder rect and hides the view while HQ overlays are open.
+  - Close runs `webContents.close()`, `removeChildView`, then `session.clearData()`. A main-renderer reload, crash, domain switch or window close tears down every view.
+- **Trust (PV-TRUST):** every HQ `webContents` is created by one factory, `apps/desktop/electron/contents-factory.ts`, in one of three classes with literal webPreferences:
+  - `hq-main`: `WINDOW_SECURITY` plus the exact `EXPECTED_MAIN_PRELOAD`, computed once at startup;
+  - `hq-preview` and `hq-component`: no `preload` key at all.
+
+  Before each constructor call the factory sets a one-shot pending expectation. The `web-contents-created` handler consumes it and records the class in a main-only registry before any load. Contents without a matching expectation are untrusted even with the identical preload path: popups are denied, navigation is prevented, and they close on the next tick. Preview and component sessions must have zero session-registered preload scripts. If `web-contents-created` does not fire synchronously inside the constructor (Q-PV0 decides), the factory records identity right after construction and before load, and unregistered contents are untrusted at their first navigation.
+- **Policy (PV-POLICY), per preview session:**
+  - **Target:** one `https:` origin, or `http:` on `127.0.0.1`, `[::1]` or `localhost`. No URL credentials or other schemes; at most 2048 characters.
+  - **Navigation:** the main frame stays within the target origin. A cross-origin attempt is cancelled and reported as `blocked:navigation`, and is never opened externally. Subframes may use http(s).
+  - **Schemes:** one session `webRequest` owner cancels `file:` and every custom scheme, including `hq-component:`.
+  - **Hygiene only:** literal loopback, private and link-local addresses, `localhost` and `.local`, other than the target, are cancelled. This is never claimed as a boundary.
+  - **WebRTC:** policy `disable_non_proxied_udp`, a local-IP rule, not an egress claim.
+  - **Denials:** every permission, device chooser and display capture; popups; downloads; basic auth and client certificates. Certificate errors are never overridden. Dialogs are disabled, unload prevention is ignored, and audio is muted.
+- **Network claim (PV-NET), accepted by T1:** the preview claims and tests isolation from HQ only:
+  - C1: no Node, preload, `hqServices`, `hqDesktop` or HQ IPC;
+  - C2: a separate in-memory session and renderer process, with no HQ cookies, storage or credentials;
+  - C3: permissions, choosers, display capture, popups and downloads denied;
+  - C4: the main frame locked to the target origin;
+  - C5: no `file:` or custom-scheme access;
+  - C6: teardown with no orphans.
+
+  A previewed site keeps the network reach of an ordinary browser tab on this host. That includes private-network hosts reached by name, redirect or rebinding, and WebRTC over TCP and TURN. The panel says so: "Live preview: runs this site's code with normal browser network access; isolated from HQ". HQ never auto-opens a target, and Chromium Private Network Access is not relied on. Destination containment for previews would be a new requirement.
+- **Routes (PV-IPC):** one closed channel, `hq:svc:preview`, and one preload member, `hqServices.preview.call(route, params)`. Each handler runs `allowedSender` and exact-key validation. It returns `{ok:true, value}` or `{ok:false, kind:'invalid'|'unavailable'|'stale'|'blocked', reason?}`. The routes are:
+  - `open{versionId, url, viewport{w,h,dpr∈1|2|3}, label}`;
+  - `place{sessionId, rect, visible}`;
+  - `navigate{sessionId, route}`;
+  - `mode{sessionId, generation, mode:'off'|'pick'|'cite'}`;
+  - `capture{sessionId, expectedGeneration}`;
+  - `events{sessionId, after}`, at most 64 per call;
+  - `resolve{sessionId, generation, requests}`, at most 50 requests;
+  - `image{captureId}`, a PNG data URL of at most 16 MiB;
+  - `status{sessionId}`;
+  - `close{sessionId}`, idempotent.
+
+  Every route returns `unavailable` with reason `disabled` while `PREVIEW_HOST_ENABLED` is false. `CaptureRecord = {captureId, sessionId, versionId, generation, route, state, viewport, scroll, contentSize, captureDigest:'sha256:<hex>', capturedAt}`.
+- **Fences (PV-FENCE):** a per-session generation increments on:
+  - main-frame cross-document and in-page navigation, and reload;
+  - a viewport or emulation change, or a size-changing `place`;
+  - a renderer crash, after which the session is `crashed` until reopened.
+
+  Main reads route (`pathname + search`) and state (`hash` plus an optional label) from `getURL()`, never from the renderer. Device emulation applies the viewport and an integer DPR.
+- **Coherent capture (PV-COHERE):** a pick or capture is anchored only after one bracketed window:
+  1. a pre-read records generation, URL, frame, the mutation counter and the target's re-resolution, with the agent highlight hidden;
+  2. the queued event's geometry and text must equal that re-resolution;
+  3. main captures twice, giving `P1` and `P2`;
+  4. a post-read repeats the first step.
+
+  The capture is accepted only if generation, URL, viewport, scroll, mutation counter and the re-resolved identity, text and rects are unchanged, `sha256(P1) = sha256(P2)`, and `P1`'s width divided by the viewport width equals the DPR. Otherwise it returns `stale` with reason `navigation`, `scroll`, `mutation`, `target-changed`, `pixels-unstable` or `dpr`, writes nothing, and allows one bounded retry. Only an accepted capture writes `P1`, once, through r3 `blob.put{expectedDigest}`. If static captures are not byte-identical on the host (Q-PV4), pick binding stays unqualified and always `stale`. The renderer reuses an anchor only on an exact `{versionId, route, state, viewport, captureDigest}` match.
+- **Agent (PV-AGENT):**
+  - `build:preview-agent` bundles `modules/design/annotations/src/preview-agent/index.ts` as one IIFE with the existing Vite library mode, into ignored build output, with no new dependency.
+  - Main pins the bundle's SHA-256 at startup and injects it into isolated world 1001 (never 999) on `dom-ready` and after each main-frame navigation. The script is idempotent.
+  - Events go to a bounded isolated-world queue. Main drains it through the same API every 100 ms, only while a mode is on and the view is visible, and revalidates every output's shape and bounds.
+  - The agent ignores untrusted events and runs in the main frame only.
+- **Status:** `PREVIEW_HOST_ENABLED` and `PREVIEW_PICK_QUALIFIED` live alone in `apps/desktop/electron/preview/status.ts`, with their own status test. Both stay false until `ac.preview-enablement.001`.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.preview-host.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#iface.component-runner.001" -->
+## Component Runner Contract
+
+Owned by T2; consumed by T7 and T8. One contained runner serves two required tiers.
+
+- **View:** a separate `WebContentsView` of class `hq-component`. It uses the preview webPreferences, the in-memory partition `hq-components`, no preload, and WebRTC policy `disable_non_proxied_udp`.
+- **Document:**
+  - It is served by `protocol.handle('hq-component', …)` on that session only.
+  - The scheme is registered `{standard:true}` in the single before-ready `registerSchemesAsPrivileged` call. It is never `secure`, `bypassCSP`, `supportFetchAPI` or service-worker enabled.
+  - Main renders from a validated `{componentId, revision, digest, renderInputDigest}` after re-reading the source through the Design store and checking the digest. The renderer never sends HTML.
+- **Header CSP:** `sandbox` for Tier S or `sandbox allow-scripts` for Tier X, giving an opaque origin. It also sets `default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; frame-src 'none'; worker-src 'none'; form-action 'none'; base-uri 'none'`. Tier S sets `script-src 'none'`; only Tier X sets `script-src 'unsafe-inline'`.
+- **Network:** the session's `webRequest` cancels every URL except `hq-component://doc/<id>` for the current document, and navigation away from it is denied. Permissions, downloads, popups and credentials follow the preview policy.
+- **Tier S (`javascript:false`):**
+  - Main binds props and variants through declarative slots (`data-hq-text`, `data-hq-attr-*`).
+  - Main injects sampled motion CSS from `sampleStudy(study, t)` with `insertCSS` and `removeInsertedCSS`.
+  - Size comes from preferred-size mode.
+  - A source with a non-empty script shows "scripted: held".
+- **Tier X (`javascript:true`):**
+  - The bootstrap and component script run inline under the header CSP. Main applies motion through an isolated-world style write.
+  - CSP is not an egress boundary for WebRTC, so Tier X needs full zero-egress qualification (`ctx.preview-qualification.001`).
+  - H-PROXY, a closed loopback session proxy with `<-loopback>` bypass subtraction, is a candidate mitigation measured there and never assumed.
+  - Final reports state that a compromised renderer is outside the threat model, which covers author-written or agent-generated design code, not exploit code.
+- **Capture:** `capturePage` produces a digest, recorded as a canvas capture with `evidence:'web-sandbox'` bound to `{componentId, revision, renderInputDigest, viewport, captureDigest}`.
+- **Status:** `COMPONENT_STATIC_ENABLED` lives in `apps/desktop/electron/components/static-status.ts` and `COMPONENT_SCRIPTED_ENABLED` in `apps/desktop/electron/components/scripted-status.ts`, each with its own status test. They stay false until `ac.component-static-enablement.001` and `ac.component-scripted-enablement.001` respectively.
+- **Not proposed:** an OS-level helper process in a Linux network namespace, or a macOS network extension. Either would be a new decision for T1 and the owner.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.component-runner.001" -->
+
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.test-plan.001" -->
 ## Test Plan
 
@@ -417,7 +588,8 @@ Each task names its Test Intent and check groups.
 
 Groups for the `tests/check-groups.toml` amendment:
 - **Already in the catalog:** `hq-root-build`, `hq-cli-planner`, `hq-social-live`, `hq-work-runtime`, `hq-wiki-module`, `hq-shared-bridge`, `hq-electron-acceptance`, `hq-source-readback`.
-- **Added by this revision:** `hq-design-storage-engine`, `hq-design-app-sections`, `hq-design-local-catalog`, `hq-shared-r3`, `hq-design-reference-provider`, `hq-design-compose`, `hq-reference-ui`, `hq-social-references`, `hq-work-references`, `hq-reference-round-trip`, `hq-hosted-ci`, `hq-capability-closure`, `hq-held-gates` (gate readback only).
+- **Added by the closure revision:** `hq-design-storage-engine`, `hq-design-app-sections`, `hq-design-local-catalog`, `hq-shared-r3`, `hq-design-reference-provider`, `hq-design-compose`, `hq-reference-ui`, `hq-social-references`, `hq-work-references`, `hq-reference-round-trip`, `hq-hosted-ci`, `hq-capability-closure`, `hq-held-gates` (gate readback only).
+- **Added by this revision:** `hq-preview-agent`, `hq-preview-compare` and `hq-component-runner-port`, which mirror the existing `design-sections.yml` rows; `hq-preview-host`; and `hq-preview-acceptance`. The existing `design-annotations`, `design-compare`, `design-components`, `hq-design-compose`, `hq-work-runtime`, `hq-root-build` and `hq-electron-acceptance` groups also cover the new intents.
 
 Rules:
 - Run the exact behavior test while editing.
@@ -425,7 +597,53 @@ Rules:
 - The final union runs once on the final head.
 - Take a fresh CPU admission sample before each test run, under the host's admission policy, and never chain it with the test command.
 - Hosted checks attach through `foundation.yml` and `design-sections.yml`, and through `cli-planner.yml` after it lands. Report absent checks as absent, never as green.
+- Native preview and component rows need a display and run only under their unpackaged qualification switches. A row without a positive control is `unmeasured`, never passed.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.test-plan.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.preview-qualification.001" -->
+## Preview And Component Qualification
+
+T7 owns these suites in `tests/acceptance/**`. They run the native built HQ app on Electron 44.9.0 at one exact head. Synthetic pages and canaries are the test inputs; the surface under test is the real one. A fake or simulated surface never qualifies.
+
+- **Switches:** `HQ_QUALIFY_PREVIEW`, `HQ_QUALIFY_COMPONENT_STATIC` and `HQ_QUALIFY_COMPONENT_SCRIPTED` take effect only when the app is unpackaged and `HQ_USER_DATA_DIR` is set. They run a capability for qualification without changing its status constant. Every suite checks that a packaged-mode start ignores its switch.
+- **Fault hooks:** unpackaged, switch-gated named pause points sit between the PV-COHERE steps. At a pause point the harness runs a main-world mutation script, so races are deterministic.
+- **Canaries (CC-CANARY):**
+  - Ordinary-user listeners run on `127.0.0.1`, `::1` and one non-loopback address the host already owns. They cover HTTP, a 302 hop, WS, raw TCP, raw UDP, STUN, TURN-TCP and TURN-TLS. An mDNS listener joins `224.0.0.251:5353` and records only.
+  - DNS aliases use a qualification-only host-resolver mapping in the unpackaged build. If none works at 44.9.0, the alias rows are `unmeasured`.
+  - Before and after each run, an unconstrained Node client and an unrestricted control `webContents` must reach every canary on every channel. A row counts only if its positive control hit.
+  - With the optional unprivileged network namespace (OS-NS1, `bwrap --unshare-net`), the app, the canaries and the controls all run inside it. There is no sudo and no packet capture.
+- **Public smoke:** one public https page with ordinary outbound network and no credentials, recorded separately from the synthetic rows.
+- **Platform:** Linux harness results qualify Linux only. OS-MAC1 requires a separately bound macOS route during final acceptance. The actual laptop OS, architecture and route must be read back; a Linux run or a different machine is not laptop qualification.
+
+**Preview rows (`preview-s2-qualification`, under `HQ_QUALIFY_PREVIEW`):**
+
+| ID | Scenario | Pass |
+| --- | --- | --- |
+| Q-PV0 | HQ starts through the factory and a Design IPC call succeeds. A hook then creates an unregistered contents with the identical preload path, and a preview-class view whose literal includes that path. Synchronous `web-contents-created` firing is recorded. | HQ IPC works; the unregistered contents closes before load and fails `allowedSender`; the altered view is refused; the firing outcome selects the PV-TRUST path |
+| Q-PV1 | Open a fixture; compare OS process IDs; probe `require`, `process`, `hqServices` and `hqDesktop` from page JS | Separate processes; all absent (C1, C2) |
+| Q-PV2 | Cross-origin main-frame navigation, `window.open`, a download, basic auth, client-certificate selection, each permission API, display media and a file input | Each blocked and counted (C3, C4); the file chooser row is recorded as observed |
+| Q-PV3 | Requests for `file:`, `hq-component:` and other custom schemes | Cancelled (C5) |
+| Q-PV3h | Literal private and loopback URLs; a canary reached through a DNS alias and through a 302; WebRTC TCP to a TURN-TCP canary, with positive controls | Recorded as observed; a hit is expected and disclosed under PV-NET; literal-URL cancellations count as hygiene only |
+| Q-PV4 | Ten repeated captures of a static page at 1280×800@1 and 390×844@3 | Viewport and DPR match; digests byte-identical, or recorded with pick binding left unqualified |
+| Q-PV5 | Navigate, scroll and resize at each PV-COHERE pause point | `stale:<reason>`; the blob-store count is unchanged |
+| Q-PV6 | Pick, navigate, then drain | `stale:navigation` |
+| Q-PV6d | At a pause point: same-length text replacement; remove and reinsert an identical node; a sibling height change that moves the target | `stale:target-changed`, `stale:mutation`, `stale:target-changed`; no anchor |
+| Q-PV6a | A compositor-only animation, a playing video, a blinking caret | `stale:pixels-unstable` for each; anchored once the page pauses the animation |
+| Q-PV6h | Pick on a static page | Anchored; no highlight colour in the pixels; `captureDigest` equals the stored blob digest |
+| Q-PV7 | Pick and cite modes; synthetic `dispatchEvent` clicks | Element only in pick, text only in cite; synthetic clicks ignored |
+| Q-PV8 | Page JS overrides `Element.prototype.getBoundingClientRect` | Agent geometry unaffected |
+| Q-PV9 | Renderer crash, main-renderer reload, domain switch | Session crashed then closed; no orphan views; `clearData` called (C6) |
+| Q-PV10 | The main-renderer CSP at the built head | Equal to the `73a6532` string |
+
+**Component rows (`component-containment-gate`):**
+
+| ID | Scenario | Pass |
+| --- | --- | --- |
+| Q-CS1–4 | Tier S under `HQ_QUALIFY_COMPONENT_STATIC`: fixture button and card with props, variants and motion at t = 0, 0.5 and 1; a probe `<script>` that must do nothing; markup-only egress rows plus every canary channel markup can reach; denied navigation self-reload | Deterministic digests per input and t; zero canary hits on every positively controlled row |
+| Q-CX1–6 | Tier X under `HQ_QUALIFY_COMPONENT_SCRIPTED`, before any production activation: the full prior proof matrix on 44.9.0 plus every canary channel (HTTP, redirect, WS, TCP, UDP, STUN, TURN-TCP, TURN-TLS, mDNS, DNS alias; IPv4 and IPv6; loopback and non-loopback), with H-PROXY off and on, three repetitions; a packaged start ignores the switch | Zero hits on every row whose positive control hit; any hit recorded as failed and never overwritten; rows without a positive control `unmeasured` |
+
+The final report says "integrated with held capabilities" while Tier X or OS-MAC1 is open.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.preview-qualification.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.operator-interaction-inventory.001" -->
 ## Operator Interaction Inventory
@@ -436,7 +654,7 @@ Rules:
 | Electron acceptance on the check host | None | Ordinary user, owned temporary profile | Stops with a recorded gap if no display exists; no package installation |
 | Import/export enablement | None; existing owner permission | T1 accepts exact-head crash, CAS and privacy evidence; T8 makes the one-constant commit | `ac.import-export-enablement.001`; disabled until then |
 | Live S1 receiver | Native Jones Code OAuth consent in the system browser; bind a task-owned receiver | HQ main loopback OAuth client; token in `safeStorage` | Held; fixture tests only until consent; renderer never sees the token; 30-day expiry needs fresh consent |
-| S2 preview, component execution | None; T1 accepts the containment design and source rebind within the existing owner permission | Later amendment, then gate task | Held until native evidence; no preview or execution before the predicate |
+| S2 preview, component execution | None; T1 accepted the source design within the existing owner permission and accepts each enabling change | T7 runs the built app under unpackaged-only qualification switches, with synthetic inputs, userspace canaries and positive controls, optionally inside an unprivileged network namespace (OS-NS1); one public-website smoke uses ordinary outbound network without credentials; T2 makes each enabling commit | Held until each enabling predicate; production disabled before it; no sudo or packet capture (OS-PC1 not requested); macOS (OS-MAC1) runs on the laptop route |
 | New-thread U1 | None in HQ; needs a Jones Code contract | Later amendment, then gate task | Held; no launch qualification |
 | Wiki private validation | Give the exact privacy scope | Owner-local runner; aggregates only | Never published |
 | Service enablement | Approve Red envelopes; enter endpoints | Service owners | Agents never read live data |
@@ -457,12 +675,16 @@ T1 lands each candidate as it qualifies, in completion order, one serialized ope
 
 The existing Design coordinator owns this lane. It is the sole writer of shared files. Its chain is serial:
 
-1. F2 (`shared-bridge`, active, not restarted; models preserved) → `bridge-landing`.
-2. Live wiring, then the Wiki mount, with their original dependencies unchanged.
+1. F2 (`shared-bridge`, not restarted; models preserved) → `bridge-landing`.
+2. Live wiring, then the Wiki mount. Live wiring gains one dependency, the Work session-injection landing, because it consumes that public seam; every other dependency of both tasks is unchanged.
 3. Shared r3 (one new Design descendant) after `bridge-landing`, the K1 and K3 landings and the Wiki mount landing, because it shares main, preload, contract and `App.tsx` files with them → `r3-landing`.
 4. The reference round trip after every provider and the Work export UI land. It also mounts r3's Work export client in `apps/desktop/src/modules.tsx`.
 5. CLI/Planner CI after K2 returns `design-sections.yml` custody.
 6. The existing-thread receiver after the Wiki mount, CL1b and the reference round trip land, because it shares main, preload, settings and `modules.tsx`. It is fixture-qualified by the Q-S wire stub of the exact `76fb3dc` shapes.
+7. The preview/component host (`preview-host`) after `receiver-landing`, because it shares main, preload and contracts with steps 3 and 6. It binds the landed preview agent and component runner port, and lands as one PR with two coherent commits: the preview host, then the component runner. Every status constant stays false. Moving it earlier needs a T1 amendment.
+8. The enabling commits (`preview-enablement`, `component-static-enablement`, `component-scripted-enablement`), each only under its own predicate, and each changing only its own status file and status test.
+
+**Live wiring and the Work seam:** the shell calls `setWorkSessionPort` once, before the first Work session. It selects the configured live Planner with recovery, or the labelled example only when configuration explicitly says unconfigured. A failed configuration read or a live-service error never falls back to the example. A configuration change needs the labelled reload.
 
 **Wiki mount:**
 - mounts `createWikiDomain({ getPort })`;
@@ -470,7 +692,10 @@ The existing Design coordinator owns this lane. It is the sole writer of shared 
 - raises the engine and CI Node version to `>=22.18`;
 - keeps Wiki `node:test` suites out of Vitest discovery;
 - adds a Node test-runner CI step;
-- adds main-only home and source configuration.
+- adds main-only home and source configuration. Home migration is versioned Wiki configuration and index initialization and upgrade in the app userData directory only, never an inferred legacy or private location;
+- migrates the renderer's stored navigation destination separately in `apps/desktop/src/state.ts`, with Wiki fourth and the legacy home mapped to it;
+- adds `apps/desktop/tsconfig.wiki-host.json` as an additive mirror of the Design host emit;
+- keeps exactly the seven closed read methods, with refresh and migration host-only, synthetic Git corpora only, and external CSS with no CSP change.
 
 The F2 host's ServiceSettings and exact 403 refresh are already implemented and are not duplicated.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.lane-t2.001" -->
@@ -485,6 +710,14 @@ The existing Social builder finishes #48 now, starting with the failed-read-is-u
 ## T4 Work Runtime
 
 The existing Work runtime builder works now on module-local code and tests, using the Planner wire fixtures. Live tests against a real Planner service use foundation after `main-sync`.
+
+**Work session injection.** The existing Work owner, bound to a fresh successor ref by the retained Social/Work representative, promotes `setWorkSessionPort(port, {example, recovery})` to an explicit production shell seam. The work is:
+- production documentation of the existing signature and behaviour in `modules/work/nav/session.ts`, with no algorithm or signature change;
+- named exports of `setWorkSessionPort` and `examplePlanner` from `modules/work/index.tsx`, correcting the stale entry documentation;
+- focused public-entry injection and selection tests in `modules/work/nav/test/live-selection.test.tsx`;
+- optionally, its own evidence file.
+
+`resetWorkSessions` stays test-only and unexported. The work needs no Work core or live adapter, shared contract or root change, and depends on neither T9 nor r3. Actual custody is reported in the coordination channel.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.lane-t4.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.lane-t6.001" -->
@@ -498,13 +731,15 @@ T6 is ready now from foundation, which already contains the Wiki contract, core 
 
 The native harness checkpoint (#53) has landed. T7 extends it with integrated scenarios as their source lands, runs the import/export and capability-closure qualifications, the held-gate qualifications once their predicates hold, and final acceptance. HQ's layout is not changed to suit the Jones Code harness, and the harness stays separate from Design production code and tests.
 
-The harness owns its scratch profile and processes. It removes exactly those on success, failure and cancellation, after preserving the evidence it needs.
+After the integrated scenarios land, T7 writes the preview and component suites of `ctx.preview-qualification.001` (`preview-scenarios`) in the same harness. It then runs them as `preview-s2-qualification` and `component-containment-gate` once T1 binds the head and the native check host.
+
+The harness owns its scratch profile, processes, fixture sites, canary listeners and control clients. It removes exactly those on success, failure and cancellation, after preserving the evidence it needs.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.lane-t7.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.lane-t8.001" -->
 ## T8 Design Closure
 
-The existing Design coordinator owns T8. K1, K2 and K3 run in the preflight children the Design coordinator has already created (Astra/medium), from the runtime host candidate `73a6532159686c769ba6e39d8070907b2a9b021e`. There are no new launches or replacements, and these children have no descendants. Their new-scope implementation starts after publication. Budget: the planned 7 of 12. K4 and shared r3 follow only when ready. CL1b goes to the F2 successor.
+The existing Design coordinator owns T8. K1, K2 and K3 run in the preflight children the Design coordinator has already created (Astra/medium), from the runtime host candidate `73a6532159686c769ba6e39d8070907b2a9b021e`. There are no new launches or replacements, and these children have no descendants. Their new-scope implementation starts after publication. Budget: actual 7 of 12 children; the preview module lanes add at most one. K4 and shared r3 follow only when ready. CL1b goes to the F2 successor.
 
 **K1, storage engine (sole writer of `modules/design/app/storage/**`):**
 - Additive `WorkspaceRecords`; `createRequestsStoragePort` retargeted to it.
@@ -553,6 +788,27 @@ The existing Design coordinator owns T8. K1, K2 and K3 run in the preflight chil
 - Extends the renderer-safe walk.
 
 **Enablement:** a later one-constant commit, only under `ac.import-export-enablement.001`.
+
+**Preview module lanes.** These are ready at this revision's publication, from `work/hq-foundation` at `9badd4f16b55e14a52e91cff95f6a5d6f20ec584` or its read-back successor. They use structural ports and labelled fakes, with no Electron.
+- **PV-M1 `preview-agent`** (`modules/design/annotations/src/preview-agent/**` and `modules/design/annotations/test/**`):
+  - ignore untrusted pick and cite events, and tag every event with its generation;
+  - export the bounded queue host shim;
+  - add PV-COHERE support: a synchronous `MutationObserver` counter through `takeRecords()`, highlight hide and restore, and one-call exact re-resolution returning identity, text and rects;
+  - keep the entry IIFE-safe, with no imports outside its folder.
+- **PV-M2 `preview-compare`** (`modules/design/compare/src/**`):
+  - host-surface placement and visibility callbacks: rect reporting, and hiding while overlays are open;
+  - a `stale` session state;
+  - still no iframe.
+- **CC-M1 `component-runner-port`** (`modules/design/components/{src,ui,tests}/**`):
+  - `ComponentRunnerPort` (`render`, `place`, `motion`, `capture`, `close`) with labelled fakes;
+  - declarative prop slots;
+  - a held placeholder in production when no runner is injected, so production no longer mounts `srcdoc` frames; the `srcdoc` path stays harness-only.
+- **Rules for all three:**
+  - New tests stay inside the existing `design-sections.yml` row globs: annotations `test/*.test.ts`, compare `src/**/*.test.ts`, components `tests/*.test.ts` and `ui/**/*.test.tsx`. If a row cannot cover them, the lane stops and reports, and never edits the workflow.
+  - No lane edits an index, build or generated path outside its own module.
+  - Custody goes to the original module owners where their current custody is bound; otherwise one combined disjoint module builder (one new Design child) runs all three.
+  - Each lane publishes from a new branch; nothing is pushed to an original ref whose current identity has not been read back.
+- **PV-M3 `preview-compose`:** the CL1b owner, after CL1b and the host land, writes the compose adapters from the preview and component routes to `PreviewCapability`, `AgentChannelPort` and `ComponentRunnerPort`. Compose therefore has one writer, and no compose work runs against an unlanded host.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.lane-t8.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.lane-t9.001" -->
@@ -607,7 +863,8 @@ The machine `task.*` blocks are authoritative. In summary:
 | `design-local-catalog` (K3) → `design-catalog-landing` | T8 → T1 | — ; + `bridge-landing` |
 | `reference-ui` → `reference-ui-landing` | T9 → T1 | custody predicate |
 | `shared-r3` → `r3-landing` | T2 → T1 | `bridge-landing`, `design-storage-landing`, `design-catalog-landing`, `wiki-mount-landing` |
-| `live-wiring` → `wiring-landing` | T2 → T1 | as before (unchanged) |
+| `work-session-injection` → `work-injection-landing` | T4 → T1 | `work-landing` |
+| `live-wiring` → `wiring-landing` | T2 → T1 | as before, plus `work-injection-landing` |
 | `wiki-mount` → `wiki-mount-landing` | T2 → T1 | `live-wiring`, `wiki-landing`; + `wiring-landing` |
 | `design-reference-provider` (K4) → `design-provider-landing` | T8 → T1 | `r3-landing` |
 | `design-compose-mount` (CL1b) → `design-compose-landing` | T8 → T1 | `bridge-landing`, `r3-landing`, K1/K2/K4 landings |
@@ -617,13 +874,18 @@ The machine `task.*` blocks are authoritative. In summary:
 | `reference-round-trip` → `round-trip-landing` | T2 → T1 | `r3-landing`, `social-references-landing`, `work-references-landing`, `design-compose-landing`, `work-export-landing` |
 | `cli-planner-ci` → `cli-ci-landing` | T2 → T1 | `design-sections-landing` |
 | `receiver-adapter` → `receiver-landing` | T2 → T1 | `wiki-mount-landing`, `design-compose-landing`, `round-trip-landing` |
+| `preview-agent` (PV-M1), `preview-compare` (PV-M2), `component-runner-port` (CC-M1) → `preview-agent-landing`, `preview-compare-landing`, `component-port-landing` | T8 → T1 | — |
+| `preview-host` → `preview-host-landing` | T2 → T1 | `receiver-landing`, `preview-agent-landing`, `component-port-landing` |
+| `preview-compose` (PV-M3) → `preview-compose-landing` | T8 → T1 | `design-compose-landing`, `preview-host-landing`, `preview-compare-landing` |
 | `acceptance-scenarios` → `scenarios-landing` | T7 → T1 | `harness-landing`, `wiring-landing`, `wiki-mount-landing`, `round-trip-landing`, `design-compose-landing`, `work-export-landing` |
+| `preview-scenarios` → `preview-scenarios-landing` | T7 → T1 | `scenarios-landing`, `preview-host-landing` |
 | `import-export-qualification` → `import-export-enablement` → `enablement-landing` | T7 → T8 → T1 | `design-storage-landing`, `r3-landing`, `design-compose-landing`; enablement predicate |
-| `closure-qualification` | T7 | all closure landings |
-| seven held-gate qualifications | T7 | each explicit predicate (receiver S1 also after `receiver-landing`) |
-| `final-acceptance` → `main-delivery` | T7 → T1 | `closure-qualification`, `scenarios-landing`, `wiki-mount-landing`, every gate, `install-route` |
+| `closure-qualification` | T7 | all closure landings, including `preview-compose-landing` and `preview-scenarios-landing` |
+| seven held-gate qualifications | T7 | each explicit predicate (receiver S1 also after `receiver-landing`; S2 and component also after `preview-compose-landing` and `preview-scenarios-landing`) |
+| `preview-enablement` → `preview-enablement-landing`; `component-static-enablement` → `component-static-landing`; `component-scripted-enablement` → `component-scripted-landing` | T2 → T1 | its qualification gate and its own enabling predicate |
+| `final-acceptance` → `main-delivery` | T7 → T1 | `closure-qualification`, `scenarios-landing`, `wiki-mount-landing`, every gate, the three enabling landings, `install-route` |
 
-**Ready as soon as this amendment is published:** K1, K2 and K3 (`design-storage-engine`, `design-app-sections`, `design-local-catalog`). Their write scopes are disjoint from each other and from the shared bridge candidate. Preflight, research and worktree preparation for them may run before publication; new-scope implementation waits for this publication. `reference-ui` and the T10/T11 tasks wait for actual custody binding.
+**Ready at publication:** K1, K2 and K3 became ready at the previous revision; K3 has since landed as #57. This revision adds `work-session-injection` and the three preview module lanes (`preview-agent`, `preview-compare`, `component-runner-port`). Their write scopes are disjoint from each other and from every task that can be ready with them. The only existing task that gains a dependency is live wiring, on the Work seam it consumes. No other dependency changes for live wiring, the Wiki mount, K1–K4, r3 or the D-4 lanes, so there is no new barrier. `reference-ui` and the T10/T11 tasks wait for actual custody binding.
 
 **Model hints (claude_frontier; the native tuple is recorded per task in the compile projection):**
 - Building defaults to Astra/medium.
@@ -631,7 +893,8 @@ The machine `task.*` blocks are authoritative. In summary:
   - Its existing preflight child is Astra/medium. The override takes effect only if the Design coordinator explicitly reconciles the native implementation binding before source work; nothing claims an effective Sonnet model otherwise.
   - The typed helper has no Sonnet entry, so compiler capsules carry a labelled placeholder.
 - K1, K3, K4, r3 and the D-4 lanes come from `spec.hq-design` or `spec.hq-social-work` and use Astra/medium; the old Design-section Opus builder instruction is not extended.
-- Verification mechanics and research use Sol/medium; closure and final judgment use Astra/high.
+- The preview module lanes, the preview host, the T7 preview suites and the enabling commits are building work at Astra/medium. `preview-compose` keeps the CL1b owner's existing native tuple. `work-session-injection` keeps the existing Work owner's native tuple.
+- Verification mechanics and research, including the two preview qualification gates, use Sol/medium; closure and final judgment use Astra/high.
 - In-flight F2 and CL1b (the F2 successor) keep their existing native tuples.
 
 **Release:** there is no wave barrier. Each landing releases as soon as its own candidate qualifies. Only the shared-writer chain is deliberately serial.
@@ -1377,7 +1640,7 @@ No lane relays status through the owner.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "lane-t2",
-  "objective": "Wire the landed Social live and Work runtime adapters to the bridge transports in the shell, with real local services opt-in and synthetic services by default. Add a shell integration test proving the live path, unavailable/unknown truthfulness, no unknown-write retry and no live-to-fixture fallback. Exercise Work against a disposable local Planner service from services/planner.",
+  "objective": "Wire the landed Social live and Work runtime adapters to the bridge transports in the shell, with real local services opt-in and synthetic services by default. Add a shell integration test proving the live path, unavailable/unknown truthfulness, no unknown-write retry and no live-to-fixture fallback. Exercise Work against a disposable local Planner service from services/planner. Consume the Work public seam: call setWorkSessionPort once before the first Work session with the configured live Planner and recovery, or the labelled examplePlanner only when configuration explicitly says unconfigured. A failed configuration read or a live-service error never falls back to the example, and a configuration change needs the labelled reload.",
   "context_refs": [
     "spec.hq-integration-parallel-execution#ctx.lane-t2.001",
     "spec.hq-integration-parallel-execution#iface.service-response.001"
@@ -1409,7 +1672,8 @@ No lane relays status through the owner.
     "spec.hq-integration-parallel-execution#task.bridge-landing.001",
     "spec.hq-integration-parallel-execution#task.social-landing.001",
     "spec.hq-integration-parallel-execution#task.work-landing.001",
-    "spec.hq-integration-parallel-execution#task.main-sync.001"
+    "spec.hq-integration-parallel-execution#task.main-sync.001",
+    "spec.hq-integration-parallel-execution#task.work-injection-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -1453,7 +1717,7 @@ No lane relays status through the owner.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "lane-t2",
-  "objective": "Mount Wiki fourth in the rail after Work with createWikiDomain({ getPort }) from modules/wiki. Add domain ID wiki to shared contracts; the seven-method preload/IPC with host-only refresh and home migration in main over modules/wiki/core; register the @hq/wiki workspace and its lockfile entry; raise engines and CI to Node >=22.18; keep Wiki node:test suites out of Vitest discovery and run them in a Node test-runner step in foundation.yml; add main-only Wiki home and source configuration (renderer sees labels only); external CSS under the existing CSP. Prove a synthetic Git-corpus round trip through the real shell. This mount never claims spec.hq-expansion wiki-integration closure while private validation is held.",
+  "objective": "Mount Wiki fourth in the rail after Work with createWikiDomain({ getPort }) from modules/wiki. Add domain ID wiki to shared contracts and exactly the seven closed read methods over preload/IPC; refresh and home migration stay host-only in main over modules/wiki/core. Home migration means versioned Wiki configuration and index initialization and upgrade in the app userData directory only, never an inferred legacy or private location. Separately, migrate the renderer's stored navigation destination in apps/desktop/src/state.ts so Wiki is fourth and a legacy home maps to it. Add apps/desktop/tsconfig.wiki-host.json as an additive mirror of the Design host emit. Register the @hq/wiki workspace and its lockfile entry; raise engines and CI to Node >=22.18; keep Wiki node:test suites out of Vitest discovery and run them in a Node test-runner step in foundation.yml; add main-only Wiki source configuration (renderer sees labels only); external CSS under the existing CSP. Prove a synthetic Git-corpus round trip through the real shell; no private data. This mount never claims spec.hq-expansion wiki-integration closure while private validation is held.",
   "context_refs": [
     "spec.hq-integration-parallel-execution#ctx.lane-t2.001",
     "spec.hq-integration-parallel-execution#iface.wiki-host-ipc.001"
@@ -1486,7 +1750,11 @@ No lane relays status through the owner.
     "apps/desktop/electron",
     "packages/contracts",
     "apps/desktop/src/wiki.integration.test.tsx",
-    "apps/desktop/src/ServiceSettings.tsx"
+    "apps/desktop/src/ServiceSettings.tsx",
+    "apps/desktop/src/state.ts",
+    "apps/desktop/src/state.test.ts",
+    "apps/desktop/src/App.settings.test.tsx",
+    "apps/desktop/tsconfig.wiki-host.json"
   ],
   "requires": [
     "spec.hq-integration-parallel-execution#req.wiki-mount.001"
@@ -1709,7 +1977,7 @@ No lane relays status through the owner.
   "kind": "verification",
   "profile_role": "verifier",
   "accountable_owner": "lane-t7",
-  "objective": "On the exact final work/hq-foundation head (equal to the #2 head), run npm ci, typecheck, test and build, the Wiki Node tests, CLI and Planner tests, the Electron acceptance scenarios and the closure suites. Then follow the bound laptop route: install and launch the final candidate. Report every failure, skip and gap, and every held capability with its gate; never report a gap or a fixture as a pass.",
+  "objective": "On the exact final work/hq-foundation head (equal to the #2 head), run npm ci, typecheck, test and build, the Wiki Node tests, CLI and Planner tests, the Electron acceptance scenarios and the closure suites. Then follow the bound laptop route: install and launch the final candidate, including the preview and component checks for its verified OS and the separately bound macOS check (OS-MAC1); do not assume the laptop OS or substitute a different machine. Report every failure, skip and gap, and every held capability with its gate; never report a gap or a fixture as a pass.",
   "context_refs": [
     "spec.hq-integration-parallel-execution#ctx.lane-t7.001"
   ],
@@ -1744,7 +2012,10 @@ No lane relays status through the owner.
     "spec.hq-integration-parallel-execution#task.component-containment-gate.001",
     "spec.hq-integration-parallel-execution#task.wiki-private-validation-gate.001",
     "spec.hq-integration-parallel-execution#task.service-enablement-qualification.001",
-    "spec.hq-integration-parallel-execution#task.laptop-route-binding.001"
+    "spec.hq-integration-parallel-execution#task.laptop-route-binding.001",
+    "spec.hq-integration-parallel-execution#task.preview-enablement-landing.001",
+    "spec.hq-integration-parallel-execution#task.component-static-landing.001",
+    "spec.hq-integration-parallel-execution#task.component-scripted-landing.001"
   ],
   "dependency_inputs": [
     {
@@ -3975,7 +4246,9 @@ No lane relays status through the owner.
     "spec.hq-integration-parallel-execution#task.round-trip-landing.001",
     "spec.hq-integration-parallel-execution#task.wiki-mount-landing.001",
     "spec.hq-integration-parallel-execution#task.receiver-landing.001",
-    "spec.hq-integration-parallel-execution#task.design-compose-landing.001"
+    "spec.hq-integration-parallel-execution#task.design-compose-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-compose-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-scenarios-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -4149,7 +4422,7 @@ No lane relays status through the owner.
   "kind": "verification",
   "profile_role": "verifier",
   "accountable_owner": "lane-t7",
-  "objective": "Qualify the S2 preview surface with route/viewport/digest binding after the accepted containment design is implemented by amendment.",
+  "objective": "On the bound exact head and native check host, under HQ_QUALIFY_PREVIEW, run every preview row in ctx.preview-qualification.001 (Q-PV0 to Q-PV10, including 3h, 6a, 6d and 6h) against the native built app on Electron 44.9.0 with synthetic inputs, positive controls and the named fault hooks, plus one public-website smoke run with ordinary outbound network and no credentials, recorded separately. Record C1–C6, the observed network reach as disclosure and the pick-binding outcome for T1. Production stays disabled.",
   "context_refs": [
     "spec.hq-integration-parallel-execution#ctx.lane-t7.001",
     "spec.hq-integration-parallel-execution#ctx.operator-interaction-inventory.001"
@@ -4173,7 +4446,9 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.design-compose-landing.001"
+    "spec.hq-integration-parallel-execution#task.design-compose-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-compose-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-scenarios-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -4202,7 +4477,7 @@ No lane relays status through the owner.
   "stop_conditions": [
     "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
     "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
-    "No accepted containment design or landed implementation; report held."
+    "No bound head or native check host, or a run would need sudo, credentials or packet capture; report held."
   ]
 }
 ```
@@ -4215,7 +4490,7 @@ No lane relays status through the owner.
   "kind": "verification",
   "profile_role": "verifier",
   "accountable_owner": "lane-t7",
-  "objective": "Qualify component execution containment with native host evidence; execution stays disabled until accepted.",
+  "objective": "On the bound exact head and native check host, under HQ_QUALIFY_COMPONENT_STATIC and HQ_QUALIFY_COMPONENT_SCRIPTED, run Q-CS1–4 and Q-CX1–6 on the native built app: every CC-CANARY channel over IPv4 and IPv6, loopback and non-loopback, with H-PROXY off and on, three repetitions and positive controls before and after. Report Tier S and Tier X separately; any hit is a recorded failure and never overwritten; a row without a positive control is unmeasured. Execution stays disabled.",
   "context_refs": [
     "spec.hq-integration-parallel-execution#ctx.lane-t7.001",
     "spec.hq-integration-parallel-execution#ctx.operator-interaction-inventory.001"
@@ -4239,7 +4514,9 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.design-compose-landing.001"
+    "spec.hq-integration-parallel-execution#task.design-compose-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-compose-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-scenarios-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -4268,7 +4545,7 @@ No lane relays status through the owner.
   "stop_conditions": [
     "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
     "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
-    "No containment evidence; report held."
+    "No bound head or native check host, or a run would need sudo, credentials or packet capture; report held."
   ]
 }
 ```
@@ -4471,6 +4748,1303 @@ No lane relays status through the owner.
 }
 ```
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#task.laptop-route-binding.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.work-session-injection.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t4",
+  "objective": "From work/hq-foundation at 9badd4f16b55e14a52e91cff95f6a5d6f20ec584 or its read-back successor, on a fresh successor ref of the existing Work owner: promote the existing setWorkSessionPort(port, {example, recovery}) to the explicit production shell injection seam with no algorithm or signature change. Document its production behaviour in modules/work/nav/session.ts; export setWorkSessionPort and examplePlanner by name from modules/work/index.tsx and correct the stale entry documentation; add public-entry injection and selection regressions in modules/work/nav/test/live-selection.test.tsx. resetWorkSessions stays test-only and unexported. Publish one module-only non-draft PR against work/hq-foundation.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t4.001",
+    "spec.hq-integration-parallel-execution#iface.contracts.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "modules/work/nav/session.ts",
+    "modules/work/index.tsx",
+    "modules/work/nav/test/live-selection.test.tsx",
+    "docs/evidence/hq-social-work/work-shell-injection.md"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.service-transport.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.work-landing.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.module-candidates.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.work-session-injection.001"
+  ],
+  "affected_check_groups": [
+    "hq-work-runtime"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "A signature or algorithm change, a resetWorkSessions export, or a Work core, live, shared or root write would be needed; stop and report."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.work-session-injection.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.work-injection-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the work-session-injection PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back. This releases live wiring's consumed seam.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "modules/work/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.work-session-injection.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.work-injection-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-agent.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t8",
+  "objective": "PV-M1. From work/hq-foundation at 9badd4f16b55e14a52e91cff95f6a5d6f20ec584 or its read-back successor, under iface.preview-host.001 PV-AGENT and PV-COHERE: ignore untrusted pick and cite events; tag every event with its mode generation; export the bounded isolated-world queue host shim (cap 64, drop-oldest with a counter); add a synchronous MutationObserver counter through takeRecords(), highlight hide and restore, and one-call exact re-resolution returning identity, text and rects; keep the entry IIFE-safe with no imports outside its folder. Structural ports and fakes only; no Electron. New tests are flat test/*.test.ts files. Publish one non-draft PR against work/hq-foundation from a new branch.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t8.001",
+    "spec.hq-integration-parallel-execution#iface.preview-host.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "modules/design/annotations/src/preview-agent",
+    "modules/design/annotations/test"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "produces": [],
+  "dependencies": [],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.preview-component-source.001",
+    "spec.hq-integration-parallel-execution#ac.module-candidates.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.preview-agent.001"
+  ],
+  "affected_check_groups": [
+    "hq-preview-agent",
+    "design-annotations"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "A new test would fall outside the existing design-sections.yml row globs, or a change outside the module cone would be needed; stop and report, never edit the workflow.",
+    "Pushing to an original module ref whose current identity has not been read back."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-agent.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-agent-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the preview-agent PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "modules/design/annotations/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.preview-agent.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-agent-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-compare.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t8",
+  "objective": "PV-M2. From work/hq-foundation at 9badd4f16b55e14a52e91cff95f6a5d6f20ec584 or its read-back successor: host-surface placement and visibility callbacks in modules/design/compare/src (rect reporting in window DIP, hidden while HQ overlays are open) and a stale preview-session state, over the existing PreviewSurface, PreviewSession and OverlayFrame contract. Compare still never creates an iframe; live panels read live preview and captures static capture. Tests stay src/**/*.test.ts. Publish one non-draft PR against work/hq-foundation from a new branch.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t8.001",
+    "spec.hq-integration-parallel-execution#iface.preview-host.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "modules/design/compare/src"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "produces": [],
+  "dependencies": [],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.preview-component-source.001",
+    "spec.hq-integration-parallel-execution#ac.module-candidates.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.preview-compare.001"
+  ],
+  "affected_check_groups": [
+    "hq-preview-compare",
+    "design-compare"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "A new test would fall outside the existing design-sections.yml row globs, or a change outside the module cone would be needed; stop and report, never edit the workflow.",
+    "Pushing to an original module ref whose current identity has not been read back."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-compare.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-compare-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the preview-compare PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "modules/design/compare/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.preview-compare.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-compare-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.component-runner-port.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t8",
+  "objective": "CC-M1. From work/hq-foundation at 9badd4f16b55e14a52e91cff95f6a5d6f20ec584 or its read-back successor, under iface.component-runner.001: ComponentRunnerPort (render, place, motion, capture, close) with labelled fakes; declarative prop slots (data-hq-text, data-hq-attr-*) as a module-local schema extension; production mounts a held placeholder instead of srcdoc frames when no runner is injected, and the srcdoc path stays harness-only. Tests stay tests/*.test.ts and ui/**/*.test.tsx. Publish one non-draft PR against work/hq-foundation from a new branch.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t8.001",
+    "spec.hq-integration-parallel-execution#iface.component-runner.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "modules/design/components/src",
+    "modules/design/components/ui",
+    "modules/design/components/tests"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "produces": [],
+  "dependencies": [],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.preview-component-source.001",
+    "spec.hq-integration-parallel-execution#ac.module-candidates.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.component-runner-port.001"
+  ],
+  "affected_check_groups": [
+    "hq-component-runner-port",
+    "design-components"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "A new test would fall outside the existing design-sections.yml row globs, or a change outside the module cone would be needed; stop and report, never edit the workflow.",
+    "Pushing to an original module ref whose current identity has not been read back."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.component-runner-port.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.component-port-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the component-runner-port PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "modules/design/components/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.component-runner-port.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.component-port-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-host.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t2",
+  "objective": "T2 step 7 after receiver-landing: one PR with two coherent commits under iface.preview-host.001 and iface.component-runner.001. First the preview host: the single contents factory (PV-TRUST), the WebContentsView host with PV-POLICY, PV-FENCE and PV-COHERE (blob.put only after acceptance), isolated-world injection of the pinned build:preview-agent bundle of the landed agent, the closed hq:svc:preview channel and one preload member. Then the hq-component runner: per-session protocol, header CSP per tier, webRequest allow-list and capture. All four status constants stay false, each alone in its status file with its own status test. Add the unpackaged-only HQ_QUALIFY_PREVIEW, HQ_QUALIFY_COMPONENT_STATIC and HQ_QUALIFY_COMPONENT_SCRIPTED switches and switch-gated fault hooks, ignored by packaged builds. The main-renderer CSP and allowedSender are unchanged; no new dependency.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t2.001",
+    "spec.hq-integration-parallel-execution#iface.preview-host.001",
+    "spec.hq-integration-parallel-execution#iface.component-runner.001",
+    "spec.hq-integration-parallel-execution#iface.shared-r3.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "package.json",
+    "apps/desktop/vite.preview-agent.config.ts",
+    "apps/desktop/tsconfig.electron.json",
+    "apps/desktop/electron/contents-factory.ts",
+    "apps/desktop/electron/contents-factory.test.ts",
+    "apps/desktop/electron/preview",
+    "apps/desktop/electron/components",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.cts",
+    "apps/desktop/electron/security.ts",
+    "apps/desktop/electron/security.test.ts",
+    "apps/desktop/src/environment.d.ts",
+    "packages/contracts/src/preview.ts",
+    "packages/contracts/src/services.ts",
+    "packages/contracts/src/index.ts"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.receiver-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-agent-landing.001",
+    "spec.hq-integration-parallel-execution#task.component-port-landing.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.preview-component-source.001",
+    "spec.hq-integration-parallel-execution#ac.shared-runtime.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.preview-host.001"
+  ],
+  "affected_check_groups": [
+    "hq-preview-host",
+    "hq-root-build"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "A CSP change, an allowedSender change, a preload on preview or component contents, or generic IPC would be needed; stop and request a T1 rebind."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-host.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-host-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the preview-host PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "apps/desktop/",
+    "packages/contracts/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.preview-host.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-host-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-compose.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t8",
+  "objective": "PV-M3 by the CL1b owner after CL1b and the host land: adapters in modules/design/app/compose from hqServices.preview and the component routes to compare's PreviewCapability (host-surface surface, qualification from status), annotations' AgentChannelPort and components' ComponentRunnerPort. The Compare, Annotations and Components views use them and show unavailable while the host reports disabled. No generic invoke, URL fetch or path; extend the renderer-safe walk.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t8.001",
+    "spec.hq-integration-parallel-execution#iface.preview-host.001",
+    "spec.hq-integration-parallel-execution#iface.component-runner.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "modules/design/app/compose"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.design-compose-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-host-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-compare-landing.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.preview-component-source.001",
+    "spec.hq-integration-parallel-execution#ac.module-candidates.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.preview-compose.001"
+  ],
+  "affected_check_groups": [
+    "hq-design-compose"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "packages/design-store, F1 signatures or another cone would need a change; stop and report."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-compose.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-compose-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the preview-compose PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "modules/design/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.preview-compose.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-compose-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-scenarios.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t7",
+  "objective": "Extend the landed native harness with the suites of ctx.preview-qualification.001: synthetic fixture sites on loopback; CC-CANARY listeners on loopback and one host-owned non-loopback address with positive-control clients before and after each run; the named fault-hook driver; packaged-mode-ignores checks for every switch; and runners for Q-PV0–Q-PV10, Q-CS1–4 and Q-CX1–6 against the built app. A row without a positive control reports unmeasured. No npm dependency, sudo or packet capture; owned profile, listener and process cleanup on every exit path. Qualifying runs belong to the gate tasks.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t7.001",
+    "spec.hq-integration-parallel-execution#ctx.preview-qualification.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "tests/acceptance",
+    "docs/evidence/hq-integration/preview"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001",
+    "spec.hq-integration-parallel-execution#req.acceptance.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.scenarios-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-host-landing.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.preview-component-source.001",
+    "spec.hq-integration-parallel-execution#ac.working-app.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.preview-scenarios.001"
+  ],
+  "affected_check_groups": [
+    "hq-preview-acceptance",
+    "hq-electron-acceptance"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-scenarios.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-scenarios-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the preview-scenarios PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "tests/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.preview-scenarios.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-scenarios-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-enablement.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t2",
+  "objective": "The enabling checkpoint: one commit that sets PREVIEW_HOST_ENABLED true, and PREVIEW_PICK_QUALIFIED true only when Q-PV4 and every Q-PV6 row passed for the accepted head's evidence, and turns the disabled-status test into an enabled-status test. Nothing else changes.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t2.001",
+    "spec.hq-integration-parallel-execution#iface.preview-host.001",
+    "spec.hq-integration-parallel-execution#iface.component-runner.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "apps/desktop/electron/preview/status.ts",
+    "apps/desktop/electron/preview/status.test.ts"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.preview-s2-qualification.001"
+  ],
+  "dependency_inputs": [
+    {
+      "task_ref": "spec.hq-integration-parallel-execution#task.preview-s2-qualification.001",
+      "fields": [
+        "summary",
+        "evidence_refs"
+      ]
+    }
+  ],
+  "activation": {
+    "mode": "explicit",
+    "predicate_ref": "spec.hq-integration-parallel-execution#ac.preview-enablement.001"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.preview-enablement.001",
+    "spec.hq-integration-parallel-execution#ac.module-candidates.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.preview-enablement.001"
+  ],
+  "affected_check_groups": [
+    "hq-preview-host",
+    "hq-root-build"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "The accepted evidence is for a different head, or any change beyond the status file and its test would be needed."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-enablement.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.preview-enablement-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the preview-enablement PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "apps/desktop/electron/preview/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.preview-enablement.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.preview-enablement-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.component-static-enablement.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t2",
+  "objective": "The enabling checkpoint: one commit that sets COMPONENT_STATIC_ENABLED true for the accepted head's evidence, and turns the disabled-status test into an enabled-status test. Nothing else changes.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t2.001",
+    "spec.hq-integration-parallel-execution#iface.preview-host.001",
+    "spec.hq-integration-parallel-execution#iface.component-runner.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "apps/desktop/electron/components/static-status.ts",
+    "apps/desktop/electron/components/static-status.test.ts"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.component-containment-gate.001"
+  ],
+  "dependency_inputs": [
+    {
+      "task_ref": "spec.hq-integration-parallel-execution#task.component-containment-gate.001",
+      "fields": [
+        "summary",
+        "evidence_refs"
+      ]
+    }
+  ],
+  "activation": {
+    "mode": "explicit",
+    "predicate_ref": "spec.hq-integration-parallel-execution#ac.component-static-enablement.001"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.component-static-enablement.001",
+    "spec.hq-integration-parallel-execution#ac.module-candidates.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.component-static-enablement.001"
+  ],
+  "affected_check_groups": [
+    "hq-preview-host",
+    "hq-root-build"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "The accepted evidence is for a different head, or any change beyond the status file and its test would be needed."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.component-static-enablement.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.component-static-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the component-static-enablement PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "apps/desktop/electron/components/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.component-static-enablement.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.component-static-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.component-scripted-enablement.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t2",
+  "objective": "The enabling checkpoint: one commit that sets COMPONENT_SCRIPTED_ENABLED true for the accepted head's evidence, and turns the disabled-status test into an enabled-status test. Nothing else changes.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t2.001",
+    "spec.hq-integration-parallel-execution#iface.preview-host.001",
+    "spec.hq-integration-parallel-execution#iface.component-runner.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "apps/desktop/electron/components/scripted-status.ts",
+    "apps/desktop/electron/components/scripted-status.test.ts"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.component-containment-gate.001"
+  ],
+  "dependency_inputs": [
+    {
+      "task_ref": "spec.hq-integration-parallel-execution#task.component-containment-gate.001",
+      "fields": [
+        "summary",
+        "evidence_refs"
+      ]
+    }
+  ],
+  "activation": {
+    "mode": "explicit",
+    "predicate_ref": "spec.hq-integration-parallel-execution#ac.component-scripted-enablement.001"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.component-scripted-enablement.001",
+    "spec.hq-integration-parallel-execution#ac.module-candidates.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.component-scripted-enablement.001"
+  ],
+  "affected_check_groups": [
+    "hq-preview-host",
+    "hq-root-build"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "The accepted evidence is for a different head, or any change beyond the status file and its test would be needed."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.component-scripted-enablement.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.component-scripted-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the component-scripted-enablement PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "apps/desktop/electron/components/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.component-scripted-enablement.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.component-scripted-landing.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.source-landing.001" -->
 ```json
@@ -4720,10 +6294,10 @@ No lane relays status through the owner.
   "validates": [
     "spec.hq-integration-parallel-execution#req.wiki-mount.001"
   ],
-  "scenario": "Wiki appears fourth in the rail; search, page, backlinks and topics work over IPC against a synthetic corpus; refresh is host-only.",
+  "scenario": "Wiki appears fourth in the rail; search, page, backlinks and topics work over the seven closed IPC methods against a synthetic Git corpus; refresh and home migration are host-only; versioned userData Wiki configuration and index initialize and upgrade; a stored legacy navigation destination maps to Wiki fourth.",
   "evidence": {
-    "predicate": "Root checks include modules/wiki and pass; Wiki node:test suites run in a CI Node test-runner step on Node >=22.18 and stay out of Vitest discovery; home and source configuration is main-only.",
-    "invalid": "The renderer can trigger refresh, read paths or arbitrary sources, or Wiki tests are silently excluded.",
+    "predicate": "Root checks include modules/wiki and pass; Wiki node:test suites run in a CI Node test-runner step on Node >=22.18 and stay out of Vitest discovery; home and source configuration is main-only; home migration touches only the versioned app userData configuration and index; state and settings tests cover the destination migration; the wiki host emit mirrors the Design host additively; the CSP is unchanged.",
+    "invalid": "The renderer can trigger refresh, migration, read paths or arbitrary sources; an inferred legacy or private location is read; Wiki tests are silently excluded.",
     "unknown": "CI Node version cannot be raised."
   },
   "environment": [
@@ -5519,14 +7093,14 @@ No lane relays status through the owner.
   "validates": [
     "spec.hq-integration-parallel-execution#req.held-capabilities.001"
   ],
-  "scenario": "Contained S2 preview with route/viewport/digest binding.",
+  "scenario": "Every preview row of ctx.preview-qualification.001 on the native built app under HQ_QUALIFY_PREVIEW, with synthetic fixture sites, positive controls and named fault hooks, plus one separately recorded public-website smoke run.",
   "evidence": {
-    "predicate": "Native evidence for the bound predicate is accepted by T1.",
-    "invalid": "A fixture, fake, preview or simulation offered as qualification.",
-    "unknown": "The predicate is unbound; report held."
+    "predicate": "At one exact head every row has its recorded outcome: C1–C6 pass; Q-PV3h hits are recorded as disclosed reach, never as containment; picks anchor only with coherent digests and blobs are written only after acceptance; T1 accepts the claim set.",
+    "invalid": "A fake or simulated surface, a run outside the built app, a production-enabled run before the gate, mixed heads, or a hygiene observation counted as containment.",
+    "unknown": "No display or Electron 44.9.0 on the check host; report held."
   },
   "environment": [
-    "Owner-bound native environment"
+    "Owner-bound native environment: built app, Electron 44.9.0, ordinary user, display"
   ],
   "obligation_owner_task": "spec.hq-integration-parallel-execution#task.preview-s2-qualification.001",
   "evidence_executor_task": "spec.hq-integration-parallel-execution#task.preview-s2-qualification.001",
@@ -5538,7 +7112,8 @@ No lane relays status through the owner.
     "docs/"
   ],
   "affected_check_groups": [
-    "hq-held-gates"
+    "hq-held-gates",
+    "hq-preview-acceptance"
   ],
   "required_at": "verification"
 }
@@ -5553,14 +7128,14 @@ No lane relays status through the owner.
   "validates": [
     "spec.hq-integration-parallel-execution#req.held-capabilities.001"
   ],
-  "scenario": "Component execution under accepted containment.",
+  "scenario": "Q-CS1–4 and Q-CX1–6 on the native built app under the component qualification switches: every CC-CANARY channel over IPv4 and IPv6, loopback and non-loopback, redirects and DNS aliases, H-PROXY off and on, three repetitions, positive controls before and after.",
   "evidence": {
-    "predicate": "Native evidence for the bound predicate is accepted by T1.",
-    "invalid": "A fixture, fake, preview or simulation offered as qualification.",
-    "unknown": "The predicate is unbound; report held."
+    "predicate": "Per tier at one exact head: zero canary hits on every row whose positive control hit; unmeasured rows listed by name; any hit recorded as failed and never overwritten; packaged starts ignore the switches.",
+    "invalid": "A row counted without a positive control, an overwritten hit, a fake runner, a CSP-only egress claim, or Tier S offered as component closure.",
+    "unknown": "No display or Electron 44.9.0 on the check host; report held."
   },
   "environment": [
-    "Owner-bound native environment"
+    "Owner-bound native environment: built app, Electron 44.9.0, ordinary user, display"
   ],
   "obligation_owner_task": "spec.hq-integration-parallel-execution#task.component-containment-gate.001",
   "evidence_executor_task": "spec.hq-integration-parallel-execution#task.component-containment-gate.001",
@@ -5572,7 +7147,8 @@ No lane relays status through the owner.
     "docs/"
   ],
   "affected_check_groups": [
-    "hq-held-gates"
+    "hq-held-gates",
+    "hq-preview-acceptance"
   ],
   "required_at": "verification"
 }
@@ -5680,3 +7256,353 @@ No lane relays status through the owner.
 }
 ```
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#test.laptop-route-binding.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.work-session-injection.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "component",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.service-transport.001"
+  ],
+  "scenario": "Inject through the public modules/work entry before the first Work session: a live Planner port with recovery, and the labelled example.",
+  "evidence": {
+    "predicate": "The public entry exports setWorkSessionPort and examplePlanner; injection before the first session selects exactly the injected port; the example stays labelled; signature and algorithm are unchanged; resetWorkSessions is not exported.",
+    "invalid": "A deep import as the production path, an implicit fallback to the example, or a Work core, live or root change.",
+    "unknown": "The DOM test environment is unavailable."
+  },
+  "environment": [
+    "Node 24 with npm ci on a clean isolated worktree; synthetic services only"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.work-session-injection.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.work-session-injection.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "modules/work/nav/"
+  ],
+  "affected_check_groups": [
+    "hq-work-runtime"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.work-session-injection.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.preview-agent.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "unit",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "scenario": "Fake-DOM suites: untrusted synthetic events, generation tags, queue cap and drop counter, the mutation counter across takeRecords, highlight hide and restore, one-call re-resolution for element and text targets, and a tampered getBoundingClientRect.",
+  "evidence": {
+    "predicate": "Untrusted events yield no pick; every event carries its generation; re-resolution returns identity, text and rects in one call; the entry imports nothing outside its folder; the existing annotations row runs the new tests.",
+    "invalid": "A preload assumption, an IPC or Electron import, or a test outside the row's globs.",
+    "unknown": "The fake DOM cannot model MutationObserver.takeRecords."
+  },
+  "environment": [
+    "Node 24 with npm ci on a clean isolated worktree; synthetic services only"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.preview-agent.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.preview-agent.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "modules/design/annotations/src/preview-agent/"
+  ],
+  "affected_check_groups": [
+    "hq-preview-agent",
+    "design-annotations"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.preview-agent.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.preview-compare.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "component",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "scenario": "Compare with a host-surface session: placement callbacks, hide on overlay, the stale session state and labels.",
+  "evidence": {
+    "predicate": "Rects are reported in window DIP; the surface is hidden while overlays are open; stale shows as stale; captures read static capture; no iframe is created.",
+    "invalid": "An iframe, a URL load, or a stale session shown as current.",
+    "unknown": "No DOM environment."
+  },
+  "environment": [
+    "Node 24 with npm ci on a clean isolated worktree; synthetic services only"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.preview-compare.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.preview-compare.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "modules/design/compare/src/"
+  ],
+  "affected_check_groups": [
+    "hq-preview-compare",
+    "design-compare"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.preview-compare.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.component-runner-port.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "component",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "scenario": "ComponentRunnerPort fakes, declarative prop slots, and the production workspace with and without an injected runner.",
+  "evidence": {
+    "predicate": "Without a runner, production shows the held placeholder and creates no srcdoc frame; slot binding is deterministic; fakes are labelled; the harness keeps the srcdoc path.",
+    "invalid": "A srcdoc frame in production, script execution, or a fake shown as a contained run.",
+    "unknown": "No DOM environment."
+  },
+  "environment": [
+    "Node 24 with npm ci on a clean isolated worktree; synthetic services only"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.component-runner-port.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.component-runner-port.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "modules/design/components/"
+  ],
+  "affected_check_groups": [
+    "hq-component-runner-port",
+    "design-components"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.component-runner-port.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.preview-host.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "integration",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "scenario": "Node and Vitest suites without Electron: scheme-policy and hygiene tables; route validation with exact keys and bounds; the fence and PV-COHERE state machine; capture-record JCS golden vectors; the PV-TRUST factory and registry; qualification-switch gating; the Tier S document builder.",
+  "evidence": {
+    "predicate": "Every suite in ac.preview-component-source.001 passes in root checks; every route returns unavailable(disabled) while its constant is false; blob writes happen only after acceptance; the CSP string equals 73a6532's; allowedSender is unchanged.",
+    "invalid": "A CSP change, a preload on preview or component contents, generic IPC, a blob written before acceptance, or a switch honoured when packaged.",
+    "unknown": "A behaviour needs Electron; record it for native qualification."
+  },
+  "environment": [
+    "Node 24 with npm ci on a clean isolated worktree; synthetic services only"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.preview-host.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.preview-host.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "apps/desktop/electron/preview/",
+    "apps/desktop/electron/components/"
+  ],
+  "affected_check_groups": [
+    "hq-preview-host",
+    "hq-root-build"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.preview-host.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.preview-compose.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "integration",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "scenario": "Compose adapters over stubbed preview and component routes in disabled and enabled states.",
+  "evidence": {
+    "predicate": "Compare, annotations and components receive their ports; disabled shows unavailable; no generic invoke, URL fetch or path; the renderer-safe walk passes.",
+    "invalid": "A live compose path against an unlanded host, or a fake shown as a live preview.",
+    "unknown": "A route stub lacks a case."
+  },
+  "environment": [
+    "Node 24 with npm ci on a clean isolated worktree; synthetic services only"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.preview-compose.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.preview-compose.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "modules/design/app/compose/"
+  ],
+  "affected_check_groups": [
+    "hq-design-compose"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.preview-compose.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.preview-scenarios.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "integration",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001",
+    "spec.hq-integration-parallel-execution#req.acceptance.001"
+  ],
+  "scenario": "Harness self-test: fixture sites, canaries, positive controls and fault hooks start and clean up; each suite runs against the built app under its switch and records pass, fail or unmeasured per row.",
+  "evidence": {
+    "predicate": "The self-test passes; a canary without a positive-control hit reports unmeasured; packaged-mode starts ignore every switch; owned profiles, listeners and processes are removed on every exit path.",
+    "invalid": "A row passed without a positive control, a simulated surface, a sudo or packet-capture step, or a leaked process.",
+    "unknown": "No display on the check host; record a gap."
+  },
+  "environment": [
+    "Built app on the check host"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.preview-scenarios.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.preview-scenarios.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "tests/acceptance/"
+  ],
+  "affected_check_groups": [
+    "hq-preview-acceptance",
+    "hq-electron-acceptance"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.preview-scenarios.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.preview-enablement.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "unit",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "scenario": "The enabling commit flips only the preview status file.",
+  "evidence": {
+    "predicate": "Only the preview status file and its status test change; enabled-status tests pass at the accepted head.",
+    "invalid": "Any other change, or enablement without accepted evidence for the same head.",
+    "unknown": "The evidence head differs."
+  },
+  "environment": [
+    "Node 24 with npm ci on a clean isolated worktree; synthetic services only"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.preview-enablement.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.preview-enablement.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "apps/desktop/electron/"
+  ],
+  "affected_check_groups": [
+    "hq-preview-host",
+    "hq-root-build"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.preview-enablement.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.component-static-enablement.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "unit",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "scenario": "The enabling commit flips only the static component status file.",
+  "evidence": {
+    "predicate": "Only the static component status file and its status test change; enabled-status tests pass at the accepted head.",
+    "invalid": "Any other change, or enablement without accepted evidence for the same head.",
+    "unknown": "The evidence head differs."
+  },
+  "environment": [
+    "Node 24 with npm ci on a clean isolated worktree; synthetic services only"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.component-static-enablement.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.component-static-enablement.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "apps/desktop/electron/"
+  ],
+  "affected_check_groups": [
+    "hq-preview-host",
+    "hq-root-build"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.component-static-enablement.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.component-scripted-enablement.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "unit",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.preview-component.001"
+  ],
+  "scenario": "The enabling commit flips only the scripted component status file.",
+  "evidence": {
+    "predicate": "Only the scripted component status file and its status test change; enabled-status tests pass at the accepted head.",
+    "invalid": "Any other change, or enablement without accepted evidence for the same head; a measured hit or an unmeasured row not accepted by name.",
+    "unknown": "The evidence head differs."
+  },
+  "environment": [
+    "Node 24 with npm ci on a clean isolated worktree; synthetic services only"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.component-scripted-enablement.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.component-scripted-enablement.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "apps/desktop/electron/"
+  ],
+  "affected_check_groups": [
+    "hq-preview-host",
+    "hq-root-build"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.component-scripted-enablement.001" -->
