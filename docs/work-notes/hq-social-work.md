@@ -181,6 +181,19 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
   - T1's read-only check: the remote head equals the reported one, and all 22 authored paths are under `modules/wiki/contract/**`. Each of its three commits has a trailer.
   - Author-reported checks: `node --test` gave 73 of 73 passing, and `tsc -p modules/wiki/contract` exited 0. T1 did not rerun them. Root `typecheck` and `test` do not include `modules/wiki`.
   - Deferred, not fixed: the AST vocabulary and the chosen structural bounds (P3); 2 MiB for "2 MB" and the single-quote URL rejection (P4).
+- **Wiki Core and UI launched** (2026-10-20). Under a root release, the Wiki owner accepted PR #34 at `76a1dbc` as their dependency. WK-C became a launch-only parent through its post-completion follow-up and launched exactly two Sonnet 5.5 / high builders from PR #30 plan `61fbcdb` (spec blob `c3525d0d`). The allowance is now A, B and WK-C (complete) plus `lane-wiki-core` and `lane-wiki-ui`.
+  - Follow-up taskId: `node:delegated-task:command%3Amcp%3Afaf8c6d3-d325-40fe-aef1-84ea725dffd2%3Athread-send%3Ahq-wiki-contract-launch-only-followup-20261020-r1`, run ordinal 2 of WK-C's child thread. WK-C's own report mislabelled this identity with the original request ID.
+  - Core:
+    - taskId `node:delegated-task:command%3Amcp%3Ac26ffaa0-0c91-43c7-89a4-f1c229aae49d%3Adelegate-task%3Ahq-wiki-core-impl-20261020-r1`
+    - childThreadId `thread:delegated-task:command%3Amcp%3Ac26ffaa0-0c91-43c7-89a4-f1c229aae49d%3Adelegate-task%3Ahq-wiki-core-impl-20261020-r1`
+    - worktree `HQ/t3-1c3e216d`, branch `t3/wiki-core-implementation`, start `76a1dbc`
+  - UI:
+    - taskId and childThreadId use the same two prefixes, with `hq-wiki-ui-impl-20261020-r1`
+    - worktree `HQ/t3-4e8c30c1`, branch `t3/implement-wiki-ui`, start `76a1dbc`
+  - Both report to WK-C's thread. The root confirmed both running, with their own pre-write binding checks passed.
+  - **Receipt correction 1:** the taskId and childThreadId are distinct (`node:` versus `thread:` prefix). An earlier T1 relay conflated them as "task and thread".
+  - **Receipt correction 2:** WK-C's claim of no Git effect is too broad. During the reconcile it ran `git fetch -q origin refs/heads/work/hq-expansion-plan` without `--no-write-fetch-head`. That is a bounded, incidental effect on shared Git metadata and `FETCH_HEAD`, and T1's follow-up brief had asked for that fetch. The root verified that the parent's branch, HEAD, index and tracked tree are still clean at `76a1dbc`, and that the published contract ref is unchanged. `FETCH_HEAD` is not restored, and nothing is reset, cleaned or repeated. Future launch-only parents read pinned objects that are already present, without fetching.
+  - Custody: T1 keeps lifecycle and fan-in. A completed launcher turn is not completed source work, so T1 checks each child's `workState` and pending runs.
 - **B released** after A's acceptance. Its compiled capsule is `3d935de4…` at plan head `00afa36e`, with the actual ready set exactly `{domain-integration}`.
 - **B completed; the root accepted it as S** (2026-10-20) for bounded fixture/source use. This is not independent review, native proof or green CI.
   - Candidate: PR #36, branch `t3/social-work-domain-assembly` (local, remote and PR head all agree), head `562986d1852d7b4ef101ff6d4c9340c3751c727a`. Its base is this branch, which was at `cec5d07` when it opened; B started at `a385a6f`. Open, non-draft and mergeable, with zero configured checks; merge held.
