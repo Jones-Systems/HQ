@@ -442,6 +442,19 @@ class CliGuards(StoreTestCase):
             self.assertEqual(main(["--data", str(self.db_path.parent / "missing" / "x.sqlite3")]), 2)
         self.assertFalse((PUBLIC_DIR / "planning.sqlite3").exists())
 
+    def test_out_of_range_port_is_a_usage_error_before_the_store_opens(self):
+        import contextlib
+
+        from planning.__main__ import main
+
+        data = self.db_path.parent / "unopened.sqlite3"
+        for port in ("70000", "-1", "http"):
+            with self.subTest(port=port), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as raised:
+                    main(["--data", str(data), "--port", port])
+                self.assertEqual(raised.exception.code, 2)
+        self.assertFalse(data.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,12 +11,19 @@ from .server import PUBLIC_DIR, PlanningApp, ThreadingHTTPServer, is_loopback_ho
 from .store import Store
 
 
+def port_number(value: str) -> int:
+    port = int(value)
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError("must be between 0 and 65535")
+    return port
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="planning", description="Manual planning hub (loopback only).")
     parser.add_argument("--data", required=True,
                         help="SQLite store path. Must be outside the public/ directory; backups go beside it.")
     parser.add_argument("--host", default="127.0.0.1", help="Loopback address to bind (default 127.0.0.1).")
-    parser.add_argument("--port", type=int, default=8765, help="Port (default 8765).")
+    parser.add_argument("--port", type=port_number, default=8765, help="Port (default 8765).")
     parser.add_argument("--allowed-host", action="append", default=[], metavar="HOST[:PORT]",
                         help="Extra Host header value to accept, e.g. when a private proxy fronts loopback.")
     return parser.parse_args(argv)
