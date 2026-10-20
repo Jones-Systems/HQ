@@ -80,7 +80,7 @@ export const WORKBENCH_OUTPUTS: { readonly [T in ToolId]: Record<string, unknown
   'tiktok-intelligence': { ok: true, result: { niche: 'Fictional tea rituals', as_of: '2026-10-01T12:00:00Z', posts: [{ post_id: 'fixture-post-1' }, { post_id: 'fixture-post-2' }], qualifications: ['Supplied snapshots only.'] } },
   'seo-studio': { ok: true, result: { ok: false, packets: [{ slug: 'steeping-guide', findings: ['Needs a second source.'] }] } },
   'search-visibility': { ok: true, result: { queries: 1, citations: [{ url: 'https://example.invalid/steeping', count: 1 }], coverage: 1 } },
-  'reddit-opportunities': { ok: true, result: { import: { posts: 1 }, analysis: { opportunities: [{ id: 'fixture-post-1', score: 0.7 }] }, profile: 'packbench-observed (built-in example product; rankings apply to that profile)' } },
+  'reddit-opportunities': { ok: true, result: { import: { posts: 1 }, analysis: { opportunities: [{ id: 'fixture-post-1', score: 0.7 }] }, profile: 'example-product (illustrative built-in profile; rankings apply to that profile)' } },
   'creator-relationships': {
     ok: true,
     result: {

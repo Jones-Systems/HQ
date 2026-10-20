@@ -32,7 +32,7 @@ describe('tool-specific result summaries', () => {
 
     expect(summarizeRun(finished('x-intelligence', WORKBENCH_OUTPUTS['x-intelligence']))!.facts).toEqual([{ label: 'items', value: '2' }, { label: 'evidence', value: '2' }]);
     expect(summarizeRun(finished('seo-studio', WORKBENCH_OUTPUTS['seo-studio']))!.heading).toBe('Some article packets need attention');
-    expect(summarizeRun(finished('reddit-opportunities', WORKBENCH_OUTPUTS['reddit-opportunities']))!.notices[0]).toMatch(/packbench-observed/u);
+    expect(summarizeRun(finished('reddit-opportunities', WORKBENCH_OUTPUTS['reddit-opportunities']))!.notices[0]).toBe('example-product (illustrative built-in profile; rankings apply to that profile)');
   });
 
   it('maps Channel preview rule IDs to the delivered wording', () => {

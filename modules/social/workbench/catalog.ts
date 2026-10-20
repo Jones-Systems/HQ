@@ -47,8 +47,8 @@ export const TOOL_GUIDES: { readonly [T in ToolId]: ToolGuide } = {
   },
   'reddit-opportunities': {
     id: 'reddit-opportunities', input: 'import',
-    recipe: 'Analyze an imported corpus', limit: 'Built-in packbench-observed example-product profile',
-    notices: ['Scores against the built-in packbench-observed example product profile. Custom product profiles exist only in the native tool.'],
+    recipe: 'Analyze an imported corpus', limit: 'Built-in example-product profile only',
+    notices: ['Scores against the built-in example product profile. Custom product profiles exist only in the native tool.'],
   },
   'creator-relationships': {
     id: 'creator-relationships', input: 'import', notices: [],
