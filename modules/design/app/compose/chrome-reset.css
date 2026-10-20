@@ -1,0 +1,35 @@
+/*
+ * Design-scoped reset (research §(b) item 4). The HQ shell styles bare elements globally
+ * (apps/desktop/src/styles.css): `main` padding, `nav` grid, `h1`, `p` (muted, 460px cap, 1.8 line
+ * height), `dl` (grid with top rule) and `select` (full width, filled). Inside Design those rules must not
+ * apply to section content. Each rule below hands the shell's declarations back with `revert`, scoped
+ * under `.hqd-chrome` with :where() so the reset is more specific than the shell's bare element selectors
+ * (0,1,0 against 0,0,1) but ties with, and so never overrides, a section's own single-class rules.
+ *
+ * Only Design is affected. The shell's rules and the Social and Work modules are untouched.
+ */
+.hqd-chrome :where(main) { padding: revert; }
+.hqd-chrome :where(nav) { display: revert; gap: revert; }
+.hqd-chrome :where(h1) { font-size: revert; font-weight: revert; letter-spacing: revert; line-height: revert; margin: revert; }
+.hqd-chrome :where(p) { color: revert; font-size: revert; line-height: revert; max-width: revert; }
+.hqd-chrome :where(dl) {
+  margin-top: revert; border-top: revert; padding-top: revert; display: revert; grid-template-columns: revert; gap: revert; font-size: revert;
+}
+.hqd-chrome :where(dt) { color: revert; }
+.hqd-chrome :where(select) { width: revert; background: revert; border: revert; border-radius: revert; padding: revert; font-size: revert; }
+
+/* Composition frame: the evidence strip shown above every composed section view. */
+.hqd-compose-frame { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.hqd-compose-strip {
+  flex: none; margin: 0; padding: 4px 10px; font-size: 12px; line-height: 1.4;
+  background: var(--hqd-surface, #fff4d6); color: var(--hqd-text, #5c4400); border-bottom: 1px dashed var(--hqd-accent, #c77700);
+}
+.hqd-compose-strip strong { text-transform: uppercase; letter-spacing: 0.4px; margin-right: 6px; }
+.hqd-compose-strip code { font-size: 11px; }
+.hqd-compose-body { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+/* Bounded height for canvas-like views; scroll sideways rather than clip when the chrome is narrow. */
+.hqd-compose-body.is-fill { padding: 0; overflow: auto hidden; display: flex; flex-direction: column; }
+.hqd-compose-body.is-fill > * { flex: 1; min-height: 0; min-width: min-content; }
+.hqd-compose-note { margin: 0 0 8px; font-size: 12px; }
+.hqd-compose-note ul { margin: 4px 0 0; padding-left: 18px; }
+.hqd-compose-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 8px; font-size: 12px; }
