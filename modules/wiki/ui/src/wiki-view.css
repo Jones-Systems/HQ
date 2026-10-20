@@ -280,6 +280,10 @@
   font-size: 0.8em;
 }
 
+.wiki-view .wiki-outlinks .wiki-link-missing::after {
+  content: none;
+}
+
 .wiki-view .wiki-link-external {
   text-decoration: underline dotted;
   text-underline-offset: 2px;

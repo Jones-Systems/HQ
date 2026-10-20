@@ -44,7 +44,7 @@ function Node(props: {
       'div',
       { className: 'wiki-topic-head' },
       expandable
-        ? h('button', { type: 'button', className: 'wiki-toggle', 'aria-expanded': expanded, 'aria-label': `${expanded ? 'Collapse' : 'Expand'} ${topic.label}`, onClick: () => toggle(topic.id) }, expanded ? '▾' : '▸')
+        ? h('button', { type: 'button', className: 'wiki-toggle', 'aria-expanded': expanded, 'aria-label': `${expanded ? 'Collapse' : 'Expand'} ${topic.label}`, onClick: () => toggle(topic.id) }, expanded ? '−' : '+')
         : h('span', { className: 'wiki-toggle-spacer', 'aria-hidden': true }),
       h('span', { className: 'wiki-topic-label' }, topic.label),
       h('span', { className: 'wiki-badge', 'data-count': topic.pageCount }, `${topic.pageCount} ${topic.pageCount === 1 ? 'page' : 'pages'}`),
