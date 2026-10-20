@@ -1,6 +1,6 @@
 /**
- * Preview agent: a pure DOM script that root bundles into the preview
- * preload. It has no Node, IPC or application access of its own; root passes
+ * Preview agent: a pure DOM script for injection into isolated world 1001.
+ * It has no Node, IPC or application access of its own; root passes
  * a `post` function and drives `setMode`/`resolve` through its typed bridge.
  *
  * Pick mode emits only `element-picked`; Cite mode emits only `text-cited`.
@@ -8,13 +8,17 @@
  */
 import type {
   AgentEvent,
+  ExactTarget,
+  ExactResolveRequest,
+  ExactResolveResult,
+  ExactResolution,
   AgentFrame,
   AgentMode,
   AgentResolution,
   Rect,
   ResolveRequest,
   ResolveResult,
-} from '../contract.ts';
+} from './types.ts';
 import { elementPath, textHash } from './dom-path.ts';
 import { locateQuote, quoteContext } from './text-quote.ts';
 
@@ -24,7 +28,11 @@ export interface AgentHost {
 
 export interface PreviewAgent {
   readonly mode: AgentMode;
-  setMode(mode: AgentMode): void;
+  readonly generation: number;
+  setMode(mode: AgentMode, generation?: number): void;
+  mutationCounter(): number;
+  setHighlightHidden(hidden: boolean): void;
+  resolveExact(requests: readonly ExactResolveRequest[]): ExactResolution;
   frame(): AgentFrame;
   resolve(requests: readonly ResolveRequest[]): AgentResolution;
   dispose(): void;
@@ -52,12 +60,44 @@ interface TextIndex {
 }
 
 export function installPreviewAgent(win: Window, host: AgentHost, options: AgentOptions = {}): PreviewAgent {
+  if (win.top !== win.self) throw new Error('Preview agent requires the main frame');
   const doc = win.document;
+  // Capture isolated-realm intrinsics, never target-owned method overrides.
+  const realm = win as Window & typeof globalThis;
+  const elementRect = realm.Element.prototype.getBoundingClientRect;
+  const clientRects = realm.Range.prototype.getClientRects;
+  let generation = 0;
+  let disposed = false;
+  let highlightHidden = false;
+  let highlightDisplay = 'none';
+  let mutations = 0;
+  const identities = new WeakMap<Node, number>();
+  let nextIdentity = 1;
+  const nodeId = (node: Node): number => {
+    let id = identities.get(node);
+    if (id === undefined) { id = nextIdentity++; identities.set(node, id); }
+    return id;
+  };
   const settleMs = options.citeSettleMs ?? 500;
   let mode: AgentMode = 'off';
   let highlight: HTMLElement | null = null;
   let lastCite = '';
   let citeTimer: number | null = null;
+
+  const countMutations = (records: readonly MutationRecord[]): void => {
+    for (const record of records) {
+      if (record.target === highlight) continue;
+      const changed = [...record.addedNodes, ...record.removedNodes];
+      if (record.type === 'childList' && changed.length > 0 && changed.every((node) => node === highlight)) continue;
+      mutations += 1;
+    }
+  };
+  const observer = new realm.MutationObserver(countMutations);
+  observer.observe(doc.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+  const mutationCounter = (): number => {
+    countMutations(observer.takeRecords());
+    return mutations;
+  };
 
   const frame = (): AgentFrame => ({
     viewport: { w: win.innerWidth, h: win.innerHeight, dpr: win.devicePixelRatio || 1 },
@@ -113,7 +153,7 @@ export function installPreviewAgent(win: Window, host: AgentHost, options: Agent
   };
 
   const rangeRects = (range: Range): Rect[] =>
-    Array.from(range.getClientRects())
+    Array.from(clientRects.call(range))
       .filter((rect) => rect.width > 0 && rect.height > 0)
       .slice(0, MAX_RECTS)
       .map(toSource);
@@ -133,6 +173,7 @@ export function installPreviewAgent(win: Window, host: AgentHost, options: Agent
   };
 
   const hideHighlight = (): void => {
+    highlightDisplay = 'none';
     if (highlight !== null) highlight.style.display = 'none';
   };
 
@@ -143,33 +184,36 @@ export function installPreviewAgent(win: Window, host: AgentHost, options: Agent
   };
 
   const onPointerMove = (event: Event): void => {
-    if (mode !== 'pick') return;
+    if (disposed || mode !== 'pick' || !event.isTrusted) return;
     const target = pickTarget(event);
     if (target === null) return hideHighlight();
-    const rect = target.getBoundingClientRect();
+    const rect = elementRect.call(target);
+    highlightDisplay = 'block';
     Object.assign(ensureHighlight().style, {
-      display: 'block', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`,
+      display: highlightHidden ? 'none' : highlightDisplay, left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`,
     });
   };
 
   const swallow = (event: Event): void => {
-    if (mode !== 'pick') return;
+    if (disposed || mode !== 'pick' || !event.isTrusted) return;
     event.preventDefault();
     event.stopImmediatePropagation();
   };
 
   const onPickClick = (event: Event): void => {
-    if (mode !== 'pick') return;
+    if (disposed || mode !== 'pick' || !event.isTrusted) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     const target = pickTarget(event);
     if (target === null) return;
     host.post({
       type: 'element-picked',
+      generation,
+      snapshot: elementSnapshot(target),
       target: {
         kind: 'element',
         path: elementPath(target, isUniqueId),
-        rect: toSource(target.getBoundingClientRect()),
+        rect: toSource(elementRect.call(target)),
         textHash: textHash(target.textContent ?? ''),
       },
       frame: frame(),
@@ -206,16 +250,17 @@ export function installPreviewAgent(win: Window, host: AgentHost, options: Agent
     trimmed.setStart(startPos.node, startPos.offset);
     trimmed.setEnd(endPos.node, endPos.offset);
     const { prefix, suffix } = quoteContext(index.text, start, end);
-    host.post({ type: 'text-cited', target: { kind: 'text', quote, prefix, suffix, rects: rangeRects(trimmed) }, frame: frame() });
+    host.post({ type: 'text-cited', generation, snapshot: textSnapshot(index, start, end, trimmed), target: { kind: 'text', quote, prefix, suffix, rects: rangeRects(trimmed) }, frame: frame() });
   };
 
-  const onCiteEnd = (): void => {
-    if (mode !== 'cite') return;
+  const onCiteEnd = (event: Event): void => {
+    if (disposed || mode !== 'cite' || !event.isTrusted) return;
     cancelCite();
     citeTimer = win.setTimeout(emitCite, settleMs);
   };
 
   const onPress = (event: Event): void => {
+    if (disposed || !event.isTrusted) return;
     if (mode === 'pick') swallow(event);
     else if (mode === 'cite') cancelCite();
   };
@@ -243,7 +288,7 @@ export function installPreviewAgent(win: Window, host: AgentHost, options: Agent
         if (relocated !== null) element = relocated;
       }
       if (element === null) return { found: false };
-      return { found: true, rects: [toSource(element.getBoundingClientRect())], textHash: textHash(element.textContent ?? '') };
+      return { found: true, rects: [toSource(elementRect.call(element))], textHash: textHash(element.textContent ?? '') };
     }
     const match = locateQuote(index.text, request.quote, request.prefix, request.suffix);
     if (match === null) return { found: false };
@@ -256,15 +301,63 @@ export function installPreviewAgent(win: Window, host: AgentHost, options: Agent
     return { found: true, rects: rangeRects(range) };
   };
 
+  const elementSnapshot = (element: Element): ExactTarget => ({
+    identity: `element:${nodeId(element)}`,
+    text: element.textContent ?? '',
+    rects: [toSource(elementRect.call(element))],
+  });
+
+  const textSnapshot = (index: TextIndex, start: number, end: number, range: Range): ExactTarget => ({
+    identity: `text:${index.nodes.flatMap((node, i) => {
+      const from = Math.max(0, start - index.starts[i]!);
+      const to = Math.min(node.data.length, end - index.starts[i]!);
+      return from < to ? [`${nodeId(node)}:${from}:${to}`] : [];
+    }).join('|')}`,
+    text: index.text.slice(start, end),
+    rects: rangeRects(range),
+  });
+
+  const exactOne = (index: TextIndex, request: ExactResolveRequest): ExactResolveResult => {
+    let snapshot: ExactTarget;
+    if (request.kind === 'element') {
+      let matches: NodeListOf<Element>;
+      try { matches = doc.querySelectorAll(request.path); } catch { return { found: false }; }
+      if (matches.length !== 1) return { found: false };
+      const element = matches[0]!;
+      if (request.textHash !== undefined && textHash(element.textContent ?? '') !== request.textHash) return { found: false };
+      snapshot = elementSnapshot(element);
+    } else {
+      if (request.quote.length === 0) return { found: false };
+      const matches: ExactTarget[] = [];
+      for (let start = index.text.indexOf(request.quote); start !== -1; start = index.text.indexOf(request.quote, start + 1)) {
+        const end = start + request.quote.length;
+        if (!index.text.slice(0, start).endsWith(request.prefix) || !index.text.slice(end).startsWith(request.suffix)) continue;
+        const from = positionAt(index, start);
+        const to = positionAt(index, end);
+        if (from === null || to === null) continue;
+        const range = doc.createRange();
+        range.setStart(from.node, from.offset);
+        range.setEnd(to.node, to.offset);
+        const candidate = textSnapshot(index, start, end, range);
+        if (request.identity === undefined || candidate.identity === request.identity) matches.push(candidate);
+        if (matches.length > 1) return { found: false };
+      }
+      if (matches.length !== 1) return { found: false };
+      snapshot = matches[0]!;
+    }
+    if (request.identity !== undefined && request.identity !== snapshot.identity) return { found: false };
+    return { found: true, ...snapshot };
+  };
+
   const listeners: ReadonlyArray<readonly [string, (event: Event) => void]> = [
     ['pointermove', onPointerMove],
     ['pointerdown', onPress],
     ['mousedown', onPress],
-    ['mouseup', (event) => (mode === 'pick' ? swallow(event) : onCiteEnd())],
+    ['mouseup', (event) => (mode === 'pick' ? swallow(event) : onCiteEnd(event))],
     ['click', onPickClick],
     ['dblclick', swallow],
     ['auxclick', swallow],
-    ['keyup', () => onCiteEnd()],
+    ['keyup', onCiteEnd],
   ];
   for (const [type, listener] of listeners) win.addEventListener(type, listener, true);
 
@@ -272,18 +365,36 @@ export function installPreviewAgent(win: Window, host: AgentHost, options: Agent
     get mode() {
       return mode;
     },
-    setMode(next: AgentMode): void {
+    get generation() { return generation; },
+    setMode(next: AgentMode, nextGeneration = generation + 1): void {
+      if (disposed) throw new Error('Preview agent disposed');
+      if (!Number.isSafeInteger(nextGeneration) || nextGeneration < generation) throw new RangeError('Invalid mode generation');
       cancelCite();
+      generation = nextGeneration;
       mode = next;
       lastCite = '';
       hideHighlight();
     },
     frame,
+    mutationCounter,
+    setHighlightHidden(hidden: boolean): void {
+      highlightHidden = hidden;
+      if (highlight !== null) highlight.style.display = hidden ? 'none' : highlightDisplay;
+    },
+    resolveExact(requests: readonly ExactResolveRequest[]): ExactResolution {
+      if (disposed) throw new Error('Preview agent disposed');
+      if (requests.length > 50) throw new RangeError('At most 50 resolution requests');
+      const index = indexText();
+      const results = requests.map((request) => exactOne(index, request));
+      return { generation, frame: frame(), mutationCounter: mutationCounter(), results };
+    },
     resolve(requests: readonly ResolveRequest[]): AgentResolution {
       const index = indexText();
       return { frame: frame(), results: requests.map((request) => resolveOne(index, request)) };
     },
     dispose(): void {
+      disposed = true;
+      observer.disconnect();
       cancelCite();
       mode = 'off';
       for (const [type, listener] of listeners) win.removeEventListener(type, listener, true);

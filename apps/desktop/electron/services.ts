@@ -71,9 +71,9 @@ export function encodeOriginal(call: WorkMutationCall): Encoded | null { return 
 export function encodeSocial(route: unknown, p: unknown): Encoded | null {
   if (typeof route !== 'string' || !Object.hasOwn(SOCIAL_PATHS, route) || !record(p) || !jsonValue(p)) return null;
   let path = SOCIAL_PATHS[route as SocialServiceRoute];
-  if (route === 'workspace') return keys(p, []) ? { method: 'GET', path, loss: 'unknown' } : null;
-  if (route === 'run') return keys(p, ['id']) && id(p.id) ? { method: 'GET', path: path + p.id, loss: 'unknown' } : null;
-  if (route === 'sample') return keys(p, ['tool']) && typeof p.tool === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(p.tool) ? { method: 'GET', path: path + p.tool, loss: 'unknown' } : null;
+  if (route === 'workspace') return keys(p, []) ? { method: 'GET', path, loss: 'unavailable' } : null;
+  if (route === 'run') return keys(p, ['id']) && id(p.id) ? { method: 'GET', path: path + p.id, loss: 'unavailable' } : null;
+  if (route === 'sample') return keys(p, ['tool']) && typeof p.tool === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(p.tool) ? { method: 'GET', path: path + p.tool, loss: 'unavailable' } : null;
   if (route === 'addBrand' && (!keys(p, ['name']) || typeof p.name !== 'string')) return null;
   if (route === 'submitRun' && (!keys(p, ['tool', 'input', 'is_example']) || typeof p.tool !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(p.tool) || !record(p.input) || typeof p.is_example !== 'boolean')) return null;
   if (route === 'saveContent') {
@@ -139,13 +139,13 @@ export function createServices(config: ServiceConfig, transport: Transport = sen
       try { encoded = encodeSocial(route, params); base = config.get('social'); } catch { return unavailable(); }
       if (!encoded || !base) return unavailable();
       if (encoded.body !== undefined && !tokens.has(base.origin)) {
-        await socialRequest(base, { method: 'GET', path: '/api/workspace', loss: 'unknown' });
+        await socialRequest(base, { method: 'GET', path: '/api/workspace', loss: 'unavailable' });
         if (!tokens.has(base.origin)) return unavailable();
       }
       const response = await socialRequest(base, encoded, tokens.get(base.origin));
       if ((route === 'saveContent' || route === 'addBrand') && response.ok && response.status === 403 && record(response.body) && response.body.error === 'Reload the workspace before saving') {
         tokens.delete(base.origin);
-        const refresh = await socialRequest(base, { method: 'GET', path: '/api/workspace', loss: 'unknown' });
+        const refresh = await socialRequest(base, { method: 'GET', path: '/api/workspace', loss: 'unavailable' });
         if (!refresh.ok || refresh.status < 200 || refresh.status >= 300 || !tokens.has(base.origin)) return response;
         return socialRequest(base, encoded, tokens.get(base.origin));
       }

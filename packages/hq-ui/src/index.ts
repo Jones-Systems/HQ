@@ -5,7 +5,14 @@
 // `tokens/t0-bridge.css` is deliberately not loaded here: it redefines T0 shell names and is the shell owner's.
 import './tokens/hq-tokens.css';
 import './components/hq-ui.css';
+import './references/references.css';
 
 export * from './components';
 export * from './contrast';
 export * from './tokens';
+export { ReferenceChip, type ReferenceChipProps } from './references/ReferenceChip';
+export { LinkList, type LinkListProps } from './references/LinkList';
+export { LinkPicker, type LinkPickerProps } from './references/LinkPicker';
+export { REFERENCE_STATUSES, referenceKey, type ReferenceStatus, type ReferenceResolution, type ReferencePort,
+  type ReturnContext, type ReferenceEntry, type ReferenceUndo, type ReferenceSnapshotUpdate } from './references/types';
+export { REFERENCE_MAX_AGE_MS } from './references/freshness';

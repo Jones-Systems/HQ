@@ -3,9 +3,11 @@ import type { ClockPort, ComponentSource, Easing, MotionStudy, RenderInput } fro
 import { EASING_PRESETS, easingCurve, easingToCss, parseEasing, progressAt, totalDuration, withSegmentEasing } from '../src/model/motion.ts';
 import { INITIAL_PLAYER, currentTime, frameAt, pause, play, replay, scrub, setLoop, tick } from '../src/model/player.ts';
 import type { PlayerState } from '../src/model/player.ts';
-import { SandboxFrame } from './SandboxFrame.tsx';
+import { ComponentSurface } from './ComponentSurface.tsx';
+import type { ComponentRunnerPort } from '../src/runner.ts';
 
 export interface MotionPlayerProps {
+  readonly runner?: ComponentRunnerPort;
   readonly study: MotionStudy;
   /** Exact component revision the study animates, if available. */
   readonly target: { readonly source: ComponentSource; readonly input: RenderInput } | null;
@@ -96,7 +98,7 @@ function EasingEditor({ easing, segmentMs, onChange }: { readonly easing: Easing
  * Motion study player: timeline, easing parameters, scrub and replay. The
  * shown frame is always `sampleStudy(draft, t)` for the current `t`.
  */
-export function MotionPlayer({ study, target, clock, onSaveDraft }: MotionPlayerProps) {
+export function MotionPlayer({ study, target, clock, onSaveDraft, runner }: MotionPlayerProps) {
   const [draft, setDraft] = useState(study);
   const [player, setPlayer] = useState<PlayerState>(INITIAL_PLAYER);
   const [now, setNow] = useState(() => clock.now());
@@ -131,7 +133,7 @@ export function MotionPlayer({ study, target, clock, onSaveDraft }: MotionPlayer
   const selectedTrack = segment === null ? undefined : draft.tracks.find((track) => track.id === segment.trackId);
   const selectedFrame = segment === null ? undefined : selectedTrack?.keyframes[segment.index];
   const nextFrame = segment === null ? undefined : selectedTrack?.keyframes[segment.index + 1];
-  const motion = useMemo(() => ({ study: draft, frame }), [draft, frame]);
+  const motion = useMemo(() => ({ study: draft, time: t }), [draft, t]);
 
   const toggle = () => {
     const reading = clock.now();
@@ -151,7 +153,7 @@ export function MotionPlayer({ study, target, clock, onSaveDraft }: MotionPlayer
 
     <div className="hqc-motion-stage">
       {target === null ? <p className="hqc-note">This study has no bound component revision.</p>
-        : <SandboxFrame source={target.source} input={target.input} motion={motion} />}
+        : <ComponentSurface source={target.source} input={target.input} motion={motion} runner={runner} />}
     </div>
 
     <div className="hqc-transport" role="group" aria-label="Playback">
