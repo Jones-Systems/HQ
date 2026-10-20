@@ -8,6 +8,7 @@ import {
   type DateInput, type Filters, type Settings, type Status, type WorkState, type WorkStore,
 } from '../core';
 import { CardDetail } from '../detail';
+import { WorkExport, type WorkExportPort } from '../export';
 import { PLANNING_VIEW_IDS, PlanningViews, PROJECT_NOTE, type PlanningViewId, type WorkDestination } from '../views';
 import {
   itemDestination, NAV_ITEMS, PAGE_LABELS, pageDestination, parseWorkDestination, viewLinkDestination,
@@ -28,6 +29,7 @@ export const EXAMPLE_NOTE = 'Fictional example planning, kept in memory for this
 const VIEWS_POLL_MS = 2_147_483_647;
 
 export interface WorkDomainProps extends ModulePort {
+  readonly workExport?: WorkExportPort;
   readonly references?: ReferencePort;
   readonly returnContext?: ReturnContext;
   /** Clock for "today" in the Planner display zone; tests pin it. */
@@ -46,7 +48,7 @@ const isPlanningView = (page: WorkPage): page is PlanningViewId => (PLANNING_VIE
  * text. Remounting, navigating and switching pages read nothing new and write nothing; a focused card-detail field is
  * still saved by the detail panel itself when focus leaves it. The Planner port has no execution member at all.
  */
-export function WorkDomain({ context, destination, navigate, now, pollMs, references, returnContext }: WorkDomainProps) {
+export function WorkDomain({ context, destination, navigate, now, pollMs, references, returnContext, workExport }: WorkDomainProps) {
   const session = workSession(context.id);
   const { store, feedback, drafts, detail, ui } = session;
   const state = useWorkState(store, pollMs === undefined ? {} : { pollMs });
@@ -103,7 +105,7 @@ export function WorkDomain({ context, destination, navigate, now, pollMs, refere
   } else if (isPlanningView(page.page)) {
     body = <PlanningViews store={store} view={page.page} filters={view.filters} {...(now ? { now } : {})} pollMs={VIEWS_POLL_MS} {...links} />;
   } else if (page.page === 'settings') {
-    body = <SettingsPage settings={state.confirmed?.settings ?? null} loading={state.confirmed === null} />;
+    body = <><SettingsPage settings={state.confirmed?.settings ?? null} loading={state.confirmed === null} /><WorkExport key={context.id} port={workExport} /></>;
   } else {
     body = (
       <StateView
