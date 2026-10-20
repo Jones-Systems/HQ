@@ -7,7 +7,8 @@ const FOCUSABLE = [
 ].join(',');
 
 export function focusableWithin(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => !el.closest('[inert]') && !el.hidden);
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE))
+    .filter((el) => el.tabIndex >= 0 && !el.closest('[inert], [hidden]'));
 }
 
 export interface DialogProps {
@@ -35,14 +36,17 @@ export function Dialog({
 }: DialogProps) {
   const id = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  // Record the opener while rendering the open dialog, before commit: a child's autoFocus moves focus before effects run.
+  if (open && !panelRef.current) openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
   useEffect(() => {
     if (!open) return;
     const panel = panelRef.current;
     if (!panel) return;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const opener = openerRef.current;
     (initialFocusRef?.current ?? focusableWithin(panel)[0] ?? panel).focus();
     const keepFocus = (event: FocusEvent) => {
       if (event.target instanceof Node && !panel.contains(event.target)) (focusableWithin(panel)[0] ?? panel).focus();
@@ -57,7 +61,9 @@ export function Dialog({
   if (!open) return null;
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // A nested widget that handled Escape (for example a Menu) marks it defaultPrevented; only a bare Escape closes.
     if (event.key === 'Escape') {
+      if (event.defaultPrevented) return;
       event.stopPropagation();
       onCloseRef.current();
       return;
@@ -74,7 +80,13 @@ export function Dialog({
 
   return (
     <div className="hq-dialog-layer">
-      <div className="hq-dialog-scrim" aria-hidden="true" onClick={dismissOnScrim ? () => onCloseRef.current() : undefined} />
+      {/* preventDefault on mousedown keeps focus in the panel, so Escape still works after a scrim click. */}
+      <div
+        className="hq-dialog-scrim"
+        aria-hidden="true"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={dismissOnScrim ? () => onCloseRef.current() : undefined}
+      />
       <div
         ref={panelRef}
         role={role}

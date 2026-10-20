@@ -125,6 +125,79 @@ describe.each(['light', 'dark'] as const)('primitives in %s chrome', (theme) => 
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
+  it('Escape inside a Menu in a Dialog closes only the menu', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<Dialog open onClose={onClose} title="Card">
+      <Menu trigger="Card actions" items={[{ id: 'rename', label: 'Rename', onSelect: vi.fn() }]} />
+    </Dialog>);
+    const trigger = screen.getByRole('button', { name: 'Card actions' });
+    expect(document.activeElement).toBe(trigger);
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menu')).toBeTruthy();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(trigger);
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('Dialog keeps focus inside when the scrim is clicked and dismissOnScrim is off', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<Dialog open onClose={onClose} title="Unsaved" dismissOnScrim={false} actions={<Button onClick={vi.fn()}>Keep editing</Button>} />);
+    const keep = screen.getByRole('button', { name: 'Keep editing' });
+    expect(document.activeElement).toBe(keep);
+    await user.click(document.querySelector('.hq-dialog-scrim')!);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(keep);
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('Dialog Tab wrap skips tabindex="-1" elements and elements in hidden ancestors', async () => {
+    const user = userEvent.setup();
+    const actions = (hiddenPanel: boolean) => <>
+      <Button>Apply</Button>
+      <Button>Cancel</Button>
+      <Button tabIndex={-1}>Roving</Button>
+      {hiddenPanel && <div hidden><Button>Hidden panel action</Button></div>}
+    </>;
+    for (const hiddenPanel of [false, true]) {
+      const { unmount } = render(<Dialog open onClose={vi.fn()} title="Filters" actions={actions(hiddenPanel)} />);
+      const apply = screen.getByRole('button', { name: 'Apply' });
+      const cancel = screen.getByRole('button', { name: 'Cancel' });
+      expect(document.activeElement).toBe(apply);
+      await user.tab({ shift: true });
+      expect(document.activeElement).toBe(cancel);
+      await user.tab();
+      expect(document.activeElement).toBe(apply);
+      unmount();
+    }
+  });
+
+  it('Dialog restores focus to the opener when a child uses autoFocus', async () => {
+    const user = userEvent.setup();
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return <>
+        <Button onClick={() => setOpen(true)}>Rename</Button>
+        <Dialog open={open} onClose={() => setOpen(false)} title="Rename card">
+          <input aria-label="Card name" autoFocus />
+        </Dialog>
+      </>;
+    }
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Rename' });
+    await user.tab();
+    await user.keyboard('{Enter}');
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Card name' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
   it('Toast announces politely, offers Undo by keyboard and dismisses with Escape', async () => {
     const user = userEvent.setup();
     const undo = vi.fn();
@@ -136,6 +209,8 @@ describe.each(['light', 'dark'] as const)('primitives in %s chrome', (theme) => 
     expect(screen.getByRole('region', { name: 'Notifications' })).toBeTruthy();
     const live = screen.getByRole('status');
     expect(live.getAttribute('aria-live')).toBe('polite');
+    // role="status" implies aria-atomic="true"; each new toast must be read alone, not the whole stack again.
+    expect(live.getAttribute('aria-atomic')).toBe('false');
     expect(live.textContent).toContain('Planning change only · no run started');
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo' }));
