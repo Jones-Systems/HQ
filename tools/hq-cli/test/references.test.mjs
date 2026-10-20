@@ -115,6 +115,29 @@ test('canonical backend vectors preserve exact ReferenceEnvelope accept/reject s
   }
 });
 
+// Server-only rules the CLI may defer to the service's HTTP 400: Python label
+// defaulting to target.title and entry-ID uniqueness. Either outcome is safe.
+const serverOnly = new Set(['default-label-overflow', 'duplicate-entry-id']);
+test('every canonical vector is accepted, rejected locally, or deferred to an explicit service 400', async t => {
+  const dir = await scratch(t);
+  const vectors = JSON.parse(readFileSync(new URL('../../../services/planner/contract/reference-vectors.json', import.meta.url)));
+  for (const vector of vectors.cases) {
+    const file = await dir.write(`${vector.id}.json`, { title: 'Vector', references: vector.input });
+    const h = server(() => vector.errors ? json({ error: 'invalid', message: 'Some fields are invalid.', errors: vector.errors }, 400) : json({ item: item({ title: 'Vector', references: vector.expected }), state_version: 9 }), modern);
+    const output = await run(['planner', 'items', 'create', '--fields-file', file], h.deps);
+    const sent = h.writes().map(call => call.parsed.fields.references);
+    if (!vector.errors) {
+      assert.equal(output.exitCode, 0, vector.id); assert.deepEqual(sent, [vector.input], vector.id);
+      assert.deepEqual(output.result.data.item.references, vector.expected, vector.id);
+    } else if (serverOnly.has(vector.id) && sent.length) {
+      assert.deepEqual(sent, [vector.input], vector.id);
+      assert.equal(output.result.effect, 'none', vector.id); assert.equal(output.result.error.code, 'validation_error', vector.id);
+    } else {
+      assert.equal(output.exitCode, 2, vector.id); assert.equal(output.result.effect, 'none', vector.id); assert.equal(h.calls.length, 0, vector.id);
+    }
+  }
+});
+
 test('HQ duplicate identity retains Work slash-joined collision semantics', async t => {
   const dir = await scratch(t);
   const file = await dir.write('duplicate.json', { title: 'Linked', references: [
