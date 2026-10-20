@@ -1,0 +1,36 @@
+{
+  "schema": "hq.planner.exchange/v1",
+  "request": {
+    "method": "POST",
+    "path": "/api/items/batch",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-Planning-Request": "1",
+      "X-Request-Id": "contract-dry"
+    },
+    "body_utf8": "{\"items\":[{\"title\":\"Batch A\",\"references\":[{\"id\":\"ref001\",\"kind\":\"hq\",\"label\":\"Example design\",\"target\":{\"version\":1,\"domain\":\"design\",\"projectId\":\"project-example\",\"kind\":\"artifact\",\"entityId\":\"artifact-example\",\"title\":\"Example design\",\"returnDestination\":{\"domain\":\"design\",\"destination\":\"artifact/example\"}}}]}],\"dry_run\":true}"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Length": "64"
+    },
+    "body": {
+      "valid": true,
+      "count": 1,
+      "dry_run": true,
+      "state_version": 7
+    }
+  }
+}

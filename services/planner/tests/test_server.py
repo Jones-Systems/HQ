@@ -200,7 +200,7 @@ class BatchAndReplayApi(AppTestCase):
         for path in ("/api/version", "/api/state"):
             resp, data = self.call("GET", path)
             self.assertEqual(data["api"], 2)
-            self.assertEqual(data["features"], ["items.batch_create", "requests.replay"])
+            self.assertEqual(data["features"], ["items.batch_create", "requests.replay", "hq-references-v1"])
             self.assertEqual(data["request_retention"], {"max": 2000, "evicted_through_version": 0})
         raw = b'{"items":[{"title":"A"},{"title":"B"}]}'
         headers = {"x-request-id": "request-0001"}

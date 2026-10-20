@@ -159,7 +159,7 @@ class Store:
     def _capabilities(self, conn) -> dict:
         floor = int(conn.execute(
             "SELECT value FROM meta WHERE key='request_evicted_through_version'").fetchone()[0])
-        return {"api": 2, "features": ["items.batch_create", "requests.replay"],
+        return {"api": 2, "features": ["items.batch_create", "requests.replay", "hq-references-v1"],
                 "request_retention": {"max": MAX_REMEMBERED_REQUESTS, "evicted_through_version": floor}}
 
     def snapshot(self) -> dict:
@@ -785,7 +785,7 @@ def _markdown_item(item: dict) -> list[str]:
     for step in item["next_steps"]:
         lines.append(f"- [{'x' if step['done'] else ' '}] {step['text']}")
     for ref in item["references"]:
-        lines.append(f"- {ref['kind']}: {ref['label']}" + (f" <{ref['url']}>" if ref["url"] else ""))
+        lines.append(f"- {ref['kind']}: {ref['label']}" + (f" <{ref['url']}>" if ref.get("url") else ""))
     if item["notes"].strip():
         lines += ["", item["notes"].strip()]
     lines.append("")

@@ -147,6 +147,72 @@ def _safe_url(url: str) -> bool:
     )
 
 
+# ReferenceEnvelope text follows ECMAScript trim and UTF-16 length, unlike
+# Planner labels, which keep the existing Python whitespace/code-point rules.
+_JS_SPACE = "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+_HQ_DOMAINS = ("design", "social", "work")
+
+
+def _hq_text(value: object, limit: int = 160) -> bool:
+    return (isinstance(value, str) and bool(value) and value.strip(_JS_SPACE) == value
+            and len(value.encode("utf-16-le", errors="surrogatepass")) // 2 <= limit
+            and not any(ord(ch) < 32 or ord(ch) == 127 for ch in value))
+
+
+def _hq_target(value: object) -> dict | None:
+    if not isinstance(value, dict) or set(value) - {
+        "version", "domain", "projectId", "kind", "entityId", "title",
+        "returnDestination", "sourceRevision", "workspaceId",
+    }:
+        return None
+    destination = value.get("returnDestination")
+    if (type(value.get("version")) not in (int, float) or value["version"] != 1
+            or value.get("domain") not in _HQ_DOMAINS
+            or not all(_hq_text(value.get(key)) for key in ("projectId", "kind", "entityId"))
+            or not _hq_text(value.get("title"), 300)
+            or not isinstance(destination, dict)
+            or set(destination) - {"domain", "destination"}
+            or destination.get("domain") not in _HQ_DOMAINS
+            or not _hq_text(destination.get("destination"), 512)):
+        return None
+    route = destination["destination"]
+    if re.match(r"^[a-z\u017f\u212a][a-z0-9\u017f\u212a+.-]*:|^[/\\]{2}", route, re.IGNORECASE | re.ASCII):
+        return None
+    if any(key in value and not _hq_text(value[key], limit)
+           for key, limit in (("sourceRevision", 300), ("workspaceId", 160))):
+        return None
+    return {**value, "version": 1, "returnDestination": dict(destination)}
+
+
+def _hq_reference(raw: dict, index: int, errors: list, targets: set) -> dict | None:
+    malformed = {"field": "references", "message": f"Reference {index + 1} is malformed."}
+    if set(raw) - {"id", "kind", "label", "target"}:
+        errors.append(malformed)
+        return None
+    ref_id = _entry_id(raw)
+    target = _hq_target(raw.get("target"))
+    if target is None:
+        errors.append({"field": "references", "message": f"Reference {index + 1} has an invalid HQ target."})
+        return None
+    label = "" if raw.get("label") is None else _single_line(raw["label"], "references", MAX_REF_LABEL, errors)
+    if label is None:
+        return None
+    shown = label or target["title"]
+    if len(shown) > MAX_REF_LABEL:
+        errors.append({"field": "references", "message": f"Limited to {MAX_REF_LABEL} characters."})
+        return None
+    # Preserve Work's slash-joined identity semantics, including delimiter collisions.
+    key = f"{target['domain']}/{target['kind']}/{target['entityId']}"
+    if key in targets:
+        errors.append({"field": "references", "message": f"Reference {index + 1} duplicates another HQ link."})
+        return None
+    if ref_id is None:
+        errors.append(malformed)
+        return None
+    targets.add(key)
+    return {"id": ref_id, "kind": "hq", "label": shown, "target": target}
+
+
 def _references(value: object, errors: list) -> list | None:
     if value is None:
         return []
@@ -156,8 +222,18 @@ def _references(value: object, errors: list) -> list | None:
     if len(value) > MAX_REFS:
         errors.append({"field": "references", "message": f"Limited to {MAX_REFS} references."})
         return None
-    out, seen = [], set()
+    out, seen, targets = [], set(), set()
     for i, raw in enumerate(value):
+        if isinstance(raw, dict) and raw.get("kind") == "hq":
+            ref = _hq_reference(raw, i, errors, targets)
+            if ref is None:
+                return None
+            if ref["id"] in seen:
+                errors.append({"field": "references", "message": f"Reference {i + 1} is malformed."})
+                return None
+            seen.add(ref["id"])
+            out.append(ref)
+            continue
         if not isinstance(raw, dict) or set(raw) - {"id", "kind", "label", "url"}:
             errors.append({"field": "references", "message": f"Reference {i + 1} is malformed."})
             return None

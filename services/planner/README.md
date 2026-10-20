@@ -53,8 +53,9 @@ node --test --test-concurrency=1 'tests/*.test.mjs'                        # cli
 The Python tests put their scratch under `tests/.scratch/`, one
 `TemporaryDirectory` per test. The context manager removes it whether a test
 passes, fails or is cancelled. The empty parent folder is removed afterwards.
-No test opens a listening socket or starts a browser. The HTTP handler runs in
-the same process against a fake connection. The Node smoke tests render every
+The contract drift test starts a disposable loopback HTTP service and owns its
+process/database cleanup. Other HTTP tests run the handler in the same process
+against a fake connection. No test starts a browser. The Node smoke tests render every
 view and boot `app.js` against a small fake DOM (`tests/fake_dom.mjs`) with a
 stubbed `fetch`. They catch wiring and runtime errors but **do not replace
 real-browser checks** of layout, drag and touch.
@@ -70,7 +71,7 @@ real-browser checks** of layout, drag and touch.
 | **Timeline** | Horizon lanes (Now, Soon, Later, Someday, none) across the next eight quarters, with a line for today. Day dates are markers. Month, quarter and year dates are dashed bands covering exactly that period. A bar is drawn only from a start date to a **later** target or deadline that you set. Dates outside the range show as edge chips. **Drag a row to another lane** to change its horizon; its menu and Alt+↑/↓ do the same. On a phone it becomes a lane list with the dates written out. |
 | **Review** | Gentle prompts. Inbox items get one-tap **Why** and **Horizon** buttons and a Move-to menu. Overdue deadlines offer Reschedule or Mark done. Passed targets offer a new target. Active items that have been quiet longer than an adjustable number of days offer “Still active” or Move. Items whose horizon and date disagree, and items with no “why”, are listed too. Nothing changes until you choose an action. |
 | **Archive** | Archived items are hidden everywhere else and can be restored with their status and position kept. Archiving is not the same as Done. |
-| **Item detail** | A side panel on desktop, full screen on a phone. You can edit the title, use status pills, and set Why, Horizon, Kind, Priority and Area (with suggestions). **Dates** are listed with their kind, precision, zone and relative time, plus the time in your display zone when the date's zone differs. The add/edit dialog covers kind, precision (day, week, month, quarter, year), an optional start and end time with an IANA zone, and a note. **Next steps** is a checklist you can reorder by drag or Alt+↑/↓. Notes save automatically. **References** are static links that open in a new tab. There is also history, Copy link and Archive. |
+| **Item detail** | A side panel on desktop, full screen on a phone. You can edit the title, use status pills, and set Why, Horizon, Kind, Priority and Area (with suggestions). **Dates** are listed with their kind, precision, zone and relative time, plus the time in your display zone when the date's zone differs. The add/edit dialog covers kind, precision (day, week, month, quarter, year), an optional start and end time with an IANA zone, and a note. **Next steps** is a checklist you can reorder by drag or Alt+↑/↓. Notes save automatically. **References** are static URL links or nonclickable HQ target snapshots. There is also history, Copy link and Archive. |
 | **Capture** | Press N, the New button or the phone's + button. A title is the only required field. Shift+Enter saves and starts another. You can add an optional day-precision date while capturing. |
 | **Data & settings** | Download a full JSON backup or a readable Markdown export. Import is checked completely first, then you choose **add new items only** or **replace everything**. Replacing needs a checkbox and writes a server-side safety backup before anything changes. You can restore from a listed backup, load or remove example items, and set preferences: time zone (for display and new timed dates), week start and the “quiet after N days” threshold. |
 
@@ -135,7 +136,7 @@ Ctrl/⌘+Z undoes the last change. Press `?` to see all shortcuts.
 ## Planner API
 
 `GET /api/version` and `GET /api/state` advertise `api: 2`, features
-`items.batch_create` and `requests.replay`, and
+`items.batch_create`, `requests.replay` and `hq-references-v1`, and
 `request_retention: {max: 2000, evicted_through_version: F}`. These are source
 capabilities; an existing hosted service needs a separately authorized update.
 
@@ -186,6 +187,28 @@ increases; opening an older store at the retention cap initializes it to the
 current version conservatively. Import and backup restore preserve request
 records and the monotonically increasing state version.
 
+### HQ references
+
+Items accept `{id, kind: "hq", label, target: ReferenceEnvelope}` alongside
+legacy URL references. HQ references forbid `url`. The envelope uses version 1,
+a Design/Social/Work domain, project and entity identity, title snapshot, and
+module-local return destination. Optional `sourceRevision` and `workspaceId`
+survive reads and writes. Unknown fields, unsafe destination forms, invalid
+text, duplicate IDs and duplicate Work target identities are rejected.
+
+Existing JSON reference storage carries the variant without changing SQLite
+schema version 1. Patches omitting `references` preserve them. Full JSON export
+(`jones-planning-export` version 1), import, and backup restore retain targets.
+The legacy web detail panel displays `Linked in HQ: <title>` as literal text;
+it can remove references and preserves complete targets when resaving others.
+It does not resolve targets, navigate domains, create backlinks or start work.
+
+The [shared contract](contract/README.md) includes reference acceptance vectors,
+real HTTP golden exchanges, regeneration checks and SHA-256 pins. These prove
+source behavior; they do not prove an installed service has been upgraded.
+Downgrading to a service without this feature can leave stored HQ references
+readable but reject resaving them; reconcile such data before a runtime rollback.
+
 ## Security
 
 - The server binds to loopback only. It answers only to known `Host`
@@ -234,4 +257,4 @@ records and the monotonically increasing state version.
 - The time-zone list comes from the browser (`Intl.supportedValuesOf`). The
   server accepts any zone in the host's tz database.
 - Nothing here talks to Jones Code, workstreams, queues or any external
-  service. References are plain links.
+  service. References are static URL links or HQ target snapshots.

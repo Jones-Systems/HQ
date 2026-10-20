@@ -528,7 +528,9 @@ function referencesSection(item, offline) {
   sec.append(h('p', { class: 'muted small', text: 'Static links and labels for context. They never start or change anything elsewhere.' }));
   const list = h('ul', { class: 'refs' });
   for (const ref of item.references) {
-    const label = ref.url
+    const label = ref.kind === 'hq'
+      ? h('span', { class: 'ref-label', text: `Linked in HQ: ${ref.target.title}` })
+      : ref.url
       ? h('a', { href: ref.url, target: '_blank', rel: 'noopener noreferrer', class: 'ref-link' }, h('span', { text: ref.label }), icon('external', { size: 13 }))
       : h('span', { class: 'ref-label', text: ref.label });
     list.append(h('li', { class: 'ref' },
