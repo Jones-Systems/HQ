@@ -1,0 +1,18 @@
+{
+  "scale": 1,
+  "corner": 5,
+  "wells": {
+    "captured-img-light": [176, 187, 160, 96],
+    "producer-srcdoc-light": [352, 187, 160, 96],
+    "export-svg-light": [528, 187, 160, 96],
+    "export-svg-checker-light": [704, 187, 160, 96],
+    "captured-img-dark": [176, 317, 160, 96],
+    "producer-srcdoc-dark": [352, 317, 160, 96],
+    "export-svg-dark": [528, 317, 160, 96],
+    "export-svg-checker-dark": [704, 317, 160, 96]
+  },
+  "controls": {
+    "control-svg": [176, 447, 160, 96],
+    "control-srcdoc": [352, 447, 160, 96]
+  }
+}
