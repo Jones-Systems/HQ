@@ -3,6 +3,7 @@
 import type { StoredDispatch, TransportRegistry } from '../src/contract.ts';
 import type { Destination } from '../src/host-catalog.ts';
 import type { Outbox, SubmitRequest } from '../src/outbox.ts';
+import type { ManualHandoffHistoryPort } from '../src/route-fence.ts';
 import { createConfirmation } from '../src/confirmation.ts';
 import { createFakeClock, createFakeReceiver, createMemoryOutboxStore, createTrace, syntheticDestination, syntheticIdentity, syntheticPacket } from '../src/fakes.ts';
 import type { FakeClock, FakeReceiver, MemoryOutboxStore, SyntheticPacket, Trace } from '../src/fakes.ts';
@@ -25,7 +26,11 @@ export interface Harness {
 
 let confirmationSeq = 0;
 
-export async function createHarness(options: { readonly sendTimeoutMs?: number; readonly backing?: Map<string, StoredDispatch> } = {}): Promise<Harness> {
+export async function createHarness(options: {
+  readonly sendTimeoutMs?: number;
+  readonly backing?: Map<string, StoredDispatch>;
+  readonly manualHandoffs?: ManualHandoffHistoryPort;
+} = {}): Promise<Harness> {
   const clock = createFakeClock();
   const trace = createTrace();
   const receiver = createFakeReceiver({ identity: syntheticIdentity(), clock, trace });
@@ -37,6 +42,7 @@ export async function createHarness(options: { readonly sendTimeoutMs?: number; 
   const make = () => createOutbox({
     store, transports, clock, sessionId: `session-${(session += 1)}`,
     sendTimeoutMs: options.sendTimeoutMs ?? 50, probeTimeoutMs: 50,
+    ...(options.manualHandoffs ? { manualHandoffs: options.manualHandoffs } : {}),
   });
   const harness: Harness = {
     clock, trace, receiver, transports, packet, destination,
