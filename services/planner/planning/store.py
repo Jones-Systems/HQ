@@ -49,7 +49,7 @@ MAX_REMEMBERED_REQUESTS = 2_000
 POSITION_STEP = 1024
 HISTORY_ACTIONS = ("created", "updated", "moved", "reordered", "archived", "restored",
                    "reviewed", "imported")
-BACKUP_RE = re.compile(r"^backup-\d{8}T\d{6}Z(?:-(\d{1,3}))?\.json$")
+BACKUP_RE = re.compile(r"backup-\d{8}T\d{6}Z(?:-(\d{1,3}))?\.json")
 MAX_BACKUP_BYTES = 50 * 1024 * 1024
 _ENUM_FIELDS = ("title", "kind", "status", "motivation", "horizon", "priority", "area")
 _JSON_FIELDS = {"next_steps": "next_steps", "references": "refs", "dates": "dates"}
@@ -460,9 +460,13 @@ class Store:
 
             def apply(cur):
                 if mode == "replace":
+                    # A surviving id must not return to an older revision, or a writer still
+                    # holding that revision would pass _guard and overwrite the restored item.
+                    current = dict(cur.execute("SELECT id, revision FROM items").fetchall())
+                    to_insert = [dict(i, revision=max(i["revision"], current[i["id"]]) + 1)
+                                 if i["id"] in current else i for i in items]
                     cur.execute("DELETE FROM history")
                     cur.execute("DELETE FROM items")
-                    to_insert = items
                     if settings is not None:
                         cur.execute("DELETE FROM settings")
                         for key, value in settings.items():
@@ -494,14 +498,14 @@ class Store:
     def list_backups(self) -> list[dict]:
         if not self.backup_dir.is_dir():
             return []
-        entries = [e for e in self.backup_dir.iterdir() if BACKUP_RE.match(e.name) and e.is_file()]
+        entries = [e for e in self.backup_dir.iterdir() if BACKUP_RE.fullmatch(e.name) and e.is_file()]
         # Newest first: by timestamp, then by same-second suffix compared as a number.
-        entries.sort(key=lambda e: (e.name[:23], int(BACKUP_RE.match(e.name).group(1) or 0)), reverse=True)
+        entries.sort(key=lambda e: (e.name[:23], int(BACKUP_RE.fullmatch(e.name).group(1) or 0)), reverse=True)
         return [{"name": e.name, "bytes": e.stat().st_size} for e in entries[:50]]
 
     def restore_backup(self, name: object, confirm: object, request_id: str | None = None,
                        fingerprint: str = "") -> tuple:
-        if not isinstance(name, str) or not BACKUP_RE.match(name):
+        if not isinstance(name, str) or not BACKUP_RE.fullmatch(name):
             raise StoreError(400, "invalid", "Unknown backup name.")
         path = self.backup_dir / name
         if not path.is_file() or path.stat().st_size > MAX_BACKUP_BYTES:

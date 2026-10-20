@@ -453,11 +453,28 @@ class ExportImport(StoreTestCase):
         self.assertEqual(status, 200)
         self.assertTrue(payload["backup"].startswith("backup-"))
         after = self.store.export()
-        self.assertEqual(after["items"], exported["items"])
+        # Surviving ids move one revision forward; everything else is restored exactly.
+        self.assertEqual([i["revision"] for i in after["items"]], [i["revision"] + 1 for i in exported["items"]])
+        self.assertEqual([dict(i, revision=0) for i in after["items"]],
+                         [dict(i, revision=0) for i in exported["items"]])
         self.assertEqual(after["settings"]["week_start"], "mon")
         self.assertEqual(len(after["history"]), len(exported["history"]))
         backup = json.loads((self.store.backup_dir / payload["backup"]).read_text())
         self.assertIn("Later addition", [i["title"] for i in backup["items"]])
+
+    def test_replace_and_restore_never_move_a_revision_backwards(self):
+        item = self.create(title="Base")
+        exported = self.store.export()
+        for revision in (1, 2):
+            self.store.update_item(item["id"], revision, {"notes": f"edit {revision}"})
+        _, payload, _ = self.store.import_data(exported, "replace", "replace")
+        self.assertEqual(self.store.get_item(item["id"])["revision"], 4)
+        with self.assertRaises(StoreError) as caught:
+            self.store.update_item(item["id"], 1, {"notes": "stale writer"})
+        self.assertEqual(caught.exception.code, "revision_conflict")
+        self.store.restore_backup(payload["backup"], "replace")
+        restored = self.store.get_item(item["id"])
+        self.assertEqual((restored["notes"], restored["revision"]), ("edit 2", 5))
 
     def test_replace_requires_confirmation(self):
         self.seed()
@@ -533,9 +550,10 @@ class ExportImport(StoreTestCase):
         titles = [i["title"] for i in self.store.snapshot()["items"]]
         self.assertNotIn("After backup", titles)
         self.assertEqual(len(self.store.list_backups()), 2)
-        for unsafe in ("../planning.sqlite3", "backup-x.json", "/etc/passwd", None):
-            with self.subTest(name=unsafe), self.assertRaises(StoreError):
+        for unsafe in ("../planning.sqlite3", "backup-x.json", "/etc/passwd", None, name + "\n"):
+            with self.subTest(name=unsafe), self.assertRaises(StoreError) as caught:
                 self.store.restore_backup(unsafe, "replace")
+            self.assertEqual((caught.exception.status, caught.exception.code), (400, "invalid"))
         self.assertTrue(restored["backup"].startswith("backup-"))
 
     def test_backups_list_newest_first_within_one_second(self):
