@@ -5,6 +5,7 @@ import { layoutGrid, planThumbnails, visibleBlocks } from '../src/grid.ts';
 import { createThumbnailLoader, LazyLoader, verifiedDataUrl, type LoadState } from '../src/loader.ts';
 import { hostId, projectId, sourceProjectId } from '../src/ids.ts';
 import type { ProjectSummary } from '../src/content.ts';
+import { swapPrefetch } from '../src/views/hooks.ts';
 import { createFakeThumbnailPort, previewRefFor, syntheticCatalogEntry, syntheticPng } from '../fakes/index.ts';
 
 const at = '2026-01-01T00:00:00.000Z';
@@ -150,6 +151,23 @@ describe('lazy loader', () => {
     const ref = await previewRefFor(bytes);
     await assert.rejects(verifiedDataUrl(ref, { mediaType: 'image/png', bytes: syntheticPng(3) }, 1 << 20), /size|digest/u);
     assert.match(await verifiedDataUrl(ref, { mediaType: 'image/png', bytes }, 1 << 20), /^data:image\/png;base64,/u);
+  });
+
+  test('moving the prefetch window keeps digests present in both windows in flight', async () => {
+    const port = createFakeThumbnailPort();
+    port.mode = 'manual';
+    const [a, b, c] = await Promise.all([1, 2, 3].map((seed) => previewRefFor(syntheticPng(seed))));
+    const loader = createThumbnailLoader(port, { concurrency: 6, retain: 10, maxBytesPerItem: 1 << 20 });
+    const first = swapPrefetch(loader, [a!, b!], []);
+    assert.deepEqual(port.requested, [a!.digest, b!.digest]);
+    const second = swapPrefetch(loader, [b!, c!], first);
+    await tick();
+    assert.deepEqual(port.requested, [a!.digest, b!.digest, c!.digest], 'the overlapping digest is not re-requested');
+    assert.deepEqual(port.aborted, [a!.digest], 'only the digest that left the window is aborted');
+    assert.deepEqual([loader.stats().started, loader.stats().aborted], [3, 1]);
+    swapPrefetch(loader, [], second);
+    await tick();
+    assert.deepEqual([...port.aborted].sort(), [a!.digest, b!.digest, c!.digest].sort());
   });
 
   test('a late result after cancellation is discarded', async () => {
