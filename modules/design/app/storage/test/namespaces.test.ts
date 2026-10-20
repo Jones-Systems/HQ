@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import { isStoreError } from '../../../../../packages/design-store/src/errors.ts';
 import { asReader, bindCache, bindWorkspace, NamespaceClassError } from '../backing.ts';
 import { createCanvasStorage } from '../canvas.ts';
+import { createDiscoveryCacheReader } from '../discovery-cache.ts';
 import { createRequestsExport } from '../export.ts';
 import { createOutboxAdapter } from '../outbox.ts';
 import { createRequestsStoragePort } from '../requests.ts';
@@ -55,6 +56,7 @@ describe('namespace separation', () => {
         'outbox adapter': createOutboxAdapter(workspace),
         'canvas adapter': createCanvasStorage(workspace),
         'export port': createRequestsExport(asReader(workspace)),
+        'discovery cache reader': createDiscoveryCacheReader(await bindCache(store)),
         'node wiring workspace': storage.workspace,
         'node wiring requests': storage.requests,
         'node wiring canvas': storage.canvas,

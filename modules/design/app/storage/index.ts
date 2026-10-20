@@ -22,6 +22,10 @@ export type { OutboxAdapter, OutboxAdapterOptions, OutboxPutResult, OutboxRecord
 export { createCanvasStorage, CANVAS_KEY_ROOT, CanvasScopeError, CanvasWriteConflictError } from './canvas.ts';
 export type { CanvasDocumentPort } from './canvas.ts';
 
+export { createDiscoveryCacheReader, DISCOVERY_CATALOG_CACHE_KEY, DiscoveryCacheScopeError } from './discovery-cache.ts';
+export type { DiscoveryCacheReader } from './discovery-cache.ts';
+export { TEXT_FORMAT } from './text-envelope.ts';
+
 export {
   classifyRequestsKey, createRequestsExport, EXPORT_SCHEMA, EXPORT_STATUS, ExportDisabledError, ExportProjectionError,
   projectCandidate, projectFreezeRecord, projectReviewEvent, REQUESTS_PACKET_PIN, reviewStreamOf,

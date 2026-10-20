@@ -8,9 +8,9 @@
  * already used) is refused rather than guessed. Text is stored byte-for-byte in a small envelope.
  */
 import { isStoreErrorCode, type WorkspaceBacking } from './backing.ts';
+import { TEXT_FORMAT } from './text-envelope.ts';
 
 export const CANVAS_KEY_ROOT = 'design.canvas.arrangement.v1/';
-const TEXT_FORMAT = 'hq.design.storage.text/v1';
 
 /** Structurally T3's `CanvasStoragePort`. */
 export interface CanvasDocumentPort {
