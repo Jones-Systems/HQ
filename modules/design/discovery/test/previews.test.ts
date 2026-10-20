@@ -61,9 +61,12 @@ test('global and per-host concurrency are bounded and visible tiles go first', a
   await settle();
   assert.equal(startedBeforeVisible, 3);
   assert.equal(loader.stats.active, 3);
+  const loads = new Map(previews.map((item, index) => [item.ref.digest, pending[index]!]));
   while (adapter.pendingPreviews.size > 0) {
     const [digest] = adapter.pendingPreviews.keys();
     adapter.releasePreview(digest!);
+    // The loader frees the slot and starts the next queued read only after the async digest check settles this load.
+    await loads.get(digest!);
     await settle();
   }
   await Promise.all(pending);
