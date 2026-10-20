@@ -434,7 +434,7 @@ Only one writer owns a path at a time. Each task block's `write_scope` gives its
 
 - **T2 (one shared owner, serialized):** root manifests, scripts and lockfile, `tsconfig.json`, `vitest.config.ts`, `.github/workflows/foundation.yml`, the new `.github/workflows/cli-planner.yml`, `apps/desktop/**` (including the Design host compatibility layer, `apps/desktop/tsconfig.design-host.json` and ServiceSettings) and `packages/contracts/**`.
   - F2 also held `modules/design/app/compose/**` and `modules/design/app/index.ts` until it handed them to CL1b at `bridge-landing`.
-  - Shared r3 owns `apps/desktop/src/reference-providers.ts` and `apps/desktop/src/references.ts`. After that, the reference round trip writes only the provider registrations, its integration test, and the Work export client mount in `apps/desktop/src/modules.tsx`.
+  - Shared r3 owns `apps/desktop/src/reference-providers.ts` and `apps/desktop/src/references.ts`. After that, the reference round trip writes only the provider registrations, its integration test, and the typed live-only Work export injection in `apps/desktop/src/services/domains.tsx`, plus the optional `WorkModuleProps.workExport` type member in `modules/work/index.tsx`.
   - The receiver writes `apps/desktop/electron/jones-code/**` plus its closed route registration. A separate bounded main-subdirectory writer is allowed only if the Design coordinator accepts an explicit non-overlap rebind.
   - The new-thread transport (`new-thread-transport`), after `preview-host-landing`, writes `apps/desktop/electron/jones-code/**`, `packages/contracts/src/jones-code.ts`, `packages/contracts/src/index.ts`, its main and preload route entries, `apps/desktop/src/ServiceSettings.tsx` and the `jones-code` composition in `apps/desktop/src/modules.tsx`.
   - The preview/component host writes `apps/desktop/electron/contents-factory.ts`, `apps/desktop/electron/{preview,components}/**`, its main, preload, security and contract entries, `apps/desktop/src/environment.d.ts`, the root `build:preview-agent` script and its Vite configuration. Each later enabling commit writes only its own status file and status test. `apps/desktop/index.html`, which holds the CSP, is in no scope.
@@ -901,7 +901,7 @@ The existing Design coordinator owns this lane. It is the sole writer of shared 
 1. F2 (`shared-bridge`, not restarted; models preserved) → `bridge-landing`.
 2. Live wiring, then the Wiki mount. Live wiring gains one dependency, the Work session-injection landing, because it consumes that public seam; every other dependency of both tasks is unchanged.
 3. Shared r3 (one new Design descendant) after `bridge-landing`, the K1 and K3 landings and the Wiki mount landing, because it shares main, preload, contract and `App.tsx` files with them → `r3-landing`.
-4. The reference round trip after every provider and the Work export UI land. It also mounts r3's Work export client in `apps/desktop/src/modules.tsx`.
+4. The reference round trip after every provider and the Work export UI land. It also injects r3's Work export client for live selection in `apps/desktop/src/services/domains.tsx`, through the optional `WorkModuleProps.workExport` type member in `modules/work/index.tsx`.
 5. CLI/Planner CI after K2 returns `design-sections.yml` custody.
 6. The existing-thread receiver after the Wiki mount, CL1b and the reference round trip land, because it shares main, preload, settings and `modules.tsx`. It is fixture-qualified by the Q-S wire stub of the exact `76fb3dc` shapes.
 7. The preview/component host (`preview-host`) after `receiver-landing`, because it shares main, preload and contracts with steps 3 and 6. It binds the landed preview agent and component runner port, and lands as one PR with two coherent commits: the preview host, then the component runner. Every status constant stays false. Moving it earlier needs a T1 amendment.
@@ -3772,7 +3772,7 @@ No lane relays status through the owner.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "lane-t2",
-  "objective": "Register the landed Design, Social and Work providers in apps/desktop/src/reference-providers.ts and prove spec.hq-social-work ac.reference-integration.001 in a shell integration test: Social draft ↔ Work card links, open and Back with source state intact, truthful changed/archived/missing/moved/unavailable, unlink leaves the target, export/import preserves links, all execution spies zero. Also hand r3's Work export client to the Work module mount in apps/desktop/src/modules.tsx through the module-local structural export port.",
+  "objective": "Register the landed Design, Social and Work providers in apps/desktop/src/reference-providers.ts and prove spec.hq-social-work ac.reference-integration.001 in a shell integration test: Social draft ↔ Work card links, open and Back with source state intact, truthful changed/archived/missing/moved/unavailable, unlink leaves the target, export/import preserves links, all execution spies zero. Also bind r3's Work export client once for live selection in apps/desktop/src/services/domains.tsx, forwarding the stable port through the typed WorkModuleProps.workExport member in modules/work/index.tsx; example and unavailable selections never receive an export port.",
   "context_refs": [
     "spec.hq-integration-parallel-execution#ctx.lane-t2.001",
     "spec.hq-integration-parallel-execution#iface.shared-r3.001"
@@ -3793,7 +3793,8 @@ No lane relays status through the owner.
   "write_scope": [
     "apps/desktop/src/reference-providers.ts",
     "apps/desktop/src/references.integration.test.tsx",
-    "apps/desktop/src/modules.tsx"
+    "apps/desktop/src/services/domains.tsx",
+    "modules/work/index.tsx"
   ],
   "requires": [
     "spec.hq-integration-parallel-execution#req.references-closure.001"

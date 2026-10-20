@@ -1,8 +1,10 @@
 import type { ModulePort } from '@hq/contracts';
 import { WorkDomain } from './nav';
+import type { WorkExportPort } from './nav';
 import type { ReferencePort, ReturnContext } from '@hq/ui';
 
 export interface WorkModuleProps extends ModulePort {
+  readonly workExport?: WorkExportPort;
   readonly references?: ReferencePort;
   readonly returnContext?: ReturnContext;
 }

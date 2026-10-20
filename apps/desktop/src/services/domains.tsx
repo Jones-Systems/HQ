@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { ModulePort } from '@hq/contracts';
 import type { HqServices, ServiceDomain } from '@hq/contracts/services';
+import { createWorkExportClient } from './work-export';
 import { WorkModule, setWorkSessionPort, examplePlanner } from '@hq/work';
 import { SocialDomain } from '../../../../modules/social/nav';
 import { createLiveSocialPort } from '../../../../modules/social/live';
@@ -30,6 +31,7 @@ function Surface({ domain, selection, children }: { domain: string; selection: S
 export function createServiceDomains(getServices: () => HqServices | undefined) {
   let socialChoice: ReturnType<typeof chooseSocial> | undefined;
   let workChoice: Promise<Selection> | undefined;
+  let workExport: ReturnType<typeof createWorkExportClient> | undefined;
   async function chooseSocial() {
     const services = getServices();
     const selection = await selectService(services, 'social');
@@ -47,6 +49,7 @@ export function createServiceDomains(getServices: () => HqServices | undefined) 
     const selection = await selectService(services, 'work');
     if (selection === 'live') {
       const planner = createPlannerLive(bridgeTransport(services!.work));
+      workExport = createWorkExportClient(services!.work);
       setWorkSessionPort(planner.port, { example: false, recovery: planner.recovery });
     } else if (selection === 'example') setWorkSessionPort(examplePlanner(), { example: true });
     return selection;
@@ -54,7 +57,7 @@ export function createServiceDomains(getServices: () => HqServices | undefined) 
   function Work(props: ModulePort) {
     const [selection, setSelection] = useState<Selection | null>(null);
     useEffect(() => { let mounted = true; workChoice ??= chooseWork(); void workChoice.then(value => { if (mounted) setSelection(value); }); return () => { mounted = false; }; }, []);
-    return selection ? <Surface domain="Work" selection={selection}>{selection !== 'unavailable' && <WorkModule {...props} />}</Surface> : <p role="status">Checking Work configuration…</p>;
+    return selection ? <Surface domain="Work" selection={selection}>{selection !== 'unavailable' && <WorkModule {...props} workExport={workExport} />}</Surface> : <p role="status">Checking Work configuration…</p>;
   }
   return { Social, Work };
 }
