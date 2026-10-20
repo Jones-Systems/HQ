@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, realpath, rename, stat, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import type { CatalogRoot, CatalogSnapshot, IsoTime, PreviewRef, RootId } from '@hq/contracts/catalog';
 import type { DesignStorageResult } from '@hq/contracts/services';
 import { keys, record } from './services.js';
@@ -22,9 +22,14 @@ export function catalogPersistence(userData: string): CatalogPersistence {
       let raw: string;
       try { raw = await readFile(path, 'utf8'); }
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { generation: 0, root: null }; throw error; }
+      if (Buffer.byteLength(raw) > 16 * 1024) throw Error('Catalog state unavailable');
       const value: unknown = JSON.parse(raw);
       if (!record(value) || !keys(value, ['generation', 'root']) || !validGeneration(value.generation)) throw Error('Catalog state unavailable');
       if (value.root !== null && (!record(value.root) || !keys(value.root, ['rootId', 'label', 'path', 'canonical']) || !['rootId', 'label', 'path', 'canonical'].every(k => typeof (value.root as Record<string, unknown>)[k] === 'string' && ((value.root as Record<string, string>)[k]!).length > 0))) throw Error('Catalog state unavailable');
+      if (value.root !== null) {
+        const root = value.root as Record<string, string>;
+        if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(root.rootId!) || root.label !== 'Selected local directory' || !isAbsolute(root.path!) || !isAbsolute(root.canonical!)) throw Error('Catalog state unavailable');
+      }
       return value as unknown as CatalogConfig;
     },
     async write(config) {
@@ -83,6 +88,7 @@ export function createCatalogHost(persistence: CatalogPersistence, choose: Choos
           return await gate.exclusive(async () => {
             const current = await load();
             if (selected === null) return { ok: true, value: roots(current) };
+            if (!isAbsolute(selected)) return unavailable();
             const canonical = await realpath(selected);
             if (!(await stat(canonical)).isDirectory()) return unavailable();
             const rootId = current.root?.canonical === canonical ? current.root.rootId : randomUUID() as RootId;

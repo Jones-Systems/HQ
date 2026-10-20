@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { createElement, useState } from 'react';
+import { createElement } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ModulePort, ReferenceEnvelope } from '@hq/contracts';
@@ -10,10 +10,9 @@ const envelope: ReferenceEnvelope = { version: 1, domain: 'work', projectId: 'hq
 vi.mock('./reference-providers', () => ({ REFERENCE_PROVIDERS: [{ domain: 'work', kinds: ['item'], find: async () => [], resolve: async () => ({ status: 'available', observedAt: new Date().toISOString(), destination: 'item/one' }) }] }));
 vi.mock('./modules', () => {
   function Source(props: ModulePort) {
-    const [draft, setDraft] = useState('');
-    return createElement('section', {}, createElement('input', { 'aria-label': 'Source draft', value: draft, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value) }),
-      createElement('button', { onClick: () => props.references?.open(envelope, { label: 'Design draft', to: { domain: 'design', destination: 'home' } }) }, 'Open card'),
-      createElement('button', { onClick: () => props.references?.open({ ...envelope, projectId: 'elsewhere' }, { label: 'Design draft', to: { domain: 'design', destination: 'home' } }) }, 'Open other project'));
+    return createElement('section', {}, createElement('p', {}, `Source ${props.destination}`), createElement('button', { onClick: () => props.navigate('draft/one') }, 'Select source draft'),
+      createElement('button', { onClick: () => props.references?.open(envelope, { label: 'Design draft', to: { domain: 'design', destination: props.destination } }) }, 'Open card'),
+      createElement('button', { onClick: () => props.references?.open({ ...envelope, projectId: 'elsewhere' }, { label: 'Design draft', to: { domain: 'design', destination: props.destination } }) }, 'Open other project'));
   }
   function Target(props: ModulePort) { return createElement('p', {}, `Target ${props.destination}; return ${props.returnContext?.label ?? 'none'}`); }
   return { DOMAIN_LABELS: { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' }, MODULES: { design: Source, social: Target, work: Target, wiki: Target }, MODULE_PRESENTATION: {} };
@@ -47,13 +46,13 @@ function mount() {
   Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) });
   return render(createElement(App));
 }
-it('App reference open/Back restores the source domain, destination and mounted draft state', async () => {
-  mount(); fireEvent.change(screen.getByLabelText('Source draft'), { target: { value: 'Unsent draft' } });
+it('App reference open/Back restores the source domain and navigation state while preserving module remount semantics', async () => {
+  mount(); fireEvent.click(screen.getByRole('button', { name: 'Select source draft' }));
   fireEvent.click(screen.getByRole('button', { name: 'Open card' }));
   await screen.findByText('Target item/one; return Design draft');
   fireEvent.click(screen.getByRole('button', { name: 'Back to Design draft' }));
-  expect((screen.getByLabelText('Source draft') as HTMLInputElement).value).toBe('Unsent draft');
-  expect(screen.getByRole('button', { name: 'Design', exact: true }).getAttribute('aria-current')).toBe('page');
+  expect(screen.getByText('Source draft/one')).toBeTruthy();
+  expect(screen.getByRole('button', { name: /^Design$/ }).getAttribute('aria-current')).toBe('page');
 });
 it('App project mismatch displays a read-only notice without navigation', async () => {
   mount(); fireEvent.click(screen.getByRole('button', { name: 'Open other project' }));
