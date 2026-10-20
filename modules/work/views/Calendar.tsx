@@ -156,6 +156,8 @@ export function CalendarView() {
     <div
       ref={root}
       className="wv-cal"
+      // A drag that ends anywhere, dropped or cancelled, disarms; a later unrelated drop must not move the item.
+      onDragEnd={() => { drag.current = null; }}
       onKeyDown={(event) => {
         if ((event.key === 'PageUp' || event.key === 'PageDown') && !event.altKey && !isTyping(event.target)) {
           event.preventDefault();
