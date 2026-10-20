@@ -44,3 +44,21 @@ export function createDiscoveryCacheReader(cache: CacheBacking): DiscoveryCacheR
   };
   return Object.freeze(reader);
 }
+
+/** Catalog-only capability: deliberately excludes discovery's preview-blob lifecycle. */
+export interface DiscoveryCacheStore extends DiscoveryCacheReader {
+  readonly namespace: 'cache';
+  writeDocument(key: string, text: string): Promise<void>;
+}
+
+export function createDiscoveryCacheStore(cache: CacheBacking): DiscoveryCacheStore {
+  const reader = createDiscoveryCacheReader(cache);
+  return Object.freeze({
+    namespace: 'cache' as const,
+    readDocument: reader.readDocument,
+    async writeDocument(key: string, text: string) {
+      if (key !== DISCOVERY_CATALOG_CACHE_KEY || typeof text !== 'string') throw new DiscoveryCacheScopeError('Invalid catalog key or text');
+      await cache.putDocument(key, { format: TEXT_FORMAT, text });
+    },
+  });
+}

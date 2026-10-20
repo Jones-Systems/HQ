@@ -105,7 +105,7 @@ in T9, so replay stays blocked until the owner runs T9's explicit `repairTornTai
 ## Not claimed
 
 Cross-record durability, power-loss or `F_FULLFSYNC` behaviour, retention or deletion policy,
-production IPC/preload hosting, the connector evidence store, and acceptance of the T13 proposal.
+production IPC/preload hosting, production enablement, and acceptance of the T13 proposal.
 
 ## Checks
 
@@ -115,3 +115,40 @@ node --test --test-concurrency=1 modules/design/app/storage/test/*.test.ts
 ```
 
 Tests use synthetic temp stores under `os.tmpdir()` and assert the directories are gone.
+
+## Disabled manifest-visible engine (K1)
+
+`node.ts` adds `transactions: DesignTransactions` and `exportBundle: DesignExportPort`.
+`transactions.workspace` is the gated host facade. Bind every participating host operation
+and renderer adapter to that same facade; the original `workspace` member remains a raw
+compatibility view outside the atomicity contract. Recovery initializes before this new
+surface is returned. Production constructors never enable import, repair or export.
+
+The new `createImportsStorage(transactions)` maps imports lane keys `imports/...` to
+`design/imports/...`, and its `imports` stream to `design/imports`. It preserves the lane's
+port and conflict class. The new protocol retains applied intents, quarantines torn streams
+only on explicit repair, refuses corrupt streams and leaves an uncertain live manifest
+scope blocked until reopen. Diagnostics reports orphan bytes/counts and pending/blocked
+intents. Legacy hashed streams return `unavailable` / `stream-enumeration`.
+
+Blobs written through the gated facade acquire visibility metadata. Raw legacy blob writes
+remain accessible through the original APIs; they are not implicitly adopted into the new
+manifest-visible surface. This prevents staged orphans becoming visible merely because an
+existing document mentions their digest. There is no retention or deletion capability.
+
+Renderer additions are `WorkspaceRecords`, `createReferencesStorage`, `createEvidenceStore`
+and `createDiscoveryCacheStore`. References retain mediaType in AssetRef records, use
+string/numeric CAS, and expose no blob deletion. Evidence is create-only, with dispatch-prefix
+listing and global evidence-ID reconciliation. The discovery factory returns only
+namespace/readDocument/writeDocument for the exact catalog key; it is not the full preview
+cache port. Existing outbox signatures already match the connector; mutual assignability
+is now checked without casts.
+
+`exportBundle.preview(exportedAt)` returns only the omission report; `.build(exportedAt)`
+returns deterministic bundle/v1 bytes plus that report. Both return disabled in production.
+Per-section recursive allow-lists exclude unknown content. Requests use the existing v1
+projection, whose public legacy enable option remains unchanged. Detailed omissions stay
+outside bundle/v1 because its parser rejects unknown fields. Native dialogs belong to r3.
+
+See HQD-K1-engineering-spec.md for protocol, interfaces and limitations, and
+HQD-K1-work-note.md for verification. No host route or feature is enabled by these additions.

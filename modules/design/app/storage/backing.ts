@@ -61,6 +61,8 @@ export interface WorkspaceBacking {
 /** Document-only workspace capability for section adapters. */
 export type WorkspaceDocuments = Pick<WorkspaceBacking, 'kind' | 'namespace' | 'getDocument' | 'putDocument' | 'listDocuments'>;
 
+export type WorkspaceRecords = WorkspaceDocuments & Pick<WorkspaceBacking, 'putBlob' | 'getBlob' | 'hasBlob' | 'appendEvent' | 'readEvents'>;
+
 /** Read-only subset used by export and inspection code. */
 export type WorkspaceReader = Pick<WorkspaceBacking, 'kind' | 'namespace' | 'getDocument' | 'listDocuments' | 'getBlob' | 'hasBlob' | 'listBlobs' | 'readEvents' | 'listStreams'>;
 
