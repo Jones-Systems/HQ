@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, writeFile, access } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, access, appendFile } from 'node:fs/promises';
 import { resolve, join, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -23,36 +23,73 @@ await mkdir(evidenceParent, { recursive: true });
 const evidence = await mkdtemp(join(evidenceParent, 'evidence-'));
 const runtime = await createRuntime(join(evidenceParent, 'scratch'));
 const report = { schema: 'hq-preview-native/v1', head: git('rev-parse', 'HEAD'), branch: git('branch', '--show-current'), dirty: git('status', '--short'), platform: process.platform, architecture: process.arch, node: process.version, invocation: process.argv, evidence, rows: [], outcome: 'unmeasured', networkClaim: 'Normal browser network reach; literal URL filtering is hygiene only.' };
-let log = '', main, shell, child, endpoint;
+let log = '', main, shell, child, endpoint, cancelled;
+let evidenceWrites = Promise.resolve(), stopNative;
+const nativeStopped = new Promise(resolve => { stopNative = resolve; });
 class Unmeasured extends Error {}
+class NativeStopped extends Error {}
+class PlannedStop extends Error {}
+const persist = (name, text) => {
+  evidenceWrites = evidenceWrites.then(() => appendFile(join(evidence, name), text)).catch(error => { report.evidenceError = error.stack; });
+  return evidenceWrites;
+};
+const emit = event => {
+  const entry = { at: new Date().toISOString(), ...event };
+  console.log(JSON.stringify(entry));
+  return persist('events.jsonl', JSON.stringify(entry) + '\n');
+};
+function assertNative() {
+  if (cancelled) throw new NativeStopped(`Cancelled: ${cancelled}`);
+  if (child?.launchError || child?.exitCode != null || child?.signalCode != null) throw new NativeStopped(`Native child stopped: ${JSON.stringify(report.nativeExit ?? { error: child.launchError?.message, code: child.exitCode, signal: child.signalCode })}`);
+}
+const nativeCall = async fn => {
+  assertNative();
+  return Promise.race([fn(), nativeStopped.then(error => { throw error; })]);
+};
 const check = async (id, scenario, fn) => {
-  try { const observed = await fn(); report.rows.push({ id, scenario, outcome: 'passed', observed }); }
-  catch (error) { report.rows.push({ id, scenario, outcome: error instanceof Unmeasured ? 'unmeasured' : 'failed', error: error.stack }); }
+  assertNative();
+  await emit({ type: 'row-start', id, scenario });
+  let row;
+  try { const observed = await nativeCall(fn); row = { id, scenario, outcome: 'passed', observed }; }
+  catch (error) {
+    row = { id, scenario, outcome: error instanceof Unmeasured ? 'unmeasured' : 'failed', error: error.stack };
+    report.rows.push(row); await persist('rows.jsonl', JSON.stringify(row) + '\n'); await emit({ type: 'row-end', id, scenario, outcome: row.outcome });
+    if (error instanceof NativeStopped) throw error;
+    assertNative();
+    return;
+  }
+  report.rows.push(row); await persist('rows.jsonl', JSON.stringify(row) + '\n'); await emit({ type: 'row-end', id, scenario, outcome: row.outcome });
 };
 const unmeasured = (id, scenario, reason) => report.rows.push({ id, scenario, outcome: 'unmeasured', reason });
-const api = (route, params) => shell.evaluate(`window.hqServices.preview.call(${JSON.stringify(route)},${JSON.stringify(params)})`);
+const api = async (route, params) => {
+  assertNative(); await emit({ type: 'api-start', route });
+  const result = await nativeCall(() => shell.evaluate(`window.hqServices.preview.call(${JSON.stringify(route)},${JSON.stringify(params)})`));
+  await emit({ type: 'api-end', route, ok: result.ok, kind: result.kind }); return result;
+};
 const value = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
-const hook = expression => main.evaluate(`globalThis.__hqPreviewQualification.${expression}`);
+const hook = expression => nativeCall(() => main.evaluate(`globalThis.__hqPreviewQualification.${expression}`));
 const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;background:#eee;color:#111;font:16px monospace}#spacer{height:40px}#target{margin:20px;width:240px;height:60px;background:#aaccee}#tail{height:1600px}</style></head><body><div id="spacer"></div><button id="target">Qualification target</button><p id="quote">Select this exact synthetic quote.</p><input id="file" type="file"><div id="tail"></div></body></html>`;
 let origin, crossOrigin, canaries;
 async function open(viewport = { w: 1280, h: 800, dpr: 1 }, url = origin) {
   const session = value(await api('open', { versionId: 'preview-qualification', url, viewport, label: 'Synthetic native qualification' }));
   value(await api('place', { sessionId: session.sessionId, rect: { x: 0, y: 0, width: viewport.w, height: viewport.h }, visible: true }));
   const target = await until(async () => (await (await fetch(`http://${new URL(endpoint).host}/json/list`)).json()).find(t => t.type === 'page' && t.url.startsWith(url)), 'preview CDP target');
-  const cdp = await connect(target.webSocketDebuggerUrl, runtime);
+  await emit({type:'fixture-cdp-attach-start',targetId:target.id});
+  const cdp = await nativeCall(()=>connect(target.webSocketDebuggerUrl, runtime));
+  await emit({type:'fixture-cdp-attach-end',targetId:target.id});
   return { session: value(await api('status', { sessionId: session.sessionId })), cdp, target };
 }
 async function withPreview(fn, viewport) {
   const p = await open(viewport);
-  try { return await fn(p); } finally { await api('close', { sessionId: p.session.sessionId }); p.cdp.close(); }
+  try {await emit({type:'fixture-workload-start'});const result=await nativeCall(()=>fn(p));await emit({type:'fixture-workload-end'});return result;}
+  finally {if(!cancelled && !child.launchError && child.exitCode===null && child.signalCode===null)await api('close',{sessionId:p.session.sessionId});p.cdp.close();await emit({type:'fixture-cdp-close'});}
 }
 const capture = session => api('capture', { sessionId: session.sessionId, expectedGeneration: session.generation });
 async function click(cdp, x = 80, y = 80) {
   await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
 }
-let cancelled;
-const cancel = signal => { cancelled = signal; void runtime.close().catch(error => { report.cleanupError = error.stack; }); };
+const cancel = signal => { cancelled = signal; stopNative(new NativeStopped(`Cancelled: ${signal}`)); void emit({type:'cancelled',signal}); void runtime.close().catch(error => { report.cleanupError = error.stack; }); };
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => cancel(signal));
 try {
   canaries = await createNetworkCanaries(runtime);
@@ -70,10 +107,16 @@ try {
   const electronBinary=option('--electron-binary') ?? join(repo, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
   report.electronBinary=electronBinary;
   child = runtime.spawn(electronBinary, ['--host-resolver-rules=MAP hq-qualification.test 127.0.0.1', '--inspect=0', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', join(repo, 'apps/desktop/dist-electron/main.js')], { cwd: repo, env, stdio: ['ignore', 'ignore', 'pipe'] });
-  child.stderr.on('data', bytes => { log = (log + bytes).slice(-256000); endpoint = /DevTools listening on (ws:\/\/\S+)/.exec(log)?.[1]; inspector = /Debugger listening on (ws:\/\/\S+)/.exec(log)?.[1]; });
+  child.once('error', error => { report.nativeExit={pid:child.pid,error:error.message};stopNative(new NativeStopped(error.message));void emit({type:'native-error',...report.nativeExit}); });
+  child.once('exit', (code, signal) => { report.nativeExit={pid:child.pid,code,signal};stopNative(new NativeStopped(`Electron exited: code=${code}, signal=${signal}`));void emit({type:'native-exit',...report.nativeExit}); });
+  child.stderr.on('data', bytes => { void persist('native.log',String(bytes)); log = (log + bytes).slice(-256000); endpoint = /DevTools listening on (ws:\/\/\S+)/.exec(log)?.[1]; inspector = /Debugger listening on (ws:\/\/\S+)/.exec(log)?.[1]; });
+  await emit({type:'native-start',pid:child.pid,binary:electronBinary});
   await until(() => { if (child.exitCode !== null || child.launchError) throw Error('Native launch failed: ' + (child.launchError?.message ?? `exit=${child.exitCode}`) + '\n' + log); return endpoint && inspector; }, 'Electron debug endpoints');
   if(args.includes('--fail-after-launch')) throw Error('Deliberate qualification lifecycle failure after native launch');
   main = await connect(inspector, runtime);
+  try {report.nativeIdentity=await nativeCall(()=>main.evaluate("import('electron').then(({app})=>({isPackaged:app.isPackaged,architecture:process.arch,electron:process.versions.electron}))"));await emit({type:'native-identity',...report.nativeIdentity});}
+  catch(error){assertNative();report.nativeIdentityUnavailable=error.message;await emit({type:'native-identity-unavailable',error:error.message});}
+  if(report.nativeIdentity){assert.equal(report.nativeIdentity.isPackaged,false);assert.equal(report.nativeIdentity.architecture,'arm64');assert.equal(report.nativeIdentity.electron,'44.9.0');}
   const target = await until(async () => (await (await fetch(`http://${new URL(endpoint).host}/json/list`)).json()).find(t => t.type === 'page' && t.url.startsWith('file:')), 'HQ renderer');
   shell = await connect(target.webSocketDebuggerUrl, runtime);
   await until(() => shell.evaluate('!!window.hqServices?.preview'), 'preview preload');
@@ -93,6 +136,7 @@ try {
     const globals = await cdp.evaluate(`Object.fromEntries(['require','process','hqServices','hqDesktop'].map(k=>[k,typeof window[k]]))`);
     assert.ok(Object.values(globals).every(v => v === 'undefined')); return globals;
   }));
+  if(args.includes('--stop-after-first-preview'))throw new PlannedStop('Stopped after first native preview lifecycle');
   if (report.hooksAvailable) await check('Q-PV0', 'Unregistered contents with main preload are quarantined', async () => {
     value(await shell.evaluate("window.hqServices.design.call('blob.has',{digest:'sha256:'+'0'.repeat(64)})"));
     const result = await hook("trustProbe('same-preload')");
@@ -406,13 +450,14 @@ try {
     finally { await api('close', { sessionId: p.session.sessionId }); p.cdp.close(); }
   }); else unmeasured('PUBLIC-HTTPS', 'Public website smoke', 'No --public-url supplied');
   unmeasured('PACKAGED-SWITCH', 'Packaged build ignores qualification switch', 'Parent performs after staging packaged candidate');
-} catch (error) { report.error = error.stack; }
+} catch (error) {if(error instanceof PlannedStop)report.plannedStop=error.message;else report.error=error.stack;report.remainingScenarios='unmeasured: runner stopped before executing remaining scenarios';}
 finally {
   if (cancelled) report.cancelled = cancelled;
-  await writeFile(join(evidence, 'native.log'), log).catch(error => { report.evidenceError = error.stack; });
+  await evidenceWrites;
   await runtime.close().then(() => { report.cleanup = 'passed'; }, error => { report.cleanup = 'failed'; report.cleanupError = error.stack; });
   try {await access(runtime.root);report.cleanup='failed';report.cleanupError='Owned scratch root survived cleanup';}catch(error){if(error.code!=='ENOENT'){report.cleanup='failed';report.cleanupError=error.stack;}}
   if(child?.pid){try{process.kill(-child.pid,0);report.cleanup='failed';report.cleanupError='Owned process group survived cleanup';}catch(error){if(error.code!=='ESRCH'){report.cleanup='failed';report.cleanupError=error.stack;}}}
+  await evidenceWrites;
   report.pickQualified = false;
   report.runnerDigest = digest(await readFile(fileURLToPath(import.meta.url)));
   report.harness={};for(const path of ['tests/acceptance/preview/run.mjs','tests/acceptance/preview/network.mjs','tests/acceptance/preview/chooser.mjs','tests/acceptance/preview/tls.mjs','tests/acceptance/preview/packaged.mjs','tests/check-groups.toml'])report.harness[path]=digest(await readFile(join(repo,path)));

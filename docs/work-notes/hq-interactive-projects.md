@@ -115,3 +115,13 @@ The assembled build passes. The complete root Vitest discovery passes 1,695 test
 
 A native macOS preview acceptance runner and a packaged switch-refusal runner are prepared using the already installed Electron runtime. They retain private evidence and clean their own temporary profiles and processes. They do not import a certificate authority, relax the main renderer CSP, install dependencies or enable production qualification flags. Exact native results and the eventual installed revision must be recorded separately.
 <!-- codex-section:end id="worknote.hq-interactive-projects#ctx.interactive-source-validation.001" -->
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.native-preview-validation.001" -->
+## Native preview validation
+
+PR #124 head `b6175869252f4d41a2d68f37e7915b82e3e99c23` passes all 25 hosted checks after the Linux fixture and preview contract-scan repairs. It includes foundation `e8fd22b9d5914dc1bcefa83c880ecd2872c05db4`. The assembled build, 1,695 root Vitest tests and nine preview Node checks pass locally. Green source checks do not establish native preview readiness.
+
+A staged actual macOS application rejects the unpackaged qualification environment switch while production flags are false. The initial unpackaged native matrix attempt at `67d88b6dbd15ee178618b0fbbca10ddebd25e1a3` verifies Electron 44.9.0 and the main renderer CSP, then encounters a main-process SIGSEGV in the first preview lifecycle. Later disconnected timeout rows are not independent scenario failures or passes. Native logs, the crash summary and raw report are retained privately. The original run ended after an approved source integration, so its recorded head variance also prevents qualification. Creator-owned native resources and temporary profile were removed; the stalled runner subsequently exited.
+
+The next bounded probe journals open, placement, renderer inspection and close separately, stops promptly on native process loss, and retains untouched matrix rows as unmeasured. No production flag, Electron upgrade, dependency installation or installed-app activation is inferred from this failure. The first-run cause must be established before a production repair; the full matrix remains required afterward.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.native-preview-validation.001" -->
