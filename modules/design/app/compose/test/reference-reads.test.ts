@@ -12,6 +12,7 @@ import { projectId, viewId, versionId } from '../../../projects/src/ids.ts';
 import { contentKey } from '../../../projects/src/repository.ts';
 import { newDraft, applyEdit, continuationOf } from '../../../requests/src/draft.ts';
 import { brandId } from '../../../requests/src/validate.ts';
+import { RequestStore } from '../../../requests/src/store.ts';
 import { buildPacket } from '../../../requests/src/packet.ts';
 import { FREEZE_SCHEMA } from '../../../requests/src/contract.ts';
 import { digestOf } from '../../../requests/src/jcs.ts';
@@ -40,24 +41,24 @@ function envelope(kind: DesignReferenceKind, entityId: string, title = 'Syntheti
   return { version: 1, domain: 'design', kind, entityId, projectId: project, title, returnDestination: { domain: 'design', destination: 'projects/projects' },
     ...(revision === undefined ? {} : { sourceRevision: revision }) };
 }
-async function fixture(t: TestContext) {
+async function fixture(t: TestContext, withLibrary = true) {
   const double = createTransportDouble();
   double.failWith((route) => route === 'event.read' ? { ok: true, value: { events: [], status: { state: 'ok' } } } : undefined);
   const bridge = createBridgeWorkspaceDocuments(double.transport);
   const reads = createDesignReferenceReads(bridge);
   const provider = createDesignReferenceProvider(reads, () => now);
-  let baseline = '';
+  let baseline = JSON.stringify([...double.documents]);
   const unchanged = () => {
     assert.deepEqual(double.calls.filter(({ route }) => !['doc.get', 'doc.list', 'blob.get', 'blob.has', 'event.read'].includes(route)), [], 'zero mutations or dispatch forwarded');
     assert.equal(JSON.stringify([...double.documents]), baseline, 'source bytes unchanged');
   };
   const seed = async (key: string, value: unknown) => {
-    if (baseline !== '') unchanged();
+    unchanged();
     await bridge.putDocument(key, toJson(value));
     double.calls.length = 0;
     baseline = JSON.stringify([...double.documents]);
   };
-  await seed(LIBRARY_DOCUMENT_KEY, libraryValue());
+  if (withLibrary) await seed(LIBRARY_DOCUMENT_KEY, libraryValue());
   t.after(unchanged);
   const found = async (kind: DesignReferenceKind, id: string): Promise<DesignReferenceRecord> => {
     const result = await reads.read(kind, id, project);
@@ -79,6 +80,7 @@ it('version mapping: found, missing, invalid and unavailable; title and T14 dest
   for (const value of [{ schema: 'hq.design.project-content/v99' }, { invalid: true }]) {
     await f.seed(PROJECTS_KEY_ROOT + contentKey(projectId(project)), value);
     assert.equal((await f.provider.resolve(envelope('version', 'version-one'))).status, 'unknown');
+    await assert.rejects(f.reads.list(project));
   }
   f.double.failWith(() => { throw new Error('Synthetic transport failure'); });
   assert.equal((await f.provider.resolve(envelope('version', 'version-one'))).status, 'unavailable');
@@ -119,21 +121,24 @@ it('interrupted freeze recovery is unknown without forwarding its attempted writ
     continuation: continuationOf(packet, consumed, brandId('draft-two'), now) });
   await f.seed(draftKey, consumed);
   assert.equal((await f.provider.resolve(envelope('request', request))).status, 'unknown');
-  await assert.rejects(f.reads.list(project));
+  assert.deepEqual((await f.reads.list(project)).map((r) => r.kind), ['reference']);
 });
 
 it('partial or corrupt request reads fail closed and list/read transport failures are unavailable', async (t) => {
   const f = await fixture(t);
   await f.seed(draftKey, { invalid: true });
   assert.equal((await f.provider.resolve(envelope('request', request))).status, 'unknown');
+  assert.deepEqual((await f.reads.list(project)).map((r) => r.kind), ['reference']);
   await f.seed(draftKey, draft());
   f.double.failWith((route) => route === 'event.read' ? { ok: true, value: { events: [], status: { state: 'corrupt', atSeq: 1, reason: 'Synthetic corruption' } } } : undefined);
   assert.equal((await f.provider.resolve(envelope('request', request))).status, 'unknown');
+  await assert.rejects(f.reads.list(project));
   f.double.failWith((route, params) => {
     if (route === 'doc.list' && 'prefix' in params && params.prefix.endsWith('/packets/')) return { ok: true, value: [`design/requests/${request}/packets/000001`] };
     if (route === 'event.read') return { ok: true, value: { events: [], status: { state: 'ok' } } };
   });
   assert.equal((await f.provider.resolve(envelope('request', request))).status, 'unknown');
+  await assert.rejects(f.reads.list(project));
   f.double.failWith((route) => { if (route === 'doc.list') throw new Error('Synthetic listing failure'); });
   assert.equal((await f.provider.resolve(envelope('request', request))).status, 'unavailable');
   await assert.rejects(f.reads.list(project));
@@ -155,6 +160,7 @@ it('reference live membership, archived, missing elsewhere and parse failures', 
   for (const invalid of [{ schema: 'hq.design.references/v99' }, { invalid: true }]) {
     await f.seed(LIBRARY_DOCUMENT_KEY, invalid);
     assert.equal((await f.provider.resolve(envelope('reference', reference))).status, 'unknown');
+    await assert.rejects(f.reads.list(project));
   }
   f.double.failWith(() => { throw new Error('Synthetic transport failure'); });
   assert.equal((await f.provider.resolve(envelope('reference', reference))).status, 'unavailable');
@@ -219,5 +225,49 @@ it('unbridged observations are unavailable and list rejects without a fallback',
     assert.deepEqual(await reads.read(kind, 'synthetic', project), { status: 'unavailable' });
     assert.equal((await provider.resolve(envelope(kind, 'synthetic'))).status, 'unavailable');
   }
+  await assert.rejects(reads.list(project));
+});
+
+it('absent library is authoritative empty while versions and requests remain searchable', async (t) => {
+  const f = await fixture(t, false);
+  await f.seed(draftKey, draft());
+  const content = addVersion(addView(createProjectContent(projectId(project), now), { id: viewId('view-home'), title: 'Home', kind: 'page' }, now),
+    { id: versionId('version-one'), viewId: viewId('view-home'), label: 'First', capture: { route: '/', viewport: { w: 1440, h: 900, dpr: 1 } }, origin: 'synthetic-fixture' }, now);
+  await f.seed(PROJECTS_KEY_ROOT + contentKey(projectId(project)), content);
+  await f.seed('design/requests/request-unassigned/draft', { ...draft(), requestId: 'request-unassigned', draftId: 'draft-unassigned', sources: [] });
+  assert.equal((await f.provider.resolve(envelope('request', 'request-unassigned'))).status, 'unknown');
+  assert.equal(f.double.documents.has(LIBRARY_DOCUMENT_KEY), false);
+  assert.deepEqual(await f.reads.read('reference', reference, project), { status: 'missing' });
+  assert.equal((await f.provider.resolve(envelope('reference', reference))).status, 'missing');
+  assert.deepEqual((await f.reads.list(project)).map((r) => r.kind), ['version', 'request']);
+  assert.deepEqual((await f.provider.find('', { projectId: project, limit: 10 })).map((r) => r.kind), ['version', 'request']);
+});
+
+it('list omits zero-source and mixed-source drafts while preserving a valid request', async (t) => {
+  const f = await fixture(t, false);
+  await f.seed(draftKey, draft());
+  for (const [id, sources] of [['request-zero', []], ['request-mixed', [source(), source('project-b', 'version-two')]]] as const) {
+    await f.seed(`design/requests/${id}/draft`, { ...draft(), requestId: id, draftId: `draft-${id}`, sources });
+    assert.equal((await f.provider.resolve(envelope('request', id))).status, 'unknown');
+  }
+  assert.deepEqual((await f.reads.list(project)).map((r) => r.entityId), [request]);
+  assert.deepEqual((await f.provider.find('', { projectId: project, limit: 10 })).map((r) => r.entityId), [request]);
+  assert.deepEqual(await f.reads.list('project-b'), []);
+});
+
+
+it('a storage TypeError swallowed by RequestStore remains unavailable and rejects list', async (t) => {
+  const f = await fixture(t);
+  await f.seed(draftKey, draft());
+  // Transport errors are normalized by the production bridge. Inject a storage-port
+  // TypeError here to exercise the distinct guard-swallowed read failure path.
+  const reads = createDesignReferenceReads({ ...f.bridge, async readEvents() { throw new TypeError('Synthetic storage read failure'); } });
+  const provider = createDesignReferenceProvider(reads, () => now);
+  const opened = t.mock.method(RequestStore.prototype, 'open');
+  assert.deepEqual(await reads.read('request', request, project), { status: 'unavailable' });
+  const snapshot = await opened.mock.calls[0]!.result;
+  assert.ok(snapshot);
+  assert.ok(snapshot.readOnly, 'open returned a readOnly snapshot instead of throwing');
+  assert.equal((await provider.resolve(envelope('request', request))).status, 'unavailable');
   await assert.rejects(reads.list(project));
 });

@@ -10,6 +10,7 @@ import { brandId } from '../../requests/src/validate.ts';
 import { digestOf } from '../../requests/src/jcs.ts';
 import { LIBRARY_DOCUMENT_KEY } from '../../references/src/contract.ts';
 import type { LibraryState, ReferenceRecord } from '../../references/src/contract.ts';
+import { emptyLibrary } from '../../references/src/library.ts';
 import { parseLibraryDocument } from '../../references/src/persist.ts';
 
 class ReadOnlyObservation extends Error {}
@@ -46,8 +47,8 @@ function observation(records: WorkspaceRecords) {
   };
   const store = () => new RequestStore({ storage: createRequestsStoragePort<Digest>({ workspace: view }), clock,
     ids: { next() { throw new ReadOnlyObservation('Reference observation cannot allocate IDs'); } } });
-  const failure = (error: unknown): DesignReferenceRead => ({
-    status: error instanceof ReadOnlyObservation || state.partial || !state.failed ? 'unknown' : 'unavailable',
+  const failure = (): DesignReferenceRead => ({
+    status: state.failed ? 'unavailable' : 'unknown',
   });
   return { view, state, store, failure };
 }
@@ -67,6 +68,7 @@ function versionRecord(value: ProjectContent, id: string): DesignReferenceRead {
 }
 async function requestRecord(o: Observation, id: string): Promise<DesignReferenceRead> {
   const snapshot = await o.store().open(brandId<'RequestId'>(id));
+  if (o.state.failed) return { status: 'unavailable' };
   if (o.state.partial || snapshot.readOnly !== null || snapshot.recovered.length > 0 || snapshot.draft === null) return { status: 'unknown' };
   const draft = snapshot.draft;
   const projects = new Set(draft.sources.map((source) => source.projectId));
@@ -80,7 +82,8 @@ async function requestRecord(o: Observation, id: string): Promise<DesignReferenc
 }
 async function library(o: Observation): Promise<LibraryState | null> {
   const document = await o.view.getDocument(LIBRARY_DOCUMENT_KEY);
-  const parsed = parseLibraryDocument(document?.value);
+  if (document === null) return o.state.failed || o.state.partial ? null : emptyLibrary();
+  const parsed = parseLibraryDocument(document.value);
   return parsed.status === 'ok' ? parsed.state : null;
 }
 async function referenceRecord(value: LibraryState, record: ReferenceRecord | undefined, project: string): Promise<DesignReferenceRead> {
@@ -112,24 +115,30 @@ export function createDesignReferenceReads(records: WorkspaceRecords | null): De
         }
         const value = await library(o);
         return value ? await referenceRecord(value, value.references[entityId], project) : { status: 'unknown' };
-      } catch (error) { return o.failure(error); }
+      } catch { return o.failure(); }
     },
     async list(project) {
       if (records === null) throw new Error('Design reference storage unavailable');
       const o = observation(records);
       const found: DesignReferenceRecord[] = [];
       const add = (result: DesignReferenceRead) => {
-        if (result.status === 'unknown' || result.status === 'unavailable') throw new Error('Design reference observation incomplete');
+        if (result.status === 'unavailable') throw new Error('Design reference observation incomplete');
         if (result.status === 'found' && result.record.projectId === project && !result.record.archived) found.push(result.record);
       };
       const versions = await content(o, project);
       if (!versions) throw new Error('Design project content unavailable');
       for (const version of versions.versions) add(versionRecord(versions, version.id));
-      for (const id of await o.store().listRequests()) add(await requestRecord(o, id));
+      for (const id of await o.store().listRequests()) {
+        // A record may be unresolved without making other records unavailable.
+        let result: DesignReferenceRead;
+        try { result = await requestRecord(o, id); } catch { result = o.failure(); }
+        if (o.state.failed || o.state.partial) throw new Error('Design request observation incomplete');
+        add(result);
+      }
       const references = await library(o);
       if (!references) throw new Error('Design reference library unavailable');
       for (const record of Object.values(references.references)) add(await referenceRecord(references, record, project));
-      if (o.state.partial) throw new Error('Design reference observation incomplete');
+      if (o.state.partial || o.state.failed) throw new Error('Design reference observation incomplete');
       return found;
     },
   };
