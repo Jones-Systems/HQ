@@ -22,6 +22,7 @@ import hashlib
 import ipaddress
 import json
 import re
+import traceback
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -288,6 +289,7 @@ def make_handler(app: PlanningApp):
         server_version = "Planning"
         sys_version = ""
         protocol_version = "HTTP/1.1"
+        timeout = 30  # seconds per socket read or write, so idle or stalled clients release their thread
 
         def _serve(self, method: str) -> None:
             headers = {k.lower(): v for k, v in self.headers.items()}
@@ -304,14 +306,25 @@ def make_handler(app: PlanningApp):
             if length > body_limit(urlsplit(self.path).path):
                 self._send(error(413, "too_large", "Request body is too large."), method, close=True)
                 return
-            body = self.rfile.read(length) if length else b""
+            try:
+                body = self.rfile.read(length) if length else b""
+            except TimeoutError:
+                # Like a stalled request line in BaseHTTPRequestHandler: log and close, no response.
+                self.log_error("Request body timed out for %s %s", method, urlsplit(self.path).path)
+                self.close_connection = True
+                return
             if len(body) != length:
                 self._send(error(400, "bad_request", "Request body ended early."), method, close=True)
                 return
             try:
                 response = app.handle(method, self.path, headers, body)
             except Exception:  # noqa: BLE001 - never leak internals to the client
+                # The traceback goes to the operator's stderr only, so a read-path
+                # failure (for example a date that no longer derives) can be traced.
+                # One line per call: log_message escapes embedded newlines.
                 self.log_error("Unhandled error for %s %s", method, urlsplit(self.path).path)
+                for line in traceback.format_exc().rstrip().splitlines():
+                    self.log_error("  %s", line)
                 response = error(500, "server_error", "The server hit an unexpected error.")
             self._send(response, method)
 

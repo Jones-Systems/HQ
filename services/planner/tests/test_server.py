@@ -316,6 +316,9 @@ class _FakeConnection:
     def makefile(self, mode, *args, **kwargs):
         return self.rfile if "r" in mode else self.wfile
 
+    def settimeout(self, value):
+        self.timeout = value
+
     def sendall(self, data):
         self.wfile.write(data)
 
@@ -351,6 +354,46 @@ class HandlerTransport(AppTestCase):
         status, headers, body = self.raw(f"HEAD / HTTP/1.1\r\nHost: {HOST}\r\nConnection: close\r\n\r\n".encode())
         self.assertIn("200", status)
         self.assertEqual(body, b"")
+
+    def test_unhandled_read_error_stays_opaque_and_is_logged_with_traceback(self):
+        from planning.dates import DateError
+
+        def broken_snapshot():
+            raise DateError("time", "Synthetic derivation failure.")
+
+        self.store.snapshot = broken_snapshot
+        logged = []
+        handler_cls = make_handler(self.app)
+        handler_cls.log_message = lambda _self, fmt, *args: logged.append(fmt % args)
+        conn = _FakeConnection(f"GET /api/state HTTP/1.1\r\nHost: {HOST}\r\nConnection: close\r\n\r\n".encode())
+        handler_cls(conn, ("127.0.0.1", 50000), _FakeServer())
+        head, _, body = conn.wfile.getvalue().partition(b"\r\n\r\n")
+        self.assertIn(b" 500 ", head.split(b"\r\n")[0])
+        self.assertEqual(json.loads(body), {"error": "server_error", "message": "The server hit an unexpected error."})
+        self.assertNotIn(b"Synthetic", body)
+        log = "\n".join(logged)
+        self.assertIn("GET /api/state", log)
+        self.assertIn("DateError", log)
+        self.assertIn("broken_snapshot", log)
+
+    def test_idle_or_stalled_connections_time_out(self):
+        handler_cls = make_handler(self.app)
+        self.assertEqual(handler_cls.timeout, 30)
+
+        class StalledBody(io.BytesIO):
+            def read(self, size=-1):
+                raise TimeoutError("timed out")
+
+        payload = b'{"fields": {"title": "Never arrives"}}'
+        conn = _FakeConnection(b"")
+        conn.rfile = StalledBody(
+            (f"POST /api/items HTTP/1.1\r\nHost: {HOST}\r\nContent-Type: application/json\r\n"
+             f"X-Planning-Request: 1\r\nContent-Length: {len(payload)}\r\n\r\n").encode())
+        handler_cls.log_message = lambda *a, **k: None
+        handler = handler_cls(conn, ("127.0.0.1", 50000), _FakeServer())
+        self.assertTrue(handler.close_connection)
+        self.assertEqual(conn.wfile.getvalue(), b"")
+        self.assertEqual(self.store.snapshot()["items"], [])
 
     def test_replay_handler_outer_limit(self):
         body = json.dumps({"mode": "lookup", "request_id": "request-0001", "method": "POST", "path": "/api/items",
