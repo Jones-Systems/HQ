@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rewriteRelativeImportExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "rootDir": "../..",
+    "outDir": "dist-electron/design-host"
+  },
+  "files": ["../../modules/design/app/storage/node.ts", "design-host/compat.ts"]
+}
