@@ -8,7 +8,7 @@
  * caller sees no result, and T12's own unknown-outcome rules apply.
  */
 import { toJson } from './canonical.ts';
-import { isStoreErrorCode, type WorkspaceBacking } from './backing.ts';
+import { isStoreErrorCode, type WorkspaceDocuments } from './backing.ts';
 
 export const OUTBOX_KEY_ROOT = 'design/connector/outbox/';
 
@@ -50,7 +50,7 @@ function keyOf(dispatchId: string): string {
 }
 
 export function createOutboxAdapter<R extends OutboxRecordShape, I extends string = string>(
-  workspace: WorkspaceBacking,
+  workspace: WorkspaceDocuments,
   options: OutboxAdapterOptions<R> = {},
 ): OutboxAdapter<R, I> {
   if (workspace.kind !== 'workspace') throw new OutboxRecordError('The outbox lives only in a workspace view');
