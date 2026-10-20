@@ -27,8 +27,11 @@ let log = '', main, shell, child, endpoint, cancelled;
 let evidenceWrites = Promise.resolve(), stopNative;
 const nativeStopped = new Promise(resolve => { stopNative = resolve; });
 class Unmeasured extends Error {}
+class EnvironmentOccluded extends Unmeasured {}
 class NativeStopped extends Error {}
 class PlannedStop extends Error {}
+let stopForOcclusion;
+const environmentStopped = new Promise(resolve => { stopForOcclusion = resolve; });
 const persist = (name, text) => {
   evidenceWrites = evidenceWrites.then(() => appendFile(join(evidence, name), text)).catch(error => { report.evidenceError = error.stack; });
   return evidenceWrites;
@@ -57,10 +60,10 @@ const check = async (id, scenario, fn) => {
   try {
     baseline = report.hooksAvailable ? await hook('sessions()') : [];
     assert.ok(nested || baseline.length === 0, 'Unexpected preview session before row');
-    const observed = await nativeCall(fn);
+    const observed = await Promise.race([nativeCall(fn), environmentStopped.then(error => { throw error; })]);
     row = { id, scenario, outcome: 'passed', observed };
   } catch (error) {
-    stopped = error instanceof NativeStopped ? error : null;
+    stopped = error instanceof NativeStopped || error instanceof EnvironmentOccluded ? error : null;
     row = { id, scenario, outcome: error instanceof Unmeasured ? 'unmeasured' : 'failed', error: error.stack, observed: error.observed };
   } finally {
     rowDepth--;
@@ -104,7 +107,7 @@ const api = async (route, params) => {
 };
 const value = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 const hook = expression => nativeCall(() => main.evaluate(`globalThis.__hqPreviewQualification.${expression}`));
-const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;background:#eee;color:#111;font:16px monospace}#spacer{height:40px}#target{margin:20px;width:240px;height:60px;background:#aaccee}#tail{height:1600px}</style></head><body><div id="spacer"></div><button id="target">Qualification target</button><p id="quote">Select this exact synthetic quote.</p><input id="file" type="file"><div id="tail"></div></body></html>`;
+const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;color-scheme:dark;background:#17191d;color:#c2c6cd;font:16px monospace}#spacer{height:40px}#target{margin:20px;width:240px;height:60px;background:#303640;color:#c2c6cd;border:1px solid #454b55}#tail{height:1600px}</style></head><body><div id="spacer"></div><button id="target">Qualification target</button><p id="quote">Select this exact synthetic quote.</p><input id="file" type="file"><div id="tail"></div></body></html>`;
 let origin, crossOrigin, canaries;
 async function open(viewport = { w: 1280, h: 800, dpr: 1 }, url = origin) {
   const session = value(await api('open', { versionId: 'preview-qualification', url, viewport, label: 'Synthetic native qualification' }));
@@ -118,11 +121,28 @@ async function open(viewport = { w: 1280, h: 800, dpr: 1 }, url = origin) {
 }
 async function withPreview(fn, viewport) {
   const p = await open(viewport);
-  try {await emit({type:'fixture-workload-start'});const result=await nativeCall(()=>fn(p));await emit({type:'fixture-workload-end'});return result;}
+  try {await drawable(p.cdp, 'workload');await emit({type:'fixture-workload-start'});const result=await nativeCall(()=>fn(p));await emit({type:'fixture-workload-end'});return result;}
   finally {if(!cancelled && !child.launchError && child.exitCode===null && child.signalCode===null)await api('close',{sessionId:p.session.sessionId});p.cdp.close();await emit({type:'fixture-cdp-close'});}
 }
-const capture = session => api('capture', { sessionId: session.sessionId, expectedGeneration: session.generation });
+let occlusionNoticed = false;
+async function drawable(cdp, stage) {
+  const windows = await main.evaluate("process.getBuiltinModule('module').createRequire(process.cwd()+'/package.json')('electron').BrowserWindow.getAllWindows().map(w=>({id:w.id,visible:w.isVisible(),minimized:w.isMinimized(),focused:w.isFocused(),destroyed:w.isDestroyed()}))");
+  const document = await cdp.evaluate('({visibility:document.visibilityState,focused:document.hasFocus()})');
+  const observed = {stage,windows,document};
+  await emit({type:'drawable-sentinel',...observed});
+  if (!windows.some(w=>w.visible&&!w.minimized&&!w.destroyed) || document.visibility !== 'visible') {
+    if (!occlusionNoticed) {occlusionNoticed=true;await emit({type:'environment-occluded',notice:'Native qualification stopped: keep the HQ test window visible and unobscured before a separately scheduled run.',...observed});}
+    const error = new EnvironmentOccluded('unmeasured:environment-occluded');error.observed=observed;stopForOcclusion(error);throw error;
+  }
+}
+const capture = async session => {
+  const cdp = previewConnections.get(session.sessionId);
+  assert.ok(cdp, 'Capture requires the owned preview connection for drawable evidence');
+  await drawable(cdp, 'host-capture');
+  return api('capture', { sessionId: session.sessionId, expectedGeneration: session.generation });
+};
 async function click(cdp, x = 80, y = 80) {
+  await drawable(cdp, 'trusted-input');
   await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
 }
@@ -188,7 +208,7 @@ try {
         ]) {
           await emit({type:'capture-diagnostic-stage-start',phase,stage});
           try { const observed=await operation();await emit({type:'capture-diagnostic-stage-end',phase,stage,outcome:'passed',observed}); }
-          catch(error){assertNative();failed=true;await emit({type:'capture-diagnostic-stage-end',phase,stage,outcome:'failed',error:error.stack});}
+          catch(error){if(error instanceof EnvironmentOccluded)throw error;assertNative();failed=true;await emit({type:'capture-diagnostic-stage-end',phase,stage,outcome:'failed',error:error.stack});}
         }
       });
       if(failed)throw new Error('Capture diagnostic failed at '+phase+'; remaining phases not run');
@@ -256,7 +276,7 @@ try {
     }, viewport));
   }
   await check('Q-PV5', 'Stable scroll captures visible viewport pixels and records scroll 100', () => withPreview(async ({ session, cdp }) => {
-    await cdp.evaluate(`(async()=>{document.body.replaceChildren();document.documentElement.style.cssText='margin:0;padding:0;scroll-behavior:auto';document.body.style.cssText='margin:0;padding:0';for(let i=0;i<24;i++){const row=document.createElement('div');row.style.cssText='height:100px;background:'+(i%2?'rgb(0,255,0)':'rgb(255,0,0)');document.body.append(row)}scrollTo(0,0);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))})()`);
+    await cdp.evaluate(`(async()=>{document.body.replaceChildren();document.documentElement.style.cssText='margin:0;padding:0;scroll-behavior:auto';document.body.style.cssText='margin:0;padding:0';for(let i=0;i<24;i++){const row=document.createElement('div');row.style.cssText='height:100px;background:'+(i%2?'rgb(35,39,45)':'rgb(27,30,35)');document.body.append(row)}scrollTo(0,0);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))})()`);
     const inspectCapture = async (record, name) => {
       const image = value(await api('image', { captureId: record.captureId }));
       const encoded = image.split(',')[1];
@@ -268,8 +288,8 @@ try {
     const initial = value(await capture(session));
     const initialPixels = await inspectCapture(initial, 'stable-scroll-before');
     assert.deepEqual(initial.scroll, { x: 0, y: 0 });
-    assert.deepEqual(initialPixels.top, [255,0,0,255]);
-    assert.deepEqual(initialPixels.next, [0,255,0,255]);
+    assert.deepEqual(initialPixels.top, [27,30,35,255]);
+    assert.deepEqual(initialPixels.next, [35,39,45,255]);
     await cdp.evaluate('new Promise(resolve=>{scrollTo(0,100);requestAnimationFrame(()=>requestAnimationFrame(resolve))})');
     assert.equal(await cdp.evaluate('scrollY'), 100);
     const scrolled = value(await capture(session));
@@ -277,8 +297,8 @@ try {
     assert.deepEqual(scrolled.scroll, { x: 0, y: 100 });
     assert.equal(scrolledPixels.width, session.viewport.w);
     assert.equal(scrolledPixels.height, session.viewport.h);
-    assert.deepEqual(scrolledPixels.top, [0,255,0,255], 'PNG top is the visible green row after stable scroll');
-    assert.deepEqual(scrolledPixels.next, [255,0,0,255]);
+    assert.deepEqual(scrolledPixels.top, [35,39,45,255], 'PNG top is the visible lighter dark row after stable scroll');
+    assert.deepEqual(scrolledPixels.next, [27,30,35,255]);
     assert.notEqual(scrolled.captureDigest, initial.captureDigest);
     return { initial, initialPixels, scrolled, scrolledPixels };
   }));
@@ -347,7 +367,7 @@ try {
       const target=(await (await fetch(`http://${new URL(endpoint).host}/json/list`)).json()).find(t=>t.type==='page'&&t.url.startsWith(url.origin));
       if(target){const cdp=await connect(target.webSocketDebuggerUrl,runtime);try{observed.document=await cdp.evaluate('({url:location.href,title:document.title,text:document.body?.innerText.slice(0,2000),secure:isSecureContext})');}finally{cdp.close();}}
       await emit({type:'client-certificate-observation',...observed});
-      if(after.denials.certificates<=before.denials.certificates){const error=new Unmeasured('No native select-client-certificate callback observed; load result and document retained, certificate-denial predicate unproved');error.observed=observed;throw error;}
+      if(after.denials.certificates<=before.denials.certificates){const error=new Unmeasured('unmeasured-unreachable: no native select-client-certificate callback; Electron empty-identity branch bypasses app delegate; load/document retained separately');error.observed=observed;throw error;}
       return observed;
     }
     finally {if(result.ok) await api('close',{sessionId:result.value.sessionId});}
@@ -434,6 +454,7 @@ try {
   }));
   await check('Q-PV7', 'Trusted selection produces cite only', () => withPreview(async ({ session, cdp }) => {
     value(await api('mode', { sessionId: session.sessionId, generation: session.generation, mode: 'cite' }));
+    await drawable(cdp, 'trusted-selection');
     const rect = await cdp.evaluate("(()=>{const r=document.querySelector('#quote').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()");
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x + 2, y: rect.y + 8, button: 'left', clickCount: 1 });
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x + 300, y: rect.y + 8, button: 'left', buttons: 1 });
@@ -488,7 +509,7 @@ try {
       assert.equal(after.blobWrites, before.blobWrites); assert.equal(value(await api('events', { sessionId: session.sessionId, after: 0 })).events.length, 0); return after.lastPickOutcome;
     }));
     await check('Q-PV6a', 'Compositor animation changes pixels, paused animation anchors', () => withPreview(async ({ session, cdp }) => {
-      await cdp.evaluate("window.motion=document.querySelector('#target').animate([{transform:'translateX(0px)'},{transform:'translateX(300px)'}],{duration:1200,iterations:Infinity})");
+      await cdp.evaluate("document.querySelector('#target').style.width='120px';document.querySelector('#target').style.height='32px';window.motion=document.querySelector('#target').animate([{transform:'translateX(0px)'},{transform:'translateX(24px)'}],{duration:4000,iterations:3})");
       const before = await hook('stats()');
       await hook("pauseAt('first-capture')");
       const pending = capture(session); pending.catch(() => {});
@@ -500,18 +521,18 @@ try {
       value(await capture(session)); return result;
     }));
     await check('Q-PV6a', 'Playing synthetic video changes captured pixels', () => withPreview(async ({ session, cdp }) => {
-      const setup = await cdp.evaluate(`(async()=>{const c=document.createElement('canvas');c.width=200;c.height=100;const ctx=c.getContext('2d');let frame=0;window.videoClock=setInterval(()=>{ctx.fillStyle='rgb('+((frame++*13)%256)+',0,128)';ctx.fillRect(0,0,200,100)},100);const v=document.createElement('video');v.id='moving-video';v.muted=true;v.style.cssText='position:fixed;left:20px;top:200px;width:200px;height:100px';v.srcObject=c.captureStream(20);document.body.append(v);await v.play();await new Promise(r=>v.requestVideoFrameCallback(r));return {width:v.videoWidth,height:v.videoHeight,paused:v.paused}})()`);
-      assert.equal(setup.paused, false); assert.equal(setup.width, 200);
+      const setup = await cdp.evaluate(`(async()=>{const c=document.createElement('canvas');c.width=96;c.height=48;const ctx=c.getContext('2d');let frame=0;window.videoClock=setInterval(()=>{ctx.fillStyle='rgb('+(30+(frame++%12))+',35,42)';ctx.fillRect(0,0,96,48);if(frame>=40)clearInterval(window.videoClock)},250);const v=document.createElement('video');v.id='moving-video';v.muted=true;v.style.cssText='position:fixed;left:20px;top:200px;width:96px;height:48px';v.srcObject=c.captureStream(4);document.body.append(v);await v.play();await new Promise(r=>v.requestVideoFrameCallback(r));return {width:v.videoWidth,height:v.videoHeight,paused:v.paused}})()`);
+      assert.equal(setup.paused, false); assert.equal(setup.width, 96);
       const before = await hook('stats()'); await hook("pauseAt('first-capture')");
       const pending = capture(session); pending.catch(() => {});
-      try { await hook('waitForPause()'); await cdp.evaluate(`new Promise(r=>document.querySelector('#moving-video').requestVideoFrameCallback(r))`); await delay(110); }
+      try { await hook('waitForPause()'); await cdp.evaluate(`new Promise(r=>document.querySelector('#moving-video').requestVideoFrameCallback(r))`); await delay(260); }
       finally { await hook('resume()'); await hook('pauseAt(null)'); }
       const result = await pending; assert.equal(result.kind, 'stale'); assert.equal(result.reason, 'pixels-unstable');
       assert.equal((await hook('stats()')).blobWrites, before.blobWrites);
       await cdp.evaluate("clearInterval(window.videoClock);document.querySelector('#moving-video').pause()"); await delay(100); value(await capture(session)); return { setup, result };
     }));
     await check('Q-PV6a', 'Native blinking caret changes captured pixels', () => withPreview(async ({ session, cdp }) => {
-      await cdp.evaluate(`(()=>{const input=document.createElement('input');input.id='caret';input.value='Caret';input.style.cssText='position:fixed;left:20px;top:200px;width:300px;font:48px monospace;caret-color:black';document.body.append(input);input.focus();input.setSelectionRange(5,5)})()`);
+      await cdp.evaluate(`(()=>{const input=document.createElement('input');input.id='caret';input.value='Caret';input.style.cssText='position:fixed;left:20px;top:200px;width:300px;font:32px monospace;background:#20242a;color:#bec3cb;caret-color:#bec3cb';document.body.append(input);input.focus();input.setSelectionRange(5,5)})()`);
       await cdp.send('Page.bringToFront');
       await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true });
       await click(cdp, 200, 225);
@@ -519,7 +540,7 @@ try {
       const focus = await cdp.evaluate("({focused:document.hasFocus(),active:document.activeElement?.id,start:document.activeElement?.selectionStart,end:document.activeElement?.selectionEnd})");
       assert.equal(focus.focused, true); assert.equal(focus.active, 'caret'); assert.equal(focus.start, focus.end);
       const samples = [];
-      const shot = async () => { const hash=digest(Buffer.from((await cdp.send('Page.captureScreenshot')).data, 'base64'));samples.push(hash);return hash; };
+      const shot = async () => { await drawable(cdp, 'caret-screenshot');const hash=digest(Buffer.from((await cdp.send('Page.captureScreenshot')).data, 'base64'));samples.push(hash);return hash; };
       const first = await shot(); let changed = false;
       for (let i=0;i<20&&!changed;i++) { await delay(180); changed = await shot() !== first; }
       if (!changed) {const error=new Unmeasured('Positive control: focused native caret did not change pixels in 20 finite samples');error.observed={focus,samples};throw error;}
@@ -585,7 +606,7 @@ try {
     finally { await api('close', { sessionId: p.session.sessionId }); p.cdp.close(); }
   }); else unmeasured('PUBLIC-HTTPS', 'Public website smoke', 'No --public-url supplied');
   unmeasured('PACKAGED-SWITCH', 'Packaged build ignores qualification switch', 'Parent performs after staging packaged candidate');
-} catch (error) {if(error instanceof PlannedStop)report.plannedStop=error.message;else report.error=error.stack;report.remainingScenarios='unmeasured: runner stopped before executing remaining scenarios';}
+} catch (error) {if(error instanceof EnvironmentOccluded){report.environmentStop=error.observed;report.plannedStop=error.message;}else if(error instanceof PlannedStop)report.plannedStop=error.message;else report.error=error.stack;report.remainingScenarios='unmeasured: runner stopped before executing remaining scenarios';}
 finally {
   if (cancelled) report.cancelled = cancelled;
   await evidenceWrites;
