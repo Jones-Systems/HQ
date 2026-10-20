@@ -6,7 +6,7 @@ import { ApiError, NetworkError } from './api.js';
 import { announce } from './dom.js';
 import { STATUS_LABEL } from './model.js';
 import { anchorsToRestore, sortByPosition } from './ordering.js';
-import { OfflineError, getItem, mutate, projectBoardMove, projectPatch, state } from './state.js';
+import { INDETERMINATE_MESSAGE, OfflineError, getItem, mutate, projectBoardMove, projectPatch, state } from './state.js';
 import { toast } from './ui.js';
 
 const undoStack = [];
@@ -53,6 +53,8 @@ export function reportError(err, what) {
       timeout: 12000,
       detail: 'The server did not answer. The change is marked unconfirmed and will be re-sent safely when the connection returns.',
     });
+  } else if (err instanceof ApiError && err.code === 'replay_indeterminate') {
+    toast(`${what}: outcome unknown`, { kind: 'error', timeout: 12000, detail: INDETERMINATE_MESSAGE });
   } else if (err instanceof ApiError && err.code === 'revision_conflict') {
     toast(`${what}: changed elsewhere`, {
       kind: 'error', detail: 'This item was edited on another device or tab. The latest version is now shown; please try again.',
