@@ -1,0 +1,231 @@
+import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  Button, Dialog, IconButton, Menu, SAVE_STATES, SaveIndicator, STATUS_TONES, StateView, StatusChip, Tabs, Toast, ToastRegion, VIEW_STATES,
+} from '../src';
+
+// Happy-dom has no layout or colour engine: these prove roles, names and keyboard paths in each chrome scheme.
+// Pixels, computed colours and focus-ring rendering are proved in a browser (docs/evidence/hq-social-work/ui/).
+describe.each(['light', 'dark'] as const)('primitives in %s chrome', (theme) => {
+  beforeEach(() => { document.documentElement.dataset.theme = theme; });
+  afterEach(() => { cleanup(); delete document.documentElement.dataset.theme; });
+
+  it('Button activates with Enter and Space, stays focusable but inert while busy, and never submits', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const { rerender } = render(<form onSubmit={() => { throw new Error('submitted'); }}><Button variant="primary" onClick={onClick}>Capture</Button></form>);
+    const button = screen.getByRole('button', { name: 'Capture' });
+    expect(button.getAttribute('type')).toBe('button');
+    expect(button.className).toBe('hq-btn hq-btn--primary');
+    await user.tab();
+    expect(document.activeElement).toBe(button);
+    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
+    expect(onClick).toHaveBeenCalledTimes(2);
+
+    rerender(<form><Button variant="primary" busy busyLabel="Saving" onClick={onClick}>Capture</Button></form>);
+    const busy = screen.getByRole('button', { name: 'Saving' });
+    expect(busy.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(busy);
+    await user.keyboard('{Enter}');
+    expect(onClick).toHaveBeenCalledTimes(2);
+  });
+
+  it('IconButton is named by its label, not its icon, and exposes toggle state', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(<IconButton label="Pin board" pressed={false} onClick={onClick} icon={<svg viewBox="0 0 24 24" />} />);
+    const button = screen.getByRole('button', { name: 'Pin board' });
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(button.getAttribute('title')).toBe('Pin board');
+    expect(button.querySelector('[aria-hidden="true"] svg')).not.toBeNull();
+    await user.tab();
+    await user.keyboard('{Enter}');
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('Menu opens from the keyboard, roves focus, skips activation of disabled items and returns focus', async () => {
+    const user = userEvent.setup();
+    const archive = vi.fn();
+    const rename = vi.fn();
+    render(<Menu trigger="Card actions" items={[
+      { id: 'rename', label: 'Rename', onSelect: rename },
+      { id: 'move', label: 'Move to list', onSelect: vi.fn(), disabled: true },
+      { id: 'archive', label: 'Archive', onSelect: archive, tone: 'danger' },
+    ]} />);
+    const trigger = screen.getByRole('button', { name: 'Card actions' });
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+
+    await user.tab();
+    await user.keyboard('{Enter}');
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('menu').getAttribute('aria-labelledby')).toBe(trigger.id);
+    const items = screen.getAllByRole('menuitem');
+    expect(document.activeElement).toBe(items[0]);
+    expect(items.map((item) => item.tabIndex)).toEqual([0, -1, -1]);
+
+    await user.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(items[1]);
+    expect(items[1]!.getAttribute('aria-disabled')).toBe('true');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menu')).toBeTruthy();
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(document.activeElement).toBe(items[0]);
+    await user.keyboard('{End}');
+    expect(document.activeElement).toBe(items[2]);
+    await user.keyboard('{Home}r');
+    expect(document.activeElement).toBe(items[0]);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    await user.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(screen.getAllByRole('menuitem')[2]);
+    await user.keyboard(' ');
+    expect(archive).toHaveBeenCalledOnce();
+    expect(rename).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('Dialog moves focus in, traps Tab both ways, closes on Escape and restores focus', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return <>
+        <Button onClick={() => setOpen(true)}>Delete board</Button>
+        <Dialog open={open} onClose={() => setOpen(false)} role="alertdialog" title="Delete this board?"
+          description="Cards stay in the Planner; only this board view is removed."
+          actions={<><Button onClick={() => setOpen(false)}>Cancel</Button><Button variant="danger" onClick={onConfirm}>Delete</Button></>} />
+      </>;
+    }
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Delete board' });
+    await user.tab();
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete this board?' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-describedby')).toBeTruthy();
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    const remove = screen.getByRole('button', { name: 'Delete' });
+    expect(document.activeElement).toBe(cancel);
+    await user.tab();
+    expect(document.activeElement).toBe(remove);
+    await user.tab();
+    expect(document.activeElement).toBe(cancel);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(remove);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('Toast announces politely, offers Undo by keyboard and dismisses with Escape', async () => {
+    const user = userEvent.setup();
+    const undo = vi.fn();
+    const dismiss = vi.fn();
+    render(<ToastRegion label="Notifications">
+      <Toast message="Moved “Write menu card copy” to Active" meta="Planning change only · no run started"
+        action={{ label: 'Undo', onAction: undo }} onDismiss={dismiss} />
+    </ToastRegion>);
+    expect(screen.getByRole('region', { name: 'Notifications' })).toBeTruthy();
+    const live = screen.getByRole('status');
+    expect(live.getAttribute('aria-live')).toBe('polite');
+    expect(live.textContent).toContain('Planning change only · no run started');
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo' }));
+    await user.keyboard('{Enter}');
+    expect(undo).toHaveBeenCalledOnce();
+    await user.keyboard('{Escape}');
+    expect(dismiss).toHaveBeenCalledOnce();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Dismiss' }));
+  });
+
+  it('Tabs keep one tab stop, move with arrows and Home/End, and select automatically or manually', async () => {
+    const user = userEvent.setup();
+    const tabs = [
+      { id: 'board', label: 'Board', panel: <p>Board panel</p> },
+      { id: 'list', label: 'List', panel: <p>List panel</p> },
+      { id: 'review', label: 'Review', panel: <p>Review panel</p> },
+    ];
+    const { unmount } = render(<Tabs label="Work views" tabs={tabs} />);
+    const [board, list, review] = screen.getAllByRole('tab');
+    expect(screen.getByRole('tablist', { name: 'Work views' })).toBeTruthy();
+    expect(screen.getAllByRole('tab').map((tab) => tab.tabIndex)).toEqual([0, -1, -1]);
+    await user.tab();
+    expect(document.activeElement).toBe(board);
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toBe(list);
+    expect(list!.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tabpanel', { name: 'List' }).textContent).toBe('List panel');
+    await user.keyboard('{ArrowLeft}{ArrowLeft}');
+    expect(document.activeElement).toBe(review);
+    await user.keyboard('{Home}');
+    expect(board!.getAttribute('aria-selected')).toBe('true');
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('tabpanel', { name: 'Board' }));
+    unmount();
+
+    const onSelectedChange = vi.fn();
+    render(<Tabs label="Manual" tabs={tabs} activation="manual" onSelectedChange={onSelectedChange} />);
+    const manual = screen.getAllByRole('tab');
+    await user.tab();
+    await user.keyboard('{End}');
+    expect(document.activeElement).toBe(manual[2]);
+    expect(manual[2]!.tabIndex).toBe(0);
+    expect(manual[0]!.getAttribute('aria-selected')).toBe('true');
+    await user.keyboard('{Enter}');
+    expect(manual[2]!.getAttribute('aria-selected')).toBe('true');
+    expect(onSelectedChange).toHaveBeenCalledWith('review');
+  });
+
+  it('StatusChip always shows its word, with a distinct shape per tone', () => {
+    render(<>{STATUS_TONES.map((tone) => <StatusChip key={tone} tone={tone} label={`Word ${tone}`} detail="observed 2 min ago" />)}</>);
+    for (const tone of STATUS_TONES) {
+      const chip = screen.getByText(`Word ${tone}`).closest('.hq-status')!;
+      expect(chip.className).toContain(`hq-status--${tone}`);
+      expect(chip.querySelector('.hq-status-shape')!.getAttribute('aria-hidden')).toBe('true');
+    }
+    expect(() => render(<StatusChip tone="success" label="  " />)).toThrow(/visible status word/);
+  });
+
+  it('SaveIndicator words every state and offers only Retry (failed) or Check (unknown)', async () => {
+    const user = userEvent.setup();
+    const retry = vi.fn();
+    const check = vi.fn();
+    const words: Record<string, string> = {
+      saved: 'Saved 14:02', saving: 'Saving…', unsaved: 'Unsaved changes', failed: 'Not saved',
+      offline: 'Offline · kept on this device', unknown: 'Save result unknown',
+    };
+    render(<>{SAVE_STATES.map((state) => <SaveIndicator key={state} state={state} savedAt="14:02" onRetry={retry} onCheck={check} />)}</>);
+    const statuses = screen.getAllByRole('status').map((node) => node.textContent);
+    expect(statuses).toEqual(SAVE_STATES.map((state) => words[state]));
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Retry', 'Check']);
+    await user.tab();
+    await user.keyboard('{Enter}');
+    await user.tab();
+    await user.keyboard(' ');
+    expect(retry).toHaveBeenCalledOnce();
+    expect(check).toHaveBeenCalledOnce();
+  });
+
+  it('StateView renders every panel state with a title, and loading as busy', async () => {
+    const user = userEvent.setup();
+    const action = vi.fn();
+    render(<>{VIEW_STATES.map((state) => <StateView key={state} state={state} title={`Title ${state}`} description="Nothing was changed." action={{ label: `Act ${state}`, onAction: action }} />)}</>);
+    for (const state of VIEW_STATES) expect(screen.getByText(`Title ${state}`)).toBeTruthy();
+    expect(document.querySelector('[data-state="loading"]')!.getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByRole('alert').textContent).toContain('Title error');
+    expect(screen.queryByRole('button', { name: 'Act loading' })).toBeNull();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Act empty' }));
+    await user.keyboard('{Enter}');
+    expect(action).toHaveBeenCalledOnce();
+  });
+});

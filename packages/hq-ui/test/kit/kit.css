@@ -1,0 +1,19 @@
+/* Layout for the kit evidence page only; the kit itself never styles elements outside .hq-* classes. */
+html, body { margin: 0; }
+body { background: var(--hq-canvas); color: var(--hq-text); font: var(--hq-type-body); }
+.kit-page { max-width: 1120px; padding: var(--hq-space-xl) var(--hq-space-2xl) 120px; display: grid; gap: var(--hq-space-xl); }
+.kit-head { display: flex; align-items: flex-end; gap: var(--hq-space-lg); flex-wrap: wrap; padding-bottom: var(--hq-space-md); border-bottom: 1px solid var(--hq-border); }
+.kit-title { margin: 0; font: var(--hq-type-display); letter-spacing: var(--hq-type-display-tracking); }
+.kit-appearance { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--hq-radius-md); background: var(--hq-surface-sunken); box-shadow: inset 0 0 0 1px var(--hq-border); }
+.kit-section { display: grid; gap: var(--hq-space-md); padding: var(--hq-space-lg); border-radius: var(--hq-radius-lg); background: var(--hq-surface); box-shadow: inset 0 0 0 1px var(--hq-border); }
+.kit-heading { margin: 0; font: var(--hq-type-title); }
+.kit-note { margin: 0; color: var(--hq-text-muted); }
+.kit-row { display: flex; align-items: center; gap: var(--hq-space-sm); flex-wrap: wrap; }
+.kit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--hq-space-sm) var(--hq-space-lg); }
+.kit-panels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--hq-space-md); }
+.kit-panel { border-radius: var(--hq-radius-lg); background: var(--hq-surface-raised); box-shadow: inset 0 0 0 1px var(--hq-border-strong), var(--hq-shadow-raised); }
+.kit-wells { display: grid; grid-template-columns: 120px repeat(4, 160px); gap: var(--hq-space-lg); align-items: start; }
+.kit-row-label { padding-top: var(--hq-space-xl); }
+.kit-well { margin: 0; display: grid; gap: var(--hq-space-xs); }
+.kit-well > [data-hq-content], .kit-control { width: 160px; height: 96px; overflow: hidden; border-radius: var(--hq-radius-sm); box-shadow: 0 0 0 1px var(--hq-border-strong); }
+.kit-well iframe, .kit-well img { display: block; border: 0; }
