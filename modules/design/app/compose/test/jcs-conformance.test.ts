@@ -36,7 +36,7 @@ describe('JCS conformance across composition, the store and the lanes', () => {
       for (const [label, input, expected] of AGREED) assert.equal(implementation(input), expected, label);
     });
     it(`${name} rejects values JSON cannot represent`, () => {
-      for (const [label, input] of UNIVERSAL_REJECTIONS) assert.throws(() => implementation(input), undefined, label);
+      for (const [label, input] of UNIVERSAL_REJECTIONS) assert.throws(() => implementation(input), (error: unknown) => error instanceof Error, label);
     });
   }
 
