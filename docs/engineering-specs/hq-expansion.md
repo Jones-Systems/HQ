@@ -625,7 +625,7 @@ Stop affected mutation on stale source identity, overlapping writer cones, unexp
 <!-- codex-section:begin id="spec.hq-expansion#iface.wiki.001" -->
 ## Wiki Contract And Core
 
-WK-C owns modules/wiki/contract/. Define hq.wiki.source/v1; namespaces bl/appdev; PageKey(namespace, relative path); aliases; SourceDescriptor with ref, commit, commitTime, indexedAt and freshness; Page with safe AST, fields, outLinks and parsed/raw state; backlinks, hits and topics. WikiService exposes exactly listSources, search, getPage, resolveAlias, getBacklinks, listTopics and indexStatus. Validate logical keys; renderer supplies no roots, refs, URLs or argv. Cap queries at 256 characters, results at 50, page blobs at 2 MB. Destinations use page/<namespace>/<encoded path>, search?q= and topics/<namespace>; scheme-like forms fail shell validation.
+WK-C owns modules/wiki/contract/. Define hq.wiki.source/v1; namespaces bl/appdev; PageKey(namespace, relative path); aliases; SourceDescriptor with ref, commit, commitTime, indexedAt and freshness; Page with safe AST, fields, outLinks and parsed/raw state; backlinks, hits and topics. WikiService exposes exactly listSources, search, getPage, resolveAlias, getBacklinks, listTopics and indexStatus. Validate logical keys; renderer supplies no roots, refs, URLs or argv. Cap queries at 256 characters, results at 50, page blobs at the accepted contract MAX_PAGE_BLOB_BYTES (2 MiB). Destinations use page/<namespace>/<encoded path>, search?q= and topics/<namespace>; scheme-like forms fail shell validation.
 
 WK-CORE owns modules/wiki/core/. Pure GitObjectSource listTree/readBlob port; Node adapter uses execFile with fixed Git argv, configured bare directories, no shell/fetch, bounded blobs/timeouts and exact remote/root/ref checks. Generic frontmatter parser accepts bounded scalar/list grammar; reject duplicates and fall back to readable raw on unsupported syntax. Private prefix/relationship tables stay in external runtime profiles. Safe Markdown AST includes headings, paragraphs, lists, fences, quotes, tables, emphasis and links; HTML and unsafe schemes stay inert; no images. Ignore links inside code. Resolve relative links/aliases, preserve ambiguity and missing targets. Deterministic BM25/backlinks serialize by namespace and commit outside sources. No new dependencies, React or Electron in core.
 
@@ -645,9 +645,9 @@ Synthetic sources prove cross-repository search/filtering, linked pages/topics, 
 <!-- codex-section:begin id="spec.hq-expansion#ctx.wiki-checks.001" -->
 ## Wiki Bases And Checks
 
-All builders: Sonnet 5.5/high, isolated native HQ worktrees, sole Git owner, no root changes. The available HQ T1 native route creates each child at its committed HQ head; no base override or prompt directory/branch switch is implied. WK-C consumes foundation PR2 at 35f9a3e1fd0561335737ea47f6a680e74a5ad0e7 through ordinary merge only if not already inherited. The native generated branch is retained (work/hq-wiki-contract is a proposed label, not a required switch). Its PR targets the exact accepted T1 parent branch, so inherited planning files are excluded from its change. Core/UI likewise start at their native parent commit, normally merge the exact accepted contract dependency, and publish scoped child PRs against that contract branch. Private validation follows core sequentially or as a child PR. Record actual native branches and verify intended diff bases before publication. Shared integration requires a named single writer and concrete file assignment on the common accepted Design-plus-Social/Work base.
+Sonnet 5.5/high builders use the conditional launch-only contract-parent route in ctx.wiki-launch.001. Both must begin at accepted PR34 commit 76a1dbc6dd8ed1eb56400fbb9e18bc4e621038a9 and retain their generated native branches. Their PR base is published t3/50386c27 at that same commit. A child from the advanced T1 planning branch would inherit unrelated docs, so that route is held. No branch switch, reset, rebase, force push or retarget is an allowed workaround.
 
-Fresh admission precedes serial checks: node --test modules/wiki/contract/test/*.test.ts; npx tsc -p modules/wiki/contract/tsconfig.json --noEmit. Core and UI run corresponding test globs and section TypeScript commands. Synthetic bare repo tests own and clean their scratch. Private validation runs outside CI after code checks. Integration runs the deduplicated union, root typecheck/build, navigation migration/preload membership tests and rendered synthetic browse/search flow. No test fetches content or sends work.
+After fresh admission run serially node --test modules/wiki/contract/test/*.test.ts and npx tsc -p modules/wiki/contract/tsconfig.json --noEmit for contract changes only; author already reports these passing on PR34. CORE and UI run the corresponding section commands in their capsules. Use the locked local TypeScript binary when installed and verify its version; npx must not install a missing compiler implicitly. CORE tests own and remove synthetic bare repositories, under task-owned storage outside /tmp. Private-source validation has a separate release after CORE and runs outside CI. Integration runs the deduplicated union, root typecheck/build, navigation migration/preload membership checks and rendered synthetic browse/search. No test fetches content or sends work.
 <!-- codex-section:end id="spec.hq-expansion#ctx.wiki-checks.001" -->
 
 <!-- codex-section:begin id="spec.hq-expansion#ctx.reference-producer.001" -->
@@ -762,7 +762,9 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   "objective": "Build committed-source reader, parser, safe AST, index, aliases and backlinks.",
   "context_refs": [
     "spec.hq-expansion#iface.wiki.001",
-    "spec.hq-expansion#ctx.test-plan.001"
+    "spec.hq-expansion#ctx.wiki-contract-disposition.001",
+    "spec.hq-expansion#ctx.wiki-launch.001",
+    "spec.hq-expansion#ctx.wiki-core-capsule.001"
   ],
   "read_scope": [
     "docs/",
@@ -770,7 +772,10 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
     "packages/"
   ],
   "write_scope": [
-    "modules/wiki/core"
+    "modules/wiki/core/src",
+    "modules/wiki/core/test",
+    "modules/wiki/core/tsconfig.json",
+    "modules/wiki/core/README.md"
   ],
   "requires": [
     "spec.hq-expansion#req.wiki.001"
@@ -818,7 +823,7 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   "validates": [
     "spec.hq-expansion#req.wiki.001"
   ],
-  "scenario": "Build committed-source reader, parser, safe AST, index, aliases and backlinks.; prove invariants/commands in spec.hq-expansion#iface.wiki.001",
+  "scenario": "Prove the exact behavior, checks, caps, null projection, safe parsing and source-unchanged invariants in spec.hq-expansion#ctx.wiki-core-capsule.001",
   "evidence": {
     "predicate": "Named meaningful behavior checks pass at exact candidate revision.",
     "invalid": "A named invariant fails or fixture evidence is labelled live.",
@@ -854,7 +859,9 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   "objective": "Build browse/search/reader/topics/backlinks/history/disambiguation against the contract.",
   "context_refs": [
     "spec.hq-expansion#iface.wiki.001",
-    "spec.hq-expansion#ctx.test-plan.001"
+    "spec.hq-expansion#ctx.wiki-contract-disposition.001",
+    "spec.hq-expansion#ctx.wiki-launch.001",
+    "spec.hq-expansion#ctx.wiki-ui-capsule.001"
   ],
   "read_scope": [
     "docs/",
@@ -910,7 +917,7 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   "validates": [
     "spec.hq-expansion#req.wiki.001"
   ],
-  "scenario": "Build browse/search/reader/topics/backlinks/history/disambiguation against the contract.; prove invariants/commands in spec.hq-expansion#iface.wiki.001",
+  "scenario": "Prove the view, history, safety, request-only and changed-flow Browser obligations in spec.hq-expansion#ctx.wiki-ui-capsule.001",
   "evidence": {
     "predicate": "Named meaningful behavior checks pass at exact candidate revision.",
     "invalid": "A named invariant fails or fixture evidence is labelled live.",
@@ -985,7 +992,8 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   "preserved_boundaries": [
     "Sonnet5.5/high native builder; exact HQ worktree and sole Git owner.",
     "Own cone only; no live dispatch, private corpus publication or root edits.",
-    "Publish scoped child PR; preserve merge/install holds."
+    "Publish scoped child PR; preserve merge/install holds.",
+    "Separate root release after CORE acceptance; report null omissions/raw/truncation/cap aggregates, no private content."
   ],
   "stop_conditions": [
     "Unknown effects, incompatible source contract, overlapping ownership or stale base."
@@ -1083,7 +1091,8 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   "preserved_boundaries": [
     "Sonnet5.5/high native builder; exact HQ worktree and sole Git owner.",
     "Own cone only; no live dispatch, private corpus publication or root edits.",
-    "Publish scoped child PR; preserve merge/install holds."
+    "Publish scoped child PR; preserve merge/install holds.",
+    "P2 destination-length and P3 null-presence findings remain deferred; no repair without explicit owner direction. Packaging, preload seven-method membership and host-only refresh require exact shared-owner assignment."
   ],
   "stop_conditions": [
     "Unknown effects, incompatible source contract, overlapping ownership or stale base."
@@ -1221,3 +1230,67 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
 }
 ```
 <!-- codex-section:end id="spec.hq-expansion#test.reference-producer.001" -->
+
+<!-- codex-section:begin id="spec.hq-expansion#ctx.wiki-contract-disposition.001" -->
+## Wiki Contract Disposition
+
+The Wiki continuity owner accepts PR34 at 76a1dbc6dd8ed1eb56400fbb9e18bc4e621038a9 as the CORE/UI dependency, following Opus 5.5/high source reconciliation. Its 22 changed files are confined to modules/wiki/contract/. Source inspection confirms the seven closed read methods, logical request validators, provenance, safe AST and destination helpers. The author's 73 Node tests, TypeScript pass and eighth-method mutation check are reported evidence, not a coordinator rerun. No CI, source integration, installed-app or private-corpus acceptance is inferred.
+
+Compatible interpretations: import MAX_PAGE_BLOB_BYTES (2 MiB = 2,097,152 bytes), never define a second cap. Queries count Unicode code points; UI uses clampQuery rather than HTML maxLength. Existing structural bounds apply to all projections. Thematic breaks, task markers, footnotes, strikethrough, HTML, images and unsafe/rejected links remain verbatim inert text rather than making an otherwise supported page raw. A single-quote URL is not rewritten into a different URL.
+
+Null-valued frontmatter fields and null list items are deliberately omitted from Page.fields, never coerced to false or empty text, and never force a raw page. Other unrepresentable frontmatter falls back to raw instead of silently losing values. Record type remains an ordinary field. UI maps bl to BusinessLessons and appdev to App Development. History is in-session navigation history, not a new service method. home or an unparseable destination selects home; invalid forms also show an inert notice. Refresh belongs only to the host, outside WikiService.
+
+Deferred findings, preserving original severities: P2 non-blocking root seam — shell destinations cap at 512 characters while Wiki can represent 16,384, so long destinations may not persist or navigate through the mounted shell. No root cap or alternate persistence repair is authorized. UI implements its already-required in-session history; mounted-shell acceptance remains separate and must disclose this limitation. P3 non-blocking contract — omitted null fields lose key presence; a lossless contract revision is deferred. Neither finding blocks these bounded source candidates or authorizes repairs. Private validation later reports null omissions, raw pages, truncations and caps as aggregates.
+<!-- codex-section:end id="spec.hq-expansion#ctx.wiki-contract-disposition.001" -->
+
+<!-- codex-section:begin id="spec.hq-expansion#ctx.wiki-launch.001" -->
+## Conditional CORE And UI Launch Capsule
+
+This plan supplies no launch authority. After the coordinating root accepts these exact published capsules and separately releases CORE/UI, T1 may invoke the supported post-completion follow-up lifecycle on its own completed WK-C child as a launch-only parent. Capture the fresh follow-up task ID. Parent remains source/Git unchanged at 76a1dbc6dd8ed1eb56400fbb9e18bc4e621038a9; native branch t3/wiki-contract-implementation and published PR34 branch t3/50386c27 already point there.
+
+The bounded follow-up overrides the original no-descendants rule only to mechanically launch exactly two named isolated implementation children: lane-wiki-core and lane-wiki-ui, each claude-sonnet-5-5/high. It performs no planning, source edits, Git changes or repairs, and permits no further descendants. T1 retains orchestration, approval and fan-in; the Wiki continuity owner retains feature and contract acceptance.
+
+Before each dispatch capture fresh receiver-native lifecycle, catalog, account and capacity evidence. Preserve the existing account, effort, runtime and holds. Unsupported or unknown nested-route effects hold that exact action with no workaround, replacement or blind retry. Retain every task/child/worktree/branch/start-head receipt. Healthy live work is never duplicated.
+
+Both children start at the unchanged accepted contract commit, so no dependency merge is needed. Each keeps its native generated checkout/branch and is its sole Git owner. Publish one non-draft merge-held PR against t3/50386c27, recording base commit 76a1dbc6dd8ed1eb56400fbb9e18bc4e621038a9. Before push/PR verify start HEAD, unchanged remote base and git diff --name-only 76a1dbc...HEAD; after creation verify the complete PR file list is inside the assigned literal cone. Stop on variance, unexpected/unowned changes, incompatible contract, unknown effect or required out-of-scope access. No branch switch, force, reset, rebase, retarget or deletion.
+
+Both report summary, exact evidence/produced refs, original-severity deferred findings, native IDs/bindings, commits, checks, PR/base and full-diff readback. No real/private sources, root/shared seam, merge, install, live send or corpus configuration release is included.
+<!-- codex-section:end id="spec.hq-expansion#ctx.wiki-launch.001" -->
+
+<!-- codex-section:begin id="spec.hq-expansion#ctx.wiki-core-capsule.001" -->
+## CORE Implementation Capsule
+
+Task task.wiki-core.001, lane-wiki-core, Sonnet 5.5/high. Writes only modules/wiki/core/src/, test/, tsconfig.json and README.md. modules/wiki/core/scripts/ is reserved for separately released private validation. Read the accepted contract via ../../contract/src/index.ts. No contract/root/lock/config/catalog/shared-contract/IPC/preload edits, package.json or new dependencies. No React/Electron. Pure modules import no node:*; only the Node adapter and tests may. Erasable TypeScript. Synthetic sources only.
+
+Exports: GitObjectSource with resolvePin() returning ref/commit/commitTime after binding checks, listTree(commit) returning path/mode/oid/size and readBlob(oid,maxBytes); IndexStore read/write(namespace,commit,snapshot); validateSourceProfile for a data-only external descriptor (namespace, gitDir, expected remote, ref, root prefix, page extensions, field mappings and topic mode); createNodeGitObjectSource(profile); createWikiHost({profiles,sources,store,clock}) returning {service:WikiService,refresh(namespace?)}. Refresh is host-only. Use contract SearchRequest.query and WikiResult return values exactly, not a parallel service shape.
+
+Node Git adapter: fixed execFile argv, shell:false, --git-dir pointing at configured realpath, --no-replace-objects, --literal-pathspecs and -c core.fsmonitor=false. Allow only bare-status read, fixed remote.origin.url lookup, verified refs/heads/<ref> commit resolution with --end-of-options, show -s --format=%ct normalized to UTC, ls-tree -r -z -l --full-tree and cat-file blob for validated hex OIDs. Use a minimal environment, disabled system/global configuration, terminal prompting and optional locks; timeout, bounded maxBuffer and binary output. No fetch/pull/-C/worktree/source writes. Binding/non-bare/root/ref mismatch or timeout returns unavailable/source-unavailable. Skip/count symlinks, submodules and invalid UTF-8 paths. Oversized blobs are not indexed; getPage returns not-found.
+
+Frontmatter begins at byte zero after an optional BOM; delimit with --- and close with --- or .... Support scalar fields, block/flow lists, comments, quoted values with bounded escapes, decimal numbers and true/false. yes/no remain strings. Null/~/empty fields and null list items follow the explicit omission disposition. Duplicate/invalid keys, nested maps, anchors/tags, block scalars, multiline plain values, unclosed fences and structural overflows yield frontmatter-unsupported raw text. Raw pages still derive body links/backlinks.
+
+Markdown supports ATX/setext headings, paragraphs, nested ordered/bullet lists, fenced/indented code, quotes, GFM tables, emphasis/strong, inline code, Markdown/autolinks/reference links and generic [[target|label]]. Use the accepted safe AST; excluded constructs remain verbatim text. Ignore links in code. Tables beyond 64 columns become plain paragraph text. Validate the final AST; invalid/depth/node-overflow content falls back to markdown-unsupported raw. Undecodable/NUL blobs become not-text raw with replacement characters, never executable content.
+
+Relative links discard query/fragment, percent-decode and resolve lexically within the namespace root. Root-relative Markdown links resolve within that configured namespace, never the host filesystem. Escapes/failed decoding are missing targets; anchor-only links are text. Only http/https/mailto passing validateExternalUrl become external records; rejected links remain original text with no out-link. Alias/relationship resolution stays namespace-scoped: one match page, multiple ambiguous sorted/capped at 50, none missing. Page.outLinks deduplicates/caps at 1000 while the index retains all discovered links. Read field relationships from profiles; never hard-code private source tables.
+
+Titles prefer the configured field, then H1, then file stem. Labels collapse whitespace, drop controls, remain nonempty and truncate without breaking surrogate pairs. BM25 uses k1=1.2,b=0.75,title weight2, Unicode letter/number tokens, lowercase+NFC; ties use pageKeyId code-unit order. Snippets cap at 512. Alias normalization is NFC/lowercase/whitespace collapse; path identity remains exact. Backlinks use resolved page targets sorted by title/key. Deterministic topic IDs have no slash and fit 128 characters; max500 topics and 50-page previews. Content freshness is unknown/null; graph freshness is current only for the pinned indexed commit. Snapshot hq.wiki.index/v1 is keyed by namespace/commit through IndexStore; corrupt/stale snapshots rebuild.
+
+Validate every request and response with the accepted contract. Not found => not-found/not-found; Git/source issue => unavailable/source-unavailable; no index => unavailable/index-unavailable; other failures => internal/internal. Tests cover namespace collisions, traversal/absolute/NUL/oversize input, source-binding mismatches, null projection, malformed/duplicate frontmatter, code/HTML/unsafe/single-quote links, ambiguity/dangling links, deterministic rank, snapshot round-trip and unchanged source trees. Synthetic bare repositories use fixed-date Git plumbing, isolated config and task-owned scratch outside /tmp with exact cleanup on success/failure/cancellation. Static checks forbid network/source mutation, shell:true, exec and child_process outside the adapter.
+
+After fresh admission run serially node --test modules/wiki/core/test/*.test.ts and npx tsc -p modules/wiki/core/tsconfig.json --noEmit (use installed locked binary; no implicit install). Report actual test-file/runner coverage. No Browser evidence is required for this non-UI cone. Publish/read back only the assigned cone under the shared launch rules.
+<!-- codex-section:end id="spec.hq-expansion#ctx.wiki-core-capsule.001" -->
+
+<!-- codex-section:begin id="spec.hq-expansion#ctx.wiki-ui-capsule.001" -->
+## UI Implementation Capsule
+
+Task task.wiki-ui.001, lane-wiki-ui, Sonnet 5.5/high. Writes only modules/wiki/ui/**. Read the accepted contract only; no core, @hq/contracts or @hq/ui imports. No contract/root/lock/config/catalog/package/IPC/preload changes or dependencies. Production uses no node:*, Electron, fetch or real sources. Use .ts and React.createElement. Existing hoisted react/react-dom and happy-dom support tests; record packaging obligations for the held integration owner.
+
+Export createWikiView(service:WikiService), returning a component with destination:string, appearance:light|dark and navigate(string):void props. Use contract destination helpers only. home or failed parsing shows home; invalid destinations add an inert notice. Implement the requested in-session history and re-sync with changed destination props. Calls to navigate request shell persistence; the known long-destination persistence gap remains deferred, with no root cap or alternate persistence repair.
+
+Views: home with listSources/indexStatus, namespace display map, ref/commit/commitTime/indexedAt, index freshness and remote-freshness unknown; search with clampQuery, namespace filters, hits/snippets/total/truncated indication; reader with namespace/path/commit provenance, ordinary fields, parsed AST or verbatim raw pre plus raw reason; out-links/backlinks, topic parentId tree/count/previews, in-session history and ambiguity/disambiguation. Add loading/errors for each code and sequence guards discarding stale async responses.
+
+Render all text through React children. No dangerouslySetInnerHTML, innerHTML, executable markup, href-based destinations or window.open. Page links are buttons invoking navigation; external URLs remain non-clickable text; missing links remain inert visibly missing labels. CSS classes use wiki- and data-appearance, support both themes without modifying captured content.
+
+Tests use a synthetic in-memory WikiService with validator-valid fixtures and happy-dom. Cover every view/filter/history/ambiguity/missing target, raw content, script-looking text without script elements, seven-method-only calls, stale-response guards and zero work execution from navigation. Static checks forbid production execution/network/unsafe-render APIs and cross-cone imports. After fresh admission run node --test modules/wiki/ui/test/*.test.ts and npx tsc -p modules/wiki/ui/tsconfig.json --noEmit serially, with the installed locked compiler and no implicit install.
+
+Provide a cone-local Vite harness on explicit loopback and synthetic fixtures. Follow the available capture-ui-evidence workflow and product-native collaborative Browser route. Capture light/dark home, search/filter, parsed/raw reader, backlinks, topics and disambiguation at the exact candidate build; verify only local-server network activity and that external text cannot navigate. Temporary harness serving ends with verification. Retain screenshots under the task evidence directory outside /tmp. If root changes would be required, report the Browser gap rather than widening scope; DOM evidence still runs. This proves the isolated view, not mounted shell/Electron/installed acceptance.
+<!-- codex-section:end id="spec.hq-expansion#ctx.wiki-ui-capsule.001" -->
