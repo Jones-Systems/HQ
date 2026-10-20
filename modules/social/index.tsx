@@ -1,11 +1,14 @@
 import type { ModulePort } from '@hq/contracts';
+import { SocialDomain, socialWorkspacePort } from './nav';
 
-/** R1 skeleton entry. SOC-C replaces it with the Social domain (task.social-domain.001). */
-export function SocialModule({ context, destination }: ModulePort) {
-  return <section className="module-slot" aria-labelledby="social-module-title">
-    <span className="eyebrow">Social module</span>
-    <h1 id="social-module-title">Social is available.</h1>
-    <p>No Social workspace is connected yet. Drafts, the editorial calendar and research tools arrive as the Social lanes land.</p>
-    <dl><dt>Project</dt><dd>{context.name}</dd><dt>Destination</dt><dd>{destination}</dd><dt>Status</dt><dd>Available · no data</dd></dl>
-  </section>;
+/**
+ * The Social domain entry for the HQ module registry (task.social-domain.001). It takes exactly T0's
+ * `ModulePort`; its state lives in the module-level Social session for `context.id`, so the shell
+ * remounting it on a domain switch restores page, filters, selection, brand and unsaved text.
+ * No Social service is reachable yet, so it shows the fictional example workspace, labelled as such.
+ */
+export function SocialModule(props: ModulePort) {
+  return <SocialDomain {...props} port={socialWorkspacePort()} example />;
 }
+
+export default SocialModule;
