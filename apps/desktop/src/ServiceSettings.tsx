@@ -1,3 +1,4 @@
+import { ProjectSources } from './settings/ProjectSources';
 import { useEffect, useRef, useState } from 'react';
 import { Button, IconButton } from '@hq/ui';
 import type { Appearance } from '@hq/contracts';
@@ -127,6 +128,7 @@ export function ServiceSettings({ config, onClose, returnLabel = 'Design', targe
         {category === 'sources' ? <>
           <div className="settings-section-heading"><h2>Data sources</h2><p>Choose where HQ gets its data. Social and Work use service addresses; Local Wiki uses repositories on this device. These are data sources, not device, SSH or environment connections.</p><p>Without a configured service, Social and Work show sample data kept only in this window. Local Wiki has no sample-data mode. After changing a service address, reload HQ to use it in that domain.</p></div>
           <div className="settings-group"><DomainSettings domain="social" config={config} selected={target === 'social'} /><DomainSettings domain="work" config={config} selected={target === 'work'} /></div>
+          <div className="settings-group"><ProjectSources /></div>
           <div id="settings-wiki" className={`settings-group${target === 'wiki' ? ' is-target' : ''}`}><WikiSettings admin={window.hqServices?.wikiAdmin} /></div>
         </> : <>
           <div className="settings-section-heading"><h2>Appearance</h2><p>Choose a light or dark workspace, or follow your device. Captured designs keep their own appearance.</p></div>

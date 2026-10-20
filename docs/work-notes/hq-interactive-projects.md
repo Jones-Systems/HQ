@@ -80,3 +80,38 @@ The compiled-spec registration returned `registration_unavailable`, `effect: non
 
 The first hosted candidate passed every check except the app composition group and its aggregate. The failing bridge test expected production to have an implicit simulated receiver. The coordinator owns a bounded compatibility edit to `modules/design/app/compose/test/bridge-records.test.ts` only: assert the real workspace has no destination, then construct the simulation with explicit `mode: example` over the same bridge stores. The shared production composition is unchanged. All 169 composition tests and its typecheck pass locally after this correction. Current-head hosted CI must be read back separately; the merge and runtime holds remain.
 <!-- codex-section:end id="worknote.hq-interactive-projects#ctx.ci-compatibility.001" -->
+
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.owner-continuation.001" -->
+## Authorized Interactive Continuation
+
+The owner explicitly directs completion, merge and the local HQ update, authorizes the necessary setup and installations, and requests real native Form simulator runs on both the laptop and Mac Mini. This supersedes the earlier merge hold and research-only simulator finish line. Native browser consent, signing/account changes and unrelated protected effects remain separate boundaries.
+
+PR #120 merged into the foundation at `e53943092566e902bf24e698fa31e0c0f2fbb912`, with qualified head `dbed58a44921f09b5c31d2f75ac5d60557803cb0` as its second parent. All 25 exact-head checks passed. The laptop task branch was fast-forwarded to that merge. This does not update the installed payload.
+
+Fresh source assignment: the laptop coordinator owns Git and integration in the existing isolated task worktree. One serialized desktop builder owns `apps/desktop/**`, `packages/contracts/**`, and necessary root build configuration. One composition builder owns `modules/design/app/compose/**`, `modules/design/app/index.ts` and the bounded Projects/Flows/Annotations/interactive section integration. The coordinator owns the spec, this Work Note and affected-check inventory. Dependency installation and builds are serialized with the native pilot. Builders do not mutate Git. Exact private paths, agent identities and runtime bindings remain in private continuation storage.
+
+The target checkout has no `.agents/shared-guidance.md`; shared enrollment is unavailable there. The explicitly adopted V3 workstream rules and HQ's local agreements still apply. No enrollment replacement was installed.
+
+The retained remote checkouts were inspected clean, with no preview, receiver or source-registry implementation found in their source or published branches. Their old receiver-release result remains unknown. The new assignment operates only in the isolated laptop task worktree; it does not retry, resume or resend the old release, mutate retained remote worktrees, or assert the old request had no effect. Any later overlapping candidate requires fresh source reconciliation before integration. Old dispatch and remote lifecycle ownership are preserved.
+
+The desktop builder consumes the accepted receiver, preview and source contracts; the composition builder uses structural ports and agrees their shapes before integration. Qualification flags remain off until actual evidence satisfies their existing predicates. Synthetic tests cannot close native qualification or consent gates. The source-registry task scope now names the actual `preload.cts`, Settings and contract export entries.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.owner-continuation.001" -->
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.storage-budget.001" -->
+## Laptop storage constraint
+
+The owner requires minimal laptop installation and storage use. The native comparison reuses installed iOS runtimes; no additional simulator runtime is authorized by the current working choice. Keep the web prototypes as the lightweight everyday interaction route. Stop additional native tool downloads, serialize heavy checks, and remove only creator-owned disposable build scratch after preserving measurements and captures. Retain source worktrees, owner data, the saved simulator app archive and rollback evidence. Do not clean shared caches or unrelated files. Record measured footprint and available disk after cleanup before further packaging copies.
+
+The laptop's unique native build scratch and task-created simulator were removed with exact readback after the storage stop. Existing devices and runtimes remain. Free space recovered to approximately 9.4 GiB; the saved install archive is 11 MiB. Both Macs built and directly launched the same source, but authenticated interaction comparison remains incomplete: laptop automation was cancelled for storage and Mini XCTest enumeration hit an installed component mismatch. Private captures, measurements, limitations and no-download launch instructions are retained outside this repository.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.storage-budget.001" -->
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.interactive-source-validation.001" -->
+## Interactive source validation
+
+The desktop implementation now supplies persisted source enrollment, main-process OAuth credentials, isolated browser previews and explicit Jones receiver wiring. Design composition uses those ports for interactive project navigation, immutable capture versions, flows, annotations and proposals. Selection and navigation do not dispatch work. Compatibility and native qualification gates remain closed until the corresponding live evidence is available; unsupported enrolled Jones releases remain read-only.
+
+The assembled build passes. The complete root Vitest discovery passes 1,695 tests across 99 files. The full Design composition group separately passes 177 tests and its typecheck; the desktop host affected group passes 93 tests across 15 files. Two existing integration fixtures were updated to represent the injected production composition and explicit unavailable reference provider. No dependency or lockfile change was needed. These are source checks, not native preview, live dispatch or installed-app proof.
+
+A native macOS preview acceptance runner and a packaged switch-refusal runner are prepared using the already installed Electron runtime. They retain private evidence and clean their own temporary profiles and processes. They do not import a certificate authority, relax the main renderer CSP, install dependencies or enable production qualification flags. Exact native results and the eventual installed revision must be recorded separately.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.interactive-source-validation.001" -->

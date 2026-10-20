@@ -9,7 +9,15 @@ type Assert<T extends true> = T;
 export type WikiCompatibility = [Assert<WikiServiceTransport extends WikiHostPort ? true : false>, Assert<WikiService extends WikiServiceTransport ? true : false>, Assert<ModulePort extends WikiModulePort ? true : false>];
 const wiki = createWikiDomain({ getPort: () => window.hqServices?.wiki ?? null });
 
-import { designDomain } from '../../../modules/design/app/index.ts';
+import { createDesignComposition } from '../../../modules/design/app/index.ts';
+import { desktopPreview, createJonesConnection, selectDesktopProject } from './interactive-runtime';
+const jonesConnection = createJonesConnection(window.hqServices?.jonesCode);
+void jonesConnection.refresh();
+window.addEventListener('hq-sources-changed', () => { void jonesConnection.refresh(); });
+export const { designDomain, designReferenceReads } = createDesignComposition({
+  preview: desktopPreview, runsConnection: jonesConnection.connection, onSelectProject: selectDesktopProject,
+  sources: { async list() { const result = await window.hqServices?.sources?.call('list', {}); if (!result?.ok) throw Error('Project sources unavailable'); return result.value; } },
+});
 
 export const DOMAIN_LABELS: Record<DomainId, string> = { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' };
 

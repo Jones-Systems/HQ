@@ -112,3 +112,7 @@ export function parseReference(value: unknown): ReferenceEnvelope | null {
     ...(typeof value.workspaceId === 'string' ? { workspaceId: value.workspaceId } : {}),
   };
 }
+
+export type { PreviewTransport, PreviewParams, PreviewValues, PreviewSession, CaptureRecord } from './preview.ts';
+export type { JonesTransport, JonesStatus, JonesIdentity, JonesReceipt } from './jones-code.ts';
+export type { SourceTransport, SourceStatus, SourceCatalogItem } from './catalog.ts';

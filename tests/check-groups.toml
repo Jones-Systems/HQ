@@ -244,7 +244,7 @@ tests = ["apps/desktop/electron/contents-factory.test.ts", "apps/desktop/electro
 summary = "Native preview and component suites on the built app; qualifying runs need a display."
 covers = ["spec.hq-integration-parallel-execution#test.preview-scenarios.001", "spec.hq-integration-parallel-execution#test.preview-s2-qualification.001", "spec.hq-integration-parallel-execution#test.component-containment-gate.001"]
 direct_surfaces = ["tests/acceptance/preview/"]
-tests = ["tests/acceptance/preview/**/*.test.mjs"]
+tests = ["tests/acceptance/preview/**/*.test.mjs", "tests/acceptance/preview/run.mjs", "tests/acceptance/preview/packaged.mjs"]
 
 [groups.hq-jones-client-launch]
 # Cross-repository group: the checks execute in a Jones-Systems/Jones-Code task
@@ -276,7 +276,7 @@ direct_surfaces = ["packages/hq-ui/", "docs/design/hq-visual-system/tokens/"]
 tests = ["packages/hq-ui/**/*.test.ts", "packages/hq-ui/**/*.test.tsx"]
 
 [groups.hq-source-registry]
-summary = "Pure registered-project and gallery source mapper behavior."
+summary = "Registered-project and gallery source mapping, persisted enrollment and native Settings behavior."
 covers = ["spec.hq-integration-parallel-execution#test.registry-adapters.001", "spec.hq-integration-parallel-execution#test.source-registry-host.001"]
-direct_surfaces = ["modules/design/discovery/src/adapters/", "apps/desktop/electron/sources/"]
-tests = ["modules/design/discovery/test/adapters/**/*.test.ts", "apps/desktop/electron/sources/**/*.test.ts"]
+direct_surfaces = ["modules/design/discovery/src/adapters/", "apps/desktop/electron/sources/", "apps/desktop/src/settings/ProjectSources.tsx", "apps/desktop/src/interactive-runtime.ts", "packages/contracts/src/catalog.ts"]
+tests = ["modules/design/discovery/test/adapters/**/*.test.ts", "apps/desktop/electron/sources/**/*.test.ts", "apps/desktop/src/settings/ProjectSources.test.tsx", "apps/desktop/src/interactive-runtime.test.ts"]

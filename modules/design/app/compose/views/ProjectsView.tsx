@@ -5,9 +5,10 @@ import type { DesignSectionProps } from '../../../ui/contract.ts';
 import { ProjectsSection } from '../../../projects/src/index.ts';
 import '../../../projects/src/projects.css';
 import { useDesignWorkspace } from '../workspace-context.tsx';
+import { InteractivePanel } from './InteractivePanel.tsx';
 import { SectionFrame } from './SectionFrame.tsx';
 
-function ProjectsViewContent({ context }: DesignSectionProps) {
+function ProjectsViewContent({ context, navigate }: DesignSectionProps) {
   const workspace = useDesignWorkspace();
   const controller = use(workspace.projectsFor(context));
   const environment = use<Awaited<ReturnType<typeof workspace.discoveryEnv>>>(workspace.discoveryEnv());
@@ -27,6 +28,7 @@ function ProjectsViewContent({ context }: DesignSectionProps) {
     finally { setBusy(false); }
   }
   return <SectionFrame lane="T2 projects" entry="projects/src › ProjectsSection" tags={[workspace.storageTag, status.tag]}>
+    <InteractivePanel context={context} navigate={navigate} />
     {native && <section aria-label="Project folders">
       <div className="hqp-toolbar">
         <Button disabled={busy} onClick={() => void run(native.chooseRoot)}>Choose projects folder</Button>

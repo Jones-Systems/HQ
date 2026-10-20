@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { HqServices } from '@hq/contracts/services';
-vi.mock('./modules', () => ({ DOMAIN_LABELS: { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' }, MODULES: { design: () => <div>Design stub<input aria-label="Design draft" defaultValue="" /></div>, wiki: () => <div>Wiki home stub</div> }, MODULE_PRESENTATION: { design: 'fill' } }));
+vi.mock('./modules', () => ({ designReferenceReads: { list: vi.fn(async () => { throw Error('Design unavailable in settings fixture'); }), read: vi.fn(async () => ({ status: 'unavailable' as const })) }, DOMAIN_LABELS: { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' }, MODULES: { design: () => <div>Design stub<input aria-label="Design draft" defaultValue="" /></div>, wiki: () => <div>Wiki home stub</div> }, MODULE_PRESENTATION: { design: 'fill' } }));
 import { App } from './App';
 afterEach(() => { cleanup(); delete (window as { hqServices?: HqServices }).hqServices; });
 it('keeps settings accessible without a bridge and reads only sanitized configuration before explicit recheck', async () => {
