@@ -405,6 +405,20 @@ test('imports and restores get a longer timeout than ordinary writes', async () 
   }
 });
 
+test('undoing a change to an item that has since gone says so instead of failing silently', async () => {
+  const { patchItem, undoLast } = await import('../public/js/actions.js');
+  seed([{ id: 'item000001', revision: 2, title: 'Trip' }], 5);
+  const calls = heldFetch();
+  const saving = patchItem(st.getItem('item000001'), { title: 'Holiday' }, { label: 'Rename' });
+  await flush();
+  calls[0].resolve(ok({ item: { id: 'item000001', revision: 3, title: 'Holiday' }, changed: ['title'], state_version: 6 }));
+  await saving;
+  seed([], 7); // deleted elsewhere (for example by a replacing import)
+  await undoLast();
+  assert.equal(calls.length, 1, 'no request is sent');
+  assert.match(toasts.lastElementChild.textContent, /no longer exists/);
+});
+
 // ------------------------------------------------------------- drag
 
 const dropped = [];
