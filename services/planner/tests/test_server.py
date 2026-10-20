@@ -53,6 +53,11 @@ class StaticFiles(AppTestCase):
                 resp, _ = self.call("GET", path)
                 self.assertEqual(resp.status, 404)
 
+    def test_unservable_names_are_not_found_not_server_errors(self):
+        # An over-long component makes the filesystem raise ENAMETOOLONG.
+        resp, _ = self.call("GET", "/" + "a" * 300 + ".js")
+        self.assertEqual(resp.status, 404)
+
     def test_unknown_host_refused(self):
         resp, _ = self.call("GET", "/", headers={"host": "evil.example:8765"})
         self.assertEqual(resp.status, 421)
@@ -129,6 +134,17 @@ class MutationGuards(AppTestCase):
         self.assertEqual(resp.status, 400)
         resp, _ = self.call("POST", "/api/items", raw=b"[1]")
         self.assertEqual(resp.status, 400)
+
+    def test_deeply_nested_json_is_bad_json_not_server_error(self):
+        nested = b"[" * 100_000 + b"]" * 100_000
+        self.assertLessEqual(len(nested), MAX_BODY)
+        resp, data = self.call("POST", "/api/items", raw=nested)
+        self.assertEqual((resp.status, data["error"]), (400, "bad_json"))
+        envelope = {"mode": "lookup", "request_id": "request-0001", "method": "POST", "path": "/api/items",
+                    "body_b64": base64.b64encode(nested).decode(), "sent_after_version": 0}
+        resp, data = self.call("POST", "/api/requests/replay", envelope)
+        self.assertEqual((resp.status, data["error"]), (400, "bad_json"))
+        self.assertEqual(self.store.version(), 0)
 
     def test_unsupported_methods(self):
         resp, _ = self.call("DELETE", "/api/items")

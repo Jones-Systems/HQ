@@ -115,13 +115,17 @@ class PlanningApp:
         parts = [p for p in path.split("/") if p]
         if not parts or any(p.startswith(".") or "\\" in p or "\x00" in p for p in parts):
             return error(404, "not_found", "Not found.")
-        target = PUBLIC_DIR.joinpath(*parts).resolve()
-        if PUBLIC_DIR not in target.parents or not target.is_file():
+        try:
+            target = PUBLIC_DIR.joinpath(*parts).resolve()
+            if PUBLIC_DIR not in target.parents or not target.is_file():
+                return error(404, "not_found", "Not found.")
+            content_type = STATIC_TYPES.get(target.suffix)
+            if content_type is None:
+                return error(404, "not_found", "Not found.")
+            data = target.read_bytes()
+        except OSError:  # for example a name too long for the filesystem
             return error(404, "not_found", "Not found.")
-        content_type = STATIC_TYPES.get(target.suffix)
-        if content_type is None:
-            return error(404, "not_found", "Not found.")
-        return Response(200, target.read_bytes(), content_type, {"Cache-Control": "no-cache"})
+        return Response(200, data, content_type, {"Cache-Control": "no-cache"})
 
     # --------------------------------------------------------------------- api
 
@@ -135,7 +139,7 @@ class PlanningApp:
             return refusal
         try:
             payload = json.loads(body.decode("utf-8")) if body else {}
-        except (UnicodeDecodeError, ValueError):
+        except (UnicodeDecodeError, ValueError, RecursionError):
             return error(400, "bad_json", "Body must be valid JSON.")
         if not isinstance(payload, dict):
             return error(400, "bad_json", "Body must be a JSON object.")
@@ -214,7 +218,7 @@ class PlanningApp:
             raise StoreError(413, "too_large", "Original request body is too large.")
         try:
             payload = json.loads(body.decode("utf-8"))
-        except (ValueError, UnicodeDecodeError):
+        except (ValueError, UnicodeDecodeError, RecursionError):
             raise StoreError(400, "bad_json", "Original body must be valid JSON.") from None
         if not isinstance(payload, dict):
             raise StoreError(400, "bad_json", "Original body must be a JSON object.")
