@@ -1,0 +1,43 @@
+{
+  "source_revision": "05e7252c565d1db2761cca1382d1540892577c06",
+  "spec_blob_oid": "698aae9864f7461bed321fe272d82d84b3ab1437",
+  "tasks": 5,
+  "test_intents": 5,
+  "rounds": [
+    {
+      "round": 1,
+      "ready": [
+        "spec.hq-expansion#task.connector-lifecycle.001",
+        "spec.hq-expansion#task.reference-graph.001",
+        "spec.hq-expansion#task.requests-lifecycle.001"
+      ],
+      "capsule_drafts": 3,
+      "assignment_drafts": 3,
+      "rendered_bytes": 47611
+    },
+    {
+      "round": 2,
+      "ready": [
+        "spec.hq-expansion#task.reference-packets.001"
+      ],
+      "capsule_drafts": 1,
+      "assignment_drafts": 1,
+      "rendered_bytes": 15776
+    },
+    {
+      "round": 3,
+      "ready": [],
+      "capsule_drafts": 0,
+      "assignment_drafts": 0,
+      "rendered_bytes": 0
+    }
+  ],
+  "held": [
+    "spec.hq-expansion#task.request-composition.001"
+  ],
+  "authority_effect": "none",
+  "projection_only": true,
+  "actual_builder_tuple": "claude-sonnet-5-5/high via native catalog",
+  "typed_model_limit": "Bound helper does not support Sonnet; Opus placeholder used only in non-launching capsule fixtures. No helper output is an actual launch or model attestation.",
+  "scope": "Actual authored graph, with hypothetical accepted predecessor results; no source task is claimed complete."
+}
