@@ -1,3 +1,5 @@
+/// <reference lib="es2024.string" />
+// The composed Taste dependency uses String.isWellFormed; include its declarations for shell consumers.
 /**
  * Production entry for Design (HQD-INT-COMPOSE). The HQ shell mounts exactly this:
  *
