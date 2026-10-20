@@ -55,7 +55,8 @@ export const DESIGN_SERVICE_ROUTES = ['doc.get', 'doc.put', 'doc.list', 'cache.g
 export type DesignServiceRoute = (typeof DESIGN_SERVICE_ROUTES)[number];
 export interface DesignServiceParams {
   readonly 'doc.get': { readonly key: string };
-  readonly 'doc.put': { readonly key: string; readonly value: JsonValue; readonly expectedRevision: number | null };
+  /** Absent: unconditional write. `null`: the key must not exist. A number: must equal the current revision. */
+  readonly 'doc.put': { readonly key: string; readonly value: JsonValue; readonly expectedRevision?: number | null };
   readonly 'doc.list': { readonly prefix: string };
   readonly 'cache.get': { readonly key: string };
 }
