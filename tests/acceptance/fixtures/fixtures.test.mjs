@@ -85,6 +85,11 @@ test('landed Work encoder, lost writes, retained records, missing baseline and m
   assert.equal((await call(fixture, notApplied)).kind, 'unknown');
   const lookup = encodeWork('replay', { requestId: 'acceptance-unseen', mode: 'lookup', original: { route: 'create', params: { requestId: 'acceptance-unseen', fields } }, sentAfterVersion: 0 });
   assert.equal((await call(fixture, lookup)).body.outcome, 'not_applied');
+  fixture.enqueue({ method: 'POST', path: '/api/requests/replay', mode: 'indeterminate' });
+  const evicted = await call(fixture, lookup);
+  assert.equal(evicted.status, 409);
+  assert.equal(evicted.body.error, 'replay_indeterminate');
+  assert.ok(evicted.body.evicted_through_version > evicted.body.sent_after_version);
   fixture.enqueue({ method: 'POST', path: '/api/items', mode: 'malformed', response: exchange.response });
   assert.equal((await call(fixture, notApplied)).kind, 'unknown');
   fixture.enqueue({ method: 'GET', path: '/api/state', mode: 'unavailable' });

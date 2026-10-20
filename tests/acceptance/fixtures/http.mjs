@@ -55,7 +55,8 @@ export async function startFixture(runtime, domain, { reads = {}, recordsName = 
         if (retained) return send(200, { outcome: 'replayed', status: retained.status, response: retained.body }, true);
         if (script.mode === 'indeterminate' || !Number.isSafeInteger(body?.sent_after_version)) return send(409, {
           error: 'replay_indeterminate', message: 'Read back before attempting another change.',
-          sent_after_version: body?.sent_after_version ?? null, evicted_through_version: 0,
+          sent_after_version: body?.sent_after_version ?? null,
+          evicted_through_version: script.mode === 'indeterminate' ? (body?.sent_after_version ?? 0) + 1 : 0,
         });
         if (body?.mode === 'lookup') return send(200, { outcome: 'not_applied' });
         return send(503, { error: 'fixture_resend_requires_script' });
