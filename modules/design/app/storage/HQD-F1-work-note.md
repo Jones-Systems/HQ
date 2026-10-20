@@ -67,3 +67,7 @@ blob/event capability, push, pull request or fan-in. No unresolved lane choices.
 An empty listing prefix is supported, matching the two listing fakes; empty document keys
 are rejected. Keys already bearing their own lane prefix still receive the fixed adapter
 root, as the supplied mapping requires.
+
+The task-owned temporary check logs (52 KiB) remain: the runtime safety hook denied the
+requested recursive cleanup because it requires human approval. No alternative deletion
+route was attempted. The exact private scratch location is reported in the delivery message.
