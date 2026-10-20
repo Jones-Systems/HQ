@@ -84,3 +84,50 @@ covers = ["spec.hq-design#test.discovery.001"]
 direct_surfaces = ["modules/design/discovery/"]
 tests = ["modules/design/discovery/**/*.test.ts", "modules/design/discovery/**/*.test.mjs"]
 
+[groups.hq-root-build]
+summary = "Root npm ci, typecheck, Vitest and build over every mounted domain."
+covers = ["spec.hq-integration-parallel-execution#test.joint-shell.001", "spec.hq-integration-parallel-execution#test.wiki-mount.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001"]
+direct_surfaces = ["package.json", "package-lock.json", "tsconfig.json", "vitest.config.ts", "apps/desktop/", "packages/contracts/"]
+tests = ["apps/desktop/**/*.test.ts", "apps/desktop/**/*.test.tsx", "packages/contracts/**/*.test.ts"]
+
+[groups.hq-cli-planner]
+summary = "HQ CLI node tests and Planner Python/Node backend tests."
+covers = ["spec.hq-integration-parallel-execution#test.final-acceptance.001"]
+direct_surfaces = ["tools/hq-cli/", "services/planner/"]
+tests = ["tools/hq-cli/**/*.test.*", "services/planner/tests/**"]
+
+[groups.hq-social-live]
+summary = "Social live adapter contract tests over a wire stub."
+covers = ["spec.hq-integration-parallel-execution#test.social-live.001"]
+direct_surfaces = ["modules/social/"]
+tests = ["modules/social/**/*.test.ts", "modules/social/**/*.test.tsx"]
+
+[groups.hq-work-runtime]
+summary = "Work live runtime and replay tests over Planner wire fixtures."
+covers = ["spec.hq-integration-parallel-execution#test.work-runtime.001"]
+direct_surfaces = ["modules/work/"]
+tests = ["modules/work/**/*.test.ts", "modules/work/**/*.test.tsx"]
+
+[groups.hq-wiki-module]
+summary = "Wiki contract, core, UI and assembly tests over synthetic Git corpora."
+covers = ["spec.hq-integration-parallel-execution#test.wiki-assembly.001", "spec.hq-integration-parallel-execution#test.wiki-mount.001"]
+direct_surfaces = ["modules/wiki/"]
+tests = ["modules/wiki/**/*.test.ts", "modules/wiki/**/*.test.tsx"]
+
+[groups.hq-shared-bridge]
+summary = "Electron main/preload, closed routes, shared contracts and live wiring."
+covers = ["spec.hq-integration-parallel-execution#test.shared-bridge.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+direct_surfaces = ["apps/desktop/electron/", "apps/desktop/src/services/", "packages/contracts/"]
+tests = ["apps/desktop/electron/**/*.test.ts", "apps/desktop/src/**/*.integration.test.tsx"]
+
+[groups.hq-electron-acceptance]
+summary = "Dependency-free Electron acceptance harness driven over CDP."
+covers = ["spec.hq-integration-parallel-execution#test.acceptance-harness.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001"]
+direct_surfaces = ["tests/acceptance/"]
+tests = ["tests/acceptance/**/*.mjs"]
+
+[groups.hq-source-readback]
+summary = "Native GitHub ref, PR and ancestry readback after each landing; no repository test files."
+covers = ["spec.hq-integration-parallel-execution#test.source-landing.001", "spec.hq-integration-parallel-execution#test.main-delivery.001"]
+direct_surfaces = ["docs/engineering-specs/hq-integration-parallel-execution.md"]
+tests = []

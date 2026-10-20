@@ -1,0 +1,12 @@
+#!/usr/bin/env node
+import { realpathSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+try {
+  const target = realpathSync(process.argv[1]);
+  const { main } = await import(pathToFileURL(resolve(dirname(target), '../src/main.ts')).href);
+  await main();
+} catch {
+  process.stdout.write(JSON.stringify({ schema: 'hq.cli.result/v1', ok: false, command: 'hq.bootstrap', effect: 'none', error: { code: 'internal_error', message: 'Unable to start HQ CLI. Use Node >=22.18 and a symlink to the source checkout.', details: {} } }) + '\n');
+  process.exitCode = 1;
+}
