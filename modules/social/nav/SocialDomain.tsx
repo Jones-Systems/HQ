@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import type { ModulePort } from '@hq/contracts';
-import { Button, Dialog, StateView } from '@hq/ui';
+import { Button, Dialog, StateView, type ReferencePort, type ReturnContext } from '@hq/ui';
 import { BrandManager, SocialContent } from '../content';
 import { useSocialSession, workspaceSnapshot, type SocialWorkspacePort } from '../core';
 import { WorkbenchSection, type Visibility } from '../workbench';
@@ -15,6 +15,8 @@ import { EXAMPLE_WORKSPACE_NOTE } from './workspace';
 import './nav.css';
 
 export interface SocialDomainProps extends ModulePort {
+  readonly references?: ReferencePort;
+  readonly returnContext?: ReturnContext;
   readonly port: SocialWorkspacePort;
   /** Label the workspace as the fictional example workspace. */
   readonly example?: boolean;
@@ -30,7 +32,7 @@ const PAUSED = 'The Social service is unreachable. Changes are paused; your text
  * the section for the current destination. Everything it keeps lives in the module-level Social session
  * for `context.id`, so a shell remount restores it. Rendering and navigating make no execution call.
  */
-export function SocialDomain({ context, destination, navigate, port, example = false, now, visibility, pollIntervalMs }: SocialDomainProps) {
+export function SocialDomain({ context, destination, navigate, port, example = false, now, visibility, pollIntervalMs, references, returnContext }: SocialDomainProps) {
   const { state, session } = useSocialSession(context.id);
   const id = useId();
   const [managing, setManaging] = useState(false);
@@ -81,6 +83,7 @@ export function SocialDomain({ context, destination, navigate, port, example = f
       </aside>
 
       <div className="sd-main">
+        {returnContext && <p role="note">Reference opened from {returnContext.label}.</p>}
         {example && (
           <p className="sd-example" role="note"><span className="sd-tag">Example data</span> {EXAMPLE_WORKSPACE_NOTE}</p>
         )}
@@ -111,7 +114,7 @@ export function SocialDomain({ context, destination, navigate, port, example = f
             ) : (
               <>
                 <h1 className="hq-sr-only">{SECTION_LABELS[route.section]}</h1>
-                <SocialContent port={port} projectId={context.id} destination={destination} navigate={navigate} {...(now ? { now } : {})} />
+                <SocialContent references={references} port={port} projectId={context.id} destination={destination} navigate={navigate} {...(now ? { now } : {})} />
               </>
             )}
       </div>

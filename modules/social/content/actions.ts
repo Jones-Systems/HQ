@@ -1,5 +1,5 @@
 import {
-  checkDraft, draftFields, isDirty, workspaceSnapshot,
+  checkDraft, draftFields, FEATURE_HQ_REFERENCES, isDirty, workspaceSnapshot,
   type Draft, type DraftEditor, type DraftFields, type PortError, type SocialSession, type SocialWorkspacePort,
 } from '../core';
 import type { SaveState } from '@hq/ui';
@@ -44,7 +44,8 @@ export function sameStoredFields(draft: Draft, fields: DraftFields, features: re
   const checked = checkDraft(fields, { features });
   if (!checked.ok) return false;
   const { links: _links, ...stored } = draftFields(draft);
-  return JSON.stringify(stored) === JSON.stringify(checked.value.fields);
+  return JSON.stringify(stored) === JSON.stringify(checked.value.fields)
+    && (!features.includes(FEATURE_HQ_REFERENCES) || JSON.stringify(draft.links ?? []) === JSON.stringify(checked.value.links ?? []));
 }
 
 export type Reconciliation =
