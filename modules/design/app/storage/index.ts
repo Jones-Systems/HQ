@@ -33,3 +33,16 @@ export {
 export type {
   CandidateProjection, ExportedBlob, OmittedStore, ProjectedFreezeRecord, RequestsExportPort, RequestsKeyClass, RequestsProjection,
 } from './export.ts';
+
+export type { WorkspaceDocuments } from './backing.ts';
+export { DEVICE_STORAGE_LABEL, PROJECTS_KEY_ROOT, COMPONENTS_KEY_ROOT, FLOWS_KEY_ROOT, COMPARE_KEY_ROOT, ANNOTATIONS_KEY_ROOT, SectionStorageScopeError } from './section-documents.ts';
+export { createProjectsStorage } from './projects.ts';
+export type { ProjectDocumentPort } from './projects.ts';
+export { createComponentsStorage } from './components.ts';
+export type { ComponentDocumentPort } from './components.ts';
+export { createFlowsStorage } from './flows.ts';
+export type { FlowDocumentPort } from './flows.ts';
+export { createCompareStorage } from './compare.ts';
+export type { CompareDocumentPort } from './compare.ts';
+export { createAnnotationsStorage } from './annotations.ts';
+export type { AnnotationDocumentPort } from './annotations.ts';

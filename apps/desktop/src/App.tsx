@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ServiceSettings } from './ServiceSettings';
 import { APPEARANCES, DOMAIN_IDS, isAppearance, parseProjectContext, type Appearance, type DesktopPort } from '@hq/contracts';
 import { DOMAIN_LABELS, MODULES, MODULE_PRESENTATION } from './modules';
 import { APPEARANCE_KEY, navigate, navigationKey, persist, readAppearance, readNavigation, resolveAppearance, type StoragePort } from './state';
@@ -10,6 +11,7 @@ function storagePort(): StoragePort { try { return window.localStorage; } catch 
 
 export function App() {
   const [storage] = useState(storagePort);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [state, setState] = useState(() => readNavigation(storage, CONTEXT.id));
   const [appearance, setAppearance] = useState<Appearance>(() => readAppearance(storage));
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -43,7 +45,7 @@ export function App() {
         </svg>
         {DOMAIN_LABELS[domain]}
       </button>)}</nav>
-      <div className="rail-footer"><label htmlFor="appearance">Appearance</label>
+      <div className="rail-footer">{window.hqServices && <button onClick={() => setSettingsOpen(true)}>Service settings</button>}<label htmlFor="appearance">Appearance</label>
         <select id="appearance" value={appearance} onChange={(event) => {
           if (isAppearance(event.target.value)) setAppearance(event.target.value);
         }}>{APPEARANCES.map((value) => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select>
@@ -56,5 +58,6 @@ export function App() {
         navigate={(destination) => setState((previous) => navigate(previous, state.domain, destination))} /></main>
       {!storageAvailable && <p className="storage-notice" role="status">Preferences are available for this session. Local storage is unavailable.</p>}
     </div>
+    {settingsOpen && window.hqServices && <ServiceSettings config={window.hqServices.config} onClose={() => setSettingsOpen(false)} />}
   </div>;
 }
