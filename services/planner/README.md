@@ -7,8 +7,10 @@ Items cannot start, queue or launch work anywhere else.
 
 - **Frontend:** plain HTML, CSS and ES modules in `public/`. It has no build
   step and loads no external fonts, CDNs or analytics. Icons are inline SVG.
-- **Backend:** Python 3 standard library only (`http.server` + `sqlite3`) in
-  `planning/`.
+- **Backend:** Python 3 standard library only (`http.server`, `sqlite3` and
+  `zoneinfo`) in `planning/`. `zoneinfo` needs Python 3.9 or newer and the
+  host's IANA time-zone database. These checks were last run on Python 3.13
+  and Node 24.
 - **Data:** one SQLite file at a path you choose. Safety backups are written
   into a folder next to it. Neither is ever served over HTTP.
 
@@ -32,7 +34,7 @@ python3 -m planning --data ~/planning-data/planning.sqlite3 --port 8765
 | Option | Meaning |
 | --- | --- |
 | `--data PATH` | Required. The SQLite store. Use an existing directory outside the HQ repository. The server rejects `public/` and warns for other paths inside this service’s source tree; keeping data outside the whole repository is the caller’s responsibility. Backups go to `<name>-backups/` beside it. |
-| `--host` | Loopback only: `127.0.0.1` (default), `::1` or `localhost`. Any other address is refused. |
+| `--host` | Loopback only: `127.0.0.1` (default), `::1` or `localhost`. A non-loopback address is refused with exit status 2. Another loopback address such as `127.0.0.2` binds, but its `Host` header is not accepted unless you also pass a matching `--allowed-host`. |
 | `--port` | Default `8765`. `0` selects an available port; the startup line prints the actual bound port. |
 | `--allowed-host HOST[:PORT]` | Accept an extra `Host` header, for when a separately authorized private proxy sits in front of loopback. Repeat it for more than one host. |
 
@@ -46,9 +48,12 @@ step.
 From this directory, after checking host capacity, run one process at a time:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -t tests   # store, HTTP boundary, CLI guards
-node --test --test-concurrency=1 'tests/*.test.mjs'                        # client date/order logic, render and app smoke
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -t tests   # store, HTTP boundary, CLI guards, HQ references, contract drift
+node --test --test-concurrency=1 'tests/*.test.mjs'                        # client date/order logic, render and app smoke, HQ reference rendering
 ```
+
+The `planner-service` group in `tests/check-groups.json` records these two
+commands and names `tests/test_contract.py` as the contract drift check.
 
 The Python tests put their scratch under `tests/.scratch/`, one
 `TemporaryDirectory` per test. The context manager removes it whether a test
@@ -247,8 +252,9 @@ readable but reject resaving them; reconcile such data before a runtime rollback
 - **Calendar drag works on day-precision dates only.** Coarse dates are
   edited in the date dialog, so a quarter is never turned into a day by
   accident.
-- **History** keeps the last 200 entries per item. Imports are limited to
-  5,000 items or 8 MB. The design targets hundreds to a few thousand items,
+- **History** keeps the last 200 entries per item; the history endpoint
+  returns the newest 100. Imports are limited to
+  5,000 items or 8 MiB. The design targets hundreds to a few thousand items,
   loaded in one request. Rendering at that size hasn't been measured.
 - **Touch drag uses a long press (≈0.3 s).** It is implemented with Pointer
   Events and a non-passive `touchmove` guard. It has not yet been tested on
