@@ -83,14 +83,14 @@ export function renderTimeline(root, ctx) {
 function itemRow(item, ctx, pct, rangeStart, rangeEnd, today) {
   const row = h('div', { class: ['tl-row', isPending(item.id) && 'is-pending', item.is_example && 'is-example'] });
   const label = h('div', {
-    class: 'tl-label', tabindex: '0', dataset: { dragType: 'tl-item', id: item.id, focusKey: `tl:${item.id}` },
+    class: 'tl-label', role: 'group', tabindex: '0', dataset: { dragType: 'tl-item', id: item.id, focusKey: `tl:${item.id}` },
     'aria-label': `${item.title}, horizon ${HORIZON_LABEL[item.horizon] || 'none'}. Alt+Up or Alt+Down changes horizon. Enter opens.`,
   }, h('span', { class: 'grip', 'aria-hidden': 'true' }, icon('grip', { size: 14 })), kindIcon(item.kind, 15),
   h('button', { type: 'button', class: 'tl-title', text: item.title, 'data-drag-handle': '', on: { click: () => ctx.openItem(item.id) } }),
   motivationPill(item.motivation) || '',
   h('button', {
     type: 'button', class: 'btn btn-icon btn-ghost tl-menu', 'aria-label': `Change horizon for ${item.title}`,
-    'aria-haspopup': 'menu', on: { click: (e) => horizonMenu(item, e.currentTarget) },
+    'aria-haspopup': 'menu', dataset: { focusKey: `tl-menu:${item.id}` }, on: { click: (e) => horizonMenu(item, e.currentTarget) },
   }, icon('more', { size: 16 })));
   row.append(label);
 
@@ -105,10 +105,12 @@ function itemRow(item, ctx, pct, rangeStart, rangeEnd, today) {
   const inRange = (b) => dayNum(b[1]) >= rangeStart && dayNum(b[0]) < rangeEnd;
   const clampPct = (v) => Math.max(0, Math.min(100, v));
 
-  // Explicit spans: a start date followed by the next later target/deadline/event.
+  // Explicit spans: a start date followed by the next later target or deadline
+  // (as the view hint and README say; events are occurrences, not ends).
   const starts = entries.filter((x) => x.entry.kind === 'start');
   for (const s of starts) {
-    const end = entries.filter((x) => x.entry.kind !== 'start' && dayNum(x.bounds[1]) > dayNum(s.bounds[0]))
+    const end = entries.filter((x) => (x.entry.kind === 'target' || x.entry.kind === 'deadline')
+      && dayNum(x.bounds[1]) > dayNum(s.bounds[0]))
       .sort((a, b) => dayNum(a.bounds[1]) - dayNum(b.bounds[1]))[0];
     if (!end) continue;
     const left = clampPct(pct(s.bounds[0]));

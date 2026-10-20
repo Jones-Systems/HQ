@@ -20,6 +20,8 @@ import { dateChip, kindIcon, motivationPill } from './common.js';
 
 const MODE_KEY = 'planning.calendar.mode';
 const MAX_CHIPS = 3;
+const OUTSIDE_EARLIER = 6;
+const OUTSIDE_LATER = 8;
 
 const cal = {
   year: null,
@@ -49,14 +51,14 @@ export function renderCalendar(root, ctx) {
   // Toolbar
   const toolbar = h('div', { class: 'cal-toolbar' });
   const nav = h('div', { class: 'cal-nav' },
-    button('Previous month', { icon: 'chevronLeft', iconOnly: true, kind: 'ghost', onClick: () => step(-1, ctx) }),
-    button('Today', { kind: 'subtle', onClick: () => { calendarGoTo(today); ctx.rerender(); } }),
-    button('Next month', { icon: 'chevronRight', iconOnly: true, kind: 'ghost', onClick: () => step(1, ctx) }),
+    button('Previous month', { icon: 'chevronLeft', iconOnly: true, kind: 'ghost', onClick: () => step(-1, ctx), attrs: { dataset: { focusKey: 'cal-prev' } } }),
+    button('Today', { kind: 'subtle', onClick: () => { calendarGoTo(today); ctx.rerender(); }, attrs: { dataset: { focusKey: 'cal-today' } } }),
+    button('Next month', { icon: 'chevronRight', iconOnly: true, kind: 'ghost', onClick: () => step(1, ctx), attrs: { dataset: { focusKey: 'cal-next' } } }),
     h('h2', { class: 'cal-title', 'aria-live': 'polite' }, `${monthName(cal.month)} `, h('span', { class: 'muted', text: String(cal.year) })));
   const modeSwitch = h('div', { class: 'segmented segmented-compact', role: 'group', 'aria-label': 'Calendar layout' });
   for (const [id, label] of [['month', 'Month'], ['agenda', 'Agenda']]) {
     modeSwitch.append(h('button', {
-      type: 'button', class: ['seg', mode === id && 'is-selected'], 'aria-pressed': String(mode === id),
+      type: 'button', class: ['seg', mode === id && 'is-selected'], 'aria-pressed': String(mode === id), dataset: { focusKey: `cal-mode:${id}` },
       on: { click: () => { cal.mode = id; try { localStorage.setItem(MODE_KEY, id); } catch { /* pref */ } ctx.rerender(); } },
     }, label));
   }
@@ -64,12 +66,12 @@ export function renderCalendar(root, ctx) {
   for (const k of DATE_KINDS) {
     const on = cal.kinds.has(k);
     kindToggles.append(h('button', {
-      type: 'button', class: ['kind-toggle', `dk-${k}`, on && 'is-on'], 'aria-pressed': String(on),
+      type: 'button', class: ['kind-toggle', `dk-${k}`, on && 'is-on'], 'aria-pressed': String(on), dataset: { focusKey: `cal-kind:${k}` },
       on: { click: () => { if (on) cal.kinds.delete(k); else cal.kinds.add(k); ctx.rerender(); } },
     }, icon(k, { size: 14 }), `${KIND_LABEL[k]}s`));
   }
   const finished = h('label', { class: 'check check-inline' },
-    h('input', { type: 'checkbox', checked: cal.showFinished, on: { change: (e) => { cal.showFinished = e.target.checked; ctx.rerender(); } } }),
+    h('input', { type: 'checkbox', checked: cal.showFinished, dataset: { focusKey: 'cal-finished' }, on: { change: (e) => { cal.showFinished = e.target.checked; ctx.rerender(); } } }),
     h('span', { text: 'Show done & dropped' }));
   toolbar.append(nav, h('div', { class: 'cal-controls' }, modeSwitch, kindToggles, finished));
   root.append(toolbar);
@@ -105,10 +107,11 @@ export function renderCalendar(root, ctx) {
     const row = h('div', {
       class: ['tray-item', isPending(item.id) && 'is-pending', item.is_example && 'is-example'],
       dataset: { dragType: 'tray-item', id: item.id, focusKey: `tray:${item.id}` },
-      tabindex: '0', 'aria-label': `${item.title}, unscheduled. Press Enter to schedule.`,
-      on: { keydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); schedule(item, today); } } },
+      role: 'group', tabindex: '0', 'aria-label': `${item.title}, unscheduled. Press Enter to schedule.`,
+      // Only the row itself: Enter on its title button must still open the item.
+      on: { keydown: (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) { e.preventDefault(); schedule(item, today); } } },
     }, h('span', { class: 'grip', 'aria-hidden': 'true' }, icon('grip', { size: 14 })), kindIcon(item.kind, 15),
-    h('button', { type: 'button', class: 'tray-title', text: item.title, 'data-drag-handle': '', on: { click: () => ctx.openItem(item.id) } }),
+    h('button', { type: 'button', class: 'tray-title', text: item.title, 'data-drag-handle': '', dataset: { focusKey: `tray-title:${item.id}` }, on: { click: () => ctx.openItem(item.id) } }),
     motivationPill(item.motivation) || '',
     h('button', { type: 'button', class: 'btn btn-subtle btn-xs', text: 'Schedule', on: { click: () => schedule(item, today) } }));
     trayList.append(row);
@@ -122,11 +125,13 @@ export function renderCalendar(root, ctx) {
   out.append(h('h3', { class: 'section-title' }, icon('clock', { size: 16 }), h('span', { text: 'Outside this month' }), h('span', { class: 'count', text: String(outside.earlier.length + outside.later.length) })));
   if (outside.earlier.length) {
     out.append(h('div', { class: 'outside-group-label', text: 'Earlier, still open' }));
-    for (const x of outside.earlier.slice(0, 6)) out.append(outsideRow(x, ctx));
+    for (const x of outside.earlier.slice(0, OUTSIDE_EARLIER)) out.append(outsideRow(x, ctx));
+    if (outside.earlier.length > OUTSIDE_EARLIER) out.append(moreNote(outside.earlier.length - OUTSIDE_EARLIER));
   }
   if (outside.later.length) {
     out.append(h('div', { class: 'outside-group-label', text: 'Later' }));
-    for (const x of outside.later.slice(0, 8)) out.append(outsideRow(x, ctx));
+    for (const x of outside.later.slice(0, OUTSIDE_LATER)) out.append(outsideRow(x, ctx));
+    if (outside.later.length > OUTSIDE_LATER) out.append(moreNote(outside.later.length - OUTSIDE_LATER));
   }
   if (!outside.earlier.length && !outside.later.length) out.append(h('p', { class: 'muted small', text: 'No other dates.' }));
   side.append(out);
@@ -134,6 +139,10 @@ export function renderCalendar(root, ctx) {
   root.append(layout);
 
   root.addEventListener('keydown', (e) => onChipKey(e, ctx));
+}
+
+function moreNote(n) {
+  return h('p', { class: 'muted small', text: `and ${n} more — use the arrows to change month` });
 }
 
 function step(delta, ctx) {
@@ -216,7 +225,10 @@ function agendaView(entries, ctx, monthRange) {
   const wrap = h('div', { class: 'agenda' });
   const inMonth = entries.filter(({ entry, bounds }) => (entry.precision === 'day' || entry.precision === 'week')
     && overlaps(bounds, monthRange));
-  inMonth.sort((a, b) => dayNum(a.bounds[0]) - dayNum(b.bounds[0]) || (a.entry.time || '99').localeCompare(b.entry.time || '99'));
+  // Day dates before week dates that start the same day; each gets its own group.
+  const weekLast = (x) => (x.entry.precision === 'week' ? 1 : 0);
+  inMonth.sort((a, b) => dayNum(a.bounds[0]) - dayNum(b.bounds[0]) || weekLast(a) - weekLast(b)
+    || (a.entry.time || '99').localeCompare(b.entry.time || '99'));
   if (!inMonth.length) {
     wrap.append(h('p', { class: 'quiet-title agenda-empty', text: `No day or week dates in ${monthName(cal.month)}.` }));
     return wrap;
@@ -225,8 +237,9 @@ function agendaView(entries, ctx, monthRange) {
   let group = null;
   for (const { item, entry, bounds } of inMonth) {
     const key = bounds[0];
-    if (key !== last) {
-      last = key;
+    const groupKey = `${entry.precision === 'week' ? 'week' : 'day'}:${key}`;
+    if (groupKey !== last) {
+      last = groupKey;
       const isToday = key === today;
       const label = entry.precision === 'week' ? `Week of ${formatDay(key, { weekday: false, today })}` : formatDay(key, { today });
       group = h('section', { class: ['agenda-day-group', isToday && 'is-today', dayNum(key) < dayNum(today) && 'is-past'], dataset: entry.precision === 'day' ? { drop: 'cal-day', day: key } : { day: key } },
@@ -235,7 +248,7 @@ function agendaView(entries, ctx, monthRange) {
     }
     const row = h('div', { class: ['agenda-entry', isPending(item.id) && 'is-pending', item.is_example && 'is-example'] },
       dateChip(entry, dateState(entry, today, isOpen(item)), today, { long: true }),
-      h('button', { type: 'button', class: 'agenda-title', text: item.title, on: { click: () => ctx.openItem(item.id) } }),
+      h('button', { type: 'button', class: 'agenda-title', text: item.title, dataset: { focusKey: `agenda:${item.id}:${entry.id}` }, on: { click: () => ctx.openItem(item.id) } }),
       local(entry),
       h('button', {
         type: 'button', class: 'btn btn-subtle btn-xs', text: 'Reschedule',
@@ -380,7 +393,7 @@ function outsideRow({ item, entry, bounds }, ctx) {
   const st = dateState(entry, ctx.today, isOpen(item));
   return h('div', { class: 'outside-row' },
     dateChip(entry, st, ctx.today),
-    h('button', { type: 'button', class: 'outside-title', text: item.title, on: { click: () => ctx.openItem(item.id) } }),
+    h('button', { type: 'button', class: 'outside-title', text: item.title, dataset: { focusKey: `outside:${item.id}:${entry.id}` }, on: { click: () => ctx.openItem(item.id) } }),
     button('Go to month', {
       icon: 'chevronRight', iconOnly: true, kind: 'ghost',
       onClick: () => { calendarGoTo(bounds[0]); ctx.rerender(); },
