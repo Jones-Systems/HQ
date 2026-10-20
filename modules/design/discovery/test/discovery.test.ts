@@ -239,3 +239,45 @@ test('workspace links are explicit and never inferred from titles', async () => 
   assert.deepEqual(link, { projectId: 'p1', sourceProjectId: shared[0]!.entry.sourceProjectId, linkedAt: isoFromMs(0), observedRevision: null });
   service.dispose();
 });
+
+test('refresh before open never writes over a newer-schema cache', async () => {
+  const cache = new MemoryCachePort();
+  const future = JSON.stringify({ schema: 'hq.design.discovery-cache/v9', anything: true });
+  cache.documents.set(CATALOG_CACHE_KEY, future);
+  const adapter = new FakeSourceAdapter().on(A, { kind: 'snapshot', snapshot: await fixtureSnapshot(A, 1, [{ path: 'one', name: 'One' }]) });
+  const service = new DiscoveryService({ adapters: { fake: adapter }, enrollments: [enrollment(A, 'Laptop')], cache, clock: new FakeClock(), refreshOnOpen: false });
+  await service.refresh();
+  await service.flushCache();
+  assert.equal(cache.documents.get(CATALOG_CACHE_KEY), future, 'refresh before open left the cached bytes unchanged');
+  assert.equal(cache.writes, 0);
+  await service.open();
+  assert.equal(service.getState().cacheStatus, 'future-readonly');
+  await service.refresh();
+  await service.flushCache();
+  assert.equal(cache.documents.get(CATALOG_CACHE_KEY), future);
+  assert.equal(cache.writes, 0);
+  service.dispose();
+});
+
+test('a failed cache read leaves the stored document unchanged and the service never writes it', async () => {
+  class FlakyReadCachePort extends MemoryCachePort {
+    failReads = 1;
+    override async readDocument(key: string): Promise<string | null> {
+      if (this.failReads > 0) { this.failReads -= 1; throw new Error('fake transient cache read failure'); }
+      return super.readDocument(key);
+    }
+  }
+  const cache = new FlakyReadCachePort();
+  await warmCache(cache, [A]);
+  const stored = cache.documents.get(CATALOG_CACHE_KEY);
+  const adapter = new FakeSourceAdapter().on(A, { kind: 'snapshot', snapshot: await fixtureSnapshot(A, 2, [{ path: 'one', name: 'One' }]) });
+  const service = new DiscoveryService({ adapters: { fake: adapter }, enrollments: [enrollment(A, 'Laptop')], cache, clock: new FakeClock(), refreshOnOpen: false });
+  await service.open();
+  await service.refresh();
+  await service.flushCache();
+  assert.equal(cache.documents.get(CATALOG_CACHE_KEY), stored, 'stored cache document is unchanged');
+  assert.equal(cache.writes, 0);
+  assert.equal(service.getState().cacheStatus, 'unavailable-readonly');
+  assert.equal(service.getState().cacheWritable, false);
+  service.dispose();
+});
