@@ -274,3 +274,9 @@ summary = "Shared visual tokens, primitives, splitters and calendar interactions
 covers = ["spec.hq-ui-modernization#test.work-calendar.001", "spec.hq-ui-modernization#test.acceptance.001"]
 direct_surfaces = ["packages/hq-ui/", "docs/design/hq-visual-system/tokens/"]
 tests = ["packages/hq-ui/**/*.test.ts", "packages/hq-ui/**/*.test.tsx"]
+
+[groups.hq-source-registry]
+summary = "Pure registered-project and gallery source mapper behavior."
+covers = ["spec.hq-integration-parallel-execution#test.registry-adapters.001", "spec.hq-integration-parallel-execution#test.source-registry-host.001"]
+direct_surfaces = ["modules/design/discovery/src/adapters/", "apps/desktop/electron/sources/"]
+tests = ["modules/design/discovery/test/adapters/**/*.test.ts", "apps/desktop/electron/sources/**/*.test.ts"]

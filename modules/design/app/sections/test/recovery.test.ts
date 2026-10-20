@@ -18,7 +18,7 @@ test('full-loop restart retains provenance, decisions and the send fence', async
   assert.equal(fresh.state.candidates.length, 1);
   assert.equal(fresh.state.candidates[0]?.observedStatus, SIMULATION_LABEL);
   assert.equal(fresh.state.reviews.length, 1);
-  assert.deepEqual(returnCounts(fresh.state.candidates), { simulated: 1, ownerReported: 0, realVerified: 0 });
+  assert.deepEqual(returnCounts(fresh.state.candidates), { simulated: 1, agentReported: 0, ownerReported: 0, realVerified: 0 });
   rebuilt.runs.controller.requestSend();
   assert.equal(await rebuilt.runs.controller.confirm(), null);
   assert.equal(d.writes.filter((entry) => entry === 'outbox:submitting').length, 1);
