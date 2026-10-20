@@ -1,0 +1,25 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "noEmit": true,
+    "moduleResolution": "Bundler",
+    "types": ["vite/client", "node"]
+  },
+  "include": [
+    "index.ts",
+    "compose",
+    "../annotations/design-module.ts",
+    "../taste/design-module.ts",
+    "../flows/design-module.ts",
+    "../compare/design-module.ts",
+    "../components/design-module.ts",
+    "../projects/design-module.ts",
+    "../discovery/design-module.ts",
+    "../canvas/design-module.ts",
+    "../imports/design-module.ts"
+  ]
+}

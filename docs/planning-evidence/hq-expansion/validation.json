@@ -1,0 +1,60 @@
+{
+  "status": "PROJECTION",
+  "source_revision": "8eed17bd2346df6fb51944a42d58a8f6c6a4a8be",
+  "spec_blob_oid": "c3525d0df9b05c18c43c7e84ddb335758f24700c",
+  "tasks": 11,
+  "test_intents": 11,
+  "rounds": [
+    {
+      "round": 1,
+      "ready": [
+        "spec.hq-expansion#task.connector-lifecycle.001",
+        "spec.hq-expansion#task.reference-graph.001",
+        "spec.hq-expansion#task.requests-lifecycle.001",
+        "spec.hq-expansion#task.wiki-contract.001"
+      ],
+      "capsule_drafts": 4,
+      "assignment_drafts": 4,
+      "rendered_bytes": 65364
+    },
+    {
+      "round": 2,
+      "ready": [
+        "spec.hq-expansion#task.reference-packets.001",
+        "spec.hq-expansion#task.wiki-core.001",
+        "spec.hq-expansion#task.wiki-ui.001"
+      ],
+      "capsule_drafts": 3,
+      "assignment_drafts": 3,
+      "rendered_bytes": 69812
+    },
+    {
+      "round": 3,
+      "ready": [
+        "spec.hq-expansion#task.reference-producer.001",
+        "spec.hq-expansion#task.wiki-private-validation.001"
+      ],
+      "capsule_drafts": 2,
+      "assignment_drafts": 2,
+      "rendered_bytes": 34378
+    },
+    {
+      "round": 4,
+      "ready": [],
+      "capsule_drafts": 0,
+      "assignment_drafts": 0,
+      "rendered_bytes": 0
+    }
+  ],
+  "held": [
+    "spec.hq-expansion#task.request-composition.001",
+    "spec.hq-expansion#task.wiki-integration.001"
+  ],
+  "authority_effect": "none",
+  "projection_only": true,
+  "catalog_adoption": false,
+  "projection_catalog_sha256": "23a0265fec8c818fa3ebc81552c33ef30aa93f42ddd5f4d25af8c34bff10192d",
+  "actual_builder_tuple": "claude-sonnet-5-5/high via native catalog",
+  "typed_model_limit": "Opus placeholder only in nonlaunching fixtures; no native model attestation.",
+  "scope": "Actual authored graph with hypothetical accepted predecessor results. No implementation task is claimed complete."
+}

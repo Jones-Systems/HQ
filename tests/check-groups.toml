@@ -1,0 +1,133 @@
+schema = "codex.v3-check-groups/v1"
+
+[groups.design-projects]
+summary = "projects behavioral checks owned by its section."
+covers = ["spec.hq-design#test.projects.001"]
+direct_surfaces = ["modules/design/projects/"]
+tests = ["modules/design/projects/**/*.test.ts", "modules/design/projects/**/*.test.mjs"]
+
+[groups.design-canvas]
+summary = "canvas behavioral checks owned by its section."
+covers = ["spec.hq-design#test.canvas.001"]
+direct_surfaces = ["modules/design/canvas/"]
+tests = ["modules/design/canvas/**/*.test.ts", "modules/design/canvas/**/*.test.mjs"]
+
+[groups.design-compare]
+summary = "compare behavioral checks owned by its section."
+covers = ["spec.hq-design#test.compare.001"]
+direct_surfaces = ["modules/design/compare/"]
+tests = ["modules/design/compare/**/*.test.ts", "modules/design/compare/**/*.test.mjs"]
+
+[groups.design-annotations]
+summary = "annotations behavioral checks owned by its section."
+covers = ["spec.hq-design#test.annotations.001"]
+direct_surfaces = ["modules/design/annotations/"]
+tests = ["modules/design/annotations/**/*.test.ts", "modules/design/annotations/**/*.test.mjs"]
+
+[groups.design-requests]
+summary = "requests behavioral checks owned by its section."
+covers = ["spec.hq-design#test.requests.001"]
+direct_surfaces = ["modules/design/requests/"]
+tests = ["modules/design/requests/**/*.test.ts", "modules/design/requests/**/*.test.mjs"]
+
+[groups.design-taste]
+summary = "taste behavioral checks owned by its section."
+covers = ["spec.hq-design#test.taste.001"]
+direct_surfaces = ["modules/design/taste/"]
+tests = ["modules/design/taste/**/*.test.ts", "modules/design/taste/**/*.test.mjs"]
+
+[groups.design-references]
+summary = "references behavioral checks owned by its section."
+covers = ["spec.hq-design#test.references.001"]
+direct_surfaces = ["modules/design/references/"]
+tests = ["modules/design/references/**/*.test.ts", "modules/design/references/**/*.test.mjs"]
+
+[groups.design-store]
+summary = "store behavioral checks owned by its section."
+covers = ["spec.hq-design#test.store.001"]
+direct_surfaces = ["packages/design-store/"]
+tests = ["packages/design-store/**/*.test.ts", "packages/design-store/**/*.test.mjs"]
+
+[groups.design-components]
+summary = "components behavioral checks owned by its section."
+covers = ["spec.hq-design#test.components.001"]
+direct_surfaces = ["modules/design/components/"]
+tests = ["modules/design/components/**/*.test.ts", "modules/design/components/**/*.test.mjs"]
+
+[groups.design-flows]
+summary = "flows behavioral checks owned by its section."
+covers = ["spec.hq-design#test.flows.001"]
+direct_surfaces = ["modules/design/flows/"]
+tests = ["modules/design/flows/**/*.test.ts", "modules/design/flows/**/*.test.mjs"]
+
+[groups.design-connector]
+summary = "connector behavioral checks owned by its section."
+covers = ["spec.hq-design#test.connector.001"]
+direct_surfaces = ["modules/design/connector/"]
+tests = ["modules/design/connector/**/*.test.ts", "modules/design/connector/**/*.test.mjs"]
+
+[groups.design-imports]
+summary = "imports behavioral checks owned by its section."
+covers = ["spec.hq-design#test.imports.001"]
+direct_surfaces = ["modules/design/imports/"]
+tests = ["modules/design/imports/**/*.test.ts", "modules/design/imports/**/*.test.mjs"]
+
+[groups.design-ui]
+summary = "ui behavioral checks owned by its section."
+covers = ["spec.hq-design#test.ui.001"]
+direct_surfaces = ["modules/design/ui/"]
+tests = ["modules/design/ui/**/*.test.ts", "modules/design/ui/**/*.test.mjs"]
+
+[groups.design-discovery]
+summary = "discovery behavioral checks owned by its section."
+covers = ["spec.hq-design#test.discovery.001"]
+direct_surfaces = ["modules/design/discovery/"]
+tests = ["modules/design/discovery/**/*.test.ts", "modules/design/discovery/**/*.test.mjs"]
+
+[groups.hq-root-build]
+summary = "Root npm ci, typecheck, Vitest and build over every mounted domain."
+covers = ["spec.hq-integration-parallel-execution#test.joint-shell.001", "spec.hq-integration-parallel-execution#test.wiki-mount.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001"]
+direct_surfaces = ["package.json", "package-lock.json", "tsconfig.json", "vitest.config.ts", "apps/desktop/", "packages/contracts/"]
+tests = ["apps/desktop/**/*.test.ts", "apps/desktop/**/*.test.tsx", "packages/contracts/**/*.test.ts"]
+
+[groups.hq-cli-planner]
+summary = "HQ CLI node tests and Planner Python/Node backend tests."
+covers = ["spec.hq-integration-parallel-execution#test.final-acceptance.001"]
+direct_surfaces = ["tools/hq-cli/", "services/planner/"]
+tests = ["tools/hq-cli/**/*.test.*", "services/planner/tests/**"]
+
+[groups.hq-social-live]
+summary = "Social live adapter contract tests over a wire stub."
+covers = ["spec.hq-integration-parallel-execution#test.social-live.001"]
+direct_surfaces = ["modules/social/"]
+tests = ["modules/social/**/*.test.ts", "modules/social/**/*.test.tsx"]
+
+[groups.hq-work-runtime]
+summary = "Work live runtime and replay tests over Planner wire fixtures."
+covers = ["spec.hq-integration-parallel-execution#test.work-runtime.001"]
+direct_surfaces = ["modules/work/"]
+tests = ["modules/work/**/*.test.ts", "modules/work/**/*.test.tsx"]
+
+[groups.hq-wiki-module]
+summary = "Wiki contract, core, UI and assembly tests over synthetic Git corpora."
+covers = ["spec.hq-integration-parallel-execution#test.wiki-assembly.001", "spec.hq-integration-parallel-execution#test.wiki-mount.001"]
+direct_surfaces = ["modules/wiki/"]
+tests = ["modules/wiki/**/*.test.ts", "modules/wiki/**/*.test.tsx"]
+
+[groups.hq-shared-bridge]
+summary = "Electron main/preload, closed routes, shared contracts and live wiring."
+covers = ["spec.hq-integration-parallel-execution#test.shared-bridge.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+direct_surfaces = ["apps/desktop/electron/", "apps/desktop/src/services/", "packages/contracts/"]
+tests = ["apps/desktop/electron/**/*.test.ts", "apps/desktop/src/**/*.integration.test.tsx"]
+
+[groups.hq-electron-acceptance]
+summary = "Dependency-free Electron acceptance harness driven over CDP."
+covers = ["spec.hq-integration-parallel-execution#test.acceptance-harness.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001"]
+direct_surfaces = ["tests/acceptance/"]
+tests = ["tests/acceptance/**/*.mjs"]
+
+[groups.hq-source-readback]
+summary = "Native GitHub ref, PR and ancestry readback after each landing; no repository test files."
+covers = ["spec.hq-integration-parallel-execution#test.source-landing.001", "spec.hq-integration-parallel-execution#test.main-delivery.001"]
+direct_surfaces = ["docs/engineering-specs/hq-integration-parallel-execution.md"]
+tests = []
