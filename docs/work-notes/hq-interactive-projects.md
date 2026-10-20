@@ -51,3 +51,25 @@ Source architecture judgment is recorded in the interactive-project amendment. E
 
 The owner asked for a resource comparison before selecting native iOS simulator execution. Both inspected Macs have 16 GiB RAM. The Mini has more current operating headroom, but neither installed toolchain matches the qualified native build. No build-time or peak-memory evidence is available, and device access is disabled. No build or simulator boot was performed. The interactive web route proceeds independently; no browser prototype is to be described as the authenticated native product.
 <!-- codex-section:end id="worknote.hq-interactive-projects#ctx.open-boundaries.001" -->
+
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.source-checkpoint.001" -->
+## Source Checkpoint
+
+The amendment is parser-validated at `a14b49f3c463ab7c95e7154f3fd5c54592942134`, spec blob `f3e36a17325b041d147fa714dc401cd7f056d412`. Real `plan_and_blob_for_request`, activation evaluation and `compile_ready_wave` ran on a private Linux verification copy using the exact local helper source. macOS cannot supply the helper's Linux pidfd containment. The verification copy, transfer and extracted helper files were creator-owned scratch and removed in `finally`; no deployed source, service or host configuration changed.
+
+The actual graph has 91 tasks and 51 Test Intents. Fifteen projected rounds produced ready/draft counts 14, 10, 2, 4, 4, 5, 1, 2, 2, 1, 1, 1, 1, 2, 0. Full sets are in `docs/planning-evidence/hq-interactive-projects-projection.json`. Projection results are fixtures, not executed or accepted delivery; 41 tasks remain unprojected behind explicit custody/native predicates or their downstream dependencies. Reference limits are bounded to 4 MiB selected/returned content and compiler contexts to 256 KiB. Registry tasks depend on their existing module landing to avoid overlapping historical ready writers; those source prerequisites are already present in this candidate.
+
+Implemented source slices:
+- `0d9460b`: pure native Jones-project and verified gallery mappers, with actual pagination/title/repository/script-preview shapes and direct website/app presentation routes. No network fetch or source execution.
+- `0f38d46`: injectable qualified Runs transport/catalog/readback, disconnected production default, explicit labelled examples, durable receipt/status and unknown-effect fences. Minimal adjacent Requests presentation and example fixtures preserve truthful defaults. CI inventory now claims every new nested test without adding a runner.
+- `5faceb0`: normal merge of foundation `3f09b2044861191fd3f24cc6226c0acc7e25a7de`; no unrelated task source was rewritten.
+
+Private structural validation used exact bytes from the existing 1,904-file export inventory, with a synthetic HTTPS base. It mapped 66 entries and identified 30 direct interactive presentations from the two selected project collections. This is schema/integrity evidence only; the snapshot is partial, and it does not prove live HQ enrollment, target reachability or runtime control. An inventory hash is not a signature or source-commit attestation.
+
+The unchanged disconnected regression failed before source changes (`1 !== 0`) and passed afterward. The focused cumulative checkpoint has 45 passing Node tests, four passing rendered-view tests, both module typechecks and the assembled build passing. A broader macOS discovery run initially reported three failures in unchanged filesystem-injection tests where raw temporary paths differ from canonical paths; the same 68-test discovery group passed with creator-owned canonical scratch, and cleanup was verified. No existing test or production filesystem logic changed to obtain that pass. The assembled root suite passed all 1,602 tests across 84 files after foundation integration.
+
+Exact current native inspection resolved the retained integration representative and source worker. The worker's physical checkout is clean with no preview/receiver implementation, but its native branch metadata is stale and one earlier release has no authoritative delivery receipt. Shared receiver/preview/composition edits remain held pending that representative's rebind; the unknown release must not be resent blindly. No shared custody transfer is inferred from this candidate.
+
+The compiled-spec registration returned `registration_unavailable`, `effect: none`, reason `endpoint_unavailable`. No registry repair was attempted. Installed HQ remains at the earlier verified foundation payload; this source candidate has not been installed or represented as a completed interactive workflow.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.source-checkpoint.001" -->
