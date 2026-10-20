@@ -52,7 +52,7 @@ async function switchDomain(name: 'Design' | 'Social' | 'Work') {
 async function roundTrip(check: () => Promise<void> | void) {
   const before = main().firstElementChild;
   await switchDomain('Design');
-  expect(screen.getByRole('heading', { level: 1, name: 'A place for Design.' })).toBeTruthy();
+  expect(await screen.findByRole('navigation', { name: 'Design' })).toBeTruthy();
   await switchDomain('Social');
   expect(screen.queryByRole('navigation', { name: 'Work' })).toBeNull();
   await switchDomain('Work');

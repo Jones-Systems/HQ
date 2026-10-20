@@ -39,3 +39,7 @@ dl { margin-top: 40px; border-top: 1px solid var(--line); padding-top: 22px; dis
 dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
 .storage-notice { margin: 0 32px 20px; font-size: 12px; }
 @media (max-width: 620px) { .rail { flex-basis: 120px; padding-inline: 6px; } .brand { padding-left: 10px; } .domain-button { padding-inline: 8px; gap: 6px; } .context-bar { align-items: start; flex-direction: column; gap: 8px; padding: 18px; } .project-context { flex-direction: column; gap: 3px; } }
+
+/* A module that asks for 'fill' (Design) gets the whole workspace below the context bar, unpadded. */
+.workspace.is-fill { display: flex; flex-direction: column; height: 100vh; }
+.workspace.is-fill > main.is-fill { flex: 1; min-height: 0; padding: 0; overflow: auto; }
