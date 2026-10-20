@@ -23,6 +23,8 @@ real capture or native runtime.
 - `ui/` — pure view model plus `ReferenceLibraryView` and `ReferenceLibraryPanel`.
 - Reference graph (`hq.design.reference-graph/v1`, see below): `src/graph-contract.ts`, `graph-identity.ts`,
   `rights.ts`, `graph-import.ts`, `graph-ops.ts`, `graph-persist.ts`, `graph-flat.ts`, `graph-service.ts`.
+- Reference packets and bundles (`hq.design.reference-packet/v1`, see below): `src/packet.ts` plus
+  `ReferenceGraph.exportPacket` / `adoptPacket`.
 
 ## Invariants
 
@@ -87,6 +89,34 @@ capture blobs live only in the workspace storage port; `GraphPorts` has no cache
 - **Persistence.** Same discipline as the library: serialized CAS commits, a thrown write fences until
   `reload()`, a newer schema or an invalid document opens read-only and is never repaired or written. Every
   ID is re-derived on load.
+
+## Reference packets (`hq.design.reference-packet/v1`)
+
+Plan: `spec.hq-expansion#task.reference-packets.001`, tests `spec.hq-expansion#test.reference-packets.001`.
+A packet is an immutable manifest of graph subjects, captures, anchors and the blobs they need, by digest. It
+carries no bytes, URLs to fetch, markup or timestamps, so one selection has one packet and one digest.
+
+- **Closed shape.** `parsePacket` accepts only the documented fields at every level, ascending unique IDs, an
+  exact `blobs` list for the captures' assets, the fixed `omitted` list, inert media types only, and rights
+  that agree with the registry. It re-derives every subject, capture and anchor ID and the `packetDigest`
+  (`sha256:` + SHA-256 of the JCS form of every other field). Anything else is `invalid` with a path;
+  a newer `hq.design.reference-packet/vN` is `future-schema`. Nothing is repaired or written.
+- **Export.** `exportPacket({ mode, captureIds? | projectId? })` returns `{ packet, bundle }`. `internal`
+  includes every live selected capture; `publishable` includes only live captures that are explicit,
+  non-private grants with servable bytes, and lists every other selected capture under `excluded` with
+  `rights-restricted`, `rights-unknown`, `private`, `tombstoned` or `blob-missing`. Ratings, pins, local
+  reference links, content availability and tombstoned records are never exported (listed in `omitted`). The
+  packet validates itself before it is returned.
+- **Adoption.** `adoptPacket(input, { blobs? })` validates first, then applies through the same idempotent
+  core as tree imports: the same packet twice writes nothing. Supplied blob bytes are verified against the
+  packet's digests before any write; absent bytes leave the capture `blob-missing` and are reported, never
+  invented. Adoption never promotes rights (a packet grant over local `unknown` stays `unknown`), may tighten
+  an agent-reported local grant, never touches an owner judgement, and records an adopted claim as
+  `agent-reported`. Local pins, ratings and lineage are untouched.
+- **ReferenceBundle** (`hq.design.reference-bundle/v1`). `{ packetDigest, mode, captureIds, rights, excluded }`
+  with a `RightsSummary` (`total`, `permitted`, `restricted`, `unknown`, `private`, `agentReportedGrants`,
+  `publishable`). Root maps it to existing request evidence; `bundleMatchesPacket` checks it is exactly the
+  projection of a packet. A bundle names captures and counts; it carries no content.
 
 ## Checks
 

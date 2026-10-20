@@ -46,3 +46,14 @@ export {
   HQ_RIGHTS_VOCABULARY, isGraphPublishable, mapDeclaredRights, publishBlock, REA_RIGHTS_VOCABULARY,
   RIGHTS_VOCABULARIES, STUDY_RIGHTS_VOCABULARY,
 } from './rights.ts';
+
+/* Reference packets (hq.design.reference-packet/v1) and bundles. */
+export type {
+  PacketAnchor, PacketBlob, PacketBody, PacketCapture, PacketExclusion, PacketExclusionReason, PacketMode, PacketSelection,
+  PacketSource, PacketSubject, ParsedPacket, ReferenceBundle, ReferencePacket, RightsSummary,
+} from './packet.ts';
+export {
+  buildBundle, buildPacket, bundleMatchesPacket, BUNDLE_SCHEMA, PACKET_MODES, PACKET_OMITTED, PACKET_SCHEMA, parsePacket,
+  summarizeRights,
+} from './packet.ts';
+export type { AdoptPacketOptions, ExportPacketOptions, PacketAdoptionOutcome } from './graph-service.ts';

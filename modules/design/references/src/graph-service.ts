@@ -1,9 +1,10 @@
 import type {
   BlobDigest, ClaimLevel, ClockPort, LibraryState, ReferenceStoragePort, ValidationIssue,
 } from './contract.ts';
+import { sha256Hex } from './jcs.ts';
 import type {
   AnchorId, CaptureId, DeclaredRightsInput, GraphState, GraphTreeCandidate, PinId, ReferencePin, SourceAvailability,
-  SubjectId, TreeImportOutcome,
+  SubjectId, TreeImportOutcome, TreeImportReport,
 } from './graph-contract.ts';
 import { GRAPH_DOCUMENT_KEY } from './graph-contract.ts';
 import { planFlatAdoption } from './graph-flat.ts';
@@ -14,6 +15,8 @@ import type { BrowseNode, PinRequest } from './graph-ops.ts';
 import * as ops from './graph-ops.ts';
 import { parseGraphDocument } from './graph-persist.ts';
 import type { Result } from './library.ts';
+import type { PacketMode, ReferenceBundle, ReferencePacket } from './packet.ts';
+import { buildBundle, buildPacket, parsePacket, preparePacketAdoption } from './packet.ts';
 import type { LibraryAccess, MutationResult } from './service.ts';
 
 /** Workspace storage and a clock. There is deliberately no cache port: graph state is never disposable. */
@@ -23,6 +26,29 @@ export interface GraphPorts {
 }
 
 export type GraphAccess = LibraryAccess;
+
+export interface ExportPacketOptions {
+  readonly mode: PacketMode;
+  /** Explicit captures. Mutually exclusive with `projectId`. */
+  readonly captureIds?: readonly CaptureId[];
+  /** Export the captures that the project pins. */
+  readonly projectId?: string;
+}
+
+export interface AdoptPacketOptions {
+  /** Blob bytes by digest; only digests the packet names are considered, and each is verified. */
+  readonly blobs?: ReadonlyMap<BlobDigest, Uint8Array>;
+}
+
+export type PacketAdoptionOutcome =
+  | ({
+    readonly ok: true;
+    readonly packetDigest: string;
+    readonly blobs: { readonly stored: number; readonly missing: readonly BlobDigest[] };
+  } & TreeImportReport)
+  | { readonly ok: false; readonly status: 'invalid'; readonly path: string }
+  | { readonly ok: false; readonly status: 'future-schema'; readonly schema: string }
+  | { readonly ok: false; readonly status: 'rejected'; readonly code: string };
 
 type Listener = () => void;
 
@@ -233,6 +259,71 @@ export class ReferenceGraph {
 
   unpin(id: PinId): Promise<MutationResult> {
     return this.#mutate((state) => ops.unpin(state, id, this.#ports.clock.now()));
+  }
+
+  /* ------------------------------------------------------------ packets -- */
+
+  /**
+   * Exports an immutable reference packet and its bundle. Selection is every
+   * capture, explicit captures, or the live pins of one project; selecting a
+   * project never changes it, and nothing here sends or launches.
+   */
+  exportPacket(options: ExportPacketOptions): Promise<MutationResult<{ readonly packet: ReferencePacket; readonly bundle: ReferenceBundle }>> {
+    return this.#serial(async () => {
+      let captureIds = options.captureIds;
+      if (options.projectId !== undefined) {
+        if (captureIds !== undefined) return { ok: false, code: 'ambiguous-selection' } as const;
+        captureIds = [...new Set(ops.pinsForProject(this.#state, options.projectId).map((pin) => pin.captureId))];
+      }
+      const built = await buildPacket(this.#state, captureIds === undefined ? { mode: options.mode } : { mode: options.mode, captureIds });
+      return built.ok ? { ok: true, value: { packet: built.packet, bundle: buildBundle(built.packet) } } as const : built;
+    });
+  }
+
+  /**
+   * Adopts a packet from untrusted input. Strict validation first; a future
+   * schema or any invalid byte changes nothing. Adoption is idempotent by
+   * content address. Blob bytes, when supplied, are verified against the
+   * packet's digests before anything is written; absent bytes leave the capture
+   * `blob-missing` rather than inventing content.
+   */
+  adoptPacket(input: unknown, options: AdoptPacketOptions = {}): Promise<PacketAdoptionOutcome> {
+    return this.#serial(async () => {
+      const parsed = await parsePacket(input);
+      if (parsed.status === 'future-schema') return { ok: false, status: 'future-schema', schema: parsed.schema };
+      if (parsed.status === 'invalid') return { ok: false, status: 'invalid', path: parsed.path };
+      if (this.#access.mode !== 'writable') return { ok: false, status: 'rejected', code: this.#access.mode };
+      const packet = parsed.packet;
+      const supplied = new Map<BlobDigest, Uint8Array>();
+      for (const blob of packet.blobs) {
+        const bytes = options.blobs?.get(blob.digest);
+        if (bytes === undefined) continue;
+        if (bytes.byteLength !== blob.bytes || `sha256:${await sha256Hex(bytes)}` !== blob.digest) {
+          return { ok: false, status: 'rejected', code: 'blob-bytes-mismatch' };
+        }
+        supplied.set(blob.digest, bytes);
+      }
+      let stored = 0;
+      for (const blob of packet.blobs) {
+        const bytes = supplied.get(blob.digest);
+        if (bytes === undefined || await this.#ports.storage.hasBlob(blob.digest)) continue;
+        const result = await this.#ports.storage.putBlob(bytes, blob.mediaType);
+        if (result.digest !== blob.digest) return { ok: false, status: 'rejected', code: 'blob-bytes-mismatch' };
+        stored += 1;
+      }
+      const now = this.#ports.clock.now();
+      const prepared = preparePacketAdoption(packet, now);
+      const presence = await this.#presence(assetDigests(prepared));
+      const committed = await this.#commit((state) => {
+        const applied = applyPrepared(state, prepared, presence, now);
+        return applied.ok ? { ok: true, value: { state: applied.state, value: applied.report } } : applied;
+      });
+      if (!committed.ok) return { ok: false, status: 'rejected', code: committed.code };
+      return {
+        ok: true, packetDigest: packet.packetDigest, ...committed.value,
+        blobs: { stored, missing: packet.blobs.map((blob) => blob.digest).filter((digest) => !presence.has(digest)) },
+      };
+    });
   }
 
   /* ------------------------------------------------------------- browse -- */

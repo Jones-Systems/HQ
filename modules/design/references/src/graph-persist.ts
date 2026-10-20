@@ -68,7 +68,10 @@ function subject(key: string, value: unknown, path: string): SubjectNode {
   return raw as unknown as SubjectNode;
 }
 
-function checkSubjectLinks(subjects: Record<string, SubjectNode>): void {
+/** The part of a subject that links it into the hierarchy; shared by graph documents and packets. */
+export type SubjectLinks = Pick<SubjectNode, 'id' | 'identity' | 'parentId' | 'steps'>;
+
+export function checkSubjectLinks(subjects: Readonly<Record<string, SubjectLinks>>): void {
   for (const node of Object.values(subjects)) {
     const path = `$.subjects.${node.id}`;
     const parent = node.parentId === null ? undefined : subjects[node.parentId];
@@ -85,7 +88,7 @@ function checkSubjectLinks(subjects: Record<string, SubjectNode>): void {
     }
     for (const step of node.steps) {
       const target = subjects[step];
-      check(target !== undefined && target.kind === 'screen' && target.parentId === node.parentId, `${path}.steps`);
+      check(target !== undefined && target.identity.kind === 'screen' && target.parentId === node.parentId, `${path}.steps`);
     }
   }
 }
