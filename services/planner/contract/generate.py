@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import base64
 from contextlib import contextmanager
+import hashlib
 import http.client
 import itertools
 import json
@@ -64,7 +65,10 @@ def service():
                     selector.register(process.stdout, selectors.EVENT_READ)
                     if not selector.select(timeout=10):
                         raise RuntimeError("Disposable service did not bind within ten seconds")
-                    port = int(process.stdout.readline())
+                    line = process.stdout.readline()
+                    if not line.strip().isdigit():
+                        raise RuntimeError(f"Disposable service exited before binding (code {process.poll()})")
+                    port = int(line)
                 yield port
             finally:
                 process.terminate()
@@ -85,13 +89,18 @@ def service():
 def capture():
     exchanges = {}
     with service() as port:
-        def call(name, method, path, body=None, request_id=None, status=200, raw=None):
+        def call(name, method, path, body=None, request_id=None, status=200, raw=None, override=None):
             wire = raw if raw is not None else (json.dumps(body, separators=(",", ":"), ensure_ascii=True) if body is not None else "")
             headers = {"Host": "localhost", "Accept": "application/json"}
             if method != "GET":
                 headers.update({"Content-Type": "application/json", "X-Planning-Request": "1"})
             if request_id is not None:
                 headers["X-Request-Id"] = request_id
+            for key, value in (override or {}).items():
+                if value is None:
+                    headers.pop(key)
+                else:
+                    headers[key] = value
             connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
             try:
                 connection.request(method, path, body=wire.encode(), headers=headers)
@@ -128,8 +137,9 @@ def capture():
         call("12-restore", "POST", path + "/restore", {"revision": 4}, "contract-restore")
         call("13-reviewed", "POST", path + "/reviewed", {"revision": 5}, "contract-reviewed")
         call("14-settings", "PUT", "/api/settings", {"settings": {"week_start": "mon"}}, "contract-settings")
-        call("15-batch-dry-run", "POST", "/api/items/batch", {"items": [{"title": "Batch A", "references": [ref]}], "dry_run": True}, "contract-dry")
         batch = {"items": [{"title": "Batch A", "references": [ref]}, {"title": "Batch B", "status": "next"}]}
+        # The CLI sends its atomic dry run and the real batch under one request ID.
+        call("15-batch-dry-run", "POST", "/api/items/batch", {**batch, "dry_run": True}, "contract-batch")
         call("16-batch", "POST", "/api/items/batch", batch, "contract-batch", 201)
         call("17-field-validation", "POST", "/api/items", {"fields": {"title": "Invalid", "references": [{**ref, "url": ""}]}}, "contract-invalid", 400)
         call("18-import-validation", "POST", "/api/import/preview", {"data": {"format": "wrong", "version": 1}}, "contract-import", 422)
@@ -148,11 +158,28 @@ def capture():
         call("25-state", "GET", "/api/state")
         call("26-version", "GET", "/api/version")
         call("27-export", "GET", "/api/export")
+        # Rejections below change no state and consume no IDs.
+        call("28-item-not-found", "GET", "/api/items/missing001", status=404)
+        call("29-mutation-not-found", "POST", "/api/items/missing001/archive", {"revision": 1}, "contract-missing", 404)
+        target = {**ref, "target": {**ref["target"], "version": 2}}
+        call("30-reference-target-validation", "POST", "/api/items", {"fields": {"title": "Invalid", "references": [target]}}, "contract-target", 400)
+        call("31-settings-validation", "PUT", "/api/settings", {"settings": {"stale_days": 0}}, "contract-bad-settings", 400)
+        call("32-replay-id-reuse", "POST", "/api/requests/replay", {**replay, "body_b64": base64.b64encode(b'{"fields":{"title":"Different"}}').decode()}, status=422)
+        call("33-missing-planning-header", "PATCH", path, {"revision": 6, "patch": {"title": "Refused"}}, "contract-refused", 403, override={"X-Planning-Request": None})
+        call("34-bad-host", "GET", "/api/version", status=421, override={"Host": "planner.invalid"})
     return exchanges
 
 
 def rendered(exchanges):
     return {name: json.dumps(data, indent=2, ensure_ascii=True) + "\n" for name, data in exchanges.items()}
+
+
+def manifest(files):
+    """SHA256SUMS text for reference vectors followed by exchanges in name order."""
+    names = ["reference-vectors.json", *(f"exchanges/{name}" for name in sorted(files))]
+    contents = {"reference-vectors.json": (CONTRACT / "reference-vectors.json").read_bytes(),
+                **{f"exchanges/{name}": text.encode() for name, text in files.items()}}
+    return "".join(f"{hashlib.sha256(contents[name]).hexdigest()}  {name}\n" for name in names)
 
 
 def main():
@@ -168,17 +195,24 @@ def main():
     signal.signal(signal.SIGTERM, cancel)
     output = rendered(capture())
     folder = CONTRACT / "exchanges"
+    sums = CONTRACT / "SHA256SUMS"
     if args.check:
         actual = {path.name: path.read_text() for path in folder.glob("*.json")}
         if output != actual:
             print("Planner golden exchanges drifted; inspect the changes before regenerating.", file=sys.stderr)
             return 1
-        print(f"Verified {len(output)} real HTTP exchanges.")
+        if not sums.exists() or sums.read_text() != manifest(output):
+            print("SHA256SUMS does not match the contract files.", file=sys.stderr)
+            return 1
+        print(f"Verified {len(output)} real HTTP exchanges and SHA256SUMS.")
     else:
         folder.mkdir(exist_ok=True)
+        for stale in set(path.name for path in folder.glob("*.json")) - set(output):
+            (folder / stale).unlink()
         for name, content in output.items():
-            (folder / name).write_text(content)
-        print(f"Captured {len(output)} real HTTP exchanges.")
+            (folder / name).write_bytes(content.encode())
+        sums.write_bytes(manifest(output).encode())
+        print(f"Captured {len(output)} real HTTP exchanges and refreshed SHA256SUMS.")
     return 0
 
 
