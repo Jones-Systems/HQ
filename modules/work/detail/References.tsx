@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { Button, StatusChip } from '@hq/ui';
 import { LIMITS, REFERENCE_KINDS, REFERENCE_LABEL, type ItemReference, type ReferenceInput, type UrlReference } from '../core';
 
-// Item links (RV-3). Planner links are plain links that open outside HQ and can
-// never start anything. HQ references (the proposed `hq` kind) are shown
-// read-only with their snapshot title and provenance: creating, resolving and
-// opening them belongs to the separately held reference tasks.
+// Ordinary Planner links remain independent of the optional HQ reference mount.
+// Without project context HQ envelopes remain readable, with no mutation controls.
 
 type UrlKind = UrlReference['kind'];
 
@@ -28,9 +26,10 @@ export interface ReferencesProps {
   references: readonly ItemReference[];
   onSave(next: ReferenceInput[]): Promise<string | null>;
   disabled?: boolean;
+  hideHq?: boolean;
 }
 
-export function References({ references, onSave, disabled }: ReferencesProps) {
+export function References({ references, onSave, disabled, hideHq }: ReferencesProps) {
   const [adding, setAdding] = useState<{ kind: UrlKind; label: string; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +49,7 @@ export function References({ references, onSave, disabled }: ReferencesProps) {
     <div className="work-links">
       {references.length === 0 && !adding && <p className="work-empty-line">No links.</p>}
       <ul className="work-link-list">
-        {references.map((ref) => (
+        {references.filter((ref) => !hideHq || ref.kind !== 'hq').map((ref) => (
           <li key={ref.id} className={`work-link${ref.kind === 'hq' ? ' work-link--hq' : ''}`}>
             {ref.kind === 'hq' ? (
               <>
@@ -70,7 +69,7 @@ export function References({ references, onSave, disabled }: ReferencesProps) {
                 {ref.url && <span className="hq-meta">{hostOf(ref.url)}</span>}
               </>
             )}
-            <Button size="sm" variant="ghost" disabled={disabled} onClick={() => void save(inputsOf(references).filter((r) => r.id !== ref.id))}>Remove</Button>
+            <Button size="sm" variant="ghost" disabled={disabled || ref.kind === 'hq'} onClick={() => void save(inputsOf(references).filter((r) => r.id !== ref.id))}>Remove</Button>
           </li>
         ))}
       </ul>

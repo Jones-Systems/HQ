@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ModulePort } from '@hq/contracts';
-import { Button, StateView, Toast, ToastRegion } from '@hq/ui';
+import { Button, StateView, Toast, ToastRegion, type ReferencePort, type ReturnContext } from '@hq/ui';
 import { StatusBoard, SyncBanners, undoFromToast, useFeedback, WorkToasts, type Feedback } from '../board';
 import { DraftsPanel, QuickCapture, useCaptureShortcut } from '../capture';
 import {
@@ -28,6 +28,8 @@ export const EXAMPLE_NOTE = 'Fictional example planning, kept in memory for this
 const VIEWS_POLL_MS = 2_147_483_647;
 
 export interface WorkDomainProps extends ModulePort {
+  readonly references?: ReferencePort;
+  readonly returnContext?: ReturnContext;
   /** Clock for "today" in the Planner display zone; tests pin it. */
   readonly now?: () => Date;
   readonly pollMs?: number;
@@ -44,7 +46,7 @@ const isPlanningView = (page: WorkPage): page is PlanningViewId => (PLANNING_VIE
  * text. Remounting, navigating and switching pages read nothing new and write nothing; a focused card-detail field is
  * still saved by the detail panel itself when focus leaves it. The Planner port has no execution member at all.
  */
-export function WorkDomain({ context, destination, navigate, now, pollMs }: WorkDomainProps) {
+export function WorkDomain({ context, destination, navigate, now, pollMs, references, returnContext }: WorkDomainProps) {
   const session = workSession(context.id);
   const { store, feedback, drafts, detail, ui } = session;
   const state = useWorkState(store, pollMs === undefined ? {} : { pollMs });
@@ -119,6 +121,7 @@ export function WorkDomain({ context, destination, navigate, now, pollMs }: Work
       </aside>
 
       <div className="wd-main">
+        {returnContext && <p className="hq-meta">From {returnContext.label} · {returnContext.to.domain} · {returnContext.to.destination}</p>}
         <h1 className="hq-sr-only">Work · {page ? PAGE_LABELS[page.page] : 'Unknown page'}</h1>
         {session.example && (
           <p className="wd-example" role="note"><span className="wd-tag">Example data</span> {EXAMPLE_NOTE}</p>
@@ -132,6 +135,7 @@ export function WorkDomain({ context, destination, navigate, now, pollMs }: Work
           <ScrollArea ui={ui} pageKey={pageKey} ready={state.confirmed !== null}>{body}</ScrollArea>
           {itemId && (
             <CardDetail
+              projectId={context.id} {...(references ? { references } : {})}
               store={store} state={state} feedback={feedback} itemId={itemId} detail={detail} {...(now ? { now } : {})}
               onClose={() => navigate(view.lastPage)}
             />

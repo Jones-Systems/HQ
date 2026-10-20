@@ -60,6 +60,15 @@ export function createEditor(store: WorkStore, feedback: Feedback, detail: Detai
     const item = confirmed();
     const fields = Object.keys(patch) as PatchField[];
     const base = options.base ?? Object.fromEntries(fields.map((field) => [field, item ? writableValue(field, item[field]) : undefined]));
+    // A picker or asynchronous read may outlive a refresh. Compare its rendered base before writing.
+    if (item && options.base) {
+      const changed = changedSince(item, base);
+      if (changed.length) {
+        detail.setConflict(itemId, { fields: changed, mine: patch,
+          theirs: Object.fromEntries(changed.map((field) => [field, item[field]])) });
+        return { status: 'failed', error: { kind: 'revision_conflict', current: item } };
+      }
+    }
     const outcome = await store.patch(itemId, patch);
     if (outcome.status === 'failed' && outcome.error.kind === 'revision_conflict') {
       const changed = changedSince(outcome.error.current, base);
