@@ -8481,14 +8481,16 @@ One synthetic end-to-end scenario enrolls a gallery and Jones list, opens a full
     "tests/"
   ],
   "write_scope": [
-    "modules/design/discovery/src/adapters/",
-    "modules/design/discovery/test/adapters/"
+    "modules/design/discovery/src/adapters",
+    "modules/design/discovery/test/adapters"
   ],
   "requires": [
     "spec.hq-integration-parallel-execution#req.project-experience-workflow.001"
   ],
   "produces": [],
-  "dependencies": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.design-catalog-landing.001"
+  ],
   "dependency_inputs": [],
   "activation": {
     "mode": "automatic"
@@ -8633,13 +8635,15 @@ One synthetic end-to-end scenario enrolls a gallery and Jones list, opens a full
     "tests/"
   ],
   "write_scope": [
-    "modules/design/app/sections/runs/"
+    "modules/design/app/sections/runs"
   ],
   "requires": [
     "spec.hq-integration-parallel-execution#req.project-experience-workflow.001"
   ],
   "produces": [],
-  "dependencies": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.design-sections-landing.001"
+  ],
   "dependency_inputs": [],
   "activation": {
     "mode": "automatic"
@@ -8782,7 +8786,7 @@ One synthetic end-to-end scenario enrolls a gallery and Jones list, opens a full
   ],
   "write_scope": [
     "apps/desktop/electron/catalog-host.ts",
-    "apps/desktop/electron/sources/",
+    "apps/desktop/electron/sources",
     "packages/contracts/src/catalog.ts",
     "apps/desktop/electron/main.ts",
     "apps/desktop/electron/preload.ts",
