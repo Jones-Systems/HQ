@@ -772,6 +772,8 @@ kbd { display: inline-block; padding: 2px 7px; border-radius: 6px; border: 1px s
   .card-title { font-size: 15px; }
 
   .glance-heading { font-size: 24px; }
+  .row { flex-wrap: wrap; }
+  .row-sub { order: 3; flex-basis: 100%; max-width: none; padding-left: 24px; }
   .cal-side { grid-template-columns: 1fr; }
   .day { min-height: 74px; padding: 4px 3px; }
   .cal-chip .chip-title { display: none; }
