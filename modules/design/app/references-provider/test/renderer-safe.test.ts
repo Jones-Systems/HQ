@@ -1,8 +1,29 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { it } from 'node:test';
+
+function assertAllowedPath(root: string, path: string): void {
+  assert.doesNotMatch(relative(root, path), /(?:^|\/)(?:social|work|wiki|storage)\/|(?:^|\/)node\.ts$|^packages\/design-store\//u);
+}
+
+it('the path guard ignores /work/ above the repo root and still rejects forbidden repo paths', () => {
+  for (const root of ['/synthetic/checkout', '/home/runner/work/HQ/HQ']) {
+    for (const path of [
+      'modules/work/x.ts', 'modules/social/x.ts', 'modules/wiki/x.ts',
+      'modules/design/app/storage/x.ts', 'modules/design/x/node.ts',
+      'packages/design-store/src/x.ts',
+    ]) {
+      assert.throws(() => assertAllowedPath(root, resolve(root, path)), assert.AssertionError);
+    }
+    for (const path of [
+      'modules/design/app/references-provider/index.ts', 'packages/contracts/src/index.ts',
+    ]) {
+      assert.doesNotThrow(() => assertAllowedPath(root, resolve(root, path)));
+    }
+  }
+});
 
 it('the provider runtime graph is renderer-safe and imports no other domain or storage', () => {
   const entry = fileURLToPath(new URL('../index.ts', import.meta.url));
@@ -11,7 +32,7 @@ it('the provider runtime graph is renderer-safe and imports no other domain or s
   function walk(path: string) {
     if (visited.has(path)) return;
     visited.add(path);
-    assert.doesNotMatch(path, /\/(?:social|work|wiki|storage)\/|\/node\.ts$|\/packages\/design-store\//u);
+    assertAllowedPath(root, path);
     const code = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gmu, '');
     assert.doesNotMatch(code, /\b(?:require\s*\(|import\s*\(|import\.meta|process\.|Buffer\.)/u);
     // Mirrors the existing app guard's static-import scan. Every import/export
