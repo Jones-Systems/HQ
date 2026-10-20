@@ -281,7 +281,7 @@ describe('the recorded intent and baseline', () => {
     fields.next_steps[0]!.text = 'Changed';
     await port.snapshot();
     expect(Object.isFrozen(intent.call)).toBe(true);
-    expect(Object.isFrozen((intent.call.params as WorkParams['create']).fields.next_steps![0])).toBe(true);
+    expect(Object.isFrozen(((intent.call.params as WorkParams['create']).fields.next_steps as object[])[0])).toBe(true);
     await recovery.check(requestId);
     const replay = wire.calls.at(-1)!.params as WorkParams['replay'];
     expect(replay.original).toEqual({ route: 'create', params: sent.params });
@@ -289,6 +289,30 @@ describe('the recorded intent and baseline', () => {
     // Typed-intent identity: the main process encodes both to the same bytes.
     expect(encodeWrite(replay.original).body).toBe(encodeWrite({ route: 'create', params: sent.params } as WorkMutationCall).body);
     expect(replay.original.params.requestId).toBe(replay.requestId);
+  });
+
+  it('sends a move with the flat anchor fields, and replays exactly that recorded original', async () => {
+    const { port, recovery, wire, planner, a } = await live();
+    const b = (await port.create({ title: 'B', status: 'next' }, rid())).item!;
+    const lastMove = () => wire.calls.filter((c) => c.route === 'move').at(-1)!.params;
+    let item = a;
+    for (const anchor of [{ after_id: b.id }, { before_id: b.id }, { place: 'bottom' as const }]) {
+      const requestId = rid();
+      const before = item;
+      item = (await port.move(item.id, item.revision, 'next', anchor, requestId)).item!;
+      expect(lastMove()).toEqual({ id: a.id, requestId, revision: before.revision, status: 'next', ...anchor });
+    }
+    wire.next('move', 'lose-response');
+    const requestId = rid();
+    await failure(port.move(item.id, item.revision, 'active', { place: 'top' }, requestId));
+    const original = { route: 'move', params: { id: a.id, requestId, revision: item.revision, status: 'active', place: 'top' } };
+    expect(lastMove()).toEqual(original.params);
+    expect(planner.ledger.intent(requestId)!.call).toEqual(original);
+    expect(Object.isFrozen(planner.ledger.intent(requestId)!.call.params)).toBe(true);
+    expect(await recovery.check(requestId)).toMatchObject({ outcome: 'replayed', result: { item: { id: a.id, status: 'active' } } });
+    const replay = wire.calls.at(-1)!.params as WorkParams['replay'];
+    expect(replay.original).toEqual(original);
+    expect(encodeWrite(replay.original).body).toBe(`{"revision":${item.revision},"status":"active","place":"top"}`);
   });
 
   it('reads the version first when nothing was observed, and sends nothing when it cannot', async () => {

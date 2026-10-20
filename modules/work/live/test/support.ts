@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { expect } from 'vitest';
 import {
   PlannerPortError, ReplayIndeterminateError,
-  type FixtureControl, type FixtureWriteCall, type PlannerPort, type SettingsWriteResult, type WriteResult,
+  type Anchor, type FixtureControl, type FixtureWriteCall, type PlannerPort, type SettingsWriteResult, type WriteResult,
 } from '../../core';
 import type { PlannerTransport, ServiceResponse, WorkMutationCall, WorkParams, WorkRoute } from '../transport';
 
@@ -31,6 +31,20 @@ export function answer(ex: Exchange): ServiceResponse {
 
 export interface Encoded { method: string; path: string; body: string; requestIdHeader: string | null }
 
+/** A wire call as the fixture Planner's own call record, which keeps a move's anchor as one object. */
+function fixtureCall(call: WorkMutationCall): FixtureWriteCall {
+  if (call.route !== 'move') return call as FixtureWriteCall;
+  const { after_id: _after, before_id: _before, place: _place, ...rest } = call.params;
+  return { route: 'move', params: { ...rest, anchor: flatAnchor(call.params) } } as FixtureWriteCall;
+}
+
+/** The flat move anchor fields that are present, in body order. */
+export function flatAnchor(params: WorkParams['move']): Partial<Record<'after_id' | 'before_id' | 'place', string>> {
+  const out: Partial<Record<'after_id' | 'before_id' | 'place', string>> = {};
+  for (const key of ['after_id', 'before_id', 'place'] as const) if (params[key] !== undefined) out[key] = params[key];
+  return out;
+}
+
 /**
  * The reference encoding the main process is expected to apply: one pure function from a typed call to the fixed
  * method, path and exact UTF-8 body. Design owns the canonical encoder; this pins the bytes it must reproduce.
@@ -42,7 +56,7 @@ export function encodeWrite(call: WorkMutationCall): Encoded {
   switch (call.route) {
     case 'create': return { method: 'POST', path: '/api/items', body: body({ fields: call.params.fields }), requestIdHeader: p.requestId };
     case 'patch': return { method: 'PATCH', path: item(), body: body({ revision: call.params.revision, patch: call.params.patch }), requestIdHeader: p.requestId };
-    case 'move': return { method: 'POST', path: item('/move'), body: body({ revision: call.params.revision, status: call.params.status, ...call.params.anchor }), requestIdHeader: p.requestId };
+    case 'move': return { method: 'POST', path: item('/move'), body: body({ revision: call.params.revision, status: call.params.status, ...flatAnchor(call.params) }), requestIdHeader: p.requestId };
     case 'archive': case 'restore': case 'reviewed':
       return { method: 'POST', path: item(`/${call.route}`), body: body({ revision: call.params.revision }), requestIdHeader: p.requestId };
     case 'settings': return { method: 'PUT', path: '/api/settings', body: body({ settings: call.params.settings }), requestIdHeader: p.requestId };
@@ -159,7 +173,7 @@ export function fixtureTransport(fixture: { port: PlannerPort; control: FixtureC
     switch (call.route) {
       case 'create': return port.create(p.fields, p.requestId);
       case 'patch': return port.patch(p.id, p.revision, p.patch, p.requestId);
-      case 'move': return port.move(p.id, p.revision, p.status, p.anchor, p.requestId);
+      case 'move': return port.move(p.id, p.revision, p.status, flatAnchor(call.params) as Anchor, p.requestId);
       case 'archive': case 'restore': return port.setArchived(p.id, p.revision, call.route === 'archive', p.requestId);
       case 'reviewed': return port.markReviewed(p.id, p.revision, p.requestId);
       case 'settings': return port.updateSettings(p.settings, p.requestId);
@@ -187,7 +201,7 @@ export function fixtureTransport(fixture: { port: PlannerPort; control: FixtureC
         }
         case 'replay': {
           const r = params as WorkParams['replay'];
-          const outcome = await control.replay({ mode: r.mode, requestId: r.requestId, original: r.original as FixtureWriteCall, ...(r.sentAfterVersion !== undefined ? { sentAfterVersion: r.sentAfterVersion } : {}) });
+          const outcome = await control.replay({ mode: r.mode, requestId: r.requestId, original: fixtureCall(r.original), ...(r.sentAfterVersion !== undefined ? { sentAfterVersion: r.sentAfterVersion } : {}) });
           if (outcome.outcome === 'not_applied') return ok(200, { outcome: 'not_applied' });
           const status = r.original.route === 'create' ? 201 : 200;
           return ok(200, { outcome: outcome.outcome, status, response: writeBody(r.original.route, (r.original.params as { id?: string }).id, outcome.response) }, outcome.outcome === 'replayed');

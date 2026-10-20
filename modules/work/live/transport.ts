@@ -1,56 +1,65 @@
-import type { Anchor } from '../core/port';
-import type { ItemPatch, NewItemFields, Settings, Status } from '../core/types';
-
 // The Work slice of the desktop service bridge, as a narrow local structural type (iface.service-bridge.001 and
-// spec.hq-agent-cli#iface.work-live-transport.001, with the settled typed replay seam). Design owns the canonical shared
-// contract; this mirrors it so the adapter does not wait for it. Calls carry typed parameters only: no URL, method,
-// header, body bytes, fetch, Node or CLI capability. The main process owns encoding, so it rebuilds the same method,
-// path and body bytes for a normal send and for a replay of it.
+// spec.hq-agent-cli#iface.work-live-transport.001, with the settled typed replay seam). It mirrors Design's frozen
+// shared `services.ts` (`WorkServiceParams`, `WorkMutationCall`, `WorkServiceTransport`, `ServiceResponse`) exactly,
+// without importing or copying it, so the adapter does not wait for it; `test/canonical-shape.test.ts` binds the shape.
+// Calls carry typed parameters only: no URL, method, header, body bytes, fetch, Node or CLI capability. Fields, patches
+// and settings cross as plain records; domain typing and validation stay inside the adapter. The main process owns
+// encoding, so it rebuilds the same method, path and body bytes for a normal send and for a replay of it.
 
 export const WORK_READ_ROUTES = ['state', 'version', 'item', 'history'] as const;
 export const WORK_WRITE_ROUTES = ['create', 'patch', 'move', 'archive', 'restore', 'reviewed', 'settings'] as const;
+export const WORK_SERVICE_ROUTES = [...WORK_READ_ROUTES, ...WORK_WRITE_ROUTES, 'replay'] as const;
 export type WorkReadRoute = (typeof WORK_READ_ROUTES)[number];
-export type WorkWriteRoute = (typeof WORK_WRITE_ROUTES)[number];
-export type WorkRoute = WorkReadRoute | WorkWriteRoute | 'replay';
-export const WORK_ROUTES: readonly WorkRoute[] = [...WORK_READ_ROUTES, ...WORK_WRITE_ROUTES, 'replay'];
+export type WorkServiceRoute = (typeof WORK_SERVICE_ROUTES)[number];
+export type WorkMutationRoute = (typeof WORK_WRITE_ROUTES)[number];
+export const WORK_ROUTES: readonly WorkServiceRoute[] = WORK_SERVICE_ROUTES;
 
-interface Guarded { id: string; requestId: string; revision: number }
-
-export interface WorkParams {
-  state: Record<string, never>;
-  version: Record<string, never>;
-  item: { id: string };
-  history: { id: string };
-  create: { requestId: string; fields: NewItemFields };
-  patch: Guarded & { patch: ItemPatch };
-  move: Guarded & { status: Status; anchor: Anchor };
-  archive: Guarded;
-  restore: Guarded;
-  reviewed: Guarded;
-  settings: { requestId: string; settings: Partial<Settings> };
+export interface WorkServiceParams {
+  readonly state: Record<string, never>;
+  readonly version: Record<string, never>;
+  readonly item: { readonly id: string };
+  readonly history: { readonly id: string };
+  readonly create: { readonly requestId: string; readonly fields: Readonly<Record<string, unknown>> };
+  readonly patch: { readonly requestId: string; readonly id: string; readonly revision: number; readonly patch: Readonly<Record<string, unknown>> };
+  /** The anchor is flat: exactly one of `after_id`, `before_id` or `place`. */
+  readonly move: {
+    readonly requestId: string; readonly id: string; readonly revision: number; readonly status: string;
+    readonly after_id?: string; readonly before_id?: string; readonly place?: 'top' | 'bottom';
+  };
+  readonly archive: { readonly requestId: string; readonly id: string; readonly revision: number };
+  readonly restore: WorkServiceParams['archive'];
+  readonly reviewed: WorkServiceParams['archive'];
+  readonly settings: { readonly requestId: string; readonly settings: Readonly<Record<string, unknown>> };
   /**
    * The closed replay route. `original` is the exact typed call first sent; its `requestId` equals the outer one.
    * `sentAfterVersion` is the state version observed before that first send, never raised afterwards. No
    * X-Request-Id header is sent on a replay.
    */
-  replay: { mode: 'lookup' | 'resend'; requestId: string; original: WorkMutationCall; sentAfterVersion?: number };
+  readonly replay: { readonly mode: 'lookup' | 'resend'; readonly requestId: string; readonly original: WorkMutationCall; readonly sentAfterVersion?: number };
 }
 
 /** One write exactly as first sent: the immutable intent a replay names. */
-export type WorkMutationCall = { [R in WorkWriteRoute]: { route: R; params: WorkParams[R] } }[WorkWriteRoute];
+export type WorkMutationCall = { [R in WorkMutationRoute]: { readonly route: R; readonly params: WorkServiceParams[R] } }[WorkMutationRoute];
 
 /**
  * Every received HTTP response, 4xx and 5xx included, is `ok: true`; `ok` never means success, so branch on
- * `status`. `body` is null when the response is empty; `replayed` reflects `X-Replayed`. Only a transport failure is
- * `ok: false`: `unavailable` when nothing was sent, `unknown` when a request may have been delivered.
+ * `status`. `body` is null when the response is empty; `replayed` reflects `X-Replayed` and is always present. Only a
+ * transport failure is `ok: false`: `unavailable` when nothing was sent, `unknown` when a request may have been
+ * delivered.
  */
-export type ServiceResponse =
-  | { ok: true; status: number; body: unknown; replayed: boolean }
-  | { ok: false; kind: 'unavailable' | 'unknown' };
+export type ServiceResponse<B = unknown> =
+  | { readonly ok: true; readonly status: number; readonly body: B; readonly replayed: boolean }
+  | { readonly ok: false; readonly kind: 'unavailable' | 'unknown' };
 
-export interface PlannerTransport {
-  call<R extends WorkRoute>(route: R, params: WorkParams[R]): Promise<ServiceResponse>;
+export interface WorkServiceTransport {
+  call<R extends WorkServiceRoute>(route: R, params: WorkServiceParams[R]): Promise<ServiceResponse>;
 }
+
+/** Local names kept for Work's existing callers. */
+export type WorkRoute = WorkServiceRoute;
+export type WorkWriteRoute = WorkMutationRoute;
+export type WorkParams = WorkServiceParams;
+export type PlannerTransport = WorkServiceTransport;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);

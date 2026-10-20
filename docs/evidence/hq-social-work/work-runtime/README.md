@@ -141,14 +141,61 @@ All checks ran serially in this worktree. Each run started after a fresh reading
 | 09:45:29 | 31.23% | `npm run typecheck` | exit 0 |
 | 09:45:33 | 28.89% | `npm run build` | exit 0 (the existing chunk-size warning only) |
 
-These are the final-candidate runs on 2026-10-20. About 39 GiB of RAM was available for each; one fully used core is 6.25% of capacity, and the serial test ceiling was 1.
+These are the runs for PR #51 at `bb42ee9` on 2026-10-20. About 39 GiB of RAM was available for each; one fully used core is 6.25% of capacity, and the serial test ceiling was 1.
+
+**Canonical alignment successor, final candidate (2026-10-20):**
+
+| Time (local) | CPU before the run | Check | Result |
+| --- | --- | --- | --- |
+| 09:53:29 | 29.32% | `npx vitest run` (full suite) | 53 files; 932 passed, 1 skipped (the upstream drift check, `unavailable`) |
+| 09:53:38 | 17.81% | `npx vitest run modules/work` | 29 files; 575 passed, 1 skipped (the same check) |
+| 09:53:42 | 8.15% | `npm run typecheck` (includes `canonical-shape.test.ts`) | exit 0 |
+| 09:53:44 | 11.63% | `npm run build` | exit 0 (the existing chunk-size warning only) |
+
+About 40–41 GiB of RAM was available for each run.
 
 ## Dispositions
 
 - **No second task store.** The live port feeds the existing `createWorkStore`.
 - **`replay_indeterminate` stays outside `PlannerError`.** `plannerErrorOf` maps it to `unknown` for existing consumers; recovery callers see the precise reason.
 - **Readback failures keep the confirmation.** A confirmed write whose move read-back fails keeps that confirmation. It returns `{changed:[item], stale:true}`, and the store sets `refreshDue` and refreshes.
-- **Typed params are a local proposal.** The `move` params carry an `anchor` object, and `settings` carries a partial. They match the reference encoder and the recorded bytes, and await identity with Design's shared `services.ts` types.
+- **Typed params now mirror the frozen shared boundary.** In PR #51 at `bb42ee9` they were a local proposal: `move` carried a nested `anchor` object, and fields, patches and settings used Work's domain types. The successor commit aligns them; see [Canonical boundary alignment](#canonical-boundary-alignment).
+
+## Canonical boundary alignment
+
+Design froze the shared `packages/contracts/src/services.ts` at local commit `dccb4987b83ef77ffbd714bd2d58c3801e664fc7` (parent `db71081`, blob `d55672ef20a3f763c52c257b350a86bbc0cdcfd8`). It was read as a Git object only. Nothing was merged, copied or republished, and no shared file was written.
+
+It showed a concrete incompatibility in this lane's transport: `move` was `{…, status: Status, anchor: Anchor}`. The canonical shape is `{requestId, id, revision, status: string, after_id?, before_id?, place?: 'top'|'bottom'}`, with flat anchor fields.
+
+**What changed:**
+
+- **`live/transport.ts`** mirrors the canonical boundary exactly:
+  - `WorkServiceParams`, `WorkMutationCall`, `WorkServiceTransport`, `ServiceResponse<B>` (with `replayed` required), `WorkServiceRoute`, `WorkMutationRoute` and `WORK_SERVICE_ROUTES`, with the same `readonly` modifiers;
+  - `fields`, `patch` and `settings` cross as `Readonly<Record<string, unknown>>`;
+  - the earlier local names remain as aliases.
+- **`live/adapter.ts`:**
+  - the move builder sends the flat anchor fields;
+  - domain typing and validation stay inside the adapter, which hands the bridge plain records.
+
+  So the normal call, the immutable ledger `original.params` and the replay `original` all carry the canonical shape.
+- **`live/test/support.ts`:**
+  - the reference encoder reads the flat fields;
+  - the fixture transport translates a flat move back into the fixture Planner's own call record.
+- **`live/test/adapter.test.ts`** has a new test, covering all three anchor kinds:
+  - the move is sent flat;
+  - the lost move's frozen intent and its replay original are the same flat params, encoded to `{"revision":N,"status":"active","place":"top"}`.
+- **`live/test/canonical-shape.test.ts`** is new. It is a synthetic compile-time binding of every route's params, the mutation call, the response and the transport call to the canonical shape. It is stated independently, not copied, and `npm run typecheck` fails on drift.
+
+**Unchanged:**
+
+- no automatic resend;
+- Check as lookup, and Apply as an explicit resend only after `not_applied`;
+- the original baseline;
+- the recorded byte identity, since transcript exchanges 09 and 10 still pass byte for byte.
+
+**Out-of-repo check.** In a temporary directory outside the repository (since deleted), the local types were compared with the frozen object. The comparison covered every route's params, `WorkMutationCall`, `ServiceResponse` and `ServiceResponse<string>`, both route unions, `WorkServiceTransport` and `WORK_SERVICE_ROUTES`. All were mutually identical. A negative control confirmed that the old nested-anchor shape is rejected.
+
+Identity with the shared file itself, on the combined base, remains integration work.
 
 ## Deferred findings (out of cone, original severity)
 
@@ -157,7 +204,7 @@ These are the final-candidate runs on 2026-10-20. About 39 GiB of RAM was availa
   - Its "Re-send same request" button shows for every `awaiting_decision` entry. The store now refuses that action unless a lookup proved `not_applied`, so it is safe but mislabelled.
   - Minimal fix, for the views owner: correct the copy, and gate the button on `store.canApply`.
 - **Low, board and views.** No "Not connected" settings action exists; Design owns it.
-- **Low, shared contract.** Type identity with Design's `services.ts` is pending; see the dispositions above.
+- **Low, shared contract.** The local transport now mirrors the frozen `services.ts` at `dccb498`, as checked out of repo and bound in `canonical-shape.test.ts`. Identity on the combined base is still integration work.
 - **Low, adapter.** The retired-ID set grows for the life of the session. It holds IDs only.
 
 ## What remains unverified

@@ -5,7 +5,7 @@ import {
 } from '../core/port';
 import {
   ENTITY_ID_PATTERN, isServiceResponse, REQUEST_ID_PATTERN,
-  type PlannerTransport, type ServiceResponse, type WorkMutationCall, type WorkParams, type WorkRoute,
+  type PlannerTransport, type ServiceResponse, type WorkMutationCall, type WorkParams, type WorkRoute, type WorkServiceParams,
 } from './transport';
 import {
   canonicalFields, canonicalSettings, decodeCurrent, decodeError, decodeHistory, decodeReplay, decodeSettingsWrite,
@@ -238,13 +238,17 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
     return fail(error);
   }
 
-  const fields = <T extends object>(value: T): T => {
+  // Domain typing and validation end here: the bridge carries plain records, as the shared boundary defines them.
+  const fields = (value: object): Readonly<Record<string, unknown>> => {
     const checked = canonicalFields(value as never, observedFeatures ?? []);
-    return checked.ok ? checked.value as T : fail(checked.error);
+    return checked.ok ? checked.value as Readonly<Record<string, unknown>> : fail(checked.error);
   };
-  const anchorOf = (anchor: Anchor): Anchor => {
+  /** The anchor as the flat move fields: exactly one of `after_id`, `before_id` or `place`. */
+  const anchorOf = (anchor: Anchor): Pick<WorkServiceParams['move'], 'after_id' | 'before_id' | 'place'> => {
     const a = anchor as { after_id?: string; before_id?: string; place?: 'top' | 'bottom' };
-    return (a.after_id !== undefined ? { after_id: a.after_id } : a.before_id !== undefined ? { before_id: a.before_id } : { place: a.place }) as Anchor;
+    if (a.after_id !== undefined) return { after_id: a.after_id };
+    if (a.before_id !== undefined) return { before_id: a.before_id };
+    return a.place !== undefined ? { place: a.place } : {};
   };
 
   const port: PlannerPort = {
@@ -261,7 +265,7 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
       return await write({ route: 'patch', params: { id, requestId, revision, patch: fields(patch) } }) as WriteResult;
     },
     async move(id, revision, status, anchor, requestId) {
-      return await write({ route: 'move', params: { id, requestId, revision, status, anchor: anchorOf(anchor) } }) as WriteResult;
+      return await write({ route: 'move', params: { id, requestId, revision, status, ...anchorOf(anchor) } }) as WriteResult;
     },
     async setArchived(id, revision, archived, requestId) {
       return await write({ route: archived ? 'archive' : 'restore', params: { id, requestId, revision } }) as WriteResult;
@@ -270,7 +274,7 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
       return await write({ route: 'reviewed', params: { id, requestId, revision } }) as WriteResult;
     },
     async updateSettings(settings, requestId) {
-      return await write({ route: 'settings', params: { requestId, settings: canonicalSettings(settings) } }) as SettingsWriteResult;
+      return await write({ route: 'settings', params: { requestId, settings: canonicalSettings(settings) as Readonly<Record<string, unknown>> } }) as SettingsWriteResult;
     },
   };
 
