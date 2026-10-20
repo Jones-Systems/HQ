@@ -1,11 +1,14 @@
 import type { ModulePort } from '@hq/contracts';
+import { WorkDomain } from './nav';
 
-/** R1 skeleton entry. WRK-B replaces it with the Work domain (task.work-domain.001). */
-export function WorkModule({ context, destination }: ModulePort) {
-  return <section className="module-slot" aria-labelledby="work-module-title">
-    <span className="eyebrow">Work module</span>
-    <h1 id="work-module-title">Work is available.</h1>
-    <p>No Planner is connected yet. The board, planning views and card details arrive as the Work lanes land.</p>
-    <dl><dt>Project</dt><dd>{context.name}</dd><dt>Destination</dt><dd>{destination}</dd><dt>Status</dt><dd>Available · no data</dd></dl>
-  </section>;
+/**
+ * The Work domain entry for the HQ module registry (task.work-domain.001). It takes exactly T0's `ModulePort`; its
+ * state lives in the module-level Work session for `context.id`, so the shell remounting it on a domain switch
+ * restores page, filters, selection, scroll and unsaved text. No Planner service is reachable yet, so it shows the
+ * fictional example planning, labelled as such. Nothing in Work can start a run: its Planner port has no execution member.
+ */
+export function WorkModule(props: ModulePort) {
+  return <WorkDomain {...props} />;
 }
+
+export default WorkModule;
