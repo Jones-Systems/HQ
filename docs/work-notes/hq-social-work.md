@@ -226,6 +226,30 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
       - a closed seven-method preload/IPC with host-only refresh and the `home` migration.
     - Still held: no further work is released. C, the shared seam, private validation, corpus, config, repairs, merge, live and install all stay held; PR #41's publication does not release C. The common accepted Design+Social/Work base and the named shared-writer prerequisites remain.
   - Lifecycle gap: both children report to WK-C's thread. T1's `task_status` returns `task_not_found` for these grandchildren, so T1 read their results through WK-C's follow-up runs and the children's native threads.
+- **Owner supersession: working-app assignment** (2026-10-20, relayed by the root from the portfolio root's owner message).
+  - The earlier project-level holds on joint work, merge and install are superseded.
+  - The portfolio root alone owns every PR merge, plus base and stack metadata.
+  - Design owns C's seven root files and the specifically bounded App, styles and deactivate work.
+  - Social/Work owns module and runtime repairs only, with no shared-file edits.
+  - S (`562986d`) and all earlier candidates are preserved.
+- **Social runtime builder released** (one child, the third new descendant under the cap of 12). It continues `task.social-live-adapter.001` as module source readiness over an injected closed transport.
+  - Route: B's post-completion follow-up makes B a launch-only coordinator. B makes no source, Git, test or fetch effects. The child starts at S through native worktree isolation.
+  - Target: Opus 5.5 / high / `fastMode: false`. No further descendants.
+  - Writer cone:
+    - `modules/social/live/**`;
+    - `modules/social/nav/workspace.ts`;
+    - `modules/social/index.tsx`;
+    - module-owned selection tests in `modules/social/nav/test/**`;
+    - `docs/evidence/hq-social-work/social-runtime/**`.
+  - Widening into Social core or session needs a proposed exact delta first.
+  - Design:
+    - `createLiveSocialPort(transport)` over a local structural mirror of `iface.service-bridge.001`. HTTP failures keep their body.
+    - No renderer endpoint or token. `submitRun` is never retried, and malformed results or exceptions yield `unknown`.
+    - The source is chosen once per window, with no silent fallback from live to fixture, and no endpoint-settings or status method.
+  - Research reads Git objects only, from `growth-intel` at `3f647dac` (`apps/social_dashboard/` and `docs/social-growth-dashboard.md`). No `data/`, no private records and no copied code.
+  - PR: one open, non-draft, cone-only PR based on `t3/social-work-domain-assembly` at S.
+  - Unverified: Electron, the real bridge or service, and persistence.
+  - Still not released: another Work child, whose exact capsule is to follow. The root keeps the shared-bridge agreement and the portfolio fan-in.
 - **B released** after A's acceptance. Its compiled capsule is `3d935de4…` at plan head `00afa36e`, with the actual ready set exactly `{domain-integration}`.
 - **B completed; the root accepted it as S** (2026-10-20) for bounded fixture/source use. This is not independent review, native proof or green CI.
   - Candidate: PR #36, branch `t3/social-work-domain-assembly` (local, remote and PR head all agree), head `562986d1852d7b4ef101ff6d4c9340c3751c727a`. Its base is this branch, which was at `cec5d07` when it opened; B started at `a385a6f`. Open, non-draft and mergeable, with zero configured checks; merge held.
