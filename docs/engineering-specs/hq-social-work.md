@@ -858,9 +858,11 @@ The 13 captures and zero-execution checks are **mockup evidence** against an in-
 | `work-core` | WRK-P | `a8c791a877bd28974894e1d48913d0ff460b6f00` | inside `work/hq-work-planner` |
 | `work-views` | WRK-P | `8a3261dbd0d98dac3553ffc594cd8a88cc4dcb04` | `work/hq-work-planner`, PR #26 → plan branch |
 | `work-board` | WRK-B | `3ca74d7479283d8ac7acf7c363bd262f34578ed4` | `work/hq-work-board`, PR #28 → `work/hq-work-planner` |
-| `work-domain` | — | not started | — |
+| `work-domain` | Work-domain child | `3426da769ca6a5cf1ba561859039b14fc745457a` | `t3/work-domain-integration`, PR #31 → `work/hq-work-board` |
 
 **Notes on individual candidates.**
+
+- **Work domain.** It was accepted by T1's fan-in (2026-10-20) for fixture/source use. It contains `72854ab` and `3ca74d7` via merge `8c2f841`, with authored paths in scope and dependency trees byte-identical. Author-reported checks: Work 391 tests in 23 files, full 465 in 33. WD-1/2 (P3): a switch commits only an already pending explicit detail edit; with none pending, it writes nothing.
 
 - **Social domain.** Its native branch label is stale; physical branch guards are recorded by the root.
 - **Work board.** It includes the normal dependency merge `3654a5a862b6896811cb265c3196b1fdd54b7e2d`, whose parents are exactly `8cdb95e` and `8a3261d`. That merge cleared PR #28's earlier conflict, which had two merge bases.
