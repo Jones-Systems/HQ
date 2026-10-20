@@ -394,7 +394,7 @@ Atomicity is `insertIfAbsent` on the receipt primary key (`EventSink.ts:1684`); 
 <!-- codex-section:begin id="spec.jones-client-launch#ctx.change-surface.001" -->
 ## Exact Change Surface And Ownership
 
-The writer cone is **24 entries covering 35 physical paths** (W19 names three files; W21 names four fixture files; W23 names five registry files; W24 names three ledger fixtures). The task's machine write scope names W8–W12 by their directory `apps/server/src/jones/mcp/clientLaunch/`, which this feature created and which holds exactly those five files; that keeps the scope within the compiler's 32-entry bound. No other file may be created there. All paths are relative to the Jones Code repository root. Anything outside the cone needs a T1 rebind.
+The writer cone is **24 entries covering 35 physical paths** (W19 names three files; W21 names four fixture files; W23 names five registry files; W24 names three ledger fixtures). The task's machine write scope names W8–W12 by one parent-directory claim, `apps/server/src/jones/mcp/clientLaunch` (no trailing slash, as the compiler's path rules require). This feature created that directory, and it holds exactly those five files. The claim keeps the scope within the compiler's 32-entry bound. No other file may be created under it. All paths are relative to the Jones Code repository root. Anything outside the cone needs a T1 rebind.
 
 | # | Path | Class after change | Content |
 | --- | --- | --- | --- |
@@ -685,7 +685,7 @@ No sudo, credential, private-state or production effect is part of this task.
     "apps/server/src/jones/persistence/Migrations/112_JonesClientLaunchRequests.ts",
     "apps/server/src/jones/persistence/Migrations/112_JonesClientLaunchRequests.test.ts",
     "apps/server/src/jones/persistence/JonesMigrations.ts",
-    "apps/server/src/jones/mcp/clientLaunch/",
+    "apps/server/src/jones/mcp/clientLaunch",
     "apps/server/src/orchestration-v2/ThreadLaunchService.ts",
     "apps/server/src/jones/orchestration/ThreadLaunchService.jones.test.ts",
     "apps/server/src/mcp/toolkits/project/tools.ts",
@@ -747,7 +747,7 @@ No sudo, credential, private-state or production effect is part of this task.
     "No PR review bots, credentials, live OAuth, session stores, installed-app update, sudo or deployment effect.",
     "F3 (P2, Scratch folder allocation before the create/fence winner) stays deferred with its original severity and blocking claim: no Scratch allocation change and no narrowed Scratch contract.",
     "W22 adds no cast, suppression, any/unknown erasure, narrowed service subset, compiler or config change and no server.ts edit; the direct initializer annotation and the effectDiscard form are rejected.",
-    "apps/server/src/jones/mcp/clientLaunch/ stands for exactly the five W8-W12 files; create no other file there.",
+    "The write-scope claim apps/server/src/jones/mcp/clientLaunch covers exactly the five W8-W12 files; create no other file under it.",
     "W23 adds only mcp__t3-code__t3_thread_launch_lookup to the Claude read-only allowlist (never fence, launch or a wildcard), the lookup and fence presentation entries and the thread-launch-resolve summary case; W24 adds only the 112 ClientLaunchRequests row to each exact ledger, never a derived expectation; no tooling, workflow, runtime, migration, protocol, schema or W22 change."
   ],
   "stop_conditions": [
