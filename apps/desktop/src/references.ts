@@ -30,6 +30,8 @@ export function createReferencePort(providers: readonly ReferenceProvider[], nav
     let resolution: ReferenceResolution;
     try { const value = await provider.resolve(envelope); resolution = validResolution(value) && fresh(value) ? { ...value } : unknown(); }
     catch { resolution = { status: 'unavailable', observedAt: new Date(now()).toISOString() }; }
+    // A failed or inconclusive read is never cached, so the next resolve asks the provider again.
+    if (resolution.status === 'unavailable' || resolution.status === 'unknown') { cache.delete(key(envelope)); return { ...resolution }; }
     if (cache.size >= 256) cache.delete(cache.keys().next().value!);
     cache.set(key(envelope), { projectId: envelope.projectId, revision: envelope.sourceRevision, resolution });
     return { ...resolution };

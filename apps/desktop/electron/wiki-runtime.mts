@@ -1,5 +1,6 @@
 /** Emitted separately with the Wiki core. Configuration, index migration and refresh are main-only. */
-import { mkdir, readFile, writeFile, rename, lstat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, writeFile, rename, lstat, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createWikiHost, createNodeGitObjectSource, validateSourceProfile, type IndexStore, type GitObjectSource } from '../../../modules/wiki/core/src/index.ts';
 import { WIKI_SERVICE_METHODS, type WikiNamespace, type WikiService } from '../../../modules/wiki/contract/src/index.ts';
@@ -15,9 +16,12 @@ async function read(path: string): Promise<unknown> {
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
 }
 async function atomic(path: string, value: unknown) {
-  const temporary = path + '.new';
-  await writeFile(temporary, JSON.stringify(value), { flag: 'wx', mode: 0o600 });
-  await rename(temporary, path);
+  // A unique sibling: residue from an interrupted write can never block a later write.
+  const temporary = `${path}.${randomUUID()}.new`;
+  try {
+    await writeFile(temporary, JSON.stringify(value), { flag: 'wx', mode: 0o600 });
+    await rename(temporary, path);
+  } catch (error) { await rm(temporary, { force: true }); throw error; }
 }
 /** Only this app's userData/wiki is initialized/upgraded; no legacy-home search or source writes. */
 export async function openWikiRuntime(userData: string) {
