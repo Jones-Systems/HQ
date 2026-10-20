@@ -158,3 +158,11 @@ The root pinned-read `7ab7f2e` and named three executable capsule inconsistencie
 - **Actual, unbound:** work-domain, then domain-integration. The capsule digests are unchanged (`071dbea0…`, `3d935de4…`).
 - **Actual, fixture-satisfied:** the same five rounds as above, with `joint-root-checks` `0ccfd071…` (context 27,192) and `joint-assembly` `8fadffa4…` (context 31,640). No writer collisions.
 - **From scratch:** unbound gives six rounds; fixture-satisfied hits the same round-3 counterfactual stop.
+
+## Actual round after the Work-domain fan-in
+
+At commit `00afa36e1647f03bf3e3b7426954cff50e2e7cd4` (spec blob `8442f08687aa7e3ae727c92c493d90cdee06423d`), the accepted Work-domain candidate is bound in `ctx.integration-bindings.001`. It is fed to the compiler as an eleventh actual result: `t1-acceptance:work-domain@3426da769ca6`, with 22 in-scope changed paths against `3ca74d7`.
+
+- **Unbound:** the ready set is exactly `{domain-integration}`. Capsule `3d935de43099817703607d7664731c1d7328f86679c4a925e2df3ea93964402d`, 30,760 context bytes; no writer collision. All explicit tasks stay unreleased.
+- **Fixture-satisfied:** five rounds, all released, with no collisions.
+- **Context bound:** every context is ≤ 32 KiB. `work-domain`, now complete, is at 32,630.

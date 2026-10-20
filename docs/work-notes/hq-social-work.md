@@ -164,7 +164,18 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
   - Admission telemetry: CPU 19.50%, 44.23 GiB available.
   - Before any write, the child read back its binding: a separate native HQ worktree on its own branch at `72854ab`, clean. Its capsule is the compiled `071dbea0…`.
   - Native identities went to the root by native message only.
-- B is not launched.
+- **A completed and was accepted by T1's fan-in** (2026-10-20) for bounded fixture/source use. This is not independent review or green CI.
+  - Candidate: PR #31, native branch `t3/work-domain-integration`, head `3426da769ca6a5cf1ba561859039b14fc745457a`, base `work/hq-work-board` at `3ca74d7`. Open, non-draft and mergeable; merge held.
+  - Inspection: the remote head equals local, and the worktree is clean. Its ancestors include `72854ab`, `3ca74d7`, `8a3261d` and `935dedf`, with normal merge `8c2f841`. All 22 authored paths since that merge are in scope.
+  - Identity: the core, views, board, detail, capture, UI, contracts, apps and root trees are byte-identical to `3ca74d7`. The only other differences are T1 plan documents byte-identical to `72854ab`, the immutable PR #3 dependency.
+  - Evidence: a README and six light/dark/remount screenshots under the app CSP.
+  - Author-reported checks: `npm ci` with the lockfile unchanged; typecheck; Work 391 tests in 23 files; full 465 in 33; build.
+  - Deferred, not fixed: WD-1/WD-2 (P3) and WD-3 to WD-10 (P4). WD-1/2 were checked: a domain switch commits only an already pending explicit detail edit, and with none pending a switch writes nothing (asserted by `domain.test.tsx`).
+- **WK-C launched** (2026-10-20), under a separate bounded root release that extends the allowance to A+B+WK-C.
+  - Route: `delegate_task`, request `hq-wiki-contract-impl-20261020-r1`, target `claude-sonnet-5-5` / high, at `c67c23cd`.
+  - Cone: exactly `modules/wiki/contract/**`, read from the immutable PR #30 plan without merging it. Its PR goes against this branch.
+  - Acceptance belongs to the Wiki continuity owner.
+- **B released** after A's acceptance. Its compiled capsule is `3d935de4…` at plan head `00afa36e`, with the actual ready set exactly `{domain-integration}`.
 
 **Owner direction delta (relayed by the root, 2026-10-20).** The Social/Work stack is to sit on top of the Local Design Hub stack, with all our content made compatible on the Design shared base, not merely handed off in documentation.
 
