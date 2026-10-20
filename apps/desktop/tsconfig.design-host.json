@@ -14,5 +14,5 @@
     "rootDir": "../..",
     "outDir": "dist-electron/design-host"
   },
-  "files": ["../../modules/design/app/storage/node.ts", "design-host/compat.ts"]
+  "files": ["../../modules/design/app/storage/node.ts", "design-host/compat.ts", "../../modules/design/discovery/node/local-directory.ts"]
 }

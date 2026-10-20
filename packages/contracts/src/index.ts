@@ -37,6 +37,8 @@ export interface DesktopPort {
 
 /** React-free boundary; the desktop registry supplies ComponentType<ModulePort>. */
 export interface ModulePort {
+  readonly references?: import('./references.js').ReferencePort;
+  readonly returnContext?: import('./references.js').ReturnContext;
   readonly context: ProjectContext;
   readonly destination: string;
   readonly appearance: ResolvedAppearance;
