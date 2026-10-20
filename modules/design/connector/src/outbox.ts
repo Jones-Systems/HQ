@@ -9,6 +9,9 @@
  *   authoritative no-effect result is recorded and the owner confirms afresh.
  * - Reconciliation only reads back (lookup) and never sends.
  * - The bound host, receiver and model are never substituted.
+ * - Another route that already took the packet (a dispatch to a different
+ *   destination, or an owner-recorded manual handoff) fences a send until the
+ *   owner acknowledges it. History only adds fences; it never clears one.
  */
 
 import type { Digest } from './canonical.ts';
@@ -17,6 +20,7 @@ import type { SendConfirmation } from './confirmation.ts';
 import type { Attempt, AttemptState, DispatchRecord, Receipt } from './dispatch.ts';
 import type { Destination } from './host-catalog.ts';
 import type { DispatchId, PacketId } from './ids.ts';
+import type { ManualHandoffHistoryPort, ManualHandoffRecord, RouteSwitchAcknowledgement } from './route-fence.ts';
 import type { IneligibleCode } from './eligibility.ts';
 import { CanonicalJsonError, digestOf, isDigest } from './canonical.ts';
 import { DEFAULT_CONFIRMATION_TTL_MS } from './confirmation.ts';
@@ -27,6 +31,8 @@ import {
 } from './dispatch.ts';
 import { evaluateDestination } from './eligibility.ts';
 import { brandId } from './ids.ts';
+import { collectRouteSources, evaluateRouteFence } from './route-fence.ts';
+import { errorText, withTimeout } from './timeout.ts';
 import { isRecord } from './validate.ts';
 
 export interface PacketInput {
@@ -41,6 +47,8 @@ export interface SubmitRequest {
   /** The destination as currently shown from the host catalog. */
   readonly destination: Destination;
   readonly confirmation: SendConfirmation;
+  /** Needed only when the packet already went another way; see route-fence.ts. Absent in v1 requests. */
+  readonly routeSwitch?: RouteSwitchAcknowledgement;
 }
 
 export type RefusalCode =
@@ -49,6 +57,9 @@ export type RefusalCode =
   | 'unresolved-attempt'
   | 'already-handed-off'
   | 'packet-fenced'
+  | 'route-switch-unacknowledged'
+  | 'route-acknowledgement-mismatch'
+  | 'route-history-unavailable'
   | 'binding-changed'
   | 'identity-mismatch'
   | 'confirmation-mismatch'
@@ -83,6 +94,12 @@ export interface OutboxOptions {
   readonly confirmationTtlMs?: number;
   /** Verifies the packet body against its authoring digest. Defaults to JCS SHA-256 of `body`. */
   readonly verifyPacket?: (packet: PacketInput) => Promise<boolean>;
+  /**
+   * Owner-recorded manual handoffs (requests owns the history). When given, a
+   * packet with manual history needs a route-switch acknowledgement, and an
+   * unreadable history refuses the send. Omitted in v1 composition.
+   */
+  readonly manualHandoffs?: ManualHandoffHistoryPort;
 }
 
 export interface Outbox {
@@ -94,26 +111,6 @@ export interface Outbox {
   get(dispatchId: DispatchId): Promise<DispatchRecord | null>;
   list(): Promise<readonly DispatchRecord[]>;
   dispatchIdFor(packet: { readonly packetId: PacketId; readonly packetDigest: Digest }, destination: Destination): Promise<DispatchId>;
-}
-
-class TimeoutError extends Error {
-  override readonly name = 'TimeoutError';
-}
-
-async function withTimeout<T>(ms: number, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
-  const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const expired = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      controller.abort();
-      reject(new TimeoutError(`Timed out after ${ms} ms`));
-    }, ms);
-  });
-  try {
-    return await Promise.race([run(controller.signal), expired]);
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 function isReceipt(value: unknown, idempotencyKey: string, status: Receipt['status']): value is Receipt {
@@ -131,10 +128,6 @@ function definiteSend(outcome: unknown, idempotencyKey: string): SendOutcome | n
     return { kind: outcome.kind, receipt: outcome.receipt };
   }
   return null;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? `${error.name}: ${error.message}` : 'non-error failure';
 }
 
 export function createOutbox(options: OutboxOptions): Outbox {
@@ -228,6 +221,27 @@ export function createOutbox(options: OutboxOptions): Outbox {
         return refused('confirmation-not-fresh', 'A new attempt needs a confirmation made after the previous attempt was resolved.', dispatchId);
       }
     }
+
+    // Route-switch fence: another destination's effect or a manual handoff needs an explicit acknowledgement.
+    // Unresolved attempts were refused above and are never acknowledgeable.
+    let manual: readonly ManualHandoffRecord[] = [];
+    if (options.manualHandoffs) {
+      try {
+        manual = await options.manualHandoffs.listForPacket(packet.packetId);
+      } catch (error) {
+        return refused('route-history-unavailable', `The manual handoff history could not be read, so nothing was sent (${errorText(error)}).`, dispatchId);
+      }
+    }
+    const routeFence = evaluateRouteFence({
+      confirmation,
+      sources: collectRouteSources({
+        packetId: packet.packetId, destinationId: destination.destinationId,
+        dispatches: all.map((item) => item.record), manualHandoffs: manual,
+      }),
+      acknowledgement: request.routeSwitch,
+      now: clock.now(),
+    });
+    if (!routeFence.ok) return refused(routeFence.code, routeFence.reason, dispatchId);
 
     const at = nowIso();
     const ordinal = (existing?.record.attempts.length ?? 0) + 1;

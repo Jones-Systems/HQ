@@ -7,11 +7,12 @@
  * treat it as a real Jones transport.
  */
 
-import type { Clock, EvidenceStorePort, Handoff, LookupOutcome, ObservedIdentity, OutboxStorePort, PutResult, SendOutcome, StoredDispatch, TransportDescriptor, TransportPort } from './contract.ts';
+import type { Clock, EvidenceChange, EvidenceFeedPort, EvidenceReadbackOutcome, EvidenceReadbackPort, EvidenceReadbackQuery, EvidenceStorePort, Handoff, LookupOutcome, ObservedIdentity, OutboxStorePort, PutResult, SendOutcome, StoredDispatch, TransportDescriptor, TransportPort } from './contract.ts';
 import type { DispatchRecord, Receipt } from './dispatch.ts';
 import type { EvidenceEntry, ResultEvidence } from './evidence.ts';
 import type { Destination, DestinationEndpoint, HostCatalog, ModelPin } from './host-catalog.ts';
 import type { DestinationId, DispatchId, EvidenceId, HostId, PacketId, ReceiptId, ReceiverId, ThreadRef } from './ids.ts';
+import type { ManualHandoffHistoryPort, ManualHandoffRecord } from './route-fence.ts';
 import type { Digest } from './canonical.ts';
 import { digestOf } from './canonical.ts';
 import { FAKE_RECEIVER_LABEL } from './eligibility.ts';
@@ -65,16 +66,20 @@ export type FakeSendFault =
 /** authoritative: absent keys are fenced and reported no-effect; absence-only: plain not-found; unavailable: readback fails. */
 export type FakeLookupMode = 'authoritative' | 'absence-only' | 'unavailable';
 
-export interface FakeReceiver extends TransportPort {
+export interface FakeReceiver extends TransportPort, EvidenceReadbackPort {
   /** Effects: handoffs the receiver durably took (accepted or held). */
   readonly handoffs: readonly Handoff[];
   readonly calls: { readonly identify: number; readonly send: number; readonly lookup: number };
+  /** Evidence readbacks served; kept out of `calls` so that v1 shape is unchanged. */
+  evidenceReads(): number;
   failNextSend(fault: FakeSendFault): void;
   setLookupMode(mode: FakeLookupMode): void;
   setIdentity(identity: ObservedIdentity): void;
   /** Mark a held receipt accepted, as a later receiver-side decision would. */
   promoteHeld(idempotencyKey: string): void;
   receiptFor(idempotencyKey: string): Receipt | null;
+  /** Make raw evidence documents available to `readEvidence` for one idempotency key (replaces earlier ones). */
+  returnEvidence(idempotencyKey: string, documents: readonly unknown[]): void;
 }
 
 export function createFakeReceiver(options: {
@@ -94,7 +99,9 @@ export function createFakeReceiver(options: {
   const handoffs: Handoff[] = [];
   const ledger = new Map<string, Receipt>();
   const fenced = new Set<string>();
+  const evidenceLedger = new Map<string, readonly unknown[]>();
   const calls = { identify: 0, send: 0, lookup: 0 };
+  let evidenceReads = 0;
   const at = () => new Date(options.clock.now()).toISOString();
 
   function record(handoff: Handoff, status: Receipt['status'], overrides: { model?: ModelPin | null; hostId?: HostId } = {}): Receipt {
@@ -120,6 +127,7 @@ export function createFakeReceiver(options: {
     descriptor,
     handoffs,
     calls,
+    evidenceReads: () => evidenceReads,
     failNextSend(fault) { nextFault = fault; },
     setLookupMode(mode) { lookupMode = mode; },
     setIdentity(value) { identity = value; },
@@ -128,6 +136,7 @@ export function createFakeReceiver(options: {
       if (receipt && receipt.status === 'held') ledger.set(key, { ...receipt, status: 'accepted' });
     },
     receiptFor(key) { return ledger.get(key) ?? null; },
+    returnEvidence(key, documents) { evidenceLedger.set(key, structuredClone(documents)); },
 
     async identify(_endpoint: DestinationEndpoint): Promise<ObservedIdentity> {
       calls.identify += 1;
@@ -167,6 +176,14 @@ export function createFakeReceiver(options: {
       // Authoritative: fence the key so a delayed delivery can never take effect later.
       fenced.add(query.idempotencyKey);
       return { kind: 'no-effect', basis: 'fake ledger has no entry; key fenced' };
+    },
+
+    async readEvidence(query: EvidenceReadbackQuery): Promise<EvidenceReadbackOutcome> {
+      evidenceReads += 1;
+      options.trace?.push('transport', 'readEvidence');
+      if (lookupMode === 'unavailable') return { kind: 'unavailable', detail: 'fake readback unavailable' };
+      const documents = evidenceLedger.get(query.idempotencyKey);
+      return documents && documents.length > 0 ? { kind: 'found', documents: structuredClone(documents) } : { kind: 'none-yet' };
     },
   };
 }
@@ -212,8 +229,14 @@ export function createMemoryOutboxStore(options: { readonly backing?: Map<string
   };
 }
 
-export function createMemoryEvidenceStore(): EvidenceStorePort & { readonly entries: readonly EvidenceEntry[] } {
+export interface MemoryEvidenceStore extends EvidenceStorePort, EvidenceFeedPort {
+  readonly entries: readonly EvidenceEntry[];
+}
+
+/** Append-only fake evidence store that also serves the read-only feed (list and subscribe). */
+export function createMemoryEvidenceStore(): MemoryEvidenceStore {
   const entries: EvidenceEntry[] = [];
+  const listeners = new Set<(change: EvidenceChange) => void>();
   return {
     entries,
     async get(evidenceId: EvidenceId) {
@@ -223,12 +246,57 @@ export function createMemoryEvidenceStore(): EvidenceStorePort & { readonly entr
     async append(entry: EvidenceEntry) {
       if (entries.some((item) => item.evidence.evidenceId === entry.evidence.evidenceId)) return 'exists';
       entries.push(structuredClone(entry));
+      const change: EvidenceChange = { kind: 'appended', evidenceId: entry.evidence.evidenceId, dispatchId: entry.evidence.dispatchId };
+      for (const listener of [...listeners]) {
+        try {
+          listener(change);
+        } catch {
+          // A faulty listener must not affect the append or other listeners.
+        }
+      }
       return 'appended';
     },
     async listByDispatch(dispatchId: DispatchId) {
       return entries.filter((entry) => entry.evidence.dispatchId === dispatchId).map((entry) => structuredClone(entry));
     },
+    async list(query) {
+      return entries
+        .filter((entry) => query?.dispatchId === undefined || entry.evidence.dispatchId === query.dispatchId)
+        .map((entry) => structuredClone(entry));
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
   };
+}
+
+/** Fake read-only manual handoff history, standing in for the requests-owned record. */
+export function createMemoryManualHandoffHistory(initial: readonly ManualHandoffRecord[] = []): ManualHandoffHistoryPort & {
+  readonly records: ManualHandoffRecord[];
+  failNextRead(): void;
+  readonly reads: () => number;
+} {
+  const records = [...initial];
+  let failing = false;
+  let reads = 0;
+  return {
+    records,
+    reads: () => reads,
+    failNextRead() { failing = true; },
+    async listForPacket(packetId: PacketId) {
+      reads += 1;
+      if (failing) {
+        failing = false;
+        throw new Error('fake manual history read fault');
+      }
+      return records.filter((record) => record.packetId === packetId).map((record) => structuredClone(record));
+    },
+  };
+}
+
+export function syntheticManualHandoff(packet: { readonly packetId: PacketId; readonly packetDigest: Digest }, recordId = 'manual.synthetic-1', recordedAt = '2026-01-01T00:00:00.000Z'): ManualHandoffRecord {
+  return { recordId, packetId: packet.packetId, packetDigest: packet.packetDigest, recordedAt };
 }
 
 // ── Synthetic fixtures ───────────────────────────────────────────────────────

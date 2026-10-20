@@ -5,7 +5,7 @@
  */
 
 import type { Digest } from './canonical.ts';
-import type { AttemptId, DestinationId, DispatchId, EvidenceId, HostId, PacketId, ReceiverId, ThreadRef } from './ids.ts';
+import type { AttemptId, DestinationId, DispatchId, EvidenceId, HostId, PacketId, ReceiptId, ReceiverId, ThreadRef } from './ids.ts';
 import type { DestinationEndpoint, ModelPin, TransportKind } from './host-catalog.ts';
 import type { DispatchRecord, Provenance, Receipt } from './dispatch.ts';
 import type { EvidenceEntry } from './evidence.ts';
@@ -124,3 +124,52 @@ export interface EvidenceStorePort {
   append(entry: EvidenceEntry): Promise<'appended' | 'exists'>;
   listByDispatch(dispatchId: DispatchId): Promise<readonly EvidenceEntry[]>;
 }
+
+// ── Returned-evidence list, subscription and readback ────────────────────────
+
+/** A change in the evidence store. Delivered after the entry is durable. */
+export interface EvidenceChange {
+  readonly kind: 'appended';
+  readonly evidenceId: EvidenceId;
+  readonly dispatchId: DispatchId;
+}
+
+/**
+ * Read-only view of the append-only evidence store: list everything, or one
+ * dispatch, and be told about new entries. It has no write and no transport.
+ * `subscribe` returns an idempotent unsubscribe; a throwing listener must not
+ * affect other listeners or the append.
+ */
+export interface EvidenceFeedPort {
+  list(query?: { readonly dispatchId?: DispatchId }): Promise<readonly EvidenceEntry[]>;
+  subscribe(listener: (change: EvidenceChange) => void): () => void;
+}
+
+export interface EvidenceReadbackQuery {
+  readonly endpoint: DestinationEndpoint;
+  readonly dispatchId: DispatchId;
+  readonly attemptId: AttemptId;
+  readonly idempotencyKey: string;
+  readonly receiptId: ReceiptId;
+}
+
+/**
+ * `found.documents` are raw, untrusted `result-evidence/v1` candidates that
+ * still pass strict intake. `none-yet` is plain absence and proves nothing.
+ */
+export type EvidenceReadbackOutcome =
+  | { readonly kind: 'found'; readonly documents: readonly unknown[] }
+  | { readonly kind: 'none-yet' }
+  | { readonly kind: 'unavailable'; readonly detail: string };
+
+/**
+ * Read-only readback of returned evidence by idempotency key. Deliberately
+ * not a TransportPort: it has no `send` and no `identify`, so polling cannot
+ * reach the execution effect.
+ */
+export interface EvidenceReadbackPort {
+  readonly descriptor: TransportDescriptor;
+  readEvidence(query: EvidenceReadbackQuery, signal: AbortSignal): Promise<EvidenceReadbackOutcome>;
+}
+
+export type EvidenceReadbackRegistry = Readonly<Partial<Record<TransportKind, EvidenceReadbackPort>>>;
