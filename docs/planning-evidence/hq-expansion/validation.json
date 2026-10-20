@@ -1,7 +1,7 @@
 {
   "status": "PROJECTION",
-  "source_revision": "e78a19632c56cc3a9dc87d53e9f36ab01806e948",
-  "spec_blob_oid": "a4e5818f2f17b33dd3e64e14ef28b6c9c0dff31d",
+  "source_revision": "8eed17bd2346df6fb51944a42d58a8f6c6a4a8be",
+  "spec_blob_oid": "c3525d0df9b05c18c43c7e84ddb335758f24700c",
   "tasks": 11,
   "test_intents": 11,
   "rounds": [
@@ -15,7 +15,7 @@
       ],
       "capsule_drafts": 4,
       "assignment_drafts": 4,
-      "rendered_bytes": 65319
+      "rendered_bytes": 65364
     },
     {
       "round": 2,
@@ -26,7 +26,7 @@
       ],
       "capsule_drafts": 3,
       "assignment_drafts": 3,
-      "rendered_bytes": 50332
+      "rendered_bytes": 69812
     },
     {
       "round": 3,
@@ -36,7 +36,7 @@
       ],
       "capsule_drafts": 2,
       "assignment_drafts": 2,
-      "rendered_bytes": 34212
+      "rendered_bytes": 34378
     },
     {
       "round": 4,
