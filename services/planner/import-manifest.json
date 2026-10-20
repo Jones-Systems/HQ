@@ -1,0 +1,341 @@
+{
+  "schema": "hq.planner-import/v1",
+  "source_repository": "Jones-Systems/Codex-V3",
+  "source_revision": "abfa34ce793a738b436ff857dfe695a2e13ef2c3",
+  "files": [
+    {
+      "source_path": "apps/manual-planner/.gitignore",
+      "dest_path": "services/planner/.gitignore",
+      "git_blob": "9fea3fa476cfa213a9968829ee5aa81256b40eb1",
+      "sha256": "52130d194dca5fe88b655ec5a0e3548da262609a1cf3f9f4c35a40bf7b2daf5d",
+      "bytes": 134,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/README.md",
+      "dest_path": "services/planner/README.md",
+      "git_blob": "8a08b2a5652930ddd2e4f0872b2a88100c46e499",
+      "sha256": "01ffd4c96035d79c31925c00372ff7d384998e97459bcb22e72d143a0c7b2f29",
+      "bytes": 17115,
+      "adapted": true
+    },
+    {
+      "source_path": "apps/manual-planner/planning/__init__.py",
+      "dest_path": "services/planner/planning/__init__.py",
+      "git_blob": "7527ca10c6c85a8495c5960efc772dd073f7265f",
+      "sha256": "5d2911776ace315afd0c3194b3626ffe970c48ae60036c381cef518a67860a54",
+      "bytes": 78,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/planning/__main__.py",
+      "dest_path": "services/planner/planning/__main__.py",
+      "git_blob": "5e49c0d534b96d3c11201a5b9fc6dbe01e2ceae2",
+      "sha256": "c08c8a21f6c0d0f8afa866488ea3ca4c69c51105549c169631ef623fa2ec130a",
+      "bytes": 2671,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/planning/dates.py",
+      "dest_path": "services/planner/planning/dates.py",
+      "git_blob": "451df39ee0a972cfe3f86fef0716a6e1eac80d98",
+      "sha256": "b9dae5ca6084eac2a2c9de29a74c4a6a3c37538ae98facd25f14ab05bf71de53",
+      "bytes": 9549,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/planning/examples.py",
+      "dest_path": "services/planner/planning/examples.py",
+      "git_blob": "bd25903914bd377a920d4fc954df014cd571a5b3",
+      "sha256": "f67a47094358d602065e058a6dbfe4a0477fccfc21a7971796cb12542159576f",
+      "bytes": 3358,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/planning/server.py",
+      "dest_path": "services/planner/planning/server.py",
+      "git_blob": "b9e259ed8b3e1235da04f9316ac3da259e763125",
+      "sha256": "78db41ef7198379f3ead564f7ee000182128258fbf6d137da946de50deca6b2d",
+      "bytes": 15980,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/planning/store.py",
+      "dest_path": "services/planner/planning/store.py",
+      "git_blob": "44f056644d882bc2694556e9e684ff89b05dbcc2",
+      "sha256": "b3721ce5f8e3631e70e7052152705037fb13f88923b93528a01dd15b477a5dc7",
+      "bytes": 38756,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/planning/validation.py",
+      "dest_path": "services/planner/planning/validation.py",
+      "git_blob": "4b18559a653eaa2be67d60d3dada47e971562c8d",
+      "sha256": "24d2a0b3e1de7235bc7ed3c404a03c02c4c1c225ba1e5b4736bbf7465c1111d6",
+      "bytes": 12508,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/css/app.css",
+      "dest_path": "services/planner/public/css/app.css",
+      "git_blob": "52d3505cded1a1c3266fdac0a6128925025c1f9f",
+      "sha256": "bde2cba61b94b69533c69e44da6ffc4a2684191562f2a6bedddb934ec2fbf54f",
+      "bytes": 64050,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/icon.svg",
+      "dest_path": "services/planner/public/icon.svg",
+      "git_blob": "ab5338ca2ce9c275aa86d25d4573eca52608e9b1",
+      "sha256": "a63d44ffb6cfa74969dcbee79bf3717b2cdeeaaf28734fde66a1f8f6cef5407c",
+      "bytes": 336,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/index.html",
+      "dest_path": "services/planner/public/index.html",
+      "git_blob": "a67a6c29773656c892cbbfe1c46a1a161aa5ff61",
+      "sha256": "155442ae57bc312250d7a3aaebbddb6fc8e45c9e629fdd575a2db4fb61907d48",
+      "bytes": 1686,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/actions.js",
+      "dest_path": "services/planner/public/js/actions.js",
+      "git_blob": "54b75e7978ef1130f6b833e77300301f0a56bcba",
+      "sha256": "7b1c54038d1a8851268f164b77b34ffc6b360d310610c971845228c711c30d08",
+      "bytes": 7735,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/api.js",
+      "dest_path": "services/planner/public/js/api.js",
+      "git_blob": "c8ec185202717e2e1778fa638205782b9ee11f5f",
+      "sha256": "1dda68c6804de8a9340cb2ea036c502dfa9ed9ed7b59e21d70bb779eea0dd66e",
+      "bytes": 2152,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/app.js",
+      "dest_path": "services/planner/public/js/app.js",
+      "git_blob": "50da146566cdd45ab8ff4ee8c45f3e5aa15898ac",
+      "sha256": "4b1d23e735dbf709a3ea606e45ca8d2d541c6eb2951ed9ba190af3fe74061e8e",
+      "bytes": 40491,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/date-editor.js",
+      "dest_path": "services/planner/public/js/date-editor.js",
+      "git_blob": "dee1fb30089eab71a50b285e89b0ca9f426003db",
+      "sha256": "626bd0e5eea312c08baae42f6ebcb22a450d01673c6eec0cfe9048f1f60c15ae",
+      "bytes": 9973,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/dates.js",
+      "dest_path": "services/planner/public/js/dates.js",
+      "git_blob": "8932be4def432eec59b60427741a08ee4fe66db7",
+      "sha256": "390c39e8fda9c539a388cfac4675eca97356893e27dd36ae4f589767c954b903",
+      "bytes": 12752,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/detail.js",
+      "dest_path": "services/planner/public/js/detail.js",
+      "git_blob": "c761e806fbe83f2a31a6c3b89c612940dcb6da18",
+      "sha256": "373384526a6f49029bf14f7a5d6938a09be62d28f44cb55dfdd3e028ebe95a6c",
+      "bytes": 27352,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/dom.js",
+      "dest_path": "services/planner/public/js/dom.js",
+      "git_blob": "8c984e9f4041432d9ff7f52c19066faf248487cc",
+      "sha256": "959b9244701b7acab1dec50a2b1425fb4befd3780f2ee2df70d5dac2da751264",
+      "bytes": 7004,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/drag.js",
+      "dest_path": "services/planner/public/js/drag.js",
+      "git_blob": "be0d6c4371d36feb09fc2c6277533c3f74fbb9b7",
+      "sha256": "570ce236d06e74a5c453165f41c1126de24c0f042742e30a0eca7d2ae3b83755",
+      "bytes": 7992,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/model.js",
+      "dest_path": "services/planner/public/js/model.js",
+      "git_blob": "926a54e980b384901e50bcd7a20c488fca01ba2a",
+      "sha256": "fb24638a1a68b85c5f2185668c1335ec0403ee219cba75075f22fb1896041f80",
+      "bytes": 6575,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/ordering.js",
+      "dest_path": "services/planner/public/js/ordering.js",
+      "git_blob": "0415a2103a33f79679284e19c09fbf5a911ae5a5",
+      "sha256": "abf141543f18fcbaefe8abae92a3f35c295d4a093ab73c8eabe30da7d57d868b",
+      "bytes": 2759,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/state.js",
+      "dest_path": "services/planner/public/js/state.js",
+      "git_blob": "3b61c4dd6e6b8549f7df3cd1b81d2f47af9ff5df",
+      "sha256": "cfc43e08839ef8ea7b18f923bc67ec7d8968b8bbd37ac1c9af9166a42de981ca",
+      "bytes": 9656,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/ui.js",
+      "dest_path": "services/planner/public/js/ui.js",
+      "git_blob": "fe709536f97e26667e44ca56c95f509a0b2576fa",
+      "sha256": "198288e0c26c97ddee5ed8db212d45dcc750bf0ade3ea4f7c4abfa9994613828",
+      "bytes": 11972,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/views/archive.js",
+      "dest_path": "services/planner/public/js/views/archive.js",
+      "git_blob": "c971ac1d70fc457a61b39d5b4f37e79ca5c803ce",
+      "sha256": "61198d0edafa86b27024919a0ae0942bbd325339d9cf0b329cee3c3d908ce9c6",
+      "bytes": 1459,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/views/board.js",
+      "dest_path": "services/planner/public/js/views/board.js",
+      "git_blob": "8243eec895d5ada1471dcc7a92924747b0bfbdfc",
+      "sha256": "4c732d070fe200fd2c546032f83f5faaf2cd430d6a7d38bb7ff1d4644f783b53",
+      "bytes": 11039,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/views/calendar.js",
+      "dest_path": "services/planner/public/js/views/calendar.js",
+      "git_blob": "4f6dfd0018f1249a417b6faee3b52632952913db",
+      "sha256": "49fa993e475f4543359a1f05e48f8d6a0896df4a8347e8bcbc3325f803d181c3",
+      "bytes": 22123,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/views/common.js",
+      "dest_path": "services/planner/public/js/views/common.js",
+      "git_blob": "6f06a534adf68427e28a86d4ab40d6e26cf362c8",
+      "sha256": "48fc2428bfbdf689a804547ecc259afc0d56bff907bc6622028c490e6efad174",
+      "bytes": 7057,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/views/glance.js",
+      "dest_path": "services/planner/public/js/views/glance.js",
+      "git_blob": "e28d6166773d7c52183bc7a31268a7fa515adccd",
+      "sha256": "424a75ac01961d94179c55c37ba06acdf7753b028b466c67396330db0623105a",
+      "bytes": 10664,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/views/list.js",
+      "dest_path": "services/planner/public/js/views/list.js",
+      "git_blob": "1274453242e9dadb8d241ce99963a349a7bb633d",
+      "sha256": "957e15e6081fd84ccfa5d76bdb9d2ca8ccf935e28a9f74b68d984a2dc04b4ed1",
+      "bytes": 6184,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/views/review.js",
+      "dest_path": "services/planner/public/js/views/review.js",
+      "git_blob": "97f4c82b2ae358b7756222ec6395ccfbe8fee07c",
+      "sha256": "b81804c3c20a7e7c5f05b360aad8924c9abceac52ac943ab6d92c48132a177b1",
+      "bytes": 7013,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/js/views/timeline.js",
+      "dest_path": "services/planner/public/js/views/timeline.js",
+      "git_blob": "da35b436f4c97594d05457c2efa7dab05e772cb2",
+      "sha256": "cb2a54da435f357ed064d23d2fbeecb53fc42823e0207cba4d32a6a9aecc03e7",
+      "bytes": 10019,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/public/manifest.webmanifest",
+      "dest_path": "services/planner/public/manifest.webmanifest",
+      "git_blob": "a5a26514cff9b05150efe4b2d1542a2ee4663ade",
+      "sha256": "73079be614c9615f6413335f243c91fb94052a04331c4dd03c0da75872046c52",
+      "bytes": 247,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/tests/app_smoke.test.mjs",
+      "dest_path": "services/planner/tests/app_smoke.test.mjs",
+      "git_blob": "16c496530ae51636d1cc72cf53b2f96e9ac90b66",
+      "sha256": "09940088fcc83934008376343768e097f0b2562b50bcb9afdef6e5ebb2463d9a",
+      "bytes": 3710,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/tests/client_logic.test.mjs",
+      "dest_path": "services/planner/tests/client_logic.test.mjs",
+      "git_blob": "f3887b0f0feb8b26e1fb7d74d2c677c32401c293",
+      "sha256": "c1813044930eaefeae14bf56255746076e71b98bdf2346b370acf0809f9a5fbe",
+      "bytes": 5205,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/tests/display_zone.test.mjs",
+      "dest_path": "services/planner/tests/display_zone.test.mjs",
+      "git_blob": "2febcddf5fb90cd697c24a5b1b31b41f92f9c52e",
+      "sha256": "1a66111711cf3d2617171301f6101d168bb2214400acd6f343cdb015c7a556fb",
+      "bytes": 4744,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/tests/fake_dom.mjs",
+      "dest_path": "services/planner/tests/fake_dom.mjs",
+      "git_blob": "37feaaba5997b72756db13b1592666780dba1ad6",
+      "sha256": "e6d9b231fb95177845b151fcfe5d42206a47b1aea6efb3d412d3dfca13bbdfdf",
+      "bytes": 7016,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/tests/render_smoke.test.mjs",
+      "dest_path": "services/planner/tests/render_smoke.test.mjs",
+      "git_blob": "f41d4f3f89e81730887c8ebc467edad2391f2df8",
+      "sha256": "a1f901a4aa2e874dd3369ba39bedc0b4f2b84d4f4400434810485558a27e9a7b",
+      "bytes": 5279,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/tests/support.py",
+      "dest_path": "services/planner/tests/support.py",
+      "git_blob": "d9ecce5b7511772d87b325e681feabc6b7dd9425",
+      "sha256": "dda0cbdc0dccaad0acf94f3bb382da7d8ebc36e1f782ba40a10dc87f8f8d2274",
+      "bytes": 1640,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/tests/test_server.py",
+      "dest_path": "services/planner/tests/test_server.py",
+      "git_blob": "f7b90a938dfeb032354155e4293f3a0c24fa4f0f",
+      "sha256": "5c758f651e1406993a93e87e74d759656b048a8e5951e4cdfb7bf6aa1b847fae",
+      "bytes": 20238,
+      "adapted": false
+    },
+    {
+      "source_path": "apps/manual-planner/tests/test_store.py",
+      "dest_path": "services/planner/tests/test_store.py",
+      "git_blob": "26aae04126133569b4341ec3fc273e462cd420be",
+      "sha256": "a4bd449bb2bd557903f1f3138430b7141e9a33c7c3ac923dc8a26135328ac728",
+      "bytes": 24346,
+      "adapted": false
+    }
+  ],
+  "excluded": [
+    {
+      "path": "apps/manual-planner/provenance.json",
+      "reason": "Historical private coordination and QA inventory; replaced by public-safe HQ provenance."
+    }
+  ]
+}

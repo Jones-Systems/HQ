@@ -5,11 +5,31 @@ import {
 } from '../core';
 
 // Save and freshness state for the Work surfaces (RW-5, RW-9, RX-5). An
-// unconfirmed write is never shown as saved: it is reconciled only by re-sending
-// the same request, and a look-alike item is a flag, never proof.
+// unconfirmed write is never shown as saved and is never re-sent on its own.
+// Check asks the Planner whether it was saved and applies nothing. Only when that
+// proves it never landed may the user Apply it, which the Planner applies at most
+// once. A look-alike item is a flag, never proof.
 
 export const OFFLINE_BANNER = 'Planner service unreachable · changes paused';
 export const POSSIBLY_SAVED_NOTE = 'A similar item appeared since. It may be this change, but that is not proof either way.';
+export const APPLY_LABEL = 'Apply: save it now';
+
+const READ_BACK = 'Read the board back to see whether it was saved; nothing will be sent for it.';
+
+/** Why an unconfirmed write's row reads as it does; Apply appears only after a Check proved it never landed. */
+export function recoveryText(entry: UnconfirmedWrite): string {
+  if (entry.state === 'held') return 'Held · the Planner reported this request ID was reused';
+  if (entry.state === 'unconfirmed') return 'Unconfirmed · Check asks the Planner whether it was saved; nothing is re-sent';
+  const recovery = entry.recovery;
+  if (recovery?.kind === 'not_applied') return 'Checked · not saved. Apply saves it now; the Planner applies it at most once';
+  switch (recovery?.reason) {
+    case 'evicted': return `Cannot be checked · the Planner no longer keeps its record. ${READ_BACK}`;
+    case 'unsupported': return `Cannot be checked · this Planner offers no replay check. ${READ_BACK}`;
+    case 'no_baseline': return `Cannot be checked · no earlier Planner version was recorded for it. ${READ_BACK}`;
+    case 'no_intent': return `Cannot be checked · HQ no longer holds the original request. ${READ_BACK}`;
+    default: return `Cannot be checked. ${READ_BACK}`;
+  }
+}
 
 function zoneOf(state: WorkState): string | undefined {
   return state.confirmed?.settings.default_tz;
@@ -56,9 +76,7 @@ function UnconfirmedRow({ entry, store, state }: { entry: UnconfirmedWrite; stor
       <div className="work-unconfirmed-text">
         <strong>{describeWrite(entry.write, state)}</strong>
         <span className="hq-meta">
-          {entry.state === 'unconfirmed' && 'Unconfirmed · will be checked by re-sending the same request'}
-          {entry.state === 'awaiting_decision' && 'Unconfirmed · its replay record may have expired, so it is never re-sent automatically'}
-          {entry.state === 'held' && 'Held · the Planner reported this request ID was reused'}
+          {recoveryText(entry)}
         </span>
         {flagged.length > 0 && (
           <span className="work-possibly-saved" role="note">
@@ -68,8 +86,8 @@ function UnconfirmedRow({ entry, store, state }: { entry: UnconfirmedWrite; stor
         )}
       </div>
       <div className="work-unconfirmed-actions">
-        {entry.state === 'awaiting_decision' && (
-          <Button size="sm" onClick={() => void store.retryUnconfirmed(entry.requestId)}>Re-send same request</Button>
+        {store.canApply(entry.requestId) && (
+          <Button size="sm" onClick={() => void store.retryUnconfirmed(entry.requestId)}>{APPLY_LABEL}</Button>
         )}
         <Button size="sm" variant="ghost" onClick={() => store.dismissUnconfirmed(entry.requestId)}>Stop tracking</Button>
       </div>
@@ -94,7 +112,7 @@ export function SyncBanners({ store, state }: { store: WorkStore; state: WorkSta
       {state.held && (
         <div className="work-banner work-banner--held" role="alert">
           <StatusChip tone="danger" label="Queue held" />
-          <span>{state.held.reason} Nothing more is re-sent until you stop tracking it.</span>
+          <span>{state.held.reason} Nothing more is checked or sent until you stop tracking it.</span>
           <Button size="sm" variant="ghost" onClick={() => store.dismissUnconfirmed(state.held!.requestId)}>Stop tracking</Button>
         </div>
       )}

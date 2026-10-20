@@ -1,0 +1,92 @@
+{
+  "kind": "hypothetical_planning_projection_only",
+  "source_revision": "88c93a16e43d6d9bcfa92021bb637e5da43ad3ff",
+  "artifact": "spec.hq-agent-cli",
+  "spec_blob_oid": "260a8e3bf735eeae084f1387faf8e215ef34e5a3",
+  "spec_sha256": "fcec20aed3dcfb42727e36306ab8724a55e1c51a2aa6ddfd347debe3df32d1d5",
+  "catalog_actual_path": "docs/planning-evidence/hq-agent-cli/projection-catalog.toml",
+  "catalog_logical_path": "tests/check-groups.toml",
+  "catalog_sha256": "5474ded6a63bc587924c6a7f52ade056c815fabca33729a1bf71646faa2e885c",
+  "catalog_groups": [
+    "hq-cli",
+    "planner-service",
+    "repository-integrity",
+    "work-live"
+  ],
+  "canonical_catalog_adopted": false,
+  "project_tasks_executed": false,
+  "actual_d_e_custody": "held",
+  "native_bindings_or_publication_proved": false,
+  "scenarios": [
+    {
+      "scenario": "actual_gates_not_satisfied_hypothetical_completions",
+      "all_inputs_hypothetical": true,
+      "rounds": [
+        {
+          "ready_task_refs": [
+            "spec.hq-agent-cli#task.b1.001"
+          ],
+          "capsule_draft_count": 1,
+          "assignment_draft_count": 1,
+          "rendered_bytes": 45020
+        },
+        {
+          "ready_task_refs": [
+            "spec.hq-agent-cli#task.c.001",
+            "spec.hq-agent-cli#task.f.001"
+          ],
+          "capsule_draft_count": 2,
+          "assignment_draft_count": 2,
+          "rendered_bytes": 87119
+        },
+        {
+          "ready_task_refs": [],
+          "capsule_draft_count": 0,
+          "assignment_draft_count": 0,
+          "rendered_bytes": 0
+        }
+      ]
+    },
+    {
+      "scenario": "HYPOTHETICAL_all_external_gates_satisfied",
+      "all_inputs_hypothetical": true,
+      "rounds": [
+        {
+          "ready_task_refs": [
+            "spec.hq-agent-cli#task.b1.001",
+            "spec.hq-agent-cli#task.d.001",
+            "spec.hq-agent-cli#task.e.001"
+          ],
+          "capsule_draft_count": 3,
+          "assignment_draft_count": 3,
+          "rendered_bytes": 130352
+        },
+        {
+          "ready_task_refs": [
+            "spec.hq-agent-cli#task.c.001",
+            "spec.hq-agent-cli#task.f.001",
+            "spec.hq-agent-cli#task.r1.001"
+          ],
+          "capsule_draft_count": 3,
+          "assignment_draft_count": 3,
+          "rendered_bytes": 132790
+        },
+        {
+          "ready_task_refs": [
+            "spec.hq-agent-cli#task.i.001",
+            "spec.hq-agent-cli#task.r2.001"
+          ],
+          "capsule_draft_count": 2,
+          "assignment_draft_count": 2,
+          "rendered_bytes": 90394
+        },
+        {
+          "ready_task_refs": [],
+          "capsule_draft_count": 0,
+          "assignment_draft_count": 0,
+          "rendered_bytes": 0
+        }
+      ]
+    }
+  ]
+}
