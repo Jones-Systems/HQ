@@ -186,8 +186,10 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
         <Button size="sm" variant="secondary" onClick={() => { setAnchor(today); navigate(contentDestination({ page: 'calendar', month: today.slice(0, 7) })); }}>{view === 'month' ? 'This month' : 'Today'}</Button>
         <Button size="sm" variant="secondary" onClick={() => rangeNavigate(1)} aria-label={`Next ${view}`}>→</Button>
       </span>
-      <div className="soc-inline" role="group" aria-label="Calendar view">{(['month', 'week', 'day'] as const).map((mode) =>
-        <Button key={mode} size="sm" variant={view === mode ? 'primary' : 'secondary'} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode[0]!.toUpperCase() + mode.slice(1)}</Button>)}</div>
+      <div className="soc-inline" role="group" aria-label="Calendar view">
+        <Button size="sm" variant="secondary" title={`Switch to ${view === 'month' ? 'Week' : view === 'week' ? 'Day' : 'Month'} view`}
+          onClick={() => setView(view === 'month' ? 'week' : view === 'week' ? 'day' : 'month')}>{view[0]!.toUpperCase() + view.slice(1)}</Button>
+      </div>
       <label className="soc-field soc-field--inline"><span>Brand</span><select value={brand} onChange={(event) => onBrandChange(event.target.value)}>
         <option value="all">All brands</option>{snapshot.brands.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select></label>

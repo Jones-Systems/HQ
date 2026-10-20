@@ -6,7 +6,9 @@ import { WorkModule, setWorkSessionPort, examplePlanner } from '@hq/work';
 import { SocialDomain } from '../../../../modules/social/nav';
 import { createLiveSocialPort } from '../../../../modules/social/live';
 import { createWorkbenchFixture } from '../../../../modules/social/workbench/fixtures/examples';
+import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES } from '../../../../modules/social/core';
 import { bridgeTransport, createPlannerLive } from '../../../../modules/work/live';
+import { serviceStatus } from './data-source-status';
 
 type Selection = 'live' | 'example' | 'unavailable';
 export const RELOAD_NOTE = 'Endpoint changes apply after HQ reloads.';
@@ -21,8 +23,9 @@ export async function selectService(services: HqServices | undefined, domain: Se
   } catch { return 'unavailable'; }
 }
 function Surface({ domain, selection, children }: { domain: string; selection: Selection; children?: ReactNode }) {
+  const status = serviceStatus(selection === 'example' ? { configured: false, policy: 'ok', transport: null } : selection === 'live' ? { configured: true, policy: 'ok', transport: 'https' } : undefined);
   return <section className="service-domain" aria-label={`${domain} service`}>
-    <div className="service-status" role="status" title={RELOAD_NOTE}>{domain}: {selection === 'live' ? 'Live service' : selection === 'example' ? 'Synthetic example' : 'Unavailable — service is not configured correctly'}.</div>
+    <div className="service-status" role="status" title={RELOAD_NOTE}><span>{domain}: {status.text}.</span><button className="service-setup-link" onClick={() => window.dispatchEvent(new CustomEvent('hq-open-settings', { detail: { source: domain.toLowerCase() } }))}>{selection === 'example' ? 'Set up' : 'Settings'}</button></div>
     {children}
   </section>;
 }
@@ -35,7 +38,7 @@ export function createServiceDomains(getServices: () => HqServices | undefined) 
     const services = getServices();
     const selection = await selectService(services, 'social');
     const port = selection === 'live' ? createLiveSocialPort(services!.social)
-      : selection === 'example' ? createWorkbenchFixture().port : null;
+      : selection === 'example' ? createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port : null;
     return { selection, port };
   }
   function Social(props: ModulePort) {

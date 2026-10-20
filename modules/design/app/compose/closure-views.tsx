@@ -107,11 +107,11 @@ export function mountRuns(Section: ComponentType<RunsSectionProps>): ComponentTy
 }
 
 export function mountReferences(Section: typeof ReferencesSection): ComponentType<DesignSectionProps> {
-  return withSectionErrorBoundary(function ReferencesMount({ context }) {
+  return withSectionErrorBoundary(function ReferencesMount({ context, navigate }) {
     const workspace = useDesignWorkspace();
     const env = use(workspace.closure.references());
     return <SectionFrame lane="References" entry="app/sections/references/View.tsx" tags={[workspace.storageTag]}>
-      <Section env={env} currentProject={context} />
+      <Section env={env} currentProject={context} onShowProjects={() => navigate({ nav: 'projects', section: 'projects' })} />
     </SectionFrame>;
   });
 }

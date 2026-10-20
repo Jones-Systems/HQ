@@ -24,18 +24,18 @@ html, body, #root { height: 100%; overflow: hidden; }
 :where([data-hq-chrome], .hq-dialog) :where(input[type="checkbox"], input[type="radio"], input[type="range"], input[type="color"]):not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { min-height: 0; padding: 0; width: auto; accent-color: var(--hq-accent-strong); }
 :where([data-hq-chrome], .hq-dialog) :where(input[type="hidden"]) { display: none; }
 .shell { display: flex; height: 100dvh; min-height: 0; overflow: hidden; }
-.rail { display: flex; flex-direction: column; flex: 0 0 auto; min-width: 64px; padding: 20px 10px 12px; border-right: 1px solid var(--line); background: var(--hq-nav); overflow: hidden; }
+.rail { display: flex; flex-direction: column; flex: 0 0 auto; min-width: 64px; padding: 20px 10px 12px; border-right: 1px solid var(--line); background: var(--hq-nav); overflow: hidden; container: rail / inline-size; }
 .brand { display: flex; align-items: center; gap: 7px; flex-shrink: 0; padding: 0 12px 26px; font-size: 23px; font-weight: 750; letter-spacing: -1px; }
 .brand-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-top: 12px; }
 .rail > nav { display: grid; align-content: start; gap: 6px; min-height: 0; overflow: auto; }
-.domain-button, .rail-action { display: flex; align-items: center; gap: 10px; flex-shrink: 0; width: 100%; min-height: 38px; border: 0; border-radius: 7px; padding: 9px 10px; text-align: left; background: transparent; color: var(--muted); font: var(--hq-type-label); white-space: nowrap; cursor: pointer; }
+.domain-button, .rail-action { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 8px; flex-shrink: 0; width: 100%; min-height: 38px; border: 0; border-radius: 7px; padding: 8px 10px; text-align: left; background: transparent; color: var(--muted); font: var(--hq-type-label); white-space: nowrap; cursor: pointer; }
 .domain-button:hover, .rail-action:hover, .domain-button[aria-current="page"] { background: var(--selected); color: var(--text); }
 .domain-button[aria-current="page"] { color: var(--hq-accent-text); font-weight: 600; box-shadow: inset 2px 0 var(--hq-accent-strong); }
-.domain-icon, .rail-action svg { width: 18px; height: 20px; flex-shrink: 0; }
+.domain-icon, .rail-action svg { width: 18px; height: 18px; justify-self: center; }
 .rail-footer { grid-template-columns: minmax(0, 1fr); min-width: 0; width: 100%; margin-top: auto; padding-top: 12px; display: grid; gap: 5px; flex-shrink: 0; }
 .rail.is-compact { padding-inline: 8px; }
 .rail.is-compact .brand { padding-inline: 2px; gap: 3px; }
-.rail.is-compact .domain-button, .rail.is-compact .rail-action { justify-content: center; padding-inline: 0; }
+.rail.is-compact .domain-button, .rail.is-compact .rail-action { grid-template-columns: 1fr; justify-items: center; padding-inline: 0; }
 .rail.is-compact .rail-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .workspace { min-width: 0; flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .workspace > main { flex: 1; min-height: 0; padding: 0; overflow: auto; }
@@ -50,3 +50,14 @@ html, body, #root { height: 100%; overflow: hidden; }
 @media (max-height: 420px) { .rail { padding-top: 10px; } .brand { padding-bottom: 10px; } .domain-button { min-height: 30px; padding-block: 5px; } }
 
 .rail-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* Mounted domain views retain drafts and navigation while Settings uses the workspace. */
+.workspace > main[hidden], .workspace > [hidden] { display: none !important; }
+.rail-utilities { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; }
+@container rail (min-width: 220px) {
+  .rail-utilities { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  .rail-utilities .rail-action { padding-inline: 10px; gap: 6px; }
+}
+
+.service-status { display: flex; align-items: center; gap: 8px; }
+.service-status .service-setup-link { min-height: 20px; padding: 0 4px; border: 0; background: transparent; color: var(--hq-accent-text); font: inherit; }

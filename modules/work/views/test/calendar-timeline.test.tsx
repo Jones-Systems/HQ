@@ -23,6 +23,15 @@ async function pick(user: ReturnType<typeof userEvent.setup>, trigger: HTMLEleme
   await user.click(screen.getByRole('menuitem', { name: item }));
 }
 
+async function showCalendarView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day') {
+  const group = screen.getByRole('group', { name: 'Calendar layout' });
+  for (let click = 0; click < 3; click += 1) {
+    if (within(group).queryByRole('button', { name })) return;
+    await user.click(within(group).getByRole('button', { name: /^(Month|Week|Day)$/ }));
+  }
+  throw new Error(`Calendar did not cycle to ${name}`);
+}
+
 describe('Calendar moves', () => {
   it('"One day later" patches only that date’s value, keeps the rest, and Undo restores it', async () => {
     const user = userEvent.setup();
@@ -244,21 +253,30 @@ describe('timed calendar interaction', () => {
   it('switches range modes, navigates week/day and returns to Today without writes', async () => {
     const user = userEvent.setup();
     const { rec, container } = await setup({ view: 'calendar' });
-    await user.click(screen.getByRole('button', { name: 'Week' }));
+    await showCalendarView(user, 'Week');
     expect(container.querySelectorAll('[data-time-day]')).toHaveLength(7);
     await user.click(screen.getByRole('button', { name: 'Next week' }));
     expect(container.querySelector('[data-time-day="2026-10-28"]')).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Day' }));
+    await showCalendarView(user, 'Day');
     expect(container.querySelectorAll('[data-time-day]')).toHaveLength(1);
     await user.click(screen.getByRole('button', { name: 'Today' }));
     expect(container.querySelector('[data-time-day="2026-10-21"]')).toBeTruthy();
+    const layout = screen.getByRole('group', { name: 'Calendar layout' });
+    expect(within(layout).getAllByRole('button')).toHaveLength(2);
+    await user.click(within(layout).getByRole('button', { name: 'Day' }));
+    expect(within(layout).getByRole('button', { name: 'Month' })).toBeTruthy();
+    expect(container.querySelectorAll('[data-time-day]')).toHaveLength(0);
+    await user.click(within(layout).getByRole('button', { name: 'Agenda' }));
+    expect(container.querySelector('.wv-agenda')).toBeTruthy();
+    await user.click(within(layout).getByRole('button', { name: 'Month' }));
+    expect(container.querySelector('.wv-month')).toBeTruthy();
     expect(rec.writes()).toHaveLength(0);
   });
 
   it('moves 15 minutes by keyboard, resizes explicitly, and offers Undo for each single patch', async () => {
     const user = userEvent.setup();
     const { rec } = await setup({ view: 'calendar' });
-    await user.click(screen.getByRole('button', { name: 'Day' }));
+    await showCalendarView(user, 'Day');
     const event = () => screen.getByRole('button', { name: /^Renew the library card, 10:/ });
     fireEvent.keyDown(event(), { key: 'ArrowDown', altKey: true });
     await waitFor(() => expect(rec.writes()).toHaveLength(1));
@@ -274,7 +292,7 @@ describe('timed calendar interaction', () => {
   it('requires date kind before scheduling a grid drop and rejects a stale drag after dragend', async () => {
     const user = userEvent.setup();
     const { rec, container } = await setup({ view: 'calendar' });
-    await user.click(screen.getByRole('button', { name: 'Day' }));
+    await showCalendarView(user, 'Day');
     const tray = screen.getByRole('region', { name: 'Unscheduled items' });
     const undated = within(tray).getByText('Tune up the old bicycle').closest<HTMLElement>('[draggable="true"]')!;
     fireEvent.dragStart(undated);
@@ -303,10 +321,10 @@ describe('calendar pointer commits', () => {
   it('previews without writes, commits once on drop, and a click or Escape never patches', async () => {
     const user = userEvent.setup();
     const { rec, container } = await setup({ view: 'calendar' });
-    await user.click(screen.getByRole('button', { name: 'Day' }));
+    await showCalendarView(user, 'Day');
     const rect = geometry();
     try {
-      const event = screen.getByRole('button', { name: /^Renew the library card, 10:30/ });
+      const event = screen.getByRole('button', { name: /^Renew the library card, 10:30 a\.m\./ });
       fireEvent.pointerDown(event, { pointerId: 1, button: 0, clientX: 100, clientY: 510 });
       fireEvent.pointerUp(window, { pointerId: 1, clientX: 100, clientY: 510 });
       expect(rec.writes()).toHaveLength(0);
@@ -329,7 +347,7 @@ describe('calendar pointer commits', () => {
   it('resizes from the lower edge and clears all time fields when moved to all day', async () => {
     const user = userEvent.setup();
     const { rec, container } = await setup({ view: 'calendar' });
-    await user.click(screen.getByRole('button', { name: 'Day' }));
+    await showCalendarView(user, 'Day');
     const rect = geometry();
     try {
       fireEvent.pointerDown(screen.getByRole('button', { name: 'Resize Renew the library card' }), { pointerId: 5, button: 0, clientX: 100, clientY: 527 });
@@ -340,7 +358,7 @@ describe('calendar pointer commits', () => {
       expect((lastWrite(rec)!.args[2] as { dates: unknown[] }).dates[0]).toMatchObject({ time: '10:30', end_time: '11:30' });
       const hit = vi.spyOn(document, 'elementFromPoint').mockReturnValue(container.querySelector('[data-grid-all-day="2026-10-21"]'));
       try {
-        fireEvent.pointerDown(screen.getByRole('button', { name: /^Renew the library card, 10:30/ }), { pointerId: 6, button: 0, clientX: 100, clientY: 510 });
+        fireEvent.pointerDown(screen.getByRole('button', { name: /^Renew the library card, 10:30 a\.m\./ }), { pointerId: 6, button: 0, clientX: 100, clientY: 510 });
         fireEvent.pointerMove(window, { pointerId: 6, clientX: 100, clientY: 10 });
         fireEvent.pointerUp(window, { pointerId: 6, clientX: 100, clientY: 10 });
         await waitFor(() => expect(rec.writes()).toHaveLength(2));

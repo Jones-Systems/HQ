@@ -117,7 +117,7 @@ it('example has no export port and unavailable does not mount Work; neither cons
   view.unmount(); mounted.mockClear();
   const unavailable = createServiceDomains(() => undefined);
   render(<unavailable.Work {...props()} />);
-  await screen.findByText('Work: Unavailable — service is not configured correctly.');
+  await screen.findByText('Work: Unavailable.');
   expect(mounted).not.toHaveBeenCalled(); expect(construct).not.toHaveBeenCalled();
   expect(f.calls.filter(c => c.route === 'export')).toEqual([]); f.noExecution();
 });
@@ -183,6 +183,10 @@ it('Social draft ↔ Work card open/Back preserves source state; explicit snapsh
   const cardBefore = JSON.stringify((await f.planner.port.snapshot()).items);
   fireEvent.click(await screen.findByRole('button', { name: 'Open Synthetic reference card' }));
   await screen.findByRole('textbox', { name: 'Card title' });
+  fireEvent.click(within(screen.getByRole('complementary', { name: 'HQ navigation' })).getByRole('button', { name: 'Settings' }));
+  expect(screen.queryByRole('button', { name: /Back to Autumn blend tasting notes/ })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '← Back to Work' }));
+  expect(screen.getByRole('button', { name: /Back to Autumn blend tasting notes/ })).toBeTruthy();
   expect(JSON.stringify(f.social.service.controls.inspect())).toBe(beforeOpen);
   fireEvent.click(screen.getByRole('button', { name: /Back to Autumn blend tasting notes/ }));
   await waitFor(() => expect(screen.getByLabelText('Body')).toHaveProperty('value', `${originalBody} Synthetic unsaved text.`));
