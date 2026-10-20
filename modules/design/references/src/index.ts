@@ -19,3 +19,41 @@ export { parseLibraryDocument } from './persist.ts';
 export type { LibraryAccess, MutationResult } from './service.ts';
 export { ReferenceLibrary } from './service.ts';
 export { REFERENCE_ENTITY_KIND, referenceDestination, toReferenceEnvelope } from './envelope.ts';
+
+/* Reference graph (hq.design.reference-graph/v1). */
+export type * from './graph-contract.ts';
+export {
+  ANCHOR_KINDS, CAPTURE_ORIGINS, CAPTURE_SUBJECT_KINDS, CONTENT_AVAILABILITY, GRAPH_DOCUMENT_KEY, GRAPH_SCHEMA,
+  SOURCE_AVAILABILITY, SUBJECT_KINDS,
+} from './graph-contract.ts';
+export {
+  deriveAnchorId, deriveCaptureId, derivePinId, deriveSubjectId, normalizeOrigin,
+} from './graph-identity.ts';
+export type { PreparedCapture, PreparedGraph } from './graph-import.ts';
+export { APP_HOME_SCREEN, emptyGraph, INERT_MEDIA_TYPES } from './graph-import.ts';
+export type { BrowseNode, PinRequest } from './graph-ops.ts';
+export {
+  availabilityLabel, browseGraph, capturesOfSubject, headCapture, lineageOf, pinsForProject, referencedGraphDigests,
+} from './graph-ops.ts';
+export type { FlatAdoptionPlan } from './graph-flat.ts';
+export { planFlatAdoption } from './graph-flat.ts';
+export type { ParsedGraph } from './graph-persist.ts';
+export { parseGraphDocument, parseGraphStructure, verifyGraphIdentities } from './graph-persist.ts';
+export type { GraphAccess, GraphPorts } from './graph-service.ts';
+export { ReferenceGraph } from './graph-service.ts';
+export type { RightsMapping } from './rights.ts';
+export {
+  HQ_RIGHTS_VOCABULARY, isGraphPublishable, mapDeclaredRights, publishBlock, REA_RIGHTS_VOCABULARY,
+  RIGHTS_VOCABULARIES, STUDY_RIGHTS_VOCABULARY,
+} from './rights.ts';
+
+/* Reference packets (hq.design.reference-packet/v1) and bundles. */
+export type {
+  PacketAnchor, PacketBlob, PacketBody, PacketCapture, PacketExclusion, PacketExclusionReason, PacketMode, PacketSelection,
+  PacketSource, PacketSubject, ParsedPacket, ReferenceBundle, ReferencePacket, RightsSummary,
+} from './packet.ts';
+export {
+  buildBundle, buildPacket, bundleMatchesPacket, BUNDLE_SCHEMA, PACKET_MODES, PACKET_OMITTED, PACKET_SCHEMA, parsePacket,
+  summarizeRights,
+} from './packet.ts';
+export type { AdoptPacketOptions, ExportPacketOptions, PacketAdoptionOutcome } from './graph-service.ts';

@@ -17,24 +17,24 @@ export type ParsedLibrary =
   /** Unreadable or inconsistent: never repaired automatically. */
   | { readonly status: 'invalid'; readonly path: string };
 
-type Json = Record<string, unknown>;
+export type Json = Record<string, unknown>;
 
-class Invalid extends Error {
+export class Invalid extends Error {
   readonly path: string;
   constructor(path: string) { super(path); this.path = path; }
 }
 
-function object(value: unknown, path: string, allowed: readonly string[]): Json {
+export function object(value: unknown, path: string, allowed: readonly string[]): Json {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Invalid(path);
   for (const key of Object.keys(value)) if (!allowed.includes(key)) throw new Invalid(`${path}.${key}`);
   return value as Json;
 }
 
-function check(condition: boolean, path: string): void {
+export function check(condition: boolean, path: string): void {
   if (!condition) throw new Invalid(path);
 }
 
-const nullable = <T>(value: unknown, test: (value: unknown) => value is T): value is T | null => value === null || test(value);
+export const nullable = <T>(value: unknown, test: (value: unknown) => value is T): value is T | null => value === null || test(value);
 const positiveOrNull = (value: unknown): boolean => value === null || (typeof value === 'number' && Number.isFinite(value) && value > 0);
 
 function source(value: unknown, path: string): ReferenceSource {
@@ -53,7 +53,7 @@ function source(value: unknown, path: string): ReferenceSource {
   return raw as unknown as ReferenceSource;
 }
 
-function asset(value: unknown, path: string): AssetRef | null {
+export function asset(value: unknown, path: string): AssetRef | null {
   if (value === null) return null;
   const raw = object(value, path, ['digest', 'mediaType', 'bytes', 'w', 'h', 'durationMs']);
   check(isBlobDigest(raw.digest), `${path}.digest`);
@@ -63,7 +63,7 @@ function asset(value: unknown, path: string): AssetRef | null {
   return raw as unknown as AssetRef;
 }
 
-function nativeEvidence(value: unknown, path: string): NativeExecutionEvidence | null {
+export function nativeEvidence(value: unknown, path: string): NativeExecutionEvidence | null {
   if (value === null) return null;
   const raw = object(value, path, ['platform', 'runtime', 'buildRef', 'claim']);
   check(isOneOf(APP_PLATFORMS, raw.platform) && isOneOf(NATIVE_RUNTIMES, raw.runtime)
@@ -121,7 +121,7 @@ function use(key: string, value: unknown, path: string, references: Json): Refer
   return raw as unknown as ReferenceUse;
 }
 
-function map<T>(value: unknown, path: string, parse: (key: string, item: unknown, path: string) => T): Record<string, T> {
+export function map<T>(value: unknown, path: string, parse: (key: string, item: unknown, path: string) => T): Record<string, T> {
   const raw = object(value, path, Object.keys(value ?? {}));
   const out: Record<string, T> = {};
   for (const [key, item] of Object.entries(raw)) out[key] = parse(key, item, `${path}.${key}`);

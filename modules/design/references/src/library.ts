@@ -124,7 +124,7 @@ export async function prepareImport(
   };
 }
 
-function optionalPositive(value: unknown, field: string, issues: ValidationIssue[]): number | null {
+export function optionalPositive(value: unknown, field: string, issues: ValidationIssue[]): number | null {
   if (value === undefined) return null;
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > 1e9) {
     issues.push({ field, code: 'invalid' });
