@@ -42,3 +42,8 @@
 .hqr-claims[data-level="agent-reported"] h3::after { content: " · unverified"; text-transform: none; letter-spacing: 0; font-weight: 400; }
 .hqr-compare-fake { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border: 1px dashed var(--line); border-radius: 6px; padding: 12px; }
 .hqr-compare-fake figcaption { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.hqr-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; font-size: 12px; }
+.hqr-facts dt { color: var(--muted); }
+.hqr-facts dd { margin: 0; }
+.hqr-manual { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px; }
+.hqr-list > li[aria-current="true"] { border-color: var(--accent); }

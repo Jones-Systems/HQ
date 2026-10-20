@@ -1,10 +1,11 @@
 import {
-  ANNOTATION_KINDS, CLAIM_LEVELS, DRAFT_PRIVACY, DRAFT_SCHEMA, FREEZE_SCHEMA, PACKET_SCHEMA, REVIEW_DECISIONS,
-  REVIEW_EVENT_SCHEMA,
-  type AnchorTarget, type AnnotationRef, type AttachmentCandidate, type Brand, type CandidateClaim, type Clarification,
-  type DecisionPacket, type Destination, type Digest, type DraftOrigin, type EvidenceRef, type FreezeRecord,
-  type PacketLineage, type PacketLink, type Point, type Rect, type RequestDraft, type ReturnedCandidate,
-  type ReviewEvent, type ReviewLink, type SelectedAttachment, type SourceAnchor, type SourceRef,
+  ANNOTATION_KINDS, CLAIM_LEVELS, DRAFT_PRIVACY, DRAFT_SCHEMA, FREEZE_SCHEMA, HANDOFF_STATES, HANDOFF_STATUS_SCHEMA,
+  OWNER_REPORTED_EVIDENCE_KINDS, OWNER_REPORTED_STATUS, PACKET_SCHEMA, RETURN_ORIGINS, REVIEW_DECISIONS, REVIEW_EVENT_SCHEMA, SEND_SCHEMA,
+  type AnchorTarget, type AnnotationRef, type AttachmentCandidate, type Brand, type CandidateClaim, type CandidateProvenance,
+  type Clarification, type DecisionPacket, type Destination, type Digest, type DraftOrigin, type EvidenceRef, type FreezeRecord,
+  type HandoffStatus, type HostModel, type NavigationIntent, type PacketLineage, type PacketLink, type Point, type Rect,
+  type RequestDraft, type ReturnedCandidate, type ReviewEvent, type ReviewLink, type SelectedAttachment, type SendRecord,
+  type SourceAnchor, type SourceRef,
 } from './contract.ts';
 import { isDigest } from './jcs.ts';
 
@@ -350,17 +351,103 @@ function claim(value: unknown, path: string): CandidateClaim {
   };
 }
 
+function hostModel(value: unknown, path: string): HostModel {
+  const raw = record(value, path, ['host', 'model'], []);
+  return {
+    ...('host' in raw ? { host: line(raw.host, `${path}.host`, LIMITS.label) } : {}),
+    ...('model' in raw ? { model: line(raw.model, `${path}.model`, LIMITS.label) } : {}),
+  };
+}
+
+function provenance(value: unknown, path: string): CandidateProvenance {
+  const raw = record(value, path, ['origin', 'host', 'model'], ['origin']);
+  return {
+    origin: oneOf(raw.origin, `${path}.origin`, RETURN_ORIGINS),
+    ...('host' in raw ? { host: line(raw.host, `${path}.host`, LIMITS.label) } : {}),
+    ...('model' in raw ? { model: line(raw.model, `${path}.model`, LIMITS.label) } : {}),
+  };
+}
+
+/**
+ * Strict candidate validation. An owner-reported return can only carry
+ * agent-reported claims, note/capture evidence and the owner-reported status:
+ * it can never assert an observation or an owner judgment.
+ */
 export function parseReturnedCandidate(value: unknown, path = 'candidate'): ReturnedCandidate {
-  const raw = record(value, path, ['candidateId', 'packet', 'baselineVersionId', 'candidateVersionId', 'claims', 'observedStatus', 'observedAt', 'evidence']);
+  const raw = record(value, path, ['candidateId', 'packet', 'baselineVersionId', 'candidateVersionId', 'claims', 'observedStatus', 'observedAt', 'evidence', 'provenance'],
+    ['candidateId', 'packet', 'baselineVersionId', 'candidateVersionId', 'claims', 'observedStatus', 'observedAt', 'evidence']);
   const claims = list(raw.claims, `${path}.claims`, claim);
   unique(claims, `${path}.claims`, (item) => item.claimId);
-  return {
+  const parsed: ReturnedCandidate = {
     candidateId: brandId(raw.candidateId, `${path}.candidateId`), packet: parsePacketLink(raw.packet, `${path}.packet`),
     baselineVersionId: brandId(raw.baselineVersionId, `${path}.baselineVersionId`),
-    candidateVersionId: brandId(raw.candidateVersionId, `${path}.candidateVersionId`), claims,
+    candidateVersionId: nullable(raw.candidateVersionId, `${path}.candidateVersionId`, (item, itemPath) => brandId<'VersionId'>(item, itemPath)),
+    claims,
     observedStatus: line(raw.observedStatus, `${path}.observedStatus`, LIMITS.label),
     observedAt: timestamp(raw.observedAt, `${path}.observedAt`), evidence: list(raw.evidence, `${path}.evidence`, parseEvidenceRef),
+    ...('provenance' in raw ? { provenance: provenance(raw.provenance, `${path}.provenance`) } : {}),
   };
+  if (parsed.provenance?.origin === 'owner-reported') {
+    if (parsed.observedStatus !== OWNER_REPORTED_STATUS) fail(`${path}.observedStatus`, `an owner-reported return has status ${OWNER_REPORTED_STATUS}`);
+    if (parsed.candidateVersionId !== null) fail(`${path}.candidateVersionId`, 'an owner-reported return has no comparable version');
+    for (const [index, item] of parsed.claims.entries()) {
+      if (item.level !== 'agent-reported') fail(`${path}.claims[${index}].level`, 'an owner-reported return cannot assert observed or owner-judged claims');
+    }
+    const kinds = OWNER_REPORTED_EVIDENCE_KINDS as readonly string[];
+    for (const [index, item] of [...parsed.evidence, ...parsed.claims.flatMap((entry) => entry.evidence)].entries()) {
+      if (!kinds.includes(item.kind)) fail(`${path}.evidence[${index}].kind`, 'an owner-reported return cannot carry observation or candidate evidence');
+    }
+  }
+  return parsed;
+}
+
+const HANDOFF_KEYS = ['schema', 'packet', 'state', 'observedAt', 'destination', 'pinned', 'actual', 'detail'];
+
+/** Status read from the connector side. Untrusted: validated strictly before it is stored or shown. */
+export function parseHandoffStatus(value: unknown, path = 'status'): HandoffStatus {
+  schema(value, path, 'hq.design.request-handoff-status', HANDOFF_STATUS_SCHEMA);
+  const raw = record(value, path, HANDOFF_KEYS, ['schema', 'packet', 'state', 'observedAt']);
+  const dest = 'destination' in raw ? record(raw.destination, `${path}.destination`, ['destinationId', 'label']) : null;
+  return {
+    schema: HANDOFF_STATUS_SCHEMA, packet: parsePacketLink(raw.packet, `${path}.packet`),
+    state: oneOf(raw.state, `${path}.state`, HANDOFF_STATES), observedAt: timestamp(raw.observedAt, `${path}.observedAt`),
+    ...(dest ? { destination: { destinationId: brandId(dest.destinationId, `${path}.destination.destinationId`), label: line(dest.label, `${path}.destination.label`, LIMITS.label) } } : {}),
+    ...('pinned' in raw ? { pinned: hostModel(raw.pinned, `${path}.pinned`) } : {}),
+    ...('actual' in raw ? { actual: hostModel(raw.actual, `${path}.actual`) } : {}),
+    ...('detail' in raw ? { detail: prose(raw.detail, `${path}.detail`, LIMITS.note) } : {}),
+  };
+}
+
+export function parseSendRecord(value: unknown, path = 'send'): SendRecord {
+  schema(value, path, 'hq.design.request-send', SEND_SCHEMA);
+  const raw = record(value, path, ['schema', 'sendId', 'requestId', 'packet', 'destination', 'at']);
+  const dest = record(raw.destination, `${path}.destination`, ['destinationId', 'label']);
+  return {
+    schema: SEND_SCHEMA, sendId: brandId(raw.sendId, `${path}.sendId`), requestId: brandId(raw.requestId, `${path}.requestId`),
+    packet: parsePacketLink(raw.packet, `${path}.packet`),
+    destination: { destinationId: brandId(dest.destinationId, `${path}.destination.destinationId`), label: line(dest.label, `${path}.destination.label`, LIMITS.label) },
+    at: timestamp(raw.at, `${path}.at`),
+  };
+}
+
+/** Navigation intents are closed shapes: any extra key (for example a send payload) is rejected. */
+export function parseNavigationIntent(value: unknown, path = 'intent'): NavigationIntent {
+  const type = (value as Raw | null)?.type;
+  switch (type) {
+    case 'open-request': case 'open-runs': {
+      const raw = record(value, path, ['type', 'requestId']);
+      return { type, requestId: brandId(raw.requestId, `${path}.requestId`) };
+    }
+    case 'open-packet': {
+      const raw = record(value, path, ['type', 'requestId', 'packetId']);
+      return { type, requestId: brandId(raw.requestId, `${path}.requestId`), packetId: brandId(raw.packetId, `${path}.packetId`) };
+    }
+    case 'open-returned': {
+      const raw = record(value, path, ['type', 'requestId', 'candidateId']);
+      return { type, requestId: brandId(raw.requestId, `${path}.requestId`), candidateId: brandId(raw.candidateId, `${path}.candidateId`) };
+    }
+    default: return fail(`${path}.type`, 'unknown navigation intent');
+  }
 }
 
 export function parseReviewEvent(value: unknown, path = 'review'): ReviewEvent {

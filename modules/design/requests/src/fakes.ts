@@ -1,5 +1,8 @@
-import type {
-  ClockPort, CreateResult, Digest, DispatchSlot, IdKind, IdPort, PacketLink, SchedulerPort, StorageNamespace, StoragePort,
+import {
+  HANDOFF_STATUS_SCHEMA,
+  type ClockPort, type CreateResult, type Digest, type DispatchSlot, type HandoffState, type HandoffStatus, type HandoffStatusPort,
+  type HostModel, type IdKind, type IdPort, type PacketLink, type ReturnsPort, type SchedulerPort, type SendBinding,
+  type StorageNamespace, type StoragePort,
 } from './contract.ts';
 import { bytesEqual, sha256 } from './jcs.ts';
 
@@ -210,4 +213,66 @@ export class ManualSchedulerFake implements SchedulerPort {
       timer.callback();
     }
   }
+}
+
+/**
+ * Labelled connector double for the whole send → status → return loop. It
+ * exposes three separate facets so tests can prove which one a caller holds:
+ * only `dispatch` can send; `status` and `returns` are read-only. It records
+ * every call and contacts nothing. This is source evidence, not a live receiver.
+ */
+export class LifecycleConnectorFake {
+  readonly label = `${FAKE_LABEL}: connector double (no real transport, host catalog or receiver)`;
+  readonly sends: { readonly packet: PacketLink; readonly binding: SendBinding | undefined }[] = [];
+  readonly statusReads: PacketLink[] = [];
+  readonly returnReads: string[] = [];
+  /** When set, the transport call throws after being recorded (an unknown handoff outcome). */
+  failTransport: string | null = null;
+  private readonly statuses = new Map<string, HandoffStatus>();
+  private returned: unknown[] = [];
+  private tick = 0;
+  private readonly pinned: HostModel;
+
+  constructor(pinned: HostModel = { host: 'fixture-host-a', model: 'fixture-model-1' }) { this.pinned = pinned; }
+
+  private stamp(): string { this.tick += 1; return new Date(Date.UTC(2026, 0, 1, 1, 0, this.tick)).toISOString(); }
+
+  readonly dispatch: DispatchSlot = {
+    requestSend: (packet, binding) => {
+      this.sends.push({ packet, binding });
+      this.set(packet, 'submitting', binding ? { destination: { destinationId: binding.destinationId, label: binding.destinationLabel } } : {});
+      if (this.failTransport) throw new Error(this.failTransport);
+    },
+  };
+
+  readonly status: HandoffStatusPort = {
+    read: async (packet) => {
+      this.statusReads.push(packet);
+      return this.statuses.get(packet.packetId) ?? null;
+    },
+  };
+
+  readonly returns: ReturnsPort = {
+    list: async (requestId) => {
+      this.returnReads.push(requestId);
+      return this.returned.slice();
+    },
+  };
+
+  /** Moves a packet's connector-side state, as a real receiver would report it. */
+  set(packet: PacketLink, state: HandoffState, extra: Partial<Pick<HandoffStatus, 'actual' | 'pinned' | 'destination' | 'detail'>> = {}, observedAt?: string): void {
+    const previous = this.statuses.get(packet.packetId);
+    this.statuses.set(packet.packetId, {
+      schema: HANDOFF_STATUS_SCHEMA, packet, state, observedAt: observedAt ?? this.stamp(),
+      pinned: extra.pinned ?? previous?.pinned ?? this.pinned,
+      ...(extra.actual ?? previous?.actual ? { actual: extra.actual ?? previous!.actual! } : {}),
+      ...(extra.destination ?? previous?.destination ? { destination: extra.destination ?? previous!.destination! } : {}),
+      ...(extra.detail === undefined ? {} : { detail: extra.detail }),
+    });
+  }
+
+  /** Raw status as the port would hand it over, for corrupting in tests. */
+  rawStatus(packet: PacketLink): HandoffStatus | undefined { return this.statuses.get(packet.packetId); }
+
+  publishReturn(raw: unknown): void { this.returned.push(raw); }
 }

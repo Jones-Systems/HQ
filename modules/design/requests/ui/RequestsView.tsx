@@ -1,10 +1,14 @@
-import { useSyncExternalStore, type ComponentType } from 'react';
-import type { CompareSlotProps, DispatchSlot, ReturnedCandidate } from '../src/contract.ts';
+import { useState, useSyncExternalStore, type ComponentType } from 'react';
+import type {
+  CandidateId, CompareSlotProps, DispatchSlot, HandoffStatusPort, NavigationPort, ReturnedCandidate, ReturnsPort,
+} from '../src/contract.ts';
 import type { RequestSession } from '../src/session.ts';
 import { DraftEditor } from './DraftEditor.tsx';
 import { STEPS, currentStep } from './model.ts';
 import { PacketHistory } from './PacketHistory.tsx';
+import { ReturnsInbox } from './ReturnsInbox.tsx';
 import { ReviewScreen } from './ReviewScreen.tsx';
+import { RunsView } from './RunsView.tsx';
 import './requests.css';
 
 export interface RequestsViewProps {
@@ -13,14 +17,27 @@ export interface RequestsViewProps {
   readonly CompareSlot: ComponentType<CompareSlotProps>;
   /** Connector hand-off. Null or absent: sending is visibly unavailable. */
   readonly dispatch?: DispatchSlot | null;
-  /** A returned candidate supplied by the connector/results section. */
+  /** A returned candidate to review. When absent, the candidate chosen in the inbox is reviewed. */
   readonly candidate?: ReturnedCandidate | null;
+  /** Read-only status readback. It cannot send. */
+  readonly statusPort?: HandoffStatusPort | null;
+  /** Read-only returned-work readback. It cannot send. */
+  readonly returnsPort?: ReturnsPort | null;
+  /** Shell navigation. Intents it receives are navigation only. */
+  readonly navigation?: NavigationPort | null;
+  /** Supplied by the shell so rendering is deterministic. Defaults to the current time. */
+  readonly now?: string;
   readonly newId: (kind: 'clarification' | 'attachment') => string;
 }
 
 /** The request lifecycle surface: draft, clarify, freeze, review. */
-export function RequestsView({ session, CompareSlot, dispatch = null, candidate = null, newId }: RequestsViewProps) {
+export function RequestsView({
+  session, CompareSlot, dispatch = null, candidate: supplied = null, statusPort = null, returnsPort = null, navigation = null, now, newId,
+}: RequestsViewProps) {
   const state = useSyncExternalStore((listener) => session.subscribe(listener), () => session.state, () => session.state);
+  const [selected, setSelected] = useState<CandidateId | null>(null);
+  const clock = now ?? new Date().toISOString();
+  const candidate = supplied ?? state.candidates.find((item) => item.candidateId === selected) ?? null;
   const step = currentStep(state, candidate);
   return <div className="hqr-root">
     <ol className="hqr-steps" aria-label="Request progress">{STEPS.map((item) =>
@@ -33,10 +50,13 @@ export function RequestsView({ session, CompareSlot, dispatch = null, candidate 
     {!state.unknown && state.error && <p className="hqr-alert" role="alert">{state.error}</p>}
     {state.recovered.length > 0 && <p className="hqr-hint" role="status">{state.recovered.join(' ')}</p>}
     {candidate && <ReviewScreen session={session} state={state} candidate={candidate} CompareSlot={CompareSlot} />}
+    {(state.packets.length > 0 || state.candidates.length > 0) && <ReturnsInbox session={session} state={state} returnsPort={returnsPort}
+      navigation={navigation} selectedCandidateId={candidate?.candidateId ?? null} onSelect={setSelected} />}
     {state.draft
       ? <DraftEditor session={session} state={state} draft={state.draft} newId={newId} />
       : <p className="hqr-empty">No editable draft.</p>}
-    <PacketHistory packets={state.packets} dispatch={dispatch} />
+    <PacketHistory session={session} state={state} dispatch={dispatch} now={clock} navigation={navigation} />
+    {state.packets.length > 0 && <RunsView session={session} statusPort={statusPort} navigation={navigation} now={clock} />}
   </div>;
 }
 
