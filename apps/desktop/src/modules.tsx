@@ -12,3 +12,6 @@ export const MODULES: Readonly<Record<DomainId, ComponentType<ModulePort>>> = {
   social: SocialModule,
   work: WorkModule,
 };
+
+/** Module-area presentation per domain. 'fill' modules get the whole workspace below the context bar, unpadded. */
+export const MODULE_PRESENTATION: Readonly<Partial<Record<DomainId, 'fill'>>> = { design: designDomain.presentation };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { APPEARANCES, DOMAIN_IDS, isAppearance, parseProjectContext, type Appearance, type DesktopPort } from '@hq/contracts';
-import { DOMAIN_LABELS, MODULES } from './modules';
+import { DOMAIN_LABELS, MODULES, MODULE_PRESENTATION } from './modules';
 import { APPEARANCE_KEY, navigate, navigationKey, persist, readAppearance, readNavigation, resolveAppearance, type StoragePort } from './state';
 
 const CONTEXT = parseProjectContext({ id: 'hq-local', name: 'HQ workspace' })!;
@@ -16,6 +16,7 @@ export function App() {
   const [storageAvailable, setStorageAvailable] = useState(true);
   const theme = resolveAppearance(appearance, systemDark);
   const Module = MODULES[state.domain];
+  const fill = MODULE_PRESENTATION[state.domain] === 'fill';
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-color-scheme: dark)');
@@ -48,9 +49,9 @@ export function App() {
         }}>{APPEARANCES.map((value) => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select>
       </div>
     </aside>
-    <div className="workspace">
+    <div className={fill ? 'workspace is-fill' : 'workspace'}>
       <header className="context-bar"><span>{DOMAIN_LABELS[state.domain]}</span><span className="project-context">Project <strong>{CONTEXT.name}</strong></span></header>
-      <main key={`${CONTEXT.id}:${state.domain}`}><Module context={CONTEXT} destination={state.destinations[state.domain]}
+      <main className={fill ? 'is-fill' : undefined} key={`${CONTEXT.id}:${state.domain}`}><Module context={CONTEXT} destination={state.destinations[state.domain]}
         appearance={theme} desktop={window.hqDesktop ?? BROWSER_PORT}
         navigate={(destination) => setState((previous) => navigate(previous, state.domain, destination))} /></main>
       {!storageAvailable && <p className="storage-notice" role="status">Preferences are available for this session. Local storage is unavailable.</p>}

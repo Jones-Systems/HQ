@@ -88,6 +88,7 @@ afterEach(() => {
   setWorkSessionPort(null);
   resetWorkSessions();
   resetViewMemory();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.restoreAllMocks();
   window.localStorage.clear();
@@ -495,6 +496,40 @@ describe('appearance', () => {
     expect(allCalls()).toBe(callsBefore);
     expect(socialWrites()).toBe(0);
     expect(plannerWrites()).toBe(0);
+    expectNoExecution();
+  });
+});
+
+
+describe('Design shell presentation and leave persistence', () => {
+  it('fills only Design and flushes changed chrome synchronously when leaving', async () => {
+    // Freeze the debounce: no timer is advanced during the leave/restore proof.
+    vi.useFakeTimers();
+    // happy-dom does no layout and its ResizeObserver reports width 0.
+    vi.stubGlobal('ResizeObserver', undefined);
+    await act(async () => { render(<App />); });
+    expect(main().classList.contains('is-fill')).toBe(true);
+    const sidebar = screen.getByRole('button', { name: 'Sidebar' });
+    const wasPressed = sidebar.getAttribute('aria-pressed') === 'true';
+    await act(async () => { fireEvent.click(sidebar); });
+    const changedPressed = sidebar.getAttribute('aria-pressed') === 'true';
+    expect(changedPressed).toBe(!wasPressed);
+    const key = 'hq.design.ui-session.v1:hq-local';
+    // The module-scoped session can predate this test; only this change matters.
+    window.localStorage.removeItem(key);
+    await act(async () => { fireEvent.click(rail().getByRole('button', { name: 'Social' })); });
+    expect(main().classList.contains('is-fill')).toBe(false);
+    const saved = window.localStorage.getItem(key);
+    expect(saved).not.toBeNull();
+    expect(JSON.parse(saved!)).toMatchObject({
+      schema: 'hq.design.ui-session/v1', projectId: 'hq-local',
+      panels: { sidebar: { collapsed: !changedPressed } },
+    });
+    await act(async () => { fireEvent.click(rail().getByRole('button', { name: 'Work' })); });
+    expect(main().classList.contains('is-fill')).toBe(false);
+    await act(async () => { fireEvent.click(rail().getByRole('button', { name: 'Design' })); });
+    expect(main().classList.contains('is-fill')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Sidebar' }).getAttribute('aria-pressed')).toBe(String(changedPressed));
     expectNoExecution();
   });
 });
