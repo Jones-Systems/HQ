@@ -100,7 +100,7 @@ describe('requests adapter: create-only freeze', () => {
   });
 });
 
-describe('requests adapter: the real PR17 RequestStore over the real file store', () => {
+describe('requests adapter: the real PR33 RequestStore over the real file store', () => {
   it('freezes, survives a reopen, and refuses a second freeze of the same slot', async () => {
     const dir = makeDir();
     try {

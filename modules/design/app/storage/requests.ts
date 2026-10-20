@@ -1,5 +1,5 @@
 /**
- * Narrow adapter for the requests section (T6, bound to PR17 head 2438d6ff). It exposes exactly
+ * Narrow adapter for the requests section (T6, bound to PR33 head 896a726d; same eight-method port as PR17 2438d6ff). It exposes exactly
  * the eight methods T6's StoragePort uses and nothing else: no delete, no blob listing, no
  * adoption. Keys are confined to `design/requests/`.
  *

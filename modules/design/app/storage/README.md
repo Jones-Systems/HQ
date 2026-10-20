@@ -12,7 +12,7 @@ Narrow, namespace-bound adapters between the Design sections and the T9 file sto
 | `requests.ts` | renderer-safe | T6 `StoragePort` adapter (create-only freeze). |
 | `outbox.ts` | renderer-safe | T12 `OutboxStorePort` adapter (revision CAS). |
 | `canvas.ts` | renderer-safe | T3 `CanvasStoragePort` adapter (one-shot read token → real CAS). |
-| `export.ts` | renderer-safe | Privacy-projected request export, bound to PR17 v1. **Disabled by default.** |
+| `export.ts` | renderer-safe | Privacy-projected request export, bound to the v1 packet at requests PR33. **Disabled by default.** |
 | `canonical.ts` | renderer-safe | Pure RFC 8785 serializer. |
 | `node.ts` | Node only | Opens the T9 store and binds the adapters. Never import it from the renderer. |
 | `proposal/imports-txn.ts` | pure, not exported | **UNACCEPTED** T13 transaction proposal (conformance scaffolding). |
@@ -50,8 +50,17 @@ never enables it. A T6 freeze record also holds the consumed draft and the conti
 namespace membership is not enough: the projection copies `schema`, `packet` and `consumed` only,
 never reads `draft` documents, exports only attachments selected into a packet, omits and counts
 keys it does not know, and refuses the whole export on any record that is not the pinned v1 shape.
-Pin: requests head `2438d6ff96a84141e12e30bab2d28d042aa80d01` (`export.test.ts` also fails if the
+Pin: requests head `896a726dd92754c17f45e732b5c2cbd07a5ab3fa` (PR33; packet, freeze and review schemas unchanged since PR17 `2438d6ff`) (`export.test.ts` also fails if the
 requests source changes). Wiring for an extension adapter waits for its accepted delta.
+
+PR33 inputs (same port, new documents): candidates and review events go through allow-lists of
+their v1 keys. A return carrying `provenance` (host/model; connector or owner-reported) or a null
+`candidateVersionId` is not the v1 shape and is omitted whole and counted, as are reviews that
+point at an omitted return. `sends/` and `handoff/` documents (destination label, pinned/actual
+host and model, connector detail) are classified, never read, and counted as labelled omitted
+stores. `reject` is accepted as a decision under the unchanged review schema. Note: a frozen
+packet still carries its own `destination` (id and label) as v1 content, so that label is part of
+the exported packet; the send and handoff copies are not.
 
 ## T13 transactions (unaccepted proposal)
 
