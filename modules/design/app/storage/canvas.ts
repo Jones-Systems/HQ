@@ -7,7 +7,7 @@
  * read and the write is rejected by the store. A write with no token (never read, or the token was
  * already used) is refused rather than guessed. Text is stored byte-for-byte in a small envelope.
  */
-import { isStoreErrorCode, type WorkspaceBacking } from './backing.ts';
+import { isStoreErrorCode, type WorkspaceDocuments } from './backing.ts';
 import { TEXT_FORMAT } from './text-envelope.ts';
 
 export const CANVAS_KEY_ROOT = 'design.canvas.arrangement.v1/';
@@ -34,7 +34,7 @@ export class CanvasScopeError extends Error {
   }
 }
 
-export function createCanvasStorage(workspace: WorkspaceBacking): CanvasDocumentPort {
+export function createCanvasStorage(workspace: WorkspaceDocuments): CanvasDocumentPort {
   if (workspace.kind !== 'workspace') throw new CanvasScopeError('Canvas documents live only in a workspace view');
   /** Revision last read per key: a number, or null when the key was absent. */
   const tokens = new Map<string, number | null>();

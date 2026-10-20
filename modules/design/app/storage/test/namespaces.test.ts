@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { isStoreError } from '../../../../../packages/design-store/src/errors.ts';
 import { asReader, bindCache, bindWorkspace, NamespaceClassError } from '../backing.ts';
+import { createProjectsStorage, createComponentsStorage, createFlowsStorage, createCompareStorage, createAnnotationsStorage } from '../index.ts';
 import { createCanvasStorage } from '../canvas.ts';
 import { createDiscoveryCacheReader } from '../discovery-cache.ts';
 import { createRequestsExport } from '../export.ts';
@@ -55,6 +56,11 @@ describe('namespace separation', () => {
         'requests adapter with cache': createRequestsStoragePort({ workspace, cache: await bindCache(store) }),
         'outbox adapter': createOutboxAdapter(workspace),
         'canvas adapter': createCanvasStorage(workspace),
+        projects: createProjectsStorage(workspace),
+        components: createComponentsStorage(workspace),
+        flows: createFlowsStorage(workspace),
+        compare: createCompareStorage(workspace),
+        annotations: createAnnotationsStorage(workspace),
         'export port': createRequestsExport(asReader(workspace)),
         'discovery cache reader': createDiscoveryCacheReader(await bindCache(store)),
         'node wiring workspace': storage.workspace,
