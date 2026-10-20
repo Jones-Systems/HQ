@@ -13,6 +13,8 @@ VITEST="$ROOT/node_modules/.bin/vitest"
 
 CONES=(annotations canvas compare components connector discovery flows imports projects references requests taste ui)
 STORE=packages/design-store
+# Production composition entry (COMPOSE) and its renderer-safe storage seam (STORE).
+APP=modules/design/app
 VITEST_CONES=(annotations canvas compare components references requests taste ui)
 
 failures=0
@@ -29,11 +31,16 @@ for cone in "${CONES[@]}"; do
   [ -f "modules/design/$cone/tsconfig.json" ] || { echo "MISSING cone modules/design/$cone"; failures=$((failures + 1)); }
 done
 [ -f "$STORE/tsconfig.json" ] || { echo "MISSING cone $STORE"; failures=$((failures + 1)); }
+for config in "$APP/tsconfig.json" "$APP/storage/tsconfig.json"; do
+  [ -f "$config" ] || { echo "MISSING $config"; failures=$((failures + 1)); }
+done
 
 for cone in "${CONES[@]}"; do
   run "$cone typecheck" "$TSC" -p "modules/design/$cone/tsconfig.json"
 done
 run "design-store typecheck" "$TSC" -p "$STORE/tsconfig.json"
+run "app typecheck" "$TSC" -p "$APP/tsconfig.json"
+run "app storage typecheck" "$TSC" -p "$APP/storage/tsconfig.json"
 run "preview typecheck" "$TSC" -p modules/design/preview/tsconfig.json
 
 # node:test files per cone. *.tsx renders and compare's suites run under vitest.
@@ -53,6 +60,10 @@ for cone in "${CONES[@]}"; do
   esac
 done
 run "design-store node:test" bash -c "cd $STORE && node --test --test-concurrency=1 test/*.test.ts"
+# shellcheck disable=SC2086
+run "app compose node:test" node --test --test-concurrency=1 $APP/compose/test/*.test.ts
+# shellcheck disable=SC2086
+run "app storage node:test" node --test --test-concurrency=1 $APP/storage/test/*.test.ts
 run "preview node:test" node --test --test-concurrency=1 modules/design/preview/test/*.test.ts
 
 for cone in "${VITEST_CONES[@]}"; do

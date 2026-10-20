@@ -12,8 +12,11 @@ import { buildRegistry } from '../../ui/src/registry.ts';
 const designRoot = fileURLToPath(new URL('../../', import.meta.url));
 const sectionsRoot = fileURLToPath(new URL('../sections/', import.meta.url));
 
-/** Cones under modules/design/ that are not sections: T14's chrome and this preview. */
-const NOT_SECTIONS = new Set(['ui', 'preview']);
+/**
+ * Directories under modules/design/ that are not sections: T14's chrome, this
+ * preview, and the production composition entry (app/index.ts, compose, storage).
+ */
+const NOT_SECTIONS = new Set(['ui', 'preview', 'app']);
 
 const PLACEMENT: Readonly<Record<string, string>> = {
   projects: 'projects', discovery: 'projects',
@@ -53,4 +56,6 @@ test('T14 registry accepts all preview descriptors with the suggested placement'
 test('preview descriptors stay out of the production section glob', () => {
   // T14's production glob is modules/design/*/design-module.ts (one level deep).
   assert.equal(existsSync(fileURLToPath(new URL('../design-module.ts', import.meta.url))), false);
+  // The production entry directory must not register itself as a section either.
+  assert.equal(existsSync(fileURLToPath(new URL('../../app/design-module.ts', import.meta.url))), false);
 });

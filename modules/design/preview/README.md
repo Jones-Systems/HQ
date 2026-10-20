@@ -64,8 +64,13 @@ npx vite build --config modules/design/preview/vite.config.ts
 modules/design/preview/section-checks.sh
 ```
 
+`section-checks.sh` also runs the production entry's rows: the `app` and
+`app/storage` typechecks and their node:test suites.
+
 `test/registry.test.ts` checks that every section cone has exactly one preview
-descriptor and that T14's registry accepts them all. `test/egress-scan.test.ts`
+descriptor and that T14's registry accepts them all. `modules/design/app` is the
+production composition entry, not a section, so it has no preview descriptor and
+must never hold a `design-module.ts`. `test/egress-scan.test.ts`
 walks the preview's import graph from `main.tsx` and checks four things:
 - no network, bridge or Node API appears in it;
 - the isolation probe, Node adapters, preview agent and store stay out of it;
