@@ -23,6 +23,8 @@ real capture or native runtime.
 - `ui/` — pure view model plus `ReferenceLibraryView` and `ReferenceLibraryPanel`.
 - Reference graph (`hq.design.reference-graph/v1`, see below): `src/graph-contract.ts`, `graph-identity.ts`,
   `rights.ts`, `graph-import.ts`, `graph-ops.ts`, `graph-persist.ts`, `graph-flat.ts`, `graph-service.ts`.
+- `ui/ReferenceGraphView.tsx`, `ReferenceGraphPanel.tsx`, `graph-view-model.ts` — graph browser (tree, captures,
+  anchors, availability, rights, explicit pin). `harness/` is a section-local Vite review harness over fakes.
 - Reference packets and bundles (`hq.design.reference-packet/v1`, see below): `src/packet.ts` plus
   `ReferenceGraph.exportPacket` / `adoptPacket`.
 
@@ -117,6 +119,12 @@ carries no bytes, URLs to fetch, markup or timestamps, so one selection has one 
   with a `RightsSummary` (`total`, `permitted`, `restricted`, `unknown`, `private`, `agentReportedGrants`,
   `publishable`). Root maps it to existing request evidence; `bundleMatchesPacket` checks it is exactly the
   projection of a packet. A bundle names captures and counts; it carries no content.
+
+## Review harness
+
+`node_modules/.bin/vite --config modules/design/references/harness/vite.config.ts` serves the graph browser
+on `127.0.0.1:5191` with synthetic sites, apps and labelled fake storage. It copies the shell's theme tokens
+and is not the desktop shell, Electron or a real store.
 
 ## Checks
 
