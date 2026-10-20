@@ -38,7 +38,8 @@ export async function authorizeJones(base: string, openBrowser: (url: string) =>
     url.search = new URLSearchParams({ response_type: 'code', client_id: registration.client_id, redirect_uri: redirect, code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', state, resource: new URL('/mcp', base).href, scope: 'orchestration:read orchestration:operate' }).toString();
     timeout = setTimeout(() => rejectCode(Error('Authorization timed out')), 180000);
     await openBrowser(url.href);
-    const response = await fetcher(new URL('/oauth/mcp/token', base), { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20000), headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code: await code, redirect_uri: redirect, client_id: registration.client_id, code_verifier: verifier, resource: new URL('/mcp', base).href }) });
+    const authorizationCode = await code;
+    const response = await fetcher(new URL('/oauth/mcp/token', base), { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20000), headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code: authorizationCode, redirect_uri: redirect, client_id: registration.client_id, code_verifier: verifier, resource: new URL('/mcp', base).href }) });
     if (!response.ok) { await response.body?.cancel(); throw Error('Token exchange unavailable'); }
     const token: unknown = JSON.parse(await boundedResponse(response, 65536));
     if (!record(token) || typeof token.access_token !== 'string' || token.access_token.length > 32768 || String(token.token_type).toLowerCase() !== 'bearer' || !Number.isSafeInteger(token.expires_in) || Number(token.expires_in) <= 0) throw Error('Invalid token response');
