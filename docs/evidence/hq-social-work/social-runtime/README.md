@@ -47,13 +47,24 @@ No canonical shared type exists yet. The mirror is local: `modules/social/live/t
 - **Request bodies.** Mutation parameters are the exact JSON body the service reads: the draft fields with `id`/`version` for an update, `{name}` and `{tool, input, is_example}`.
 - **No transport details.** The renderer passes no URL, method, header or token.
 - **Validation before sending.** `checkDraft`, `checkBrandName` and `checkRunSubmission` run first, and so do the run-ID and tool checks. An invalid call makes zero transport calls.
-- **Links.** `links` are sent only when the last snapshot advertised `hq-references-v1`. If no snapshot has been read and a draft carries links, one `workspace` read learns the capability first.
+- **Links.** `links` are sent only when the last snapshot advertised `hq-references-v1`. If no snapshot has been read and a draft carries links, one `workspace` read learns the capability first. If that pre-read fails in any way, no mutation is sent and the result is `unavailable`.
+- **Read versus mutation (settled Design common seam).** An *uncertain* outcome means one of: a thrown transport call, a malformed envelope, `ok:false kind:'unknown'`, a malformed 2xx result, a known error status without an exact `{error: string}` body, or a 5xx/unmapped status. It is `unavailable` on a read route (`workspace`, `sample`, `run`) and `unknown` on a mutation route (`saveContent`, `addBrand`, `submitRun`).
+
+  | Outcome | Read routes | Mutation routes |
+  | --- | --- | --- |
+  | `ok:false kind:'unavailable'` | `unavailable` | `unavailable` |
+  | `ok:false kind:'unknown'`, thrown call, malformed envelope (including the retired `kind:'http'`) | `unavailable` | `unknown` |
+  | 2xx failing its guard | `unavailable` | `unknown` |
+  | 400/422, 409, 403, 404 with exact `{error: string}` | `invalid` / `conflict` / `forbidden` / `not_found` | same |
+  | The same statuses without exact `{error: string}` | `unavailable` | `unknown` |
+  | 5xx, 3xx or any unmapped status | `unavailable` | `unknown` |
+
 - **Status mapping (`ok: true`).**
-  - 2xx passes through fail-closed guards. A malformed 2xx result is `unknown`.
+  - 2xx passes through fail-closed guards. A malformed 2xx result is uncertain.
   - 400/422 → `invalid`; 409 → `conflict`, for example `Run queue is full. Wait for a run to finish.`; 403 → `forbidden`; 404 → `not_found`.
-  - Each of these requires the body to be exactly `{error: string}` and shows that text. Otherwise the result is `unknown`.
-  - 5xx and any unmapped status → `unknown` (see deferred finding F-1).
-- **Transport failures.** A thrown transport call, a malformed envelope or `ok:false kind:'unknown'` → `unknown`. `ok:false kind:'unavailable'` → `unavailable`.
+  - Each of these requires the body to be exactly `{error: string}` and shows that text. Otherwise the result is uncertain.
+  - 5xx and any unmapped status are uncertain (see deferred finding F-1).
+- **Transport failures.** A thrown transport call, a malformed envelope or `ok:false kind:'unknown'` is uncertain. `ok:false kind:'unavailable'` → `unavailable` on every route.
 - **Guards.** They check every promised field and drop the rest. The workspace token (`csrf`) never leaves the adapter, and no csrf token reaches the session. `features` defaults to `[]` when absent. `observedAt` and `attemptedAt` are client stamps.
 - **`submitRun`.** Exactly one transport call; the adapter never retries.
 - **Production source selection** (`nav/workspace.ts`, `index.tsx`).
@@ -84,6 +95,15 @@ Each check started after a fresh `collect_work_capacity.py --format admission` r
 | `npm run build` | 07:17:23, CPU 22.05%, 41.02 GiB | built; the existing >500 kB chunk warning only |
 | `vitest run modules/social/live` (after a test rename) | 07:18:31, CPU 43.48%, 40.50 GiB | 166 tests passed |
 
+**Read/mutation correction** (T1 bounded follow-up on PR #48, after the root inspected `017a2cb`). Only `live/port.ts`, `live/test/live.test.ts`, this README and the PR body changed.
+
+| Check | Telemetry (UTC) | Result |
+| --- | --- | --- |
+| `vitest run modules/social/live` (iterating) | 07:32:52, CPU 32.60%, 41.18 GiB | 313 tests passed |
+| `vitest run modules/social apps/desktop` (final, social-module + shell-integration) | 07:33:11, CPU 18.73%, 41.39 GiB | 19 files, 617 tests passed |
+| `npm run typecheck` (final) | 07:33:17, CPU 27.19%, 41.32 GiB | clean |
+| `npm run build` (final) | 07:33:19, CPU 25.71%, 41.33 GiB | built; the existing >500 kB chunk warning only |
+
 Coverage:
 
 - **Conformance.** The same shared suite (`core/test/port-conformance.ts`) runs against the live port through the fictional wire-codec bridge stub (`live/test/wire-stub.ts`), with and without `hq-references-v1`.
@@ -91,18 +111,19 @@ Coverage:
   - The native workspace body, including the token and with no features.
   - 409 for a full queue and for a stale draft; 400; 422; 403; 404; 500; 503; 418; 302.
   - Malformed error bodies: null, non-string, list, missing or bare string.
-  - `ok:false` unavailable and unknown, on every method; a transport exception.
-  - Malformed envelopes, including the retired `kind:'http'`.
+  - `ok:false` unavailable and unknown, a transport exception and malformed envelopes (including the retired `kind:'http'`).
   - Malformed 2xx results for runs, drafts, brands, workspace and sample.
+  - Each received status, failure and malformed envelope runs against every port method, and asserts the read-versus-mutation result above. Malformed 2xx results are tagged by route class.
+  - A failed capability pre-read (throw, unknown, unavailable, 500, 403 or malformed body) sends no `saveContent` and is `unavailable`.
 - **One submit call.** Exactly one transport call and one execution-class port call after a throw, unknown, malformed result, 500, unavailable and 409. A lost result is `unknown`, and the stub service holds exactly one new run.
 - **Zero execution.** Navigation across every section plus remounts, with the live source: zero `submitRun`, `saveContent` or `addBrand` calls, and one `workspace` read.
 - **Source selection and banner.** Absent and malformed bridges, a valid bridge, select-once, unavailable-with-no-fallback and the harness API.
 
 ## Deferred findings (original severity; not implemented)
 
-- **F-1 (P2).** `PortError` (owned by `core`) has no server-error kind carrying a message. A 5xx therefore maps to `unknown`, and the service's 500 text (`The service could not complete this request. Your existing data is preserved.`) is not shown. Showing it needs a `core` port change, so it is proposed to T1 rather than widened here.
+- **F-1 (P2).** `PortError` (owned by `core`) has no server-error kind carrying a message. A 5xx therefore maps to `unavailable` on a read and `unknown` on a mutation, and the service's 500 text (`The service could not complete this request. Your existing data is preserved.`) is not shown. Showing it needs a `core` port change, so it is proposed to T1 rather than widened here.
 - **F-2 (P3).** The adapter learns `features` only from a snapshot. A capability change after the last snapshot is seen at the next snapshot.
-- **F-3 (P3).** An unknown future tool ID or category in `workspace.tools` fails the whole snapshot closed (`unknown`), rather than hiding that one tool.
+- **F-3 (P3).** An unknown future tool ID or category in `workspace.tools` fails the whole snapshot closed (`unavailable`, as a read), rather than hiding that one tool.
 
 ## Unverified
 

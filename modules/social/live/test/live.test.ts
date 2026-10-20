@@ -75,14 +75,18 @@ async function rejection(promise: Promise<unknown>): Promise<PortError> {
 }
 
 type Call = (port: SocialWorkspacePort) => Promise<unknown>;
-const CALLS: [string, Call][] = [
-  ['snapshot', (port) => port.snapshot()],
-  ['saveDraft', (port) => port.saveDraft({ title: 'Fictional title', body: '', brand_id: 'default', channel: 'General', planned_date: '', archived: 0 })],
-  ['addBrand', (port) => port.addBrand('Fictional brand')],
-  ['example', (port) => port.example('x-studio')],
-  ['run', (port) => port.run(RUN_ID)],
-  ['submitRun', (port) => port.submitRun('x-studio', { notes: 'Fictional notes' }, false)],
+type RouteClass = 'read' | 'mutation';
+/** Every port method, by the class of its single route: `workspace`, `sample`, `run` read; the rest mutate. */
+const CALLS: [string, RouteClass, Call][] = [
+  ['snapshot', 'read', (port) => port.snapshot()],
+  ['example', 'read', (port) => port.example('x-studio')],
+  ['run', 'read', (port) => port.run(RUN_ID)],
+  ['saveDraft', 'mutation', (port) => port.saveDraft({ title: 'Fictional title', body: '', brand_id: 'default', channel: 'General', planned_date: '', archived: 0 })],
+  ['addBrand', 'mutation', (port) => port.addBrand('Fictional brand')],
+  ['submitRun', 'mutation', (port) => port.submitRun('x-studio', { notes: 'Fictional notes' }, false)],
 ];
+/** The settled seam: an uncertain read is `unavailable`; an uncertain mutation is `unknown`. */
+const UNCERTAIN: { readonly [C in RouteClass]: PortError } = { read: { kind: 'unavailable' }, mutation: { kind: 'unknown', attemptedAt: NOW } };
 
 describe('live Social port: exact synthetic exchanges', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -145,7 +149,22 @@ describe('live Social port: exact synthetic exchanges', () => {
     expect(calls.map((call) => call.route)).toEqual(['workspace']);
   });
 
-  describe('received HTTP responses branch on status; the exact { error } text is shown', () => {
+  it.each<[string, unknown]>([
+    ['a transport exception', new Error('IPC channel closed')],
+    ['an unknown transport outcome', { ok: false, kind: 'unknown' }],
+    ['a known unavailable', { ok: false, kind: 'unavailable' }],
+    ['a 500', err(500, 'The service could not complete this request. Your existing data is preserved.')],
+    ['a 403', err(403, 'Unrecognized host')],
+    ['a malformed workspace body', ok({ brands: 'none' })],
+  ])('makes no mutation and is unavailable when the capability pre-read fails with %s', async (_name, outcome) => {
+    const { transport, calls } = scriptedTransport([outcome]);
+    const links = [{ version: 1, domain: 'work', projectId: 'p', kind: 'item', entityId: 'card-1', title: 'Card', returnDestination: { domain: 'social', destination: 'library' } }];
+    const draft = { title: 'Linked', body: '', brand_id: 'default', channel: 'General' as const, planned_date: '', archived: 0 as const, links: links as never };
+    expect(await rejection(createLiveSocialPort(transport, { now: at }).saveDraft(draft))).toEqual({ kind: 'unavailable' });
+    expect(calls.map((call) => call.route)).toEqual(['workspace']);
+  });
+
+  describe.each(CALLS)('%s (%s route): received HTTP responses branch on status', (_method, routeClass, call) => {
     it.each<[string, ServiceResponse, PortError]>([
       ['409 full run queue', err(409, MESSAGES.queueFull), { kind: 'conflict', message: MESSAGES.queueFull }],
       ['409 stale draft', err(409, MESSAGES.conflict), { kind: 'conflict', message: MESSAGES.conflict }],
@@ -153,83 +172,74 @@ describe('live Social port: exact synthetic exchanges', () => {
       ['422 validation', err(422, 'Fictional validation message'), { kind: 'invalid', message: 'Fictional validation message' }],
       ['403 after the main-process refresh', err(403, 'Reload the workspace before saving'), { kind: 'forbidden' }],
       ['404', err(404, 'Run not found'), { kind: 'not_found' }],
-      ['500', err(500, 'The service could not complete this request. Your existing data is preserved.'), { kind: 'unknown', attemptedAt: NOW }],
-      ['503', err(503, 'Fictional gateway text'), { kind: 'unknown', attemptedAt: NOW }],
-      ['an unmapped 4xx', err(418, 'Fictional'), { kind: 'unknown', attemptedAt: NOW }],
-      ['a 3xx (redirects are disabled in main)', ok({ error: 'moved' }, 302), { kind: 'unknown', attemptedAt: NOW }],
-    ])('%s', async (_name, response, expected) => {
+    ])('a known %s keeps its meaning and exact { error } text', async (_name, response, expected) => {
       const { transport, calls } = scriptedTransport([response]);
-      expect(await rejection(createLiveSocialPort(transport, { now: at }).submitRun('x-studio', { notes: 'Fictional' }, false))).toEqual(expected);
+      expect(await rejection(call(createLiveSocialPort(transport, { now: at })))).toEqual(expected);
       expect(calls).toHaveLength(1);
     });
 
-    it.each<[string, unknown]>([
-      ['a null body', null],
-      ['a non-string error', { error: 409 }],
-      ['an error list', { error: ['Run queue is full.'] }],
-      ['a missing error', { detail: 'Run queue is full.' }],
-      ['a bare string', 'Run queue is full.'],
-      ['an array body', [{ error: 'x' }]],
-    ])('fails closed to unknown on a 409 with %s', async (_name, body) => {
-      const { transport } = scriptedTransport([{ ok: true, status: 409, body, replayed: false }]);
-      expect(await rejection(createLiveSocialPort(transport, { now: at }).submitRun('x-studio', {}, false))).toEqual({ kind: 'unknown', attemptedAt: NOW });
-    });
-
-    it.each([400, 403, 404, 422, 500])('fails closed to unknown on a %i with a malformed body', async (status) => {
-      const { transport } = scriptedTransport([{ ok: true, status, body: { error: null }, replayed: false }]);
-      expect(await rejection(createLiveSocialPort(transport, { now: at }).run(RUN_ID))).toEqual({ kind: 'unknown', attemptedAt: NOW });
+    it.each<[string, ServiceResponse]>([
+      ['500', err(500, 'The service could not complete this request. Your existing data is preserved.')],
+      ['503', err(503, 'Fictional gateway text')],
+      ['an unmapped 4xx', err(418, 'Fictional')],
+      ['a 3xx (redirects are disabled in main)', ok({ error: 'moved' }, 302)],
+      ['409 with a null body', ok(null, 409)],
+      ['409 with a non-string error', err(409, 409)],
+      ['409 with an error list', err(409, ['Run queue is full.'])],
+      ['409 with a missing error', ok({ detail: 'Run queue is full.' }, 409)],
+      ['409 with a bare string', ok('Run queue is full.', 409)],
+      ['409 with an array body', ok([{ error: 'x' }], 409)],
+      ...[400, 403, 404, 422, 500].map((status): [string, ServiceResponse] => [`${status} with a null error`, err(status, null)]),
+    ])('an uncertain %s is unavailable on a read and unknown on a mutation', async (_name, response) => {
+      const { transport, calls } = scriptedTransport([response]);
+      expect(await rejection(call(createLiveSocialPort(transport, { now: at })))).toEqual(UNCERTAIN[routeClass]);
+      expect(calls).toHaveLength(1);
     });
   });
 
-  describe('transport failures', () => {
-    it.each(CALLS)('%s: a known unavailable stays unavailable', async (_name, call) => {
+  describe.each(CALLS)('%s (%s route): transport failures', (_method, routeClass, call) => {
+    it('a known unavailable stays unavailable', async () => {
       const { transport, calls } = scriptedTransport([{ ok: false, kind: 'unavailable' }]);
       expect(await rejection(call(createLiveSocialPort(transport, { now: at })))).toEqual({ kind: 'unavailable' });
       expect(calls).toHaveLength(1);
     });
 
-    it.each(CALLS)('%s: an unknown transport outcome is unknown', async (_name, call) => {
-      const { transport } = scriptedTransport([{ ok: false, kind: 'unknown' }]);
-      expect(await rejection(call(createLiveSocialPort(transport, { now: at })))).toEqual({ kind: 'unknown', attemptedAt: NOW });
-    });
-
-    it.each(CALLS)('%s: a transport exception is unknown', async (_name, call) => {
-      const { transport } = scriptedTransport([new Error('IPC channel closed')]);
-      expect(await rejection(call(createLiveSocialPort(transport, { now: at })))).toEqual({ kind: 'unknown', attemptedAt: NOW });
-    });
-
     it.each<[string, unknown]>([
+      ['an unknown transport outcome', { ok: false, kind: 'unknown' }],
+      ['a transport exception', new Error('IPC channel closed')],
       ['the retired kind http', { ok: false, kind: 'http', status: 409, body: { error: MESSAGES.queueFull } }],
       ['ok:true without status', { ok: true, body: NATIVE.run, replayed: false }],
       ['ok:true without body', { ok: true, status: 200, replayed: false }],
       ['a non-integer status', { ok: true, status: '200', body: NATIVE.run, replayed: false }],
       ['a non-boolean replayed', { ok: true, status: 200, body: NATIVE.run, replayed: 'yes' }],
-      ['undefined', undefined],
-      ['a string', 'ok'],
-    ])('treats a malformed envelope (%s) as unknown', async (_name, envelope) => {
-      const { transport } = scriptedTransport([envelope]);
-      expect(await rejection(createLiveSocialPort(transport, { now: at }).submitRun('x-studio', {}, false))).toEqual({ kind: 'unknown', attemptedAt: NOW });
+      ['an undefined envelope', undefined],
+      ['a string envelope', 'ok'],
+    ])('%s is unavailable on a read and unknown on a mutation', async (_name, outcome) => {
+      const { transport, calls } = scriptedTransport([outcome]);
+      expect(await rejection(call(createLiveSocialPort(transport, { now: at })))).toEqual(UNCERTAIN[routeClass]);
+      expect(calls).toHaveLength(1);
     });
   });
 
   describe('fail-closed 2xx guards', () => {
-    it.each<[string, Call, unknown]>([
-      ['a run without status', (port) => port.submitRun('x-studio', {}, false), { ...NATIVE.run, status: undefined }],
-      ['a run with an unknown status', (port) => port.submitRun('x-studio', {}, false), { ...NATIVE.run, status: 'done' }],
-      ['a run with a boolean example flag', (port) => port.submitRun('x-studio', {}, false), { ...NATIVE.run, is_example: false }],
-      ['an empty body', (port) => port.submitRun('x-studio', {}, false), null],
-      ['a draft with archived 2', (port) => port.saveDraft({ title: 'T', body: '', brand_id: 'default', channel: 'General', planned_date: '', archived: 0 }), { ...NATIVE.draft, archived: 2 }],
-      ['a draft without version', (port) => port.saveDraft({ title: 'T', body: '', brand_id: 'default', channel: 'General', planned_date: '', archived: 0 }), { ...NATIVE.draft, version: undefined }],
-      ['a draft with malformed links', (port) => port.saveDraft({ title: 'T', body: '', brand_id: 'default', channel: 'General', planned_date: '', archived: 0 }), { ...NATIVE.draft, links: [{ version: 2 }] }],
-      ['a brand without a name', (port) => port.addBrand('Fictional'), { id: 'b1'.repeat(16) }],
-      ['a workspace with an unknown tool', (port) => port.snapshot(), { ...NATIVE.workspace, tools: [{ ...NATIVE.workspace.tools[0], id: 'mystery' }] }],
-      ['a workspace without runs', (port) => port.snapshot(), { ...NATIVE.workspace, runs: undefined }],
-      ['a workspace with non-string features', (port) => port.snapshot(), { ...NATIVE.workspace, features: [1] }],
-      ['a sample that is a list', (port) => port.example('x-studio'), [1, 2]],
-      ['a run read missing its record fields', (port) => port.run(RUN_ID), { id: RUN_ID }],
-    ])('%s is unknown', async (_name, call, body) => {
+    it.each<[string, RouteClass, Call, unknown]>([
+      ['a run without status', 'mutation', (port) => port.submitRun('x-studio', {}, false), { ...NATIVE.run, status: undefined }],
+      ['a run with an unknown status', 'mutation', (port) => port.submitRun('x-studio', {}, false), { ...NATIVE.run, status: 'done' }],
+      ['a run with a boolean example flag', 'mutation', (port) => port.submitRun('x-studio', {}, false), { ...NATIVE.run, is_example: false }],
+      ['an empty submit body', 'mutation', (port) => port.submitRun('x-studio', {}, false), null],
+      ['a draft with archived 2', 'mutation', (port) => port.saveDraft({ title: 'T', body: '', brand_id: 'default', channel: 'General', planned_date: '', archived: 0 }), { ...NATIVE.draft, archived: 2 }],
+      ['a draft without version', 'mutation', (port) => port.saveDraft({ title: 'T', body: '', brand_id: 'default', channel: 'General', planned_date: '', archived: 0 }), { ...NATIVE.draft, version: undefined }],
+      ['a draft with malformed links', 'mutation', (port) => port.saveDraft({ title: 'T', body: '', brand_id: 'default', channel: 'General', planned_date: '', archived: 0 }), { ...NATIVE.draft, links: [{ version: 2 }] }],
+      ['a brand without a name', 'mutation', (port) => port.addBrand('Fictional'), { id: 'b1'.repeat(16) }],
+      ['a workspace with an unknown tool', 'read', (port) => port.snapshot(), { ...NATIVE.workspace, tools: [{ ...NATIVE.workspace.tools[0], id: 'mystery' }] }],
+      ['a workspace without runs', 'read', (port) => port.snapshot(), { ...NATIVE.workspace, runs: undefined }],
+      ['a workspace with non-string features', 'read', (port) => port.snapshot(), { ...NATIVE.workspace, features: [1] }],
+      ['an empty workspace body', 'read', (port) => port.snapshot(), null],
+      ['a sample that is a list', 'read', (port) => port.example('x-studio'), [1, 2]],
+      ['a run read missing its record fields', 'read', (port) => port.run(RUN_ID), { id: RUN_ID }],
+    ])('%s (%s) is uncertain', async (_name, routeClass, call, body) => {
       const { transport, calls } = scriptedTransport([ok(body)]);
-      expect(await rejection(call(createLiveSocialPort(transport, { now: at })))).toEqual({ kind: 'unknown', attemptedAt: NOW });
+      expect(await rejection(call(createLiveSocialPort(transport, { now: at })))).toEqual(UNCERTAIN[routeClass]);
       expect(calls).toHaveLength(1);
     });
 
