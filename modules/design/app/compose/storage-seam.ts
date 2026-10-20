@@ -2,9 +2,8 @@
  * Compile-time alignment of compose's storage stand-ins with STORE's renderer-safe seam.
  *
  * TYPES ONLY. Every import below is `import type` from `../storage/index.ts` (never `node.ts`), so
- * nothing here exists at runtime; test/renderer-safe.test.ts proves the runtime graph. Real
- * instances of these ports can reach the renderer only through a held main-process bridge, which is
- * out of scope: the fakes in workspace.ts stay the only implementations compose uses.
+ * nothing here exists at runtime; test/renderer-safe.test.ts proves the runtime graph. The production workspace now supplies F1 adapters through the validated document bridge;
+ * the unbridged workspace retains its labelled fakes.
  */
 import type { CanvasStoragePort } from '../../canvas/src/contract.ts';
 import type { CacheStoragePort } from '../../discovery/src/contract.ts';
