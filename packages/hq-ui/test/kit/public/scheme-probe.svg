@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="96" viewBox="0 0 160 96">
+  <!-- Fictional export probe. As an <img>, this follows the owner element's used color-scheme. -->
+  <style>
+    .bg { fill: #f4f1e6; } .ink { fill: #2c4a7a; }
+    @media (prefers-color-scheme: dark) { .bg { fill: #1b1d24; } .ink { fill: #e8b04c; } }
+  </style>
+  <rect class="bg" width="160" height="96" />
+  <rect class="ink" x="16" y="16" width="56" height="64" rx="6" />
+  <circle class="ink" cx="116" cy="48" r="28" />
+</svg>
