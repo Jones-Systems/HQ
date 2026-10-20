@@ -205,6 +205,26 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
     - Browser evidence: 19 synthetic loopback captures in T3 Browser at `cbd71af`. From `cbd71af` to `014593b`, only the README and evidence files change.
     - Packaging obligations for the held integration owner: the CSS file under CSP, Node tests kept out of Vitest, Node ≥ 22.18, and no implicit shared seam.
   - Deferred, not repaired: the original P2 (destination length) and P3 (null-key presence). UI adds new P3s and P4s.
+  - **Wiki continuity owner disposition: ACCEPTED SOURCE ONLY**, for exactly `task.wiki-core.001` (PR #39 at `b57bcd234d11270df4d045d8d24136b150456c3d`) and `task.wiki-ui.001` (PR #38 at `014593b033b4eaa523c4dc5f35159639d2081d04`).
+    - Basis (the owner's read-only review):
+      - the PR #30 plan at `61fbcdb`: requirements, interface, tasks, tests and capsules;
+      - both finals and READMEs, plus a bounded source inspection;
+      - the exact `76a1dbc` base, open non-draft state, the 32- and 56-file cones, ancestry and contract identity;
+      - for UI, the served `cbd71af` source, fixture, test and harness trees equal `014593b`, and the evidence README plus representative light and dark captures were inspected.
+    - Checks are author-reported: 214 Node tests in 9 files plus `tsc` (Core); 105 Node tests in 10 files plus `tsc`, mutation probes and 19 synthetic captures (UI). The owner ran no tests or Browser, and zero CI is not green CI.
+    - Not covered: independent review, and full Wiki, app or private acceptance.
+    - Core departures, kept as reported: it omitted the mandated Codex-V3 AGENTS read; it ran an exploratory `tsc` before admission; and an accidental `/tmp/dummy` run timed out, with removal reported by the author. No clean-preflight claim, rollback or repair.
+    - Findings, deferred and unrepaired at original severity:
+      - original P2 (destination 512 vs 16,384) and P3 (null-presence loss);
+      - UI at `014593b`, P3: topic cycles; filter and disambiguation cannot be restored;
+      - UI at `014593b`, P4: path-only labels, the echo heuristic, the empty-destination notice, unmeasured large render cost, and no screen-reader or narrow-viewport evidence.
+    - Packaging obligations kept:
+      - the CSS file under CSP;
+      - workspace, package and tsconfig wiring;
+      - Node tests excluded from Vitest, with Node ≥ 22.18;
+      - possible contract-import promotion;
+      - a closed seven-method preload/IPC with host-only refresh and the `home` migration.
+    - Still held: no further work is released. C, the shared seam, private validation, corpus, config, repairs, merge, live and install all stay held; PR #41's publication does not release C. The common accepted Design+Social/Work base and the named shared-writer prerequisites remain.
   - Lifecycle gap: both children report to WK-C's thread. T1's `task_status` returns `task_not_found` for these grandchildren, so T1 read their results through WK-C's follow-up runs and the children's native threads.
 - **B released** after A's acceptance. Its compiled capsule is `3d935de4…` at plan head `00afa36e`, with the actual ready set exactly `{domain-integration}`.
 - **B completed; the root accepted it as S** (2026-10-20) for bounded fixture/source use. This is not independent review, native proof or green CI.
