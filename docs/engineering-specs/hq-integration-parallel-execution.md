@@ -85,7 +85,7 @@ These keep `prd.hq-design`, `spec.hq-design` and `spec.hq-expansion` intact:
 
 - **Production loop (CL1).** Requests, Runs and References are mounted in the production Design registry over durable lane ports. The loop runs freeze → strict packet verification → outbox CAS → labelled fake dispatch with a durable send record → evidence → returned inbox → accept, reject or revise. The only destination is the labelled simulated one ("Simulated — nothing sent"). An owner-reported return can never claim native verification.
 - **Import and export (CL4).** One durable-manifest transaction (`hq.design.storage.import-txn/v1`) is all-or-nothing for every reader through the Design host under process kill. `recover()` runs at open before any route is served and finishes a committed intent by idempotent replay (`clientEventId` dedupes). Only torn-tail repair is never automatic: a torn tail leaves the intent blocked until the explicit owner action `import.repair`, which quarantines the original bytes. A corrupt stream is refused and never repaired. Export produces bundle/v1 with per-section allow-lists and an exact omitted-store report. Both stay disabled (`unavailable`, reason `disabled`) until `ac.import-export-enablement.001` is satisfied.
-- **Local catalog (CL7).** A user-selected laptop-local root feeds the discovery `SourceAdapter`. Main keeps the absolute path, and the renderer sees only `{rootId, label}`.
+- **Local catalog (CL7).** One active user-selected laptop-local root feeds the discovery `SourceAdapter`; choosing a different root explicitly replaces the selection. Main keeps the absolute path, and the renderer sees only `{rootId, label}`. Snapshot completeness covers that configured root under the fixed `laptop-local` host, with a durable host-wide generation across replacement, forget and restart; failed refreshes preserve cached records and workspace links.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#req.design-closure.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#req.references-closure.001" -->
@@ -529,7 +529,13 @@ Closed, typed routes are added by one writer, with no generic filesystem, shell 
   - every route returns `unavailable` with reason `disabled` while its status constant is off.
 - **Catalog:**
   - `catalog.roots|chooseRoot|forget|snapshot|preview`, over K3's Node builder;
-  - `forget` removes the configuration entry only, never files;
+  - one active root: `roots` returns zero or one opaque `{rootId,label}` descriptor. `chooseRoot` uses only the native directory dialog and visibly replaces the current selection; cancellation or validation/persistence failure preserves it. Selecting the current canonical root retains its opaque ID; a different canonical root gets a new opaque ID;
+  - main retains the selected canonical root binding and its absolute path. A later canonical-path mismatch requires explicit reselection; renderer input cannot supply a path or silently retarget the root;
+  - `snapshot` covers exactly the active root under K3's fixed `laptop-local` host. Preserve the builder's `complete` value, including partial enumeration at its existing entry bound and a genuinely empty successful complete scan. Never publish separate complete per-root snapshots or invent multi-root aggregation;
+  - persist one strictly increasing safe-integer host generation before exposing a snapshot. It survives root replacement, forget and restart; gaps are allowed, reuse/reset is not. Persistence failure, corrupt generation state or exhaustion fails closed. Serialize allocation/publication with configuration changes and discard scans from obsolete selections;
+  - no configured root, a missing/unreadable root, failed enumeration, or a realpath escape/mismatch returns the existing unavailable result boundary with bounded path-free detail, never a fabricated empty complete snapshot. Cached records and workspace links survive. Preserve K3's optional-preview omission/refusal behavior without upgrading a partial scan to complete;
+  - `forget` removes the configuration entry only, never files, cached records, links or the generation high-water mark. Replacement/forget invalidate old preview readers. The next successful complete replacement-root snapshot may mark prior-root records `missing-at-source` under the existing reducer; this means absence from the selected catalog scope, not proven physical deletion;
+  - catalog routes retain the settled `DesignStorageResult` boundary and existing `ServiceResponse` status conventions; no new HTTP response shape or module edit;
   - design `cache.put` for the catalog key only.
 - **Work export:**
   - `export{format:'json'|'markdown'}`;
@@ -1054,6 +1060,8 @@ It adds explicit exports to `src/index.ts`. Shared r3 proves the copies are assi
 
 Custody stays with the original Social content owner, bound at launch.
 
+Source work may proceed alongside r3 using the landed `@hq/ui` exports `ReferenceStatus`, `REFERENCE_STATUSES`, `ReferenceResolution`, `ReturnContext` and `ReferencePort`. Its module-local `ReferenceProvider` and optional `references`/`returnContext` props must match the unchanged `spec.hq-social-work#iface.references.001` exactly; props may structurally extend `ModulePort`. It must not edit shared contracts or depend on an unfinished r3 branch. The module candidate may be published and checked before r3, but its foundation landing still waits for `r3-landing`. Canonical assignability, shell provider registration, round-trip and native qualification remain later integration obligations. Source fixture/recorder checks prove only the module source boundary.
+
 - **Provider:** a read-only provider for drafts, runs and brands.
 - **Link editor:** in content. Persistence is gated: without `hq-references-v1`, links show "not saved — needs Social service support" and are never dropped.
 - **Mount plumbing:** passes the optional `references` and `returnContext` through the index and nav files only.
@@ -1064,6 +1072,8 @@ Custody stays with the original Social content owner, bound at launch.
 ## T11 Work References And Export
 
 Custody stays with the original Work board owner, bound at launch.
+
+Source work may proceed alongside r3 using the landed `@hq/ui` exports `ReferenceStatus`, `REFERENCE_STATUSES`, `ReferenceResolution`, `ReturnContext` and `ReferencePort`. Its module-local `ReferenceProvider` and optional `references`/`returnContext` props must match the unchanged `spec.hq-social-work#iface.references.001` exactly; props may structurally extend `ModulePort`. It must not edit shared contracts or depend on an unfinished r3 branch. The module candidate may be published and checked before r3, but its foundation landing still waits for `r3-landing`. Canonical assignability, shell provider registration, round-trip and native qualification remain later integration obligations. Source fixture/recorder checks prove only the module source boundary.
 
 1. **References first:**
    - a provider covering items, including archived and missing;
@@ -1094,8 +1104,8 @@ The machine `task.*` blocks are authoritative. In summary:
 | `wiki-mount` → `wiki-mount-landing` | T2 → T1 | `live-wiring`, `wiki-landing`; + `wiring-landing` |
 | `design-reference-provider` (K4) → `design-provider-landing` | T8 → T1 | `r3-landing` |
 | `design-compose-mount` (CL1b) → `design-compose-landing` | T8 → T1 | `bridge-landing`, `r3-landing`, K1/K2/K4 landings |
-| `social-references` → `social-references-landing` | T10 → T1 | custody, `r3-landing`, `reference-ui-landing`, `social-landing` |
-| `work-references` → `work-references-landing` | T11 → T1 | custody, `r3-landing`, `reference-ui-landing`, `work-landing` |
+| `social-references` → `social-references-landing` | T10 → T1 | custody, `reference-ui-landing`, `social-landing`; + `r3-landing` |
+| `work-references` → `work-references-landing` | T11 → T1 | custody, `reference-ui-landing`, `work-landing`; + `r3-landing` |
 | `work-export-ui` → `work-export-landing` | T11 → T1 | `work-references`, `r3-landing`; + `work-references-landing` |
 | `reference-round-trip` → `round-trip-landing` | T2 → T1 | `r3-landing`, `social-references-landing`, `work-references-landing`, `design-compose-landing`, `work-export-landing` |
 | `cli-planner-ci` → `cli-ci-landing` | T2 → T1 | `design-sections-landing` |
@@ -1114,6 +1124,8 @@ The machine `task.*` blocks are authoritative. In summary:
 | `final-acceptance` → `main-delivery` | T7 → T1 | `closure-qualification`, `scenarios-landing`, `wiki-mount-landing`, every gate, the three enabling landings, `install-route` |
 
 **Ready at publication:** K1, K2 and K3 became ready at the previous revision; K3 has since landed as #57. This revision adds `work-session-injection` and the three preview module lanes (`preview-agent`, `preview-compare`, `component-runner-port`). Their write scopes are disjoint from each other and from every task that can be ready with them. The only existing task that gains a dependency is live wiring, on the Work seam it consumes. No other dependency changes for live wiring, the Wiki mount, K1–K4, r3 or the D-4 lanes, so there is no new barrier. `reference-ui` and the T10/T11 tasks wait for actual custody binding. The U1 follow-on revision adds `connector-resolve-unknown`, ready at its publication with a scope disjoint from every task that can be ready with it, and `new-thread-transport`, which waits for `preview-host-landing` and `connector-resolve-landing`. Only `new-thread-u1-qualification` and `closure-qualification` gain a dependency, `new-thread-landing`; no other dependency changes.
+
+**Reference-source scheduling amendment:** Social and Work reference source tasks consume the landed UI structural types and unchanged reference specification, so they can run in parallel with r3 after their existing UI/domain/custody prerequisites. Their `r3-landing` dependency moves to each source-landing task; integration order is preserved. No shared write scope, test intent, reference contract, round-trip dependency or native gate changes. Work Export UI still waits for the actual r3 export seam and its existing dependencies. Use sibling PRs against foundation because unfinished r3 host source is not an upstream source input.
 
 **Model hints (claude_frontier; the native tuple is recorded per task in the compile projection):**
 - Building defaults to Astra/medium.
@@ -3382,7 +3394,6 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.r3-landing.001",
     "spec.hq-integration-parallel-execution#task.reference-ui-landing.001",
     "spec.hq-integration-parallel-execution#task.social-landing.001"
   ],
@@ -3443,7 +3454,8 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.social-references.001"
+    "spec.hq-integration-parallel-execution#task.social-references.001",
+    "spec.hq-integration-parallel-execution#task.r3-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -3512,7 +3524,6 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.r3-landing.001",
     "spec.hq-integration-parallel-execution#task.reference-ui-landing.001",
     "spec.hq-integration-parallel-execution#task.work-landing.001"
   ],
@@ -3573,7 +3584,8 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.work-references.001"
+    "spec.hq-integration-parallel-execution#task.work-references.001",
+    "spec.hq-integration-parallel-execution#task.r3-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -7043,10 +7055,10 @@ No lane relays status through the owner.
     "spec.hq-integration-parallel-execution#req.references-closure.001",
     "spec.hq-integration-parallel-execution#req.work-export.001"
   ],
-  "scenario": "Closed r3 routes cross preload into main; gate exclusivity and recover-before-serve; Work export via a stubbed save dialog and Planner stub; reference open/Back/mismatch in the shell.",
+  "scenario": "Closed r3 routes cross preload into main; gate exclusivity and recover-before-serve; singleton catalog selection/replacement/cancel, restart generation and partial/failing scans with synthetic directories; Work export via a stubbed save dialog and Planner stub; reference open/Back/mismatch in the shell.",
   "evidence": {
-    "predicate": "Root checks and Electron security tests pass; transaction/export routes return unavailable(disabled); Work export bytes equal the stub and the renderer gets no path; reference contract matches iface.references.001; structural types assignable.",
-    "invalid": "Generic IPC, a path or token in renderer state, an enabled route, or a CSP change.",
+    "predicate": "Root checks and Electron security tests pass; transaction/export routes return unavailable(disabled); catalog roots is empty/singleton, cancel preserves selection, same canonical root retains ID, replacement changes ID, generations strictly increase across replacement/forget/restart, stale scans/readers are refused, K3 partial completeness is preserved, unavailable scans cannot mark cached entries missing, and next complete replacement scan marks old-scope records missing without deleting links; Work export bytes equal the stub and the renderer gets no path; reference contract matches iface.references.001; structural types assignable.",
+    "invalid": "Generic IPC, a path or token in renderer state, an enabled route, a CSP change, generation reset/reuse, complete empty snapshots fabricated from root failures, or deletion on forget.",
     "unknown": "Electron cannot run on the check host."
   },
   "environment": [
