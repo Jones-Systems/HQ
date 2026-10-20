@@ -25,25 +25,25 @@ Authority effect: none
 
 **Finish line:** `work/hq-foundation` holds every landed slice. Final acceptance passes on that exact head, and T1 merges #2 into `main` last with readback. Accepting source alone does not deliver it.
 
-**Amends, does not replace:** `spec.hq-bootstrap`, `spec.hq-design`, `spec.hq-social-work` and `spec.hq-expansion` keep their requirements and acceptance. This artifact adds lane ownership, shared contracts and landing order. It is the only shared plan; lanes do not write duplicate project plans. The closure revision added the required-capability closure: Design closure K1–K4 and CL1b, shared r3, D-4 references, Work export, hosted CLI/Planner CI, closure qualification, and the held-capability gates. This revision adds the source construction of the S2 preview host and the contained component runner (`req.preview-component.001`), and the Work session-injection seam that live wiring consumes. Native qualification and production enabling of the preview and components stay explicit.
+**Amends, does not replace:** `spec.hq-bootstrap`, `spec.hq-design`, `spec.hq-social-work` and `spec.hq-expansion` keep their requirements and acceptance. This artifact adds lane ownership, shared contracts and landing order. It is the only shared plan; lanes do not write duplicate project plans. The closure revision added the required-capability closure: Design closure K1–K4 and CL1b, shared r3, D-4 references, Work export, hosted CLI/Planner CI, closure qualification, and the held-capability gates. This revision adds the source construction of the S2 preview host and the contained component runner (`req.preview-component.001`), and the Work session-injection seam that live wiring consumes. Native qualification and production enabling of the preview and components stay explicit. The U1 follow-on revision adds the HQ source for new-thread launch (`req.new-thread-followon.001`): the keyed Jones Code launch transport and the owner-confirmed Resolve unknown action, against the planned Jones Code contract `spec.jones-client-launch`. Its live qualification stays explicit.
 
 **Lanes:**
 
 | Lane | Owner | Outcome |
 | --- | --- | --- |
 | T1 | Integration root | Continuity, shared-ref landings, plan amendments, #2 delivery |
-| T2 | Existing Design coordinator (shared writer) | F2 shared bridge (landed), then shared r3, live wiring, Wiki mount, reference round trip, CLI/Planner CI, receiver, the preview/component host and its enabling commits |
+| T2 | Existing Design coordinator (shared writer) | F2 shared bridge (landed), then shared r3, live wiring, Wiki mount, reference round trip, CLI/Planner CI, receiver, the preview/component host and its enabling commits, then the new-thread transport |
 | T3 | Existing Social builder | Social live adapter #48 — landed |
 | T4 | Existing Work runtime owner | Work live runtime #51 — landed; then the bounded Work session-injection seam |
 | T5 | — | CLI stack #46 merged; no lane |
 | T6 | Wiki builder | Wiki module assembly #54 — landed |
 | T7 | Acceptance builder/verifier | Native harness #53 landed; integrated scenarios, preview/component suites, qualifications, final acceptance |
-| T8 | Existing Design coordinator (Design closure) | K1 storage engine, K2 app sections, K3 local catalog, K4 reference provider, CL1b mount, import/export enablement, preview module lanes and compose adapters |
+| T8 | Existing Design coordinator (Design closure) | K1 storage engine, K2 app sections, K3 local catalog, K4 reference provider, CL1b mount, import/export enablement, preview module lanes and compose adapters, and the connector Resolve unknown action |
 | T9 | Original `@hq/ui` owner custody | Reference UI kit |
 | T10 | Original Social content owner custody | Read-only Social reference provider and link editor |
 | T11 | Original Work board owner custody | Work reference provider, Links section, then RW-6 Export UI |
 
-**No goal reduction:** every requirement and protected gate in the existing specs remains a completion obligation. Six capabilities stay held behind their own native, privacy or authority gates, encoded as explicit-activation qualification tasks: live S1 receiver qualification (native OAuth consent), new-thread launch U1 (a missing Jones Code contract), the S2 preview surface, component-execution containment, Wiki private validation, and service enablement (Planner revision, Social `hq-references-v1`, live conformance). Laptop installation is a seventh gate. The existing-thread receiver is planned, required source work: its contract framing is complete, and `receiver-adapter` builds it and qualifies it against fixtures without native OAuth. Only live S1 qualification waits for the owner's consent. The S2 preview host and the component runner are likewise planned source work; only their native qualification and production enabling wait. Signing, notarization, release and deployment were never authorized.
+**No goal reduction:** every requirement and protected gate in the existing specs remains a completion obligation. Six capabilities stay held behind their own native, privacy or authority gates, encoded as explicit-activation qualification tasks: live S1 receiver qualification (native OAuth consent), new-thread launch U1 (the Jones Code contract planned in `spec.jones-client-launch`, then an installed build and native consent), the S2 preview surface, component-execution containment, Wiki private validation, and service enablement (Planner revision, Social `hq-references-v1`, live conformance). Laptop installation is a seventh gate. The existing-thread receiver is planned, required source work: its contract framing is complete, and `receiver-adapter` builds it and qualifies it against fixtures without native OAuth. Only live S1 qualification waits for the owner's consent. The S2 preview host and the component runner are likewise planned source work; only their native qualification and production enabling wait. The new-thread transport and the Resolve unknown action are planned source work too, qualified only against the Q-N wire stub; only live U1 qualification waits for the merged and installed Jones Code build and the owner's consent. Signing, notarization, release and deployment were never authorized.
 
 While any required capability is held, final reports say exactly that. They never call the app "working" or "complete", and fakes, fixtures or previews never count as production qualification.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.project-summary.001" -->
@@ -139,6 +139,24 @@ These close CL-6 and CL-12 while keeping `prd.hq-design` and `spec.hq-design` in
 - **PV-D1 (closed for v1).** Previews are ephemeral only. A persistent or credential-bearing preview profile is not built; it would need a new owner decision. No PRD line requires authenticated previews.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#req.preview-component.001" -->
 
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#req.new-thread-followon.001" -->
+## New-Thread Follow-On Requirement
+
+HQ source implements new-thread delivery against the planned Jones Code launch contract `spec.jones-client-launch` (target `Jones-Systems/Jones-Code` at `fa7c6c013811db33d128422027697dbaa1517b60`). It has two parts:
+
+- a main-only keyed launch transport, with lookup by key and a closed result mapping (`iface.new-thread-transport.001`);
+- an explicit, owner-confirmed **Resolve unknown** action in the Design connector. It is the only path that can fence a key (`iface.resolve-unknown.001`).
+
+**Invariants:**
+- Automatic reconciliation stays lookup-only.
+- An unknown is never resent.
+- A fence that returns no answer leaves the attempt unknown.
+- Nothing retries.
+- A fixture never qualifies the live capability.
+
+**Source versus activation.** Source construction uses synthetic wire stubs. It needs no OAuth grant, token, live call, installed Jones Code build or native consent. Native activation still needs `ac.new-thread-u1-binding.001`.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#req.new-thread-followon.001" -->
+
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.source-landing.001" -->
 ## Source Landing Acceptance
 
@@ -223,6 +241,20 @@ Source construction passes when these run green at the candidate head, without E
 Source acceptance is never native qualification and never enables a capability.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.preview-component-source.001" -->
 
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.new-thread-followon-source.001" -->
+## New-Thread Follow-On Source Acceptance
+
+Each candidate passes its checks at one exact head, and T1 then lands it:
+
+- **Connector candidate:** the new suites run in the existing `design-sections.yml` connector row (`test/*.test.ts`) and pass. A fence call is reachable only from a confirmed `resolveUnknown`. Existing exports, persisted formats, and the send and reconciliation paths are unchanged.
+- **Transport candidate:** every Q-N wire-stub case in `iface.new-thread-transport.001` passes, and so does the root build.
+  - In production, new-thread destinations stay refused, because the descriptor lists `new-thread` only with U1 evidence.
+  - The `jones-code` transport stays unqualified.
+  - No token, `projectId` or command ID reaches renderer state.
+
+**What landing does and does not change.** Landing both candidates makes the U1 gate qualifiable. It does not qualify the gate, and new-thread stays held until `ac.new-thread-u1-binding.001`.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.new-thread-followon-source.001" -->
+
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.reference-lane-custody.001" -->
 ## Reference Lane Custody Predicate
 
@@ -249,7 +281,27 @@ Only then does live S1 run its steps Q0–Q5: transport and identity, one send, 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.new-thread-u1-binding.001" -->
 ## New-Thread U1 Binding Predicate
 
-Explicit activation predicate: Jones Code exposes a client-callable launch that takes `clientRequestId` and `projectId`, derives a stable thread ID and offers lookup by key, and a later amendment adopts it in HQ. Until then, new-thread mode stays disabled with its existing reason, and there is no launch qualification.
+**Explicit activation predicate.** All of the following hold:
+
+- **G1:** the Jones Code PR of `spec.jones-client-launch` is merged and read back under its `#ac.source-delivery.001`.
+- **G2:** the owner has adopted an installed Jones Code build that contains it, through the existing owner-controlled Jones update path.
+- **G3:** the owner has completed native Jones Code OAuth consent for the HQ client, at the recommended narrowest access level.
+- `new-thread-landing` has landed.
+- A task-owned synthetic Jones project is bound.
+- The packet is synthetic and public-safe.
+
+**Live U1 steps.** Only then does live U1 run its steps N0–N5:
+
+- **N0:** transport and identity.
+- **N1:** one keyed launch.
+- **N2:** lookup by key, including one deliberate harness-only identical replay. The replay must return the same thread.
+- **N3:** unknown recovery: lookup, then one owner-confirmed fence on a deliberately orphaned harness key.
+- **N4:** definite refusals (`request_conflict`, `launch_fenced`).
+- **N5:** session-change readback (a different-session lookup or fence returns `unavailable`).
+
+`qualification.evidenceRef`, and the descriptor's `new-thread` mode, are set only from those results.
+
+**Until then.** New-thread mode stays disabled with its existing reason, and a fixture never stands in for qualification.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.new-thread-u1-binding.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.preview-s2-binding.001" -->
@@ -384,6 +436,7 @@ Only one writer owns a path at a time. Each task block's `write_scope` gives its
   - F2 also held `modules/design/app/compose/**` and `modules/design/app/index.ts` until it handed them to CL1b at `bridge-landing`.
   - Shared r3 owns `apps/desktop/src/reference-providers.ts` and `apps/desktop/src/references.ts`. After that, the reference round trip writes only the provider registrations, its integration test, and the Work export client mount in `apps/desktop/src/modules.tsx`.
   - The receiver writes `apps/desktop/electron/jones-code/**` plus its closed route registration. A separate bounded main-subdirectory writer is allowed only if the Design coordinator accepts an explicit non-overlap rebind.
+  - The new-thread transport (`new-thread-transport`), after `preview-host-landing`, writes `apps/desktop/electron/jones-code/**`, `packages/contracts/src/jones-code.ts`, `packages/contracts/src/index.ts`, its main and preload route entries, `apps/desktop/src/ServiceSettings.tsx` and the `jones-code` composition in `apps/desktop/src/modules.tsx`.
   - The preview/component host writes `apps/desktop/electron/contents-factory.ts`, `apps/desktop/electron/{preview,components}/**`, its main, preload, security and contract entries, `apps/desktop/src/environment.d.ts`, the root `build:preview-agent` script and its Vite configuration. Each later enabling commit writes only its own status file and status test. `apps/desktop/index.html`, which holds the CSP, is in no scope.
 - **T4 (the existing Work owner, bounded successor):** `modules/work/nav/session.ts` (production documentation only), the named exports and entry documentation in `modules/work/index.tsx`, `modules/work/nav/test/live-selection.test.tsx`, and its own evidence file. No Work core or live adapter, shared contract or root file.
 - **T8 (Design closure; each a Design descendant in its own worktree):**
@@ -395,6 +448,7 @@ Only one writer owns a path at a time. Each task block's `write_scope` gives its
   - PV-M1: `modules/design/annotations/src/preview-agent/**` and `modules/design/annotations/test/**`.
   - PV-M2: `modules/design/compare/src/**`.
   - CC-M1: `modules/design/components/{src,ui,tests}/**`.
+  - CN-U1: `modules/design/connector/src/**`, `modules/design/connector/test/**` and `modules/design/connector/README.md`. CL1b keeps `modules/design/connector/design-module.ts`.
   - PV-M3: the CL1b owner's `modules/design/app/compose/**`, after CL1b.
   - Enablement: the two status constants only.
   - `packages/design-store` stays frozen.
@@ -410,7 +464,7 @@ A needed edit outside a lane's scope goes to T1 as a rebind request. Module lane
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#iface.contracts.001" -->
 ## Interface Contracts
 
-Eight shared contracts govern concurrent lanes:
+Ten shared contracts govern concurrent lanes:
 - `iface.service-response.001`: owned by T2 in `packages/contracts`; consumed by T3, T4, T7 and T11.
 - `iface.wiki-host-ipc.001`: owned by T2 in main/preload; consumed by T6 and T7.
 - `iface.shared-r3.001`: owned by T2; consumed by T7, T8, T10 and T11. It also covers the receiver's closed `design.jonesCode.*` route family (`status`, `authorize`, `identify`, `send`, `lookup`, `readEvidence`, `listThreads`), whose names are reconciled with r3. That family maps to the unchanged Design connector `TransportPort`/`EvidenceReadbackPort` for `transport:"jones-code"` and stays `unqualified` until S1 evidence.
@@ -418,6 +472,8 @@ Eight shared contracts govern concurrent lanes:
 - The Design lane contracts already at the runtime host parent: owned by the Design coordinator.
 - `iface.preview-host.001`: owned by T2 in main, preload and `packages/contracts`; consumed by T7 and T8.
 - `iface.component-runner.001`: owned by T2; consumed by T7 and T8.
+- `iface.new-thread-transport.001`: owned by T2 in main and `packages/contracts/src/jones-code.ts`; consumed by T7. It adds one route, `fence`, to the closed `design.jonesCode.*` family and targets the Jones Code contract `spec.jones-client-launch`.
+- `iface.resolve-unknown.001`: owned by the Design coordinator in the connector module; consumed by T2, which proves its transport assignable to the module-local types, and by T7. It is frozen at this revision's publication, before any consumer builds against it.
 - The Work session-injection seam, `setWorkSessionPort(port, {example, recovery})` and `examplePlanner` from the `modules/work` public entry: owned by T4 with its signature and algorithm unchanged; consumed by T2's live wiring. `resetWorkSessions` stays test-only and unexported.
 
 Changing any of them needs a T1 rebind of every consumer.
@@ -581,6 +637,167 @@ Owned by T2; consumed by T7 and T8. One contained runner serves two required tie
 - **Not proposed:** an OS-level helper process in a Linux network namespace, or a macOS network extension. Either would be a new decision for T1 and the owner.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.component-runner.001" -->
 
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#iface.new-thread-transport.001" -->
+## New-Thread Transport Contract
+
+**Settled target.** `spec.jones-client-launch` sections `#iface.mcp-tools.001`, `#iface.semantics.001` and `#ctx.gates-and-hq-seam.001` (published in this repository), against Jones Code base `fa7c6c013811db33d128422027697dbaa1517b60`. HQ builds against a Q-N wire stub of those shapes and makes no live call.
+
+**Owner and place.** T2 owns it, in main only, inside the landed receiver's `apps/desktop/electron/jones-code/**`. It reuses the receiver's:
+- MCP client and OAuth session;
+- `safeStorage` credentials;
+- pre-send ledger;
+- handoff text: the marker line, then the JCS envelope.
+
+The renderer sees status only.
+
+**Binding:**
+- A new-thread destination is a `jones-code` endpoint. Main resolves its locator to a main-only binding `{mode: "new-thread", projectId, label}`, which is set in ServiceSettings.
+- `projectId` never reaches the renderer or the handoff.
+- `identify` returns the receiver's host identity, with `receiverId = "jones-project:" + the first 32 hex digits of sha256(hostId + "\0" + projectId)`.
+
+**Send** (`TransportPort.send`; called only after `submitting` is durable):
+1. Write the ledger entry `{idempotencyKey, mode: "new-thread", locator, wireDigest, sessionLabel}`. If the write fails, the result is `rejected` and nothing is sent.
+2. Make exactly one `t3_thread_launch` call with:
+   - `clientRequestId`: the attempt key (`idempotencyKey = attemptId`);
+   - `projectId`: from the binding;
+   - `title`: `HQ handoff <packetId>`, trimmed to the Jones limit;
+   - `message`: the receiver's handoff text;
+   - `modelSelection`: only when the handoff pins a model, mapped as the receiver maps it.
+
+   The call never sets `runtimeMode` or `interactionMode` (the consented client ceiling applies), `workspaceStrategy` (root), `scratch` or `attachments`. The request is a pure function of the handoff and the binding, so it is canonically identical for its key.
+3. Map the result:
+
+| Jones result | `SendOutcome` |
+| --- | --- |
+| success with `initialMessage: "accepted"` | `accepted`, receipt `jcl1:<threadId>` |
+| success with any other `initialMessage` or `preparation` state | `held`, the same receipt, with a reason that names both states |
+| `invalid_request`, `capability_denied`, `runtime_mode_escalation_denied`, `interaction_mode_escalation_denied`, `request_conflict`, `launch_fenced` | `rejected`, with the code |
+| anything else: `orchestration_error`, timeout, reset after write, a malformed result or an unknown code | thrown, so the outbox records `unknown`; never resent |
+
+HTTP 401 follows the receiver's landed handling: the session becomes `needs-authorization`, and HQ never re-authorizes silently.
+
+**Receipt fields:**
+
+| Field | Value |
+| --- | --- |
+| `receiptId` | `"jcl1:" + threadId` |
+| `idempotencyKey` | the attempt key |
+| `status` | as mapped above |
+| observed host and receiver | from `identify` |
+| `observedModel` | the returned model, when it maps to a pin; otherwise `null` |
+| `provenance` | `"jones"` |
+| `at` | the response time |
+
+**Lookup** (`ReadbackPort.lookup`; read-only; `t3_thread_launch_lookup`):
+
+| Jones state | `LookupOutcome` |
+| --- | --- |
+| `launched` | `found`, with the receipt rule above; `threadDeleted` gives `held` with a reason |
+| `no_effect` | `no-effect`, basis `jones:<basis>` |
+| `absent`, claimed or not | `not-found` |
+| failure, timeout, malformed | `unavailable` |
+
+**Fence** (`TransportPort.fence`; `t3_thread_launch_fence`). It is reachable only from `iface.resolve-unknown.001`:
+
+| Jones state | `FenceOutcome` |
+| --- | --- |
+| `launched` | `found`, with the receipt rule above |
+| `no_effect` | `no-effect`, basis `jones:fence` |
+| failure, timeout, malformed | `unavailable`; the attempt stays unknown, and nothing retries |
+
+An existing-thread locator returns `unavailable` without a call. The receiver at `76fb3dc` has no fence, so existing-thread unknowns stay lookup-only, as framed.
+
+**Session rule (R1):**
+- Jones derives launch IDs from the OAuth session's request namespace, and a re-authorized session gets a new namespace.
+- So lookup and fence run only while the current session label equals the ledger entry's `sessionLabel`. Otherwise they return `unavailable` without a call: "session changed; this attempt cannot be resolved by key".
+- Unknowns must be resolved before the 30-day session expiry.
+
+**Routes:**
+- The closed `design.jonesCode.*` family gains one route: `fence {locator, idempotencyKey}`.
+- `send` and `lookup` dispatch on the locator's binding.
+- The shapes live in `packages/contracts/src/jones-code.ts`.
+- There is no generic IPC.
+
+**Qualification:**
+- The descriptor lists `new-thread` in `modes` only when U1 qualification evidence is recorded under `ac.new-thread-u1-binding.001`. An S1 qualification of existing-thread delivery therefore never enables new threads.
+- Until then the transport is `unqualified` for new-thread, and its destinations keep `NEW_THREAD_REASON`.
+
+**Q-N stub cases:**
+- success with each `initialMessage` and `preparation` state;
+- every definite failure code, `orchestration_error`, a timeout after write, and malformed results and unknown codes;
+- a ledger write failure;
+- lookup of `launched`, `no_effect`, `absent`, claimed and deleted keys;
+- fence on an absent key, a launched key, and a failure;
+- the existing-thread fence refusal;
+- a session-label change;
+- HTTP 401 and oversize.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.new-thread-transport.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#iface.resolve-unknown.001" -->
+## Resolve Unknown Contract
+
+**Owner.** The Design coordinator owns this, in the connector module (`modules/design/connector/**`). It is a module-local contract, and T2 proves that the transport's types are assignable to it. Every change is additive, so existing exports and the persisted `hq.design.dispatch/v1` and `hq.design.handoff/v1` formats are unchanged.
+
+**Port additions** (`src/contract.ts`; all optional):
+
+```ts
+interface TransportDescriptor { readonly modes?: readonly DestinationMode[] }  // absent = ['existing-thread']
+type FenceOutcome =
+  | { readonly kind: 'found'; readonly receipt: Receipt }
+  | { readonly kind: 'no-effect'; readonly basis: string }
+  | { readonly kind: 'unavailable'; readonly detail: string };
+interface TransportPort {
+  fence?(query: { readonly endpoint: DestinationEndpoint; readonly idempotencyKey: string }, signal: AbortSignal): Promise<FenceOutcome>;
+}
+```
+
+**Eligibility:**
+- A new-thread destination is eligible only when its transport qualifies under the existing rule **and** `descriptor.modes` includes `new-thread`. Otherwise it keeps `NEW_THREAD_REASON`.
+- `newThreadControl` follows from the rows: it is enabled only while a selectable new-thread destination exists. Activating it selects that destination; it never sends.
+
+**Outbox: `resolveUnknown({dispatchId, confirmation})`:**
+1. **Preconditions.** Each failure is a refusal with no transport call:
+   - the latest attempt is `unknown`;
+   - the bound mode is `new-thread`;
+   - the transport has `fence`;
+   - no send of the packet is in flight;
+   - the confirmation binds `dispatchId`, `attemptId`, `idempotencyKey` and the attempt's `readbacks` count, is younger than the confirmation TTL, and has not been used.
+
+   Because the confirmation binds the `readbacks` count, a used confirmation is stale in every process, with no format change.
+2. **One `fence` call**, under the probe timeout.
+3. **Mapping:**
+   - `found` with a valid receipt → `accepted` or `held` with basis `readback`, as reconciliation does;
+   - `no-effect` → `no-effect` with basis `readback`, and a reason naming the owner-confirmed fence;
+   - anything else, including a throw, timeout or malformed result → the attempt stays `unknown`, with `readbacks` incremented and the detail recorded. Nothing retries.
+4. **Compare-and-swap write.** On a conflict the result is not saved, and that is reported.
+
+No new state or basis literal is added.
+
+**Never fences.** `recover`, `reconcile`, `checkStatus`, `refresh`, selection and the evidence feed never call `fence`; reconciliation keeps its lookup-only readback port. Each later explicit confirmation is a fresh owner action.
+
+**Controller and panel:**
+- `requestResolveUnknown()` opens a card, only when the preconditions hold.
+- `confirmResolveUnknown()` runs one resolution.
+- `cancel()` closes the card.
+- The view gains `resolveUnknown {available, reason, confirming}`.
+- The panel gains optional `onRequestResolveUnknown`/`onConfirmResolveUnknown` props. `ConnectorPanelHost` wires them, so no host or compose change is needed.
+- The card says three things: HQ asks the receiver to make this attempt permanently unable to run; if it already ran, HQ records that instead; nothing is resent.
+- A result that stays unknown shows "Still unknown", with its detail.
+
+**Fakes.** The labelled fake transport in `src/fakes.ts` may implement `fence` and declare `modes` for tests. A labelled fake never qualifies Jones.
+
+**Tests** (`test/*.test.ts`, the existing connector row):
+- new-thread eligibility with and without declared modes and qualification;
+- the `newThreadControl` derivation;
+- every precondition refusal: an attempt that is not unknown, existing-thread, no fence, in flight, stale, used, expired;
+- one fence call per confirmation;
+- the `found`, `no-effect`, `unavailable`, throw, timeout and malformed mappings;
+- a compare-and-swap conflict;
+- zero fence calls from every read path;
+- the card and `ConnectorPanelHost` wiring;
+- compatibility exports unchanged.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.resolve-unknown.001" -->
+
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.test-plan.001" -->
 ## Test Plan
 
@@ -655,7 +872,7 @@ The final report says "integrated with held capabilities" while Tier X or OS-MAC
 | Import/export enablement | None; existing owner permission | T1 accepts exact-head crash, CAS and privacy evidence; T8 makes the one-constant commit | `ac.import-export-enablement.001`; disabled until then |
 | Live S1 receiver | Native Jones Code OAuth consent in the system browser; bind a task-owned receiver | HQ main loopback OAuth client; token in `safeStorage` | Held; fixture tests only until consent; renderer never sees the token; 30-day expiry needs fresh consent |
 | S2 preview, component execution | None; T1 accepted the source design within the existing owner permission and accepts each enabling change | T7 runs the built app under unpackaged-only qualification switches, with synthetic inputs, userspace canaries and positive controls, optionally inside an unprivileged network namespace (OS-NS1); one public-website smoke uses ordinary outbound network without credentials; T2 makes each enabling commit | Held until each enabling predicate; production disabled before it; no sudo or packet capture (OS-PC1 not requested); macOS (OS-MAC1) runs on the laptop route |
-| New-thread U1 | None in HQ; needs a Jones Code contract | Later amendment, then gate task | Held; no launch qualification |
+| New-thread U1 | Source: none. Native: G1 the Jones Code PR merged, G2 the owner adopts an installed build through the existing Jones update path, G3 native Jones Code OAuth consent for the HQ client | HQ main, with the same loopback client and `safeStorage` as S1; `new-thread-transport` builds against the Q-N stub only | Held; production new-thread disabled until U1 evidence; Resolve unknown runs only on the owner's confirmation; 30-day expiry needs fresh consent, and keys from an earlier session cannot be resolved |
 | Wiki private validation | Give the exact privacy scope | Owner-local runner; aggregates only | Never published |
 | Service enablement | Approve Red envelopes; enter endpoints | Service owners | Agents never read live data |
 | Laptop install and launch | Identify the target; authorize the route | Proved owner route | Unsigned local build only; any elevation, signing or credential need stops with a disclosed gap |
@@ -683,6 +900,7 @@ The existing Design coordinator owns this lane. It is the sole writer of shared 
 6. The existing-thread receiver after the Wiki mount, CL1b and the reference round trip land, because it shares main, preload, settings and `modules.tsx`. It is fixture-qualified by the Q-S wire stub of the exact `76fb3dc` shapes.
 7. The preview/component host (`preview-host`) after `receiver-landing`, because it shares main, preload and contracts with steps 3 and 6. It binds the landed preview agent and component runner port, and lands as one PR with two coherent commits: the preview host, then the component runner. Every status constant stays false. Moving it earlier needs a T1 amendment.
 8. The enabling commits (`preview-enablement`, `component-static-enablement`, `component-scripted-enablement`), each only under its own predicate, and each changing only its own status file and status test.
+9. The new-thread transport (`new-thread-transport`) after `preview-host-landing` and `connector-resolve-landing`. It extends the landed receiver's main-only `jones-code` module under `iface.new-thread-transport.001` and consumes the landed connector port of `iface.resolve-unknown.001`. Placing it after the preview host keeps the earlier critical flow closed. It waits on no Jones Code merge, install or consent: it is fixture-qualified by the Q-N wire stub, and new-thread stays disabled in production.
 
 **Live wiring and the Work seam:** the shell calls `setWorkSessionPort` once, before the first Work session. It selects the configured live Planner with recovery, or the labelled example only when configuration explicitly says unconfigured. A failed configuration read or a live-service error never falls back to the example. A configuration change needs the labelled reload.
 
@@ -732,6 +950,8 @@ T6 is ready now from foundation, which already contains the Wiki contract, core 
 The native harness checkpoint (#53) has landed. T7 extends it with integrated scenarios as their source lands, runs the import/export and capability-closure qualifications, the held-gate qualifications once their predicates hold, and final acceptance. HQ's layout is not changed to suit the Jones Code harness, and the harness stays separate from Design production code and tests.
 
 After the integrated scenarios land, T7 writes the preview and component suites of `ctx.preview-qualification.001` (`preview-scenarios`) in the same harness. It then runs them as `preview-s2-qualification` and `component-containment-gate` once T1 binds the head and the native check host.
+
+The U1 gate (`new-thread-u1-qualification`) also follows `new-thread-landing`, so it runs against landed HQ source, and only under `ac.new-thread-u1-binding.001`.
 
 The harness owns its scratch profile, processes, fixture sites, canary listeners and control clients. It removes exactly those on success, failure and cancellation, after preserving the evidence it needs.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.lane-t7.001" -->
@@ -809,6 +1029,12 @@ The existing Design coordinator owns T8. K1, K2 and K3 run in the preflight chil
   - Custody goes to the original module owners where their current custody is bound; otherwise one combined disjoint module builder (one new Design child) runs all three.
   - Each lane publishes from a new branch; nothing is pushed to an original ref whose current identity has not been read back.
 - **PV-M3 `preview-compose`:** the CL1b owner, after CL1b and the host land, writes the compose adapters from the preview and component routes to `PreviewCapability`, `AgentChannelPort` and `ComponentRunnerPort`. Compose therefore has one writer, and no compose work runs against an unlanded host.
+
+**CN-U1 `connector-resolve-unknown`** (`modules/design/connector/{src,test}/**` and its README) is ready at the U1 follow-on publication, from `work/hq-foundation` at `fc3f69a4a4ee6096e4dc60bd1295ed4e31995e52` or its read-back successor.
+- It adds the optional port members, new-thread eligibility and the owner-confirmed Resolve unknown action of `iface.resolve-unknown.001`, with labelled fakes only.
+- New tests stay flat `test/*.test.ts` files in the existing connector row; the lane never edits the workflow.
+- Custody goes to the original connector owner where its current custody is bound; otherwise to one Design child, at most one more than the published budget.
+- CL1b keeps `modules/design/connector/design-module.ts`.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.lane-t8.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.lane-t9.001" -->
@@ -876,16 +1102,18 @@ The machine `task.*` blocks are authoritative. In summary:
 | `receiver-adapter` → `receiver-landing` | T2 → T1 | `wiki-mount-landing`, `design-compose-landing`, `round-trip-landing` |
 | `preview-agent` (PV-M1), `preview-compare` (PV-M2), `component-runner-port` (CC-M1) → `preview-agent-landing`, `preview-compare-landing`, `component-port-landing` | T8 → T1 | — |
 | `preview-host` → `preview-host-landing` | T2 → T1 | `receiver-landing`, `preview-agent-landing`, `component-port-landing` |
+| `connector-resolve-unknown` (CN-U1) → `connector-resolve-landing` | T8 → T1 | — |
+| `new-thread-transport` → `new-thread-landing` | T2 → T1 | `preview-host-landing`, `connector-resolve-landing` |
 | `preview-compose` (PV-M3) → `preview-compose-landing` | T8 → T1 | `design-compose-landing`, `preview-host-landing`, `preview-compare-landing` |
 | `acceptance-scenarios` → `scenarios-landing` | T7 → T1 | `harness-landing`, `wiring-landing`, `wiki-mount-landing`, `round-trip-landing`, `design-compose-landing`, `work-export-landing` |
 | `preview-scenarios` → `preview-scenarios-landing` | T7 → T1 | `scenarios-landing`, `preview-host-landing` |
 | `import-export-qualification` → `import-export-enablement` → `enablement-landing` | T7 → T8 → T1 | `design-storage-landing`, `r3-landing`, `design-compose-landing`; enablement predicate |
-| `closure-qualification` | T7 | all closure landings, including `preview-compose-landing` and `preview-scenarios-landing` |
-| seven held-gate qualifications | T7 | each explicit predicate (receiver S1 also after `receiver-landing`; S2 and component also after `preview-compose-landing` and `preview-scenarios-landing`) |
+| `closure-qualification` | T7 | all closure landings, including `preview-compose-landing`, `preview-scenarios-landing` and `new-thread-landing` |
+| seven held-gate qualifications | T7 | each explicit predicate (receiver S1 also after `receiver-landing`; U1 also after `new-thread-landing`; S2 and component also after `preview-compose-landing` and `preview-scenarios-landing`) |
 | `preview-enablement` → `preview-enablement-landing`; `component-static-enablement` → `component-static-landing`; `component-scripted-enablement` → `component-scripted-landing` | T2 → T1 | its qualification gate and its own enabling predicate |
 | `final-acceptance` → `main-delivery` | T7 → T1 | `closure-qualification`, `scenarios-landing`, `wiki-mount-landing`, every gate, the three enabling landings, `install-route` |
 
-**Ready at publication:** K1, K2 and K3 became ready at the previous revision; K3 has since landed as #57. This revision adds `work-session-injection` and the three preview module lanes (`preview-agent`, `preview-compare`, `component-runner-port`). Their write scopes are disjoint from each other and from every task that can be ready with them. The only existing task that gains a dependency is live wiring, on the Work seam it consumes. No other dependency changes for live wiring, the Wiki mount, K1–K4, r3 or the D-4 lanes, so there is no new barrier. `reference-ui` and the T10/T11 tasks wait for actual custody binding.
+**Ready at publication:** K1, K2 and K3 became ready at the previous revision; K3 has since landed as #57. This revision adds `work-session-injection` and the three preview module lanes (`preview-agent`, `preview-compare`, `component-runner-port`). Their write scopes are disjoint from each other and from every task that can be ready with them. The only existing task that gains a dependency is live wiring, on the Work seam it consumes. No other dependency changes for live wiring, the Wiki mount, K1–K4, r3 or the D-4 lanes, so there is no new barrier. `reference-ui` and the T10/T11 tasks wait for actual custody binding. The U1 follow-on revision adds `connector-resolve-unknown`, ready at its publication with a scope disjoint from every task that can be ready with it, and `new-thread-transport`, which waits for `preview-host-landing` and `connector-resolve-landing`. Only `new-thread-u1-qualification` and `closure-qualification` gain a dependency, `new-thread-landing`; no other dependency changes.
 
 **Model hints (claude_frontier; the native tuple is recorded per task in the compile projection):**
 - Building defaults to Astra/medium.
@@ -894,6 +1122,7 @@ The machine `task.*` blocks are authoritative. In summary:
   - The typed helper has no Sonnet entry, so compiler capsules carry a labelled placeholder.
 - K1, K3, K4, r3 and the D-4 lanes come from `spec.hq-design` or `spec.hq-social-work` and use Astra/medium; the old Design-section Opus builder instruction is not extended.
 - The preview module lanes, the preview host, the T7 preview suites and the enabling commits are building work at Astra/medium. `preview-compose` keeps the CL1b owner's existing native tuple. `work-session-injection` keeps the existing Work owner's native tuple.
+- `connector-resolve-unknown` and `new-thread-transport` are building work at Astra/medium. `connector-resolve-unknown` keeps the original connector owner's native tuple when that custody is bound.
 - Verification mechanics and research, including the two preview qualification gates, use Sol/medium; closure and final judgment use Astra/high.
 - In-flight F2 and CL1b (the F2 successor) keep their existing native tuples.
 
@@ -1640,7 +1869,7 @@ No lane relays status through the owner.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "lane-t2",
-  "objective": "Wire the landed Social live and Work runtime adapters to the bridge transports in the shell, with real local services opt-in and synthetic services by default. Add a shell integration test proving the live path, unavailable/unknown truthfulness, no unknown-write retry and no live-to-fixture fallback. Exercise Work against a disposable local Planner service from services/planner. Consume the Work public seam: call setWorkSessionPort once before the first Work session with the configured live Planner and recovery, or the labelled examplePlanner only when configuration explicitly says unconfigured. A failed configuration read or a live-service error never falls back to the example, and a configuration change needs the labelled reload.",
+  "objective": "Wire the landed Social live and Work runtime adapters to the bridge transports in the shell, with real local services opt-in and synthetic services by default. Add a shell integration test proving the live path, unavailable/unknown truthfulness, no unknown-write retry and no live-to-fixture fallback. Exercise Work against a disposable local Planner service from services/planner. Consume the Work public seam: call setWorkSessionPort once before the first Work session with the configured live Planner and recovery, or the labelled examplePlanner only when configuration explicitly says unconfigured. A failed configuration read or a live-service error never falls back to the example, and a configuration change needs the labelled reload. Adapt only wrapper descriptor/identity expectations and explicit valid UNCONFIGURED synthetic-bridge setup in the three named existing test fixtures. Preserve every port, write, execution, navigation, restoration and Undo assertion plus missing/failed configuration and live-no-fixture-fallback negatives. A real product regression is repaired inside the owned wrapper cone, never accepted by weakening a test.",
   "context_refs": [
     "spec.hq-integration-parallel-execution#ctx.lane-t2.001",
     "spec.hq-integration-parallel-execution#iface.service-response.001"
@@ -1662,7 +1891,10 @@ No lane relays status through the owner.
     "apps/desktop/src/modules.tsx",
     "apps/desktop/src/services",
     "apps/desktop/electron",
-    "apps/desktop/src/live-services.integration.test.tsx"
+    "apps/desktop/src/live-services.integration.test.tsx",
+    "modules/social/nav/test/registry.test.tsx",
+    "modules/work/nav/test/registry.test.tsx",
+    "apps/desktop/src/social-work.integration.test.tsx"
   ],
   "requires": [
     "spec.hq-integration-parallel-execution#req.service-transport.001"
@@ -1687,7 +1919,9 @@ No lane relays status through the owner.
   ],
   "affected_check_groups": [
     "hq-shared-bridge",
-    "hq-root-build"
+    "hq-root-build",
+    "hq-social-live",
+    "hq-work-runtime"
   ],
   "result_fields": [
     "summary",
@@ -4248,7 +4482,8 @@ No lane relays status through the owner.
     "spec.hq-integration-parallel-execution#task.receiver-landing.001",
     "spec.hq-integration-parallel-execution#task.design-compose-landing.001",
     "spec.hq-integration-parallel-execution#task.preview-compose-landing.001",
-    "spec.hq-integration-parallel-execution#task.preview-scenarios-landing.001"
+    "spec.hq-integration-parallel-execution#task.preview-scenarios-landing.001",
+    "spec.hq-integration-parallel-execution#task.new-thread-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -4356,10 +4591,11 @@ No lane relays status through the owner.
   "kind": "verification",
   "profile_role": "verifier",
   "accountable_owner": "lane-t7",
-  "objective": "Qualify new-thread launch only after an adopted idempotent client-callable Jones Code launch with lookup by key; no fake launch qualification.",
+  "objective": "Qualify new-thread launch only under ac.new-thread-u1-binding.001: the merged and installed Jones Code launch contract of spec.jones-client-launch, native consent, and the landed HQ new-thread transport; no fake launch qualification.",
   "context_refs": [
     "spec.hq-integration-parallel-execution#ctx.lane-t7.001",
-    "spec.hq-integration-parallel-execution#ctx.operator-interaction-inventory.001"
+    "spec.hq-integration-parallel-execution#ctx.operator-interaction-inventory.001",
+    "spec.hq-integration-parallel-execution#iface.new-thread-transport.001"
   ],
   "read_scope": [
     "AGENTS.md",
@@ -4380,7 +4616,8 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.receiver-landing.001"
+    "spec.hq-integration-parallel-execution#task.receiver-landing.001",
+    "spec.hq-integration-parallel-execution#task.new-thread-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -6046,6 +6283,267 @@ No lane relays status through the owner.
 ```
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#task.component-scripted-landing.001" -->
 
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.connector-resolve-unknown.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t8",
+  "objective": "CN-U1. From work/hq-foundation at fc3f69a4a4ee6096e4dc60bd1295ed4e31995e52 or its read-back successor, under iface.resolve-unknown.001: add the optional TransportDescriptor.modes, FenceOutcome and TransportPort.fence port members; make a new-thread destination eligible only when its transport qualifies and declares new-thread, and derive newThreadControl from the rows; add outbox.resolveUnknown with its preconditions, one fence call and closed mapping, where an unanswered fence leaves the attempt unknown and nothing retries; add controller requestResolveUnknown/confirmResolveUnknown and the panel card wired through ConnectorPanelHost; a labelled fake fence for tests; README status rows. Additive only: existing exports, persisted dispatch and handoff formats, and the send and reconciliation paths are unchanged, and no read path can reach fence. New tests are flat test/*.test.ts files. Publish one non-draft PR against work/hq-foundation from a new branch.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t8.001",
+    "spec.hq-integration-parallel-execution#iface.resolve-unknown.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "modules/design/connector/src",
+    "modules/design/connector/test",
+    "modules/design/connector/README.md"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.new-thread-followon.001"
+  ],
+  "produces": [],
+  "dependencies": [],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.new-thread-followon-source.001",
+    "spec.hq-integration-parallel-execution#ac.module-candidates.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.connector-resolve-unknown.001"
+  ],
+  "affected_check_groups": [
+    "hq-connector-resolve-unknown",
+    "design-connector"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "A new test would fall outside the existing design-sections.yml connector row glob, or a change outside the module cone would be needed; stop and report, never edit the workflow.",
+    "A needed change to a persisted dispatch or handoff format, or a fence call reachable from any read path.",
+    "Pushing to an original module ref whose current identity has not been read back."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.connector-resolve-unknown.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.connector-resolve-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the connector-resolve-unknown PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "modules/design/connector/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.connector-resolve-unknown.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.connector-resolve-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.new-thread-transport.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t2",
+  "objective": "T2 step 9 after preview-host-landing and connector-resolve-landing, under iface.new-thread-transport.001, against the planned Jones Code contract spec.jones-client-launch (target Jones-Systems/Jones-Code fa7c6c013811db33d128422027697dbaa1517b60), with no Jones Code change. Inside the landed receiver's main-only jones-code module: the main-only new-thread binding; keyed t3_thread_launch send with clientRequestId = the attempt key and the jcl1 receipt; t3_thread_launch_lookup readback; t3_thread_launch_fence reachable only through the connector's owner-confirmed resolveUnknown; the closed result mapping, the ledger and the session rule; the one added design.jonesCode.fence route and its contract shapes; the jones-code composition with the connector port types. The descriptor lists new-thread only with U1 evidence, so production stays disabled and unqualified. Qualify with the Q-N wire stub only; no OAuth, token, live call or installed Jones Code dependency.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t2.001",
+    "spec.hq-integration-parallel-execution#iface.new-thread-transport.001",
+    "spec.hq-integration-parallel-execution#iface.resolve-unknown.001",
+    "spec.hq-integration-parallel-execution#iface.shared-r3.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/",
+    "apps/desktop/",
+    "packages/",
+    "modules/",
+    "tests/",
+    "tools/hq-cli/",
+    "services/planner/",
+    "package.json",
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "write_scope": [
+    "apps/desktop/electron/jones-code",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.cts",
+    "apps/desktop/src/ServiceSettings.tsx",
+    "apps/desktop/src/modules.tsx",
+    "packages/contracts/src/jones-code.ts",
+    "packages/contracts/src/index.ts"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.new-thread-followon.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.preview-host-landing.001",
+    "spec.hq-integration-parallel-execution#task.connector-resolve-landing.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.new-thread-followon-source.001",
+    "spec.hq-integration-parallel-execution#ac.shared-runtime.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.new-thread-transport.001"
+  ],
+  "affected_check_groups": [
+    "hq-new-thread-transport",
+    "hq-root-build"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Own only the literal write scope in one isolated non-main HQ worktree; one Git owner per worktree.",
+    "Public repository: no private corpus, personal data, host addresses, session history, native thread IDs or credentials.",
+    "Merge commits only; no force push, rebase, squash, history rewrite, branch or worktree deletion.",
+    "No reviewer bots or automated PR review services; no sudo, signing, credential or deployment effect."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead.",
+    "Any live Jones Code call, OAuth consent or token read would be needed.",
+    "The landed receiver lacks the MCP client, ledger or handoff text this task reuses; request a T1 rebind."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.new-thread-transport.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.new-thread-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "T1 verifies the new-thread-transport PR a diff inside its literal write scope and green exact-head checks, merges it into work/hq-foundation with --match-head-commit and reads back.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.lane-t1.001"
+  ],
+  "read_scope": [
+    "docs/",
+    "apps/desktop/",
+    "packages/contracts/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.source-integration.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.new-thread-transport.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.source-landing.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "T1 alone mutates shared integration refs and PR bases; one serialized operation per shared ref.",
+    "Merge with an exact --match-head-commit after green exact-head checks; read back ref, PR state and ancestry.",
+    "No force, rewind or retry of an unknown effect; reconcile first and repair forward by revert."
+  ],
+  "stop_conditions": [
+    "Stale source identity, unexpected or unowned change, overlapping writer, or unknown prior effect.",
+    "A needed change to a shared contract, root configuration or another lane's scope; request a T1 rebind instead."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.new-thread-landing.001" -->
+
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.source-landing.001" -->
 ```json
 {
@@ -6259,7 +6757,7 @@ No lane relays status through the owner.
   "validates": [
     "spec.hq-integration-parallel-execution#req.service-transport.001"
   ],
-  "scenario": "The shell drives Social through a wire stub and Work through a disposable local Planner service.",
+  "scenario": "The shell drives Social through a wire stub and Work through a disposable local Planner service. Wrapper integration adapts the existing Social/Work registry and shell fixtures with explicit valid UNCONFIGURED synthetic bridge setup while preserving all behavior assertions and negative configuration/no-fallback cases.",
   "evidence": {
     "predicate": "Integration tests pass with truthful status and no duplicate or fallback effects.",
     "invalid": "Live and fixture data are mixed or unlabelled.",
@@ -6279,7 +6777,10 @@ No lane relays status through the owner.
     "apps/desktop/src/"
   ],
   "affected_check_groups": [
-    "hq-shared-bridge"
+    "hq-shared-bridge",
+    "hq-root-build",
+    "hq-social-live",
+    "hq-work-runtime"
   ],
   "required_at": "integration-and-candidate"
 }
@@ -7606,3 +8107,74 @@ No lane relays status through the owner.
 }
 ```
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#test.component-scripted-enablement.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.connector-resolve-unknown.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "unit",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.new-thread-followon.001"
+  ],
+  "scenario": "Node suites with the labelled fake: new-thread eligibility with and without declared modes and qualification; the newThreadControl derivation; every resolveUnknown precondition refusal (not unknown, existing-thread, no fence, in flight, stale, used, expired); one fence call per confirmation; found, no-effect, unavailable, throw, timeout and malformed mappings; a CAS conflict; zero fence calls from recover, reconcile, checkStatus, refresh, selection and the evidence feed; the card and ConnectorPanelHost wiring; compatibility exports unchanged.",
+  "evidence": {
+    "predicate": "Fence is reachable only from a confirmed resolveUnknown; an unanswered fence leaves the attempt unknown with no retry; existing exports, persisted formats and the send path are unchanged; the existing connector row runs the new tests.",
+    "invalid": "A fence call from any read path, a resend, a new persisted state or basis, a labelled fake marked qualified, or a test outside the row glob.",
+    "unknown": "The server-render check cannot exercise the card interaction."
+  },
+  "environment": [
+    "Node 24 with npm ci on a clean isolated worktree; synthetic services only"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.connector-resolve-unknown.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.connector-resolve-unknown.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "modules/design/connector/src/"
+  ],
+  "affected_check_groups": [
+    "hq-connector-resolve-unknown",
+    "design-connector"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.connector-resolve-unknown.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.new-thread-transport.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "conformance",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.new-thread-followon.001",
+    "spec.hq-integration-parallel-execution#req.held-capabilities.001"
+  ],
+  "scenario": "Q-N: a recorded-schema stub of the Jones Code fa7c6c0 launch, lookup and fence shapes covers success with each initialMessage and preparation state, every definite failure code, orchestration_error, timeout after write, malformed and unknown codes, ledger write failure, lookup of launched, no_effect, absent, claimed and deleted keys, fence on absent, launched and failure, the existing-thread fence refusal, a session-label change, 401 and oversize.",
+  "evidence": {
+    "predicate": "Outcomes match iface.new-thread-transport.001; one launch call per attempt; unknown never resent; fence only through the resolve route; no token, projectId or command ID in renderer state; new-thread stays out of descriptor modes and the transport unqualified.",
+    "invalid": "A live call, a retry of unknown, a no-effect from an absent lookup or after a session change, or a qualified flag or new-thread mode from fixtures.",
+    "unknown": "The stub cannot represent a case."
+  },
+  "environment": [
+    "Node 24 with npm ci on a clean isolated worktree; synthetic services only"
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.new-thread-transport.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.new-thread-transport.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "apps/desktop/electron/jones-code/"
+  ],
+  "affected_check_groups": [
+    "hq-new-thread-transport",
+    "hq-root-build"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.new-thread-transport.001" -->
