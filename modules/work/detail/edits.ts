@@ -100,7 +100,9 @@ export function createEditor(store: WorkStore, feedback: Feedback, detail: Detai
     }
     const sent = buffer.text;
     const value = field === 'area' ? (sent.trim() ? sent : null) : sent;
-    const outcome = await save({ [field]: value }, { base: { [field]: buffer.base }, toast: field === 'notes' ? undefined : `Saved ${FIELD_WORD[field]}` });
+    // The buffer holds an empty area as ''; the Planner holds it as null, so the base is compared in the Planner's form.
+    const base = field === 'area' && buffer.base === '' ? null : buffer.base;
+    const outcome = await save({ [field]: value }, { base: { [field]: base }, toast: field === 'notes' ? undefined : `Saved ${FIELD_WORD[field]}` });
     if (outcome.status === 'saved') {
       const now = detail.buffer(itemId, field);
       if (now?.text === sent) detail.clearBuffer(itemId, field);

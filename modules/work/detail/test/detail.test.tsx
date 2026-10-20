@@ -128,6 +128,21 @@ describe('card detail conflicts', () => {
     expect(within(panel).queryByRole('alert')).toBeNull();
   });
 
+  it('setting an area on an item without one, while its notes changed elsewhere, re-applies without asking', async () => {
+    const env = await setup();
+    const panel = openCard(env, 'it-seed');
+    await env.device.patch('it-seed', 1, { notes: 'Theirs.' }, env.otherRid());
+    const area = within(panel).getByRole('textbox', { name: 'Area' });
+    fireEvent.change(area, { target: { value: 'Garden' } });
+    await act(async () => { fireEvent.blur(area); });
+    expect(within(panel).queryByRole('alert')).toBeNull();
+    expect(patches(env).map((c) => c.args.slice(0, 3))).toEqual([
+      ['it-seed', 1, { area: 'Garden' }],
+      ['it-seed', 2, { area: 'Garden' }],
+    ]);
+    expect(env.byId('it-seed')).toMatchObject({ area: 'Garden', notes: 'Theirs.', revision: 3 });
+  });
+
   it('a select edit that meets a changed value elsewhere asks instead of overwriting', async () => {
     const env = await setup();
     const panel = openCard(env, 'it-zine');
