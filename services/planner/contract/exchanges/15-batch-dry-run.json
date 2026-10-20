@@ -8,9 +8,9 @@
       "Accept": "application/json",
       "Content-Type": "application/json",
       "X-Planning-Request": "1",
-      "X-Request-Id": "contract-batch"
+      "X-Request-Id": "contract-dry"
     },
-    "body_utf8": "{\"items\":[{\"title\":\"Batch A\",\"references\":[{\"id\":\"ref001\",\"kind\":\"hq\",\"label\":\"Example design\",\"target\":{\"version\":1,\"domain\":\"design\",\"projectId\":\"project-example\",\"kind\":\"artifact\",\"entityId\":\"artifact-example\",\"title\":\"Example design\",\"returnDestination\":{\"domain\":\"design\",\"destination\":\"artifact/example\"}}}]},{\"title\":\"Batch B\",\"status\":\"next\"}],\"dry_run\":true}"
+    "body_utf8": "{\"items\":[{\"title\":\"Batch A\",\"references\":[{\"id\":\"ref001\",\"kind\":\"hq\",\"label\":\"Example design\",\"target\":{\"version\":1,\"domain\":\"design\",\"projectId\":\"project-example\",\"kind\":\"artifact\",\"entityId\":\"artifact-example\",\"title\":\"Example design\",\"returnDestination\":{\"domain\":\"design\",\"destination\":\"artifact/example\"}}}]}],\"dry_run\":true}"
   },
   "response": {
     "status": 200,
@@ -28,7 +28,7 @@
     },
     "body": {
       "valid": true,
-      "count": 2,
+      "count": 1,
       "dry_run": true,
       "state_version": 7
     }

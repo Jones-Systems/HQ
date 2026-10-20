@@ -89,18 +89,13 @@ def service():
 def capture():
     exchanges = {}
     with service() as port:
-        def call(name, method, path, body=None, request_id=None, status=200, raw=None, override=None):
+        def call(name, method, path, body=None, request_id=None, status=200, raw=None):
             wire = raw if raw is not None else (json.dumps(body, separators=(",", ":"), ensure_ascii=True) if body is not None else "")
             headers = {"Host": "localhost", "Accept": "application/json"}
             if method != "GET":
                 headers.update({"Content-Type": "application/json", "X-Planning-Request": "1"})
             if request_id is not None:
                 headers["X-Request-Id"] = request_id
-            for key, value in (override or {}).items():
-                if value is None:
-                    headers.pop(key)
-                else:
-                    headers[key] = value
             connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
             try:
                 connection.request(method, path, body=wire.encode(), headers=headers)
@@ -137,9 +132,8 @@ def capture():
         call("12-restore", "POST", path + "/restore", {"revision": 4}, "contract-restore")
         call("13-reviewed", "POST", path + "/reviewed", {"revision": 5}, "contract-reviewed")
         call("14-settings", "PUT", "/api/settings", {"settings": {"week_start": "mon"}}, "contract-settings")
+        call("15-batch-dry-run", "POST", "/api/items/batch", {"items": [{"title": "Batch A", "references": [ref]}], "dry_run": True}, "contract-dry")
         batch = {"items": [{"title": "Batch A", "references": [ref]}, {"title": "Batch B", "status": "next"}]}
-        # The CLI sends its atomic dry run and the real batch under one request ID.
-        call("15-batch-dry-run", "POST", "/api/items/batch", {**batch, "dry_run": True}, "contract-batch")
         call("16-batch", "POST", "/api/items/batch", batch, "contract-batch", 201)
         call("17-field-validation", "POST", "/api/items", {"fields": {"title": "Invalid", "references": [{**ref, "url": ""}]}}, "contract-invalid", 400)
         call("18-import-validation", "POST", "/api/import/preview", {"data": {"format": "wrong", "version": 1}}, "contract-import", 422)
@@ -158,15 +152,6 @@ def capture():
         call("25-state", "GET", "/api/state")
         call("26-version", "GET", "/api/version")
         call("27-export", "GET", "/api/export")
-        # Rejections below change no state and consume no IDs.
-        call("28-item-not-found", "GET", "/api/items/missing001", status=404)
-        call("29-mutation-not-found", "POST", "/api/items/missing001/archive", {"revision": 1}, "contract-missing", 404)
-        target = {**ref, "target": {**ref["target"], "version": 2}}
-        call("30-reference-target-validation", "POST", "/api/items", {"fields": {"title": "Invalid", "references": [target]}}, "contract-target", 400)
-        call("31-settings-validation", "PUT", "/api/settings", {"settings": {"stale_days": 0}}, "contract-bad-settings", 400)
-        call("32-replay-id-reuse", "POST", "/api/requests/replay", {**replay, "body_b64": base64.b64encode(b'{"fields":{"title":"Different"}}').decode()}, status=422)
-        call("33-missing-planning-header", "PATCH", path, {"revision": 6, "patch": {"title": "Refused"}}, "contract-refused", 403, override={"X-Planning-Request": None})
-        call("34-bad-host", "GET", "/api/version", status=421, override={"Host": "planner.invalid"})
     return exchanges
 
 
@@ -199,6 +184,11 @@ def main():
     if args.check:
         actual = {path.name: path.read_text() for path in folder.glob("*.json")}
         if output != actual:
+            for label, names in (("drifted", [n for n in output if n in actual and output[n] != actual[n]]),
+                                 ("missing", [n for n in output if n not in actual]),
+                                 ("unexpected", [n for n in actual if n not in output])):
+                if names:
+                    print(f"{label}: {', '.join(sorted(names))}", file=sys.stderr)
             print("Planner golden exchanges drifted; inspect the changes before regenerating.", file=sys.stderr)
             return 1
         if not sums.exists() or sums.read_text() != manifest(output):

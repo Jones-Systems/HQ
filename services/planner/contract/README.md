@@ -31,15 +31,10 @@ controlled application values. No response status, error, revision, state
 version, position, target, body or replay result is rewritten. Field validation
 is native HTTP 400; invalid imports and request-ID reuse are HTTP 422.
 The captures cover reads, all item mutations, settings, atomic batch and dry
-run, exact-byte repeat, revision/order conflicts, retained replay, safe resend,
-and an indeterminate replay with no baseline. The dry run and the real batch
-share one request ID, as the CLI sends them: a dry run records no request.
-After the final state, version and export readback, `28`–`34` capture
-rejections that change no state: item read and mutation `not_found` (404), a
-malformed reference and an invalid HQ target (400), invalid settings (400),
-replay request-ID reuse (422), a missing `X-Planning-Request` header (403) and
-an unrecognized Host (421). Retention eviction and rollback are additionally
-covered by store tests.
+run, exact-byte repeat, revision/order conflicts, a malformed HQ reference,
+an invalid import, retained replay, safe resend, and an indeterminate replay
+with no baseline. Retention eviction and rollback are additionally covered by
+store tests.
 
 From `services/planner`, after admission to one serial test process:
 
@@ -47,9 +42,14 @@ From `services/planner`, after admission to one serial test process:
 PYTHONDONTWRITEBYTECODE=1 python3 contract/generate.py --check
 ```
 
-`--check` fails on exchange drift, extra or missing exchange files, or a
-`SHA256SUMS` mismatch. To deliberately update fixtures after reviewing a
-contract change, run `python3 -B contract/build_vectors.py` and then
+`--check` names any drifted, missing or unexpected exchange files and fails
+on them or on a `SHA256SUMS` mismatch.
+
+Byte copies of these files are pinned outside this directory: the CLI's
+vector hash above, and the Work live-adapter copy in
+`modules/work/live/test/contract/` on the foundation line. Any byte change
+here, including an added capture, needs those owners to re-pin it. To
+deliberately update fixtures after reviewing a contract change, run `python3 -B contract/build_vectors.py` and then
 `python3 -B contract/generate.py`. The second step rewrites the exchanges,
 removes stale exchange files and refreshes `SHA256SUMS`. Inspect the diff.
 The `planner-service` group in `tests/check-groups.json` checks byte-exact
