@@ -170,7 +170,8 @@ export class RequestStore {
     const storage = this.ports.storage;
     const prefix = keys.packets(requestId);
     const records: FreezeRecord[] = [];
-    for (const key of await storage.listDocuments('workspace', prefix)) {
+    // The port does not promise an order; zero-padded sequence keys sort lexically into sequence order.
+    for (const key of [...await storage.listDocuments('workspace', prefix)].sort()) {
       const bytes = await storage.readDocument('workspace', key);
       if (!bytes) continue;
       const record = parseFreezeRecord(decodeJson(bytes));

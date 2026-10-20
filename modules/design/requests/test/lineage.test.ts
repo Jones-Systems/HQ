@@ -49,3 +49,18 @@ test('two writers racing for the same packet slot cannot both freeze', async () 
   assert.match(other.state.error ?? '', /no longer continues the latest packet|Another freeze/u);
   assert.equal((await e.store.open(requestId)).packets.length, 1);
 });
+
+test('packet history loads in sequence order even when storage lists keys unordered', async () => {
+  const e = env();
+  const { requestId, session } = await readyDraft(e);
+  const first = (await session.freeze())!;
+  session.edit({ type: 'add-annotation', annotation: annotation('B') });
+  const second = (await session.freeze())!;
+
+  // The StoragePort contract does not promise ordering; only the fake sorts.
+  const list = e.storage.listDocuments.bind(e.storage);
+  e.storage.listDocuments = async (ns, prefix) => [...await list(ns, prefix)].reverse();
+  const reopened = await e.store.open(requestId);
+  assert.equal(reopened.readOnly, null);
+  assert.deepEqual(reopened.packets.map((packet) => packet.packetId), [first.packetId, second.packetId]);
+});

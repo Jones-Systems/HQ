@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { exportRequests } from '../src/export.ts';
-import { env, imageBytes, readyDraft } from './fixtures.ts';
+import { env, frozenWithDestination, imageBytes, readyDraft } from './fixtures.ts';
 
 function base64(bytes: Uint8Array): string { return Buffer.from(bytes).toString('base64'); }
 
@@ -41,5 +41,19 @@ test('privacy/export output contains no unsent drafts and no unselected images',
   assert.equal(text.includes(unselectedDigest), false, 'unselected image digest absent');
   assert.equal(text.includes(base64(selected)), true, 'selected image is exported');
   assert.deepEqual(bundle.requests.map((item) => item.requestId), [requestId], 'never-frozen requests are omitted');
-  assert.deepEqual(bundle.omitted.map((item) => [item.store, item.count]), [['drafts', 2], ['draft-history', 1], ['unselected-attachments', 1], ['cache', 0]]);
+  assert.deepEqual(bundle.omitted.map((item) => [item.store, item.count]), [['drafts', 2], ['draft-history', 1], ['unselected-attachments', 1], ['cache', 0], ['sends', 0], ['handoff', 0]]);
+});
+
+test('export reports the send records and handoff statuses it leaves out', async () => {
+  const { e, requestId, session, packet, link } = await frozenWithDestination();
+  assert.equal(await session.send(e.connector.dispatch, packet.packetId, 'dest-1'), 'sent');
+  e.connector.set(link, 'queued');
+  await session.refreshHandoff(e.connector.status);
+  const snapshot = await e.store.open(requestId);
+  assert.equal(snapshot.sends.length, 1);
+  assert.equal(snapshot.handoff.length, 1);
+  const { bundle, bytes } = await exportRequests([snapshot], e.storage, '2026-01-03T00:00:00.000Z');
+  const text = new TextDecoder().decode(bytes);
+  for (const schema of ['hq.design.request-send/v1', 'hq.design.request-handoff-status/v1']) assert.equal(text.includes(schema), false, `export must not contain ${schema}`);
+  assert.deepEqual(bundle.omitted.filter((item) => item.store === 'sends' || item.store === 'handoff').map((item) => [item.store, item.count]), [['sends', 1], ['handoff', 1]]);
 });
