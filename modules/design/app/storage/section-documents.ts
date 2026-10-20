@@ -15,7 +15,7 @@ export class SectionStorageScopeError extends Error {
 }
 
 const ROOTS = [PROJECTS_KEY_ROOT, COMPONENTS_KEY_ROOT, FLOWS_KEY_ROOT, COMPARE_KEY_ROOT,
-  ANNOTATIONS_KEY_ROOT, 'design.canvas.arrangement.v1/', 'design/requests/', 'design/connector/', 'design/storage/'];
+  ANNOTATIONS_KEY_ROOT, 'design.canvas.arrangement.v1/', 'design/requests/', 'design/connector/', 'design/storage/', 'design/imports/'];
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/u;
 const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
 

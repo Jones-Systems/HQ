@@ -12,7 +12,7 @@
  * canonical form, so bytes round-trip exactly; bytes that are not canonical JSON are refused.
  */
 import { bytesEqual, canonicalBytes, parseCanonicalBytes } from './canonical.ts';
-import { isStoreErrorCode, type CacheBacking, type WorkspaceBacking } from './backing.ts';
+import { isStoreErrorCode, type CacheBacking, type WorkspaceRecords } from './backing.ts';
 
 export const REQUESTS_KEY_ROOT = 'design/requests/';
 export type RequestsNamespace = 'workspace' | 'cache';
@@ -46,7 +46,7 @@ function inScope(key: string): string {
 }
 
 export function createRequestsStoragePort<D extends string = string>(backings: {
-  readonly workspace: WorkspaceBacking;
+  readonly workspace: WorkspaceRecords;
   /** Optional: without it the cache namespace is unavailable rather than silently redirected. */
   readonly cache?: CacheBacking;
 }): RequestsStoragePort<D> {
@@ -54,12 +54,12 @@ export function createRequestsStoragePort<D extends string = string>(backings: {
   if (workspace.kind !== 'workspace') throw new RequestsStorageScopeError('workspace backing must be a workspace view');
   if (backings.cache && backings.cache.kind !== 'cache') throw new RequestsStorageScopeError('cache backing must be a cache view');
 
-  const docs = (ns: RequestsNamespace): WorkspaceBacking | CacheBacking => {
+  const docs = (ns: RequestsNamespace): WorkspaceRecords | CacheBacking => {
     if (ns === 'workspace') return workspace;
     if (ns === 'cache' && backings.cache) return backings.cache;
     throw new RequestsStorageScopeError(`Namespace ${JSON.stringify(ns)} is not available to the requests adapter`);
   };
-  const eventsOnWorkspace = (ns: RequestsNamespace): WorkspaceBacking => {
+  const eventsOnWorkspace = (ns: RequestsNamespace): WorkspaceRecords => {
     if (ns !== 'workspace') throw new RequestsStorageScopeError('Events live only in the workspace namespace');
     return workspace;
   };

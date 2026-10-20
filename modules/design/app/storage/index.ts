@@ -46,3 +46,9 @@ export { createCompareStorage } from './compare.ts';
 export type { CompareDocumentPort } from './compare.ts';
 export { createAnnotationsStorage } from './annotations.ts';
 export type { AnnotationDocumentPort } from './annotations.ts';
+
+export type { WorkspaceRecords } from './backing.ts';
+export { createReferencesStorage, REFERENCES_KEY_ROOT } from './references.ts';
+export { createEvidenceStore, EVIDENCE_KEY_ROOT } from './evidence.ts';
+export { createDiscoveryCacheStore } from './discovery-cache.ts';
+export type { DiscoveryCacheStore } from './discovery-cache.ts';
