@@ -249,8 +249,8 @@ function ScrollArea({ ui, pageKey, ready, children }: { ui: WorkUi; pageKey: str
     const el = ref.current;
     if (!el || !ready || restored.current === pageKey) return;
     restored.current = pageKey;
-    const saved = ui.getState().scroll[pageKey];
-    if (!saved) return;
+    // A page never visited starts at the top: the scroller element is shared, so it would keep the last page's offset.
+    const saved = ui.getState().scroll[pageKey] ?? { top: 0, left: 0, columns: 0 };
     el.scrollTop = saved.top;
     el.scrollLeft = saved.left;
     const columns = el.querySelector<HTMLElement>('.work-columns');
