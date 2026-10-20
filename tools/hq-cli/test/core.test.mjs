@@ -8,6 +8,10 @@ import { run, parse } from '../src/cli.ts';
 import { commands, schemas } from '../src/commands.ts';
 import { conforms } from '../src/schema.ts';
 import { harness, state, item, date } from './fixtures.mjs';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+import { readJSON, atomicJSON } from '../src/files.ts';
+import { scratch } from './write-fixtures.mjs';
 const noNetwork = { env: {}, fetch: async () => { assert.fail('Unexpected network'); } };
 
 test('unconfigured discovery never fetches and identifies every unavailable domain honestly', async () => {
@@ -91,4 +95,41 @@ test('symlink launcher resolves checkout with spaces and prints exactly one JSON
       assert.equal(p.stderr, '');
     }
   } finally { await rm(scratch, { recursive: true, force: true }); }
+});
+
+test('input-file errors keep their specific message instead of a generic read failure', async t => {
+  const f = await scratch(t);
+  const path = await f.write('large.json', { synthetic: 'x'.repeat(64) });
+  assert.throws(() => readJSON(path, 16), e => e.code === 'usage_error' && /size limit/.test(e.message));
+});
+
+test('atomic intent write makes the rename durable by syncing the file and then its directory', async t => {
+  const f = await scratch(t);
+  const target = f.path('intent.json');
+  const synced = [];
+  const original = fs.fsyncSync;
+  fs.fsyncSync = fd => { synced.push({ directory: fs.fstatSync(fd).isDirectory(), renamed: fs.existsSync(target) }); return original(fd); };
+  syncBuiltinESMExports();
+  try { atomicJSON(target, { synthetic: true }); }
+  finally { fs.fsyncSync = original; syncBuiltinESMExports(); }
+  assert.deepEqual(synced, [{ directory: false, renamed: false }, { directory: true, renamed: true }]);
+  assert.deepEqual(fs.readdirSync(f.root), ['intent.json']);
+});
+
+for (const [signal, exit] of [['SIGINT', 130], ['SIGTERM', 143]]) test(`a real ${signal} delivered while the intent file is written is honored, not swallowed`, async t => {
+  const f = await scratch(t);
+  const script = `import fs from 'node:fs'; import { syncBuiltinESMExports } from 'node:module';
+    const original = fs.fsyncSync; let armed = true;
+    fs.fsyncSync = fd => { if (armed) { armed = false; process.kill(process.pid, process.env.TEST_SIGNAL); } return original(fd); };
+    syncBuiltinESMExports();
+    const { atomicJSON } = await import(process.env.TEST_MODULE);
+    await new Promise(done => fs.readFile(process.env.TEST_TARGET + '.missing', () => done()));
+    atomicJSON(process.env.TEST_TARGET, { synthetic: true });
+    for (let i = 0; i < 3; i++) await new Promise(done => setImmediate(done));
+    await new Promise(done => setTimeout(done, 50));
+    process.stdout.write('continued');`;
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', env: { ...process.env, TEST_MODULE: new URL('../src/files.ts', import.meta.url).href, TEST_TARGET: f.path('intent.json'), TEST_SIGNAL: signal } });
+  assert.equal(child.stdout, '', 'the process must not continue toward a send after the signal');
+  assert.equal(child.status, exit, child.stderr);
+  assert.deepEqual(fs.readdirSync(f.root), ['intent.json']);
 });
