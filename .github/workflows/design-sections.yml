@@ -39,7 +39,7 @@ env:
   # one runner of exactly one row, and every direct child directory there must have a row. Adding a
   # directory fails the inventory job until its row and HQD_EXPECTED_ROWS are added here. A nested
   # directory with tests and no row fails the omission check.
-  HQD_EXPECTED_ROWS: '18'
+  HQD_EXPECTED_ROWS: '19'
   HQD_INVENTORY: |
     annotations|modules/design/annotations|root|test/*.test.ts|vitest.config.ts|repo|test/**/*.render.test.tsx|-
     canvas|modules/design/canvas|root|test/*.test.ts|vitest.config.ts|cone|test/view/**/*.test.tsx|-
@@ -57,6 +57,7 @@ env:
     ui|modules/design/ui|root|test/node/*.test.ts|vitest.config.ts|cone|test/vite/**/*.test.ts|-
     app|modules/design/app|root|compose/test/*.test.ts|-|-|-|-
     app-storage|modules/design/app/storage|root|test/*.test.ts|-|-|-|-
+    app-sections|modules/design/app/sections|root|test/*.test.ts|vitest.config.ts|cone|test/**/*.test.tsx|-
     design-store|packages/design-store|cone|test/*.test.ts|-|-|-|-
     preview|modules/design/preview|root|test/*.test.ts|-|-|-|modules/design/preview/vite.config.ts
 
