@@ -48,6 +48,13 @@ export function initDrag(guard) {
 
 function onPointerDown(e) {
   if (e.button !== 0 || active) return;
+  if (pending) {
+    // A second finger during a hold is a pinch or scroll, not a drag. The same
+    // pointer pressing again means its release was missed: start afresh.
+    const stale = pending.pointerId === e.pointerId;
+    teardown();
+    if (!stale) return;
+  }
   const source = e.target.closest('[data-drag-type]');
   if (!source) return;
   if (e.target.closest('button, a, input, select, textarea, label, [data-no-drag]')
@@ -62,8 +69,9 @@ function onPointerDown(e) {
     timer: null,
   };
   if (touch) {
+    const hold = pending;
     pending.timer = setTimeout(() => {
-      if (!pending) return;
+      if (pending !== hold) return;
       pending.armed = true;
       begin();
     }, HOLD_MS);
@@ -190,8 +198,12 @@ function autoScroll() {
   active.raf = requestAnimationFrame(autoScroll);
 }
 
+// Only the pointer that started the gesture may end it.
+const ownsPointer = (e) => (active || pending)?.pointerId === e.pointerId;
+
 function onPointerUp(e) {
-  if (active && e.pointerId === active.pointerId) {
+  if (!ownsPointer(e)) return;
+  if (active) {
     const { handler, target, payload, source } = active;
     const point = { x: active.x, y: active.y };
     finish();
@@ -204,7 +216,8 @@ function onPointerUp(e) {
   teardown();
 }
 
-function onPointerCancel() {
+function onPointerCancel(e) {
+  if (!ownsPointer(e)) return;
   if (active) {
     finish();
     announce('Drag cancelled.');

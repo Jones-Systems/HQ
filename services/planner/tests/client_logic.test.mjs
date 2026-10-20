@@ -113,6 +113,9 @@ test('filters and review buckets', () => {
 
 const { api, ApiError, NetworkError } = await import('../public/js/api.js');
 const st = await import('../public/js/state.js');
+const { registerDragType, initDrag, isDragging } = await import('../public/js/drag.js');
+const { openDateEditor } = await import('../public/js/date-editor.js');
+const { h } = await import('../public/js/dom.js');
 
 const flush = () => new Promise((r) => setImmediate(r));
 const ok = (body) => ({ ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(body)) });
@@ -399,5 +402,78 @@ test('imports and restores get a longer timeout than ordinary writes', async () 
     assert.ok(outcomes['/api/backups/restore'] instanceof NetworkError);
   } finally {
     mock.timers.reset();
+  }
+});
+
+// ------------------------------------------------------------- drag
+
+const dropped = [];
+registerDragType('test', { findTarget: () => null, indicate: () => null, drop: (...args) => dropped.push(args) });
+initDrag(() => null);
+const dragSource = h('div', { dataset: { dragType: 'test', id: 'a' } });
+doc.body.append(dragSource);
+const pointer = (props) => ({ button: 0, target: dragSource, pointerType: 'mouse', pointerId: 1, clientX: 0, clientY: 0, ...props });
+
+test('another pointer lifting or cancelling does not strand an active drag', () => {
+  doc.fire('pointerdown', pointer({}));
+  doc.fire('pointermove', pointer({ clientX: 20 }));
+  assert.ok(isDragging());
+  doc.fire('pointerup', pointer({ pointerId: 2 }));
+  doc.fire('pointercancel', pointer({ pointerId: 2 }));
+  assert.ok(isDragging(), 'a second finger does not end or cancel the drag');
+  doc.fire('pointerup', pointer({ clientX: 20 }));
+  assert.equal(isDragging(), false, 'the dragging pointer still ends it');
+  assert.equal(doc.querySelector('.drag-layer'), null);
+});
+
+test('a second finger during a touch hold cancels the hold instead of hijacking it', () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    doc.fire('pointerdown', pointer({ pointerType: 'touch', pointerId: 5 }));
+    doc.fire('pointerdown', pointer({ pointerType: 'touch', pointerId: 6 }));
+    mock.timers.tick(400);
+    assert.equal(isDragging(), false);
+    // A single-finger hold still starts a drag.
+    doc.fire('pointerdown', pointer({ pointerType: 'touch', pointerId: 7 }));
+    mock.timers.tick(400);
+    assert.ok(isDragging());
+    doc.fire('pointerup', pointer({ pointerType: 'touch', pointerId: 7 }));
+    assert.equal(isDragging(), false);
+    // A press whose release was never delivered does not block the next one.
+    doc.fire('pointerdown', pointer({ pointerId: 8 }));
+    doc.fire('pointerdown', pointer({ pointerId: 8 }));
+    doc.fire('pointermove', pointer({ pointerId: 8, clientX: 20 }));
+    assert.ok(isDragging());
+    doc.fire('pointerup', pointer({ pointerId: 8 }));
+    assert.equal(isDragging(), false);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+// ------------------------------------------------------------- date editor
+
+test('a double-clicked Add date sends one change', async () => {
+  const item = { id: 'item000001', revision: 2, title: 'Trip', dates: [] };
+  seed([item], 5);
+  const calls = heldFetch();
+  const closed = openDateEditor({ item, defaults: { kind: 'target', precision: 'day', value: '2026-11-14' } });
+  const add = doc.querySelectorAll('button').find((b) => b.textContent === 'Add date');
+  add.listeners.click.forEach((fn) => fn());
+  add.listeners.click.forEach((fn) => fn());
+  await flush();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].body.revision, 2);
+  calls[0].resolve(ok({ item: { ...item, revision: 3 }, changed: [], state_version: 6 }));
+  assert.equal(await closed, true);
+});
+
+test('script-scheme links are never rendered as live hrefs', () => {
+  assert.equal(h('a', { href: 'https://example.com/a' }).href, 'https://example.com/a');
+  assert.equal(h('a', { href: '#/board' }).href, '#/board');
+  for (const bad of ['javascript:alert(1)', ' JaVaScRiPt:alert(1)', 'java\tscript:alert(1)', 'data:text/html,x', 'vbscript:x']) {
+    const a = h('a', { href: bad });
+    assert.equal(a.href, '', bad);
+    assert.equal(a.getAttribute('href'), null, bad);
   }
 });
