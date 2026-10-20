@@ -715,7 +715,6 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
     "Unknown effects, incompatible source contract, overlapping ownership or stale base."
   ]
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#task.wiki-contract.001" -->
 
@@ -750,7 +749,6 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   ],
   "required_at": "checkpoint-and-candidate"
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#test.wiki-contract.001" -->
 
@@ -809,7 +807,6 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
     "Unknown effects, incompatible source contract, overlapping ownership or stale base."
   ]
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#task.wiki-core.001" -->
 
@@ -844,7 +841,6 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   ],
   "required_at": "checkpoint-and-candidate"
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#test.wiki-core.001" -->
 
@@ -903,7 +899,6 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
     "Unknown effects, incompatible source contract, overlapping ownership or stale base."
   ]
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#task.wiki-ui.001" -->
 
@@ -938,7 +933,6 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   ],
   "required_at": "checkpoint-and-candidate"
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#test.wiki-ui.001" -->
 
@@ -997,7 +991,6 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
     "Unknown effects, incompatible source contract, overlapping ownership or stale base."
   ]
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#task.wiki-private-validation.001" -->
 
@@ -1032,7 +1025,6 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   ],
   "required_at": "checkpoint-and-candidate"
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#test.wiki-private-validation.001" -->
 
@@ -1097,7 +1089,6 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
     "Unknown effects, incompatible source contract, overlapping ownership or stale base."
   ]
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#task.wiki-integration.001" -->
 
@@ -1136,7 +1127,6 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   ],
   "required_at": "checkpoint-and-candidate"
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#test.wiki-integration.001" -->
 
@@ -1195,7 +1185,6 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
     "Unknown effects, incompatible source contract, overlapping ownership or stale base."
   ]
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#task.reference-producer.001" -->
 
@@ -1230,6 +1219,5 @@ Tests cover deterministic packets, generation changes, future schemas, traversal
   ],
   "required_at": "checkpoint-and-candidate"
 }
-
 ```
 <!-- codex-section:end id="spec.hq-expansion#test.reference-producer.001" -->
