@@ -12,7 +12,7 @@ from codex_v3.wave_compiler import (CompileReadyWaveRequest, ExplicitActivationE
     NormalizedResultField, NormalizedTaskResult, ResultCompletion, ResultField, TaskModelRequest,
     compile_ready_wave, plan_and_blob_for_request)
 
-repo = Path(sys.argv[1]); rev = RevisionIdentity(sys.argv[2]); activate = sys.argv[3] == 'activated'
+repo = Path(sys.argv[1]).resolve(); rev = RevisionIdentity(sys.argv[2]); activate = sys.argv[3] == 'activated'
 def catalog_bytes(spec_text):
     """Projection catalog: the TOML fence in ctx.check-catalog.001 (a proposed delta, not tests/check-groups.toml)."""
     sec = spec_text.split('<!-- codex-section:begin id="spec.hq-social-work#ctx.check-catalog.001" -->', 1)[1].split('<!-- codex-section:end', 1)[0]

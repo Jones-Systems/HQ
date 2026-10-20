@@ -94,10 +94,14 @@ Shared presentation lives in `packages/hq-ui/`. Live service access goes through
 <!-- codex-section:end id="spec.hq-social-work#req.foundation-binding.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#req.shell.001" -->
-- **RS-1.** `packages/hq-ui` defines CSS custom-property tokens for the foundation's semantic roles: base/raised surfaces, primary/muted text, border, accent and accent text, focus, success, warning and danger. Each role has light and dark values selected by the shell's `data-theme` attribute on `document.documentElement`, which T0's candidate sets to `light` or `dark`. A `prefers-color-scheme` fallback applies before that attribute is set. Final values come from T2's visual system. Modules use only these roles plus documented domain roles.
-- **RS-2.** Tokens never apply to captured or producer content. Elements marked `data-hq-content="captured"` and images or iframes of evidence get no filter, blend or recolor. The dark theme changes chrome only.
-- **RS-3.** `packages/hq-ui` provides accessible primitives: Button, IconButton, Menu with roving focus, Dialog with focus trap and Escape, Toast with an action (Undo), Tabs, StatusChip with a text label (never color alone), SaveIndicator (saving / saved / not saved / offline / unknown) and StateView (empty / loading / error / offline / unavailable / unknown). All are keyboard operable with a visible focus ring in both themes and respect reduced motion.
-- **RS-4.** After explicit custody transfer only, the shell chrome (`apps/desktop/src/App.tsx`, `apps/desktop/src/styles.css`) adopts these tokens, replacing T0's `--background`, `--surface`, `--text`, `--muted`, `--line`, `--selected` and `--accent` variables. It covers: slim rail Design → Social → Work, project context, appearance control. Rail order, per-domain destination restoration and appearance persistence keep T0's behavior.
+- **RS-1.** `packages/hq-ui` ships T2's published visual-system tokens (`ctx.visual-system-binding.001`): 39 colour roles as `light-dark()` pairs, 4 theme-invariant artwork tokens, and type, space, radius, size, breakpoint, motion, layering and component roles, all `--hq-*`. The scheme is selected by the shell's `data-theme` attribute on `document.documentElement`, which T0 sets to `light` or `dark`. Before it is set, `:root { color-scheme: light dark }` follows the OS. Modules use only these roles plus documented domain roles (`--social-*`, `--work-*`). Status colour is always paired with a word and a shape.
+- **RS-2.** Tokens never apply to preserved content.
+  - **Marking.** A preserved-content well carries `data-hq-content="captured"`, `"producer"` or `"export"`. It may add `data-hq-matte="checker"` for a fixed transparency grid. It sits on the constant artwork matte.
+  - **Scheme pin.** The well's `--hq-content-scheme` is **pinned to the content's recorded theme** (`light` or `dark`), set through CSSOM (`element.style.setProperty`), which the existing CSP allows.
+  - **Why the pin is required.** T2's Chromium 155 probe found that an embedded iframe's `prefers-color-scheme`, and an SVG used as `<img>`, follow the owner element's used `color-scheme`. Without the pin, switching HQ's appearance would silently re-theme a preview.
+  - **No alteration.** No filter, blend mode, opacity or recolour is ever applied to preserved content. Global appearance changes chrome only.
+- **RS-3.** `packages/hq-ui` provides accessible primitives: Button, IconButton, Menu with roving focus, Dialog with focus trap and Escape, Toast with an action (Undo), Tabs, StatusChip with a text label (never color alone), SaveIndicator (saved / saving / unsaved / failed with retry / offline, kept on this device / unknown result with check; local persistence only, never execution) and StateView (empty / loading / error / offline / unavailable / unknown). All are keyboard operable with a visible focus ring in both themes and respect reduced motion.
+- **RS-4.** After a named UI owner is explicitly assigned, the shell chrome (`apps/desktop/src/App.tsx`, `apps/desktop/src/styles.css`, released by T0 but **unassigned**) adopts T2's tokens. It loads `hq-tokens.css` and then T2's `t0-bridge.css`, and retires T0's palette blocks. It covers: the 40px titlebar with project context and the Light/Dark/System radio group (a menu button below 960px), the 64px rail Design → Social → Work with T0's unavailable slots as `aria-disabled`, and the compact secondary-nav drawer below 960px. Rail order, per-domain destination restoration and appearance persistence keep T0's behavior.
 <!-- codex-section:end id="spec.hq-social-work#req.shell.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#req.social-content.001" -->
@@ -257,7 +261,15 @@ These come from one root-owned commit with one lockfile regeneration. Fresh `npm
 <!-- codex-section:end id="spec.hq-social-work#ac.workspace-skeleton.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.ui-kit.001" -->
-Token and primitive tests pass in light and dark. Text-role contrast is at least 4.5:1 and focus contrast at least 3:1, both computed. Captured-content containers keep their pixels and computed colors across theme changes. Every primitive is operable by keyboard alone. Light and dark visual evidence of the kit page is attached.
+The kit consumes T2's tokens at `f3c1daff`. The integrity test passes.
+
+- **Tests and contrast.** Token and primitive tests pass in light and dark. All 104 of T2's contrast pairs are recomputed and meet T2's thresholds: text at least 4.5:1, focus at least 3:1.
+- **Preserved content.**
+  - Every `PreservedContent` kind keeps its pixels and computed colours across Light, Dark and System changes.
+  - Its computed `color-scheme` equals the **recorded** scheme, not the chrome's. This is checked for an `<img>`, an SVG-as-`<img>` and a same-origin `srcdoc` iframe whose `prefers-color-scheme` probe reports the recorded scheme.
+  - No filter, blend or opacity is computed on the well.
+- **Keyboard and evidence.** Every primitive is operable by keyboard alone. Light and dark evidence of the kit page is attached.
+- **Gaps stay visible.** T2's unverified surfaces stay listed as gaps, not passes: Electron, macOS, SF fallback, screen readers, forced colours and 2×.
 <!-- codex-section:end id="spec.hq-social-work#ac.ui-kit.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.custody-transfer.001" -->
@@ -447,7 +459,7 @@ The parallel mockup lanes T2 (visual system), T3 (Social) and T4 (Work) had publ
 ### Gaps that hold only their dependents
 
 - **G-1.** T0 code is published as candidate `33dfe44` but not accepted or frozen. The plan is bound to it; acceptance and any delta are confirmed in `task.bind-foundation.001`. No compiler-validated runnable implementation is claimed for module code.
-- **G-2.** T2, T3 and T4 mockups are unpublished. Token values and layouts are pending. They block visual acceptance, not core start.
+- **G-2.** T2 is published and accepted (`ctx.visual-system-binding.001`). T3 is preliminary (`ctx.social-design-reconciliation.001`). T4 is unpublished. Remaining layout gaps block visual acceptance, not core start.
 - **G-3.** UI-state storage. `ModulePort` has no storage member, and T0 remounts modules on every domain switch.
   - **Default:** a module-level in-memory store that survives remounts within the session, plus destination strings for restorable location.
   - **Proposed to the root:** a namespaced `storage` member on `ModulePort`, needed for restoration across restarts.
@@ -542,8 +554,44 @@ The earlier `brands` destination is dropped. Brands are managed from the brand s
 
 **Adopted honesty copy:** never *scheduled*, *published*, *posted*, *live* or *connected*.
 
-**Pending:** final token values still come from T2.
+**Token values:** from T2 (`ctx.visual-system-binding.001`). T3's proposed token names are superseded by T2's.
 <!-- codex-section:end id="spec.hq-social-work#ctx.social-design-reconciliation.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#ctx.visual-system-binding.001" -->
+## Visual system binding (T2)
+
+**Evidence.** `docs/design/hq-visual-system/` at `f3c1daff9c6ab98d51a1bfb4aafbe83c351c1124` (PR #18, base `work/hq-foundation`). Its changes are limited to that directory. The root accepted it as a design and source artifact for implementation input. T1 read `README.md`, `tokens/hq-tokens.{json,css}`, `tokens/t0-bridge.css`, `components/hq-components.css` and `evidence/manifest.json` at that commit on 2026-10-20.
+
+**Reported checks** (T2's own run, headless Chromium 155 at 1×; not rerun by T1 or root):
+
+- `hq_tokens.py check`: 104/104 contrast pairs pass in both modes;
+- `compare_regions.py`: 13/13 region checks pass, with identical well pixels in light and dark chrome, 1:1 wells equal to the source PNGs, and System matching explicit Light/Dark;
+- live preview at 1280 and 760.
+
+There is no CI on the base; nothing here is called green CI. **Unverified:** Electron, macOS, SF Pro fallback, real window controls, screen readers, forced colours, 2× capture.
+
+**What it supplies:**
+
+- final role values for RS-1 and the UI kit;
+- the preserved-content marker, aligned with RS-2;
+- SaveIndicator and StateView state names, aligned with RS-3;
+- reference-block treatments matching RL-4: same project, other project (worded with a warning edge), missing (dashed, snapshot kept).
+
+T3's proposed `--hq-*` names are superseded by T2's role names. `--social-future*` stays a Social domain role.
+
+**The color-scheme pin requirement.** Carried into RS-2, `iface.ui-kit.001` and `ac.ui-kit.001`. It is posted on coordination issue #1 for Design owners, who own their preview, compare and export wells.
+
+**T2 shared proposals, under their existing owners and gates** (none expands T1's R1 cone):
+
+| Proposal | Owner | Gate |
+| --- | --- | --- |
+| Load tokens and `t0-bridge.css`; retire T0's palette in `styles.css` | Shell chrome (`task.shell-chrome.001`) | A named UI owner assigned for `App.tsx`/`styles.css`, which are released by T0 but unassigned |
+| Appearance control in the titlebar; compact drawer below 960px | Shell chrome | Same |
+| Bundle IBM Plex Sans 400/500/600 and Mono 400/500 as local woff2. No runtime Google Fonts (CSP `font-src 'self'`). | Root (packaging and assets), consumed by `@hq/ui` | An exact-file SIL OFL 1.1 provenance and licence check, recorded before any font file enters the repository. Fallback stack until then. |
+| Theme-matched `BrowserWindow` background (`#E6E5DD` light, `#0B0C0A` dark) | Root, Electron main | A later serialized integration phase |
+| macOS `titleBarStyle: 'hiddenInset'` with drag and no-drag regions | Root, Electron main, plus shell chrome CSS | Same, plus native macOS verification |
+| Pin `--hq-content-scheme` to the recorded theme on every preserved well | `@hq/ui` (`PreservedContent`); Design owners for Design wells | `ac.ui-kit.001`; Design consumes it via issue #1 |
+<!-- codex-section:end id="spec.hq-social-work#ctx.visual-system-binding.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ctx.change-surface.001" -->
 ## Exact Change Surface And Ownership
@@ -752,14 +800,16 @@ Design supplies its own provider for its kinds through its integration owner; th
 <!-- codex-section:end id="spec.hq-social-work#iface.service-reference-extensions.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#iface.ui-kit.001" -->
-**`@hq/ui`** (owner UI lane).
+**`@hq/ui`** (owner UI lane). Values come from T2 at `f3c1daff` (`ctx.visual-system-binding.001`).
 
-- **Tokens.** `packages/hq-ui/src/tokens.css` sets `--hq-surface-base`, `--hq-surface-raised`, `--hq-text`, `--hq-text-muted`, `--hq-border`, `--hq-accent`, `--hq-accent-text`, `--hq-focus`, `--hq-success`, `--hq-warning` and `--hq-danger`, plus the `-soft` variants of the last four. They are scoped by `:root[data-theme="light"|"dark"]`, which T0 sets on `document.documentElement`, with a `prefers-color-scheme` fallback matching T0's `styles.css`.
+- **Tokens.** `packages/hq-ui/src/tokens/hq-tokens.css` and `hq-tokens.json` are byte-for-byte copies of T2's generated files. An integrity test records T2's path and SHA-256 per file. Edits happen upstream in T2's JSON source, never in HQ copies. Role names are T2's: `--hq-canvas`, `--hq-nav`, `--hq-surface[-raised|-overlay|-sunken|-hover|-pressed|-selected]`, `--hq-border[-strong|-control]`, `--hq-text[-muted|-subtle|-disabled]`, `--hq-accent*`, `--hq-on-accent`, `--hq-focus`, `--hq-selection`, `--hq-success|warning|danger|info[-soft]`, `--hq-skeleton*`, `--hq-scrim`, plus artwork invariants. They are scoped by `[data-theme]` and `light-dark()`.
+- **Bridge.** `t0-bridge.css` is also copied verbatim, for the shell owner to load.
 - **TypeScript names.** `packages/hq-ui/src/tokens.ts` exports the token names; values live only in CSS.
-- **Domain roles.** These are module-local: Work `--work-st-<status>` and `--work-dk-<datekind>`, Social `--social-channel-<id>`. Each needs a light and a dark value.
-- **Components.** `packages/hq-ui/src/components/` exports the RS-3 set.
-- **Contrast.** `packages/hq-ui/src/contrast.ts` exports a contrast helper used by the tests.
-- **Captured content.** `[data-hq-content="captured"]` is documented as theme-exempt.
+- **Domain roles.** These are module-local and paired with words: Work `--work-st-<status>` and `--work-dk-<datekind>`, Social `--social-channel-<id>`. Each needs a light and a dark value.
+- **Components.** `packages/hq-ui/src/components/` exports the RS-3 set, styled to T2's `hq-components.css` geometry and class roles (`hq-btn`, `hq-save`, `hq-fresh`, `hq-ref`, `hq-empty`, `hq-banner`, `hq-toast`, …). The component CSS is reference geometry; HQ's implementation is checked against it, not copied wholesale.
+- **Preserved content.** `PreservedContent` renders the RS-2 well. Its props are `kind: 'captured'|'producer'|'export'`, `recordedScheme: 'light'|'dark'` and `matte?: 'checker'`. It sets `--hq-content-scheme` through CSSOM. `setContentScheme(element, scheme)` is exported for modules that own their own wells.
+- **Contrast.** `packages/hq-ui/src/contrast.ts` recomputes T2's 104 contrast pairs in tests.
+- **Fonts.** The system fallback stack (`system-ui` / `ui-monospace`) is used until the font gate in `ctx.visual-system-binding.001` clears.
 
 Token names may be renamed only before the first consumer lands.
 <!-- codex-section:end id="spec.hq-social-work#iface.ui-kit.001" -->
@@ -892,7 +942,7 @@ domain-integration + reference-shell + social-references + work-references → r
 | Producer | Consumer | Deliverable | Blocks |
 | --- | --- | --- | --- |
 | T0 | R0 → all | Accepted baseline commit with registry, contracts and scripts | All implementation |
-| T2 visual system (`docs/design/hq-visual-system/`) | UI | Token values, type scale, density, rail/chrome treatment | UI-kit acceptance and visual evidence. Start may use foundation roles with provisional values. |
+| T2 visual system (`docs/design/hq-visual-system/`), **published `f3c1daff`** | UI | Token values, type scale, density, rail and chrome treatment, preserved-content pin | Satisfied for UI-kit input |
 | T3 Social mockups (`docs/design/social/`) | SOC-C, SOC-W | Library, calendar, workbench and run layouts | Visual acceptance; core and logic start now |
 | T4 Work mockups (`docs/design/work/`) | WRK-P, WRK-B | Board, card, detail, capture and Lists layouts | Visual acceptance; core and logic start now |
 | Owner D-1 (approved) | WRK-P | Verbatim three-file import mapping, `ctx.d1-import.001` | None now |
@@ -925,7 +975,6 @@ Merge is held.
   "default_context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.project-summary.001",
-    "spec.hq-social-work#ctx.foundation-binding-record.001",
     "brief.hq-shared-foundation#iface.shell.001",
     "brief.hq-shared-foundation#iface.references.001"
   ],
@@ -960,7 +1009,8 @@ Merge is held.
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
     "spec.hq-social-work#ctx.stop-recovery-delivery.001",
-    "spec.hq-social-work#iface.domain-module.001"
+    "spec.hq-social-work#iface.domain-module.001",
+    "spec.hq-social-work#ctx.foundation-binding-record.001"
   ],
   "read_scope": [
     "AGENTS.md",
@@ -1025,7 +1075,8 @@ Merge is held.
   "context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
-    "spec.hq-social-work#ctx.stop-recovery-delivery.001"
+    "spec.hq-social-work#ctx.stop-recovery-delivery.001",
+    "spec.hq-social-work#ctx.foundation-binding-record.001"
   ],
   "read_scope": [
     "AGENTS.md",
@@ -1197,12 +1248,13 @@ Merge is held.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "lane-hq-ui",
-  "objective": "Build @hq/ui: light/dark semantic tokens scoped by data-hq-appearance, captured-content exemption, contrast helper, and the accessible primitive set (Button, IconButton, Menu, Dialog, Toast with Undo, Tabs, StatusChip, SaveIndicator, StateView) with a kit evidence page.",
+  "objective": "Build @hq/ui: byte-for-byte copies of T2 tokens at f3c1daff with an integrity test, PreservedContent wells pinning --hq-content-scheme to the recorded theme via CSSOM, contrast helper recomputing the 104 pairs, and the accessible primitive set (Button, IconButton, Menu, Dialog, Toast with Undo, Tabs, StatusChip, SaveIndicator, StateView) with a kit evidence page.",
   "context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
     "spec.hq-social-work#ctx.stop-recovery-delivery.001",
-    "spec.hq-social-work#iface.ui-kit.001"
+    "spec.hq-social-work#iface.ui-kit.001",
+    "spec.hq-social-work#ctx.visual-system-binding.001"
   ],
   "read_scope": [
     "AGENTS.md",
@@ -3036,11 +3088,11 @@ Merge is held.
   "validates": [
     "spec.hq-social-work#req.shell.001"
   ],
-  "scenario": "Token and primitive tests render every primitive in light and dark, operate them by keyboard only, compute contrast and verify captured-content containers keep computed colors across theme change.",
+  "scenario": "Token and primitive tests render every primitive in light and dark, operate them by keyboard only, recompute the 104 T2 contrast pairs, and verify each PreservedContent kind keeps pixels and its recorded color-scheme (img, SVG-as-img, srcdoc iframe probe) across Light, Dark and System.",
   "evidence": {
-    "predicate": "Text contrast is at least 4.5:1, focus at least 3:1, keyboard paths complete and captured content unchanged.",
-    "invalid": "Contrast is asserted from a screenshot guess or captured content is recolored.",
-    "unknown": "T2 token values are unpublished; provisional values are labeled."
+    "predicate": "T2 token copies match recorded hashes, contrast pairs meet thresholds, keyboard paths complete, and preserved wells keep the recorded scheme with no filter, blend or opacity.",
+    "invalid": "Contrast is asserted from a screenshot guess, token copies were hand-edited, or a well follows global appearance.",
+    "unknown": "An environment T2 also left unverified (Electron, macOS, screen reader, forced colours, 2x) is unavailable; recorded as a gap."
   },
   "environment": [
     "T0 or skeleton-provided DOM test environment",
@@ -3617,7 +3669,7 @@ Merge is held.
   "evidence": {
     "predicate": "Each status has a text label and freshness, snapshots stay readable, and keyboard paths complete.",
     "invalid": "Status is conveyed by color alone or an unresolved target renders as available.",
-    "unknown": "T2 token values are unpublished; provisional values are labeled."
+    "unknown": "An environment T2 also left unverified (Electron, macOS, screen reader, forced colours, 2x) is unavailable; recorded as a gap."
   },
   "environment": [
     "T0 or skeleton-provided DOM test environment",
@@ -3882,7 +3934,7 @@ Common to all capsules:
 
 | Lane | Tasks | Read first | Ready now | First real gate | Finish line |
 | --- | --- | --- | --- | --- | --- |
-| UI | `task.ui-kit.001`, `task.reference-ui.001`, then `task.shell-chrome.001` | `iface.ui-kit.001`, `req.shell.001`, T2 branch `work/hq-visual-system` | Token and contrast helper, primitives against foundation roles | R1 skeleton for checks; T2 values for acceptance; custody for shell-chrome | `ac.ui-kit.001`, then `ac.shell-chrome.001` |
+| UI | `task.ui-kit.001`, `task.reference-ui.001`, then `task.shell-chrome.001` | `iface.ui-kit.001`, `req.shell.001`, `ctx.visual-system-binding.001`, T2 commit `f3c1daff` | Token copy with integrity test, contrast helper, primitives, PreservedContent | R1 skeleton; a named UI owner for shell-chrome | `ac.ui-kit.001`, then `ac.shell-chrome.001` |
 | SOC-C | `task.social-core.001` → `task.social-content.001` → `task.social-domain.001` → `task.social-references.001`; `task.social-live-adapter.001` when activated | `iface.social-port.001`, `req.social-content.001`, `req.references.001`, `ctx.social-design-reconciliation.001`, T3 commit `8f91f6b2` | Port, fixture, conformance suite | R1; publish core early for SOC-W | `ac.social-core.001`, `ac.social-content.001`, `ac.social-domain.001` |
 | SOC-W | `task.social-workbench.001` | `req.social-research.001`, `iface.social-port.001`, T3 branch | Per-tool input builders and result summarizers as pure functions | SOC-C core commit; UI kit | `ac.social-workbench.001` |
 | WRK-P | `task.work-core.001` → `task.work-views.001`; `task.work-live-adapter.001` when activated | `iface.work-port.001`, `req.work-core.001`, `req.work-views.001`, `ctx.d1-import.001`, T4 branch `work/hq-work-design` | Verbatim D-1 import with provenance and an integrity test; validation; fixture | R1; publish core early for WRK-B | `ac.work-core.001`, `ac.work-views.001` |
