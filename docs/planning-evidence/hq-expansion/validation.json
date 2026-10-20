@@ -1,31 +1,45 @@
 {
-  "source_revision": "05e7252c565d1db2761cca1382d1540892577c06",
-  "spec_blob_oid": "698aae9864f7461bed321fe272d82d84b3ab1437",
-  "tasks": 5,
-  "test_intents": 5,
+  "status": "PROJECTION",
+  "source_revision": "1ba3acd812a9bd3e4f3876c69337fe48c8a5de99",
+  "spec_blob_oid": "af67cfd596f2a32bf4e0f7f41d4badc5d6874e86",
+  "tasks": 11,
+  "test_intents": 11,
   "rounds": [
     {
       "round": 1,
       "ready": [
         "spec.hq-expansion#task.connector-lifecycle.001",
         "spec.hq-expansion#task.reference-graph.001",
-        "spec.hq-expansion#task.requests-lifecycle.001"
+        "spec.hq-expansion#task.requests-lifecycle.001",
+        "spec.hq-expansion#task.wiki-contract.001"
       ],
-      "capsule_drafts": 3,
-      "assignment_drafts": 3,
-      "rendered_bytes": 47611
+      "capsule_drafts": 4,
+      "assignment_drafts": 4,
+      "rendered_bytes": 65319
     },
     {
       "round": 2,
       "ready": [
-        "spec.hq-expansion#task.reference-packets.001"
+        "spec.hq-expansion#task.reference-packets.001",
+        "spec.hq-expansion#task.wiki-core.001",
+        "spec.hq-expansion#task.wiki-ui.001"
       ],
-      "capsule_drafts": 1,
-      "assignment_drafts": 1,
-      "rendered_bytes": 15776
+      "capsule_drafts": 3,
+      "assignment_drafts": 3,
+      "rendered_bytes": 50332
     },
     {
       "round": 3,
+      "ready": [
+        "spec.hq-expansion#task.reference-producer.001",
+        "spec.hq-expansion#task.wiki-private-validation.001"
+      ],
+      "capsule_drafts": 2,
+      "assignment_drafts": 2,
+      "rendered_bytes": 34212
+    },
+    {
+      "round": 4,
       "ready": [],
       "capsule_drafts": 0,
       "assignment_drafts": 0,
@@ -33,11 +47,14 @@
     }
   ],
   "held": [
-    "spec.hq-expansion#task.request-composition.001"
+    "spec.hq-expansion#task.request-composition.001",
+    "spec.hq-expansion#task.wiki-integration.001"
   ],
   "authority_effect": "none",
   "projection_only": true,
+  "catalog_adoption": false,
+  "projection_catalog_sha256": "23a0265fec8c818fa3ebc81552c33ef30aa93f42ddd5f4d25af8c34bff10192d",
   "actual_builder_tuple": "claude-sonnet-5-5/high via native catalog",
-  "typed_model_limit": "Bound helper does not support Sonnet; Opus placeholder used only in non-launching capsule fixtures. No helper output is an actual launch or model attestation.",
-  "scope": "Actual authored graph, with hypothetical accepted predecessor results; no source task is claimed complete."
+  "typed_model_limit": "Opus placeholder only in nonlaunching fixtures; no native model attestation.",
+  "scope": "Actual authored graph with hypothetical accepted predecessor results. No implementation task is claimed complete."
 }
