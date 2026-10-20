@@ -1,0 +1,69 @@
+/* Work domain chrome: secondary navigation, toolbar, filters and the page scroller. Class-scoped (`.wd-*`), token-only
+   colours, no inline styles (the app CSP blocks them; the scroller height arrives as a CSSOM custom property). */
+.wd-domain {
+  display: grid; grid-template-columns: var(--hq-size-secnav-width) minmax(0, 1fr); gap: var(--hq-space-lg); align-items: start;
+}
+.wd-side {
+  position: sticky; top: 0; display: grid; gap: var(--hq-space-md); padding: var(--hq-space-md);
+  background: var(--hq-nav); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg);
+}
+.wd-main { display: grid; gap: var(--hq-space-md); min-width: 0; }
+
+.wd-nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--hq-space-3xs); }
+.wd-group {
+  margin: var(--hq-space-sm) 0 var(--hq-space-2xs); padding: 0 var(--hq-space-sm);
+  font: var(--hq-type-eyebrow); letter-spacing: var(--hq-type-eyebrow-tracking); text-transform: uppercase; color: var(--hq-text-subtle);
+}
+.wd-group:first-child { margin-top: 0; }
+.wd-nav-item {
+  width: 100%; min-height: var(--hq-size-control-md); display: flex; align-items: center;
+  padding: 0 var(--hq-space-sm); text-align: start; cursor: pointer;
+  font: var(--hq-type-body); color: var(--hq-nav-item-fg); background: none; border: 0; border-radius: var(--hq-radius-sm);
+}
+.wd-nav-item:hover { background: var(--hq-surface-hover); }
+.wd-nav-item[aria-current="page"] {
+  color: var(--hq-nav-item-fg-selected); background: var(--hq-nav-item-bg-selected); font-weight: var(--hq-font-weight-semibold);
+  box-shadow: inset var(--hq-size-rail-indicator) 0 0 var(--hq-nav-item-indicator);
+}
+
+.wd-tag {
+  display: inline-block; padding: 0 var(--hq-space-xs); border: 1px dashed var(--hq-border-strong); border-radius: var(--hq-radius-pill);
+  font: var(--hq-type-small); font-weight: var(--hq-font-weight-semibold); color: var(--hq-text-muted); white-space: nowrap;
+}
+.wd-example {
+  margin: 0; max-width: none; padding: var(--hq-space-sm) var(--hq-space-md); border-radius: var(--hq-radius-md);
+  font: var(--hq-type-small); color: var(--hq-text); background: var(--hq-surface-sunken); border: 1px dashed var(--hq-border-strong);
+}
+.wd-note { margin: 0; max-width: none; font: var(--hq-type-meta); color: var(--hq-text-subtle); }
+
+.wd-toolbar { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--hq-space-sm) var(--hq-space-lg); }
+.wd-capture { display: grid; gap: var(--hq-space-2xs); flex: 1 1 360px; min-width: 0; }
+.wd-capture-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
+.wd-capture-input { flex: 1 1 220px; min-width: 0; }
+.wd-capture-hint { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); margin: 0; max-width: none; font: var(--hq-type-small); color: var(--hq-text); }
+.wd-capture-note { margin: 0; max-width: none; }
+
+.wd-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--hq-space-xs); }
+.wd-filter { display: grid; gap: var(--hq-space-3xs); min-width: 0; }
+.wd-filter .work-input { min-width: 112px; }
+.wd-filter input.work-input { width: 168px; }
+
+.wd-workarea { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-md); align-items: start; min-width: 0; }
+.wd-workarea--detail { grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); }
+.wd-workarea .work-detail { max-height: var(--wd-scroll-max, none); overflow: auto; }
+.wd-scroll { min-width: 0; max-height: var(--wd-scroll-max, none); overflow: auto; overscroll-behavior: contain; }
+
+.wd-settings { display: grid; gap: var(--hq-space-sm); max-width: 560px; }
+.wd-settings h2 { margin: 0; font: var(--hq-type-heading); letter-spacing: var(--hq-type-heading-tracking); }
+.wd-settings dl { display: grid; grid-template-columns: max-content 1fr; gap: var(--hq-space-xs) var(--hq-space-lg); margin: 0; padding: 0; border: 0; font: var(--hq-type-body); }
+.wd-settings dt { color: var(--hq-text-muted); }
+.wd-settings dd { margin: 0; color: var(--hq-text); }
+.wd-settings p { max-width: none; }
+
+@media (max-width: 960px) {
+  .wd-domain { grid-template-columns: minmax(0, 1fr); }
+  .wd-side { position: static; }
+  .wd-nav ul { display: flex; flex-wrap: wrap; }
+  .wd-nav-item { width: auto; }
+  .wd-workarea--detail { grid-template-columns: minmax(0, 1fr); }
+}

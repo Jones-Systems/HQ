@@ -4,9 +4,15 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { parseProjectContext, type ModulePort } from '@hq/contracts';
 import { PRESERVED_CONTENT_KINDS } from '@hq/ui';
-import { SocialModule } from '@hq/social';
+import SocialDefault, { SocialModule } from '@hq/social';
+import { resetSocialSessions } from './core';
+import { setSocialWorkspacePort } from './nav';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  resetSocialSessions();
+  setSocialWorkspacePort(null);
+});
 
 function port(destination: string): ModulePort & { navigate: Mock<(destination: string) => void> } {
   return {
@@ -22,13 +28,14 @@ describe('Social workspace skeleton', () => {
     expect(PRESERVED_CONTENT_KINDS).toContain('captured');
   });
 
-  it('renders an available, no-data stub with the shell context and destination', () => {
-    const props = port('library');
+  it('mounts the Social domain descriptor under the shell context without navigating', async () => {
+    expect(SocialDefault).toBe(SocialModule);
+    const props = port('home');
     render(createElement(SocialModule, props));
-    expect(screen.getByRole('heading', { level: 1, name: 'Social is available.' })).toBeTruthy();
-    expect(screen.getByText('Larkspur Tea Co.')).toBeTruthy();
-    expect(screen.getByText('library')).toBeTruthy();
-    expect(screen.getByText('Available · no data')).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Social' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-current')).toBe('page');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy();
+    expect(screen.getByText(/^Fictional example workspace/u)).toBeTruthy();
     expect(props.navigate).not.toHaveBeenCalled();
   });
 });
