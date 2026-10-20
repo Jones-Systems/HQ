@@ -1,7 +1,7 @@
 {
   "status": "PROJECTION",
-  "source_revision": "1ba3acd812a9bd3e4f3876c69337fe48c8a5de99",
-  "spec_blob_oid": "af67cfd596f2a32bf4e0f7f41d4badc5d6874e86",
+  "source_revision": "e78a19632c56cc3a9dc87d53e9f36ab01806e948",
+  "spec_blob_oid": "a4e5818f2f17b33dd3e64e14ef28b6c9c0dff31d",
   "tasks": 11,
   "test_intents": 11,
   "rounds": [
