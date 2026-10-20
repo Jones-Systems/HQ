@@ -151,3 +151,9 @@ export interface OverlayFrame {
   /** Present only for static captures; a live preview has no frozen bytes. */
   readonly captureDigest: string | null;
 }
+
+/** Placement relative to the HQ window content origin, in device-independent pixels. */
+export interface HostSurfacePlacement {
+  readonly rect: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+  readonly visible: boolean;
+}

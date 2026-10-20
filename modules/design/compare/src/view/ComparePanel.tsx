@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import type { OverlayFrame, PreviewQualification, PreviewSession, SyntheticBlock, VersionSummary } from '../contract.ts';
+import type { HostSurfacePlacement, OverlayFrame, PreviewQualification, PreviewSession, SyntheticBlock, VersionSummary } from '../contract.ts';
 import type { PanelRuntime } from '../controller.ts';
 import { fitScale, MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, PANEL_INSET } from '../geometry.ts';
 import { labelSource, ROLE_LABELS } from '../labels.ts';
@@ -7,6 +7,11 @@ import type { Panel, PanelRole } from '../model.ts';
 import { describeViewport, VIEWPORT_PRESETS } from '../presets.ts';
 
 export interface PanelSlots {
+  /** Shell-owned overlay state; native views must not cover HQ dialogs or menus. */
+  readonly overlaysOpen?: boolean;
+  /** HQ renderer zoom, not devicePixelRatio or the preview viewport DPR. Defaults to 1. */
+  readonly rendererZoomFactor?: number;
+  readonly onHostSurfacePlacement?: (session: PreviewSession, placement: HostSurfacePlacement) => void;
   /** HQD-04 overlays, positioned in source CSS pixels inside the scaled frame. */
   readonly renderOverlay?: (frame: OverlayFrame) => ReactNode;
   /** Root-owned qualified preview surface (S2). Compare never creates frames itself. */
@@ -44,7 +49,7 @@ function Synthetic({ blocks }: { readonly blocks: readonly SyntheticBlock[] }) {
   }}>{block.text}</div>)}</>;
 }
 
-export function ComparePanel({ panel, index, runtime, versions, preview, canRemove, actions, renderOverlay, renderHostSurface }: ComparePanelProps) {
+export function ComparePanel({ panel, index, runtime, versions, preview, canRemove, actions, renderOverlay, renderHostSurface, overlaysOpen = false, rendererZoomFactor = 1, onHostSurfacePlacement }: ComparePanelProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const echo = useRef<{ left: number; top: number } | null>(null);
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -66,6 +71,44 @@ export function ComparePanel({ panel, index, runtime, versions, preview, canRemo
     element.scrollLeft = left;
     element.scrollTop = top;
   }, [panel.scroll.x, panel.scroll.y, scale, content]);
+
+  const hostSession = panel.source.kind === 'live-preview' && runtime?.session?.surface.kind === 'host-surface'
+    ? runtime.session : null;
+  useLayoutEffect(() => {
+    if (hostSession === null || onHostSurfacePlacement === undefined) return;
+    const element = scroller.current;
+    const owner = element?.ownerDocument.defaultView;
+    let last: HostSurfacePlacement | null = null;
+    let request = 0;
+    const report = () => {
+      const bounds = element?.getBoundingClientRect();
+      const zoom = rendererZoomFactor;
+      const valid = bounds !== undefined && Number.isFinite(zoom) && zoom > 0;
+      const rect = valid ? { x: bounds.x * zoom, y: bounds.y * zoom, width: bounds.width * zoom, height: bounds.height * zoom }
+        : { x: 0, y: 0, width: 0, height: 0 };
+      const visible = valid && status === 'ready' && !overlaysOpen && element?.isConnected === true
+        && element.ownerDocument.visibilityState !== 'hidden' && rect.width > 0 && rect.height > 0;
+      const next = { rect, visible };
+      if (last === null || JSON.stringify(last) !== JSON.stringify(next)) {
+        last = next;
+        onHostSurfacePlacement(hostSession, next);
+      }
+    };
+    // Layout shifts can move a panel without resizing it or emitting a scroll event.
+    const tick = () => { report(); request = owner?.requestAnimationFrame(tick) ?? 0; };
+    report();
+    request = owner?.requestAnimationFrame(tick) ?? 0;
+    owner?.addEventListener('scroll', report, true);
+    owner?.addEventListener('resize', report);
+    element?.ownerDocument.addEventListener('visibilitychange', report);
+    return () => {
+      owner?.cancelAnimationFrame(request);
+      owner?.removeEventListener('scroll', report, true);
+      owner?.removeEventListener('resize', report);
+      element?.ownerDocument.removeEventListener('visibilitychange', report);
+      onHostSurfacePlacement(hostSession, { rect: last?.rect ?? { x: 0, y: 0, width: 0, height: 0 }, visible: false });
+    };
+  }, [hostSession, status, overlaysOpen, rendererZoomFactor, onHostSurfacePlacement]);
 
   const onScroll = () => {
     const element = scroller.current;
@@ -133,7 +176,7 @@ export function ComparePanel({ panel, index, runtime, versions, preview, canRemo
   const choices = versions ?? (runtime?.version != null ? [runtime.version] : []);
   const staticViewports = new Set((runtime?.version?.captures ?? []).map((item) => `${item.viewport.w}x${item.viewport.h}@${item.viewport.dpr}`));
 
-  return <section className="cmp-panel" data-panel-id={panel.id} data-role={panel.role} data-source-kind={panel.source.kind}
+  return <section className="cmp-panel" data-preview-status={status} data-panel-id={panel.id} data-role={panel.role} data-source-kind={panel.source.kind}
     aria-labelledby={titleId} style={{ width: panel.width, flexBasis: panel.width }}>
     <header className="cmp-panel-header">
       <div className="cmp-title-row">
