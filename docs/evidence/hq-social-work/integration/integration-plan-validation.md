@@ -94,3 +94,38 @@ Unreleased: none. Joint tasks wait on the Social+Work assembly. `campaign-verifi
 - Navigation, domain and page switches make zero writes and zero execution. Explicit card, date and horizon moves make only their single intended planning mutation (and explicit Undo), with zero execution.
 - The Work import boundary applies to HQ workspaces (`@hq/contracts`, `@hq/ui`). React and runtime imports stay allowed.
 - Joint root checks, joint assembly and CI are explicit-activation tasks (`ac.joint-integration-gate.001`, `ac.ci-adoption.001`). No PR merge order is adopted.
+
+## Revision 5 (joint continuation on the Design parent)
+
+**Input.** The root's read-only Design-first stack scout result (2026-10-20, SHA-256 `2bd169a8da0b99a9b722e4dfb731f8a73286eee5146b94dc6f8ecc07131422bb`), as inspected by the root:
+
+- committed Design (`33dfe44..bb908fd`) and Social/Work paths are disjoint;
+- no trial merge was run and there is no runtime-compatibility proof;
+- `PullRequest.stack` is null on all 24 open PRs;
+- no Design assembly parent is published or accepted (`bb908fd` is local only).
+
+**What changed.**
+
+- `ac.joint-integration-gate.001` now lists five explicit, unbound activation bindings: D, S, Design wiring, root-file custody (including a `vite.config.ts` decision) and C's release.
+- The joint tasks are one additive continuation. It starts at D, normally merges S, and opens a PR against the Design branch that contains D. No rebase, force push or mass retarget.
+- Root discovery evidence is an inventory of unique Node, DOM and section files and their actual configs.
+- `apps/desktop/vite.config.ts` is named as unassigned.
+- No workflow custody is implied.
+- B's test stays an immutable dependency.
+- `task.joint-root-checks.001` adds `apps/desktop/package.json`, completing the six R0 root paths. `task.joint-assembly.001` adds the new `apps/desktop/src/joint.integration.test.tsx`.
+
+**Identities.** Commit `7ab7f2e5517dcfee2334548e0a27d78f1921d5e7`, spec blob `d38be0f9789363877497fb129e246436c0fca50a`, file SHA-256 `7684925b5bc22ae2495306f5cb23a75445506bc1c122b224eac302a7812cdff0`. Same catalog projection (`7ed3bfcb…`) and model requests as above. Telemetry was CPU 29.02% used, 41.33 GiB available, ceiling 10.
+
+**Results.**
+
+- `sections_cli check`: valid. `parse_engineering_spec_plan`: 27 tasks and 27 intents.
+- Every context is ≤ 32 KiB. The largest are `work-core` at 32,663, `work-domain` at 32,134 and `joint-assembly` at 30,706.
+
+| Projection | Rounds (ready sets) | Collisions |
+| --- | --- | --- |
+| Actual, unbound | 1: work-domain (context 32,134); 2: domain-integration (30,264). Joint, reference, bridge, chrome and campaign tasks unreleased. | none |
+| Actual, fixture-satisfied | 1: reference-contract, service-bridge, work-domain; 2: domain-integration, reference-shell, reference-ui, social-live-adapter, work-live-adapter; 3: joint-root-checks (`9fc45d1c…`), shell-chrome, social-references, work-references; 4: joint-assembly (`56dcf7f0…`), joint-ci (`0bc294d1…`), reference-integration; 5: campaign-verification, joint-electron-smoke | none |
+| From scratch, unbound | the same six rounds as revision 4 | none |
+| From scratch, fixture-satisfied | rounds 1–2, then the same typed `reference_bound_exceeded` counterfactual stop at round 3 | — |
+
+**What `capsule_sha256` covers.** The `work-domain` and `domain-integration` capsule digests are unchanged (`071dbea0…`, `3d935de4…`) because their task blocks are unchanged. The digest covers the capsule body. The resolved context bytes differ (the writer map changed), and those are carried in the capsule draft's resolved-context records. Child A was compiled and launched at `72854ab` and keeps that binding. B will compile at the plan head current at its launch.
