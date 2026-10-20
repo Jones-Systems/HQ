@@ -1,6 +1,6 @@
 name: HQ Design sections
 
-# Lane-inclusive checks for the assembled Design section cones. Root `npm test` and
+# Lane-inclusive checks for the assembled Design cones, composition entry and storage seam. Root `npm test` and
 # `npm run typecheck` cover the foundation only, so the foundation check does not
 # evidence any Design cone. Every cone below runs its own typecheck, node:test and
 # Vitest commands, mirroring modules/design/preview/section-checks.sh.
@@ -10,7 +10,6 @@ name: HQ Design sections
 
 on:
   pull_request:
-    branches: [work/hq-design-plan, main]
   push:
     branches: [work/hq-design-integration, work/hq-design-plan, main]
   workflow_dispatch:
@@ -23,9 +22,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Explicit inventory: fourteen Design cones plus the integration preview, one row each.
+  # Explicit inventory, one row each: the fourteen section cones, the production app (compose),
+  # its renderer-safe storage seam, the references producer and the integration preview.
   # Fields: id|dir|nodeCwd|nodeTests|vitestConfig|vitestRoot|vitestTests|viteBuild
-  #   dir          repo-relative cone directory; must hold its own tsconfig.json
+  #   dir          repo-relative cone directory; must hold its own tsconfig.json. A direct child of
+  #                modules/design or packages/design-*, or a NESTED row (app/storage, references/producer)
+  #                whose parent directory has its own row. Parent globs must not reach nested tests
   #   nodeCwd      root = run node --test from the repo root; cone = from dir (flows, design-store)
   #   nodeTests    node:test glob relative to dir, or - for none
   #   vitestConfig Vitest config file name inside dir, or - for none
@@ -34,10 +36,10 @@ env:
   #                declares it; compare src/*.test.ts and ui test/vite/*.test.ts run ONLY under Vitest
   #   viteBuild    repo-relative Vite config to build, or - for none
   # Every test file on disk under modules/design/** and packages/design-* must be claimed by exactly
-  # one runner of exactly one row, and every directory there must have a row. Adding a directory
-  # (for example modules/design/app) fails the inventory job until its row and HQD_EXPECTED_ROWS are
-  # added here.
-  HQD_EXPECTED_ROWS: '15'
+  # one runner of exactly one row, and every direct child directory there must have a row. Adding a
+  # directory fails the inventory job until its row and HQD_EXPECTED_ROWS are added here. A nested
+  # directory with tests and no row fails the omission check.
+  HQD_EXPECTED_ROWS: '18'
   HQD_INVENTORY: |
     annotations|modules/design/annotations|root|test/*.test.ts|vitest.config.ts|repo|test/**/*.render.test.tsx|-
     canvas|modules/design/canvas|root|test/*.test.ts|vitest.config.ts|cone|test/view/**/*.test.tsx|-
@@ -49,9 +51,12 @@ env:
     imports|modules/design/imports|root|test/*.test.ts|-|-|-|-
     projects|modules/design/projects|root|test/*.test.ts|-|-|-|-
     references|modules/design/references|root|test/*.test.ts|vitest.config.ts|repo|**/*.render.test.tsx|-
+    references-producer|modules/design/references/producer|root|test/*.test.ts|-|-|-|-
     requests|modules/design/requests|root|test/*.test.ts|vitest.config.ts|cone|test/**/*.test.tsx|-
     taste|modules/design/taste|root|test/*.test.ts|vitest.config.ts|cone|test/ui/**/*.test.tsx|-
     ui|modules/design/ui|root|test/node/*.test.ts|vitest.config.ts|cone|test/vite/**/*.test.ts|-
+    app|modules/design/app|root|compose/test/*.test.ts|-|-|-|-
+    app-storage|modules/design/app/storage|root|test/*.test.ts|-|-|-|-
     design-store|packages/design-store|cone|test/*.test.ts|-|-|-|-
     preview|modules/design/preview|root|test/*.test.ts|-|-|-|modules/design/preview/vite.config.ts
 
@@ -82,6 +87,8 @@ jobs:
           matrix=()
           declared_modules=()
           declared_packages=()
+          row_dirs=()
+          nested_rows=()
           rows=0; preview_rows=0; node_total=0; vitest_total=0
 
           while IFS= read -r line; do
@@ -102,11 +109,17 @@ jobs:
             if [ "$build" = - ]; then build=''; fi
 
             case "$dir" in
-              modules/design/*) rest=${dir#modules/design/}; declared_modules+=("$rest") ;;
-              packages/design-*) rest=${dir#packages/}; declared_packages+=("$rest") ;;
+              modules/design/*) rest=${dir#modules/design/}; kind=modules ;;
+              packages/design-*) rest=${dir#packages/}; kind=packages ;;
               *) err "$id: $dir is outside modules/design and packages/design-*"; continue ;;
             esac
-            if [[ "$rest" == */* ]]; then err "$id: $dir must be a direct child directory"; continue; fi
+            row_dirs+=("$dir")
+            if [[ "$rest" == */* ]]; then
+              # Nested row: allowed only under a parent directory that has its own row (checked below).
+              nested_rows+=("$id|$dir")
+            elif [ "$kind" = modules ]; then declared_modules+=("$rest")
+            else declared_packages+=("$rest")
+            fi
             if [ ! -f "$dir/tsconfig.json" ]; then err "$id: missing cone, no $dir/tsconfig.json"; continue; fi
             case "$cwdmode" in
               root) node_cwd=. ; node_run_glob="$dir/$node_glob" ;;
@@ -152,8 +165,14 @@ jobs:
           if [ "$rows" -ne "$HQD_EXPECTED_ROWS" ]; then err "inventory has $rows rows, expected $HQD_EXPECTED_ROWS"; fi
           if [ "$preview_rows" -ne 1 ]; then err "inventory must have exactly one preview row, has $preview_rows"; fi
 
-          # Every directory that could hold a cone needs a row, so a new one (modules/design/app,
-          # a new packages/design-*) fails here until its row is added.
+          # A nested row needs a row for its parent directory.
+          for entry in "${nested_rows[@]}"; do
+            nested_id=${entry%%|*}; nested_dir=${entry#*|}
+            in_list "${nested_dir%/*}" "${row_dirs[@]}" || err "$nested_id: nested row $nested_dir has no row for its parent ${nested_dir%/*}"
+          done
+
+          # Every direct child directory that could hold a cone needs a row, so a new one
+          # (a new modules/design/<name>, a new packages/design-*) fails here until its row is added.
           for path in modules/design/*/; do
             name=${path#modules/design/}; name=${name%/}
             in_list "$name" "${declared_modules[@]}" || err "modules/design/$name has no inventory row"
