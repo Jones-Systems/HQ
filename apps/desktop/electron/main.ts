@@ -4,6 +4,7 @@ import { validateDevelopmentUrl, WINDOW_SECURITY } from './security.js';
 
 import { allowedSender, CHANNELS, createServices } from './services.js';
 import { openServiceConfig } from './service-config.js';
+import { createWikiBridge, openEmittedWiki, wikiIpcHandler } from './wiki-host.js';
 import { createDesignHost, openEmittedDesignStore } from './design-host.js';
 
 // Explicit temporary userData is supported only in unpackaged qualification runs.
@@ -11,6 +12,7 @@ if (!app.isPackaged && process.env.HQ_USER_DATA_DIR) app.setPath('userData', pro
 const ownsInstance = app.requestSingleInstanceLock();
 if (!ownsInstance) app.quit();
 const design = createDesignHost(() => openEmittedDesignStore(app.getPath('userData')));
+const wiki = createWikiBridge(() => openEmittedWiki(app.getPath('userData')));
 let closing = false;
 let closed = false;
 app.on('before-quit', (event) => {
@@ -18,7 +20,7 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   if (closing) return;
   closing = true;
-  void design.close().then(() => { closed = true; app.quit(); }, () => { app.exit(1); });
+  void Promise.all([design.close(), wiki.close()]).then(() => { closed = true; app.quit(); }, () => { app.exit(1); });
 });
 const builtUrl = new URL('../dist/index.html', import.meta.url).href;
 let mainWindow: BrowserWindow | undefined;
@@ -46,6 +48,7 @@ if (ownsInstance) app.whenReady().then(async () => {
   const config = await openServiceConfig(app.getPath('userData'));
   const services = createServices(config);
   const authorized = (event: Electron.IpcMainInvokeEvent) => mainWindow !== undefined && allowedSender(event, mainWindow.webContents, builtUrl, developmentUrl);
+  ipcMain.handle(CHANNELS.wiki, wikiIpcHandler(authorized, wiki));
   ipcMain.handle(CHANNELS.social, (event, route: unknown, params: unknown) => authorized(event) ? services.social(route, params) : { ok: false, kind: 'unavailable' });
   ipcMain.handle(CHANNELS.work, (event, route: unknown, params: unknown) => authorized(event) ? services.work(route, params) : { ok: false, kind: 'unavailable' });
   ipcMain.handle(CHANNELS.design, (event, route: unknown, params: unknown) => authorized(event) ? design.call(route, params) : { ok: false, kind: 'unavailable' });

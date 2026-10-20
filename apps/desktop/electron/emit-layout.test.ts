@@ -4,12 +4,12 @@ import { join } from 'node:path';
 function files(root: string): string[] { return readdirSync(root, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(root, e.name)) : [join(root, e.name)]); }
 it('additive emit keeps main/preload paths and a plain-Node Design closure without renderer code or .ts specifiers', () => {
   const root = 'apps/desktop/dist-electron';
-  for (const path of ['main.js', 'preload.cjs', 'design-host/modules/design/app/storage/node.js']) expect(existsSync(join(root, path))).toBe(true);
-  for (const path of files(root).filter(p => p.endsWith('.js') || p.endsWith('.cjs'))) {
+  for (const path of ['main.js', 'preload.cjs', 'design-host/modules/design/app/storage/node.js', 'wiki-host/apps/desktop/electron/wiki-runtime.mjs']) expect(existsSync(join(root, path))).toBe(true);
+  for (const path of files(root).filter(p => p.endsWith('.js') || p.endsWith('.cjs') || p.endsWith('.mjs'))) {
     const text = readFileSync(path, 'utf8');
-    expect(text).not.toMatch(/(?:from\s+|import\s*\()["'][^"']+\.ts["']/);
+    expect(text).not.toMatch(/(?:from\s+|import\s*\()["'][^"']+\.[cm]?ts["']/);
     expect(text).not.toMatch(/(?:from\s+|import\s*\()["'][^"']*(?:react|app\/compose|\/ui\/)[^"']*["']/);
-    if (path.includes('/design-host/')) for (const match of text.matchAll(/(?:from\s+|import\s*\()["']([^"']+)["']/g)) expect(match[1]).toMatch(/^(?:node:|\.)/);
+    if (path.includes('/design-host/') || path.includes('/wiki-host/')) for (const match of text.matchAll(/(?:from\s+|import\s*\()["']([^"']+)["']/g)) expect(match[1]).toMatch(/^(?:node:|\.)/);
   }
 });
 it('domain bridge references are a source convention, not hard same-realm isolation', () => {

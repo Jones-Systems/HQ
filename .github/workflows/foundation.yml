@@ -33,5 +33,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Test foundation
         run: npm test
+      - name: Test Wiki with the Node test runner
+        run: npm test --workspace @hq/wiki
       - name: Typecheck and build renderer and Electron source
         run: npm run build

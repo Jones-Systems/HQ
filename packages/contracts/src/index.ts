@@ -1,4 +1,4 @@
-export const DOMAIN_IDS = ['design', 'social', 'work'] as const;
+export const DOMAIN_IDS = ['design', 'social', 'work', 'wiki'] as const;
 export type DomainId = (typeof DOMAIN_IDS)[number];
 export const APPEARANCES = ['light', 'dark', 'system'] as const;
 export type Appearance = (typeof APPEARANCES)[number];
