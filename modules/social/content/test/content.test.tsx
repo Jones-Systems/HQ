@@ -334,6 +334,134 @@ describe('Social content: calendar', () => {
   });
 });
 
+
+describe('Social calendar navigation and notification lifetime', () => {
+  async function selectView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day') {
+    await user.click(screen.getByRole('button', { name: /^Calendar view:/ }));
+    await user.click(screen.getByRole('menuitemradio', { name }));
+  }
+  async function moveTo(title: string, day: string) {
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${title}`) }));
+    fireEvent.change(screen.getByLabelText('Planned date'), { target: { value: day } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Move to date' })); });
+  }
+
+  it('drills the full month header and week header into the exact day without saving', async () => {
+    const { recorded, user } = setup('calendar/2026-10');
+    await screen.findByRole('heading', { name: 'October 2026' });
+    fireEvent.doubleClick(document.querySelector('[data-drop-date="2026-10-22"] .soc-day-head')!);
+    expect(screen.getByRole('button', { name: 'Calendar view: Week' })).toBeTruthy();
+    expect(document.querySelector('[data-time-day="2026-10-22"]')).toBeTruthy();
+    const day = screen.getByRole('button', { name: 'Open day 2026-10-22' });
+    await user.click(day);
+    expect(screen.getByRole('button', { name: 'Calendar view: Week' })).toBeTruthy();
+    await user.dblClick(day);
+    expect(screen.getByRole('button', { name: 'Calendar view: Day' })).toBeTruthy();
+    expect(document.querySelectorAll('[data-time-day]')).toHaveLength(1);
+    expect(document.querySelector('[data-time-day="2026-10-22"]')).toBeTruthy();
+    await selectView(user, 'Month');
+    await selectView(user, 'Day');
+    expect(document.querySelector('[data-time-day="2026-10-22"]')).toBeTruthy();
+    expect(methods(recorded)).toEqual(['snapshot']);
+  });
+
+  it.each(['Enter', ' ', 'assistive click'])('opens an adjacent month day with %s and keeps the exact anchor through routing', async (key) => {
+    const { recorded, visited, user } = setup('calendar/2026-10');
+    const number = await screen.findByRole('button', { name: 'Open week of 1 Nov 2026' });
+    await user.click(number);
+    expect(screen.getByRole('button', { name: 'Calendar view: Month' })).toBeTruthy();
+    if (key === 'assistive click') fireEvent.click(number, { detail: 0 });
+    else fireEvent.keyDown(number, { key });
+    expect(visited.at(-1)).toBe('calendar/2026-11');
+    const heading = document.querySelector('.soc-calendar-head h2');
+    expect(document.activeElement).toBe(heading);
+    await selectView(user, 'Day');
+    expect(document.querySelector('[data-time-day="2026-11-01"]')).toBeTruthy();
+    await selectView(user, 'Month');
+    expect(screen.getByRole('heading', { name: 'November 2026' })).toBeTruthy();
+    expect(methods(recorded)).toEqual(['snapshot']);
+  });
+
+  it('keeps a revision-bound Undo after success expires and consumes it only once', async () => {
+    const { controls, recorded } = setup('calendar/2026-10');
+    await screen.findByRole('heading', { name: 'October 2026' });
+    vi.useFakeTimers();
+    try {
+      recorded.clear();
+      await moveTo('Autumn blend tasting notes', '2026-10-28');
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+      await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+      expect(screen.queryByText('Moved “Autumn blend tasting notes” to 28 Oct 2026.')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+      expect(methods(recorded)).toEqual(['saveDraft']);
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo last calendar change' })); });
+      expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)).toMatchObject({ planned_date: '2026-10-24', version: 5 });
+      expect(recorded.calls()[1]!.args[0]).toMatchObject({ id: FIXTURE_IDS.autumnBlend, version: 4, planned_date: '2026-10-24' });
+      expect(screen.queryByRole('button', { name: 'Undo last calendar change' })).toBeNull();
+      expect(methods(recorded)).toEqual(['saveDraft', 'saveDraft']);
+      expectNoExecution(recorded);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('restarts the expiry for a new success and replaces Undo with its exact inverse', async () => {
+    const { controls, recorded } = setup('calendar/2026-10');
+    await screen.findByRole('heading', { name: 'October 2026' });
+    vi.useFakeTimers();
+    try {
+      recorded.clear();
+      await moveTo('Autumn blend tasting notes', '2026-10-28');
+      await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+      await moveTo('Autumn blend tasting notes', '2026-10-29');
+      await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+      expect(screen.getByText('Moved “Autumn blend tasting notes” to 29 Oct 2026.')).toBeTruthy();
+      await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+      expect(screen.queryByText('Moved “Autumn blend tasting notes” to 29 Oct 2026.')).toBeNull();
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo last calendar change' })); });
+      expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)).toMatchObject({ planned_date: '2026-10-28', version: 6 });
+      expect(recorded.calls()[2]!.args[0]).toMatchObject({ version: 5, planned_date: '2026-10-28' });
+      expect(methods(recorded)).toEqual(['saveDraft', 'saveDraft', 'saveDraft']);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('preserves an unknown-save message and the previous inverse without retrying', async () => {
+    const { controls, recorded } = setup('calendar/2026-10');
+    await screen.findByRole('heading', { name: 'October 2026' });
+    vi.useFakeTimers();
+    try {
+      await moveTo('Autumn blend tasting notes', '2026-10-28');
+      controls.failNext('saveDraft', { kind: 'unknown', attemptedAt: NOW().toISOString() });
+      recorded.clear();
+      await moveTo('Steeping times thread', '2026-10-29');
+      expect(screen.getByText(/Not moved: The result is unknown/)).toBeTruthy();
+      await act(async () => { await vi.advanceTimersByTimeAsync(16000); });
+      expect(screen.getByText(/Not moved: The result is unknown/)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Undo last calendar change' })).toBeTruthy();
+      expect(methods(recorded)).toEqual(['saveDraft', 'snapshot']);
+      expectNoExecution(recorded);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('refuses a stale Undo after expiry and preserves the conflict notification', async () => {
+    const { controls, recorded } = setup('calendar/2026-10');
+    await screen.findByRole('heading', { name: 'October 2026' });
+    vi.useFakeTimers();
+    try {
+      await moveTo('Autumn blend tasting notes', '2026-10-28');
+      await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+      controls.editElsewhere(FIXTURE_IDS.autumnBlend, { planned_date: '2026-10-30' });
+      recorded.clear();
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo last calendar change' })); });
+      expect(recorded.calls()[0]!.args[0]).toMatchObject({ version: 4 });
+      expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)?.planned_date).toBe('2026-10-30');
+      expect(screen.getByText(/Could not undo: This draft changed in another window/)).toBeTruthy();
+      await act(async () => { await vi.advanceTimersByTimeAsync(16000); });
+      expect(screen.getByText(/Could not undo: This draft changed in another window/)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Undo last calendar change' })).toBeNull();
+      expect(methods(recorded)).toEqual(['saveDraft']);
+    } finally { vi.useRealTimers(); }
+  });
+});
+
 describe('Social content: brands', () => {
   it('lists the built-in brand as present and adds a brand with one call and one read', async () => {
     const fixture = createFixtureWorkspace();
@@ -396,12 +524,8 @@ import { changeDraft } from '../actions';
 
 describe('Social calendar service-backed timeboxes', () => {
   async function showView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day') {
-    const group = await screen.findByRole('group', { name: 'Calendar view' });
-    for (let click = 0; click < 3; click += 1) {
-      if (within(group).queryByRole('button', { name })) return;
-      await user.click(within(group).getByRole('button'));
-    }
-    throw new Error(`Calendar did not cycle to ${name}`);
+    await user.click(await screen.findByRole('button', { name: /^Calendar view:/ }));
+    await user.click(screen.getByRole('menuitemradio', { name }));
   }
   const timedSeed = () => {
     const seed = fictionalSeed();
@@ -409,14 +533,18 @@ describe('Social calendar service-backed timeboxes', () => {
       ? { ...draft, planned_date: '2026-10-20', planning_slot: { start: '09:00', duration_minutes: 30, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } } : draft);
     return seed;
   };
-  it('cycles one view button Month to Week to Day to Month without saving', async () => {
+  it('selects every view from one checked menu without saving', async () => {
     const { recorded, user } = setup('calendar/2026-10');
     const group = await screen.findByRole('group', { name: 'Calendar view' });
-    for (const [before, after, columns] of [['Month', 'Week', 7], ['Week', 'Day', 1], ['Day', 'Month', 0]] as const) {
+    for (const [name, columns] of [['Week', 7], ['Day', 1], ['Month', 0]] as const) {
       expect(within(group).getAllByRole('button')).toHaveLength(1);
-      await user.click(within(group).getByRole('button', { name: before }));
-      expect(within(group).getByRole('button', { name: after })).toBeTruthy();
+      await showView(user, name);
+      expect(within(group).getByRole('button', { name: `Calendar view: ${name}` })).toBeTruthy();
       expect(document.querySelectorAll('[data-time-day]')).toHaveLength(columns);
+      await user.click(within(group).getByRole('button'));
+      expect(screen.getByRole('menuitemradio', { name }).getAttribute('aria-checked')).toBe('true');
+      expect(screen.getAllByRole('menuitemradio')).toHaveLength(3);
+      await user.keyboard('{Escape}');
     }
     expect(methods(recorded)).toEqual(['snapshot']);
     expectNoExecution(recorded);

@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Button, Dialog, Splitter, StatusChip, TimeGrid, Toast, ToastRegion, calendarGridSnap, CALENDAR_HOUR_HEIGHT, type CalendarGridEvent } from '@hq/ui';
+import { Button, Dialog, Menu, Splitter, StatusChip, TimeGrid, Toast, ToastRegion, TOAST_AUTO_DISMISS_MS, calendarGridSnap, CALENDAR_HOUR_HEIGHT, type CalendarGridEvent } from '@hq/ui';
 import { checkSlot, FEATURE_HQ_EDITORIAL_TIMEBOX, SLOT_MESSAGES, zonedSlotParts, type Draft, type PlanningSlot, type SocialSession, type SocialWorkspacePort, type WorkspaceSnapshot } from '../core';
 import { changeDraft, errorText } from './actions';
 import { calendarPlan, contentDestination, dateLabel, monthGrid, monthLabel, shiftMonth } from './model';
@@ -18,9 +18,12 @@ export interface CalendarProps {
   readonly now?: () => Date;
 }
 interface ToastState {
+  readonly id: number;
   readonly message: string;
-  readonly undo?: { readonly draft: Draft; readonly plannedDate: string; readonly slot: PlanningSlot | null };
+  readonly success?: boolean;
+  readonly undo?: CalendarUndo;
 }
+interface CalendarUndo { readonly draft: Draft; readonly plannedDate: string; readonly slot: PlanningSlot | null }
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DRAG_THRESHOLD = 4;
 const DRAG_TYPE = 'application/x-hq-social-draft';
@@ -41,6 +44,12 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
   const [duration, setDuration] = useState(30);
   const [dialogError, setDialogError] = useState('');
   const [toast, setToast] = useState<ToastState | null>(null);
+  const notificationId = useRef(0);
+  const [undoOffer, setUndoOffer] = useState<CalendarUndo | null>(null);
+  const undoRef = useRef<CalendarUndo | null>(null);
+  const title = useRef<HTMLHeadingElement>(null);
+  const focusTitle = useRef(false);
+  const pendingMonth = useRef<string | null>(null);
   const [moving, setMoving] = useState(false);
   const busy = useRef(false);
   const [uncertain, setUncertain] = useState<string[]>(() => {
@@ -66,9 +75,15 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
   }
   const brandName = (brandId: string) => snapshot.brands.find((item) => item.id === brandId)?.name ?? 'Unknown brand';
   const disabled = (draft: Draft) => Boolean(paused) || moving || uncertain.includes(draft.id);
-  const announce = (message: string) => { setToast({ message }); };
+  const announce = (message: string) => { setToast({ id: ++notificationId.current, message }); };
   useEffect(() => { const timer = window.setInterval(() => setClock(now()), 60_000); return () => window.clearInterval(timer); }, [now]);
-  useEffect(() => { setAnchor((current) => current.startsWith(month) ? current : `${month}-01`); }, [month]);
+  useEffect(() => {
+    if (pendingMonth.current === month) { pendingMonth.current = null; return; }
+    setAnchor((current) => current.startsWith(month) ? current : today.startsWith(month) ? today : `${month}-01`);
+  }, [month]);
+  useEffect(() => {
+    if (focusTitle.current) { title.current?.focus(); focusTitle.current = false; }
+  }, [view, anchor]);
   useLayoutEffect(() => { body.current?.style.setProperty('--soc-calendar-tray-width', `${trayWidth}px`); }, [trayWidth]);
   const resizeTray = (width: number) => {
     const next = width < 72 ? 0 : width;
@@ -98,7 +113,16 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
     const message = isUndo ? `Undone. “${draft.title}” is ${plannedDate ? `planned for ${dateLabel(plannedDate)}` : 'back in No date yet'}.`
       : plannedDate ? `Moved “${draft.title}” to ${dateLabel(plannedDate)}${slot ? ` at ${slot.start} (${slot.timezone}), ${slot.duration_minutes} minutes` : ''}.`
       : `Cleared the planned date of “${draft.title}”.`;
-    setToast({ message, ...(!isUndo ? { undo: { draft: result.draft, plannedDate: draft.planned_date, slot: draft.planning_slot ?? null } } : {}) });
+    const undo = isUndo ? null : { draft: result.draft, plannedDate: draft.planned_date, slot: draft.planning_slot ?? null };
+    undoRef.current = undo; setUndoOffer(undo);
+    setToast({ id: ++notificationId.current, message, success: true, ...(undo ? { undo } : {}) });
+  }
+
+  function undoLastChange() {
+    const undo = undoRef.current;
+    if (!undo || busy.current || disabled(undo.draft)) return;
+    undoRef.current = null; setUndoOffer(null); setToast(null);
+    void move(undo.draft, undo.plannedDate, undo.slot, true);
   }
 
   function openDialog(draft: Draft) {
@@ -170,26 +194,43 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
     else if (view === 'month') moveMonth(draft, day);
     else void move(draft, day, null);
   };
+  function goTo(day: string) {
+    setAnchor(day);
+    if (day.slice(0, 7) !== month) {
+      pendingMonth.current = day.slice(0, 7);
+      navigate(contentDestination({ page: 'calendar', month: day.slice(0, 7) }));
+    }
+  }
+  function selectView(next: 'month' | 'week' | 'day') {
+    if (view === 'month' && next !== 'month') goTo(anchor.startsWith(month) ? anchor : today.startsWith(month) ? today : `${month}-01`);
+    else if (next === 'month') goTo(anchor);
+    setView(next);
+  }
+  function openDay(day: string, next: 'week' | 'day') {
+    focusTitle.current = true; goTo(day); setView(next);
+  }
   function rangeNavigate(delta: number) {
     if (view === 'month') navigate(contentDestination({ page: 'calendar', month: shiftMonth(month, delta) }));
-    else {
-      const day = shiftCalendarDay(anchor, delta * (view === 'week' ? 7 : 1)); setAnchor(day);
-      if (day.slice(0, 7) !== month) navigate(contentDestination({ page: 'calendar', month: day.slice(0, 7) }));
-    }
+    else goTo(shiftCalendarDay(anchor, delta * (view === 'week' ? 7 : 1)));
   }
   const days = calendarRange(anchor, view === 'day' ? 'day' : 'week');
   return <section className="soc-calendar" aria-labelledby={`${id}-heading`}>
     <header className="soc-calendar-head">
-      <h2 id={`${id}-heading`}>{view === 'month' ? monthLabel(month) : view === 'day' ? dateLabel(anchor) : `${dateLabel(days[0]!)} – ${dateLabel(days[6]!)}`}</h2>
+      <h2 ref={title} tabIndex={-1} id={`${id}-heading`}>{view === 'month' ? monthLabel(month) : view === 'day' ? dateLabel(anchor) : `${dateLabel(days[0]!)} – ${dateLabel(days[6]!)}`}</h2>
       <span className="soc-inline">
         <Button size="sm" variant="secondary" onClick={() => rangeNavigate(-1)} aria-label={`Previous ${view}`}>←</Button>
-        <Button size="sm" variant="secondary" onClick={() => { setAnchor(today); navigate(contentDestination({ page: 'calendar', month: today.slice(0, 7) })); }}>{view === 'month' ? 'This month' : 'Today'}</Button>
+        <Button size="sm" variant="secondary" onClick={() => goTo(today)}>{view === 'month' ? 'This month' : 'Today'}</Button>
         <Button size="sm" variant="secondary" onClick={() => rangeNavigate(1)} aria-label={`Next ${view}`}>→</Button>
       </span>
       <div className="soc-inline" role="group" aria-label="Calendar view">
-        <Button size="sm" variant="secondary" title={`Switch to ${view === 'month' ? 'Week' : view === 'week' ? 'Day' : 'Month'} view`}
-          onClick={() => setView(view === 'month' ? 'week' : view === 'week' ? 'day' : 'month')}>{view[0]!.toUpperCase() + view.slice(1)}</Button>
+        <Menu size="sm" trigger={`${view[0]!.toUpperCase() + view.slice(1)} ▾`}
+          triggerLabel={`Calendar view: ${view[0]!.toUpperCase() + view.slice(1)}`}
+          items={(['month', 'week', 'day'] as const).map((value) => ({
+            id: value, label: value[0]!.toUpperCase() + value.slice(1), checked: view === value,
+            onSelect: () => selectView(value),
+          }))} />
       </div>
+      {undoOffer && <Button size="sm" variant="ghost" disabled={disabled(undoOffer.draft)} onClick={undoLastChange}>Undo last calendar change</Button>}
       <label className="soc-field soc-field--inline"><span>Brand</span><select value={brand} onChange={(event) => onBrandChange(event.target.value)}>
         <option value="all">All brands</option>{snapshot.brands.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select></label>
@@ -205,11 +246,17 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
           <tbody>{monthGrid(month, today).map((week) => <tr key={week[0]!.date}>{week.map((day) => {
             const items = monthDates.get(day.date) ?? [];
             return <td key={day.date} data-drop-date={day.date} data-outside={!day.inMonth || undefined} aria-current={day.isToday ? 'date' : undefined} onDragOver={acceptDrop} onDrop={(event) => drop(event, day.date)}>
-              <span className="soc-day-number">{Number(day.date.slice(8))}{day.isToday && <span className="hq-sr-only"> (today)</span>}</span>
+              <div className="soc-day-head" title="Double-click to open this week" onDoubleClick={() => openDay(day.date, 'week')}>
+                <button type="button" className="soc-day-number" aria-label={`Open week of ${dateLabel(day.date)}`}
+                  onClick={(event) => { if (event.detail === 0) openDay(day.date, 'week'); }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDay(day.date, 'week'); }
+                  }}>{Number(day.date.slice(8))}{day.isToday && <span className="hq-sr-only"> (today)</span>}</button>
+              </div>
               {items.length > 0 && <ul className="soc-day-items" aria-label={dateLabel(day.date)}>{items.map(chip)}</ul>}
             </td>;
           })}</tr>)}</tbody>
-        </table> : <TimeGrid days={days} events={active.flatMap((draft) => { const event = draftGridEvent(draft, zone, disabled(draft) || !supported); return event ? [event] : []; })} zone={zone} now={clock}
+        </table> : <TimeGrid days={days} onOpenDay={view === 'week' ? (day) => openDay(day, 'day') : undefined} events={active.flatMap((draft) => { const event = draftGridEvent(draft, zone, disabled(draft) || !supported); return event ? [event] : []; })} zone={zone} now={clock}
           onChange={(event, day, minute, resize) => { const draft = eventDraft(event); if (draft) gridChange(draft, day, minute, resize); }}
           onAllDay={(event, day) => { const draft = eventDraft(event); if (draft) void move(draft, day, null); }}
           onRemove={(event) => { const draft = eventDraft(event); if (draft) void move(draft, '', null); }}
@@ -244,7 +291,9 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
     </Dialog>
     <ToastRegion label="Calendar notifications">
       {moving && <StatusChip tone="info" label="Saving…" />}
-      {toast && <Toast message={toast.message} action={toast.undo ? { label: 'Undo', onAction: () => { const undo = toast.undo!; setToast(null); void move(undo.draft, undo.plannedDate, undo.slot, true); } } : undefined} onDismiss={() => setToast(null)} />}
+      {toast && <Toast key={toast.id} message={toast.message} autoDismissMs={toast.success ? TOAST_AUTO_DISMISS_MS : undefined}
+        action={toast.undo && toast.undo === undoOffer ? { label: 'Undo', onAction: undoLastChange } : undefined}
+        onDismiss={() => setToast((current) => current?.id === toast.id ? null : current)} />}
     </ToastRegion>
   </section>;
 }

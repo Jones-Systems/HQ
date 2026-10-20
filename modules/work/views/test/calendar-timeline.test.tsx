@@ -23,13 +23,9 @@ async function pick(user: ReturnType<typeof userEvent.setup>, trigger: HTMLEleme
   await user.click(screen.getByRole('menuitem', { name: item }));
 }
 
-async function showCalendarView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day') {
-  const group = screen.getByRole('group', { name: 'Calendar layout' });
-  for (let click = 0; click < 3; click += 1) {
-    if (within(group).queryByRole('button', { name })) return;
-    await user.click(within(group).getByRole('button', { name: /^(Month|Week|Day)$/ }));
-  }
-  throw new Error(`Calendar did not cycle to ${name}`);
+async function showCalendarView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day' | 'Agenda') {
+  await user.click(screen.getByRole('button', { name: /^Calendar view:/ }));
+  await user.click(screen.getByRole('menuitemradio', { name }));
 }
 
 describe('Calendar moves', () => {
@@ -174,8 +170,8 @@ describe('Calendar moves', () => {
     const user = userEvent.setup();
     const { container } = await setup({ view: 'calendar', settings: { default_tz: 'America/New_York', week_start: 'mon', stale_days: 21 } });
     expect(container.querySelector('.wv-month-head')!.textContent).toBe('MonTueWedThuFriSatSun');
-    await user.click(screen.getByRole('button', { name: 'Agenda' }));
-    expect(screen.getByRole('button', { name: 'Agenda' }).getAttribute('aria-pressed')).toBe('true');
+    await showCalendarView(user, 'Agenda');
+    expect(screen.getByRole('button', { name: 'Calendar view: Agenda' })).toBeTruthy();
     expect(container.querySelector('.wv-agenda')!.textContent).toContain('Sat, Oct 24 · in 3 days');
     expect(container.querySelector('.wv-month')).toBeNull();
   });
@@ -238,7 +234,7 @@ describe('Timeline moves', () => {
   it('draws a bar only between a start date and a later end, and shows eight quarters', async () => {
     const { container } = await setup({ view: 'timeline' });
     expect([...container.querySelectorAll('.wv-tl-tick')].map((t) => t.textContent)).toEqual([
-      '2026 Q4', '2027 Q1', '2027 Q2', '2027 Q3', '2027 Q4', '2028 Q1', '2028 Q2', '2028 Q3',
+      '2026 · Q4', '2027 · Q1', 'Q2', 'Q3', 'Q4', '2028 · Q1', 'Q2', 'Q3',
     ]);
     const spans = container.querySelectorAll<HTMLElement>('.wv-tl-span');
     expect(spans).toHaveLength(1);
@@ -262,13 +258,13 @@ describe('timed calendar interaction', () => {
     await user.click(screen.getByRole('button', { name: 'Today' }));
     expect(container.querySelector('[data-time-day="2026-10-21"]')).toBeTruthy();
     const layout = screen.getByRole('group', { name: 'Calendar layout' });
-    expect(within(layout).getAllByRole('button')).toHaveLength(2);
-    await user.click(within(layout).getByRole('button', { name: 'Day' }));
-    expect(within(layout).getByRole('button', { name: 'Month' })).toBeTruthy();
+    expect(within(layout).getAllByRole('button')).toHaveLength(1);
+    await showCalendarView(user, 'Month');
+    expect(within(layout).getByRole('button', { name: 'Calendar view: Month' })).toBeTruthy();
     expect(container.querySelectorAll('[data-time-day]')).toHaveLength(0);
-    await user.click(within(layout).getByRole('button', { name: 'Agenda' }));
+    await showCalendarView(user, 'Agenda');
     expect(container.querySelector('.wv-agenda')).toBeTruthy();
-    await user.click(within(layout).getByRole('button', { name: 'Month' }));
+    await showCalendarView(user, 'Month');
     expect(container.querySelector('.wv-month')).toBeTruthy();
     expect(rec.writes()).toHaveLength(0);
   });

@@ -6,6 +6,7 @@ import { displayedInterval, type GridEntry } from './time-grid';
 
 interface Props {
   days: readonly string[];
+  onOpenDay?: (day: string) => void;
   entries: readonly GridEntry[];
   chip: (entry: GridEntry & { bounds: [string, string] }, movable: boolean) => ReactNode;
   onCommit: (item: Item, entry: PlanningDate, day: string, minute: number, resize: boolean) => void;
@@ -15,7 +16,7 @@ interface Props {
   acceptDrop: (event: DragEvent) => void;
 }
 
-export function TimeGrid({ days, entries, chip, onCommit, onAllDay, onRemove, onDrop, acceptDrop }: Props) {
+export function TimeGrid({ days, onOpenDay, entries, chip, onCommit, onAllDay, onRemove, onDrop, acceptDrop }: Props) {
   const env = useEnv();
   const [clock, setClock] = useState(() => env.now());
   useEffect(() => { const id = window.setInterval(() => setClock(env.now()), 60000); return () => window.clearInterval(id); }, [env.now]);
@@ -32,7 +33,7 @@ export function TimeGrid({ days, entries, chip, onCommit, onAllDay, onRemove, on
     }
     return x;
   };
-  return <SharedTimeGrid days={days} events={events} zone={env.settings.default_tz} now={clock} onAnnounce={env.announce}
+  return <SharedTimeGrid days={days} onOpenDay={onOpenDay} events={events} zone={env.settings.default_tz} now={clock} onAnnounce={env.announce}
     onChange={(event, day, minute, resize) => { const x = current(event); if (x) onCommit(x.item, x.entry, day, minute, resize); }}
     onAllDay={(event, day) => { const x = current(event); if (x) onAllDay(x.item, x.entry, day); }}
     onRemove={(event) => { const x = current(event); if (x) onRemove(x.item.id, x.entry.id); }}

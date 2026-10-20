@@ -98,13 +98,13 @@ tests = ["tools/hq-cli/**/*.test.*", "services/planner/tests/**"]
 
 [groups.hq-social-live]
 summary = "Social live adapter contract tests over a wire stub."
-covers = ["spec.hq-integration-parallel-execution#test.social-live.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+covers = ["spec.hq-ui-modernization#test.work-calendar.001", "spec.hq-integration-parallel-execution#test.social-live.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
 direct_surfaces = ["modules/social/"]
 tests = ["modules/social/**/*.test.ts", "modules/social/**/*.test.tsx"]
 
 [groups.hq-work-runtime]
 summary = "Work live runtime and replay tests over Planner wire fixtures."
-covers = ["spec.hq-integration-parallel-execution#test.work-runtime.001", "spec.hq-integration-parallel-execution#test.work-session-injection.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+covers = ["spec.hq-ui-modernization#test.work-calendar.001", "spec.hq-integration-parallel-execution#test.work-runtime.001", "spec.hq-integration-parallel-execution#test.work-session-injection.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
 direct_surfaces = ["modules/work/"]
 tests = ["modules/work/**/*.test.ts", "modules/work/**/*.test.tsx"]
 
@@ -271,6 +271,6 @@ tests = ["apps/desktop/electron/jones-code/**/*.test.ts"]
 
 [groups.hq-ui]
 summary = "Shared visual tokens, primitives, splitters and calendar interactions."
-covers = ["spec.hq-ui-modernization#test.acceptance.001"]
+covers = ["spec.hq-ui-modernization#test.work-calendar.001", "spec.hq-ui-modernization#test.acceptance.001"]
 direct_surfaces = ["packages/hq-ui/", "docs/design/hq-visual-system/tokens/"]
 tests = ["packages/hq-ui/**/*.test.ts", "packages/hq-ui/**/*.test.tsx"]

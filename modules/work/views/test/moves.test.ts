@@ -71,6 +71,23 @@ describe('calendar patches (Planner changeDate)', () => {
 });
 
 describe('timeline', () => {
+  it('shifts scale and geometry together by whole quarters without changing date precision', () => {
+    const scale = timelineScale(VIEW_TODAY, -4);
+    expect(scale.quarters[0]!.value).toBe('2025-Q4');
+    expect(scale.quarters.at(-1)!.value).toBe('2027-Q3');
+    expect(scale.today).toBeCloseTo(385 / 730 * 100);
+    const quilt = byId('ex-quilt');
+    const before = structuredClone(quilt.dates);
+    const earlier = timelineGeometry(quilt, VIEW_TODAY, -4);
+    expect(earlier.marks.map((mark) => mark.shape)).toEqual(['marker', 'band']);
+    expect(earlier.marks[0]!.left).toBeCloseTo(355.5 / 730 * 100);
+    expect(earlier.marks[1]!.width).toBeCloseTo(31 / 730 * 100);
+    expect(timelineGeometry(quilt, VIEW_TODAY, 4).marks.map((mark) => mark.shape)).toEqual(['edge-before', 'edge-before']);
+    expect(timelineGeometry(quilt, VIEW_TODAY, 4).spans).toEqual([]);
+    expect(timelineScale(VIEW_TODAY, 0)).toEqual(timelineScale(VIEW_TODAY));
+    expect(quilt.dates).toEqual(before);
+  });
+
   it('steps through Now, Soon, Later, Someday and No horizon, stopping at either end', () => {
     expect(stepHorizon('now', 1)).toBe('soon');
     expect(stepHorizon('someday', 1)).toBeNull();
