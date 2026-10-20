@@ -1,14 +1,14 @@
 import { createServer } from 'node:http';
 import { createRuntime } from './runtime.mjs';
-const runtime = await createRuntime(process.argv[2]);
 let finish;
 const gate = new Promise(resolve => { finish = resolve; });
 process.once('SIGTERM', () => finish());
 process.once('SIGINT', () => finish());
+const runtime = await createRuntime(process.argv[2]);
 try {
   const child = runtime.spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   const origin = await runtime.listen(createServer((_req, res) => res.end('owned')));
-  if (process.argv[3] === 'cleanup-failure') runtime.own('deliberate cleanup failure', () => { throw new Error('cleanup failed'); });
+  if (['cleanup-failure', 'cleanup-only'].includes(process.argv[3])) runtime.own('deliberate cleanup failure', () => { throw new Error('cleanup failed'); });
   console.log(JSON.stringify({ root: runtime.root, pid: child.pid, origin }));
   if (process.argv[3] === 'partial') {
     const missing = runtime.spawn('acceptance-no-such-executable', []);

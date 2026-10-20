@@ -11,6 +11,10 @@ import { row, scenarioGaps, fullOutcome } from './fixtures/results.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const checkpoint = process.argv.includes('--checkpoint');
+let cancelled = false;
+const onSignal = () => { cancelled = true; };
+process.on('SIGINT', onSignal);
+process.on('SIGTERM', onSignal);
 const evidenceParent = join(repo, '.t3/acceptance-evidence');
 await mkdir(evidenceParent, { recursive: true });
 const evidence = await mkdtemp(join(evidenceParent, 'run-'));
@@ -22,14 +26,11 @@ let activeRow;
 const prerequisite = [{ id: 'built-native-app', status: 'pass' }];
 function begin(id) { activeRow = id; }
 function passed(detail) { report.rows.push(row(activeRow, 'pass', prerequisite, [detail])); activeRow = undefined; }
-let cancelled = false;
 let log = '';
-const onSignal = () => { cancelled = true; };
 const until = (probe, label, timeout) => poll(() => { if (cancelled) throw new Error('Harness cancelled'); return probe(); }, label, timeout);
-process.on('SIGINT', onSignal);
-process.on('SIGTERM', onSignal);
 try {
   begin('native-prerequisites');
+  if (cancelled) throw new Error('Harness cancelled during startup');
   const binary = join(repo, 'node_modules/electron/dist/electron');
   const main = join(repo, 'apps/desktop/dist-electron/main.js');
   await access(binary);

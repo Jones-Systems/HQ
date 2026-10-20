@@ -43,6 +43,7 @@ test('owned profiles and child processes disappear on success, failure and signa
     process.kill(peer.pid, 0);
     await gone(await fixture('failure'), 7);
     await gone(await fixture('partial'), 7);
+    await gone(await fixture('cleanup-only'), 8);
     const failedCleanup = await fixture('cleanup-failure');
     await gone(failedCleanup, 7);
     assert.match(failedCleanup.stderr(), /deliberate fixture failure/);
