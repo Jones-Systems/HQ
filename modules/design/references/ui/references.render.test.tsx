@@ -11,6 +11,8 @@ import { appScreenshot, nativeReference, screenshot } from '../test/fixtures.ts'
 import { ReferenceLibraryPanel } from './ReferenceLibraryPanel.tsx';
 import { ReferenceLibraryView } from './ReferenceLibraryView.tsx';
 import { buildLibraryView } from './view-model.ts';
+import { createReferencesEnvironment } from '../../app/sections/references/env.ts';
+import { ReferencesSection } from '../../app/sections/references/View.tsx';
 
 const noop = () => undefined;
 const actions = {
@@ -30,6 +32,21 @@ async function seeded() {
 }
 
 describe('ReferenceLibraryView rendered markup', () => {
+  test('an empty library offers real image selection and project folders without empty sidebars or graph', async () => {
+    const ports = fakePorts();
+    const env = await createReferencesEnvironment({ storage: ports.storage, clock: ports.clock,
+      ids: { label: 'fake:ids', next: (kind) => `${kind}_test` }, compareSlot: () => null, previewUrl: () => null });
+    const html = renderToStaticMarkup(<ReferencesSection env={env} currentProject={null} onShowProjects={noop} />);
+    expect(html).toContain('Bring in designs to compare');
+    expect(html).toContain('Import screenshots');
+    expect(html).toContain('Show my project folders');
+    expect(html).toMatch(/<input[^>]+type="file"[^>]+accept="image\/png,image\/jpeg,image\/webp"/u);
+    expect(html).not.toContain('Reference graph');
+    expect(html).not.toContain('New collection');
+    expect(html).not.toContain('Reference collections');
+    expect(html).not.toContain('tag:x');
+  });
+
   test('cards show evidence, rights and use-in-project controls', async () => {
     const { library, ids } = await seeded();
     await library.useInProject(ids[0]!, 'project-alpha');

@@ -1,7 +1,11 @@
 export const CALENDAR_HOUR_HEIGHT = 48;
 export const CALENDAR_SNAP_MINUTES = 15;
 export const calendarGridSnap = (minute: number): number => Math.round(minute / CALENDAR_SNAP_MINUTES) * CALENDAR_SNAP_MINUTES;
-export const calendarClock = (minutes: number): string => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+export const calendarClock = (minutes: number): string => {
+  const minute = ((minutes % 1440) + 1440) % 1440;
+  const hour = Math.floor(minute / 60);
+  return `${hour % 12 || 12}:${String(minute % 60).padStart(2, '0')} ${hour < 12 ? 'a.m.' : 'p.m.'}`;
+};
 export const calendarDayNumber = (day: string): number => Date.parse(`${day}T00:00:00Z`) / 86400000;
 export const calendarAddDays = (day: string, delta: number): string => new Date((calendarDayNumber(day) + delta) * 86400000).toISOString().slice(0, 10);
 

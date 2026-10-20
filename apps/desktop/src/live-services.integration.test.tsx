@@ -39,23 +39,33 @@ it('explicit unconfigured mounts labelled examples once; later settings changes 
   const bind = vi.spyOn(Work, 'setWorkSessionPort');
   const domains = createServiceDomains(() => ({ ...services, config: { ...services.config, status } }));
   const p = props(); const view = render(<domains.Work {...p} />);
-  expect(await screen.findByText('Work: Synthetic example.')).toBeTruthy();
+  expect(await screen.findByText('Work: Sample data · not set up.')).toBeTruthy();
   expect(screen.getAllByTitle(RELOAD_NOTE)).toHaveLength(1);
   status.mockResolvedValue(configured); view.unmount();
   render(<domains.Work {...p} />);
-  expect(await screen.findByText('Work: Synthetic example.')).toBeTruthy();
+  expect(await screen.findByText('Work: Sample data · not set up.')).toBeTruthy();
   expect(bind).toHaveBeenCalledTimes(1); expect(status).toHaveBeenCalledTimes(1);
   cleanup(); status.mockResolvedValue({ configured: false, policy: 'ok', transport: null });
   render(<domains.Social {...props()} />);
-  expect(await screen.findByText('Social: Synthetic example.')).toBeTruthy();
+  expect(await screen.findByText('Social: Sample data · not set up.')).toBeTruthy();
 });
 it('failed status mounts unavailable surfaces without creating Work sessions or fixtures', async () => {
   const bind = vi.spyOn(Work, 'setWorkSessionPort');
   const domains = createServiceDomains(() => undefined);
   render(<><domains.Work {...props()} /><domains.Social {...props()} /></>);
-  expect(await screen.findByText('Work: Unavailable — service is not configured correctly.')).toBeTruthy();
-  expect(await screen.findByText('Social: Unavailable — service is not configured correctly.')).toBeTruthy();
+  expect(await screen.findByText('Work: Unavailable.')).toBeTruthy();
+  expect(await screen.findByText('Social: Unavailable.')).toBeTruthy();
   expect(screen.queryByText(/Fictional example/)).toBeNull(); expect(bind).not.toHaveBeenCalled();
+});
+
+it('desktop example Social calendar allows timed planning through its injected workspace', async () => {
+  const services = bridge(new URL('http://127.0.0.1'), new URL('http://127.0.0.1'), async () => ({ ok: false, kind: 'unavailable' }));
+  const domains = createServiceDomains(() => ({ ...services, config: { ...services.config,
+    status: async () => ({ configured: false, policy: 'ok', transport: null }) } }));
+  render(<domains.Social {...props()} destination="calendar/2026-10" />);
+  fireEvent.click(await screen.findByRole('button', { name: /^Autumn blend tasting notes/ }));
+  expect((screen.getByRole('checkbox', { name: 'Set time' }) as HTMLInputElement).disabled).toBe(false);
+  expect(screen.queryByText(/Timed planning needs a newer Social service/)).toBeNull();
 });
 
 describe('synthetic Social wire through the actual main HTTP layer', () => {
@@ -81,7 +91,7 @@ describe('synthetic Social wire through the actual main HTTP layer', () => {
     try {
       const services = bridge(url, url); const domains = createServiceDomains(() => services);
       render(<domains.Social {...props()} />);
-      expect(await screen.findByText('Social: Live service.')).toBeTruthy();
+      expect(await screen.findByText('Social: Set up · not checked.')).toBeTruthy();
       await waitFor(() => expect(calls).toContain('GET /api/workspace'));
       const port = createLiveSocialPort(services.social);
       await port.snapshot();
@@ -123,7 +133,7 @@ it('shell binds the real disposable Planner: live reads, lost write, stable repl
     const bind = vi.spyOn(Work, 'setWorkSessionPort');
     const domains = createServiceDomains(() => bridge(url, url, transport));
     render(<domains.Work {...props()} />);
-    expect(await screen.findByText('Work: Live service.')).toBeTruthy();
+    expect(await screen.findByText('Work: Set up · not checked.')).toBeTruthy();
     await waitFor(() => expect(bind).toHaveBeenCalledTimes(1));
     const [port, options] = bind.mock.calls[0]!;
     const before = await port!.snapshot(); loseWrite = true;

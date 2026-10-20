@@ -219,11 +219,11 @@ export function CalendarView() {
         </div>
         <div className="wv-cal-controls">
           <div className="wv-seg" role="group" aria-label="Calendar layout">
-            {(['month', 'week', 'day', 'agenda'] as const).map((id) => (
-              <button key={id} type="button" className="wv-seg-btn" aria-pressed={mode === id} onClick={() => setMode(id)}>
-                {id[0]!.toUpperCase() + id.slice(1)}
-              </button>
-            ))}
+            <Button size="sm" variant="secondary" title={`Switch to ${mode === 'month' ? 'Week' : mode === 'week' ? 'Day' : 'Month'} view`}
+              onClick={() => setMode(mode === 'month' ? 'week' : mode === 'week' ? 'day' : 'month')}>
+              {mode === 'agenda' ? 'Month' : mode[0]!.toUpperCase() + mode.slice(1)}
+            </Button>
+            <Button size="sm" variant="ghost" aria-pressed={mode === 'agenda'} onClick={() => setMode('agenda')}>Agenda</Button>
           </div>
           <div className="wv-seg" role="group" aria-label="Show date kinds">
             {DATE_KIND_IDS.map((k) => {

@@ -1,5 +1,5 @@
 import { SecondaryPanel } from '../../ui/src/secondary-panels.tsx';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import type { BlobDigest, CollectionId, ReferenceId } from '../src/contract.ts';
 import type { LibraryViewModel, ReferenceCard } from './view-model.ts';
 import './references.css';
@@ -16,11 +16,10 @@ export interface ReferenceLibraryActions {
 
 export interface ReferenceLibraryViewProps extends ReferenceLibraryActions {
   readonly view: LibraryViewModel;
-  /**
-   * Injected preview lookup (e.g. a sandboxed blob URL). Returning null shows
-   * a placeholder; the view never fetches by itself.
-   */
+  /** Injected verified preview lookup. Returning null shows a placeholder. */
   readonly previewUrl: (digest: BlobDigest) => string | null;
+  readonly importControls?: ReactNode;
+  readonly onShowProjects?: () => void;
 }
 
 /** Presentational reference library. Every action is explicit and local; none dispatches work. */
@@ -34,20 +33,27 @@ export function ReferenceLibraryView(props: ReferenceLibraryViewProps) {
         <h2 id={`${searchId}-title`}>References</h2>
         <p className="hq-refs-count">{view.totalLive} {view.totalLive === 1 ? 'reference' : 'references'}</p>
       </div>
-      <div className="hq-refs-search">
+      {view.totalLive > 0 && <div className="hq-refs-search">
         <label htmlFor={searchId}>Search references</label>
-        <input id={searchId} type="search" value={view.query} placeholder="Title, tag, site or app — tag:x kind:screenshot is:publishable"
+        <input id={searchId} type="search" value={view.query} placeholder="Search references"
           onChange={(event) => props.onQueryChange(event.currentTarget.value)} />
-      </div>
+      </div>}
     </header>
+    {props.importControls}
     {view.banner === null ? null : <div className="hq-refs-banner" role="status">
       <span>{view.banner}</span>
       <button type="button" onClick={props.onReload}>Reload</button>
     </div>}
     <div className="hq-refs-body">
-      <SecondaryPanel name="reference-collections" label="Reference collections" initial={200} side="start"><CollectionsNav {...props} /></SecondaryPanel>
+      {view.totalLive > 0 && <SecondaryPanel name="reference-collections" label="Reference collections" initial={200} side="start"><CollectionsNav {...props} /></SecondaryPanel>}
       <div className="hq-refs-results">
-        {view.emptyMessage === null
+        {view.totalLive === 0 ? <div className="hq-refs-welcome">
+          <div className="hq-refs-welcome-mark" aria-hidden="true">▧</div>
+          <h3>Bring in designs to compare</h3>
+          <p>Import screenshots from a website or app to build your reference library. Selected images and their source details stay on this device.</p>
+          <p>Project folders are separate: add them in Projects to browse source files and available previews.</p>
+          {props.onShowProjects && <button type="button" onClick={props.onShowProjects}>Show my project folders</button>}
+        </div> : view.emptyMessage === null
           ? <ul className="hq-refs-grid" aria-label="Reference results">
             {view.cards.map((card) => <li key={card.id}><Card card={card} {...props} /></li>)}
           </ul>
@@ -58,6 +64,9 @@ export function ReferenceLibraryView(props: ReferenceLibraryViewProps) {
           <h3>{view.detail.title}</h3>
           <button type="button" className="hq-refs-quiet" onClick={() => props.onSelectReference(null)}>Close</button>
         </div>
+        {(() => { const thumbnail = view.cards.find((card) => card.id === view.detail?.id)?.thumbnail;
+          const src = thumbnail ? props.previewUrl(thumbnail.digest) : null;
+          return src ? <img className="hq-refs-detail-image" src={src} alt={view.detail.title} /> : null; })()}
         {view.detail.notes === '' ? null : <p>{view.detail.notes}</p>}
         <dl>{view.detail.provenance.map((row) => [<dt key={`${row.term}-t`}>{row.term}</dt>, <dd key={`${row.term}-d`}>{row.value}</dd>])}</dl>
         <h4>Used in</h4>

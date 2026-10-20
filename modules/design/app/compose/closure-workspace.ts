@@ -60,6 +60,9 @@ export function createClosureWorkspace(records: WorkspaceRecords | null) {
   return {
     label, requests, outboxStore, evidenceStore, referenceStorage,
     runs: () => runs ??= createRunsEnvironment({ requests, outboxStore, evidenceStore, clock, ids, compareSlot }),
-    references: () => references ??= createReferencesEnvironment({ storage: referenceStorage, clock, ids, compareSlot, previewUrl: () => null }),
+    references: () => references ??= createReferencesEnvironment({ storage: referenceStorage, clock, ids, compareSlot, previewUrl: () => null,
+      readBlob: records === null
+        ? async (digest) => (referenceStorage as MemoryReferenceStorage).blobs.get(digest)?.bytes.slice() ?? null
+        : (digest) => records.getBlob(digest) }),
   };
 }

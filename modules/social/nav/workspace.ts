@@ -1,4 +1,4 @@
-import type { SocialWorkspacePort } from '../core';
+import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES, type SocialWorkspacePort } from '../core';
 import { createLiveSocialPort, socialServiceBridge } from '../live';
 import { createWorkbenchFixture } from '../workbench/fixtures/examples';
 
@@ -20,7 +20,8 @@ let current: SocialWorkspace | null = null;
 
 export function selectSocialWorkspace(scope: unknown = globalThis): SocialWorkspace {
   const bridge = socialServiceBridge(scope);
-  return bridge ? { port: createLiveSocialPort(bridge), source: 'live' } : { port: createWorkbenchFixture().port, source: 'fixture' };
+  return bridge ? { port: createLiveSocialPort(bridge), source: 'live' }
+    : { port: createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port, source: 'fixture' };
 }
 
 export function socialWorkspace(): SocialWorkspace {

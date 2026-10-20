@@ -1,13 +1,13 @@
 /* Timed views use CSSOM variables so event geometry remains compatible with the renderer CSP. */
 .hq-calendar-time-grid { min-width: 0; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-md); overflow: auto; background: var(--hq-surface); }
 .hq-calendar-time-help { margin: 0; padding: var(--hq-space-sm); font: var(--hq-type-small); color: var(--hq-text-muted); max-width: none; border-bottom: 1px solid var(--hq-border); }
-.hq-calendar-time-head { display: grid; grid-template-columns: 52px repeat(var(--hq-calendar-grid-days), minmax(80px, 1fr)); min-width: calc(52px + var(--hq-calendar-grid-days) * 80px); }
+.hq-calendar-time-head { display: grid; grid-template-columns: 88px repeat(var(--hq-calendar-grid-days), minmax(80px, 1fr)); min-width: calc(88px + var(--hq-calendar-grid-days) * 80px); }
 .hq-calendar-time-head > span { padding: 10px 4px; font: var(--hq-type-small); color: var(--hq-text-muted); }
 .hq-calendar-time-head > div { min-width: 0; border-left: 1px solid var(--hq-border); }
 .hq-calendar-time-head strong { display: block; padding: 8px 6px; font: var(--hq-type-small); font-weight: var(--hq-font-weight-semibold); }
 .hq-calendar-time-head .is-today > strong { color: var(--hq-accent-text); background: var(--hq-accent-soft); }
 .hq-calendar-all-day { min-height: 42px; display: grid; gap: 3px; padding: 4px; }
-.hq-calendar-time-rows { max-height: min(64vh, 680px); overflow: auto; display: grid; grid-template-columns: 52px minmax(0, 1fr); min-width: calc(52px + var(--hq-calendar-grid-days) * 80px); border-top: 1px solid var(--hq-border); }
+.hq-calendar-time-rows { max-height: min(64vh, 680px); overflow: auto; display: grid; grid-template-columns: 88px minmax(0, 1fr); min-width: calc(88px + var(--hq-calendar-grid-days) * 80px); border-top: 1px solid var(--hq-border); }
 .hq-calendar-time-hours > div { height: 48px; padding: 4px; text-align: right; font: var(--hq-type-small); color: var(--hq-text-subtle); font-variant-numeric: tabular-nums; }
 .hq-calendar-time-columns { display: grid; grid-template-columns: repeat(var(--hq-calendar-grid-days), minmax(0, 1fr)); height: 1152px; }
 .hq-calendar-time-day { position: relative; min-width: 0; border-left: 1px solid var(--hq-border); background: repeating-linear-gradient(to bottom, transparent 0, transparent 47px, var(--hq-border) 47px, var(--hq-border) 48px); }
