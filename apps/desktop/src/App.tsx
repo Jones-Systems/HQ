@@ -4,7 +4,7 @@ import { REFERENCE_PROVIDERS } from './reference-providers';
 import type { ReturnContext } from '@hq/contracts/references';
 import type { ShellState } from './state';
 import { Splitter } from '@hq/ui';
-import { deactivateDesktopPreview, subscribeDesktopProject } from './interactive-runtime';
+import { deactivateDesktopPreview, overlayDesktopPreview, subscribeDesktopProject } from './interactive-runtime';
 import { Connections } from './Connections';
 import { ServiceSettings } from './ServiceSettings';
 import { DataSourcesProvider } from './settings/DataSources';
@@ -36,6 +36,7 @@ function WorkspaceApp() {
     setSettingsTarget(target); setSettingsOpen(true);
   };
   const closeSettings = () => setSettingsOpen(false);
+  useEffect(() => { void overlayDesktopPreview(settingsOpen); }, [settingsOpen]);
   useEffect(() => {
     if (wasSettingsOpen.current && !settingsOpen) settingsOpener.current?.focus();
     wasSettingsOpen.current = settingsOpen;

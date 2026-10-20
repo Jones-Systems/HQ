@@ -11,6 +11,8 @@ function request(v: unknown): boolean {
 }
 export function previewParams(route: unknown, p: unknown): boolean {
   if (!record(p)) return false;
+  if (route === 'deactivate') return keys(p, []);
+  if (route === 'overlay') return keys(p, ['hidden']) && typeof p.hidden === 'boolean';
   if (route === 'open') return keys(p, ['versionId', 'url', 'viewport', 'label']) && text(p.versionId, 300) && text(p.label, 160) && !!previewTarget(p.url) && record(p.viewport) && keys(p.viewport, ['w', 'h', 'dpr']) && integer(p.viewport.w, 1, 4096) && integer(p.viewport.h, 1, 4096) && [1, 2, 3].includes(Number(p.viewport.dpr));
   if (route === 'image') return keys(p, ['captureId']) && text(p.captureId, 100);
   if (!text(p.sessionId, 100)) return false;

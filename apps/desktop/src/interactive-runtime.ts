@@ -8,21 +8,14 @@ import type { HostCatalog } from '../../../modules/design/connector/src/host-cat
 const listeners = new Set<(project: ProjectContext) => void>();
 export function selectDesktopProject(project: { id: string; label: string }) { for (const listener of listeners) listener({ id: project.id, name: project.label }); }
 export function subscribeDesktopProject(listener: (project: ProjectContext) => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
-const previewSessions = new Set<string>();
 export const desktopPreview: PreviewTransport = {
   async call(route, params) {
     const transport = window.hqServices?.preview;
-    if (!transport) return { ok: false, kind: 'unavailable' };
-    const result = await transport.call(route, params);
-    if (route === 'open' && result.ok && result.value && typeof result.value === 'object' && 'sessionId' in result.value) previewSessions.add(String(result.value.sessionId));
-    if (route === 'close') previewSessions.delete((params as { sessionId: string }).sessionId);
-    return result;
+    return transport ? transport.call(route, params) : { ok: false, kind: 'unavailable' };
   },
 };
-export async function deactivateDesktopPreview() {
-  const ids = [...previewSessions]; previewSessions.clear();
-  await Promise.all(ids.map(sessionId => desktopPreview.call('close', { sessionId })));
-}
+export async function deactivateDesktopPreview() { await desktopPreview.call('deactivate', {}); }
+export async function overlayDesktopPreview(hidden: boolean) { await desktopPreview.call('overlay', { hidden }); }
 export function createJonesConnection(transport: JonesTransport | undefined): { connection: RunsConnection; refresh(): Promise<void> } {
   let current: JonesStatus = { state: 'not-configured', destinations: [], descriptor: { kind: 'jones-code', label: 'Jones Code', provenance: 'jones', modes: ['existing-thread'], qualification: { level: 'unqualified', reason: 'Jones Code is disconnected' } } };
   let generation = 0;

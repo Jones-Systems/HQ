@@ -26,6 +26,7 @@ export function createPreviewHost(options: {
   const denials = { permissions: 0, devices: 0, display: 0, popups: 0, downloads: 0, auth: 0, certificates: 0, certificateErrors: 0, navigation: 0 };
   const diagnostics = { blobWrites: 0, clearedSessions: 0, deniedRequests: 0, lastPickOutcome: null as PreviewResult<CaptureRecord> | null };
   const sessions = new Map<string, Live>();
+  let lifecycleEpoch = 0, overlayHidden = false;
   const images = new Map<string, { sessionId: string; data: string }>();
   let bundle: Promise<{ source: string; digest: string }> | undefined;
   const pinnedBundle = () => bundle ??= readFile(new URL('../preview-agent/agent.js', import.meta.url), 'utf8').then(source => ({ source, digest: createHash('sha256').update(source).digest('hex') }));
@@ -53,7 +54,11 @@ export function createPreviewHost(options: {
     finally { if (window && !window.isDestroyed()) window.contentView.removeChildView(live.view); await live.session.clearData(); diagnostics.clearedSessions++; }
   }
   function close(id: string) { const pending = closeSession(id); closingTasks.add(pending); void pending.finally(() => closingTasks.delete(pending)).catch(() => {}); return pending; }
-  async function closeAll() { await closeNetworkControl(); for (const id of sessions.keys()) void close(id); await Promise.all([...closingTasks]); }
+  async function closeAll() {
+    lifecycleEpoch++;
+    for (const id of sessions.keys()) void close(id);
+    await Promise.all([closeNetworkControl(), ...closingTasks]);
+  }
   async function read(live: Live, requests: readonly unknown[]): Promise<CaptureReading> {
     const generation = live.value.generation, url = live.view.webContents.getURL();
     const value = await world<unknown>(live, `(() => {const a=window.__hqPreviewAgentHostV1.agent;a.setHighlightHidden(true);const r=a.resolveExact(${JSON.stringify(requests)});return {...r,contentSize:{w:document.documentElement.scrollWidth,h:document.documentElement.scrollHeight}};})()`);
@@ -109,7 +114,7 @@ export function createPreviewHost(options: {
     finally { if (!live.closing && !live.view.webContents.isDestroyed()) await world(live, 'window.__hqPreviewAgentHostV1?.agent.setHighlightHidden(false)').catch(() => {}); }
   }
   async function drain(live: Live) {
-    if (live.draining || !live.visible || live.mode === 'off' || live.closing || live.value.status === 'crashed') return;
+    if (live.draining || overlayHidden || !live.visible || live.mode === 'off' || live.closing || live.value.status === 'crashed') return;
     live.draining = true;
     try {
       const events = await world<unknown>(live, 'window.__hqPreviewAgentHostV1?.drain() ?? []');
@@ -117,10 +122,11 @@ export function createPreviewHost(options: {
       if (events.length && qualificationEnabled) await barrier.checkpoint('before-drain', live.value.sessionId);
       for (const event of events) {
         if (!validAgentEvent(event)) continue;
+        if (overlayHidden) continue;
         if (event.generation !== live.value.generation) { diagnostics.lastPickOutcome = { ok: false, kind: 'stale', reason: 'navigation' }; continue; }
         const operation = live.queue.then(() => capture(live, event.generation, event)); live.queue = operation.catch(() => {});
         const result = await operation; diagnostics.lastPickOutcome = result;
-        if (result.ok && event.generation === live.value.generation && !live.closing) {
+        if (result.ok && !overlayHidden && event.generation === live.value.generation && !live.closing) {
           live.events.push({ sequence: ++live.sequence, generation: event.generation, event, capture: result.value });
           if (live.events.length > 64) live.events.shift();
         }
@@ -130,7 +136,9 @@ export function createPreviewHost(options: {
   }
   async function open(params: PreviewParams['open']): Promise<Result> {
     const window = options.window(); if (!window || window.isDestroyed() || sessions.size >= 4) return fail('unavailable', 'view-limit');
+    const openingEpoch = lifecycleEpoch;
     await pinnedBundle();
+    if (openingEpoch !== lifecycleEpoch) return fail('stale', 'deactivated');
     const target = previewTarget(params.url)!;
     const made = createIsolatedContents('hq-preview'), id = randomUUID();
     const live: Live = { ...made, target, value: { sessionId: id, versionId: params.versionId, generation: 0, route: target.pathname + target.search, state: target.hash, viewport: params.viewport, contentSize: { w: params.viewport.w, h: params.viewport.h }, status: 'open', pickQualified },
@@ -170,8 +178,11 @@ export function createPreviewHost(options: {
       // Initialize an inert view, then retain CDP metrics across target renderer changes.
       await contents.loadURL('about:blank');
       await emulate(live);
+      if (openingEpoch !== lifecycleEpoch || live.closing) return fail('stale', 'deactivated');
       initializing = false;
-      await contents.loadURL(target.href); await install(live); return ok(current(live));
+      await contents.loadURL(target.href); await install(live);
+      if (openingEpoch !== lifecycleEpoch || live.closing) return fail('stale', 'deactivated');
+      return ok(current(live));
     }
     catch { await close(id); return fail('unavailable', 'load'); }
   }
@@ -192,8 +203,8 @@ export function createPreviewHost(options: {
     closeNetworkControl,
     pauseAt: barrier.pauseAt, waitForPause: barrier.waitForPause, resume: barrier.resume,
     fault(value: string | null) { if (value !== null && !['mutation', 'pixels-unstable', 'dpr'].includes(value)) throw Error('Invalid fault'); fault = value ?? undefined; },
-    sessions: () => [...sessions.values()].map(live => ({ ...current(live), webContentsId: live.view.webContents.id, processId: live.view.webContents.getOSProcessId(), preloadScripts: live.session.getPreloadScripts(), preloads: live.session.getPreloads(), storagePath: live.session.storagePath, persistent: live.session.isPersistent() })),
-    stats: () => ({ ...diagnostics, denials: { ...denials }, mainPid: process.pid, rendererPid: options.window()?.webContents.getOSProcessId(), sessions: sessions.size }),
+    sessions: () => [...sessions.values()].map(live => ({ ...current(live), visible: live.view.getVisible(), intendedVisible: live.visible, overlayHidden, webContentsId: live.view.webContents.id, processId: live.view.webContents.getOSProcessId(), preloadScripts: live.session.getPreloadScripts(), preloads: live.session.getPreloads(), storagePath: live.session.storagePath, persistent: live.session.isPersistent() })),
+    stats: () => ({ ...diagnostics, overlayHidden, denials: { ...denials }, mainPid: process.pid, rendererPid: options.window()?.webContents.getOSProcessId(), sessions: sessions.size }),
   };
   return {
     closeAll,
@@ -202,6 +213,12 @@ export function createPreviewHost(options: {
       if (!enabled) return fail('unavailable', 'disabled');
       const p = raw as Record<string, unknown>;
       try {
+        if (route === 'deactivate') { await closeAll(); return ok(null); }
+        if (route === 'overlay') {
+          overlayHidden = Boolean(p.hidden);
+          for (const live of sessions.values()) if (!live.closing && !live.view.webContents.isDestroyed()) live.view.setVisible(live.visible && !overlayHidden);
+          return ok(null);
+        }
         if (route === 'open') return await open(raw as PreviewParams['open']);
         if (route === 'image') return images.has(String(p.captureId)) ? ok(images.get(String(p.captureId))!.data) : fail('unavailable');
         if (route === 'close') { await close(String(p.sessionId)); return ok(null); }
@@ -214,7 +231,7 @@ export function createPreviewHost(options: {
           if (old.width !== Math.round(rect.width) || old.height !== Math.round(rect.height)) { fence(live); await install(live); }
           live.view.setBounds({ x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) });
           await emulate(live, Math.max(0.01, Math.min(rect.width / live.value.viewport.w, rect.height / live.value.viewport.h)));
-          live.view.setVisible(visible); live.visible = visible; return ok(current(live));
+          live.view.setVisible(visible && !overlayHidden); live.visible = visible; return ok(current(live));
         }
         if (route === 'navigate') {
           const target = new URL(String(p.route), live.target);

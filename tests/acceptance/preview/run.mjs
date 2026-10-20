@@ -46,19 +46,55 @@ const nativeCall = async fn => {
   assertNative();
   return Promise.race([fn(), nativeStopped.then(error => { throw error; })]);
 };
+const previewConnections = new Map();
+let rowDepth = 0;
 const check = async (id, scenario, fn) => {
   assertNative();
   await emit({ type: 'row-start', id, scenario });
-  let row;
-  try { const observed = await nativeCall(fn); row = { id, scenario, outcome: 'passed', observed }; }
-  catch (error) {
-    row = { id, scenario, outcome: error instanceof Unmeasured ? 'unmeasured' : 'failed', error: error.stack };
-    report.rows.push(row); await persist('rows.jsonl', JSON.stringify(row) + '\n'); await emit({ type: 'row-end', id, scenario, outcome: row.outcome });
-    if (error instanceof NativeStopped) throw error;
-    assertNative();
-    return;
+  const connectionsBefore = new Set(previewConnections.keys());
+  let row, stopped, baseline = [];
+  const nested = rowDepth++ > 0;
+  try {
+    baseline = report.hooksAvailable ? await hook('sessions()') : [];
+    assert.ok(nested || baseline.length === 0, 'Unexpected preview session before row');
+    const observed = await nativeCall(fn);
+    row = { id, scenario, outcome: 'passed', observed };
+  } catch (error) {
+    stopped = error instanceof NativeStopped ? error : null;
+    row = { id, scenario, outcome: error instanceof Unmeasured ? 'unmeasured' : 'failed', error: error.stack, observed: error.observed };
+  } finally {
+    rowDepth--;
+    try {
+      assertNative();
+      if (report.hooksAvailable) {
+        const survivors = (await hook('sessions()')).filter(s => !nested || !baseline.some(b => b.sessionId === s.sessionId));
+        row.cleanup = { survivingSessionIds: survivors.map(s => s.sessionId) };
+        if (survivors.length) {
+          row.outcome = 'failed';
+          row.cleanup.orphanFailure = 'Row left native preview sessions alive';
+          for (const session of survivors) value(await api('close', { sessionId: session.sessionId }));
+          const remaining = await hook('sessions()');
+          assert.ok(survivors.every(s => !remaining.some(r => r.sessionId === s.sessionId)), 'Row cleanup left orphan sessions');
+        }
+        if (!nested && (await hook('stats()')).overlayHidden) {
+          row.outcome = 'failed'; row.cleanup.overlayLeftOpen = true;
+          const closed = await shell.evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Back to'));b?.click();return !!b})()`);
+          assert.equal(closed, true, 'Cannot restore Settings after failed row');
+          await until(async () => !(await hook('stats()')).overlayHidden, 'row overlay cleanup');
+        }
+        row.cleanup.completed = true;
+      }
+    } catch (error) {
+      row.outcome = 'failed'; row.cleanupError = error.stack;
+      if (error instanceof NativeStopped) stopped = error;
+    }
+    for (const [id, cdp] of previewConnections) if (!connectionsBefore.has(id)) { cdp.close(); previewConnections.delete(id); }
   }
-  report.rows.push(row); await persist('rows.jsonl', JSON.stringify(row) + '\n'); await emit({ type: 'row-end', id, scenario, outcome: row.outcome });
+  report.rows.push(row); await persist('rows.jsonl', JSON.stringify(row) + '\n');
+  await emit({ type: 'row-end', id, scenario, outcome: row.outcome });
+  if (stopped) throw stopped;
+  if (row.cleanupError) throw Error('Row cleanup failed; stopping to prevent contamination: ' + row.cleanupError);
+  assertNative();
 };
 const unmeasured = (id, scenario, reason) => report.rows.push({ id, scenario, outcome: 'unmeasured', reason });
 const api = async (route, params) => {
@@ -76,6 +112,7 @@ async function open(viewport = { w: 1280, h: 800, dpr: 1 }, url = origin) {
   const target = await until(async () => (await (await fetch(`http://${new URL(endpoint).host}/json/list`)).json()).find(t => t.type === 'page' && t.url.startsWith(url)), 'preview CDP target');
   await emit({type:'fixture-cdp-attach-start',targetId:target.id});
   const cdp = await nativeCall(()=>connect(target.webSocketDebuggerUrl, runtime));
+  previewConnections.set(session.sessionId, cdp);
   await emit({type:'fixture-cdp-attach-end',targetId:target.id});
   return { session: value(await api('status', { sessionId: session.sessionId })), cdp, target };
 }
@@ -220,10 +257,16 @@ try {
     ['camera-microphone', "navigator.mediaDevices.getUserMedia({audio:true,video:true}).then(stream=>{stream.getTracks().forEach(t=>t.stop());return 'allowed'},e=>'denied:'+e.name)"],
     ['display-media', "navigator.mediaDevices.getDisplayMedia({video:true}).then(stream=>{stream.getTracks().forEach(t=>t.stop());return 'allowed'},e=>'denied:'+e.name)"],
     ['usb', "navigator.usb.requestDevice({filters:[]}).then(()=> 'allowed',e=>'denied:'+e.name)"],
-    ['hid', "navigator.hid.requestDevice({filters:[]}).then(()=> 'allowed',e=>'denied:'+e.name)"],
+    ['hid', "navigator.hid.requestDevice({filters:[]}).then(devices=>Array.isArray(devices)&&devices.length===0?'denied:empty-selection':'allowed:nonempty-or-invalid-selection',e=>'denied:'+e.name)"],
     ['serial', "navigator.serial.requestPort().then(()=> 'allowed',e=>'denied:'+e.name)"],
     ['bluetooth', "navigator.bluetooth.requestDevice({acceptAllDevices:true}).then(()=> 'allowed',e=>'denied:'+e.name)"],
   ]) await check('Q-PV2', `Permission/device API ${name}`, () => withPreview(async ({ cdp }) => {
+    if (name === 'bluetooth') {
+      try {
+        await cdp.send('BluetoothEmulation.enable', { state: 'powered-on', leSupported: true });
+        await cdp.send('BluetoothEmulation.simulatePreconnectedPeripheral', { address: '00:00:00:00:00:01', name: 'HQ synthetic peripheral', manufacturerData: [], knownServiceUuids: [] });
+      } catch (error) { throw new Unmeasured('Native CDP Bluetooth emulation unavailable: ' + error.message); }
+    }
     const before = report.hooksAvailable ? await hook('stats()') : null;
     const response = await cdp.send('Runtime.evaluate',{expression:`(async()=>{try{return await (${expression})}catch(e){return 'unsupported:'+e.name}})()`,returnByValue:true,awaitPromise:true,userGesture:true});
     const result=response.result?.value;
@@ -245,7 +288,15 @@ try {
     const url=new URL(clientCertificateUrl);assert.equal(url.protocol,'https:');assert.equal(url.username+url.password,'');
     const before=await hook('stats()');
     const result=await api('open',{versionId:'client-certificate-denial',url:url.href,viewport:{w:390,h:844,dpr:1},label:'Public client certificate test'});
-    try { const after=await hook('stats()');if(after.denials.certificates<=before.denials.certificates) throw new Unmeasured('No native select-client-certificate callback observed');return {result,before:before.denials.certificates,after:after.denials.certificates}; }
+    try {
+      const after=await hook('stats()');
+      const observed={result,before:before.denials.certificates,after:after.denials.certificates,emptyIdentityBehavior:'Electron 44.9 skips the app selection delegate when client_certs is empty',source:'https://github.com/electron/electron/blob/v44.9.0/shell/browser/electron_browser_client.cc'};
+      const target=(await (await fetch(`http://${new URL(endpoint).host}/json/list`)).json()).find(t=>t.type==='page'&&t.url.startsWith(url.origin));
+      if(target){const cdp=await connect(target.webSocketDebuggerUrl,runtime);try{observed.document=await cdp.evaluate('({url:location.href,title:document.title,text:document.body?.innerText.slice(0,2000),secure:isSecureContext})');}finally{cdp.close();}}
+      await emit({type:'client-certificate-observation',...observed});
+      if(after.denials.certificates<=before.denials.certificates){const error=new Unmeasured('No native select-client-certificate callback observed; load result and document retained, certificate-denial predicate unproved');error.observed=observed;throw error;}
+      return observed;
+    }
     finally {if(result.ok) await api('close',{sessionId:result.value.sessionId});}
   });else unmeasured('Q-PV2','Client-certificate chooser denial','Provide verified trusted --client-certificate-url; untrusted certificate rejection is separate evidence');
   for(const [name,path] of [['downloads','/download'],['auth','/auth']]) await check('Q-PV2', `Native ${name} callback denies request`, () => withPreview(async ({cdp})=>{
@@ -408,13 +459,20 @@ try {
     }));
     await check('Q-PV6a', 'Native blinking caret changes captured pixels', () => withPreview(async ({ session, cdp }) => {
       await cdp.evaluate(`(()=>{const input=document.createElement('input');input.id='caret';input.value='Caret';input.style.cssText='position:fixed;left:20px;top:200px;width:300px;font:48px monospace;caret-color:black';document.body.append(input);input.focus();input.setSelectionRange(5,5)})()`);
-      const shot = async () => digest(Buffer.from((await cdp.send('Page.captureScreenshot')).data, 'base64'));
+      await cdp.send('Page.bringToFront');
+      await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+      await click(cdp, 200, 225);
+      await cdp.evaluate("document.querySelector('#caret').setSelectionRange(5,5)");
+      const focus = await cdp.evaluate("({focused:document.hasFocus(),active:document.activeElement?.id,start:document.activeElement?.selectionStart,end:document.activeElement?.selectionEnd})");
+      assert.equal(focus.focused, true); assert.equal(focus.active, 'caret'); assert.equal(focus.start, focus.end);
+      const samples = [];
+      const shot = async () => { const hash=digest(Buffer.from((await cdp.send('Page.captureScreenshot')).data, 'base64'));samples.push(hash);return hash; };
       const first = await shot(); let changed = false;
-      for (let i=0;i<6&&!changed;i++) { await delay(180); changed = await shot() !== first; }
-      if (!changed) throw new Unmeasured('Positive control: no native caret pixels observed');
+      for (let i=0;i<20&&!changed;i++) { await delay(180); changed = await shot() !== first; }
+      if (!changed) {const error=new Unmeasured('Positive control: focused native caret did not change pixels in 20 finite samples');error.observed={focus,samples};throw error;}
       const before = await hook('stats()'); await hook("pauseAt('first-capture')");
       const pending = capture(session); pending.catch(() => {});
-      try { await hook('waitForPause()'); const baseline=await shot(); let different=false; for(let i=0;i<6&&!different;i++){await delay(180);different=await shot()!==baseline;} if(!different) throw new Unmeasured('Caret ceased blinking during pause'); }
+      try { await hook('waitForPause()'); const baseline=await shot(); let different=false; for(let i=0;i<20&&!different;i++){await delay(180);different=await shot()!==baseline;} if(!different) throw new Unmeasured('Caret ceased blinking during pause'); }
       finally { await hook('resume()'); await hook('pauseAt(null)'); }
       const result = await pending; assert.equal(result.kind, 'stale'); assert.equal(result.reason, 'pixels-unstable'); assert.equal((await hook('stats()')).blobWrites, before.blobWrites);
       await cdp.evaluate("document.querySelector('#caret').blur()"); value(await capture(session)); return result;
@@ -426,6 +484,30 @@ try {
       value(await api('close', { sessionId: p.session.sessionId }));
       const after = await hook('stats()'); assert.equal(after.sessions, 0); assert.equal(after.clearedSessions, before.clearedSessions + 1); p.cdp.close(); return after;
     });
+    await check('Q-PV9', 'Settings hides native view, suppresses drain and restores intended visibility', () => withPreview(async ({session, cdp}) => {
+      const native = async () => (await hook('sessions()')).find(s => s.sessionId === session.sessionId);
+      const before = await hook('stats()');
+      assert.equal((await native()).visible, true);
+      value(await api('mode', {sessionId:session.sessionId,generation:session.generation,mode:'pick'}));
+      await hook("pauseAt('before-drain')");
+      try {
+        await click(cdp); await hook('waitForPause()');
+        assert.equal(await shell.evaluate(`(()=>{const b=document.querySelector('button[title="Settings"]');b?.click();return !!b})()`), true);
+        await until(async () => (await native())?.overlayHidden === true, 'Settings overlay hide');
+        assert.equal((await native()).visible, false);
+        value(await api('place', {sessionId:session.sessionId,rect:{x:0,y:0,width:1280,height:800},visible:true}));
+        assert.equal((await native()).visible, false);
+        assert.equal((await native()).intendedVisible, true);
+      } finally { await hook('resume()'); await hook('pauseAt(null)'); }
+      await delay(250);
+      assert.equal((await hook('stats()')).blobWrites, before.blobWrites);
+      assert.equal(value(await api('events', {sessionId:session.sessionId,after:0})).events.length, 0);
+      assert.equal(await shell.evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Back to'));b?.click();return !!b})()`), true);
+      await until(async () => {const n=await native();return n && !n.overlayHidden && n.visible;}, 'Settings overlay restore');
+      assert.equal((await hook('stats()')).clearedSessions, before.clearedSessions);
+      value(await api('mode', {sessionId:session.sessionId,generation:session.generation,mode:'off'}));
+      return {before, after:await hook('stats()'), native:await native()};
+    }));
     await check('Q-PV9', 'Domain switch closes views and clears session', async () => {
       const p = await open(); const before = await hook('stats()');
       assert.equal(await shell.evaluate(`(()=>{const b=[...document.querySelectorAll('nav[aria-label="Domains"] button')].find(b=>b.textContent.trim()==='Work');b?.click();return !!b})()`), true);

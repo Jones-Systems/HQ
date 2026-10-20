@@ -74,6 +74,11 @@ export async function probeUnregisteredContents(variant: 'same-preload' | 'alter
   const contents = window.webContents;
   const registered = contentsClass(contents) ?? null;
   const allowedSenderAccepted = mainContents ? allowedSender({ sender: contents, senderFrame: contents.mainFrame }, mainContents, mainContents.getURL(), null) : false;
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>(resolve => {
+    if (contents.isDestroyed()) { resolve(); return; }
+    const finish = () => { clearTimeout(timeout); contents.removeListener('destroyed', finish); resolve(); };
+    const timeout = setTimeout(finish, 2000);
+    contents.once('destroyed', finish);
+  });
   return { registered, destroyed: contents.isDestroyed(), constructed: true, alteredPreviewRefused: false, synchronousRegistration, allowedSenderAccepted };
 }

@@ -17,6 +17,8 @@ export interface CaptureRecord {
   readonly captureDigest: `sha256:${string}`; readonly capturedAt: string;
 }
 export interface PreviewParams {
+  readonly deactivate: Record<string, never>;
+  readonly overlay: { readonly hidden: boolean };
   readonly open: { readonly versionId: string; readonly url: string; readonly viewport: PreviewViewport; readonly label: string };
   readonly place: { readonly sessionId: string; readonly rect: PreviewRect; readonly visible: boolean };
   readonly navigate: { readonly sessionId: string; readonly route: string };
@@ -29,6 +31,7 @@ export interface PreviewParams {
   readonly close: { readonly sessionId: string };
 }
 export interface PreviewValues {
+  readonly deactivate: null; readonly overlay: null;
   readonly open: PreviewSession; readonly place: PreviewSession; readonly navigate: PreviewSession;
   readonly mode: null; readonly capture: CaptureRecord;
   readonly events: { readonly after: number; readonly events: readonly { readonly sequence: number; readonly generation: number; readonly event: AgentEvent; readonly capture: CaptureRecord }[] };
