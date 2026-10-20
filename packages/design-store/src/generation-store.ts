@@ -443,6 +443,25 @@ export class GenerationStore implements StoragePort {
     });
   }
 
+  listStreams(namespace: NamespaceId, options: { readonly prefix?: string } = {}): Promise<readonly StreamId[]> {
+    return this.serial(async () => {
+      this.assertOpen();
+      const config = this.namespace(namespace);
+      const ids = new Set<string>();
+      for (const name of await listOrEmpty(this.fs, this.paths.eventsDir(namespace))) {
+        if (name.startsWith('.') || !name.endsWith('.jsonl')) continue;
+        const decoded = decodeName(name.slice(0, -'.jsonl'.length));
+        if (decoded !== null) {
+          ids.add(decoded);
+        } else if (config.storageClass === 'authoritative') {
+          throw integrity(`Event journal ${name} has a hashed file name; its stream id cannot be listed`, { namespace });
+        }
+      }
+      const prefix = options.prefix ?? '';
+      return [...ids].filter((id) => id.startsWith(prefix)).sort().map((id) => streamId(id));
+    });
+  }
+
   project<S extends JsonValue>(namespace: NamespaceId, stream: StreamId, projection: Projection<S>): Promise<ProjectionResult<S>> {
     return this.serial(async () => {
       this.assertOpen();

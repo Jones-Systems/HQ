@@ -193,6 +193,13 @@ export interface StoragePort {
 
   appendEvent(namespace: NamespaceId, stream: StreamId, event: EventInput): Promise<EventRecord>;
   readEvents(namespace: NamespaceId, stream: StreamId): Promise<EventStreamRead>;
+  /**
+   * Streams that have an event file in this namespace, sorted by id (UTF-16 order). A stream whose
+   * journal is torn or corrupt is still listed; `readEvents` reports its status. A journal whose
+   * file name was hashed because its id is too long cannot be mapped back to an id, so an
+   * authoritative namespace fails closed with `integrity` instead of omitting it silently.
+   */
+  listStreams(namespace: NamespaceId, options?: { readonly prefix?: string }): Promise<readonly StreamId[]>;
   project<S extends JsonValue>(namespace: NamespaceId, stream: StreamId, projection: Projection<S>): Promise<ProjectionResult<S>>;
   /** Explicit owner action only: preserves the original journal, then removes an incomplete final line. */
   repairTornTail(namespace: NamespaceId, stream: StreamId): Promise<RepairResult>;
