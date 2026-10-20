@@ -18,7 +18,7 @@ test('sections render simulated and owner-reported returns distinctly after rest
   await rebuilt.runs.pipeline.selectPacket(fresh, packet.packetId);
   await rebuilt.runs.pipeline.refresh(fresh);
   const before = d.writes.length;
-  const html = renderToStaticMarkup(<RequestsSection env={rebuilt.requests} session={fresh} />);
+  const html = renderToStaticMarkup(<RequestsSection env={rebuilt.requests} session={fresh} example />);
   assert.ok(html.includes(SIMULATION_LABEL));
   assert.ok(html.includes('hq-status-label'));
   assert.ok(html.includes('hqd-section-notice'));
@@ -71,4 +71,13 @@ test('references compose both panels with injected previews and do not create bl
     previewUrl: () => 'data:image/png;base64,c3ludGhldGlj',
   });
   assert.equal(injected.previewUrl('synthetic' as never), 'data:image/png;base64,c3ludGhldGlj');
+});
+
+
+test('production request presentation never offers a simulated destination by default', async () => {
+  const { requests, session } = await sent();
+  const html = renderToStaticMarkup(<RequestsSection env={requests} session={session} />);
+  assert.ok(!html.includes('Choose simulated destination'));
+  assert.ok(!html.includes('Frozen packets can be simulated'));
+  assert.ok(html.includes('explicit confirmation to send'));
 });

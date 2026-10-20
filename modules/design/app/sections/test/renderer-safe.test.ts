@@ -51,6 +51,7 @@ test('all section runtime imports remain renderer-safe; no descriptors or produc
   };
   for (const section of ['requests', 'runs', 'references']) {
     for (const name of readdirSync(resolve(root, section))) {
+      if (/\.test\.tsx?$/.test(name)) continue;
       assert.notEqual(name, 'design-module.ts');
       const path = resolve(root, section, name);
       visit(path);

@@ -63,7 +63,7 @@ export function doubles() {
     crashEvidence: (failure: 'before' | 'after') => { failEvidence = failure; },
     async open() {
       const requests = createRequestsEnvironment({ storage, clock, ids, scheduler, compareSlot });
-      const runs = await createRunsEnvironment({ requests, outboxStore, evidenceStore, clock, ids, compareSlot });
+      const runs = await createRunsEnvironment({ mode: 'example', requests, outboxStore, evidenceStore, clock, ids, compareSlot });
       return { requests, runs };
     },
   };
