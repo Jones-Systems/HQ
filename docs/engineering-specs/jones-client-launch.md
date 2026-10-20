@@ -75,7 +75,7 @@ At one exact head of the task branch:
 
 - Acceptance cases T1–T14 (`#ctx.test-plan.001`) pass.
 - The final focused union in `#ctx.test-plan.001` passes, including lint, the two package typechecks and `check-boundary.ts --strict`.
-- The diff touches only the 21 paths of the writer cone (`#ctx.change-surface.001`).
+- The diff touches only the 22 paths of the writer cone (`#ctx.change-surface.001`).
 
 Any skipped or unavailable check is reported as such, never as a pass.
 <!-- codex-section:end id="spec.jones-client-launch#ac.source-candidate.001" -->
@@ -140,7 +140,7 @@ From Jones Code `AGENTS.md` and `docs/operations/{contributor-guidance,developme
 
 All changes are additive; unkeyed `t3_thread_launch` is unchanged.
 
-### `t3_thread_launch` (existing; `McpToolAccess.startsThreads`)
+### `t3_thread_launch` (existing; moves to `McpToolAccess.startsOrContinuesThreads`, `#iface.access-hook.001`)
 
 - **Input** adds `clientRequestId?: OrchestratorMcpClientRequestId` (trimmed, 1..256).
 - **When keyed**, these return `invalid_request` with no effect:
@@ -243,27 +243,80 @@ How this fits the database boundary:
 - The only queries are primary-key lookups on the three new paths.
 <!-- codex-section:end id="spec.jones-client-launch#iface.identity-claim.001" -->
 
+<!-- codex-section:begin id="spec.jones-client-launch#iface.access-hook.001" -->
+## Access Hook In McpToolAccess
+
+**Why the existing API cannot compose the semantics.** These facts are from `apps/server/src/mcp/McpToolAccess.ts` at the base:
+
+- **Wrappers run first and are sealed.** A tool's handler can be built only through the module's private `declare` (34–73). A `Declaration` hides its handler, so a handler cannot run code before its wrapper, and other code cannot wrap a declaration.
+- **`startsThreads` (174–194) runs, in order:**
+  1. `writingCaller` (89–92): `refuseReadOnlyClient`, `loadCaller`, `assertLiveCaller`, with no `orchestration` check;
+  2. `resolveRuntimeMode` and `resolveInteractionMode` on the requested modes;
+  3. only then the handler.
+
+  A keyed handler therefore cannot run `readCaller()` before mode resolution, as `#iface.semantics.001` requires. A credential without `orchestration` that also asks for broader modes would get `*_escalation_denied` instead of `capability_denied` (T14).
+- **No guard for continuing.** `startsThreads` provides no `DispatchModeLimit` and no refusal mapping. The guard exists only inside `writesThreads` (127–158), whose `escalationDenied` (160–167) is private. `writesThreads` needs target thread IDs before the handler runs. A keyed launch learns that it is continuing an existing thread only after its receipt read, so `writesThreads` cannot be used either.
+- **Rejected workaround.** Passing `{}` as the `startsThreads` mode selector for keyed calls, and redoing resolution and the guard in Jones code, would move a write tool's mode check out of the module that declares tool access. It is not used.
+
+**The hook.** This is one additive export, marked `// Jones hook: spec.jones-client-launch`. It is the only change to the file.
+
+```ts
+export interface ThreadStartGate {
+  /** startsThreads' mode resolution (its lines 184–191), deferred to the handler. */
+  readonly start: Effect.Effect<StartedModes, OrchestratorMcpFailure>;
+  /** writesThreads' target check and dispatch guard, for continuing an existing launch. */
+  readonly continueWithin: <A, E, R>(
+    target: { readonly runtimeMode: RuntimeMode; readonly interactionMode: ProviderInteractionMode },
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | OrchestratorMcpFailure, R>;
+}
+
+export const startsOrContinuesThreads = <P, A, E, R>(
+  modes: (params: P) => {
+    readonly runtimeMode?: RuntimeMode | undefined;
+    readonly interactionMode?: ProviderInteractionMode | undefined;
+  },
+  handle: (params: P, gate: ThreadStartGate) => Effect.Effect<A, E, R>,
+) => declare(/* params => writingCaller, then handle(params, gate built from caller.limits) */);
+```
+
+**Rules for the hook:**
+
+- **Wrapper.** It runs `writingCaller` exactly as `startsThreads` does, then calls the handler with a gate built from that caller's `limits`.
+- **`start`.** It runs the same `resolveRuntimeMode`/`resolveInteractionMode` sequence on `modes(params)` as `startsThreads` lines 184–191.
+- **`continueWithin`.** It runs `assertTargetWithinLimits(limits, target)`, then the effect under `Effect.provideService(DispatchModeLimit, { ...limits, refused })`. A recorded refusal is mapped through the existing private `escalationDenied`, the same sequence as `writesThreads` lines 140–156.
+- **Unchanged.** `startsThreads` (also used by `schedule_task`), `writesThreads`, every other builder, `Declaration`, `HandlersLayer` and `toLayer` stay as they are. There is no new Layer, no other export, and no access bypass.
+- **One user.** Only `t3_thread_launch` in `project/handlers.ts` moves from `startsThreads` to `startsOrContinuesThreads`, keeping its selector `(input) => input`.
+  - The unkeyed branch yields `gate.start` before anything else, then runs today's body unchanged. Its failure order is therefore exactly today's: wrapper, mode resolution, then the handler's `readCaller()`.
+  - The keyed branch yields `readCaller()`, then `gate.start`, and dispatches a continuation only inside `gate.continueWithin`.
+- **Boundary.** `McpToolAccess.ts` is not in the boundary inventory at the base, so it is pristine upstream. It becomes a `hook` entry and is listed with W16 as a hook in the W18 fragment.
+<!-- codex-section:end id="spec.jones-client-launch#iface.access-hook.001" -->
+
 <!-- codex-section:begin id="spec.jones-client-launch#iface.semantics.001" -->
 ## Authorization, Effect And Unknown Semantics
 
-**Gates.** Every one of the three handlers runs, in order:
+**Gates.** An `McpToolAccess` wrapper always runs before its handler, and a handler cannot run first. Each tool therefore runs its wrapper and then, as the handler's first step, `readCaller()`, the only `orchestration`-capability check. Only then does it delegate to `ClientLaunchService`.
 
-1. `readCaller()`, the only `orchestration`-capability check;
-2. its `McpToolAccess` wrapper;
-3. delegation to `ClientLaunchService`.
+| Tool | Wrapper | Handler order |
+| --- | --- | --- |
+| `t3_thread_launch` | `startsOrContinuesThreads` (`#iface.access-hook.001`) | unkeyed: `gate.start`, then the existing body unchanged; keyed: `readCaller()`, then `gate.start`, then the steps below |
+| `t3_thread_launch_lookup` | `reads` | `readCaller()`, then lookup |
+| `t3_thread_launch_fence` | `writesWithCapability` | `readCaller()`, then fence |
+
+No wrapper reads launch state. So for a caller without `orchestration`, every tool fails `capability_denied` before any receipt, claim or thread read and before any write. The only reads before that point are the wrapper's own load of the calling thread's shell, the same as for every existing write tool.
 
 **Keyed launch:**
 
-1. Compute the IDs and digest, then read the receipt for `commandId`.
+1. `readCaller()`, then `gate.start`: the requested modes are resolved against the caller's current limits, as `startsThreads` does. A refusal means this call had no effect. Then compute the IDs and digest, and read the receipt for `commandId`.
 2. **`rejected`:** return `launch_fenced`, with no writes.
 3. **`accepted`:**
    1. The claim row must exist with an equal digest; otherwise `request_conflict`.
    2. Skip the base-ref, worktree and default-resolution preflight.
    3. Compute states for the **bound run**: `runs.find(r => r.userMessageId === messageId)`.
    4. A continuation is needed only for `initialMessage: "pending"`, or for `accepted` with `preparation: "unscheduled"`.
-   5. Before continuing:
+   5. Continue only inside `gate.continueWithin(recordedThreadModes, …)`:
       - `assertTargetWithinLimits(currentLimits, recordedThreadModes)`; a refusal is `*_escalation_denied` with zero dispatch;
-      - then run under the `DispatchModeLimit` guard, as `writesThreads` does.
+      - then run under the `DispatchModeLimit` guard, which maps a mid-dispatch refusal to `*_escalation_denied`, as `writesThreads` does.
    6. Continue through `ThreadLaunchService.launch` with the same IDs and the recorded model and modes. It replays the message by receipt, recomputes `runIsPreparing`/`shouldSchedule`, and schedules only through `reservePreparation`, at most once.
    7. Return with `replayed: true`.
 4. **Absent:** run the existing preflight. Insert-or-compare the claim, recording `message_requested`; a differing digest is `request_conflict`. Then launch.
@@ -310,7 +363,7 @@ Atomicity is `insertIfAbsent` on the receipt primary key (`EventSink.ts:1684`); 
 <!-- codex-section:begin id="spec.jones-client-launch#ctx.change-surface.001" -->
 ## Exact Change Surface And Ownership
 
-The writer cone is **19 entries covering 21 physical paths** (W19 names three files). All paths are relative to the Jones Code repository root. Anything outside the cone needs a T1 rebind.
+The writer cone is **20 entries covering 22 physical paths** (W19 names three files). All paths are relative to the Jones Code repository root. Anything outside the cone needs a T1 rebind.
 
 | # | Path | Class after change | Content |
 | --- | --- | --- | --- |
@@ -329,16 +382,18 @@ The writer cone is **19 entries covering 21 physical paths** (W19 names three fi
 | W13 | `apps/server/src/orchestration-v2/ThreadLaunchService.ts` | accepted-shared | `// Jones hook:` read-only `preparationActive(commandId)` over `scheduledLaunches.commands`; no behaviour change |
 | W14 | `apps/server/src/jones/orchestration/ThreadLaunchService.jones.test.ts` | existing Jones test | accessor during a live reservation, after release, and on a fresh layer |
 | W15 | `apps/server/src/mcp/toolkits/project/tools.ts` | accepted-shared | input and output fields; two tools in `ProjectToolkit`; `dependencies` add `CommandReceiptStoreV2`, `EventSinkV2`, `SqlClient` |
-| W16 | `apps/server/src/mcp/toolkits/project/handlers.ts` | **becomes hook** | `// Jones hook:` keyed branch, lookup and fence handlers; each calls `readCaller()` first; the unkeyed path is unchanged |
+| W16 | `apps/server/src/mcp/toolkits/project/handlers.ts` | **becomes hook** | `// Jones hook:` `t3_thread_launch` on `startsOrContinuesThreads`; keyed branch, lookup and fence handlers each call `readCaller()` first in the handler; the unkeyed branch yields `gate.start`, then today's body unchanged |
 | W17 | `docs/orchestration-v2/orchestrator-mcp-server.md` | becomes accepted-shared | retry key, lookup and fence; idempotency bullets |
-| W18 | `scripts/jones/boundary/fragments/client-launch.json` (new) | policy | owned paths, hook W16, allowed imports |
-| W19 | `scripts/jones/boundary/inventory.json`, `scripts/jones/boundary/features.json`, `scripts/jones/boundary/checks.json` | policy | accounting only; preserve every other entry |
+| W18 | `scripts/jones/boundary/fragments/client-launch.json` (new) | policy | owned paths, hooks W16 and W20, allowed imports |
+| W19 | `scripts/jones/boundary/inventory.json`, `scripts/jones/boundary/features.json`, `scripts/jones/boundary/checks.json` | policy | accounting only, including `hook` for W16 and W20; preserve every other entry |
+| W20 | `apps/server/src/mcp/McpToolAccess.ts` | **becomes hook** | one additive `// Jones hook:` export `startsOrContinuesThreads` with `ThreadStartGate` (`#iface.access-hook.001`); no other line changes |
 
 **Hidden ownership: none.**
 
 - No upstream test edits.
 - No new Layer and no `server.ts` edit.
 - No edits to `Orchestrator.ts`, `EventSink.ts` or `CommandReceiptStore.ts`.
+- No change to any existing `McpToolAccess` builder, including `startsThreads`, which `schedule_task` also uses.
 - No new event or command type, upstream schema change or generated file.
 - No index or worktree operation outside the builder's own worktree.
 <!-- codex-section:end id="spec.jones-client-launch#ctx.change-surface.001" -->
@@ -359,11 +414,11 @@ All cases use synthetic namespaces and keys, in-memory SQLite (`NodeSqliteClient
 | T7 | W11 | fault after the claim but before dispatch: retry launches; fault after `thread.create` but before the message: `pending`, then exactly one message |
 | T8 | W6 | the table exists; `message_requested` accepts only 0 and 1; update, delete and re-insert refused; no foreign key |
 | T9 | W9 | no raw namespace in IDs or outputs; golden digests; key length bounds |
-| T10 | W12 + upstream handler test | unkeyed launch unchanged; upstream tests pass untouched |
-| T11 | W12 | a narrower caller where a continuation is needed: `*_escalation_denied`, zero dispatch; a replay with no continuation is read-only; modes raised mid-dispatch are refused, with nothing committed |
+| T10 | W12 + upstream handler and `McpToolAccess` tests | unkeyed launch unchanged, including failure order (read-only client, missing or inactive calling thread, broader requested modes, then missing `orchestration`); upstream tests, including `McpToolAccess.test.ts` and `McpToolAccess.race.test.ts`, pass untouched |
+| T11 | W12 | a narrower caller where a continuation is needed: `*_escalation_denied`, zero dispatch; a replay with no continuation is read-only; modes raised mid-dispatch are refused through `gate.continueWithin`, with nothing committed |
 | T12 | W11 + W14 | message accepted, crash before scheduling: `unscheduled`, and the retry schedules once; active: `in_progress`; progress receipt and not active: `unknown_effect`, with no `launch` call; two concurrent retries schedule once |
 | T13 | W11 | `not_requested` vs `pending`; `rejected` with reason; `unknown` without a claim; a later unrelated run never changes `runId`/`runStatus` |
-| T14 | W12 | no `orchestration` capability: `capability_denied` from all three tools before any read; read-only: launch and fence refused, lookup allowed |
+| T14 | W12 | no `orchestration` capability: `capability_denied` from all three tools before any receipt, claim or thread read, including a keyed launch that also requests broader modes; read-only: launch and fence refused, lookup allowed |
 
 **Stage checkpoints.** Each is a coherent commit.
 
@@ -372,14 +427,14 @@ All cases use synthetic namespaces and keys, in-memory SQLite (`NodeSqliteClient
 | S1 contracts | W1–W4 | `vp test run packages/contracts/src/jones/clientLaunch.test.ts packages/contracts/src/orchestratorMcp.test.ts --maxWorkers=1`; `vp run --filter @t3tools/contracts typecheck` |
 | S2 persistence | W5–W7 | `vp test run apps/server/src/jones/persistence/Migrations/112_JonesClientLaunchRequests.test.ts apps/server/src/jones/persistence/UpstreamIsolation.test.ts apps/server/src/jones/persistence/ForeignHistoryCompatibility.test.ts --maxWorkers=1 --no-file-parallelism` |
 | S3 service | W8–W11, W13–W14 | `vp test run apps/server/src/jones/mcp/clientLaunch/ClientLaunchIdentity.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchService.test.ts apps/server/src/jones/orchestration/ThreadLaunchService.jones.test.ts apps/server/src/orchestration-v2/ThreadLaunchService.test.ts --maxWorkers=1 --no-file-parallelism` |
-| S4 MCP hooks | W12, W15–W16 | `vp test run apps/server/src/jones/mcp/clientLaunch/ClientLaunchHandlers.test.ts apps/server/src/mcp/toolkits/project/handlers.test.ts --maxWorkers=1 --no-file-parallelism` |
+| S4 MCP hooks | W12, W15–W16, W20 | `vp test run apps/server/src/jones/mcp/clientLaunch/ClientLaunchHandlers.test.ts apps/server/src/mcp/toolkits/project/handlers.test.ts apps/server/src/mcp/McpToolAccess.test.ts apps/server/src/mcp/McpToolAccess.race.test.ts --maxWorkers=1 --no-file-parallelism` |
 | S5 final | W17–W19 | the final union below |
 
 **Final candidate union** (serial, after a CPU admission sample):
 
 ```sh
-vp test run packages/contracts/src/jones/clientLaunch.test.ts packages/contracts/src/orchestratorMcp.test.ts apps/server/src/jones/persistence/Migrations/112_JonesClientLaunchRequests.test.ts apps/server/src/jones/persistence/UpstreamIsolation.test.ts apps/server/src/jones/persistence/ForeignHistoryCompatibility.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchIdentity.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchService.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchHandlers.test.ts apps/server/src/jones/orchestration/ThreadLaunchService.jones.test.ts apps/server/src/orchestration-v2/ThreadLaunchService.test.ts apps/server/src/mcp/toolkits/project/handlers.test.ts --maxWorkers=1 --no-file-parallelism
-vp lint <each changed .ts file in W1–W16>
+vp test run packages/contracts/src/jones/clientLaunch.test.ts packages/contracts/src/orchestratorMcp.test.ts apps/server/src/jones/persistence/Migrations/112_JonesClientLaunchRequests.test.ts apps/server/src/jones/persistence/UpstreamIsolation.test.ts apps/server/src/jones/persistence/ForeignHistoryCompatibility.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchIdentity.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchService.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchHandlers.test.ts apps/server/src/jones/orchestration/ThreadLaunchService.jones.test.ts apps/server/src/orchestration-v2/ThreadLaunchService.test.ts apps/server/src/mcp/toolkits/project/handlers.test.ts apps/server/src/mcp/McpToolAccess.test.ts apps/server/src/mcp/McpToolAccess.race.test.ts --maxWorkers=1 --no-file-parallelism
+vp lint <each changed .ts file in W1–W16 and W20>
 vp run --filter @t3tools/contracts --filter t3 --concurrency-limit 1 typecheck
 node scripts/jones/check-boundary.ts --strict
 ```
@@ -488,6 +543,7 @@ No sudo, credential, private-state or production effect is part of this task.
     "spec.jones-client-launch#ctx.target-rules.001",
     "spec.jones-client-launch#iface.mcp-tools.001",
     "spec.jones-client-launch#iface.identity-claim.001",
+    "spec.jones-client-launch#iface.access-hook.001",
     "spec.jones-client-launch#iface.semantics.001",
     "spec.jones-client-launch#ctx.test-plan.001",
     "spec.jones-client-launch#ctx.rollback.001",
@@ -523,7 +579,8 @@ No sudo, credential, private-state or production effect is part of this task.
     "scripts/jones/boundary/fragments/client-launch.json",
     "scripts/jones/boundary/inventory.json",
     "scripts/jones/boundary/features.json",
-    "scripts/jones/boundary/checks.json"
+    "scripts/jones/boundary/checks.json",
+    "apps/server/src/mcp/McpToolAccess.ts"
   ],
   "requires": [
     "spec.jones-client-launch#req.idempotent-launch.001",
@@ -555,7 +612,7 @@ No sudo, credential, private-state or production effect is part of this task.
   ],
   "preserved_boundaries": [
     "Jones Code only: one dedicated non-main branch in an isolated linked worktree with one Git owner; never the primary checkout.",
-    "Write only the 21 cone paths; no upstream test, Orchestrator.ts, EventSink.ts, CommandReceiptStore.ts, event or command type, upstream schema or new Layer change.",
+    "Write only the 22 cone paths; in McpToolAccess.ts only the additive startsOrContinuesThreads hook; no upstream test, Orchestrator.ts, EventSink.ts, CommandReceiptStore.ts, event or command type, upstream schema or new Layer change.",
     "Migration 112 only, jones_-prefixed, no foreign key to upstream; never renumber or delete a released migration.",
     "Focused checks only; never vp check, vp run -r test or vp run -r typecheck; CPU admission before each check batch.",
     "Merge the new main with an ordinary merge commit when main moves; no rebase, force push, squash or history rewrite.",
@@ -563,7 +620,7 @@ No sudo, credential, private-state or production effect is part of this task.
   ],
   "stop_conditions": [
     "Stale base, unexpected or unowned change, or an unknown prior effect.",
-    "A needed path outside the 21-path cone or a needed change to an excluded upstream surface; request a T1 rebind.",
+    "A needed path outside the 22-path cone or a needed change to an excluded upstream surface; request a T1 rebind.",
     "Migration 112 is taken on main by another change."
   ]
 }
@@ -601,7 +658,8 @@ No sudo, credential, private-state or production effect is part of this task.
     "apps/server/src/jones/mcp/clientLaunch/",
     "apps/server/src/jones/persistence/Migrations/",
     "apps/server/src/jones/orchestration/",
-    "apps/server/src/mcp/toolkits/project/"
+    "apps/server/src/mcp/toolkits/project/",
+    "apps/server/src/mcp/"
   ],
   "affected_check_groups": [
     "hq-jones-client-launch"
