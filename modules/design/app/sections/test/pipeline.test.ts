@@ -80,6 +80,26 @@ test('double confirmation cannot create two attempts or sends', async () => {
   assert.equal(d.writes.filter((entry) => entry === 'outbox:accepted').length, 1);
 });
 
+test('a failed read-back after an accepted send keeps the attempted result', async () => {
+  const { d, runs, session } = await frozen();
+  const store = d.evidenceStore as { listByDispatch: typeof d.evidenceStore.listByDispatch };
+  const original = store.listByDispatch;
+  let failures = 1;
+  store.listByDispatch = async (id) => {
+    if (failures > 0) { failures -= 1; throw new Error('synthetic read-back failure'); }
+    return original(id);
+  };
+  runs.controller.requestSend();
+  const result = await runs.controller.confirm();
+  assert.equal(failures, 0, 'the read-back failure was exercised');
+  assert.equal(result?.outcome, 'attempted');
+  if (result?.outcome === 'attempted') assert.equal(result.attempt.state, 'accepted');
+  assert.deepEqual(d.writes, ['outbox:submitting', 'outbox:accepted']);
+  assert.equal(session.state.sends.length, 1);
+  await runs.pipeline.refresh(session);
+  assert.equal(session.handoffView(session.state.packets[0]!.packetId, d.clock.now())?.state, 'queued', 'an accepted dispatch reads back as queued');
+});
+
 test('saved-result refresh preserves unsaved continuation edits', async () => {
   const { runs, session, dispatchId } = await sent();
   session.edit({ type: 'set-intent', intent: 'Unsaved follow-up intent' });

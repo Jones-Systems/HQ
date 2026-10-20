@@ -73,7 +73,8 @@ describe('exactly one handoff', () => {
     assert.equal(h.receiver.handoffs.length, 1);
   });
 
-  it('concurrent submits from two processes on one store still produce one handoff', async () => {
+  // The barrier waits for both reads; a regression that skips one read fails on the timeout instead of hanging CI.
+  it('concurrent submits from two processes on one store still produce one handoff', { timeout: 10_000 }, async () => {
     const h = await createHarness();
     const firstStore = h.store;
     const first = h.outbox;
