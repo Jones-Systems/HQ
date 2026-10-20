@@ -98,12 +98,14 @@ test('no module in the graph names a network, bridge or Node capability', () => 
   assert.deepEqual(hits, []);
 });
 
-test('isolation probe, Node adapters, preview agent and the store stay out of the graph', () => {
+test('isolation probe, Node adapters, producer, preview agent, app entry and the store stay out of the graph', () => {
   const paths = scanned.map((file) => relative(designRoot, file));
   for (const excluded of ['components/src/review/isolation-probe.ts', 'taste/src/node-file-system.ts', 'taste/src/main.ts']) {
     assert.ok(!paths.includes(excluded), `${excluded} is not loaded`);
   }
   assert.ok(!paths.some((path) => path.startsWith('annotations/src/preview-agent/')), 'preview agent is not loaded');
+  assert.ok(!paths.some((path) => path.startsWith('references/producer/')), 'Node-only reference producer is not loaded');
+  assert.ok(!paths.some((path) => path.startsWith('app/')), 'production entry and its storage seam are not loaded');
   const outside = paths.filter((path) => path.startsWith('../'));
   assert.deepEqual(outside, ['../../packages/contracts/src/index.ts'], 'only shared contracts load from outside modules/design; the Node store does not');
 });

@@ -64,8 +64,9 @@ npx vite build --config modules/design/preview/vite.config.ts
 modules/design/preview/section-checks.sh
 ```
 
-`section-checks.sh` also runs the production entry's rows: the `app` and
-`app/storage` typechecks and their node:test suites.
+`section-checks.sh` also runs the production entry's rows (the `app` and
+`app/storage` typechecks and their node:test suites) and the Node-only reference
+producer's row under `references/producer`. The preview never loads the producer.
 
 `test/registry.test.ts` checks that every section cone has exactly one preview
 descriptor and that T14's registry accepts them all. `modules/design/app` is the
