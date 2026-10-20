@@ -14,7 +14,8 @@ Governing task: `spec.hq-design#task.connector.001`
 | Area | State |
 | --- | --- |
 | Models, ports, outbox, evidence intake, controller | Implemented; Node tests below |
-| React panel | Implemented; server-render checks only (no browser/Electron run) |
+| Lifecycle projection, evidence list/subscribe/readback, pinned route, manual-route fence | Implemented (`spec.hq-expansion#task.connector-lifecycle.001`); Node tests below |
+| React panel | Implemented; server-render checks in the repo (browser evidence for the expansion flow is reported with the PR, not committed) |
 | Transport | **Labelled fake receiver only.** No real Jones adapter exists here |
 | Real Jones existing-thread send | Not qualified — needs S1 and a public wire contract (HQD-11b) |
 | New-thread launch | Disabled with reason — needs U1 idempotent launch/lookup |
@@ -72,6 +73,91 @@ one shared implementation.
   receiver, pinned model and provenance all match. Receivers cannot claim
   `owner-judged`. Fake evidence stays labelled fake.
 
+## Request lifecycle (expansion)
+
+Governing task: `spec.hq-expansion#task.connector-lifecycle.001`
+(`docs/engineering-specs/hq-expansion.md`, `iface.requests.001`). Requests keeps
+its own local status/returns ports; root composition maps these types, so there
+are no cross-section imports.
+
+- `dispatchLifecycle(record, evidence, options?)` (`src/lifecycle.ts`) is a pure
+  projection: no clock, no I/O, never sends. Stages: `not-sent`, `submitting`,
+  `unknown`, `held`, `queued`, `running`, `returned`, `failed`, `cancelled`.
+  `not-sent` also carries the no-effect resolution (`rejected`, `blocked`,
+  `no-effect`, or `none`). `queued` means the receiver accepted the handoff and
+  has reported no run yet. Only evidence that answers the latest attempt's exact
+  receipt, packet digest, host, receiver, pinned model and provenance counts;
+  anything else is listed as `ignored` with a reason. A terminal report is not
+  walked back by a later `running`; conflicting terminals are flagged. A `held`
+  handoff stays `held` whatever evidence says (flagged `evidence-while-held`).
+  Receiver reports are claims: `returned` is not approval and not native
+  verification, and fake evidence stays labelled fake.
+- Send fence view: `open`, `needs-fresh-confirmation` (with the instant the new
+  confirmation must follow) or `fenced` (`unresolved-attempt` /
+  `already-handed-off`). There is no resend path for `unknown`.
+
+### Evidence list, subscription and readback
+
+- `EvidenceFeedPort` (`list`, `subscribe`) is a read-only view over the
+  append-only store. The fake store (`createMemoryEvidenceStore`) implements it
+  and isolates a throwing listener.
+- `EvidenceReadbackPort` has only `descriptor` and `readEvidence`. It is not a
+  `TransportPort`: no `send`, no `identify`. `readbackEvidence` calls it only
+  when the receiver holds the handoff, re-wraps the port so nothing else is
+  reachable, bounds the wait, and passes whatever returns through the same strict
+  `intakeEvidence` as any other evidence. Tests use a trap port whose `send`,
+  `identify` and `lookup` getters record any access, and assert zero sends,
+  zero probes and zero reads of those members.
+- `createLifecycleReader` lists/gets lifecycles and notifies with the
+  recomputed lifecycle when evidence is appended.
+
+### Pinned route
+
+`pinnedRouteOf` / `lifecycle.route` show the host, receiver, fingerprint, thread
+and model a dispatch is bound to, with `fallback: 'forbidden'`, the receipt's
+observed host/model, variances (stored ones plus a recomputation from the
+receipt, so a missing stored variance cannot hide a mismatch), and freshness and
+drift against the current catalog when one is given. Drift is reported, never
+repaired; a vanished destination is `destination-missing`, not replaced. No
+pinned model is displayed as "No model pinned".
+
+### Manual-route / route-switch fence
+
+A packet that already reached a receiver through another destination, or that
+the owner handed off by hand, is fenced until the owner acknowledges it:
+
+- Manual handoff history is a read-only `ManualHandoffHistoryPort` (requests
+  owns the record; composition adapts it). Pass it to `createOutbox`
+  (`manualHandoffs`). An unreadable history refuses the send (`route-history-unavailable`).
+- Sources are other-destination dispatches whose latest attempt is `accepted` or
+  `held`, plus every manual record for the packet ID. Without an acknowledgement
+  the send is refused `route-switch-unacknowledged` before anything is recorded
+  or probed. This applies even with no history port, so a v1 composition can no
+  longer duplicate a held packet to a second destination.
+- `createRouteSwitchAcknowledgement` binds the owner's acknowledgement to one
+  confirmation, packet digest and destination and lists every source shown. A
+  source that appears later is not covered (`route-acknowledgement-mismatch`).
+- History only adds fences. It never resolves or reopens anything: an unknown
+  attempt stays `unresolved-attempt`, other destinations stay `packet-fenced`,
+  and a same-destination handoff stays `already-handed-off`, acknowledgement or
+  not.
+- The controller shows the sources, requires an explicit acknowledgement before
+  Confirm is enabled, and clears it on cancel, reselect or refresh.
+
+### Compatibility
+
+Existing v1 inputs are unchanged: `hq.design.handoff/v1` (wire digest separate
+from the packet's authoring digest), `dispatch/v1`, `result-evidence/v1`,
+`host-catalog/v1`, all enums, `EvidenceStorePort`/`OutboxStorePort`, and the
+fake receiver's `calls` shape. `test/compat.test.ts` pins golden digests
+computed independently of this code, the vocabularies, the public exports, a
+stored v1 dispatch written before this change, and a v1 composition. Additive
+changes: optional `SubmitRequest.routeSwitch`, optional `OutboxOptions.manualHandoffs`,
+optional controller options and panel prop, three new refusal codes, new view
+fields. One behavioural tightening, called out for the integration owner: a
+second destination is refused once another destination holds the packet
+(previously only an unresolved effect fenced other destinations).
+
 ## Ports for root composition
 
 `src/contract.ts`: `OutboxStorePort` (one document per dispatch in the
@@ -90,9 +176,12 @@ owner is gone.
 From the repository root (Node 24, after `npm ci`):
 
 ```sh
-node --test modules/design/connector/test/*.test.ts
-node_modules/.bin/tsc -p modules/design/connector/tsconfig.json
+node_modules/.bin/tsc -p modules/design/connector/tsconfig.json   # TypeScript 7.0.2
+node --test --test-concurrency=1 modules/design/connector/test/*.test.ts
 ```
+
+The connector has no Vitest config; every `*.test.ts` is covered by the glob
+above and root `npm test` does not run it.
 
 The panel test renders with `react-dom/server`; it proves markup, labels and
 disabled state, not browser layout or Electron behaviour.

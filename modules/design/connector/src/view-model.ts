@@ -3,6 +3,8 @@
 import type { TransportRegistry } from './contract.ts';
 import type { Attempt, AttemptState, DispatchRecord, Variance } from './dispatch.ts';
 import type { EvidenceEntry } from './evidence.ts';
+import type { DispatchLifecycle, LifecycleAnomaly, LifecycleStage } from './lifecycle.ts';
+import type { PinnedRoute, RouteDrift } from './route-fence.ts';
 import type { Destination, HostCatalog } from './host-catalog.ts';
 import type { DestinationId, DispatchId } from './ids.ts';
 import type { SendConfirmation } from './confirmation.ts';
@@ -198,5 +200,111 @@ export function evidenceRow(entry: EvidenceEntry): EvidenceRow {
     executionLabel: `${evidence.execution.status} · observed ${evidence.execution.observedAt}`,
     packetLabel: `${evidence.packet.packetId} · ${shortDigest(evidence.packet.packetDigest)}`,
     fake: entry.fake,
+  };
+}
+
+// ── Lifecycle and pinned route ───────────────────────────────────────────────
+
+const STAGE_COPY: Readonly<Record<LifecycleStage, { readonly label: string; readonly tone: Tone; readonly explanation: string }>> = {
+  'not-sent': { label: 'Not sent', tone: 'neutral', explanation: 'Nothing has been handed to a receiver.' },
+  submitting: { label: 'Sending', tone: 'progress', explanation: 'HQ recorded this attempt and is handing it to the receiver.' },
+  unknown: { label: 'Effect unknown', tone: 'danger', explanation: 'HQ cannot tell whether the receiver got this handoff. It will not resend; check status reads without sending.' },
+  held: { label: 'Held by receiver', tone: 'warning', explanation: 'The receiver has the handoff but is holding it. It has not started.' },
+  queued: { label: 'Queued at receiver', tone: 'progress', explanation: 'The receiver accepted the handoff. No run has been reported yet.' },
+  running: { label: 'Running', tone: 'progress', explanation: 'The receiver reports the work is running. This is its report, not an HQ check.' },
+  returned: { label: 'Returned', tone: 'success', explanation: 'The receiver reports returned work. Review it; returned is not approved.' },
+  failed: { label: 'Failed', tone: 'danger', explanation: 'The receiver reports the run failed. Revising or sending again needs your decision.' },
+  cancelled: { label: 'Cancelled', tone: 'warning', explanation: 'The receiver reports the run was cancelled.' },
+};
+
+const RESOLUTION_LABEL: Readonly<Record<'rejected' | 'blocked' | 'no-effect', string>> = {
+  rejected: 'Not sent — receiver rejected it',
+  blocked: 'Not sent — blocked before sending',
+  'no-effect': 'Not sent — receiver confirmed no effect',
+};
+
+const ANOMALY_COPY: Readonly<Record<LifecycleAnomaly, string>> = {
+  'evidence-while-held': 'Evidence arrived while the receiver still holds the handoff; the stage stays Held until the receiver accepts it.',
+  'conflicting-terminal-evidence': 'The receiver reported conflicting final outcomes. The latest is shown; check with the receiver.',
+  'route-variance': 'The receiver answered from a different host, receiver or model than the one you chose.',
+  'route-drift': 'The destination in the catalog no longer matches the route this request is pinned to.',
+};
+
+const DRIFT_COPY: Readonly<Record<RouteDrift, string>> = {
+  'destination-missing': 'destination no longer listed',
+  destination: 'destination changed',
+  mode: 'thread mode changed',
+  host: 'host changed',
+  receiver: 'receiver changed',
+  fingerprint: 'fingerprint changed',
+  endpoint: 'endpoint changed',
+  thread: 'thread changed',
+  model: 'pinned model changed',
+};
+
+export interface LifecycleView {
+  readonly stage: LifecycleStage;
+  readonly stageLabel: string;
+  readonly tone: Tone;
+  readonly explanation: string;
+  readonly executionLabel: string | null;
+  readonly evidenceLabel: string | null;
+  readonly sendLabel: string;
+  /** The receiver holds the handoff and has not reported a final outcome: offer a read-only poll. */
+  readonly canCheckForResults: boolean;
+  readonly routeAcknowledgementLabel: string | null;
+  readonly anomalyLabels: readonly string[];
+  readonly fake: boolean;
+}
+
+export function lifecycleView(lifecycle: DispatchLifecycle): LifecycleView {
+  const copy = STAGE_COPY[lifecycle.stage];
+  const latest = lifecycle.evidence.latest;
+  const sendLabel = lifecycle.send.status === 'open' ? (lifecycle.routeHistory.acknowledgementRequired ? 'Ready to send after you confirm and acknowledge the earlier handoff.' : 'Ready to send after you confirm.')
+    : lifecycle.send.status === 'needs-fresh-confirmation' ? 'A new attempt needs a fresh confirmation made after the last result.'
+      : lifecycle.send.code === 'unresolved-attempt' ? 'Send is fenced: the last attempt has an unknown effect.'
+        : 'Send is fenced: the receiver already has this request.';
+  return {
+    stage: lifecycle.stage,
+    stageLabel: lifecycle.stage === 'not-sent' && lifecycle.resolution !== 'none' ? RESOLUTION_LABEL[lifecycle.resolution] : copy.label,
+    tone: lifecycle.anomalies.includes('route-variance') ? 'danger' : copy.tone,
+    explanation: copy.explanation,
+    executionLabel: latest ? `${latest.execution} · ${latest.claimLevel === 'observed' ? 'observed by receiver' : 'reported by agent'} · ${latest.observedAt}` : null,
+    evidenceLabel: lifecycle.evidence.counted > 0
+      ? `${lifecycle.evidence.counted} evidence record${lifecycle.evidence.counted === 1 ? '' : 's'}${lifecycle.evidence.ignored.length > 0 ? `, ${lifecycle.evidence.ignored.length} ignored` : ''}`
+      : lifecycle.evidence.ignored.length > 0 ? `${lifecycle.evidence.ignored.length} evidence record${lifecycle.evidence.ignored.length === 1 ? '' : 's'} ignored (do not match this handoff)` : null,
+    sendLabel,
+    canCheckForResults: lifecycle.stage === 'queued' || lifecycle.stage === 'running',
+    routeAcknowledgementLabel: lifecycle.routeHistory.acknowledgementRequired
+      ? 'This request was already handed off another way. Sending here needs your explicit acknowledgement.' : null,
+    anomalyLabels: lifecycle.anomalies.map((anomaly) => ANOMALY_COPY[anomaly]),
+    fake: lifecycle.fake,
+  };
+}
+
+export interface RouteView {
+  readonly pinnedLabel: string;
+  readonly hostLabel: string;
+  readonly receiverLabel: string;
+  readonly modelLabel: string;
+  readonly observedLabel: string | null;
+  readonly freshnessLabel: string;
+  readonly fallbackLabel: string;
+  readonly driftLabels: readonly string[];
+}
+
+export function routeView(route: PinnedRoute): RouteView {
+  const freshness = route.freshness;
+  return {
+    pinnedLabel: route.source === 'dispatch-binding' ? 'Pinned to this route' : 'Chosen route (pinned when you confirm)',
+    hostLabel: route.hostId,
+    receiverLabel: `${route.receiverId} · ${shortDigest(route.fingerprint)}`,
+    modelLabel: route.model ? `${route.model.provider}/${route.model.model} (pinned)` : 'No model pinned — HQ makes no model claim',
+    observedLabel: route.observed
+      ? `Receiver reported ${route.observed.hostId} · ${route.observed.receiverId} · ${route.observed.model ? `${route.observed.model.provider}/${route.observed.model.model}` : 'no model reported'}`
+      : null,
+    freshnessLabel: freshness.status === 'unobserved' ? 'Freshness not checked' : freshness.lastSuccessAt ? `${freshness.status} · checked ${freshness.lastSuccessAt}` : `${freshness.status} · never checked`,
+    fallbackLabel: 'No fallback: HQ never switches host or model.',
+    driftLabels: route.drift.map((drift) => DRIFT_COPY[drift]),
   };
 }
