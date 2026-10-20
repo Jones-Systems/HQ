@@ -206,6 +206,21 @@ class ApiFlow(AppTestCase):
         resp, _ = self.call("GET", "/api/nothing")
         self.assertEqual(resp.status, 404)
 
+    def test_request_id_pattern_matches_the_whole_value(self):
+        # "$" alone also matches before a trailing newline.
+        resp, data = self.call("POST", "/api/items", {"fields": {"title": "Again"}},
+                               headers={"x-request-id": "request-0001\n"})
+        self.assertEqual((resp.status, data["error"]), (400, "bad_request_id"))
+
+    def test_head_on_api_reads_mirrors_get(self):
+        for path in ("/api/state", "/api/version", "/api/export"):
+            with self.subTest(path=path):
+                get, _ = self.call("GET", path)
+                head, _ = self.call("HEAD", path)
+                self.assertEqual((head.status, head.headers), (get.status, get.headers))
+        resp, _ = self.call("HEAD", "/api/nothing")
+        self.assertEqual(resp.status, 404)
+
 
 class BatchAndReplayApi(AppTestCase):
     def envelope(self, raw=b'{"fields":{"title":"Once"}}', **overrides):

@@ -143,7 +143,7 @@ class PlanningApp:
     # --------------------------------------------------------------------- api
 
     def _api(self, method: str, path: str, headers: dict, body: bytes) -> Response:
-        if method == "GET":
+        if method in ("GET", "HEAD"):  # the handler drops the body for HEAD
             return self._api_get(path)
         if method not in ("POST", "PATCH", "PUT"):
             return error(405, "method_not_allowed", "Method not allowed.")
@@ -159,7 +159,7 @@ class PlanningApp:
         if path == "/api/requests/replay" and "x-request-id" in headers:
             return error(400, "bad_request_id", "Put the original request ID in the replay body.")
         request_id = headers.get("x-request-id") or None
-        if request_id is not None and not _REQUEST_ID_RE.match(request_id):
+        if request_id is not None and not _REQUEST_ID_RE.fullmatch(request_id):
             return error(400, "bad_request_id", "Malformed X-Request-Id.")
         fingerprint = hashlib.sha256(f"{method} {path}\n".encode() + body).hexdigest()
         ctx = {"request_id": request_id, "fingerprint": fingerprint}
@@ -177,7 +177,7 @@ class PlanningApp:
             return s.create_item(p.get("fields"), **ctx)
         if method == "POST" and path == "/api/items/batch":
             return s.create_batch(p, **ctx)
-        match = _ITEM_RE.match(path)
+        match = _ITEM_RE.fullmatch(path)
         if match:
             item_id, action = match.group(1), match.group(2)
             if method == "PATCH" and action is None:
@@ -256,7 +256,7 @@ class PlanningApp:
             return Response(200, s.export_markdown().encode("utf-8"), "text/markdown; charset=utf-8", {
                 "Cache-Control": "no-store",
                 "Content-Disposition": 'attachment; filename="planning-export.md"'})
-        match = _ITEM_RE.match(path)
+        match = _ITEM_RE.fullmatch(path)
         if match and match.group(2) == "/history":
             s.get_item(match.group(1))
             return json_response(200, {"history": s.history(match.group(1))})
