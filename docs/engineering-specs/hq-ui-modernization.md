@@ -134,3 +134,16 @@ The accepted read-only Opus framing supplies the visual direction. Direct source
 
 Production browser confirms readable titles at 15/30/45 minutes in seven-column Week, exact month→week→day drill-down and no capture-button navigation, one view control with stable anchors, wide/narrow toolbars and Glance rows, clear timeline labels/offset navigation, and light/dark chips without heavy bottom edges. Fake timers prove eight-second expiry, overlapping pause conditions, cleanup and persistent errors; consumer tests prove Undo after notification expiry. Run the deduplicated root affected test union, typecheck and build serially, then capture the actual served production bundle with synthetic fixtures only. Personal laptop connectivity and full-native acceptance retain their separate gates.
 <!-- codex-section:end id="spec.hq-ui-modernization#test.work-calendar.001" -->
+
+
+<!-- codex-section:begin id="spec.hq-ui-modernization#impl.references-alignment.001" -->
+## Populated References alignment
+
+The populated-library pass aligns the heading, search and import trigger in one responsive toolbar. Import feedback and its metadata form expand below the toolbar without squeezing its controls. Collections receive a labelled collapse strip aligned with the results summary; collection creation, selection, deletion, resizing and remembered collapse remain compatible. Narrow layouts move secondary content into full-width rows instead of compressing the cards.
+
+Reference cards use a consistent image, two-line title, compact source, evidence/rights, caveat and footer hierarchy. Long source descriptions remain fully available in the detail panel and accessible labels; card actions share a baseline. Shared controls replace mismatched local buttons. The existing generic button selector must not override card-open, quiet or graph-row styling. Remove duplicate dead body-layout rules and make provenance a real grid. All rights/caveats, reload/fenced state, no-project state, import mutation guards and full provenance remain intact.
+
+The source cone is the References view/stylesheet/rendered checks, graph header/close control, and an import workflow wrapper. Shared panels, shell, protocols and services remain owned by their existing lanes. The coordinator owns the worktree, documents, checks and publication. This slice starts at the exact calendar-polish parent head because it continues this evolving specification; it lands after that parent and does not repeat its source changes. No native installation or live connection setup is implied.
+
+Verification uses synthetic references with short and long titles/source text, generated image bytes, expanded/collapsed collections, details and import states, light/dark appearance and wide/narrow content widths. Browser measurements must show no unintended inner card border, readable provenance, consistent title/action rows and no page overflow. Focused References/sections checks and production typecheck/build cover the final candidate. Actual owner screenshots and project metadata are not test fixtures or public evidence.
+<!-- codex-section:end id="spec.hq-ui-modernization#impl.references-alignment.001" -->
