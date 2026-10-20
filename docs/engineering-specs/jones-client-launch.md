@@ -317,9 +317,9 @@ No wrapper reads launch state. So for a caller without `orchestration`, every to
    5. Continue only inside `gate.continueWithin(recordedThreadModes, …)`:
       - `assertTargetWithinLimits(currentLimits, recordedThreadModes)`; a refusal is `*_escalation_denied` with zero dispatch;
       - then run under the `DispatchModeLimit` guard, which maps a mid-dispatch refusal to `*_escalation_denied`, as `writesThreads` does.
-   6. Continue through `ThreadLaunchService.launch` with the same IDs and the recorded model and modes. It replays the message by receipt, recomputes `runIsPreparing`/`shouldSchedule`, and schedules only through `reservePreparation`, at most once.
+   6. Continue through `ThreadLaunchService.launch` with the same IDs, the recorded model and modes, and `holdPreparationAfterProgress: true` (see **Keyed preparation hold**). It replays the message by receipt, recomputes `runIsPreparing`/`shouldSchedule`, and schedules only through `reservePreparation`, at most once, and never after an accepted progress receipt.
    7. Return with `replayed: true`.
-4. **Absent:** run the existing preflight. Insert-or-compare the claim, recording `message_requested`; a differing digest is `request_conflict`. Then launch.
+4. **Absent:** run the existing preflight. Insert-or-compare the claim, recording `message_requested`; a differing digest is `request_conflict`. Then launch, also with `holdPreparationAfterProgress: true`.
 
 **Preparation states** (bound run only, using the new `ThreadLaunchService.preparationActive(commandId)`):
 
@@ -330,6 +330,35 @@ No wrapper reads launch state. So for a caller without `orchestration`, every to
 | `in_progress` | `preparing` and active |
 | `unscheduled` | `preparing`, not active, and no accepted `${commandId}:progress:worktree` or `:progress:setup` receipt |
 | `unknown_effect` | `preparing`, not active, and a progress receipt exists. Never rescheduled automatically; explicit preparation retry stays an owner action. |
+
+**Keyed preparation hold.** The lookup that chose `unscheduled` holds no reservation, so its answer can be stale when the retry reaches `launch`. In between, another retry can:
+
+1. reserve preparation;
+2. record a progress receipt and start the external step;
+3. fail;
+4. fail to persist `prepared-run.fail`;
+5. release the reservation.
+
+The run is then still `preparing`, nothing is active, and a progress receipt is accepted. A second unlocked lookup has the same gap. So the decision is made inside `ThreadLaunchService.launch`, while the caller owns the reservation:
+
+1. `ThreadLaunchInput` gains one optional server-owned field, `holdPreparationAfterProgress?: true`, marked `// Jones hook:`. Public launch schemas do not decode it. Only `ClientLaunchService` sets it, on every keyed `launch` call.
+2. In the existing owned section, take the case where `reservePreparation` has returned ownership and the existing `preparationStillRequired` re-read finds the bound run still `preparing`. There, when the flag is set and `runId !== null`, read the `${commandId}:progress:worktree` and `${commandId}:progress:setup` receipts with the service's existing `readReceipt`.
+3. If either receipt is `accepted`, call `releasePreparation(commandId)` and do not call `schedulePreparation`. `launch` then returns its ordinary result, and the keyed caller's final lookup reports `unknown_effect`.
+4. Otherwise schedule exactly as today. If a receipt read fails, the existing `onError` releases the reservation and nothing is scheduled. The keyed caller reports this as unknown (`orchestration_error`).
+
+Why this is enough:
+
+- The reservation is the existing exclusive in-process scheduling ownership.
+- Each progress receipt is dispatched and awaited before its external step: the worktree receipt before any Git or worktree work, the setup receipt before the setup script.
+- An owner releases only after its preparation fiber has ended.
+
+So any earlier owner that could have started an external step has an accepted progress receipt before a later retry can own the reservation. An earlier owner that stopped before any progress receipt had no external effect, so scheduling again stays correct. The hold reuses the lookup's own progress-receipt rule and adds no new effect class.
+
+**Unchanged.**
+
+- **Callers without the flag:** every unkeyed and legacy caller, `prepareRun` and `retryPreparation`. They behave exactly as before, including the legacy-only progress refusal.
+- **The service interface:** unchanged, so W21's launch-service fixture needs no new member.
+- **Nothing new:** no Layer, mutex, retry, schema, migration, event or command type.
 
 **Lookup:**
 
@@ -357,7 +386,7 @@ Atomicity is `insertIfAbsent` on the receipt primary key (`EventSink.ts:1684`); 
 | `pending` / `unscheduled` | an identical retry reconciles it |
 | `rejected` / `unknown_effect` / `threadDeleted` | held; never relaunch under that key |
 
-**Never:** a second thread per key; a second live preparation; automatic rescheduling after a progress receipt; replay of unrelated commands; reads of credentials, session stores or private data.
+**Never:** a second thread per key; a second live preparation; automatic rescheduling after a progress receipt, including by a retry whose lookup was stale; replay of unrelated commands; reads of credentials, session stores or private data.
 <!-- codex-section:end id="spec.jones-client-launch#iface.semantics.001" -->
 
 <!-- codex-section:begin id="spec.jones-client-launch#ctx.change-surface.001" -->
@@ -377,10 +406,10 @@ The writer cone is **21 entries covering 26 physical paths** (W19 names three fi
 | W8 | `apps/server/src/jones/mcp/clientLaunch/ClientLaunchIdentity.ts` (new) | jones-owned | IDs, JCS, digest |
 | W9 | `apps/server/src/jones/mcp/clientLaunch/ClientLaunchIdentity.test.ts` (new) | jones-owned | T9 |
 | W10 | `apps/server/src/jones/mcp/clientLaunch/ClientLaunchService.ts` (new) | jones-owned | launch, lookup, fence, states, claim SQL |
-| W11 | `apps/server/src/jones/mcp/clientLaunch/ClientLaunchService.test.ts` (new) | jones-owned | T1, T2, T4–T7, T12, T13 |
+| W11 | `apps/server/src/jones/mcp/clientLaunch/ClientLaunchService.test.ts` (new) | jones-owned | T1, T2, T4–T7, T12, T13, T15 (keyed-retry side) |
 | W12 | `apps/server/src/jones/mcp/clientLaunch/ClientLaunchHandlers.test.ts` (new) | jones-owned | T3, T10, T11, T14 through `McpToolAccess.HandlersLayer.layer(ProjectHandlers.layer)`; the upstream handler assertions are unchanged, with only the W21 additive service fixture update |
-| W13 | `apps/server/src/orchestration-v2/ThreadLaunchService.ts` | accepted-shared | `// Jones hook:` read-only `preparationActive(commandId)` over `scheduledLaunches.commands`; no behaviour change |
-| W14 | `apps/server/src/jones/orchestration/ThreadLaunchService.jones.test.ts` | existing Jones test | accessor during a live reservation, after release, and on a fresh layer |
+| W13 | `apps/server/src/orchestration-v2/ThreadLaunchService.ts` | accepted-shared | `// Jones hook:` read-only `preparationActive(commandId)` over `scheduledLaunches.commands`, and the keyed-only `holdPreparationAfterProgress` input field with its accepted-progress check inside the owned reservation section (`#iface.semantics.001`); no behaviour change when the field is absent |
+| W14 | `apps/server/src/jones/orchestration/ThreadLaunchService.jones.test.ts` | existing Jones test | accessor during a live reservation, after release, and on a fresh layer; T15 service cases for the keyed hold |
 | W15 | `apps/server/src/mcp/toolkits/project/tools.ts` | accepted-shared | input and output fields; two tools in `ProjectToolkit`; `dependencies` add `CommandReceiptStoreV2`, `EventSinkV2`, `SqlClient` |
 | W16 | `apps/server/src/mcp/toolkits/project/handlers.ts` | **becomes hook** | `// Jones hook:` `t3_thread_launch` on `startsOrContinuesThreads`; keyed branch, lookup and fence handlers each call `readCaller()` first in the handler; the unkeyed branch yields `gate.start`, then today's body unchanged |
 | W17 | `docs/orchestration-v2/orchestrator-mcp-server.md` | becomes accepted-shared | retry key, lookup and fence; idempotency bullets |
@@ -396,6 +425,8 @@ The writer cone is **21 entries covering 26 physical paths** (W19 names three fi
 - No new Layer and no `server.ts` edit.
 - No edits to `Orchestrator.ts`, `EventSink.ts` or `CommandReceiptStore.ts`.
 - No change to any existing `McpToolAccess` builder, including `startsThreads`, which `schedule_task` also uses.
+- In `ThreadLaunchService.ts`, nothing beyond W13: no change to the service interface, `prepareRun`, `retryPreparation`, `schedulePreparation`, `failPreparedRun`, `reservePreparation` or `releasePreparation`, and no behaviour change when `holdPreparationAfterProgress` is absent. The F2 hold adds no path: it stays in W13, W11 and W14.
+- No change to Scratch folder allocation (`folderForThread`); F3 stays deferred (`#ctx.stop-recovery-delivery.001`).
 - No new event or command type, upstream schema change or generated file.
 - No index or worktree operation outside the builder's own worktree.
 <!-- codex-section:end id="spec.jones-client-launch#ctx.change-surface.001" -->
@@ -421,6 +452,7 @@ All cases use synthetic namespaces and keys, in-memory SQLite (`NodeSqliteClient
 | T12 | W11 + W14 | message accepted, crash before scheduling: `unscheduled`, and the retry schedules once; active: `in_progress`; progress receipt and not active: `unknown_effect`, with no `launch` call; two concurrent retries schedule once |
 | T13 | W11 | `not_requested` vs `pending`; `rejected` with reason; `unknown` without a claim; a later unrelated run never changes `runId`/`runStatus` |
 | T14 | W12 | no `orchestration` capability: `capability_denied` from all three tools before any receipt, claim or thread read, including a keyed launch that also requests broader modes; read-only: launch and fence refused, lookup allowed |
+| T15 | W11 + W14 | **Stale keyed retry (F2).** W11, deterministic and without sleeps: (1) a keyed `worktree` launch faults after its message is accepted and before scheduling, leaving `unscheduled`; (2) retry A runs to its continuation and is held by a `Deferred` barrier in its `ThreadLaunchService.launch` wrapper, after its `unscheduled` lookup and before the real `launch`; (3) while A is held, insert an accepted `${commandId}:progress:worktree` receipt, with the run still `preparing` and no reservation. That is the state another retry's failed preparation leaves when `prepared-run.fail` cannot be persisted; (4) release A. Pass: A's request carries `holdPreparationAfterProgress: true`; A returns `replayed: true` with `unknown_effect`; `createWorktree` and setup call counts do not increase across the barrier; `preparationActive` is false. Without the hold this case schedules preparation again, so it fails before the fix. W14, service cases on a real layer: with the flag and an accepted progress receipt, nothing is scheduled and the reservation is released; with the flag and no progress receipt, preparation is scheduled once; with the flag while another owner holds the reservation, there is no second scheduling; without the flag, behaviour is as today, including scheduling after a progress receipt on the non-legacy path. |
 
 **Stage checkpoints.** Each is a coherent commit.
 
@@ -458,6 +490,8 @@ Ask T1 for a rebind instead of widening scope.
 **Moving `main`.** If `main` moves, or boundary files conflict, merge the new `main` into the task branch with an ordinary merge commit. Keep every other feature's inventory, feature and check entries. No rebase, force push or history rewrite.
 
 **Delivery.** One non-draft PR against `main` under the Jones Code standing delivery contract. Keep exact-head checks green; merge with a merge commit; read back. Record P2–P4 findings without implementing them.
+
+**Deferred finding F3** (P2, from the source PR's first correctness review). For an existing Scratch project, managed folder allocation can run before the create/fence winner is persisted. Its original blocking effect stands: it violates complete no-effect reporting for keyed launches that target the existing Scratch project, and it can leave duplicate or unbound folders. This task does not repair it and does not narrow the Scratch contract. The F2 change does not touch Scratch allocation. Report F3 with the other deferred findings, with its severity and blocking claim unchanged.
 
 **Return:** branch, head, PR URL, per-stage checks run or skipped, and deferred findings.
 <!-- codex-section:end id="spec.jones-client-launch#ctx.stop-recovery-delivery.001" -->
@@ -618,16 +652,18 @@ No sudo, credential, private-state or production effect is part of this task.
   ],
   "preserved_boundaries": [
     "Jones Code only: one dedicated non-main branch in an isolated linked worktree with one Git owner; never the primary checkout.",
-    "Write only the 26 cone paths; in McpToolAccess.ts only the additive startsOrContinuesThreads hook; only W21 additive test-fixture wiring and migration expected-list update without assertion relaxation; no other upstream test edit, Orchestrator.ts, EventSink.ts, CommandReceiptStore.ts, event or command type, upstream schema or new Layer change.",
+    "Write only the 26 cone paths; in McpToolAccess.ts only the additive startsOrContinuesThreads hook; in ThreadLaunchService.ts only the read-only preparationActive accessor and the keyed-only holdPreparationAfterProgress hold; only W21 additive test-fixture wiring and migration expected-list update without assertion relaxation; no other upstream test edit, Orchestrator.ts, EventSink.ts, CommandReceiptStore.ts, event or command type, upstream schema or new Layer change.",
     "Migration 112 only, jones_-prefixed, no foreign key to upstream; never renumber or delete a released migration.",
     "Focused checks only; never vp check, vp run -r test or vp run -r typecheck; CPU admission before each check batch.",
     "Merge the new main with an ordinary merge commit when main moves; no rebase, force push, squash or history rewrite.",
-    "No PR review bots, credentials, live OAuth, session stores, installed-app update, sudo or deployment effect."
+    "No PR review bots, credentials, live OAuth, session stores, installed-app update, sudo or deployment effect.",
+    "F3 (P2, Scratch folder allocation before the create/fence winner) stays deferred with its original severity and blocking claim: no Scratch allocation change and no narrowed Scratch contract."
   ],
   "stop_conditions": [
     "Stale base, unexpected or unowned change, or an unknown prior effect.",
     "A needed path outside the 26-path cone or a needed change to an excluded upstream surface; request a T1 rebind.",
-    "Migration 112 is taken on main by another change."
+    "Migration 112 is taken on main by another change.",
+    "The keyed preparation hold cannot be made inside the W13 owned reservation section without changing unkeyed behaviour or the service interface; request a T1 rebind."
   ]
 }
 ```
@@ -643,10 +679,10 @@ No sudo, credential, private-state or production effect is part of this task.
     "spec.jones-client-launch#req.effect-truth.001",
     "spec.jones-client-launch#req.repository-boundary.001"
   ],
-  "scenario": "In the Jones Code task worktree, with synthetic namespaces and keys, in-memory SQLite and typed receipts, cases T1-T14 exercise keyed replay, conflict, lookup, fence, fault windows, bound-run states and authorization; the unkeyed path and upstream test behavior stay unchanged, with only W21 additive fixture updates.",
+  "scenario": "In the Jones Code task worktree, with synthetic namespaces and keys, in-memory SQLite and typed receipts, cases T1-T15 exercise keyed replay, conflict, lookup, fence, fault windows, bound-run states, the stale-retry preparation hold and authorization; the unkeyed path and upstream test behavior stay unchanged, with only W21 additive fixture updates.",
   "evidence": {
     "predicate": "At one exact Jones Code head the final focused union passes: the listed vp test run files, vp lint of every changed .ts file, the contracts and server typechecks, and check-boundary.ts --strict.",
-    "invalid": "A second thread, message or live preparation per key; automatic rescheduling after a progress receipt; a replay that widens authority; an upstream test edit beyond the W21 additive fixture updates; or a skipped check reported as a pass.",
+    "invalid": "A second thread, message or live preparation per key; automatic rescheduling after a progress receipt, including by a retry whose lookup was stale; a replay that widens authority; an upstream test edit beyond the W21 additive fixture updates; or a skipped check reported as a pass.",
     "unknown": "The Jones Code toolchain (Node ^24.13.1, pnpm 11.10.0 via vp) cannot run on the check host, or CPU admission holds; record the exact check as not run."
   },
   "environment": [
