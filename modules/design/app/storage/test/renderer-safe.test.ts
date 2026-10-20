@@ -68,6 +68,8 @@ describe('storage/index.ts is renderer-safe', () => {
     const names = files.map((file) => relative(STORAGE, file)).sort();
     assert.deepEqual(names, [
       '../../../../packages/design-store/src/contract.ts',
+      '../../projects/src/contract.ts', '../../projects/src/ids.ts', '../../annotations/src/contract.ts',
+      'annotations.ts', 'components.ts', 'compare.ts', 'flows.ts', 'projects.ts', 'section-documents.ts',
       'backing.ts', 'canonical.ts', 'canvas.ts', 'discovery-cache.ts', 'export.ts', 'index.ts', 'outbox.ts', 'requests.ts', 'text-envelope.ts',
     ].sort(), 'the graph is exactly the expected renderer-safe set');
   });
