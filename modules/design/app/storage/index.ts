@@ -24,8 +24,8 @@ export type { CanvasDocumentPort } from './canvas.ts';
 
 export {
   classifyRequestsKey, createRequestsExport, EXPORT_SCHEMA, EXPORT_STATUS, ExportDisabledError, ExportProjectionError,
-  projectFreezeRecord, REQUESTS_PACKET_PIN, reviewStreamOf,
+  projectCandidate, projectFreezeRecord, projectReviewEvent, REQUESTS_PACKET_PIN, reviewStreamOf,
 } from './export.ts';
 export type {
-  ExportedBlob, OmittedStore, ProjectedFreezeRecord, RequestsExportPort, RequestsKeyClass, RequestsProjection,
+  CandidateProjection, ExportedBlob, OmittedStore, ProjectedFreezeRecord, RequestsExportPort, RequestsKeyClass, RequestsProjection,
 } from './export.ts';

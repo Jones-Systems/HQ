@@ -50,12 +50,18 @@ export type RequestsKeyClass =
   | { readonly kind: 'draft'; readonly requestId: string }
   | { readonly kind: 'packet'; readonly requestId: string; readonly sequence: number }
   | { readonly kind: 'candidate'; readonly requestId: string; readonly candidateId: string }
+  /** PR33 write-once send record (destination label); never exported. */
+  | { readonly kind: 'send'; readonly requestId: string; readonly packetId: string }
+  /** PR33 mutable handoff status (destination, host and model); never exported. */
+  | { readonly kind: 'handoff'; readonly requestId: string; readonly packetId: string }
   | { readonly kind: 'unclassified' };
 
 const SAFE = '[A-Za-z0-9][A-Za-z0-9._-]{0,159}';
 const DRAFT_KEY = new RegExp(`^design/requests/(${SAFE})/draft$`, 'u');
 const PACKET_KEY = new RegExp(`^design/requests/(${SAFE})/packets/(\\d{6})$`, 'u');
 const CANDIDATE_KEY = new RegExp(`^design/requests/(${SAFE})/candidates/(${SAFE})$`, 'u');
+const SEND_KEY = new RegExp(`^design/requests/(${SAFE})/sends/(${SAFE})$`, 'u');
+const HANDOFF_KEY = new RegExp(`^design/requests/(${SAFE})/handoff/(${SAFE})$`, 'u');
 
 export function classifyRequestsKey(key: string): RequestsKeyClass {
   const draft = DRAFT_KEY.exec(key);
@@ -64,6 +70,10 @@ export function classifyRequestsKey(key: string): RequestsKeyClass {
   if (packet) return { kind: 'packet', requestId: packet[1]!, sequence: Number(packet[2]) };
   const candidate = CANDIDATE_KEY.exec(key);
   if (candidate) return { kind: 'candidate', requestId: candidate[1]!, candidateId: candidate[2]! };
+  const send = SEND_KEY.exec(key);
+  if (send) return { kind: 'send', requestId: send[1]!, packetId: send[2]! };
+  const handoff = HANDOFF_KEY.exec(key);
+  if (handoff) return { kind: 'handoff', requestId: handoff[1]!, packetId: handoff[2]! };
   return { kind: 'unclassified' };
 }
 
@@ -108,6 +118,93 @@ export function projectFreezeRecord(value: unknown): { readonly record: Projecte
   };
 }
 
+const CANDIDATE_KEYS = ['candidateId', 'packet', 'baselineVersionId', 'candidateVersionId', 'claims', 'observedStatus', 'observedAt', 'evidence'] as const;
+const REVIEW_DECISIONS_V1 = ['accept', 'revise', 'defer', 'reject'] as const;
+const REVIEW_JUDGMENTS = ['confirmed', 'disputed'] as const;
+
+function text(value: unknown, what: string): string {
+  if (typeof value !== 'string') throw new ExportProjectionError(`${what} is not text`);
+  return value;
+}
+
+function listOf(value: unknown, what: string): readonly unknown[] {
+  if (!Array.isArray(value)) throw new ExportProjectionError(`${what} is not a list`);
+  return value;
+}
+
+function plain(value: unknown, what: string): Plain {
+  if (!isPlain(value)) throw new ExportProjectionError(`${what} is not an object`);
+  return value;
+}
+
+function projectLink(value: unknown, what: string): { readonly packetId: string; readonly authoringDigest: string } {
+  const link = plain(value, what);
+  return { packetId: text(link.packetId, `${what}.packetId`), authoringDigest: text(link.authoringDigest, `${what}.authoringDigest`) };
+}
+
+function projectEvidence(value: unknown, what: string): Plain {
+  const item = plain(value, what);
+  return {
+    evidenceId: text(item.evidenceId, `${what}.evidenceId`), kind: text(item.kind, `${what}.kind`),
+    label: text(item.label, `${what}.label`), digest: text(item.digest, `${what}.digest`),
+    ...('versionId' in item ? { versionId: text(item.versionId, `${what}.versionId`) } : {}),
+  };
+}
+
+export type CandidateProjection =
+  | { readonly kind: 'exported'; readonly candidate: Plain }
+  | { readonly kind: 'omitted'; readonly reason: 'provenance' | 'no-comparable-version' };
+
+/**
+ * Allow-list projection of a v1 ReturnedCandidate. A candidate carrying `provenance` (host/model,
+ * connector or owner-reported) or a null `candidateVersionId` is not the v1 shape and is omitted
+ * whole, so producer identity and owner-reported text are never exported. Unknown fields on an
+ * otherwise v1 candidate are not copied.
+ */
+export function projectCandidate(value: unknown): CandidateProjection {
+  const raw = plain(value, 'candidate');
+  if ('provenance' in raw) return { kind: 'omitted', reason: 'provenance' };
+  if (typeof raw.candidateVersionId !== 'string') {
+    if (raw.candidateVersionId === null) return { kind: 'omitted', reason: 'no-comparable-version' };
+    throw new ExportProjectionError('candidate.candidateVersionId is neither text nor null');
+  }
+  const claims = listOf(raw.claims, 'candidate.claims').map((entry, index) => {
+    const claim = plain(entry, `candidate.claims[${index}]`);
+    return {
+      claimId: text(claim.claimId, 'claim.claimId'), text: text(claim.text, 'claim.text'), level: text(claim.level, 'claim.level'),
+      evidence: listOf(claim.evidence, 'claim.evidence').map((item, at) => projectEvidence(item, `claim.evidence[${at}]`)),
+    };
+  });
+  const projected: Plain = {
+    candidateId: text(raw.candidateId, 'candidate.candidateId'), packet: projectLink(raw.packet, 'candidate.packet'),
+    baselineVersionId: text(raw.baselineVersionId, 'candidate.baselineVersionId'), candidateVersionId: raw.candidateVersionId,
+    claims, observedStatus: text(raw.observedStatus, 'candidate.observedStatus'), observedAt: text(raw.observedAt, 'candidate.observedAt'),
+    evidence: listOf(raw.evidence, 'candidate.evidence').map((item, at) => projectEvidence(item, `candidate.evidence[${at}]`)),
+  };
+  for (const key of CANDIDATE_KEYS) if (!(key in projected)) throw new ExportProjectionError(`candidate lacks ${key}`);
+  return { kind: 'exported', candidate: projected };
+}
+
+/** Allow-list projection of a ReviewEvent. `reject` is a known decision under the unchanged schema. */
+export function projectReviewEvent(value: unknown): Plain {
+  const raw = plain(value, 'review event');
+  if (raw.schema !== REQUESTS_PACKET_PIN.reviewEventSchema) throw new ExportProjectionError('review event is not the pinned v1 schema');
+  const decision = text(raw.decision, 'review.decision');
+  if (!(REVIEW_DECISIONS_V1 as readonly string[]).includes(decision)) throw new ExportProjectionError(`review decision ${JSON.stringify(decision.slice(0, 40))} is not known`);
+  const judgments = listOf(raw.judgments, 'review.judgments').map((entry, index) => {
+    const judgment = plain(entry, `review.judgments[${index}]`);
+    const verdict = text(judgment.judgment, 'judgment.judgment');
+    if (!(REVIEW_JUDGMENTS as readonly string[]).includes(verdict)) throw new ExportProjectionError('judgment is not known');
+    return { claimId: text(judgment.claimId, 'judgment.claimId'), judgment: verdict };
+  });
+  return {
+    schema: REQUESTS_PACKET_PIN.reviewEventSchema, eventId: text(raw.eventId, 'review.eventId'), requestId: text(raw.requestId, 'review.requestId'),
+    packet: projectLink(raw.packet, 'review.packet'), candidateId: text(raw.candidateId, 'review.candidateId'), decision,
+    note: text(raw.note, 'review.note'), at: text(raw.at, 'review.at'), judgments,
+    ...('revisionDraftId' in raw ? { revisionDraftId: text(raw.revisionDraftId, 'review.revisionDraftId') } : {}),
+  };
+}
+
 export interface ExportedBlob {
   readonly digest: string;
   readonly mediaType: string;
@@ -115,7 +212,9 @@ export interface ExportedBlob {
 }
 
 export interface OmittedStore {
-  readonly store: 'drafts' | 'draft-history' | 'continuations' | 'unselected-attachments' | 'unclassified-keys' | 'cache' | 'missing-blobs';
+  readonly store:
+    | 'drafts' | 'draft-history' | 'continuations' | 'unselected-attachments' | 'sends' | 'handoff-status'
+    | 'non-v1-candidates' | 'reviews-of-omitted-candidates' | 'unclassified-keys' | 'cache' | 'missing-blobs';
   readonly count: number;
   readonly reason: string;
 }
@@ -154,6 +253,8 @@ export function createRequestsExport(reader: WorkspaceReader, options: { readonl
     async exportRequests(exportedAt: string) {
       if (!enabled) throw new ExportDisabledError();
       const grouped = new Map<string, { packets: { sequence: number; key: string }[]; candidates: string[]; drafts: number }>();
+      let sends = 0;
+      let handoffs = 0;
       let unclassified = 0;
       const slot = (id: string) => {
         let found = grouped.get(id);
@@ -165,6 +266,8 @@ export function createRequestsExport(reader: WorkspaceReader, options: { readonl
         if (kind.kind === 'draft') slot(kind.requestId).drafts += 1; // counted from the key; the document is never read
         else if (kind.kind === 'packet') slot(kind.requestId).packets.push({ sequence: kind.sequence, key });
         else if (kind.kind === 'candidate') slot(kind.requestId).candidates.push(key);
+        else if (kind.kind === 'send') sends += 1; // counted from the key; destination labels are never read
+        else if (kind.kind === 'handoff') handoffs += 1; // counted from the key; host/model are never read
         else unclassified += 1;
       }
       const requests: { requestId: string; freezes: ProjectedFreezeRecord[]; candidates: unknown[]; reviews: unknown[] }[] = [];
@@ -172,6 +275,8 @@ export function createRequestsExport(reader: WorkspaceReader, options: { readonl
       const candidateAttachments = new Set<string>();
       let drafts = 0;
       let history = 0;
+      let nonV1 = 0;
+      let reviewsOfOmitted = 0;
       for (const [requestId, group] of [...grouped].sort(([a], [b]) => (a < b ? -1 : 1))) {
         drafts += group.drafts;
         if (group.packets.length === 0) continue;
@@ -191,13 +296,26 @@ export function createRequestsExport(reader: WorkspaceReader, options: { readonl
           freezes.push(projected.record);
         }
         const candidates: unknown[] = [];
+        const omittedCandidateIds = new Set<string>();
         for (const key of group.candidates.sort()) {
           const stored = await reader.getDocument(key);
-          if (stored) candidates.push(stored.value);
+          if (!stored) continue;
+          const projected = projectCandidate(stored.value);
+          if (projected.kind === 'exported') candidates.push(projected.candidate);
+          else {
+            nonV1 += 1;
+            omittedCandidateIds.add(text((stored.value as Plain).candidateId, 'candidate.candidateId'));
+          }
         }
         const events = await reader.readEvents(reviewStreamOf(requestId));
         if (events.status.state !== 'ok') throw new ExportProjectionError(`review journal of ${requestId} is ${events.status.state}`);
-        requests.push({ requestId, freezes, candidates, reviews: events.events.map((event) => event.payload) });
+        const reviews: unknown[] = [];
+        for (const event of events.events) {
+          const projected = projectReviewEvent(event.payload);
+          if (omittedCandidateIds.has(projected.candidateId as string)) reviewsOfOmitted += 1;
+          else reviews.push(projected);
+        }
+        requests.push({ requestId, freezes, candidates, reviews });
       }
       const blobs: ExportedBlob[] = [];
       let missing = 0;
@@ -212,6 +330,10 @@ export function createRequestsExport(reader: WorkspaceReader, options: { readonl
         { store: 'draft-history', count: history, reason: 'Consumed drafts are local recovery history and are left out of every freeze record.' },
         { store: 'continuations', count: history, reason: 'Linked continuation drafts are editable local state and are left out of every freeze record.' },
         { store: 'unselected-attachments', count: unselected, reason: 'Only attachments selected into a frozen packet are exported.' },
+        { store: 'sends', count: sends, reason: 'Send records hold the destination label and are local handoff state.' },
+        { store: 'handoff-status', count: handoffs, reason: 'Handoff status holds the destination, pinned and actual host/model and connector detail.' },
+        { store: 'non-v1-candidates', count: nonV1, reason: 'Returns carrying producer provenance (host/model) or no comparable version are not the v1 shape and are left out whole.' },
+        { store: 'reviews-of-omitted-candidates', count: reviewsOfOmitted, reason: 'Review events that point at an omitted return are left out so no omitted return is described.' },
         { store: 'unclassified-keys', count: unclassified, reason: 'Keys the pinned v1 projection does not know are never exported.' },
         { store: 'cache', count: 0, reason: 'The cache namespace is never read.' },
       ];
