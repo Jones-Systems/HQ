@@ -85,7 +85,7 @@ These keep `prd.hq-design`, `spec.hq-design` and `spec.hq-expansion` intact:
 
 - **Production loop (CL1).** Requests, Runs and References are mounted in the production Design registry over durable lane ports. The loop runs freeze → strict packet verification → outbox CAS → labelled fake dispatch with a durable send record → evidence → returned inbox → accept, reject or revise. The only destination is the labelled simulated one ("Simulated — nothing sent"). An owner-reported return can never claim native verification.
 - **Import and export (CL4).** One durable-manifest transaction (`hq.design.storage.import-txn/v1`) is all-or-nothing for every reader through the Design host under process kill. `recover()` runs at open before any route is served and finishes a committed intent by idempotent replay (`clientEventId` dedupes). Only torn-tail repair is never automatic: a torn tail leaves the intent blocked until the explicit owner action `import.repair`, which quarantines the original bytes. A corrupt stream is refused and never repaired. Export produces bundle/v1 with per-section allow-lists and an exact omitted-store report. Both stay disabled (`unavailable`, reason `disabled`) until `ac.import-export-enablement.001` is satisfied.
-- **Local catalog (CL7).** A user-selected laptop-local root feeds the discovery `SourceAdapter`. Main keeps the absolute path, and the renderer sees only `{rootId, label}`.
+- **Local catalog (CL7).** One active user-selected laptop-local root feeds the discovery `SourceAdapter`; choosing a different root explicitly replaces the selection. Main keeps the absolute path, and the renderer sees only `{rootId, label}`. Snapshot completeness covers that configured root under the fixed `laptop-local` host, with a durable host-wide generation across replacement, forget and restart; failed refreshes preserve cached records and workspace links.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#req.design-closure.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#req.references-closure.001" -->
@@ -529,7 +529,13 @@ Closed, typed routes are added by one writer, with no generic filesystem, shell 
   - every route returns `unavailable` with reason `disabled` while its status constant is off.
 - **Catalog:**
   - `catalog.roots|chooseRoot|forget|snapshot|preview`, over K3's Node builder;
-  - `forget` removes the configuration entry only, never files;
+  - one active root: `roots` returns zero or one opaque `{rootId,label}` descriptor. `chooseRoot` uses only the native directory dialog and visibly replaces the current selection; cancellation or validation/persistence failure preserves it. Selecting the current canonical root retains its opaque ID; a different canonical root gets a new opaque ID;
+  - main retains the selected canonical root binding and its absolute path. A later canonical-path mismatch requires explicit reselection; renderer input cannot supply a path or silently retarget the root;
+  - `snapshot` covers exactly the active root under K3's fixed `laptop-local` host. Preserve the builder's `complete` value, including partial enumeration at its existing entry bound and a genuinely empty successful complete scan. Never publish separate complete per-root snapshots or invent multi-root aggregation;
+  - persist one strictly increasing safe-integer host generation before exposing a snapshot. It survives root replacement, forget and restart; gaps are allowed, reuse/reset is not. Persistence failure, corrupt generation state or exhaustion fails closed. Serialize allocation/publication with configuration changes and discard scans from obsolete selections;
+  - no configured root, a missing/unreadable root, failed enumeration, or a realpath escape/mismatch returns the existing unavailable result boundary with bounded path-free detail, never a fabricated empty complete snapshot. Cached records and workspace links survive. Preserve K3's optional-preview omission/refusal behavior without upgrading a partial scan to complete;
+  - `forget` removes the configuration entry only, never files, cached records, links or the generation high-water mark. Replacement/forget invalidate old preview readers. The next successful complete replacement-root snapshot may mark prior-root records `missing-at-source` under the existing reducer; this means absence from the selected catalog scope, not proven physical deletion;
+  - catalog routes retain the settled `DesignStorageResult` boundary and existing `ServiceResponse` status conventions; no new HTTP response shape or module edit;
   - design `cache.put` for the catalog key only.
 - **Work export:**
   - `export{format:'json'|'markdown'}`;
@@ -7049,10 +7055,10 @@ No lane relays status through the owner.
     "spec.hq-integration-parallel-execution#req.references-closure.001",
     "spec.hq-integration-parallel-execution#req.work-export.001"
   ],
-  "scenario": "Closed r3 routes cross preload into main; gate exclusivity and recover-before-serve; Work export via a stubbed save dialog and Planner stub; reference open/Back/mismatch in the shell.",
+  "scenario": "Closed r3 routes cross preload into main; gate exclusivity and recover-before-serve; singleton catalog selection/replacement/cancel, restart generation and partial/failing scans with synthetic directories; Work export via a stubbed save dialog and Planner stub; reference open/Back/mismatch in the shell.",
   "evidence": {
-    "predicate": "Root checks and Electron security tests pass; transaction/export routes return unavailable(disabled); Work export bytes equal the stub and the renderer gets no path; reference contract matches iface.references.001; structural types assignable.",
-    "invalid": "Generic IPC, a path or token in renderer state, an enabled route, or a CSP change.",
+    "predicate": "Root checks and Electron security tests pass; transaction/export routes return unavailable(disabled); catalog roots is empty/singleton, cancel preserves selection, same canonical root retains ID, replacement changes ID, generations strictly increase across replacement/forget/restart, stale scans/readers are refused, K3 partial completeness is preserved, unavailable scans cannot mark cached entries missing, and next complete replacement scan marks old-scope records missing without deleting links; Work export bytes equal the stub and the renderer gets no path; reference contract matches iface.references.001; structural types assignable.",
+    "invalid": "Generic IPC, a path or token in renderer state, an enabled route, a CSP change, generation reset/reuse, complete empty snapshots fabricated from root failures, or deletion on forget.",
     "unknown": "Electron cannot run on the check host."
   },
   "environment": [
