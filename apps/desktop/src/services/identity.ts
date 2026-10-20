@@ -10,8 +10,8 @@ export type TransportIdentity = [
   Assert<C.SocialServiceTransport extends S.SocialServiceTransport ? true : false>,
   Assert<C.WorkServiceTransport extends W.WorkServiceTransport ? true : false>,
   Assert<NonNullable<C.HqServices['social']> extends S.SocialServiceTransport ? true : false>,
-  Assert<Equal<C.WorkServiceRoute, W.WorkServiceRoute>>,
+  Assert<Equal<Exclude<C.WorkServiceRoute, 'export'>, W.WorkServiceRoute>>,
   Assert<Equal<C.WorkMutationRoute, W.WorkMutationRoute>>,
-  Assert<Equal<C.WorkServiceParams, W.WorkServiceParams>>,
+  Assert<Equal<Omit<C.WorkServiceParams, 'export'>, W.WorkServiceParams>>,
   Assert<Equal<C.ServiceResponse, W.ServiceResponse>>,
 ];

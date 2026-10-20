@@ -49,7 +49,7 @@ it('all six sections use F1 roots; navigation and reads never put documents', as
   assert.equal(workspace.tasteEnv, fake.tasteEnv);
   assert.equal(workspace.importsFor, fake.importsFor);
   for (const root of ['design/projects/', 'design/components/', 'design/flows/', 'design/compare/', 'design/annotations/', 'design.canvas.arrangement.v1/']) {
-    assert.ok(double.calls.some(({ params }) => ('key' in params ? params.key : params.prefix).startsWith(root)), root);
+    assert.ok(double.calls.some(({ params }) => ('key' in params ? params.key : 'prefix' in params ? params.prefix : '').startsWith(root)), root);
   }
   assert.equal(double.calls.filter(({ route }) => route === 'doc.put').length, 0);
   compare.dispose();
