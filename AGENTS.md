@@ -1,5 +1,7 @@
 # HQ working agreements
 
+At startup, read `.agents/shared-guidance.md` when present. It is the locally delivered Universal Agents / Codex V3 bridge; follow its pointers to the exact shared-method snapshot. Combine that guidance with the HQ agreements below. HQ owns its product, local roles and lane boundaries. If the bridge is absent, report shared enrollment as unavailable and follow these local agreements; do not claim current shared guidance or install a replacement implicitly. See [shared guidance setup](docs/shared-agent-guidance.md) for enrollment and verification.
+
 HQ is one Electron application with Design, Social and Work domains. M Jones owns product decisions. Each implementation lane has an explicitly assigned scope and isolated non-main worktree. Its agent is sole Git owner there. Preserve unrelated changes; never reset/clean or rewrite history. No sudo, deployment, signing, credential access or private-data access without exact separate authorization.
 
 Read docs/engineering-specs/hq-bootstrap.md and the assigned campaign plan before work. Root configuration, lockfiles, shared contracts and desktop packaging have one coordinating owner. Module lanes edit only their assigned directory and lane-local tests/docs. Propose shared changes through the coordination issue; do not edit other lanes. Work card movement, reference navigation and domain switches never launch work.
