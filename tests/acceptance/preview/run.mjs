@@ -67,9 +67,11 @@ try {
   await mkdir(join(runtime.root, 'tmp'));
   Object.assign(env, { HQ_USER_DATA_DIR: join(runtime.root, 'profile'), HQ_QUALIFY_PREVIEW: '1', TMPDIR: join(runtime.root, 'tmp') });
   let inspector;
-  child = runtime.spawn(join(repo, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'), ['--host-resolver-rules=MAP hq-qualification.test 127.0.0.1', '--inspect=0', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', join(repo, 'apps/desktop/dist-electron/main.js')], { cwd: repo, env, stdio: ['ignore', 'ignore', 'pipe'] });
+  const electronBinary=option('--electron-binary') ?? join(repo, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
+  report.electronBinary=electronBinary;
+  child = runtime.spawn(electronBinary, ['--host-resolver-rules=MAP hq-qualification.test 127.0.0.1', '--inspect=0', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', join(repo, 'apps/desktop/dist-electron/main.js')], { cwd: repo, env, stdio: ['ignore', 'ignore', 'pipe'] });
   child.stderr.on('data', bytes => { log = (log + bytes).slice(-256000); endpoint = /DevTools listening on (ws:\/\/\S+)/.exec(log)?.[1]; inspector = /Debugger listening on (ws:\/\/\S+)/.exec(log)?.[1]; });
-  await until(() => { if (child.exitCode !== null || child.launchError) throw Error('Native launch failed: ' + log); return endpoint && inspector; }, 'Electron debug endpoints');
+  await until(() => { if (child.exitCode !== null || child.launchError) throw Error('Native launch failed: ' + (child.launchError?.message ?? `exit=${child.exitCode}`) + '\n' + log); return endpoint && inspector; }, 'Electron debug endpoints');
   if(args.includes('--fail-after-launch')) throw Error('Deliberate qualification lifecycle failure after native launch');
   main = await connect(inspector, runtime);
   const target = await until(async () => (await (await fetch(`http://${new URL(endpoint).host}/json/list`)).json()).find(t => t.type === 'page' && t.url.startsWith('file:')), 'HQ renderer');
