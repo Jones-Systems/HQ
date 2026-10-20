@@ -115,6 +115,22 @@ describe('bounded evictable cache', () => {
     await second.close();
   });
 
+  it('lists blobs and deletes only from evictable namespaces', async (t) => {
+    const root = join(scratch(t), 'store');
+    const { store } = await open(root);
+    const cached = await store.putBlob(CACHE, bytes('preview'));
+    const kept = await store.putBlob(WORKSPACE, bytes('evidence'));
+    assert.deepEqual(await store.listBlobs(CACHE), [cached]);
+    assert.deepEqual(await store.listBlobs(WORKSPACE), [kept]);
+    await assert.rejects(store.deleteBlob(WORKSPACE, kept.digest), (error) => isStoreError(error, 'invalid-argument'));
+    assert.equal(await store.hasBlob(WORKSPACE, kept.digest), true);
+    assert.equal(await store.deleteBlob(CACHE, cached.digest), true);
+    assert.equal(await store.deleteBlob(CACHE, cached.digest), false);
+    assert.deepEqual(await store.listBlobs(CACHE), []);
+    assert.equal((await store.usage(CACHE)).bytes, 0);
+    await store.close();
+  });
+
   it('adopts a cached preview into workspace before eviction can drop it', async (t) => {
     const root = join(scratch(t), 'store');
     const { store } = await open(root, { namespaces: namespaces(50) });

@@ -42,6 +42,7 @@ describe('unknown future schema', () => {
       store.commit([{ op: 'put', namespace: WORKSPACE, key: key('b'), value: 1 }]),
       store.putBlob(WORKSPACE, bytes('new')),
       store.adoptBlob(CACHE, WORKSPACE, blob.digest),
+      store.deleteBlob(CACHE, blob.digest),
       store.appendEvent(WORKSPACE, STREAM, { type: 'y', payload: 2 }),
       store.repairTornTail(WORKSPACE, STREAM),
     ];

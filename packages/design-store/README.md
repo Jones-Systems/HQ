@@ -18,6 +18,7 @@ installed app.
   anything.
 - **Content-addressed blobs** (`sha256:<hex>`). If you pass `expectedDigest` and the bytes don't
   match, the blob is rejected and nothing is written. Every read re-checks the digest.
+  `deleteBlob` works only in evictable namespaces; authoritative blobs are immutable.
 - **Append-only event streams.** Records are canonical JSON lines linked by a hash chain, and each
   append is fsynced before it is acknowledged. A `clientEventId` makes an append idempotent:
   replaying the same payload does nothing, and a different payload is a conflict. Projections fold

@@ -185,6 +185,9 @@ export interface StoragePort {
   putBlob(namespace: NamespaceId, bytes: Uint8Array, options?: PutBlobOptions): Promise<BlobRef>;
   getBlob(namespace: NamespaceId, digest: BlobDigest): Promise<Uint8Array | null>;
   hasBlob(namespace: NamespaceId, digest: BlobDigest): Promise<boolean>;
+  listBlobs(namespace: NamespaceId): Promise<readonly BlobRef[]>;
+  /** Evictable namespaces only; authoritative blobs are immutable and are never deleted. */
+  deleteBlob(namespace: NamespaceId, digest: BlobDigest): Promise<boolean>;
   /** Copies a verified blob into another namespace (for example cache → workspace before eviction). */
   adoptBlob(from: NamespaceId, to: NamespaceId, digest: BlobDigest): Promise<BlobRef>;
 

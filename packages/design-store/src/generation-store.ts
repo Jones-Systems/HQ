@@ -354,6 +354,40 @@ export class GenerationStore implements StoragePort {
     return this.serial(async () => (await this.readBlob(namespace, digest)) !== null);
   }
 
+  listBlobs(namespace: NamespaceId): Promise<readonly BlobRef[]> {
+    return this.serial(async () => {
+      this.assertOpen();
+      this.namespace(namespace);
+      const refs: BlobRef[] = [];
+      const dir = this.paths.blobsDir(namespace);
+      for (const fanout of await listOrEmpty(this.fs, dir)) {
+        if (fanout.startsWith('.')) continue;
+        for (const name of await listOrEmpty(this.fs, join(dir, fanout))) {
+          if (!/^[0-9a-f]{64}$/u.test(name)) continue;
+          const info = await this.fs.stat(join(dir, fanout, name));
+          if (info && !info.isDirectory) refs.push({ digest: `sha256:${name}` as BlobDigest, bytes: info.size });
+        }
+      }
+      return refs;
+    });
+  }
+
+  deleteBlob(namespace: NamespaceId, digest: BlobDigest): Promise<boolean> {
+    return this.serial(async () => {
+      this.assertWritable();
+      const config = this.namespace(namespace);
+      blobDigest(digest);
+      if (config.storageClass !== 'evictable') {
+        throw new StoreError('invalid-argument', `Blobs in authoritative namespace ${namespace} are immutable`, { namespace });
+      }
+      const path = this.paths.blobFile(namespace, digest);
+      const removed = await unlinkIfPresent(this.fs, path);
+      if (removed) await syncDir(this.fs, dirname(path), this.probe);
+      this.caches.get(namespace)?.delete(path);
+      return removed;
+    });
+  }
+
   async adoptBlob(from: NamespaceId, to: NamespaceId, digest: BlobDigest): Promise<BlobRef> {
     this.assertWritable();
     const bytes = await this.getBlob(from, digest);
