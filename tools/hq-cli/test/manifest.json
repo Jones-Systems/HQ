@@ -1,0 +1,11 @@
+{
+  "schema": "hq.cli.checks/v1",
+  "groups": {
+    "hq-cli-t2": {
+      "command": "node --test --test-concurrency=1 test/core.test.mjs test/reads.test.mjs test/transport.test.mjs",
+      "modules": ["test/core.test.mjs", "test/reads.test.mjs", "test/transport.test.mjs"],
+      "environment": "Node >=22.18; injected fetch and clock; no unit-test sockets"
+    }
+  },
+  "candidate": "node --test --test-concurrency=1 'test/**/*.test.mjs'"
+}
