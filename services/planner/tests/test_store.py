@@ -4,6 +4,9 @@ archive, persistence, export/import/restore and example data."""
 from __future__ import annotations
 
 import json
+import os
+import sqlite3
+import stat
 import unittest
 from unittest.mock import patch
 
@@ -140,6 +143,17 @@ class RetentionReplay(StoreTestCase):
             self.reopen()
             self.assertEqual(self.floor(), 3)
 
+    def test_newest_request_is_retained_when_the_clock_steps_back(self):
+        stamps = iter(f"2026-01-01T00:00:{59 - i:02d}.000Z" for i in range(100))
+        with patch("planning.store.MAX_REMEMBERED_REQUESTS", 3), \
+                patch("planning.store.utc_now", lambda: next(stamps)):
+            for i in range(4):
+                self.store.create_item({"title": str(i)}, f"request-{i}", str(i))
+            _, _, replayed = self.store.create_item({"title": "3"}, "request-3", "3")
+        self.assertTrue(replayed)
+        self.assertEqual(len(self.store.snapshot()["items"]), 4)
+        self.assertEqual(self.floor(), 1)
+
     def test_upgrade_initialization_and_import_preserve_floor(self):
         with patch("planning.store.MAX_REMEMBERED_REQUESTS", 3):
             self.create()
@@ -249,6 +263,16 @@ class RevisionsAndIdempotency(StoreTestCase):
         _, payload, _ = self.store.update_item(item["id"], 1, {"horizon": "soon"})
         self.assertEqual((payload["item"]["revision"], payload["changed"]), (1, []))
 
+    def test_resending_unchanged_timed_dates_keeps_revision(self):
+        item = self.create(dates=[{"kind": "event", "precision": "day", "value": "2026-11-14",
+                                   "time": "09:30", "tz": "America/New_York"}])
+        dates = [{k: v for k, v in d.items() if k not in ("instant", "end_instant", "tz_abbr")}
+                 for d in item["dates"]]
+        _, payload, _ = self.store.update_item(item["id"], 1, {"dates": dates})
+        self.assertEqual((payload["item"]["revision"], payload["changed"]), (1, []))
+        self.assertEqual(payload["item"]["dates"], item["dates"])
+        self.assertEqual([h["action"] for h in self.store.history(item["id"])], ["created"])
+
     def test_missing_or_bool_revision_rejected(self):
         item = self.create()
         for revision in (None, True, "1"):
@@ -264,6 +288,21 @@ class RevisionsAndIdempotency(StoreTestCase):
         with self.assertRaises(StoreError) as caught:
             self.store.create_item({"title": "Other"}, request_id="req-abcdef12", fingerprint="fp2")
         self.assertEqual(caught.exception.status, 422)
+
+    def test_auto_rolled_back_failure_keeps_original_error(self):
+        conn = self.store._conn
+        conn.create_function("halt", 0, lambda: (conn.interrupt(), 1)[1])
+
+        def apply(cur):
+            cur.execute("UPDATE meta SET value=value WHERE halt()")
+            return 200, {}
+
+        with self.assertRaisesRegex(sqlite3.OperationalError, "interrupted"):
+            self.store._mutate("req-halted01", "f", apply)
+        self.assertFalse(conn.in_transaction)
+        self.assertEqual(self.store.version(), 0)
+        self.create()
+        self.assertEqual(self.store.version(), 1)
 
     def test_failed_mutation_is_not_remembered(self):
         item = self.create()
@@ -328,8 +367,10 @@ class Ordering(StoreTestCase):
         self.assertEqual(self.column("next"), ["A", "B", "C", "D"])
 
     def test_moving_to_same_place_does_not_bump_revision(self):
+        positions = [i["position"] for i in self.store.snapshot()["items"]]
         _, payload, _ = self.move("B", "next", after_id=self.ids["A"])
         self.assertEqual(payload["item"]["revision"], 1)
+        self.assertEqual([i["position"] for i in self.store.snapshot()["items"]], positions)
 
     def test_status_change_through_patch_goes_to_top(self):
         x = self.create(title="X", status="inbox")
@@ -347,6 +388,44 @@ class ArchiveAndPersistence(StoreTestCase):
         _, payload, _ = self.store.set_archived(a["id"], 2, False)
         self.assertIsNone(payload["item"]["archived_at"])
         self.assertEqual(self.column("active"), ["B", "A"])
+
+    def test_interrupted_first_open_leaves_a_store_that_opens(self):
+        from planning.store import Store
+
+        self.store.close()
+        self.db_path.unlink()
+        opened, meta_inserts = [], []
+        real_connect = sqlite3.connect
+
+        def deny_second_meta_insert(action, table, *_):
+            if action == sqlite3.SQLITE_INSERT and table == "meta":
+                meta_inserts.append(table)
+                if len(meta_inserts) == 2:
+                    return sqlite3.SQLITE_DENY
+            return sqlite3.SQLITE_OK
+
+        def connect(*args, **kwargs):
+            conn = real_connect(*args, **kwargs)
+            conn.set_authorizer(deny_second_meta_insert)
+            opened.append(conn)
+            return conn
+
+        with patch.object(sqlite3, "connect", connect), self.assertRaises(sqlite3.DatabaseError):
+            Store(self.db_path)
+        opened[0].close()
+        store = self.reopen()
+        self.assertEqual((store.version(), store.snapshot()["items"]), (0, []))
+
+    def test_new_store_and_backup_files_are_private(self):
+        def private(path):
+            return stat.S_IMODE(os.stat(path).st_mode) & 0o077 == 0
+
+        self.create()
+        self.assertTrue(private(self.db_path))
+        self.assertTrue(private(f"{self.db_path}-wal"))
+        _, payload, _ = self.store.import_data(self.store.export(), "replace", "replace")
+        self.assertTrue(private(self.store.backup_dir))
+        self.assertTrue(private(self.store.backup_dir / payload["backup"]))
 
     def test_acknowledged_changes_survive_restart(self):
         item = self.create(title="Durable", notes="keep me")
@@ -399,6 +478,34 @@ class ExportImport(StoreTestCase):
         self.assertEqual(self.store.export()["items"], before["items"])
         self.assertEqual(self.store.list_backups(), [])
 
+    def test_malformed_history_id_and_huge_revision_are_rejected_cleanly(self):
+        self.seed()
+        before = self.store.export()
+        bad_history = json.loads(json.dumps(before))
+        bad_history["history"][0]["item_id"] = ["not", "hashable"]
+        huge_revision = json.loads(json.dumps(before))
+        huge_revision["items"][0]["revision"] = 2**64
+        for label, data in (("history id", bad_history), ("revision", huge_revision)):
+            with self.subTest(label):
+                with self.assertRaises(StoreError) as caught:
+                    self.store.import_data(data, "replace", "replace")
+                self.assertEqual((caught.exception.status, caught.exception.code), (422, "invalid_import"))
+        self.assertEqual(self.store.export()["items"], before["items"])
+        self.assertEqual(self.store.list_backups(), [])
+
+    def test_imported_history_is_capped_per_item(self):
+        from planning.store import MAX_HISTORY_PER_ITEM
+
+        self.seed()
+        data = self.store.export()
+        item_id = data["items"][0]["id"]
+        data["history"] = [{"item_id": item_id, "at": "2026-01-01T00:00:00Z", "action": "updated",
+                            "detail": {"n": n}} for n in range(MAX_HISTORY_PER_ITEM + 5)]
+        self.store.import_data(data, "replace", "replace")
+        kept = self.store.history(item_id, limit=MAX_HISTORY_PER_ITEM + 10)
+        self.assertEqual(len(kept), MAX_HISTORY_PER_ITEM)
+        self.assertEqual((kept[0]["detail"]["n"], kept[-1]["detail"]["n"]), (MAX_HISTORY_PER_ITEM + 4, 5))
+
     def test_wrong_format_rejected(self):
         for data in ({}, {"format": "other", "version": 1, "items": []}, [], "x"):
             with self.subTest(data=data), self.assertRaises(StoreError):
@@ -430,6 +537,16 @@ class ExportImport(StoreTestCase):
             with self.subTest(name=unsafe), self.assertRaises(StoreError):
                 self.store.restore_backup(unsafe, "replace")
         self.assertTrue(restored["backup"].startswith("backup-"))
+
+    def test_backups_list_newest_first_within_one_second(self):
+        self.store.backup_dir.mkdir()
+        names = ["backup-20261020T120000Z.json", "backup-20261020T120000Z-1.json",
+                 "backup-20261020T120000Z-2.json", "backup-20261020T120000Z-10.json",
+                 "backup-20261020T120001Z.json"]
+        for name in names:
+            (self.store.backup_dir / name).write_text("{}")
+        self.assertEqual([b["name"] for b in self.store.list_backups()],
+                         [names[4], names[3], names[2], names[1], names[0]])
 
     def test_markdown_export_is_readable(self):
         self.seed()

@@ -49,7 +49,7 @@ MAX_REMEMBERED_REQUESTS = 2_000
 POSITION_STEP = 1024
 HISTORY_ACTIONS = ("created", "updated", "moved", "reordered", "archived", "restored",
                    "reviewed", "imported")
-BACKUP_RE = re.compile(r"^backup-\d{8}T\d{6}Z(-\d{1,3})?\.json$")
+BACKUP_RE = re.compile(r"^backup-\d{8}T\d{6}Z(?:-(\d{1,3}))?\.json$")
 MAX_BACKUP_BYTES = 50 * 1024 * 1024
 _ENUM_FIELDS = ("title", "kind", "status", "motivation", "horizon", "priority", "area")
 _JSON_FIELDS = {"next_steps": "next_steps", "references": "refs", "dates": "dates"}
@@ -124,6 +124,11 @@ class Store:
         self.path = Path(path)
         self.backup_dir = self.path.parent / f"{self.path.stem}-backups"
         self._lock = threading.RLock()
+        try:
+            # Owner-only from the first byte; SQLite gives its -wal/-shm files the same mode.
+            os.close(os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+        except FileExistsError:
+            pass
         self._conn = sqlite3.connect(str(self.path), isolation_level=None, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -131,16 +136,22 @@ class Store:
         self._conn.execute("PRAGMA busy_timeout=5000")
         with self._lock:
             self._conn.executescript(_SCHEMA)
-            row = self._conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
-            if row is None:
-                self._conn.execute("INSERT INTO meta VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
-                self._conn.execute("INSERT OR IGNORE INTO meta VALUES ('state_version', '0')")
-            elif int(row["value"]) != SCHEMA_VERSION:
-                raise RuntimeError(f"Unsupported planning store schema {row['value']}.")
-            count = self._conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0]
-            floor = 0 if count < MAX_REMEMBERED_REQUESTS else self._version(self._conn)
-            self._conn.execute("INSERT OR IGNORE INTO meta VALUES ('request_evicted_through_version', ?)",
-                               (str(floor),))
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = self._conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+                if row is None:
+                    self._conn.execute("INSERT INTO meta VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
+                    self._conn.execute("INSERT OR IGNORE INTO meta VALUES ('state_version', '0')")
+                elif int(row["value"]) != SCHEMA_VERSION:
+                    raise RuntimeError(f"Unsupported planning store schema {row['value']}.")
+                count = self._conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0]
+                floor = 0 if count < MAX_REMEMBERED_REQUESTS else self._version(self._conn)
+                self._conn.execute("INSERT OR IGNORE INTO meta VALUES ('request_evicted_through_version', ?)",
+                                   (str(floor),))
+                self._conn.execute("COMMIT")
+            except BaseException:
+                self._rollback()
+                raise
 
     def close(self) -> None:
         with self._lock:
@@ -232,9 +243,11 @@ class Store:
 
         def apply(cur):
             current = self._guard(cur, item_id, revision)
+            # Compare with stored values: derived date fields would make every timed date differ.
+            stored = self._load(cur, item_id, derived=False)
             changes, fields = {}, []
             for key, new in values.items():
-                old = current[key]
+                old = stored[key]
                 if old != new:
                     fields.append(key)
                     if key in _ENUM_FIELDS:
@@ -293,10 +306,10 @@ class Store:
             old_ids = [r["id"] for r in cur.execute(
                 f"SELECT id FROM items WHERE status=? {_ORDER}", (current["status"],))]
             ids.insert(index, item_id)
+            if status == current["status"] and old_ids == ids:
+                return 200, {"item": current, "changed": []}
             for i, other in enumerate(ids):
                 cur.execute("UPDATE items SET position=? WHERE id=?", ((i + 1) * POSITION_STEP, other))
-            if status == current["status"] and old_ids == ids:
-                return 200, {"item": self._load(cur, item_id), "changed": []}
             now = utc_now()
             cur.execute("UPDATE items SET status=?, revision=revision+1, updated_at=? WHERE id=?",
                         (status, now, item_id))
@@ -471,6 +484,8 @@ class Store:
                     if entry["item_id"] in inserted:
                         cur.execute("INSERT INTO history (item_id, at, action, detail) VALUES (?,?,?,?)",
                                     (entry["item_id"], entry["at"], entry["action"], json.dumps(entry["detail"])))
+                for item_id in {entry["item_id"] for entry in history} & inserted:
+                    self._trim_history(cur, item_id)
                 return 200, {"mode": mode, "imported": len(to_insert),
                              "skipped": len(items) - len(to_insert), "backup": backup}
 
@@ -479,11 +494,10 @@ class Store:
     def list_backups(self) -> list[dict]:
         if not self.backup_dir.is_dir():
             return []
-        out = []
-        for entry in sorted(self.backup_dir.iterdir(), reverse=True):
-            if BACKUP_RE.match(entry.name) and entry.is_file():
-                out.append({"name": entry.name, "bytes": entry.stat().st_size})
-        return out[:50]
+        entries = [e for e in self.backup_dir.iterdir() if BACKUP_RE.match(e.name) and e.is_file()]
+        # Newest first: by timestamp, then by same-second suffix compared as a number.
+        entries.sort(key=lambda e: (e.name[:23], int(BACKUP_RE.match(e.name).group(1) or 0)), reverse=True)
+        return [{"name": e.name, "bytes": e.stat().st_size} for e in entries[:50]]
 
     def restore_backup(self, name: object, confirm: object, request_id: str | None = None,
                        fingerprint: str = "") -> tuple:
@@ -515,23 +529,29 @@ class Store:
                 if request_id:
                     cur.execute("INSERT INTO requests VALUES (?,?,?,?,?)",
                                 (request_id, fingerprint, status, json.dumps(payload), utc_now()))
-                    evicted = cur.execute(
-                        """SELECT MAX(CAST(json_extract(response, '$.state_version') AS INTEGER))
-                           FROM requests WHERE request_id NOT IN
-                           (SELECT request_id FROM requests ORDER BY created_at DESC, rowid DESC LIMIT ?)""",
-                        (MAX_REMEMBERED_REQUESTS,)).fetchone()[0]
-                    if evicted is not None:
-                        cur.execute("""UPDATE meta SET value=MAX(CAST(value AS INTEGER), ?)
-                                       WHERE key='request_evicted_through_version'""", (evicted,))
-                    cur.execute(
-                        """DELETE FROM requests WHERE request_id NOT IN
-                           (SELECT request_id FROM requests ORDER BY created_at DESC, rowid DESC LIMIT ?)""",
-                        (MAX_REMEMBERED_REQUESTS,))
+                    # Insertion order, not the wall clock, decides which records are oldest:
+                    # rowids only grow because only the lowest ones are ever deleted.
+                    cutoff = cur.execute("SELECT rowid FROM requests ORDER BY rowid DESC LIMIT 1 OFFSET ?",
+                                         (MAX_REMEMBERED_REQUESTS,)).fetchone()
+                    if cutoff is not None:
+                        evicted = cur.execute(
+                            """SELECT MAX(CAST(json_extract(response, '$.state_version') AS INTEGER))
+                               FROM requests WHERE rowid <= ?""", (cutoff[0],)).fetchone()[0]
+                        if evicted is not None:
+                            cur.execute("""UPDATE meta SET value=MAX(CAST(value AS INTEGER), ?)
+                                           WHERE key='request_evicted_through_version'""", (evicted,))
+                        cur.execute("DELETE FROM requests WHERE rowid <= ?", (cutoff[0],))
                 cur.execute("COMMIT")
             except BaseException:
-                cur.execute("ROLLBACK")
+                self._rollback()
                 raise
             return status, payload, False
+
+    def _rollback(self) -> None:
+        # SQLite may already have rolled back (for example on SQLITE_INTERRUPT or an I/O
+        # error); a second ROLLBACK would then replace the original error.
+        if self._conn.in_transaction:
+            self._conn.execute("ROLLBACK")
 
     def replay_request(self, request_id, fingerprint, sent_after_version, mode, apply) -> tuple:
         # This lock also covers normal mutations and stays held through resend.
@@ -579,8 +599,8 @@ class Store:
                              "This item changed since you loaded it.", current=current)
         return current
 
-    def _load(self, cur, item_id: str) -> dict:
-        return self._row_to_item(cur.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone())
+    def _load(self, cur, item_id: str, derived: bool = True) -> dict:
+        return self._row_to_item(cur.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone(), derived)
 
     def _edge_position(self, cur, status: str, *, top: bool) -> int:
         fn = "MIN" if top else "MAX"
@@ -592,6 +612,10 @@ class Store:
     def _log(self, cur, item_id: str, action: str, detail: dict) -> None:
         cur.execute("INSERT INTO history (item_id, at, action, detail) VALUES (?,?,?,?)",
                     (item_id, utc_now(), action, json.dumps(detail)))
+        self._trim_history(cur, item_id)
+
+    @staticmethod
+    def _trim_history(cur, item_id: str) -> None:
         cur.execute(
             """DELETE FROM history WHERE item_id=? AND id NOT IN
                (SELECT id FROM history WHERE item_id=? ORDER BY id DESC LIMIT ?)""",
@@ -662,6 +686,8 @@ class Store:
         meta_keys = {"id", "revision", "position", "is_example", "created_at", "updated_at",
                      "archived_at", "reviewed_at"}
         for index, raw in enumerate(raw_items):
+            if len(problems) >= 20:
+                break
             label = f"Item {index + 1}"
             if not isinstance(raw, dict):
                 problems.append(f"{label}: not an object.")
@@ -680,7 +706,7 @@ class Store:
                 problems.append(f"{label}: missing, malformed or duplicate id.")
                 continue
             revision, position = raw.get("revision"), raw.get("position")
-            if (not isinstance(revision, int) or isinstance(revision, bool) or revision < 1
+            if (not isinstance(revision, int) or isinstance(revision, bool) or not 1 <= revision <= 2**53
                     or not isinstance(position, int) or isinstance(position, bool)
                     or abs(position) > 2**53):
                 problems.append(f"{label}: revision/position must be whole numbers.")
@@ -700,15 +726,14 @@ class Store:
                           updated_at=raw["updated_at"], archived_at=raw.get("archived_at"),
                           reviewed_at=raw.get("reviewed_at"))
             items.append(values)
-            if len(problems) >= 20:
-                break
         history = []
         raw_history = data.get("history", [])
         if not isinstance(raw_history, list):
             problems.append("history must be a list.")
         else:
             for index, entry in enumerate(raw_history):
-                if (not isinstance(entry, dict) or entry.get("item_id") not in seen
+                if (not isinstance(entry, dict) or not is_item_id(entry.get("item_id"))
+                        or entry["item_id"] not in seen
                         or entry.get("action") not in HISTORY_ACTIONS
                         or not is_timestamp(entry.get("at")) or not isinstance(entry.get("detail"), dict)):
                     problems.append(f"History entry {index + 1} is malformed.")
@@ -737,7 +762,8 @@ class Store:
         final = self.backup_dir / name
         temp = self.backup_dir / f".{name}.partial"
         try:
-            with open(temp, "wb") as handle:
+            temp.unlink(missing_ok=True)
+            with open(os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as handle:
                 handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
@@ -759,9 +785,12 @@ def _date_changes(old: list, new: list) -> list[str]:
     old_by_id = {d["id"]: d for d in old}
     new_by_id = {d["id"]: d for d in new}
     out = []
+
+    def strip(d):
+        return {k: d.get(k) for k in ("kind", "precision", "value", "time", "end_time", "tz", "note")}
+
     for entry in new:
         before = old_by_id.get(entry["id"])
-        strip = lambda d: {k: d.get(k) for k in ("kind", "precision", "value", "time", "end_time", "tz", "note")}
         if before is None:
             out.append(f"added {describe_date(entry)}")
         elif strip(before) != strip(entry):
