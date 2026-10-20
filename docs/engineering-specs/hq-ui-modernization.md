@@ -91,7 +91,7 @@ Use the collaborative browser for actual interaction and screenshots, with synth
 <!-- codex-section:begin id="spec.hq-ui-modernization#ops.delivery.001" -->
 ## Delivery and operational boundary
 
-The desktop exists on the integration foundation, not on main. HQ changes are a scoped dependent PR against that foundation; the HQ integration-owner merge hold remains in force. The Social service source extension is published in its owning repository. Before publication, recheck open-PR collisions and changed paths, preserve exact head/check evidence, and register the PRs with the native thread.
+The desktop exists on the integration foundation, not on main. HQ changes use a scoped dependent PR against that foundation. The owner explicitly authorized merging the green UI and Social service PRs and directed future green task PRs to proceed without another confirmation, subject to native protections and readiness checks. The Social service source extension is published in its owning repository. Preserve exact head/check evidence and register the PRs with the native thread. Foundation-to-main integration and installed rollout retain their own readiness requirements.
 
 Source compatibility does not prove that either installed runtime supports the feature. Service activation, app installation and remote host setup require their existing separately authorized routes. If those are unavailable, report the exact remaining effect and source capability honestly; do not replace service-backed storage with a local overlay or call an unconfigured host connected.
 <!-- codex-section:end id="spec.hq-ui-modernization#ops.delivery.001" -->
