@@ -189,9 +189,11 @@ export class FakeEvent {
   readonly target: unknown;
   defaultPrevented = false;
   propagationStopped = false;
-  constructor(type: string, target: unknown) {
+  readonly isTrusted: boolean;
+  constructor(type: string, target: unknown, isTrusted = true) {
     this.type = type;
     this.target = target;
+    this.isTrusted = isTrusted;
   }
   preventDefault(): void {
     this.defaultPrevented = true;
@@ -201,7 +203,34 @@ export class FakeEvent {
   }
 }
 
+/** Manual observer delivery models pending records and synchronous takeRecords. */
+export class FakeMutationObserver {
+  readonly records: MutationRecord[] = [];
+  disconnected = false;
+  options: MutationObserverInit | undefined;
+  readonly callback: (records: MutationRecord[]) => void;
+  constructor(callback: (records: MutationRecord[]) => void) { this.callback = callback; }
+  observe(_target: unknown, options: MutationObserverInit): void { this.options = options; }
+  takeRecords(): MutationRecord[] { return this.records.splice(0); }
+  disconnect(): void { this.disconnected = true; this.records.splice(0); }
+  enqueue(target: unknown, type = 'characterData', addedNodes: unknown[] = [], removedNodes: unknown[] = []): void {
+    if (!this.disconnected) this.records.push({ target, type, addedNodes, removedNodes } as unknown as MutationRecord);
+  }
+  deliver(): void { this.callback(this.takeRecords()); }
+}
+
 export class FakeWindow {
+  readonly self = this;
+  top: FakeWindow = this;
+  readonly Element = FakeElement;
+  readonly Range = FakeRange;
+  readonly observers: FakeMutationObserver[] = [];
+  readonly MutationObserver = (() => {
+    const observers = this.observers;
+    return class extends FakeMutationObserver {
+      constructor(callback: (records: MutationRecord[]) => void) { super(callback); observers.push(this); }
+    };
+  })();
   readonly document = new FakeDocument();
   innerWidth = 1280;
   innerHeight = 800;
@@ -243,8 +272,8 @@ export class FakeWindow {
   getSelection() {
     return this.selection;
   }
-  dispatch(type: string, target: unknown): FakeEvent {
-    const event = new FakeEvent(type, target);
+  dispatch(type: string, target: unknown, isTrusted = true): FakeEvent {
+    const event = new FakeEvent(type, target, isTrusted);
     for (const listener of this.#listeners.get(type) ?? []) {
       listener(event);
       if (event.propagationStopped) break;
