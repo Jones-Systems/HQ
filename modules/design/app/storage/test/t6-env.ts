@@ -1,4 +1,4 @@
-/** Drives the real PR17 requests code (RequestStore/RequestSession) over a storage port. Synthetic data only. */
+/** Drives the real requests code (PR33 head 896a726d) (RequestStore/RequestSession) over a storage port. Synthetic data only. */
 import type { RequestId, StoragePort as T6StoragePort } from '../../../requests/src/contract.ts';
 import { ManualSchedulerFake, SequentialIdsFake, StepClockFake } from '../../../requests/src/fakes.ts';
 import { RequestSession } from '../../../requests/src/session.ts';

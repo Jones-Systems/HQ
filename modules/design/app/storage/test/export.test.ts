@@ -86,7 +86,7 @@ describe('export is disabled by default', () => {
   });
 });
 
-describe('privacy projection (PR17 v1 packet)', () => {
+describe('privacy projection (v1 packet at requests PR33)', () => {
   it('exports frozen decisions and selected images only, with visible omissions', async () => {
     await fixture(async ({ storage, requestId, otherId, selected, unselectedDigest, unselected }) => {
       // Control: the raw freeze record really does hold the private material, so the checks below mean something.
@@ -181,22 +181,23 @@ describe('privacy projection (PR17 v1 packet)', () => {
   });
 });
 
-describe('binding to the exact PR17 v1 packet', () => {
+describe('binding to the exact requests PR33 head', () => {
   it('uses the schema names of the pinned requests code', () => {
     assert.equal(REQUESTS_PACKET_PIN.packetSchema, PACKET_SCHEMA);
     assert.equal(REQUESTS_PACKET_PIN.freezeSchema, FREEZE_SCHEMA);
     assert.equal(REQUESTS_PACKET_PIN.reviewEventSchema, REVIEW_EVENT_SCHEMA);
     assert.equal(REQUESTS_PACKET_PIN.draftSchema, DRAFT_SCHEMA);
-    assert.equal(REQUESTS_PACKET_PIN.requestsHead, '2438d6ff96a84141e12e30bab2d28d042aa80d01');
+    assert.equal(REQUESTS_PACKET_PIN.requestsHead, '896a726dd92754c17f45e732b5c2cbd07a5ab3fa');
   });
 
   it('fails loudly if the requests source changes, so an extension is re-bound deliberately', () => {
-    // Digest of modules/design/requests/src/*.ts at 2438d6ff. When the requests extension is accepted,
-    // re-run the projection tests against it and update this value together with REQUESTS_PACKET_PIN.
+    // Digest of modules/design/requests/src/*.ts (14 files) at requests PR33, 896a726d. It was
+    // a1196f0a… at PR17 2438d6ff. When the next requests extension is accepted, re-run the projection
+    // tests against it and update this value together with REQUESTS_PACKET_PIN.
     const dir = join(dirname(fileURLToPath(import.meta.url)), '../../../requests/src');
     const lines = readdirSync(dir).filter((name) => name.endsWith('.ts')).sort()
       .map((name) => `${name}\0${createHash('sha256').update(readFileSync(join(dir, name))).digest('hex')}\n`);
-    assert.equal(createHash('sha256').update(lines.join('')).digest('hex'), 'a1196f0a9d2b502fe1af56445f076af361cc6d6bf2d9e989521aa25dacf616a0');
+    assert.equal(createHash('sha256').update(lines.join('')).digest('hex'), 'fa989aea7916ac22bc48aa1ab45d1ba35aa716922e006af256eba1589deba9da');
   });
 });
 
