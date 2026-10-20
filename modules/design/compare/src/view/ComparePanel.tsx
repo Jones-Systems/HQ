@@ -1,3 +1,5 @@
+import { SecondaryBar } from '../../../ui/src/secondary-panels.tsx';
+import { Button } from '@hq/ui';
 import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import type { HostSurfacePlacement, OverlayFrame, PreviewQualification, PreviewSession, SyntheticBlock, VersionSummary } from '../contract.ts';
 import type { PanelRuntime } from '../controller.ts';
@@ -183,7 +185,7 @@ export function ComparePanel({ panel, index, runtime, versions, preview, canRemo
         <span className={`cmp-role cmp-role-${panel.role}`}>{ROLE_LABELS[panel.role]}</span>
         <h2 id={titleId}>{versionLabel}</h2>
       </div>
-      <code className="cmp-version-id" title="Pinned VersionId">{panel.source.versionId}</code>
+      <SecondaryBar name={`compare-controls-${panel.id}`} label={`Panel ${index + 1} controls`}><code className="cmp-version-id" title="Pinned VersionId">{panel.source.versionId}</code>
       <div className={`cmp-source-badge cmp-source-${panel.source.kind}`} data-evidence={label.evidence}>
         <strong>{label.badge}</strong><span>{label.detail}</span>
       </div>
@@ -220,9 +222,10 @@ export function ComparePanel({ panel, index, runtime, versions, preview, canRemo
         </label>
       </div>
       <div className="cmp-panel-actions">
-        <button type="button" onClick={actions.addPanel}>Duplicate</button>
-        <button type="button" onClick={actions.removePanel} disabled={!canRemove}>Remove</button>
+        <Button size="sm" type="button" onClick={actions.addPanel}>Duplicate</Button>
+        <Button size="sm" type="button" onClick={actions.removePanel} disabled={!canRemove}>Remove</Button>
       </div>
+      </SecondaryBar>
     </header>
     <div className="cmp-stage" style={{ paddingInline: PANEL_INSET }}>{body}</div>
     <div className="cmp-resize" role="separator" aria-orientation="vertical" tabIndex={0}

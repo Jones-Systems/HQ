@@ -4,6 +4,7 @@ import { validateDevelopmentUrl, WINDOW_SECURITY } from './security.js';
 
 import { allowedSender, CHANNELS, createServices } from './services.js';
 import { openServiceConfig } from './service-config.js';
+import { wikiAdminIpcHandler } from './wiki-admin.js';
 import { createWikiBridge, openEmittedWiki, wikiIpcHandler } from './wiki-host.js';
 import { catalogPersistence, createCatalogHost } from './catalog-host.js';
 import { createSaveDialog } from './save-dialog.js';
@@ -60,6 +61,10 @@ if (ownsInstance) app.whenReady().then(async () => {
   });
   const exportWork = createWorkExport(config, save);
   const authorized = (event: Electron.IpcMainInvokeEvent) => mainWindow !== undefined && allowedSender(event, mainWindow.webContents, builtUrl, developmentUrl);
+  ipcMain.handle('hq:svc:wiki-admin', wikiAdminIpcHandler(authorized, wiki, async kind => {
+    const result = await dialog.showOpenDialog({ title: kind === 'profile' ? 'Import Wiki source profile' : 'Choose local bare Wiki repository', properties: kind === 'profile' ? ['openFile'] : ['openDirectory'], ...(kind === 'profile' ? { filters: [{ name: 'Source profile', extensions: ['json'] }] } : {}) });
+    return result.canceled ? null : result.filePaths[0] ?? null;
+  }));
   ipcMain.handle(CHANNELS.wiki, wikiIpcHandler(authorized, wiki));
   ipcMain.handle(CHANNELS.social, (event, route: unknown, params: unknown) => authorized(event) ? services.social(route, params) : { ok: false, kind: 'unavailable' });
   ipcMain.handle(CHANNELS.work, (event, route: unknown, params: unknown) => authorized(event) ? (route === 'export' ? exportWork(params) : services.work(route, params)) : { ok: false, kind: 'unavailable' });

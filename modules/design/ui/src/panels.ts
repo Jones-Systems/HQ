@@ -69,9 +69,12 @@ export function maxSize(layout: PanelLayout, panel: PanelId, width: number): num
   return clamp(width - neighbour - MAIN_MIN, PANEL_BOUNDS[panel].min, PANEL_BOUNDS[panel].max);
 }
 
-/** Change one panel's size. The other panel is never resized; the workspace absorbs the difference. */
+/** Collapse below half the minimum width and retain the last open size; never resize the other panel. */
 export function setPanelSize(layout: PanelLayout, panel: PanelId, size: number, width: number): PanelLayout {
   if (!Number.isFinite(size)) return layout;
+  if (size < PANEL_BOUNDS[panel].min / 2) {
+    return layout[panel].collapsed ? layout : togglePanel(layout, panel);
+  }
   const next = Math.round(clamp(size, PANEL_BOUNDS[panel].min, maxSize(layout, panel, width)));
   if (next === layout[panel].size && !layout[panel].collapsed) return layout;
   return { ...layout, [panel]: { size: next, collapsed: false } };
@@ -79,6 +82,9 @@ export function setPanelSize(layout: PanelLayout, panel: PanelId, size: number, 
 
 /** Pointer drag or keyboard step expressed as a change of panel size (positive = wider). */
 export function resizePanel(layout: PanelLayout, panel: PanelId, delta: number, width: number): PanelLayout {
+  if (!Number.isFinite(delta) || delta === 0) return layout;
+  if (layout[panel].collapsed) return delta > 0 ? togglePanel(layout, panel) : layout;
+  if (delta < 0 && layout[panel].size <= PANEL_BOUNDS[panel].min) return togglePanel(layout, panel);
   return setPanelSize(layout, panel, layout[panel].size + delta, width);
 }
 
@@ -97,7 +103,7 @@ export function splitterKey(layout: PanelLayout, panel: PanelId, key: string, sh
   switch (key) {
     case 'ArrowRight': return resizePanel(layout, panel, step * direction, width);
     case 'ArrowLeft': return resizePanel(layout, panel, -step * direction, width);
-    case 'Home': return setPanelSize(layout, panel, PANEL_BOUNDS[panel].min, width);
+    case 'Home': return setPanelSize(layout, panel, 0, width);
     case 'End': return setPanelSize(layout, panel, maxSize(layout, panel, width), width);
     case 'Enter': return togglePanel(layout, panel);
     default: return null;

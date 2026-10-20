@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_LOCATION, formatDestination, parseDestination } from '../../src/navigation.ts';
-import { DEFAULT_LAYOUT, MAIN_MIN, PANEL_BOUNDS, parseLayout, resizePanel, resolveLayout, splitterKey, togglePanel } from '../../src/panels.ts';
+import { DEFAULT_LAYOUT, MAIN_MIN, PANEL_BOUNDS, parseLayout, resizePanel, setPanelSize, resolveLayout, splitterKey, togglePanel } from '../../src/panels.ts';
 import { chromeTheme, FALLBACK_TOKENS, isCssColor, surfaceProps } from '../../src/theme.ts';
 
 test('dark tokens recolour every chrome variable', () => {
@@ -13,8 +13,8 @@ test('dark tokens recolour every chrome variable', () => {
 test('shell-supplied tokens are used; unsafe values fall back and are reported', () => {
   const theme = chromeTheme('dark', { ...FALLBACK_TOKENS.dark, accent: 'oklch(0.7 0.1 250)', text: 'red;} body{display:none', line: 'url(x)' });
   assert.equal(theme.vars['--hqd-accent'], 'oklch(0.7 0.1 250)');
-  assert.equal(theme.vars['--hqd-text'], FALLBACK_TOKENS.dark.text);
-  assert.equal(theme.vars['--hqd-line'], FALLBACK_TOKENS.dark.line);
+  assert.equal(theme.vars['--hqd-text'], `var(--hq-text, ${FALLBACK_TOKENS.dark.text})`);
+  assert.equal(theme.vars['--hqd-line'], `var(--hq-border, ${FALLBACK_TOKENS.dark.line})`);
   assert.deepEqual(theme.rejected, ['text', 'line']);
   assert.ok(!isCssColor('var(--x)'));
   assert.ok(isCssColor('#abcd'));
@@ -52,7 +52,7 @@ test('resizing one panel never changes the other panel', () => {
 });
 
 test('panels clamp to their bounds and keep the workspace at its minimum', () => {
-  assert.equal(resizePanel(DEFAULT_LAYOUT, 'sidebar', -500, 1400).sidebar.size, PANEL_BOUNDS.sidebar.min);
+  assert.equal(resizePanel(DEFAULT_LAYOUT, 'sidebar', -500, 1400).sidebar.collapsed, true);
   assert.equal(resizePanel(DEFAULT_LAYOUT, 'sidebar', 5000, 3000).sidebar.size, PANEL_BOUNDS.sidebar.max);
   const tight = resizePanel(DEFAULT_LAYOUT, 'sidebar', 5000, 900);
   assert.equal(tight.sidebar.size, 900 - DEFAULT_LAYOUT.inspector.size - MAIN_MIN);
@@ -69,12 +69,12 @@ test('narrow windows squeeze effective widths without rewriting stored preferenc
   assert.deepEqual(DEFAULT_LAYOUT.inspector, { size: 300, collapsed: false });
 });
 
-test('splitter keyboard model: arrows move the edge, Home/End bound, Enter collapses', () => {
+test('splitter keyboard model: arrows move the edge, Home collapses, End expands, Enter toggles', () => {
   const width = 1400;
   assert.equal(splitterKey(DEFAULT_LAYOUT, 'sidebar', 'ArrowRight', false, width)?.sidebar.size, 256);
   assert.equal(splitterKey(DEFAULT_LAYOUT, 'sidebar', 'ArrowLeft', true, width)?.sidebar.size, 180);
   assert.equal(splitterKey(DEFAULT_LAYOUT, 'inspector', 'ArrowLeft', false, width)?.inspector.size, 316);
-  assert.equal(splitterKey(DEFAULT_LAYOUT, 'inspector', 'Home', false, width)?.inspector.size, PANEL_BOUNDS.inspector.min);
+  assert.equal(splitterKey(DEFAULT_LAYOUT, 'inspector', 'Home', false, width)?.inspector.collapsed, true);
   assert.equal(splitterKey(DEFAULT_LAYOUT, 'inspector', 'End', false, width)?.inspector.size, PANEL_BOUNDS.inspector.max);
   assert.equal(splitterKey(DEFAULT_LAYOUT, 'sidebar', 'Enter', false, width)?.sidebar.collapsed, true);
   assert.equal(splitterKey(DEFAULT_LAYOUT, 'sidebar', 'a', false, width), null);
@@ -86,4 +86,39 @@ test('stored layouts are validated strictly', () => {
   assert.equal(parseLayout({ ...DEFAULT_LAYOUT, sidebar: { size: 10, collapsed: false } }), null);
   assert.equal(parseLayout({ ...DEFAULT_LAYOUT, extra: 1 }), null);
   assert.equal(parseLayout({ ...DEFAULT_LAYOUT, inspector: { size: 300.5, collapsed: false } }), null);
+});
+
+test('dragging either panel fully closed retains its stored width and restores it', () => {
+  for (const panel of ['sidebar', 'inspector'] as const) {
+    const original = setPanelSize(DEFAULT_LAYOUT, panel, 340, 1600);
+    const closed = setPanelSize(original, panel, 0, 1600);
+    assert.deepEqual(closed[panel], { size: 340, collapsed: true });
+    assert.equal(resolveLayout(closed, 1600)[panel], 0);
+    assert.deepEqual(parseLayout(JSON.parse(JSON.stringify(closed))), closed);
+    assert.deepEqual(togglePanel(closed, panel), original);
+    const restored = resizePanel(closed, panel, 16, 1600);
+    assert.deepEqual(restored, original);
+    assert.equal(setPanelSize(closed, panel, PANEL_BOUNDS[panel].min, 1600)[panel].collapsed, false);
+  }
+});
+
+test('keyboard shrinking at the minimum closes a panel instead of trapping the edge', () => {
+  for (const panel of ['sidebar', 'inspector'] as const) {
+    const minimum = setPanelSize(DEFAULT_LAYOUT, panel, PANEL_BOUNDS[panel].min, 1600);
+    const inward = panel === 'sidebar' ? 'ArrowLeft' : 'ArrowRight';
+    const outward = panel === 'sidebar' ? 'ArrowRight' : 'ArrowLeft';
+    const closed = splitterKey(minimum, panel, inward, false, 1600)!;
+    assert.equal(closed[panel].collapsed, true);
+    assert.equal(splitterKey(closed, panel, inward, false, 1600), closed);
+    assert.deepEqual(splitterKey(closed, panel, outward, false, 1600), minimum);
+  }
+});
+
+test('absent shell tokens use only trusted kit variable names with literal standalone fallbacks', () => {
+  const theme = chromeTheme('light', undefined);
+  assert.equal(theme.vars['--hqd-background'], `var(--hq-canvas, ${FALLBACK_TOKENS.light.background})`);
+  assert.equal(theme.vars['--hqd-accent'], `var(--hq-accent-strong, ${FALLBACK_TOKENS.light.accent})`);
+  assert.deepEqual(theme.rejected, []);
+  assert.equal(isCssColor('var(--hq-text)'), false);
+  assert.equal(isCssColor('url(https://example.invalid)'), false);
 });

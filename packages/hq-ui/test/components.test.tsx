@@ -1,9 +1,9 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  Button, Dialog, IconButton, Menu, SAVE_STATES, SaveIndicator, STATUS_TONES, StateView, StatusChip, Tabs, Toast, ToastRegion, VIEW_STATES,
+  Button, Dialog, IconButton, Menu, Splitter, SAVE_STATES, SaveIndicator, STATUS_TONES, StateView, StatusChip, Tabs, Toast, ToastRegion, VIEW_STATES,
 } from '../src';
 
 // Happy-dom has no layout or colour engine: these prove roles, names and keyboard paths in each chrome scheme.
@@ -302,5 +302,60 @@ describe.each(['light', 'dark'] as const)('primitives in %s chrome', (theme) => 
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Act empty' }));
     await user.keyboard('{Enter}');
     expect(action).toHaveBeenCalledOnce();
+  });
+});
+
+
+describe('resizable panel separator', () => {
+  afterEach(cleanup);
+  it.each(['start', 'end'] as const)('resizes a %s-side panel with arrows and supports full collapse, restore and bounds', async side => {
+    const toggle = vi.fn();
+    function Panel() {
+      const [size, setSize] = useState(120);
+      return <Splitter label="Panel width" side={side} value={size} min={0} max={280} onResize={setSize} onToggle={toggle} />;
+    }
+    render(<Panel />);
+    const separator = screen.getByRole('separator', { name: 'Panel width' });
+    expect(separator.getAttribute('aria-orientation')).toBe('vertical');
+    separator.focus();
+    fireEvent.keyDown(separator, { key: 'ArrowRight' });
+    expect(separator.getAttribute('aria-valuenow')).toBe(side === 'start' ? '128' : '112');
+    fireEvent.keyDown(separator, { key: 'ArrowLeft' });
+    expect(separator.getAttribute('aria-valuenow')).toBe('120');
+    fireEvent.keyDown(separator, { key: 'Home' });
+    expect(separator.getAttribute('aria-valuenow')).toBe('0');
+    expect(document.activeElement).toBe(separator);
+    fireEvent.keyDown(separator, { key: side === 'start' ? 'ArrowLeft' : 'ArrowRight' });
+    expect(separator.getAttribute('aria-valuenow')).toBe('0');
+    fireEvent.keyDown(separator, { key: 'End' });
+    expect(separator.getAttribute('aria-valuenow')).toBe('280');
+    fireEvent.keyDown(separator, { key: 'Enter' });
+    fireEvent.doubleClick(separator);
+    expect(toggle).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['start', 'end'] as const)('captures a pointer for %s-side drag, ignores other pointers and releases on cancel/unmount', side => {
+    const resize = vi.fn();
+    const view = render(<Splitter label="Drag panel" side={side} value={0} min={0} max={280} onResize={resize} />);
+    const separator = screen.getByRole('separator', { name: 'Drag panel' });
+    let captured: number | null = null;
+    separator.setPointerCapture = vi.fn(id => { captured = id; });
+    separator.hasPointerCapture = vi.fn(id => captured === id);
+    separator.releasePointerCapture = vi.fn(() => { captured = null; });
+    fireEvent.pointerDown(separator, { pointerId: 1, button: 0, clientX: 200 });
+    expect(separator.setPointerCapture).toHaveBeenCalledWith(1);
+    expect(document.activeElement).toBe(separator);
+    fireEvent.pointerMove(separator, { pointerId: 2, clientX: 240 });
+    expect(resize).not.toHaveBeenCalled();
+    fireEvent.pointerMove(separator, { pointerId: 1, clientX: side === 'start' ? 240 : 160 });
+    expect(resize).toHaveBeenLastCalledWith(40);
+    fireEvent.pointerCancel(separator, { pointerId: 1 });
+    expect(separator.releasePointerCapture).toHaveBeenCalledWith(1);
+    resize.mockClear();
+    fireEvent.pointerMove(separator, { pointerId: 1, clientX: 280 });
+    expect(resize).not.toHaveBeenCalled();
+    fireEvent.pointerDown(separator, { pointerId: 3, button: 0, clientX: 200 });
+    view.unmount();
+    expect(separator.releasePointerCapture).toHaveBeenLastCalledWith(3);
   });
 });

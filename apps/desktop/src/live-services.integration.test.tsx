@@ -40,7 +40,7 @@ it('explicit unconfigured mounts labelled examples once; later settings changes 
   const domains = createServiceDomains(() => ({ ...services, config: { ...services.config, status } }));
   const p = props(); const view = render(<domains.Work {...p} />);
   expect(await screen.findByText('Work: Synthetic example.')).toBeTruthy();
-  expect(screen.getAllByText(RELOAD_NOTE)).toHaveLength(1);
+  expect(screen.getAllByTitle(RELOAD_NOTE)).toHaveLength(1);
   status.mockResolvedValue(configured); view.unmount();
   render(<domains.Work {...p} />);
   expect(await screen.findByText('Work: Synthetic example.')).toBeTruthy();

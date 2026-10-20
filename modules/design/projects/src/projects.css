@@ -81,3 +81,12 @@
 .hqp-selection dl { margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: 96px 1fr; gap: 6px; font-size: 11px; }
 .hqp-links ul { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
 .hqp-links li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+.hqp-detail-body { display: flex; gap: 0; }
+.hqp-detail-scroller { flex: 1; min-width: 0; }
+
+.hqp-information { display: flex; flex: 0 0 auto; position: relative; width: calc(var(--hqp-information-width, 280px) + 6px); min-width: 0; }
+.hqp-information-body { width: var(--hqp-information-width, 280px); min-width: 0; padding-top: 32px; overflow: auto; box-sizing: border-box; }
+.hqp-information-body[hidden] { display: none; }
+.hqp-information-grip { width: 6px; flex: 0 0 6px; touch-action: none; cursor: col-resize; }
+.hqp-information-toggle { position: absolute; top: 2px; right: 6px; z-index: 2; padding: 2px 6px; }

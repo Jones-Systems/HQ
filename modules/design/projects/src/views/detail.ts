@@ -1,9 +1,87 @@
-import { createElement as h, useLayoutEffect, useRef, useState } from 'react';
+import { createElement as h, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { VIEW_KINDS, versionsOf, type ProjectContent, type VersionRecord, type ViewKind, type ViewRecord } from '../content.ts';
 import type { ProjectsController, ProjectsSnapshot } from '../controller.ts';
 import { memoryFor } from '../session.ts';
 import { count } from './gallery.ts';
 import { useThumbnail } from './hooks.ts';
+
+const PANEL_KEY = 'hq.design.secondary.project-information.v1';
+function readInformationSize(): { width: number; restored: number } {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(PANEL_KEY) ?? 'null');
+    if (saved && typeof saved === 'object' && 'width' in saved && 'restored' in saved
+      && typeof saved.width === 'number' && Number.isFinite(saved.width) && saved.width >= 0 && saved.width <= 560
+      && typeof saved.restored === 'number' && Number.isFinite(saved.restored) && saved.restored > 0 && saved.restored <= 560) return { width: saved.width, restored: saved.restored };
+  } catch { /* Display preference storage is optional. */ }
+  return { width: 280, restored: 280 };
+}
+
+function InformationPanel({ children }: { children?: ReactNode }) {
+  const [size, setSize] = useState(readInformationSize);
+  const root = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ id: number; x: number; width: number } | null>(null);
+  const id = useId();
+  useLayoutEffect(() => {
+    root.current?.style.setProperty('--hqp-information-width', `${size.width}px`);
+    try { localStorage.setItem(PANEL_KEY, JSON.stringify(size)); } catch { /* Keep resizing available. */ }
+  }, [size]);
+  const resize = (value: number) => setSize(current => {
+    const width = Math.max(0, Math.min(560, value));
+    return { width, restored: width > 0 ? width : current.restored };
+  });
+  const toggle = () => setSize(current => ({ ...current, width: current.width === 0 ? current.restored : 0 }));
+  const action = `${size.width === 0 ? 'Show' : 'Hide'} Project information`;
+  return h('div', { className: 'hqp-information', ref: root },
+    h('div', { className: 'hq-splitter hqp-information-grip', role: 'separator', tabIndex: 0, 'aria-label': 'Resize Project information',
+      'aria-orientation': 'vertical', 'aria-valuemin': 0, 'aria-valuemax': 560, 'aria-valuenow': size.width,
+      title: 'Resize Project information · drag or use arrow keys · double-click to toggle',
+      onPointerDown: event => {
+        if (event.button !== 0 || drag.current) return;
+        event.preventDefault(); event.currentTarget.focus(); event.currentTarget.setPointerCapture(event.pointerId);
+        drag.current = { id: event.pointerId, x: event.clientX, width: size.width };
+      },
+      onPointerMove: event => { if (drag.current?.id === event.pointerId) resize(drag.current.width - event.clientX + drag.current.x); },
+      onPointerUp: event => {
+        if (drag.current?.id !== event.pointerId) return;
+        const previous = drag.current?.width;
+        drag.current = null;
+        if (previous !== undefined && previous > 0) setSize(current => current.width === 0 ? { ...current, restored: previous } : current);
+        if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      },
+      onPointerCancel: event => {
+        if (drag.current?.id !== event.pointerId) return;
+        const previous = drag.current?.width;
+        drag.current = null;
+        if (previous !== undefined && previous > 0) setSize(current => current.width === 0 ? { ...current, restored: previous } : current);
+        if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      },
+      onLostPointerCapture: () => { drag.current = null; }, onDoubleClick: toggle,
+      onKeyDown: event => {
+        const step = event.shiftKey ? 32 : 8;
+        if (event.key === 'ArrowLeft') resize(size.width + step);
+        else if (event.key === 'ArrowRight') resize(size.width - step);
+        else if (event.key === 'Home') resize(0);
+        else if (event.key === 'End') resize(560);
+        else if (event.key === 'Enter') toggle();
+        else return;
+        event.preventDefault();
+      },
+    }),
+    h('button', { className: 'hqp-information-toggle', type: 'button', 'aria-label': action, title: action, 'aria-controls': id, 'aria-expanded': size.width > 0, onClick: toggle }, size.width > 0 ? '›' : '‹'),
+    h('div', { className: 'hqp-information-body', hidden: size.width === 0, id }, children));
+}
+
+function ProjectTools({ children }: { children?: ReactNode }) {
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem('hq.design.secondary.project-tools.v1') !== 'closed'; } catch { return true; }
+  });
+  const id = useId();
+  const action = `${open ? 'Hide' : 'Show'} Project tools`;
+  return h('div', null, h('button', { type: 'button', 'aria-label': action, title: action, 'aria-controls': id, 'aria-expanded': open, onClick: () => setOpen(current => {
+    try { localStorage.setItem('hq.design.secondary.project-tools.v1', current ? 'closed' : 'open'); } catch { /* Session state remains available. */ }
+    return !current;
+  }) }, open ? '⌃' : '⌄'), h('div', { id, hidden: !open }, children));
+}
 
 function VersionCard({ controller, version, selected }: { controller: ProjectsController; version: VersionRecord; selected: boolean }) {
   const state = useThumbnail(controller.thumbnails, version.thumbnail, 'visible');
@@ -153,7 +231,7 @@ export function ProjectDetail({ controller, snapshot }: { controller: ProjectsCo
 
   return h('section', { className: 'hqp-detail', 'data-project': content.projectId },
     header,
-    h('div', { className: 'hqp-filters', role: 'search' },
+    h(ProjectTools, null, h('div', { className: 'hqp-filters', role: 'search' },
       h('label', { className: 'hqp-field hqp-field-grow' }, h('span', null, 'Filter views'),
         h('input', { type: 'search', value: memory.filters.query, placeholder: 'View title',
           onChange: (event: { target: { value: string } }) => controller.setDetailFilters({ query: event.target.value }) })),
@@ -164,7 +242,7 @@ export function ProjectDetail({ controller, snapshot }: { controller: ProjectsCo
               ? memory.filters.kinds.filter((other) => other !== kind) : [...memory.filters.kinds, kind] }) }), kind)))),
     h('div', { className: 'hqp-forms' },
       h(AddViewForm, { controller, disabled: saving }),
-      h(AddVersionForm, { controller, content, disabled: saving, defaultView: memory.selection.viewId })),
+      h(AddVersionForm, { controller, content, disabled: saving, defaultView: memory.selection.viewId }))),
     snapshot.edit.status === 'error' ? h('p', { className: 'hqp-error', role: 'alert' }, snapshot.edit.message) : null,
     h('div', { className: 'hqp-detail-body' },
       h('div', {
@@ -174,7 +252,7 @@ export function ProjectDetail({ controller, snapshot }: { controller: ProjectsCo
       content.views.length === 0 ? h('p', { className: 'hqp-empty' }, 'This project has no views yet. Add one to start collecting versions.') : null,
       views.map((view) => h(ViewSection, { key: view.id, controller, content, view,
         collapsed: memory.collapsedViews.includes(view.id), selectedVersion: memory.selection.versionId }))),
-      h('div', { className: 'hqp-side' },
+      h(InformationPanel, null, h('div', { className: 'hqp-side' },
         h(Selection, { content, versionId: memory.selection.versionId }),
-        h(Links, { controller, snapshot, content, disabled: saving }))));
+        h(Links, { controller, snapshot, content, disabled: saving })))));
 }

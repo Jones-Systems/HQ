@@ -6,17 +6,17 @@ import type { SaveState } from '@hq/ui';
 
 export type ChangeResult =
   | { readonly ok: true; readonly draft: Draft }
-  | { readonly ok: false; readonly error: PortError | { readonly kind: 'blocked'; readonly message: string } };
+  | { readonly ok: false; readonly error: PortError | { readonly kind: 'blocked'; readonly message: string }; readonly reconciliation?: Reconciliation['kind'] };
 
 export const BLOCKED_BY_EDIT = 'This draft has unsaved edits in the Library. Save or discard them first.';
 
 /**
- * Changes stored fields of one draft (planned date, archive state) through exactly one versioned
+ * Changes stored fields of one draft (planning date/time, archive state) through exactly one versioned
  * save of the stored record. Unsaved editor text is never folded in: a draft with unsaved edits is
  * refused, and a clean open editor is closed so it reopens from the saved record.
  */
 export async function changeDraft(
-  session: SocialSession, port: SocialWorkspacePort, draft: Draft, patch: Partial<Pick<DraftFields, 'planned_date' | 'archived'>>,
+  session: SocialSession, port: SocialWorkspacePort, draft: Draft, patch: Partial<Pick<DraftFields, 'planned_date' | 'planning_slot' | 'archived'>>, reconcileUnknown = false,
 ): Promise<ChangeResult> {
   const open = session.getState().editors[draft.id];
   if (open && (isDirty(open) || open.status !== 'editing')) return { ok: false, error: { kind: 'blocked', message: BLOCKED_BY_EDIT } };
@@ -27,6 +27,12 @@ export async function changeDraft(
   session.editDraft(key, patch);
   const saved = await session.saveEditor(port, key);
   const error = session.getState().editors[key]?.error;
+  if (!saved && error?.kind === 'unknown' && reconcileUnknown) {
+    const reconciled = await reconcileUnknownSave(session, port, key);
+    session.closeEditor(key);
+    if (reconciled.kind === 'applied') return { ok: true, draft: reconciled.draft };
+    return { ok: false, error, reconciliation: reconciled.kind };
+  }
   session.closeEditor(key);
   if (saved) return { ok: true, draft: saved };
   return { ok: false, error: error ?? { kind: 'unknown', attemptedAt: new Date().toISOString() } };
@@ -43,8 +49,8 @@ export function saveStateOf(editor: DraftEditor): SaveState {
 export function sameStoredFields(draft: Draft, fields: DraftFields, features: readonly string[]): boolean {
   const checked = checkDraft(fields, { features });
   if (!checked.ok) return false;
-  const { links: _links, ...stored } = draftFields(draft);
-  return JSON.stringify(stored) === JSON.stringify(checked.value.fields)
+  const actual = checkDraft(draftFields(draft), { features });
+  return actual.ok && JSON.stringify(actual.value.fields) === JSON.stringify(checked.value.fields)
     && (!features.includes(FEATURE_HQ_REFERENCES) || JSON.stringify(draft.links ?? []) === JSON.stringify(checked.value.links ?? []));
 }
 

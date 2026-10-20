@@ -1,3 +1,5 @@
+import { SecondaryBar } from '../../../ui/src/secondary-panels.tsx';
+import { Button } from '@hq/ui';
 import { useMemo, useSyncExternalStore } from 'react';
 import type { CompareController, ControllerError } from '../controller.ts';
 import { parseVersionId } from '../ids.ts';
@@ -51,19 +53,19 @@ export function CompareWorkspace({ controller, title = 'Compare', renderOverlay,
   const baseline = baselineOf(comparison);
   const leader = baseline?.id ?? comparison.panels[0]?.id ?? null;
   return <div className="cmp-workspace">
-    <div className="cmp-toolbar" role="toolbar" aria-label="Comparison">
+    <SecondaryBar name="compare-tools" label="Comparison tools"><div className="cmp-toolbar" role="toolbar" aria-label="Comparison">
       <h1 className="cmp-heading">{title}</h1>
-      <button type="button" aria-pressed={comparison.syncScroll}
+      <Button size="sm" type="button" aria-pressed={comparison.syncScroll}
         onClick={() => controller.setSyncScroll(!comparison.syncScroll, leader)}>
         Synced scroll: {comparison.syncScroll ? 'On' : 'Off'}
-      </button>
-      <button type="button" disabled={leader === null} onClick={() => { if (leader !== null) controller.matchViewports(leader); }}>
+      </Button>
+      <Button size="sm" type="button" disabled={leader === null} onClick={() => { if (leader !== null) controller.matchViewports(leader); }}>
         Match viewports to {baseline === null ? 'first panel' : 'baseline'}
-      </button>
-      <button type="button" onClick={() => { void controller.save(); }}>Save layout</button>
+      </Button>
+      <Button size="sm" type="button" onClick={() => { void controller.save(); }}>Save layout</Button>
       <span className="cmp-save-state" role="status">{snapshot.dirty ? 'Unsaved layout changes' : 'Layout saved'}</span>
       {snapshot.preview?.qualification === 'labelled-fake' && <span className="cmp-fake-flag">Labelled fake previews</span>}
-    </div>
+    </div></SecondaryBar>
     {snapshot.lastError !== null && <p className="cmp-error" role="alert">{ERROR_TEXT[snapshot.lastError]}</p>}
     <div className="cmp-strip">
       {comparison.panels.map((panel, index) => <PanelSlot key={panel.id} controller={controller} panel={panel} index={index}

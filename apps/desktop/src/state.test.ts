@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APPEARANCE_KEY, DEFAULT_STATE, navigate, navigationKey, persist, readAppearance, readNavigation, resolveAppearance, type StoragePort } from './state';
+import { APPEARANCE_KEY, RAIL_KEY, cycleAppearance, readRail, resizeRail, toggleRail, DEFAULT_STATE, navigate, navigationKey, persist, readAppearance, readNavigation, resolveAppearance, type StoragePort } from './state';
 
 function memoryStorage(): StoragePort {
   const values = new Map<string, string>();
@@ -64,4 +64,31 @@ it('adds Wiki home to old three-domain state and preserves current Wiki destinat
   expect(readNavigation(storage, 'a').destinations.wiki).toBe('home');
   const current = navigate(readNavigation(storage, 'a'), 'wiki', 'topics/bl');
   persist(storage, navigationKey('a'), JSON.stringify(current)); expect(readNavigation(storage, 'a')).toEqual(current);
+});
+
+
+describe('rail and appearance controls', () => {
+  it('cycles light, dark and system in order', () => {
+    expect(cycleAppearance('light')).toBe('dark');
+    expect(cycleAppearance('dark')).toBe('system');
+    expect(cycleAppearance('system')).toBe('light');
+  });
+  it('restores a resized rail after collapse and a reload', () => {
+    const storage = memoryStorage();
+    const resized = resizeRail(readRail(storage), 232);
+    const collapsed = resizeRail(resized, 64);
+    persist(storage, RAIL_KEY, JSON.stringify(collapsed));
+    expect(readRail(storage)).toEqual({ width: 64, expanded: 232 });
+    expect(toggleRail(readRail(storage))).toEqual({ width: 232, expanded: 232 });
+    expect(toggleRail(resized)).toEqual(collapsed);
+    expect(resizeRail(resized, 500).width).toBe(280);
+    expect(resizeRail(resized, -20).width).toBe(64);
+  });
+  it.each(['null', '{broken', '{}', '{"width":10,"expanded":160}', '{"width":64,"expanded":64}', '{"width":"160","expanded":160}'])('ignores malformed rail preferences: %s', value => {
+    const storage = memoryStorage(); storage.setItem(RAIL_KEY, value);
+    expect(readRail(storage)).toEqual({ width: 160, expanded: 160 });
+  });
+  it('keeps rail controls usable with inaccessible storage', () => {
+    expect(readRail({ getItem: () => { throw new Error('blocked'); }, setItem: () => {} })).toEqual({ width: 160, expanded: 160 });
+  });
 });

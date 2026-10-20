@@ -126,3 +126,30 @@ describe('fixture workspace', () => {
     expect(serviceTimestamp(new Date('2026-10-20T12:00:00.042Z'))).toBe('2026-10-20T12:00:00.042000+00:00');
   });
 });
+
+import { FEATURE_HQ_EDITORIAL_TIMEBOX } from '../port';
+
+describe('fixture editorial timeboxes', () => {
+  it('saves and clears atomically, retains times on old-client omission and refuses stale versions', async () => {
+    const { port, controls } = createFixtureWorkspace({ features: [FEATURE_HQ_EDITORIAL_TIMEBOX] });
+    const draft = (await port.snapshot()).content.find((item) => item.id === FIXTURE_IDS.autumnBlend)!;
+    const slot = { start: '09:15', duration_minutes: 30, timezone: 'America/New_York' };
+    const saved = await port.saveDraft({ ...draft, planning_slot: slot });
+    expect(saved).toMatchObject({ planning_slot: slot, version: draft.version + 1 });
+    await expect(port.saveDraft({ ...draft, planning_slot: null })).rejects.toMatchObject({ error: { kind: 'conflict' } });
+    const { planning_slot: _slot, ...legacy } = saved;
+    const retained = await port.saveDraft({ ...legacy, title: 'Old client edit' });
+    expect(retained.planning_slot).toEqual(slot);
+    controls.restart();
+    expect((await port.snapshot()).content.find((item) => item.id === draft.id)?.planning_slot).toEqual(slot);
+    const cleared = await port.saveDraft({ ...retained, planning_slot: null });
+    expect(cleared).toMatchObject({ planned_date: draft.planned_date, planning_slot: null });
+    const retimed = await port.saveDraft({ ...cleared, planning_slot: slot });
+    const { planning_slot: _time, ...older } = retimed;
+    expect(await port.saveDraft({ ...older, planned_date: '' })).toMatchObject({ planned_date: '', planning_slot: null });
+  });
+  it('does not advertise or return slots on an unsupported fixture', async () => {
+    const fixture = createFixtureWorkspace({ features: [] });
+    expect((await fixture.port.snapshot()).content.every((draft) => !('planning_slot' in draft))).toBe(true);
+  });
+});

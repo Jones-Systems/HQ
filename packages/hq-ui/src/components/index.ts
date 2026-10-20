@@ -10,3 +10,4 @@ export { STATUS_TONES, StatusChip, type StatusChipProps, type StatusTone } from 
 export { StateView, VIEW_STATES, type StateViewAction, type StateViewProps, type ViewState } from './StateView';
 export { Tabs, type TabItem, type TabsProps } from './Tabs';
 export { Toast, ToastRegion, type ToastAction, type ToastProps, type ToastRegionProps } from './Toast';
+export { Splitter, type SplitterProps } from './Splitter';

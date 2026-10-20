@@ -21,5 +21,5 @@ export const MODULES: Readonly<Record<DomainId, ComponentType<ModulePort>>> = {
   wiki: wiki.Component,
 };
 
-/** Module-area presentation per domain. 'fill' modules get the whole workspace below the context bar, unpadded. */
+/** Module-area presentation per domain. 'fill' modules own their internal scrolling; all module mounts are unpadded. */
 export const MODULE_PRESENTATION: Readonly<Partial<Record<DomainId, 'fill'>>> = { design: designDomain.presentation, wiki: wiki.presentation };

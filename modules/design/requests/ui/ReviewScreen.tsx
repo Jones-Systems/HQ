@@ -1,3 +1,4 @@
+import { Button } from '@hq/ui';
 import { useState, type ComponentType } from 'react';
 import { CLAIM_LEVELS, type ClaimJudgment, type CompareSlotProps, type ReturnedCandidate, type ReviewDecision } from '../src/contract.ts';
 import { CLAIM_LEVEL_LABELS, reviewCandidate } from '../src/review.ts';
@@ -86,8 +87,8 @@ export function ReviewScreen({ session, state, candidate, CompareSlot }: ReviewS
       <textarea rows={3} value={note} disabled={disabled} onChange={(event) => setNote(event.target.value)} />
     </label>
     <div className="hqr-inline">
-      {DECISIONS.map((item) => <button key={item.decision} type="button" disabled={disabled} className={item.decision === 'accept' ? 'hqr-primary' : undefined}
-        onClick={() => { void decide(item.decision); }}>{item.label}</button>)}
+      {DECISIONS.map((item) => <Button key={item.decision} type="button" disabled={disabled} variant={item.decision === 'accept' ? 'primary' : 'secondary'}
+        onClick={() => { void decide(item.decision); }}>{item.label}</Button>)}
     </div>
     <p className="hqr-hint">Decisions are appended to this request's history. Revise starts a new linked draft and keeps all evidence. Reject records that you declined the result; it starts no draft and no work.</p>
 

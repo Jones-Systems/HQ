@@ -1,0 +1,21 @@
+.connections { min-width: 0; max-width: 100%; color: var(--hq-text-muted); font-size: 11px; padding: 6px 0; }
+.connections-heading, .connection-row { display: flex; align-items: center; gap: 6px; }
+.connections-heading { justify-content: space-between; font-weight: 600; }
+.connection-row { min-height: 34px; }
+.connection-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; line-height: 1.35; }
+.connection-copy strong { color: var(--hq-text); font-size: 11px; font-weight: 500; }
+.connection-copy > span { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connection-shape { color: var(--hq-text-muted); font-size: 10px; flex: none; }
+.connection-row--good .connection-shape { color: var(--hq-success, #24724c); }
+.connection-row--bad .connection-shape { color: var(--hq-warning, #94701c); }
+.connections--compact { display: flex; align-items: center; flex-direction: column; }
+.connections--compact .connection-row { gap: 0; }
+.connections-sr { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.connection-manager { display: grid; gap: 16px; }
+.connection-manager form, .wiki-manager { display: grid; gap: 8px; }
+.connection-manager h3, .connection-manager p { margin: 0; }
+.connection-manager label, .connection-manager p { font-size: 13px; }
+.connection-manager input { width: 100%; box-sizing: border-box; }
+.wiki-manager-source { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-block: 8px; border-top: 1px solid var(--hq-border); }
+.wiki-manager-source > span:first-child { flex: 1; }
+.wiki-manager-actions { display: flex; flex-wrap: wrap; gap: 8px; }

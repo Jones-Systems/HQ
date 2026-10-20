@@ -4,14 +4,15 @@ import type { IntendedScheme, ShellThemeTokens, SurfaceKind, SurfaceProps, Surfa
 export const TOKEN_NAMES = ['background', 'surface', 'text', 'muted', 'line', 'selected', 'accent'] as const satisfies readonly (keyof ShellThemeTokens)[];
 
 /**
- * Fallback tokens mirroring the shell stylesheet. Used only when the shell
- * adapter supplies an appearance without tokens (today's ModulePort), or a
- * supplied token fails validation.
+ * Literal fallbacks for standalone chrome. The shared kit supplies the active palette
+ * when no valid shell colour is supplied; untrusted CSS never enters the variable reference.
  */
 export const FALLBACK_TOKENS: Readonly<Record<ResolvedAppearance, ShellThemeTokens>> = {
   light: { background: '#f8f9fb', surface: '#ffffff', text: '#20232a', muted: '#69717e', line: '#e2e5eb', selected: '#e9edf6', accent: '#516aa2' },
   dark: { background: '#17191d', surface: '#1d2025', text: '#eceef2', muted: '#a2a9b5', line: '#30353d', selected: '#2b3446', accent: '#a2b8ee' },
 };
+
+const KIT_TOKENS = { background: 'canvas', surface: 'surface', text: 'text', muted: 'text-muted', line: 'border', selected: 'surface-selected', accent: 'accent-strong' } as const;
 
 /** Conservative colour grammar: no url(), var(), nesting, or declaration breakouts. */
 export function isCssColor(value: unknown): value is string {
@@ -33,7 +34,7 @@ export function chromeTheme(appearance: ResolvedAppearance, tokens: ShellThemeTo
   const entries = TOKEN_NAMES.map((name) => {
     const supplied = tokens?.[name];
     if (supplied !== undefined && !isCssColor(supplied)) rejected.push(name);
-    return [`--hqd-${name}`, isCssColor(supplied) ? supplied : fallback[name]] as const;
+    return [`--hqd-${name}`, isCssColor(supplied) ? supplied : `var(--hq-${KIT_TOKENS[name]}, ${fallback[name]})`] as const;
   });
   return { appearance, vars: Object.fromEntries(entries) as ChromeTheme['vars'], rejected };
 }

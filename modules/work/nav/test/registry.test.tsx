@@ -86,7 +86,7 @@ describe('Work descriptor in the T0 registry', () => {
     expect(screen.getByText('Example data')).toBeTruthy();
     expect(screen.getByText('Planner items aren’t project-scoped · showing all planning')).toBeTruthy();
     // The shell's project context is unchanged; Work never switches it.
-    expect(screen.getByText('HQ workspace')).toBeTruthy();
+    expect(screen.getByText('Local projects')).toBeTruthy();
     expect(recorded.writes()).toHaveLength(0);
     expect(recorded.execution()).toHaveLength(0);
   });

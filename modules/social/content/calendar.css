@@ -1,0 +1,7 @@
+.soc-calendar-layout.soc-calendar-body { display: grid; grid-template-columns: minmax(0, 1fr) 8px var(--soc-calendar-tray-width, 240px); gap: 0; align-items: stretch; }
+.soc-calendar-main { min-width: 0; overflow: auto; }
+.soc-calendar-layout > .soc-tray { min-width: 0; overflow: auto; }
+.soc-calendar-layout[data-tray-collapsed] { grid-template-columns: minmax(0, 1fr) 8px 48px; }
+.soc-calendar-layout[data-tray-collapsed] > .soc-tray { padding: 4px; }
+.soc-calendar-layout[data-tray-collapsed] > .soc-tray h3 { writing-mode: vertical-rl; margin: 12px auto; }
+.soc-calendar-layout .hq-calendar-all-day .soc-chip { white-space: normal; }

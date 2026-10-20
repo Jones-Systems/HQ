@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { contrastRatio, parseColor } from '@hq/ui';
 import { DATE_KIND_IDS, STATUS_IDS, withDerived, type Item } from '../../core';
+import { calendarDays, displayedInterval, gridDatePatch, layoutTimedEntries, snapMinute } from '../time-grid';
 import { VIEW_TODAY, viewItems } from '../fixtures';
 import {
-  addDatePatch, outsideEntries, removeDatePatch, rescheduleDatePatch, scheduleDay, shiftDatePatch, stepHorizon,
+  clearTimePatch, retimeDatePatch, timeboxPatch, addDatePatch, outsideEntries, removeDatePatch, rescheduleDatePatch, scheduleDay, shiftDatePatch, stepHorizon,
   timelineGeometry, timelineScale, untouchedDays, upcomingEntries,
 } from '../moves';
 
@@ -150,5 +151,58 @@ describe('module-local Work roles', () => {
     expect(css).not.toMatch(/\bfilter\s*:/);
     expect(css).not.toMatch(/mix-blend-mode/);
     expect(css).toMatch(/prefers-reduced-motion: reduce/);
+  });
+});
+
+describe('timed calendar patches and layout', () => {
+  it('preserves kind, zone, note and unrelated dates when moving a timebox', () => {
+    const item = asRead(byId('ex-library'));
+    item.dates[0] = { ...item.dates[0]!, end_time: '11:30', note: 'Bring the card' };
+    const patch = retimeDatePatch(item, 'date-library', '2026-10-22', 660)!;
+    expect(patch.dates![0]).toEqual({ id: 'date-library', kind: 'event', precision: 'day', value: '2026-10-22', time: '11:00', end_time: '12:00', tz: 'America/New_York', note: 'Bring the card' });
+    expect(item.dates[0].time).toBe('10:30');
+  });
+
+  it('uses a 30 minute new timebox and keeps a start-only move start-only', () => {
+    const item = byId('ex-library');
+    expect(timeboxPatch(item, 'date-library', '2026-10-21', 600, 'Europe/London')!.dates![0]).toMatchObject({ time: '10:00', end_time: '10:30', tz: 'America/New_York' });
+    expect(retimeDatePatch(item, 'date-library', '2026-10-21', 600)!.dates![0]).toMatchObject({ time: '10:00', end_time: null });
+    expect(timeboxPatch(byId('ex-bike'), null, '2026-10-21', 540, 'Europe/London', 'deadline')!.dates!.at(-1)).toMatchObject({ kind: 'deadline', time: '09:00', end_time: '09:30', tz: 'Europe/London' });
+  });
+
+  it('rejects midnight crossings, invalid periods, short resizes and DST gaps without a patch', () => {
+    const item = byId('ex-library');
+    expect(retimeDatePatch(item, 'date-library', '2026-10-21', 1425)).toBeNull();
+    expect(retimeDatePatch(item, 'date-library', '2026-03-08', 150)).toBeNull();
+    expect(timeboxPatch(item, 'date-library', '2026-03-08', 90, 'America/New_York', 'event', 60)).toBeNull();
+    expect(timeboxPatch(item, 'date-library', '2026-02-30', 600, 'America/New_York')).toBeNull();
+    expect(timeboxPatch(item, 'date-library', '2026-10-21', 600, 'America/New_York', 'event', 10)).toBeNull();
+    expect(clearTimePatch(item, 'date-library', '2026-10-22')!.dates![0]).toMatchObject({ value: '2026-10-22', time: null, end_time: null, tz: null });
+  });
+
+  it('lays overlapping entries in independent columns and reuses a column at exact boundaries', () => {
+    const item = byId('ex-library');
+    const entries = [['a', '09:00', '10:00'], ['b', '09:30', '10:30'], ['c', '10:00', '11:00'], ['d', '11:00', '11:30']].map(([id, time, end_time]) => ({ item, entry: { ...item.dates[0]!, id: `date-${id}`, time: time!, end_time: end_time! } }));
+    expect(layoutTimedEntries(entries).map(({ column, columns }) => [column, columns])).toEqual([[0, 2], [1, 2], [0, 2], [0, 1]]);
+    expect(calendarDays('2026-10-21', 'week', 'mon')).toEqual(['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25']);
+    expect(snapMinute(607)).toBe(600);
+    expect(snapMinute(608)).toBe(615);
+  });
+
+  it('positions cross-zone dates in the display zone and converts drops back to the source zone', () => {
+    const item = byId('ex-library');
+    const entry = item.dates[0]!;
+    expect(displayedInterval(entry, 'Europe/London')).toMatchObject({ day: '2026-10-21', start: 930, end: 960 });
+    expect(gridDatePatch(item, entry, '2026-10-22', 960, 'Europe/London')!.dates![0]).toMatchObject({ value: '2026-10-22', time: '11:00', end_time: null, tz: 'America/New_York' });
+    expect(gridDatePatch(item, entry, '2026-03-29', 90, 'Europe/London')).toBeNull();
+  });
+
+  it('splits a display-midnight crossing into clipped pieces without changing the stored date', () => {
+    const item = byId('ex-library');
+    const entry = { ...item.dates[0]!, time: '18:30', end_time: '20:30' };
+    const entries = [{ item, entry }];
+    expect(layoutTimedEntries(entries, '2026-10-21', 'Europe/London')[0]).toMatchObject({ start: 1410, end: 1440 });
+    expect(layoutTimedEntries(entries, '2026-10-22', 'Europe/London')[0]).toMatchObject({ start: 0, end: 90 });
+    expect(entry.value).toBe('2026-10-21');
   });
 });

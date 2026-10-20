@@ -80,6 +80,7 @@ export interface ServiceConfigTransport {
   status(domain: ServiceDomain): Promise<ServiceConfigStatus>;
 }
 export interface HqServices {
+  readonly wikiAdmin?: Readonly<import('./wiki-admin.js').WikiAdminTransport>;
   readonly wiki?: Readonly<import('./wiki.js').WikiServiceTransport>;
   readonly social: Readonly<SocialServiceTransport>;
   readonly work: Readonly<WorkServiceTransport>;

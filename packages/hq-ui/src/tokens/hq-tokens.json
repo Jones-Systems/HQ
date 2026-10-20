@@ -1,7 +1,7 @@
 {
   "meta": {
     "name": "HQ visual system tokens",
-    "version": "0.1.0-draft",
+    "version": "0.2.0-draft",
     "status": "preliminary design artifact; not a published package or frozen contract",
     "modes": ["light", "dark"],
     "cssPrefix": "hq",
@@ -13,35 +13,35 @@
     ]
   },
   "color": {
-    "canvas":          { "light": "#E6E5DD", "dark": "#0B0C0A", "use": "Window backdrop: titlebar and rail bezel" },
-    "nav":             { "light": "#F0EFE8", "dark": "#121311", "use": "Secondary navigation column" },
-    "surface":         { "light": "#FAF9F5", "dark": "#171815", "use": "Base working surface (foundation: base surface)" },
-    "surface-raised":  { "light": "#FFFFFF", "dark": "#1E1F1B", "use": "Panels, cards, menus (foundation: raised surface)" },
-    "surface-overlay": { "light": "#FFFFFF", "dark": "#262722", "use": "Popovers, dialogs, toasts" },
-    "surface-sunken":  { "light": "#F0EFE9", "dark": "#0F100E", "use": "Inputs, wells, code" },
-    "surface-hover":   { "light": "rgba(25, 26, 22, 0.055)", "dark": "rgba(237, 236, 229, 0.06)", "use": "Hover overlay on any surface" },
-    "surface-pressed": { "light": "rgba(25, 26, 22, 0.10)", "dark": "rgba(237, 236, 229, 0.11)", "use": "Pressed overlay" },
-    "surface-selected":{ "light": "rgba(25, 26, 22, 0.075)", "dark": "rgba(237, 236, 229, 0.085)", "use": "Selected rail/nav item fill (paired with an indicator bar)" },
+    "canvas":          { "light": "#F3F5F9", "dark": "#11151D", "use": "Window backdrop: titlebar and rail bezel" },
+    "nav":             { "light": "#F6F8FB", "dark": "#161B24", "use": "Secondary navigation column" },
+    "surface":         { "light": "#FAFBFD", "dark": "#1B212C", "use": "Base working surface (foundation: base surface)" },
+    "surface-raised":  { "light": "#FFFFFF", "dark": "#222A37", "use": "Panels, cards, menus (foundation: raised surface)" },
+    "surface-overlay": { "light": "#FFFFFF", "dark": "#283242", "use": "Popovers, dialogs, toasts" },
+    "surface-sunken":  { "light": "#F0F3F8", "dark": "#151A23", "use": "Inputs, wells, code" },
+    "surface-hover":   { "light": "rgba(24, 35, 54, 0.055)", "dark": "rgba(235, 241, 252, 0.06)", "use": "Hover overlay on any surface" },
+    "surface-pressed": { "light": "rgba(24, 35, 54, 0.10)", "dark": "rgba(235, 241, 252, 0.11)", "use": "Pressed overlay" },
+    "surface-selected":{ "light": "rgba(48, 92, 172, 0.09)", "dark": "rgba(148, 184, 248, 0.10)", "use": "Selected rail/nav item fill (paired with an indicator bar)" },
 
-    "border":          { "light": "#DEDDD4", "dark": "#2B2C27", "use": "Hairline dividers (foundation: border)" },
-    "border-strong":   { "light": "#C8C7BD", "dark": "#3B3C36", "use": "Panel and card outlines" },
-    "border-control":  { "light": "#8A897F", "dark": "#6A6A61", "use": "Input and control boundaries (3:1 non-text)" },
+    "border":          { "light": "#DFE4ED", "dark": "#343E4E", "use": "Hairline dividers (foundation: border)" },
+    "border-strong":   { "light": "#C9D1DE", "dark": "#465268", "use": "Panel and card outlines" },
+    "border-control":  { "light": "#8290A5", "dark": "#7D8AA1", "use": "Input and control boundaries (3:1 non-text)" },
 
-    "text":            { "light": "#191A16", "dark": "#EDECE5", "use": "Primary text (foundation: primary text)" },
-    "text-muted":      { "light": "#52534B", "dark": "#ABAAA0", "use": "Secondary text (foundation: muted text)" },
-    "text-subtle":     { "light": "#65665D", "dark": "#8F8E84", "use": "Metadata and placeholders; still 4.5:1" },
-    "text-disabled":   { "light": "#A3A299", "dark": "#5E5E57", "use": "Disabled labels (exempt from contrast minimums; never the only state cue)" },
+    "text":            { "light": "#202A3A", "dark": "#EDF2FA", "use": "Primary text (foundation: primary text)" },
+    "text-muted":      { "light": "#526078", "dark": "#BBC5D5", "use": "Secondary text (foundation: muted text)" },
+    "text-subtle":     { "light": "#606D82", "dark": "#A9B5C8", "use": "Metadata and placeholders; still 4.5:1" },
+    "text-disabled":   { "light": "#94A0B2", "dark": "#69758A", "use": "Disabled labels (exempt from contrast minimums; never the only state cue)" },
 
-    "accent":          { "light": "#C6F04D", "dark": "#C6F04D", "use": "Signal fill: primary action, selected indicator in dark" },
-    "accent-hover":    { "light": "#B8E43A", "dark": "#D4F86E", "use": "Primary action hover" },
-    "accent-pressed":  { "light": "#A8D42A", "dark": "#B5DE3B", "use": "Primary action pressed" },
-    "accent-edge":     { "light": "rgba(38, 50, 0, 0.42)", "dark": "rgba(198, 240, 77, 0)", "use": "Primary action outline so lime reads on paper" },
-    "on-accent":       { "light": "#151905", "dark": "#151905", "use": "Text and icons on accent fill (foundation: accent text on fill)" },
-    "accent-text":     { "light": "#4A6407", "dark": "#C6F04D", "use": "Accent as foreground on surfaces (foundation: accent text)" },
-    "accent-strong":   { "light": "#557300", "dark": "#C6F04D", "use": "Selection indicator bars and active marks" },
-    "accent-soft":     { "light": "rgba(85, 115, 0, 0.11)", "dark": "rgba(198, 240, 77, 0.12)", "use": "Accent tint backgrounds" },
-    "focus":           { "light": "#3F5A00", "dark": "#C6F04D", "use": "Keyboard focus ring (foundation: focus)" },
-    "selection":       { "light": "rgba(85, 115, 0, 0.20)", "dark": "rgba(198, 240, 77, 0.24)", "use": "Text selection highlight" },
+    "accent":          { "light": "#285BB5", "dark": "#A6C7FF", "use": "Primary action fill" },
+    "accent-hover":    { "light": "#224F9F", "dark": "#C1D8FF", "use": "Primary action hover" },
+    "accent-pressed":  { "light": "#1C438B", "dark": "#8AB4FB", "use": "Primary action pressed" },
+    "accent-edge":     { "light": "rgba(20, 50, 100, 0.22)", "dark": "rgba(166, 199, 255, 0)", "use": "Primary action outline" },
+    "on-accent":       { "light": "#FFFFFF", "dark": "#142541", "use": "Text and icons on accent fill (foundation: accent text on fill)" },
+    "accent-text":     { "light": "#285BB5", "dark": "#A6C7FF", "use": "Accent as foreground on surfaces (foundation: accent text)" },
+    "accent-strong":   { "light": "#285BB5", "dark": "#A6C7FF", "use": "Selection indicator bars and active marks" },
+    "accent-soft":     { "light": "rgba(40, 91, 181, 0.09)", "dark": "rgba(166, 199, 255, 0.10)", "use": "Accent tint backgrounds" },
+    "focus":           { "light": "#285BB5", "dark": "#A6C7FF", "use": "Keyboard focus ring (foundation: focus)" },
+    "selection":       { "light": "rgba(40, 91, 181, 0.20)", "dark": "rgba(166, 199, 255, 0.24)", "use": "Text selection highlight" },
 
     "success":         { "light": "#16754B", "dark": "#5DD39E", "use": "Success text/icon (foundation: success)" },
     "success-soft":    { "light": "rgba(22, 117, 75, 0.11)", "dark": "rgba(93, 211, 158, 0.13)", "use": "Success tint" },
@@ -54,9 +54,9 @@
     "info":            { "light": "#2156B5", "dark": "#8DBBFF", "use": "Informational text/icon" },
     "info-soft":       { "light": "rgba(33, 86, 181, 0.10)", "dark": "rgba(141, 187, 255, 0.13)", "use": "Informational tint" },
 
-    "skeleton":        { "light": "rgba(25, 26, 22, 0.07)", "dark": "rgba(237, 236, 229, 0.07)", "use": "Loading placeholder blocks" },
-    "skeleton-sheen":  { "light": "rgba(25, 26, 22, 0.12)", "dark": "rgba(237, 236, 229, 0.12)", "use": "Loading placeholder highlight" },
-    "scrim":           { "light": "rgba(25, 26, 22, 0.34)", "dark": "rgba(0, 0, 0, 0.58)", "use": "Behind drawers and dialogs" }
+    "skeleton":        { "light": "rgba(24, 35, 54, 0.07)", "dark": "rgba(235, 241, 252, 0.07)", "use": "Loading placeholder blocks" },
+    "skeleton-sheen":  { "light": "rgba(24, 35, 54, 0.12)", "dark": "rgba(235, 241, 252, 0.12)", "use": "Loading placeholder highlight" },
+    "scrim":           { "light": "rgba(24, 35, 54, 0.34)", "dark": "rgba(0, 0, 0, 0.58)", "use": "Behind drawers and dialogs" }
   },
   "invariant": {
     "artwork-matte":     { "value": "#8C8C8C", "use": "Neutral matte around preserved artwork; identical in every chrome theme" },
@@ -71,7 +71,7 @@
   },
   "font": {
     "family-sans": { "value": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "use": "Interface text. Bundle OFL woff2 under font-src 'self'; system fallback is acceptable." },
-    "family-mono": { "value": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace", "use": "Provenance, identifiers, revisions, timestamps, eyebrows" },
+    "family-mono": { "value": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace", "use": "Code and identifiers" },
     "weight-regular": { "value": "400" },
     "weight-medium":  { "value": "500" },
     "weight-semibold":{ "value": "600" }
@@ -84,8 +84,8 @@
     "small":   { "family": "sans", "size": "12px", "line": "16px", "weight": "400", "tracking": "0", "use": "Secondary lines" },
     "label":   { "family": "sans", "size": "12px", "line": "16px", "weight": "500", "tracking": "0", "use": "Controls and nav items" },
     "rail":    { "family": "sans", "size": "10.5px", "line": "12px", "weight": "500", "tracking": "0.01em", "use": "Rail labels under glyphs" },
-    "eyebrow": { "family": "mono", "size": "10.5px", "line": "14px", "weight": "500", "tracking": "0.08em", "use": "Uppercase section labels" },
-    "meta":    { "family": "mono", "size": "11px", "line": "16px", "weight": "400", "tracking": "0", "use": "Provenance, revisions, timestamps (tabular)" }
+    "eyebrow": { "family": "sans", "size": "10.5px", "line": "14px", "weight": "500", "tracking": "0.08em", "use": "Uppercase section labels" },
+    "meta":    { "family": "sans", "size": "11px", "line": "16px", "weight": "400", "tracking": "0", "use": "Metadata, provenance labels and timestamps" }
   },
   "space": {
     "3xs": "2px", "2xs": "4px", "xs": "6px", "sm": "8px", "md": "12px",
