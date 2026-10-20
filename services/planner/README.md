@@ -1,7 +1,7 @@
-# Planning hub (website)
+# HQ Planner service
 
-A private, single-owner planning hub for larger projects, ideas and personal
-goals. You arrange items by hand: drag them between statuses, put them in
+HQ’s single-owner Planner backend and legacy web UI for larger projects,
+ideas and personal goals. You arrange items by hand: drag them between statuses, put them in
 order, move dates around on a calendar, and shift their horizons on a timeline.
 Items cannot start, queue or launch work anywhere else.
 
@@ -12,26 +12,28 @@ Items cannot start, queue or launch work anywhere else.
 - **Data:** one SQLite file at a path you choose. Safety backups are written
   into a folder next to it. Neither is ever served over HTTP.
 
-The adopted candidate and its original file hashes are recorded in
-[provenance.json](provenance.json). Persistent hosting is a separate, unapproved
-[hosting proposal and device acceptance procedure](../../docs/operations/manual-planner-hosting.md).
+Selected source extraction and licensing are recorded in [PROVENANCE.md](PROVENANCE.md),
+with original file hashes in [import-manifest.json](import-manifest.json). The
+[MIT license](LICENSE) applies to this service. Deployment, persistent hosting
+and installation are separate held operations; moving source does not update
+a running service. Keep data and backups outside the HQ source repository.
 
 ## Run it locally
 
 From the repository root:
 
 ```bash
-cd apps/manual-planner
-mkdir -p ~/planning-data            # any directory outside public/
+cd services/planner
+mkdir -p ~/planning-data            # choose a directory outside the HQ repository
 python3 -m planning --data ~/planning-data/planning.sqlite3 --port 8765
 # open http://127.0.0.1:8765/
 ```
 
 | Option | Meaning |
 | --- | --- |
-| `--data PATH` | Required. The SQLite store. Its directory must already exist, and the path must be outside `public/`. The server warns if the path is inside this source tree. Backups go to `<name>-backups/` beside it. |
+| `--data PATH` | Required. The SQLite store. Use an existing directory outside the HQ repository. The server rejects `public/` and warns for other paths inside this service’s source tree; keeping data outside the whole repository is the caller’s responsibility. Backups go to `<name>-backups/` beside it. |
 | `--host` | Loopback only: `127.0.0.1` (default), `::1` or `localhost`. Any other address is refused. |
-| `--port` | Default `8765`. |
+| `--port` | Default `8765`. `0` selects an available port; the startup line prints the actual bound port. |
 | `--allowed-host HOST[:PORT]` | Accept an extra `Host` header, for when a separately authorized private proxy sits in front of loopback. Repeat it for more than one host. |
 
 Stop the server with Ctrl+C. A new store starts **empty**. Example items load
