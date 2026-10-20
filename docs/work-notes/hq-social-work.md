@@ -194,6 +194,18 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
   - **Receipt correction 1:** the taskId and childThreadId are distinct (`node:` versus `thread:` prefix). An earlier T1 relay conflated them as "task and thread".
   - **Receipt correction 2:** WK-C's claim of no Git effect is too broad. During the reconcile it ran `git fetch -q origin refs/heads/work/hq-expansion-plan` without `--no-write-fetch-head`. That is a bounded, incidental effect on shared Git metadata and `FETCH_HEAD`, and T1's follow-up brief had asked for that fetch. The root verified that the parent's branch, HEAD, index and tracked tree are still clean at `76a1dbc`, and that the published contract ref is unchanged. `FETCH_HEAD` is not restored, and nothing is reset, cleaned or repeated. Future launch-only parents read pinned objects that are already present, without fetching.
   - Custody: T1 keeps lifecycle and fan-in. A completed launcher turn is not completed source work, so T1 checks each child's `workState` and pending runs.
+- **Wiki Core and UI delivered** (2026-10-20). These are candidates only: not feature acceptance, CI, the mounted shell, a private corpus or native proof. Both are open, non-draft, mergeable and merge-held, based on `t3/50386c27` at `76a1dbc`, with zero checks. T1 read them back read-only:
+  - **Core: PR #39**, `t3/wiki-core-implementation` at `b57bcd234d11270df4d045d8d24136b150456c3d`.
+    - Diff: the full PR diff is 32 files, all inside the core cone, and the contract tree is unchanged.
+    - Author checks: 214 Node tests in 9 files, plus `tsc`.
+    - Disclosures: it did not read the Codex-V3 AGENTS in that session; one `tsc` run came before admission; and an accidental test run was timed out and its `/tmp` output deleted. So T1 does not claim clean preflight compliance.
+  - **UI: PR #38**, `t3/implement-wiki-ui` at `014593b033b4eaa523c4dc5f35159639d2081d04`.
+    - Diff: the full PR diff is 56 files, all inside `modules/wiki/ui/`, and the contract tree is unchanged.
+    - Author checks: 105 Node tests in 10 files, plus `tsc`.
+    - Browser evidence: 19 synthetic loopback captures in T3 Browser at `cbd71af`. From `cbd71af` to `014593b`, only the README and evidence files change.
+    - Packaging obligations for the held integration owner: the CSS file under CSP, Node tests kept out of Vitest, Node ≥ 22.18, and no implicit shared seam.
+  - Deferred, not repaired: the original P2 (destination length) and P3 (null-key presence). UI adds new P3s and P4s.
+  - Lifecycle gap: both children report to WK-C's thread. T1's `task_status` returns `task_not_found` for these grandchildren, so T1 read their results through WK-C's follow-up runs and the children's native threads.
 - **B released** after A's acceptance. Its compiled capsule is `3d935de4…` at plan head `00afa36e`, with the actual ready set exactly `{domain-integration}`.
 - **B completed; the root accepted it as S** (2026-10-20) for bounded fixture/source use. This is not independent review, native proof or green CI.
   - Candidate: PR #36, branch `t3/social-work-domain-assembly` (local, remote and PR head all agree), head `562986d1852d7b4ef101ff6d4c9340c3751c727a`. Its base is this branch, which was at `cec5d07` when it opened; B started at `a385a6f`. Open, non-draft and mergeable, with zero configured checks; merge held.
