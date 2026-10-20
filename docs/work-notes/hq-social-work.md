@@ -176,7 +176,8 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
   - Cone: exactly `modules/wiki/contract/**`, read from the immutable PR #30 plan without merging it. Its PR goes against this branch.
   - Acceptance belongs to the Wiki continuity owner.
 - **WK-C completed** (2026-10-20). This is not acceptance: the result was relayed to the root for the Wiki owner.
-  - PR #34: native branch `t3/50386c27`, head `76a1dbc6dd8ed1eb56400fbb9e18bc4e621038a9`, base this branch at `a385a6f` (merge base `c67c23cd`). Open, non-draft and mergeable, with no checks; merge held.
+  - PR #34: head branch `t3/50386c27` (remote), head `76a1dbc6dd8ed1eb56400fbb9e18bc4e621038a9`, base this branch at `a385a6f` (merge base `c67c23cd`). Open, non-draft and mergeable, with no checks; merge held.
+  - Branch identities (read back by the root and T1): the physical checkout `HQ/t3-50386c27` is on local `t3/wiki-contract-implementation` at `76a1dbc`, clean, and matches the native label. The remote and PR head branch is `t3/50386c27` at the same `76a1dbc`. There is no local `t3/50386c27` and no remote `t3/wiki-contract-implementation`. So the author's statement that the physical branch is `t3/50386c27` is stale. The content is identical. Both refs are kept, and no rename, reset or retarget is made.
   - T1's read-only check: the remote head equals the reported one, and all 22 authored paths are under `modules/wiki/contract/**`. Each of its three commits has a trailer.
   - Author-reported checks: `node --test` gave 73 of 73 passing, and `tsc -p modules/wiki/contract` exited 0. T1 did not rerun them. Root `typecheck` and `test` do not include `modules/wiki`.
   - Deferred, not fixed: the AST vocabulary and the chosen structural bounds (P3); 2 MiB for "2 MB" and the single-quote URL rejection (P4).
