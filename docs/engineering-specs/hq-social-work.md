@@ -152,19 +152,45 @@ Shared presentation lives in `packages/hq-ui/`. Live service access goes through
 
   Status, horizon and dates stay separate axes.
 
-  **Proposed additive reference entry (D-4):** `{id, kind: 'hq', label, target: ReferenceEnvelope}`, with no `url`. It is accepted only when the service advertises `hq-references-v1` (`iface.references.001`). The fixture adapter implements it as labeled proposed-schema behavior.
+  **Proposed additive reference entry (D-4; T4 option B):** `{id, kind: 'hq', label, target: ReferenceEnvelope}`, with no `url`.
+  - It is stored losslessly by the Planner after the explicit schema phase. It is accepted only when the service advertises `hq-references-v1` (`iface.references.001`).
+  - Ordinary URL references stay unchanged and compatible.
+  - There is no HQ-side link or task store (T4 option C is rejected).
+  - The fixture adapter implements the entry as labeled proposed-schema behavior.
+  - Design annotations and Jones requests stay distinct `kind` values inside the envelope. A target's observed state is never written to the item's status.
 - **RW-2.** Client validation mirrors the service rules for immediate feedback. The authoritative service, or the fixture adapter standing in for it, remains the validator and returns `[{field, message}]`.
-- **RW-3.** Pure logic is reused **verbatim** from the three D-1-approved Planner files. The mapping is in `ctx.d1-import.001`. The logic is: ordering and drop anchors (`before_id` / `after_id` / top / bottom; renumber within the target status), period bounds and ISO weeks, primary date, date state, review buckets, filters.
+- **RW-3.** Pure logic is reused **verbatim** from the three D-1-approved Planner files. The mapping is in `ctx.d1-import.001`. The logic is: ordering and drop anchors (`before_id` / `after_id` / top / bottom; renumber within the target status), period bounds and ISO weeks, primary date, date state, review buckets, filters. Week grouping honors the Planner `week_start` setting.
 - **RW-4.** The `PlannerPort` (`iface.work-port.001`) has two implementations:
-  - an in-memory fixture adapter with revision guards, `revision_conflict` and `order_conflict` (409 semantics), request-ID idempotency (replay returns the recorded result; reuse with a different body is rejected) and synthetic fictional examples;
+  - An in-memory fixture adapter with:
+    - revision guards, and `revision_conflict` and `order_conflict` (409 semantics);
+    - request-ID idempotency: the same ID with the same body returns the recorded result with `replayed: true`; the same ID with a different body returns `request_id_reused`. The record holds a bounded 2,000 IDs, as in the Planner.
+    - synthetic fictional examples.
+
+    T4's mockup fixture lacks replay and `request_id_reused`. HQ's fixture **must** implement both, and the conformance suite tests both.
   - later, a live adapter over the bridge.
-- **RW-5.** The state hook provides:
+- **RW-5.** The state hook keeps its state in the module-level store, so it survives T0's remount on every domain switch. It provides:
   - snapshot load and version polling while visible;
   - optimistic projection with rollback;
-  - an unconfirmed queue retried with the **same** request ID;
+  - an unconfirmed queue;
   - save states Saving… / Saved · time / N unconfirmed / Offline · not saving;
-  - a client undo stack of up to 40 inverse operations through the normal port.
-- **RW-6.** Export and restore stay with the Planner service and its existing format (`jones-planning-export` v1). HQ exposes them only through the live adapter and never reformats records.
+  - a client undo stack of up to 40 entries through the normal port.
+- **RW-7. Move-only status changes (T4 P-1).** Every status change goes through `move(id, rev, status, {place: 'top'})`. That includes the detail panel's status pills and the List view's status select. Undo then restores the exact neighbor anchor. `ItemPatch` excludes `status` at the type level.
+- **RW-8. Compare-and-swap field undo (T4 P-2).** An undo entry for a patch records each patched field's post-action value. On undo, if the current value of every field equals that value, the inverse patch is sent at the current revision. Otherwise nothing is written, and the toast says *"Not undone: … was changed again since; the newer value was kept."* This preserves concurrent edits, deliberately unlike the Planner's own client. Undo of a create archives the item. Each entry is consumed **once**: the toast action and Ctrl/⌘+Z share it and remove it.
+- **RW-9. Unknown-mutation reconciliation.** A lost or timed-out mutation is `unknown` and stays *Unconfirmed*. It is reconciled only by re-sending the **same request ID and body**:
+  - replay (`replayed: true`) confirms it;
+  - `request_id_reused` is a defect and holds the queue;
+  - a revision or order conflict is shown truthfully.
+
+  Similar-looking items, such as a create with the same title, may be **flagged** as *Possibly already saved*, but they are never proof that the write happened or did not happen.
+
+  If the replay record may have been evicted (a create older than the session), HQ never auto-resends: the user decides.
+
+  The queue is in-session only, and says so, until a G-3 storage member exists.
+- **RW-10. HQ drafts are HQ's own (T4 P-5).** Offline captures are HQ device drafts, labeled *not in the Planner* and sent only by an explicit **Send drafts**. HQ never reads the Planner's per-origin drafts.
+- **RW-6.** Export, import and restore stay with the Planner service and its existing format (`jones-planning-export` v1), as in T4 P-7.
+  - Phase 1 shows Export as a pointer to the Planner's own tools.
+  - After the bridge, read-only `exportJson`/`exportMarkdown` bytes are written unmodified through a native save dialog.
+  - **Import and replace-restore stay in the Planner's own tools.** HQ re-implements no destructive guard.
 <!-- codex-section:end id="spec.hq-social-work#req.work-core.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#req.work-views.001" -->
@@ -183,19 +209,30 @@ Shared presentation lives in `packages/hq-ui/`. Live service access goes through
   - **Timeline:** horizon lanes across quarters.
   - **Review:** one-tap prompts.
   - **Archive:** restore.
-- **RV-5.** Lists view, illustrating the owner's Today / This week / Later reference. Groups are derived from actual dates only:
-  - **Today:** a day-precision date today, or overdue;
-  - **This week:** a date in the current ISO week;
-  - **Later:** a date after this week;
+- **RV-5.** The **By date** board (T4; the earlier "Lists" name is kept as an alias destination) illustrates the owner's Today / This week / Later reference. Groups are derived from the items' actual dates only:
+  - **Today:** a day-precision date today, or an overdue deadline;
+  - **This week:** a day or week date later in the current week, bounded by the Planner's `week_start`;
+  - **Later:** a later date, or a month, quarter or year period;
   - **Undated:** everything else.
 
-  Lists are read-only groupings. Dragging between them is disabled with an explanation. They never write a date or reinterpret a horizon. Board presets are saved filters by area, kind or status, stored per device.
-- **RV-6.** Work secondary navigation restores its view, filters, scroll and selection after a domain switch. Mode switch, drag, reorder and status/horizon/date changes make zero execution calls.
+  Each group shows its rule. Done and Dropped are hidden.
+
+  By date is **read-only**:
+  - Drag and keyboard moves are inert, with an explanation.
+  - The move menu offers status moves only.
+  - It never writes a date and never relabels a horizon.
+
+  Board presets are saved filters by area, kind or status, stored per device. Weekly plan (editable lists) stays unbuilt: D-3 is deferred.
+- **RV-7. Working defaults** (reversible, without a further owner question):
+  - Work `home` is the Board.
+  - Weeks honor the Planner's `week_start`.
+  - Work shows all items, with a quiet note: *"Planner items aren't project-scoped · showing all planning"*. That holds until an owned project mapping exists. `area` is never treated as project identity, and Work never switches project.
+- **RV-6.** Work secondary navigation restores its view, filters, scroll and selection after a domain switch. Mode switch, drag, reorder, status/horizon/date changes, link following and navigation make zero execution calls. They never resubmit Jones work and never change a source-owned status.
 <!-- codex-section:end id="spec.hq-social-work#req.work-views.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#req.safety.001" -->
 - **RX-1.** Public repository content uses fictional fixtures only. It contains no private records, brand names, screenshots of owner content, internal addresses, credentials or session history.
-- **RX-2.** Private source (Fieldnotes and Manual Planner) informs interfaces only. No file is imported unless the owner makes the selected-file publication decision D-1.
+- **RX-2.** Private source (Fieldnotes and Manual Planner) informs interfaces only. The single exception is the three files cleared by owner decision D-1 (`ctx.d1-import.001`). No other file is imported.
 - **RX-3.** The renderer gets no generic network, filesystem or shell access. Service access is main-process only. Each domain uses an enumerated route allowlist. Endpoints are user-configured at runtime and never committed. Tokens stay in the main process.
 - **RX-4.** Agents never read live Social or Planner data. Live adapters are verified against hand-written synthetic HTTP exchanges and, optionally, a task-owned scratch service instance with synthetic data.
 - **RX-5.** Every observed external state shows its freshness: last synced, offline, unknown. Stale or unknown state never renders as verified success.
@@ -317,19 +354,44 @@ Bridge conformance passes:
 <!-- codex-section:end id="spec.hq-social-work#ac.service-bridge.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.live-adapters.001" -->
-Each live adapter passes the same port conformance suite as its fixture against synthetic recorded exchanges. The Planner adapter reuses the same `X-Request-Id` on retry, maps 409 `revision_conflict` and `order_conflict`, and treats 422 `request_id_reused` as a defect. The Fieldnotes adapter refreshes the token on 403, maps 409 conflicts and never retries `submitRun`. No live data is read by agents.
+Each live adapter passes the same port conformance suite as its fixture against synthetic recorded exchanges. The Planner adapter:
+
+- reuses the same `X-Request-Id` and body on retry, and surfaces `X-Replayed: 1` as `replayed`;
+- maps 409 `revision_conflict` and `order_conflict`;
+- treats 422 `request_id_reused` as a defect;
+- sends `Content-Type: application/json` and `X-Planning-Request: 1` on mutations;
+- disables redirects and maps a mutation timeout to `unknown`.
+
+Origin and Host protections are preserved: main-process requests send no `Origin`, the endpoint host is loopback or the Planner's `--allowed-host`, and no protection is weakened. The Fieldnotes adapter refreshes the token on 403, maps 409 conflicts and never retries `submitRun`. No live data is read by agents.
 <!-- codex-section:end id="spec.hq-social-work#ac.live-adapters.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.work-core.001" -->
-Validation parity table tests pass: every enum, limit, date precision/time/tz rule and URL rule. Ordering, period, review-bucket and filter tests pass. The fixture adapter passes revision-conflict, order-conflict, idempotent replay and request-ID reuse. The hook's unconfirmed retry reuses the request ID, and undo restores prior fields and anchors.
+**Parity and logic.** Validation parity table tests pass for every enum and limit, every date precision, time and timezone rule (including the DST-gap rejection), and the URL rule. Ordering, period (with `week_start`), review-bucket and filter tests pass.
+
+**Conformance suite.** It includes T4's seven cases:
+
+1. Each anchor form, a missing anchor (`order_conflict`), a stale revision (`revision_conflict` returning the current item), and a cross-status move that renumbers only the target status.
+2. **Actual replay:** the same ID and body returns `replayed: true`. The same ID with a different body returns `request_id_reused`.
+3. A create lands at the top and keeps its date kind and precision exactly.
+4. The types reject `patch({status})`.
+5. CAS undo refuses after a concurrent same-field change and succeeds after a different-field change.
+6. The port key set has no execution member.
+7. By date grouping at fixed dates.
+
+**State hook.**
+
+- An unconfirmed write is reconciled only by the same request ID and body.
+- A same-title match is reported as *possibly saved*, never as proof.
+- Undo restores exact anchors and is consumed once.
+- The undo stack survives a module remount.
 <!-- codex-section:end id="spec.hq-social-work#ac.work-core.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.work-board.001" -->
-Board drag, keyboard and menu moves produce identical `move` calls and agree after Undo. Quick capture creates one inbox item with no dates. Detail autosave and conflict states work. Zero execution-class calls exist because the port has none, and a test asserts the port surface. Empty, loading, error, offline and saving states are covered. Light and dark evidence is attached.
+Board drag, keyboard and menu moves produce identical `move` calls and agree after Undo. Status changes from the detail pills and the List select are `move` calls whose Undo restores the exact position. Quick capture creates one inbox item with no dates. A date-like word only offers a suggestion, and the title is unchanged. Offline capture creates labeled HQ drafts that are sent only explicitly. Detail autosave and conflict states work. Zero execution-class calls exist because the port has none, and a test asserts the port surface. Empty, loading, error, offline and saving states are covered. Light and dark evidence is attached.
 <!-- codex-section:end id="spec.hq-social-work#ac.work-board.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.work-views.001" -->
-Glance, List, Calendar, Timeline, Review, Archive and Lists render the synthetic fixture. Calendar and Timeline moves produce the documented patch with Undo. Lists classify only by actual dates, keep undated items in Undated and never write. Light and dark evidence is attached.
+Glance, List, Calendar, Timeline, Review, Archive and By date render the synthetic fixture. Calendar and Timeline moves produce the documented patch with Undo. By date classifies only by actual dates, honors `week_start`, keeps undated items in Undated, and never writes: drag is inert and the menu has no reorder items. The project note is shown and nothing filters by `area` as a project. Light and dark evidence is attached.
 <!-- codex-section:end id="spec.hq-social-work#ac.work-views.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.work-domain.001" -->
@@ -425,7 +487,7 @@ The parallel mockup lanes T2 (visual system), T3 (Social) and T4 (Work) had publ
    - Design is unaffected except for the optional adoption of `hq-ui` tokens.
    - Coverage is **partial**: the universe is the HQ public tree at `aab225b` plus the two private sources at the revisions above, discovered by reading the route and handler source. Excluded: T0 code (unpublished), the hosting configuration of the live services (not read, by design), and the physical-device touch drag (unverified upstream).
 4. **Interface depth.** Ports sit at the domain-operation level: `saveContent`, `move`, `patch`. They do not expose HTTP routes, so fixture and live adapters are interchangeable. The bridge sits one level lower, with enumerated routes, because it is a shared security boundary that must be reviewable as a fixed list. Exposing generic `fetch` is rejected.
-5. **Compatibility and migration.** None. Records keep their identity, format and export. No schema change. HQ adds no field the services would reject. Planner card references to HQ objects (`hq:` URLs) would fail the Planner's http(s) rule, so cross-domain references stored on cards wait for D-4.
+5. **Compatibility and migration.** HQ source work needs none. Records keep their identity, format and export. HQ adds no field the services would reject. Planner card references to HQ objects (`hq:` URLs) would fail the Planner's http(s) rule. Stored references therefore wait for the Planner-owned `hq-references-v1` schema phase that D-4 plans (`iface.service-reference-extensions.001`), behind its Operator Interaction Inventory gates.
 6. **Load-bearing safety claims.**
    - Zero execution calls from Work (the port has no such method; tested).
    - Social runs only on explicit Run, with no automatic retry of an unknown (recorder tests).
@@ -453,7 +515,7 @@ The parallel mockup lanes T2 (visual system), T3 (Social) and T4 (Work) had publ
 | --- | --- | --- | --- |
 | D-1 | Publish selected Manual Planner pure modules into public HQ with provenance? | **Approved by M Jones (2026-10-20)** for exactly `ordering.js`, `dates.js` and `model.js`, after exact-file checks. The checks passed; see `ctx.d1-import.001`. No other private file is cleared. | Import verbatim, with provenance |
 | D-2 | Connect HQ to the existing Fieldnotes and Planner services through a main-process bridge with user-entered endpoints? | **Owner selected this as next (2026-10-20).** Source planning for the narrow preload/main bridge and adapters is approved. Root accepts the narrow preload approach as the development direction. Still gated: single-writer custody and cross-owner compatibility for contracts/IPC files; real-service access requires verified user-entered endpoints and an exact access scope. No live-data access, credentials, service mutation or deployment. | Proceed under those gates |
-| D-3 | Extend the Planner schema for editable manual lists, multiple boards and multi-labels? | **Deferred**, pending the owner's answer. Rule-based Lists view and per-device board presets; area shown as a label. Not granted by D-4. | Defer |
+| D-3 | Extend the Planner schema for editable manual lists, multiple boards and multi-labels? | **Deferred** by the owner (2026-10-20). Rule-based Lists view and per-device board presets; area shown as a label. Not granted by D-4. | Defer |
 | D-4 | Cross-domain references | **Owner: likely core; plan now (2026-10-20).** Planned in `req.references.001` and `iface.references.001`. Any service schema change or live activation stays behind the Operator Interaction Inventory gates. | Build the HQ side on fixtures now; propose the service extensions |
 
 ### Gaps that hold only their dependents
@@ -593,6 +655,45 @@ T3's proposed `--hq-*` names are superseded by T2's role names. `--social-future
 | Pin `--hq-content-scheme` to the recorded theme on every preserved well | `@hq/ui` (`PreservedContent`); Design owners for Design wells | `ac.ui-kit.001`; Design consumes it via issue #1 |
 <!-- codex-section:end id="spec.hq-social-work#ctx.visual-system-binding.001" -->
 
+<!-- codex-section:begin id="spec.hq-social-work#ctx.work-design-binding.001" -->
+## Work design binding (T4)
+
+**Evidence.** `docs/design/work/` at `1bb550de4069ff6b0e1666844896b1a6c2cb03e9` (PR #19). Its 19 changed paths are all in that directory. T1 read `hq-work-design.md`, `adapter-boundary.md`, `mockup-evidence.md` and the observations in `planner-behavior-inventory.md` on 2026-10-20.
+
+The 13 captures and zero-execution checks are **mockup evidence** against an in-page fixture. They are not adapter, service, persistence or native proof, and there is no CI on the base. T4 reports these gaps; they stay visible:
+
+- full loading and error views;
+- screen readers;
+- replay and `request_id_reused`, which the mockup fixture lacks;
+- date editing;
+- any real service or persistence.
+
+**Adopted:**
+
+- P-1 → RW-7; P-2 → RW-8; P-3 → RW-5 (module-level store) and RW-8 (consume once).
+- P-4, tightened by RW-9: same-request reconciliation only; a heuristic match is never proof.
+- P-5 → RW-10; P-6 → `iface.work-port.001` invariants and RW-4; P-7 → RW-6; P-8 → Work destinations.
+- T4's seven conformance cases → `ac.work-core.001`; its design acceptance checks 1–8 → `ac.work-board.001`, `ac.work-views.001` and `ac.work-domain.001`.
+- Bridge transport notes → `ac.live-adapters.001`.
+- Layouts are reconciled against `mockups/work-hq.html` and its screenshots.
+
+**Resolved, superseding T4's "undecided" text with the owner decisions already received:**
+
+| T4 item | Resolution |
+| --- | --- |
+| D-1 / GW-3 | The 3 selected files are checked and approved (`ctx.d1-import.001`) |
+| D-2 / GW-1 | The source bridge is next. It is held on contracts/IPC custody (`ac.service-bridge-approval.001`). |
+| D-4 / Q-5 | The core reference plan is now in this spec. Option B is the target, Planner-owned and lossless after its explicit schema phase. Option C is rejected. |
+| D-3 / Q-4 | Editable lists and Weekly plan are deferred |
+| Q-1 | Board home (RV-7) |
+| Q-2 / GW-6 | All items, with a not-project-scoped note (RV-7) |
+| Q-3 / GW-5 | `week_start` (RV-5) |
+| GW-2 | Still G-3 |
+| GW-7 | Live verification needs a scratch Planner with synthetic data |
+
+**Material contract conflicts: none found.** P-10 option B matches `iface.service-reference-extensions.001`. T4's "Linked across HQ" rows (a Design annotation with a revision, a Jones request with an observed status that never changes the card, and an unavailable target with a snapshot) match RL-4 through RL-6 and RL-10. Jones requests are a target kind for a provider owned outside this plan; until one exists they resolve as `unknown`.
+<!-- codex-section:end id="spec.hq-social-work#ctx.work-design-binding.001" -->
+
 <!-- codex-section:begin id="spec.hq-social-work#ctx.change-surface.001" -->
 ## Exact Change Surface And Ownership
 
@@ -635,7 +736,12 @@ T3's proposed `--hq-*` names are superseded by T2's role names. `--social-future
 
 Social destinations are reconciled with T3 in `ctx.social-design-reconciliation.001`: `home` (Overview), `overview`, `sources[/<sourceId>]` (reserved), `workbenches[/<toolId>]`, `library[/<draftId>]`, `calendar[/<YYYY-MM>]`, `runs[/<runId>]`, `channels`.
 
-Work destinations: `home` (Board), `glance`, `board`, `list`, `calendar`, `calendar/<YYYY-MM>`, `timeline`, `review`, `lists`, `archive`, `item/<itemId>`.
+Work destinations (with T4 P-8):
+
+- `home` (Board), `glance`, `board`, `board/by-date`, `list`, `calendar`, `calendar/<YYYY-MM>`, `timeline`, `review`, `archive`, `settings`, `item/<itemId>`;
+- `lists` is an alias of `board/by-date`;
+- `item/<itemId>` opens the detail panel over the last view;
+- `board/plan/<listBoardId>` is reserved for D-3 and renders *Proposed — not available*.
 
 Cross-domain links use T0's `ReferenceEnvelope` and `parseReference`, plus the optional `ModulePort.references` and `ModulePort.returnContext` members proposed in `iface.references.001`. A module renders unknown or unresolvable references read-only, with their title and provenance.
 <!-- codex-section:end id="spec.hq-social-work#iface.domain-module.001" -->
@@ -705,8 +811,12 @@ interface PlannerPort {
 
 **Invariants:**
 
-- A retry after `unknown` reuses the same `requestId`.
+- A retry after `unknown` reuses the same `requestId` and body (RW-9).
 - `move` renumbers only the target status.
+- `create` always places the item at the top of its status.
+- `ItemPatch` has no `status` member (RW-7).
+- `markReviewed` is its own explicit action.
+- The key set of the port surface is asserted by test, and contains no execution member.
 - The port exposes no export, import or backup methods until the live adapter phase adds read-only `exportJson` and an explicitly confirmed `importPreview`/`import` that mirror the service. The root and owner approve those with D-2.
 <!-- codex-section:end id="spec.hq-social-work#iface.work-port.001" -->
 
@@ -1235,7 +1345,7 @@ Merge is held.
     "accepted T0 baseline or required rebind is missing",
     "a change outside write_scope or a dependency/lockfile change is required",
     "an unknown prior Git, GitHub or service effect is unreconciled",
-    "owner decision D-2 or root contract acceptance is absent"
+    "contracts/IPC single-writer custody or cross-owner contract compatibility is absent"
   ]
 }
 ```
@@ -1835,13 +1945,14 @@ Merge is held.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "lane-work-planner",
-  "objective": "Implement modules/work/core: verbatim D-1 upstream copies of ordering.js, dates.js and model.js with declarations, PROVENANCE.md and an integrity test; PlannerPort and item types exactly per RW-1 plus the features capability and capability-gated hq reference variant, validation parity, ordering/anchors, periods and ISO weeks, review buckets and filters, fictional fixture adapter with revision/order conflicts and request-ID idempotency, port conformance suite, and the state hook with save states, unconfirmed retry using the same request ID and a 40-entry undo stack. Publish early for the board lane.",
+  "objective": "Implement modules/work/core: verbatim D-1 upstream copies of ordering.js, dates.js and model.js with declarations, PROVENANCE.md and an integrity test; PlannerPort and item types exactly per RW-1 plus the features capability and capability-gated hq reference variant, validation parity, ordering/anchors, periods and ISO weeks, review buckets and filters, fictional fixture adapter with revision/order conflicts, actual replay and request_id_reused, T4 conformance cases, move-only status changes, and the module-store state hook with save states, same-request reconciliation of unknown writes, and a 40-entry consume-once compare-and-swap undo stack. Publish early for the board lane.",
   "context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
     "spec.hq-social-work#ctx.stop-recovery-delivery.001",
     "spec.hq-social-work#iface.work-port.001",
-    "spec.hq-social-work#ctx.d1-import.001"
+    "spec.hq-social-work#ctx.d1-import.001",
+    "spec.hq-social-work#ctx.work-design-binding.001"
   ],
   "read_scope": [
     "AGENTS.md",
@@ -1908,7 +2019,7 @@ Merge is held.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "lane-work-planner",
-  "objective": "Build Glance, List, Calendar, Timeline, Review, Archive and the date-derived read-only Lists view (Today, This week, Later, Undated) with Planner behavior parity, undoable calendar and timeline moves, and full state coverage in light and dark.",
+  "objective": "Build Glance, List, Calendar, Timeline, Review, Archive and the read-only By date board (Today, This week by Planner week_start, Later, Undated) with Planner behavior parity, the not-project-scoped note, undoable calendar and timeline moves, and full state coverage in light and dark.",
   "context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
@@ -1994,7 +2105,7 @@ Merge is held.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "lane-work-board",
-  "objective": "Build the status Board with cards, pointer/touch drag, keyboard and menu moves sharing one move path with Undo, quick capture into Inbox without invented dates, and the card detail panel with autosave, checklist, typed dates, references and conflict handling.",
+  "objective": "Build the status Board with cards, pointer/touch drag, keyboard and menu moves sharing one move path with Undo, detail and List status changes through move, quick capture into Inbox without invented dates and with explicit-only HQ drafts, and the card detail panel with autosave, checklist, typed dates, references and conflict handling.",
   "context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
@@ -3354,10 +3465,10 @@ Merge is held.
   "validates": [
     "spec.hq-social-work#req.work-core.001"
   ],
-  "scenario": "A validation parity table covers every enum, limit, date precision, time and timezone rule and URL rule; ordering, periods, review buckets and filters are tested; the fixture adapter and hook are exercised for conflicts, idempotent replay, unconfirmed retry and undo.",
+  "scenario": "A validation parity table covers every enum, limit, date precision, time and timezone rule and URL rule; ordering, periods with week_start, review buckets and filters are tested; the fixture and hook run T4's seven conformance cases including actual replay and request_id_reused, same-request reconciliation, CAS undo and remount survival.",
   "evidence": {
-    "predicate": "All parity and behavior tests pass with the same request ID reused on retry.",
-    "invalid": "Parity expectations were derived from the TypeScript implementation instead of the Planner rules.",
+    "predicate": "All parity and conformance tests pass; unknown writes resolve only by the same request ID and body; a heuristic match is never treated as proof.",
+    "invalid": "Parity expectations were derived from the TypeScript implementation instead of the Planner rules, or replay cases were skipped because the mockup fixture lacks them.",
     "unknown": "A Planner rule could not be determined from source."
   },
   "environment": [
@@ -3937,6 +4048,6 @@ Common to all capsules:
 | UI | `task.ui-kit.001`, `task.reference-ui.001`, then `task.shell-chrome.001` | `iface.ui-kit.001`, `req.shell.001`, `ctx.visual-system-binding.001`, T2 commit `f3c1daff` | Token copy with integrity test, contrast helper, primitives, PreservedContent | R1 skeleton; a named UI owner for shell-chrome | `ac.ui-kit.001`, then `ac.shell-chrome.001` |
 | SOC-C | `task.social-core.001` → `task.social-content.001` → `task.social-domain.001` → `task.social-references.001`; `task.social-live-adapter.001` when activated | `iface.social-port.001`, `req.social-content.001`, `req.references.001`, `ctx.social-design-reconciliation.001`, T3 commit `8f91f6b2` | Port, fixture, conformance suite | R1; publish core early for SOC-W | `ac.social-core.001`, `ac.social-content.001`, `ac.social-domain.001` |
 | SOC-W | `task.social-workbench.001` | `req.social-research.001`, `iface.social-port.001`, T3 branch | Per-tool input builders and result summarizers as pure functions | SOC-C core commit; UI kit | `ac.social-workbench.001` |
-| WRK-P | `task.work-core.001` → `task.work-views.001`; `task.work-live-adapter.001` when activated | `iface.work-port.001`, `req.work-core.001`, `req.work-views.001`, `ctx.d1-import.001`, T4 branch `work/hq-work-design` | Verbatim D-1 import with provenance and an integrity test; validation; fixture | R1; publish core early for WRK-B | `ac.work-core.001`, `ac.work-views.001` |
+| WRK-P | `task.work-core.001` → `task.work-views.001`; `task.work-live-adapter.001` when activated | `iface.work-port.001`, `req.work-core.001`, `req.work-views.001`, `ctx.d1-import.001`, `ctx.work-design-binding.001`, T4 commit `1bb550de` | Verbatim D-1 import with provenance and an integrity test; validation; fixture | R1; publish core early for WRK-B | `ac.work-core.001`, `ac.work-views.001` |
 | WRK-B | `task.work-board.001` → `task.work-domain.001` → `task.work-references.001` | `req.work-views.001` RV-1–3 and RV-6, `iface.work-port.001`, T4 branch | Pointer-drag engine and keyboard move model against port types | WRK-P core commit; UI kit | `ac.work-board.001`, `ac.work-domain.001` |
 <!-- codex-section:end id="spec.hq-social-work#ctx.lane-capsules.001" -->
