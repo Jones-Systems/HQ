@@ -1,10 +1,10 @@
-import { array, bool, enumeration, errorSchema, item, itemId, jsonValue, nullable, object, settings, text, timestamp, DATE_KINDS, PRECISIONS, ERROR_CODES } from './schema.ts';
+import { array, referenceInput, bool, enumeration, errorSchema, item, itemId, jsonValue, nullable, object, settings, text, timestamp, DATE_KINDS, PRECISIONS, ERROR_CODES } from './schema.ts';
 import type { Schema } from './schema.ts';
 export const requestId: Schema = { type: 'string', pattern: '^[A-Za-z0-9-]{8,64}$' };
 export const versionNumber: Schema = { type: 'integer', minimum: 0 };
 export const revision: Schema = { type: 'integer', minimum: 1 };
 export const dateInput = object({ id: itemId, kind: enumeration(DATE_KINDS), precision: enumeration(PRECISIONS), value: text, time: nullable(text), end_time: nullable(text), tz: nullable(text), note: { type: 'string', maxLength: 120 } }, ['kind', 'value']);
-export const fields = object({ ...Object.fromEntries(['title', 'kind', 'status', 'motivation', 'horizon', 'priority', 'area', 'notes'].map(key => [key, item.properties![key]])), next_steps: array(object({ id: itemId, text: item.properties!.next_steps.items!.properties!.text, done: bool }, ['text']), 100), references: array(object(item.properties!.references.items!.properties!, []), 30), dates: array(dateInput, 20) }, []);
+export const fields = object({ ...Object.fromEntries(['title', 'kind', 'status', 'motivation', 'horizon', 'priority', 'area', 'notes'].map(key => [key, item.properties![key]])), next_steps: array(object({ id: itemId, text: item.properties!.next_steps.items!.properties!.text, done: bool }, ['text']), 100), references: array(referenceInput, 30), dates: array(dateInput, 20) }, []);
 export const batchSpec = object({ schema: { const: 'hq.planner.batch-create/v1' }, board: { const: 'planner:main' }, items: { ...array(object({ ...fields.properties, client_key: { type: 'string', minLength: 1, maxLength: 200 } }, ['title']), 50), minItems: 1 } }, ['schema', 'board', 'items']);
 export const replayDocument = object({ schema: { const: 'hq.planner.replay/v1' }, request_id: requestId, method: enumeration(['POST', 'PATCH', 'PUT']), path: text, body_b64: { type: 'string', maxLength: 349528 }, sent_after_version: versionNumber, planner_url: text, created_at: timestamp });
 export const dateResolution = object({ input: text, resolved: text, tz: text, today: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } });

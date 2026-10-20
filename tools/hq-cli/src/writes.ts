@@ -18,12 +18,21 @@ const bytes = (body: any) => { const text = JSON.stringify(body); if (Buffer.byt
 const withoutKey = (item: any) => Object.fromEntries(Object.entries(item).filter(([key]) => key !== 'client_key'));
 function validateFields(raw: any, creating: boolean): void {
   if (!conforms(fieldsShape, raw) || (creating && !Object.hasOwn(raw, 'title')) || (!creating && Object.keys(raw).length === 0)) throw usage('Fields do not match the editable-fields schema; create needs title and update needs a nonempty patch.', 'fields');
+  const targets = new Set<string>();
+  for (const ref of raw.references ?? []) if (ref.kind === 'hq') {
+    const key = `${ref.target.domain}/${ref.target.kind}/${ref.target.entityId}`;
+    if (targets.has(key)) throw usage('Duplicate HQ reference target.', 'references');
+    targets.add(key);
+  }
   if (raw.title !== undefined && !raw.title.trim()) throw usage('Title must not be blank.', 'title');
 }
 function validateBatch(raw: any): void {
   if (!conforms(batchSpec, raw)) throw usage('Batch spec requires schema hq.planner.batch-create/v1, board planner:main, and 1..50 items.', 'spec_file');
   const keys = new Set();
   for (const entry of raw.items) { validateFields(withoutKey(entry), true); if (entry.client_key) { if (keys.has(entry.client_key)) throw usage('Batch client_key values must be unique.'); keys.add(entry.client_key); } }
+}
+function requireReferences(info: any, inputs: any[]): void {
+  if (inputs.some(input => input?.references?.some((ref: any) => ref.kind === 'hq')) && !(info.features ?? []).includes('hq-references-v1')) throw usage('HQ references require advertised hq-references-v1; no write was sent.', 'references');
 }
 async function preRead(client: PlannerClient): Promise<any> {
   try { return await client.read({ kind: 'version' }, version); }
@@ -81,6 +90,8 @@ async function send(client: PlannerClient, doc: Replay, noEffect = false): Promi
   return { body: reply.body, effect: noEffect ? 'none' : reply.replayed ? 'replayed' : 'applied' };
 }
 async function reconcile(client: PlannerClient, doc: Replay, info: any, check = false): Promise<{ body?: any; effect: string; outcome: string }> {
+  const original = JSON.parse(Buffer.from(doc.body_b64, 'base64').toString('utf8'));
+  if (!check) requireReferences(info, original.items ?? [original.fields ?? original.patch]);
   if (doc.sent_after_version > info.state_version) throw usage('Replay version is newer than this service state.');
   if ((info.features ?? []).includes('requests.replay')) {
     const { schema, planner_url, created_at, ...inner } = doc;
@@ -164,6 +175,7 @@ async function batch(invocation: Invocation, deps: Dependencies, now: Date): Pro
   if (mode === 'sequential' && rid.length > 60) throw usage('Sequential request ID is limited to 60 characters.');
   const client = new PlannerClient(bindURL(input, deps, prior?.planner_url), deps.fetch ?? globalThis.fetch, input.timeout_ms);
   let info = await preRead(client);
+  requireReferences(info, prior ? spec.items.filter((_: any, index: number) => !['created', 'replayed'].includes(prior.results[index].status)) : spec.items);
   const resolutions = prior?.dates ?? [];
   if (!prior) {
     let tz = input.tz;
@@ -199,6 +211,7 @@ async function batch(invocation: Invocation, deps: Dependencies, now: Date): Pro
     let attempted = false;
     try {
       if (index > 0) info = await preRead(client);
+      requireReferences(info, [spec.items[index]]);
       const modern = (info.features ?? []).includes('requests.replay');
       if (prior && !modern && entry.status === 'unknown') throw uncertain('replay_unsupported', 'An old service cannot safely reconcile this unknown create.');
       if (prior && !modern && entry.status === 'failed') throw new CliError('resume_requires_edit', 'A rejected item needs an edited spec and a new run containing only unfinished work.', 3);
@@ -258,6 +271,7 @@ export async function executeWrite(invocation: Invocation, deps: Dependencies): 
     }
     const client = new PlannerClient(bindURL(input, deps), deps.fetch ?? globalThis.fetch, input.timeout_ms);
     const info = await preRead(client);
+    requireReferences(info, [raw]);
     let resolutions: any[] = [];
     if (raw) {
       const resolved = await resolveFields(raw, input, client, deps, now); resolutions = resolved.resolutions;

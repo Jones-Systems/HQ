@@ -28,13 +28,25 @@ const dateBase = {
   tz: nullable(text), note: { type: 'string', maxLength: 120 }, instant: timestamp, end_instant: timestamp, tz_abbr: text,
 };
 export const planningDate = object(dateBase, ['id', 'kind', 'precision', 'value', 'time', 'end_time', 'tz', 'note']);
+// The length lookahead preserves parseReference’s UTF-16 limits, including astral text.
+const referenceText = (max = 160): Schema => ({ type: 'string', minLength: 1, maxLength: max, pattern: `^(?=[\\s\\S]{1,${max}}$)(?!\\s)(?![\\s\\S]*\\s$)[^\\u0000-\\u001f\\u007f]+$` });
+const referenceDomain = enumeration(['design', 'social', 'work']);
+export const referenceEnvelope = object({
+  version: { const: 1 }, domain: referenceDomain, projectId: referenceText(), kind: referenceText(), entityId: referenceText(), title: referenceText(300),
+  returnDestination: object({ domain: referenceDomain, destination: { ...referenceText(512), pattern: `^(?![a-zA-ZſK][a-zA-Z0-9ſK+.-]*:|[/\\\\]{2})${referenceText(512).pattern!.slice(1)}` } }),
+  sourceRevision: referenceText(300), workspaceId: referenceText(),
+}, ['version', 'domain', 'projectId', 'kind', 'entityId', 'title', 'returnDestination']);
+const legacyReferenceProperties = { id: itemId, kind: enumeration(['url', 'doc', 'repo', 'pr', 'project', 'workstream', 'other']), label: text, url: text };
+const hqReferenceProperties = { id: itemId, kind: { const: 'hq' }, label: { type: 'string', maxLength: 200 }, target: referenceEnvelope } satisfies Record<string, Schema>;
+export const reference: Schema = { anyOf: [object(legacyReferenceProperties), object(hqReferenceProperties)] };
+export const referenceInput: Schema = { anyOf: [object(legacyReferenceProperties, []), object(hqReferenceProperties, ['kind', 'target'])] };
 export const item = object({
   id: itemId, revision: { type: 'integer', minimum: 1 }, title: { type: 'string', minLength: 1, maxLength: 200 },
   kind: enumeration(KINDS), status: enumeration(STATUSES), motivation: nullable(enumeration(['need', 'want', 'exploring'])),
   horizon: nullable(enumeration(HORIZONS)), priority: nullable(enumeration(['high', 'normal', 'low'])),
   area: nullable({ type: 'string', maxLength: 40 }), notes: { type: 'string', maxLength: 20000 },
   next_steps: array(object({ id: itemId, text: { type: 'string', minLength: 1, maxLength: 300 }, done: bool }), 100),
-  references: array(object({ id: itemId, kind: enumeration(['url', 'doc', 'repo', 'pr', 'project', 'workstream', 'other']), label: text, url: text }), 30),
+  references: array(reference, 30),
   dates: array(planningDate, 20), position: integer, is_example: bool,
   created_at: timestamp, updated_at: timestamp, archived_at: nullable(timestamp), reviewed_at: nullable(timestamp),
 });
@@ -49,6 +61,10 @@ export const failure = (command: string) => object({ schema: { const: 'hq.cli.re
 export const resultSchema = (command: string, data: Schema): Schema => ({ $schema: 'https://json-schema.org/draft/2020-12/schema', $defs: { jsonValue }, anyOf: [object({ schema: { const: 'hq.cli.result/v1' }, ok: { const: true }, command: { const: command }, effect: { const: 'none' }, data }), failure(command)] });
 
 export function conforms(schema: Schema, value: unknown, allowExtras = false, root = schema): boolean {
+  // HQ reference envelopes are closed even when projecting additive service fields.
+  if (schema === referenceEnvelope || ((schema === reference || schema === referenceInput) && (value as any)?.kind === 'hq')) allowExtras = false;
+  if (schema === referenceEnvelope && (!value || typeof value !== 'object' || ![Object.prototype, null].includes(Object.getPrototypeOf(value)))) return false;
+  if (schema === referenceEnvelope && ![Object.prototype, null].includes(Object.getPrototypeOf((value as any).returnDestination ?? {}))) return false;
   if (schema.$ref) { const ref = root.$defs?.[schema.$ref.replace('#/$defs/', '')]; return ref !== undefined && conforms(ref, value, allowExtras, root); }
   if (schema.anyOf) return schema.anyOf.some(s => conforms(s, value, allowExtras, root));
   if ('const' in schema && schema.const !== value) return false;

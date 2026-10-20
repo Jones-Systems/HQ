@@ -72,6 +72,14 @@ A field cannot be supplied both ways. Use the file for explicit null values and
 replacement arrays (`dates`, `next_steps`, `references`); an empty dates array
 clears dates. The schemas returned by discovery describe these files.
 
+References can also carry `{kind:"hq", label, target}`. The target is the full
+HQ ReferenceEnvelope (version, domain, projectId, kind, entityId, title,
+returnDestination, and optional sourceRevision/workspaceId). This variant has no
+URL; it preserves its provenance through writes and reads. Duplicate targets by
+(domain, kind, entityId) are rejected. HQ-reference writes require advertised
+`hq-references-v1`; a missing feature returns local exit 2 before a mutation.
+Legacy URL references remain supported without this feature.
+
 `--planned D` means **target** as the CLI's visible default. `--due D` means
 **deadline**, independently. Repeat `--date kind:value[@HH:MM[-HH:MM]][~TZ]` for
 other dates. Kinds are `target`, `deadline`, `start`, `event`; values preserve
@@ -180,12 +188,27 @@ fields outside the declared contract are omitted. `hq --help` returns JSON.
 From `tools/hq-cli`, run:
 
 ```sh
-node --test --test-concurrency=1 'test/**/*.test.mjs'
+npm test
+HQ_CLI_E2E=1 npm test
 ```
 
-The `hq-cli-t2` and `hq-cli-t3` groups are recorded in `test/manifest.json`.
+The `hq-cli` union and its read, write, reference and E2E groups are recorded in
+`test/manifest.json`.
 Unit tests inject fetch/time and open no sockets. File fixtures use unique trees
 below `test/` and creating-test teardown; intent-file tests cover atomic visibility
 and cleanup. These source checks do not prove installed behavior, live-service
-compatibility, root workspace CI or deployment. Real-service E2E and the dedicated
-agent guide are a separate delivery stage.
+compatibility, root workspace CI or deployment.
+
+The opt-in E2E requires Python 3 and launches the actual in-tree
+`services/planner` on an ephemeral loopback port with a disposable synthetic
+SQLite store. It requires the reference-capable backend; no external source path
+or live endpoint is used. It exercises the five-item planning example with an
+injected fixed CLI clock and absolute dates, plus a real-clock relative-date
+echo, atomic/sequential creation, readback, replay and reference roundtrip.
+Without opt-in, these checks explicitly skip. The E2E owns its unique ignored
+`test/e2e/.scratch-*` tree and terminates its child before removing that exact
+tree on completion, failure or handled SIGINT/SIGTERM. Cleanup checks cover
+success, deliberate failure and both signals.
+
+Agents can use the source-local [HQ CLI skill](skills/hq-cli/SKILL.md). Skill
+installation and global activation remain separate operations.

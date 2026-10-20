@@ -19,6 +19,35 @@
         "test/batch.test.mjs"
       ],
       "environment": "Node >=22.18; injected fetch and clock; no sockets; caller-file fixtures cleaned by test teardown"
+    },
+    "hq-cli-references": {
+      "command": "node --test --test-concurrency=1 test/references.test.mjs",
+      "modules": [
+        "test/references.test.mjs"
+      ],
+      "environment": "Node >=22.18; injected fetch; task-owned caller-file fixtures cleaned by teardown"
+    },
+    "hq-cli-e2e": {
+      "command": "HQ_CLI_E2E=1 node --test --test-concurrency=1 test/e2e/planner.test.mjs",
+      "modules": [
+        "test/e2e/planner.test.mjs"
+      ],
+      "environment": "Explicit opt-in; Node >=22.18 and python3; actual in-tree services/planner; synthetic loopback only; unique package scratch and child cleanup on success/failure/SIGINT/SIGTERM"
+    },
+    "hq-cli": {
+      "command": "npm test",
+      "modules": [
+        "test/core.test.mjs",
+        "test/reads.test.mjs",
+        "test/transport.test.mjs",
+        "test/writes.test.mjs",
+        "test/write-dates.test.mjs",
+        "test/replay.test.mjs",
+        "test/batch.test.mjs",
+        "test/references.test.mjs",
+        "test/e2e/planner.test.mjs"
+      ],
+      "environment": "All CLI cases; real-service E2E explicitly skips unless HQ_CLI_E2E=1"
     }
   },
   "candidate": "node --test --test-concurrency=1 'test/**/*.test.mjs'"
