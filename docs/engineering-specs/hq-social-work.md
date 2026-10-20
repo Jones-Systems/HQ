@@ -417,7 +417,7 @@ Glance, List, Calendar, Timeline, Review, Archive and By date render the synthet
 
 **Boundaries.**
 
-- The Work module imports only `@hq/contracts` and `@hq/ui` across package boundaries.
+- Across HQ workspace boundaries, the Work module imports only `@hq/contracts` and `@hq/ui`. React and runtime imports stay allowed, as in the existing modules.
 - The transferred `modules/work/skeleton.test.ts` asserts the descriptor mount, dependency resolution and no navigation on mount.
 - Board, detail, capture, views, core and UI kit trees are byte-identical to their accepted commits.
 - Light and dark evidence is attached.
@@ -440,7 +440,13 @@ On the integrated candidate. That is the Social+Work assembly with T0's Design p
 - the accepted Social domain head `9735b741e94baad83d9f7dc5f3bb8ce9c3778b2d`, which contains core, content and workbench;
 - the accepted Work-domain head, which contains board, views and core.
 
-The UI kit `935dedf` arrives identically through both. Authored paths are `docs/evidence/hq-social-work/integration/social-work/**`, plus `apps/desktop/src/modules.tsx` only if genuinely required.
+The UI kit `935dedf` arrives identically through both. Authored paths are:
+
+- `apps/desktop/src/social-work.integration.test.tsx`, a new file assigned by the root as exact test-file custody (not a general source mandate). The `dom` project and root typecheck already discover it. If another owner or branch is observed on this path, only this file holds;
+- `docs/evidence/hq-social-work/integration/social-work/**`;
+- `apps/desktop/src/modules.tsx`, only if genuinely required.
+
+Existing Social and Work tests stay read-only. The assembly reads `modules/social`, `modules/work`, `packages/hq-ui` and their accepted evidence for their public mount and export contracts.
 
 **What must hold.**
 
@@ -459,9 +465,9 @@ This is the first combined run of all the lanes. It is **combined verification, 
 
 **Usable** means Social and Work are actually mounted in the real shell with labelled fictional data. The evidence proves:
 
-- integration tests for `ac.integration.001` with Design as the placeholder, including cross-domain round trips that restore both domains' state;
+- integration tests in `apps/desktop/src/social-work.integration.test.tsx` for `ac.integration.001` with Design as the placeholder, including cross-domain round trips that restore both domains' state;
 - one keypress consumes one undo entry;
-- navigation makes zero writes or execution calls;
+- navigation, domain and page switches make zero writes and zero execution calls. Explicit card, date or horizon moves make only their single intended planning mutation (and explicit Undo), with zero execution;
 - an early reviewable walkthrough, on fixture data only with no endpoints, covering Social and Work in light and dark at usable widths, with no console errors under the exact app CSP;
 - Electron, only through an approved route on this host. Otherwise it is reported as **unverified**; no install or sudo.
 
@@ -946,12 +952,12 @@ Integration happens in **isolated assembly branches** owned by the assembly owne
 | **SOC-W** (Social workbench lane) | `modules/social/workbench/`, `docs/evidence/hq-social-work/social-workbench/` | `modules/social/core/` (proposes changes to SOC-C) |
 | **WRK-P** (Work planner lane) | `modules/work/core/`, `modules/work/views/`, `modules/work/live/` (when activated), `docs/evidence/hq-social-work/work-planner/` | `modules/work/board/` |
 | **WRK-B** (Work board lane) | `modules/work/board/`, `modules/work/detail/`, `modules/work/capture/`, `docs/evidence/hq-social-work/work-board/`; later `modules/work/references/` | `modules/work/core/` (proposes changes to WRK-P) |
-| **Work-domain child** | `modules/work/index.tsx`, `modules/work/nav/`, `modules/work/skeleton.test.ts`, `docs/evidence/hq-social-work/work-domain/` | Other Work trees, UI kit, root files |
-| **Assembly owner** | `…/integration/social-work/`, `…/integration/joint/`, `…/joint-smoke/`; `modules.tsx` if needed; gated joint root files and CI workflow | Lane and Design source, catalog |
+| **Work-domain child** | `modules/work/index.tsx`, `modules/work/nav/`, `modules/work/skeleton.test.ts`, `docs/evidence/hq-social-work/work-domain/` | Other Work trees, UI kit, roots |
+| **Assembly owner** | `…/integration/{social-work,joint}/`, `…/joint-smoke/`, `apps/desktop/src/social-work.integration.test.tsx`; `modules.tsx` if needed; gated root files, CI | Lane/Design source, catalog |
 | **T1 planner** | this spec, `docs/work-notes/hq-social-work.md`, `docs/work-notes/hq-social-work-tools/`, `docs/design/hq-shared-foundation.md`, `…/integration/integration-plan-validation.md` | Everything else |
 | **Unassigned / held** | `App.tsx`, `styles.css`; contracts, IPC, reference shell | — |
 | **Design-owned** | `modules/design/**`, `packages/design-store/**`, `tests/check-groups.toml`, `.github/workflows/foundation.yml` | — |
-| **Others** (Design, T0, T2–T4) | own scopes | — |
+| **Others** (Design, T0, T2–T4) | own | — |
 
 ### Serialization rules
 
@@ -2462,7 +2468,8 @@ No merge order is adopted. Merge is held.
     "spec.hq-social-work#ctx.change-surface.001",
     "spec.hq-social-work#ctx.stop-recovery-delivery.001",
     "spec.hq-social-work#ctx.integration-bindings.001",
-    "spec.hq-social-work#ctx.child-launch-containment.001"
+    "spec.hq-social-work#ctx.child-launch-containment.001",
+    "spec.hq-social-work#ctx.work-design-binding.001"
   ],
   "read_scope": [
     "AGENTS.md",
@@ -2644,7 +2651,7 @@ No merge order is adopted. Merge is held.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "hq-root",
-  "objective": "In a fresh native isolated assembly checkout started from the published plan head, normally merge exactly the accepted Social domain 9735b74 and the accepted Work-domain head (both carry the identical UI kit 935dedf), keep lane branches and PRs unchanged, keep T0's Design placeholder, adjust the registry only if the named exports require it, and prove a usable mounted Social+Work shell with labelled fictional data: cross-domain round trips restoring both domains, one keypress one undo, zero navigation writes or execution, exact combined test discovery with typecheck, full suite and build once on the exact head, representative light and dark previews at usable widths without console errors under the app CSP, and Electron only if qualified. Publish one merge-held non-draft assembly PR against the plan branch.",
+  "objective": "In a fresh native isolated assembly checkout started from the published plan head, normally merge exactly the accepted Social domain 9735b74 and the accepted Work-domain head (both carry the identical UI kit 935dedf), keep lane branches and PRs unchanged, keep T0's Design placeholder, adjust the registry only if the named exports require it, and prove a usable mounted Social+Work shell with labelled fictional data in the root-assigned new test apps/desktop/src/social-work.integration.test.tsx (existing Social/Work tests stay read-only): cross-domain round trips restoring both domains, one keypress one undo, zero writes and execution from navigation, domain and page switches, explicit planning moves making only their single intended mutation with zero execution, exact combined test discovery with typecheck, full suite and build once on the exact head, representative light and dark previews at usable widths without console errors under the app CSP, and Electron only if qualified. Publish one merge-held non-draft assembly PR against the plan branch.",
   "context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
@@ -2657,9 +2664,14 @@ No merge order is adopted. Merge is held.
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
     "packages/contracts",
-    "apps/desktop"
+    "apps/desktop",
+    "modules/social",
+    "modules/work",
+    "packages/hq-ui",
+    "docs/evidence/hq-social-work"
   ],
   "write_scope": [
+    "apps/desktop/src/social-work.integration.test.tsx",
     "apps/desktop/src/modules.tsx",
     "docs/evidence/hq-social-work/integration/social-work"
   ],
@@ -4197,7 +4209,7 @@ No merge order is adopted. Merge is held.
   ],
   "scenario": "The real T0 App with MODULES drives Design, Social, Work, Work: Work returns with view, filters, selection, scroll and unsaved capture/detail text restored; a nested PlanningViews plus domain Ctrl/Meta+Z consumes exactly one undo entry; typing controls and defaultPrevented events are skipped; the skeleton test asserts mount, dependency resolution and no navigation; light and dark previews are captured under the app CSP.",
   "evidence": {
-    "predicate": "Restoration, undo, boundary and zero write/execution assertions pass; board, views, core, detail, capture and UI trees are byte-identical to their accepted commits.",
+    "predicate": "Restoration, undo, HQ workspace import boundary and zero navigation write/execution assertions pass; board, views, core, detail, capture and UI trees are byte-identical to their accepted commits.",
     "invalid": "The test uses a fake descriptor wrapper instead of the real App and MODULES, or edits accepted dependency trees.",
     "unknown": "The registry harness or browser capture is unavailable on this host."
   },
@@ -4276,7 +4288,7 @@ No merge order is adopted. Merge is held.
     "spec.hq-social-work#req.safety.001",
     "spec.hq-social-work#req.foundation-binding.001"
   ],
-  "scenario": "On the exact Social+Work assembly head with the Design placeholder, real App round trips restore Social and Work state; explicit theme survives reload; one keypress consumes one undo entry; switches and card moves make zero writes or execution; the run lists unique inherited test files plus new integration tests; light and dark previews at usable widths show no console errors under the app CSP.",
+  "scenario": "On the exact Social+Work assembly head with the Design placeholder, apps/desktop/src/social-work.integration.test.tsx drives the real App: round trips restore Social and Work state; explicit theme survives reload; one keypress consumes one undo entry; navigation, domain and page switches make zero writes and zero execution; explicit card, date or horizon moves make only their single intended planning mutation (and explicit Undo), with zero execution; the run lists unique inherited test files plus new integration tests; light and dark previews at usable widths show no console errors under the app CSP.",
   "evidence": {
     "predicate": "Typecheck, full suite and build pass once on the exact assembly head; incoming accepted trees are byte-identical; discovery is listed by file identity.",
     "invalid": "Lane branches were advanced, counts were summed instead of discovered, or execution spies were removed.",
@@ -4297,6 +4309,7 @@ No merge order is adopted. Merge is held.
     ]
   },
   "target_hints": [
+    "apps/desktop/src/social-work.integration.test.tsx",
     "docs/evidence/hq-social-work/integration/social-work/"
   ],
   "affected_check_groups": [
@@ -4827,5 +4840,5 @@ Common to all capsules:
 | WRK-P | `task.work-core.001` → `task.work-views.001`; `task.work-live-adapter.001` when activated | `iface.work-port.001`, `req.work-core.001`, `req.work-views.001`, `ctx.d1-import.001`, `ctx.work-design-binding.001`, T4 commit `1bb550de` | Verbatim D-1 import with provenance and an integrity test; validation; fixture | R1; publish core early for WRK-B | `ac.work-core.001`, `ac.work-views.001` |
 | WRK-B | `task.work-board.001` (accepted `3ca74d7`) → later `task.work-references.001` | `req.work-views.001` RV-1–3 and RV-6, `iface.work-port.001`, T4 branch | Done; holds | `ac.reference-contract-custody.001` for references | `ac.work-board.001` |
 | Work-domain child | `task.work-domain.001` | `ctx.integration-bindings.001`, `ctx.child-launch-containment.001`, `ac.work-domain.001`, `ctx.work-design-binding.001` | Normal merge of exactly `3ca74d7` inside its own native checkout, then the descriptor | A native HQ-parent launch under exact root direction | `ac.work-domain.001` |
-| Assembly owner | `task.domain-integration.001`; explicit joint tasks later | `ctx.integration-stages.001`, `ac.sw-assembly.001` | — | Accepted Work-domain candidate | `ac.sw-assembly.001`, then the joint acceptances |
+| Assembly owner | `task.domain-integration.001`; explicit joint tasks later | `ctx.integration-bindings.001`, `ac.sw-assembly.001`; joint tasks add `ctx.integration-stages.001` | — | Accepted Work-domain candidate | `ac.sw-assembly.001`, then the joint acceptances |
 <!-- codex-section:end id="spec.hq-social-work#ctx.lane-capsules.001" -->
