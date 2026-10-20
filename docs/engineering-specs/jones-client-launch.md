@@ -65,7 +65,7 @@ The change follows the current Jones Code rules:
 - Persistence uses one `jones_`-prefixed table, created by the next free Jones migration, with no foreign key to upstream tables.
 - The boundary inventory is updated, and `check-boundary.ts --strict` passes.
 - Upstream test behavior and assertions stay unchanged; only the four declared fixture updates in W21 are permitted. The two McpToolAccess test files remain unedited and pass.
-- No new event or command type, no upstream schema change, and no new Layer.
+- No new event or command type, no upstream schema change, and no new Layer construction. The W22 `ws.ts` export re-exports the existing Layer value with a checked type and constructs nothing (`#ctx.change-surface.001`).
 <!-- codex-section:end id="spec.jones-client-launch#req.repository-boundary.001" -->
 
 <!-- codex-section:begin id="spec.jones-client-launch#ac.source-candidate.001" -->
@@ -73,9 +73,9 @@ The change follows the current Jones Code rules:
 
 At one exact head of the task branch:
 
-- Acceptance cases T1–T14 (`#ctx.test-plan.001`) pass.
+- Acceptance cases T1–T16 (`#ctx.test-plan.001`) pass.
 - The final focused union in `#ctx.test-plan.001` passes, including lint, the two package typechecks and `check-boundary.ts --strict`.
-- The diff touches only the 26 paths of the writer cone (`#ctx.change-surface.001`).
+- The diff touches only the 27 paths of the writer cone (`#ctx.change-surface.001`).
 
 Any skipped or unavailable check is reported as such, never as a pass.
 <!-- codex-section:end id="spec.jones-client-launch#ac.source-candidate.001" -->
@@ -115,6 +115,7 @@ Facts at the base:
 - **Migration ID.** The highest Jones migration is `111`; IDs 7–99 are reserved for foreign histories, so **`112` is free**. `JonesTablePresence.ts` has no table enum.
 - **Services.** `CommandReceiptStoreV2`, `EventSinkV2` and `SqlClient` are already in the server context (`runtimeLayer.layer` and `layerProduction`). The project toolkit registers from that context (`McpHttpServer.ts:809`), so only the tools' `dependencies` arrays change.
 - **Boundary classes.** `project/handlers.ts` is pristine upstream, so editing it creates a new `hook` inventory entry. `project/tools.ts`, `ThreadLaunchService.ts` and `orchestratorMcp.ts` are already `accepted-shared`; `packages/contracts/src/index.ts` is a `hook`.
+- **`ws.ts`.** `apps/server/src/ws.ts` is a `hook` in the inventory, declared in the `runtime-stop` fragment's `hookPaths`. Its bytes are unchanged from the base through the head bound for the W22 repair: SHA-256 `ddd1cd32b676824ba986c8fd56111f6f517385951b471d36f2ddd7664757cd38`, 3,409 lines. Of the W22 type-import targets, `environment/NativeStoreAuthority.ts` is `jones-owned`; the others are upstream or `accepted-shared`.
 <!-- codex-section:end id="spec.jones-client-launch#ctx.source-binding.001" -->
 
 <!-- codex-section:begin id="spec.jones-client-launch#ctx.target-rules.001" -->
@@ -392,7 +393,7 @@ Atomicity is `insertIfAbsent` on the receipt primary key (`EventSink.ts:1684`); 
 <!-- codex-section:begin id="spec.jones-client-launch#ctx.change-surface.001" -->
 ## Exact Change Surface And Ownership
 
-The writer cone is **21 entries covering 26 physical paths** (W19 names three files; W21 names four fixture files). All paths are relative to the Jones Code repository root. Anything outside the cone needs a T1 rebind.
+The writer cone is **22 entries covering 27 physical paths** (W19 names three files; W21 names four fixture files). All paths are relative to the Jones Code repository root. Anything outside the cone needs a T1 rebind.
 
 | # | Path | Class after change | Content |
 | --- | --- | --- | --- |
@@ -413,22 +414,52 @@ The writer cone is **21 entries covering 26 physical paths** (W19 names three fi
 | W15 | `apps/server/src/mcp/toolkits/project/tools.ts` | accepted-shared | input and output fields; two tools in `ProjectToolkit`; `dependencies` add `CommandReceiptStoreV2`, `EventSinkV2`, `SqlClient` |
 | W16 | `apps/server/src/mcp/toolkits/project/handlers.ts` | **becomes hook** | `// Jones hook:` `t3_thread_launch` on `startsOrContinuesThreads`; keyed branch, lookup and fence handlers each call `readCaller()` first in the handler; the unkeyed branch yields `gate.start`, then today's body unchanged |
 | W17 | `docs/orchestration-v2/orchestrator-mcp-server.md` | becomes accepted-shared | retry key, lookup and fence; idempotency bullets |
-| W18 | `scripts/jones/boundary/fragments/client-launch.json` (new) | policy | owned paths, hooks W16 and W20, allowed imports |
-| W19 | `scripts/jones/boundary/inventory.json`, `scripts/jones/boundary/features.json`, `scripts/jones/boundary/checks.json` | policy | accounting only, including `hook` for W16 and W20; preserve every other entry |
+| W18 | `scripts/jones/boundary/fragments/client-launch.json` (new) | policy | owned paths, hooks W16 and W20, allowed imports, including the one W22 type-import edge `apps/server/src/ws.ts` → `apps/server/src/environment/NativeStoreAuthority.ts` |
+| W19 | `scripts/jones/boundary/inventory.json`, `scripts/jones/boundary/features.json`, `scripts/jones/boundary/checks.json` | policy | accounting only, including `hook` for W16 and W20; in `checks.json`, add `apps/server/src/ws.ts` to the `hq-jones-client-launch` lint command; preserve every other entry |
 | W20 | `apps/server/src/mcp/McpToolAccess.ts` | **becomes hook** | one additive `// Jones hook:` export `startsOrContinuesThreads` with `ThreadStartGate` (`#iface.access-hook.001`); no other line changes |
-
 | W21 | `apps/server/src/jones/persistence/UpstreamIsolation.test.ts`, `apps/server/src/mcp/toolkits/project/handlers.test.ts`, `apps/server/src/mcp/toolkits/worktree/registration.test.ts`, `apps/server/src/orchestration-v2/ThreadLaunchService.test.ts` | narrow test fixtures | Add migration 112 to the exact expected Jones migration list; provide the newly required typed synthetic receipt/event/SQL services to toolkit fixtures; forward the existing preparationActive accessor in the launch-service fixture. Preserve all existing assertions and cases; no runtime source or server.ts change. |
+| W22 | `apps/server/src/ws.ts` | hook (class unchanged; declared by the existing `runtime-stop` fragment) | type-only checked export of the existing WebSocket Layer value (**W22 checked `ws.ts` export** below); no runtime change |
 
 **Hidden ownership: none.**
 
 - Only W21 additive test-fixture wiring and the migration-112 expected-list update are permitted. No assertion relaxation, skips, timeouts, test deletion or other upstream test behavior change.
-- No new Layer and no `server.ts` edit.
+- No new Layer construction and no `server.ts` edit. W22 renames the existing `Layer.unwrap(...)` binding to a private `layerWs` and exports the same value as `layer`. Nothing new is built, provided or composed.
 - No edits to `Orchestrator.ts`, `EventSink.ts` or `CommandReceiptStore.ts`.
 - No change to any existing `McpToolAccess` builder, including `startsThreads`, which `schedule_task` also uses.
 - In `ThreadLaunchService.ts`, nothing beyond W13: no change to the service interface, `prepareRun`, `retryPreparation`, `schedulePreparation`, `failPreparedRun`, `reservePreparation` or `releasePreparation`, and no behaviour change when `holdPreparationAfterProgress` is absent. The F2 hold adds no path: it stays in W13, W11 and W14.
 - No change to Scratch folder allocation (`folderForThread`); F3 stays deferred (`#ctx.stop-recovery-delivery.001`).
 - No new event or command type, upstream schema change or generated file.
 - No index or worktree operation outside the builder's own worktree.
+
+**W22 checked `ws.ts` export.**
+
+- **Cause.** `server.ts` imports `layer` from `ws.ts`. Across that import, the inferred requirements of the exported `Layer.unwrap(...)` value widen. The unchanged server typecheck then reports eight TS377030 requirements-channel errors in `server.ts`; at the head bound for the repair they are at (722,7), (752,8), (784,7), (1112,11), (1112,42), (1119,11), (1120,7) and (1128,12). The local, unexported Layer keeps its full requirements.
+- **Form.**
+  - Keep the original initializer, unannotated, as a private `const layerWs = Layer.unwrap(...)`.
+  - Export the same value with `export const layer: Layer.Layer<never, never, WsLayerServices> = layerWs;`.
+  - `WsLayerServices` is the complete union of the original layer's requirements:
+    - eight ordinary services: `HttpRouter.HttpRouter`, `NativeStoreAuthority`, `PreviewAutomationBroker`, `PullRequestReviewGuideService`, `PullRequestService`, `ServerBrowser`, `ServerSelfUpdate` and `SqlClient`;
+    - `HttpRouter.Request.From<"Requires", …>` over 78 request services;
+    - `HttpRouter.Request<"Error", ConfigError>`.
+  - Eleven `import type` lines supply the names not already imported.
+- **Qualification recorded by the diagnosis.**
+  - The interface equals the original unannotated layer's requirements in both directions, and every one of the 87 one-member omissions is rejected, naming exactly that member.
+  - With the form applied and no instrumentation, the unchanged typecheck command ran both scopes with no cache hit and reported no diagnostic.
+  - Emitted JavaScript differs only by the binding name and the re-export; once that is normalized, it is byte-identical.
+  - A focused check with the installed Effect showed the same Layer identity, lazy build, memoization, request capture and one finalization.
+  - This is diagnosis evidence. Acceptance is T16 at the task head.
+- **Rejected forms.** Annotating the initializer itself, which gave three TS2589 depth errors. The `effectDiscard`/`router.add` form, which left all eight errors in place.
+- **Invariants.**
+  - No change to the initializer, any runtime import, statement order, provider or handler, schema, wire key or state path.
+  - No cast, `@ts-` suppression, `any`/`unknown` erasure, narrowed service subset, compiler or config change.
+  - No `server.ts` edit; its explicit `runServer` signature stays as is.
+  - Nothing is constructed, provided or composed anew, so the no-new-Layer rule holds.
+- **Reference.** Applied to `ws.ts` with SHA-256 `ddd1cd32b676824ba986c8fd56111f6f517385951b471d36f2ddd7664757cd38`, the reference patch (SHA-256 `ee40456bee3ea511db1a8f0b3d559357a10398acb46c26befb6935f168f84a4e`; 107 lines added, 1 removed) yields SHA-256 `ca07f1b3edd65fc59a6f897480cac2492963a538899b0910958ec0911b0c4fed`. If the `ws.ts` bytes differ when the builder applies it, stop and ask T1; do not re-derive the interface.
+- **Boundary.**
+  - `environment/NativeStoreAuthority.ts` is `jones-owned`, and `check-boundary.ts` checks type-only imports too. So W18 lists exactly one new allowed edge, from `apps/server/src/ws.ts` to `apps/server/src/environment/NativeStoreAuthority.ts`.
+  - The other ten type-import targets are upstream or `accepted-shared` and need no edge.
+  - `ws.ts` stays a `hook` declared by `runtime-stop`. Listing it again in the `client-launch` `hookPaths` would fail as an overlapping hook.
+  - No ownership claim and no other policy entry changes.
 <!-- codex-section:end id="spec.jones-client-launch#ctx.change-surface.001" -->
 
 <!-- codex-section:begin id="spec.jones-client-launch#ctx.test-plan.001" -->
@@ -453,6 +484,7 @@ All cases use synthetic namespaces and keys, in-memory SQLite (`NodeSqliteClient
 | T13 | W11 | `not_requested` vs `pending`; `rejected` with reason; `unknown` without a claim; a later unrelated run never changes `runId`/`runStatus` |
 | T14 | W12 | no `orchestration` capability: `capability_denied` from all three tools before any receipt, claim or thread read, including a keyed launch that also requests broader modes; read-only: launch and fence refused, lookup allowed |
 | T15 | W11 + W14 | **Stale keyed retry (F2).** W11, deterministic and without sleeps: (1) a keyed `worktree` launch faults after its message is accepted and before scheduling, leaving `unscheduled`; (2) retry A runs to its continuation and is held by a `Deferred` barrier in its `ThreadLaunchService.launch` wrapper, after its `unscheduled` lookup and before the real `launch`; (3) while A is held, insert an accepted `${commandId}:progress:worktree` receipt, with the run still `preparing` and no reservation. That is the state another retry's failed preparation leaves when `prepared-run.fail` cannot be persisted; (4) release A. Pass: A's request carries `holdPreparationAfterProgress: true`; A returns `replayed: true` with `unknown_effect`; `createWorktree` and setup call counts do not increase across the barrier; `preparationActive` is false. Without the hold this case schedules preparation again, so it fails before the fix. W14, service cases on a real layer: with the flag and an accepted progress receipt, nothing is scheduled and the reservation is released; with the flag and no progress receipt, preparation is scheduled once; with the flag while another owner holds the reservation, there is no second scheduling; without the flag, behaviour is as today, including scheduling after a progress receipt on the non-legacy path. |
+| T16 | W22 (+ W18, W19) | **Checked `ws.ts` export.** (1) The unchanged `vp run --filter @t3tools/contracts --filter t3 --concurrency-limit 1 typecheck` executes both scopes, so a cache hit is not evidence, and reports no diagnostic. The eight TS377030 errors in `server.ts` are gone, and there is no TS2589. (2) `vp lint apps/server/src/ws.ts` and `check-boundary.ts --strict` pass, the latter with the one W18 edge. (3) The `ws.ts` diff is exactly the reference form: eleven `import type` lines, the `WsLayerServices` alias, the `layerWs` binding and one exported line. Every other byte, including the `Layer.unwrap` initializer, is unchanged. An instrumented run is not a pass. |
 
 **Stage checkpoints.** Each is a coherent commit.
 
@@ -461,14 +493,14 @@ All cases use synthetic namespaces and keys, in-memory SQLite (`NodeSqliteClient
 | S1 contracts | W1–W4 | `vp test run packages/contracts/src/jones/clientLaunch.test.ts packages/contracts/src/orchestratorMcp.test.ts --maxWorkers=1`; `vp run --filter @t3tools/contracts typecheck` |
 | S2 persistence | W5–W7 | `vp test run apps/server/src/jones/persistence/Migrations/112_JonesClientLaunchRequests.test.ts apps/server/src/jones/persistence/UpstreamIsolation.test.ts apps/server/src/jones/persistence/ForeignHistoryCompatibility.test.ts --maxWorkers=1 --no-file-parallelism` |
 | S3 service | W8–W11, W13–W14 | `vp test run apps/server/src/jones/mcp/clientLaunch/ClientLaunchIdentity.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchService.test.ts apps/server/src/jones/orchestration/ThreadLaunchService.jones.test.ts apps/server/src/orchestration-v2/ThreadLaunchService.test.ts --maxWorkers=1 --no-file-parallelism` |
-| S4 MCP hooks | W12, W15–W16, W20–W21 | `vp test run apps/server/src/jones/mcp/clientLaunch/ClientLaunchHandlers.test.ts apps/server/src/mcp/toolkits/project/handlers.test.ts apps/server/src/mcp/toolkits/worktree/registration.test.ts apps/server/src/mcp/McpToolAccess.test.ts apps/server/src/mcp/McpToolAccess.race.test.ts --maxWorkers=1 --no-file-parallelism` |
+| S4 MCP hooks and `ws.ts` | W12, W15–W16, W20–W22 | `vp test run apps/server/src/jones/mcp/clientLaunch/ClientLaunchHandlers.test.ts apps/server/src/mcp/toolkits/project/handlers.test.ts apps/server/src/mcp/toolkits/worktree/registration.test.ts apps/server/src/mcp/McpToolAccess.test.ts apps/server/src/mcp/McpToolAccess.race.test.ts --maxWorkers=1 --no-file-parallelism`; for W22, `vp run --filter @t3tools/contracts --filter t3 --concurrency-limit 1 typecheck` (T16) |
 | S5 final | W17–W19 | the final union below |
 
 **Final candidate union** (serial, after a CPU admission sample):
 
 ```sh
 vp test run packages/contracts/src/jones/clientLaunch.test.ts packages/contracts/src/orchestratorMcp.test.ts apps/server/src/jones/persistence/Migrations/112_JonesClientLaunchRequests.test.ts apps/server/src/jones/persistence/UpstreamIsolation.test.ts apps/server/src/jones/persistence/ForeignHistoryCompatibility.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchIdentity.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchService.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchHandlers.test.ts apps/server/src/jones/orchestration/ThreadLaunchService.jones.test.ts apps/server/src/orchestration-v2/ThreadLaunchService.test.ts apps/server/src/mcp/toolkits/project/handlers.test.ts apps/server/src/mcp/toolkits/worktree/registration.test.ts apps/server/src/mcp/McpToolAccess.test.ts apps/server/src/mcp/McpToolAccess.race.test.ts --maxWorkers=1 --no-file-parallelism
-vp lint <each changed .ts file in W1–W16 and W20–W21>
+vp lint <each changed .ts file in W1–W16 and W20–W22>
 vp run --filter @t3tools/contracts --filter t3 --concurrency-limit 1 typecheck
 node scripts/jones/check-boundary.ts --strict
 ```
@@ -620,7 +652,8 @@ No sudo, credential, private-state or production effect is part of this task.
     "apps/server/src/jones/persistence/UpstreamIsolation.test.ts",
     "apps/server/src/mcp/toolkits/project/handlers.test.ts",
     "apps/server/src/mcp/toolkits/worktree/registration.test.ts",
-    "apps/server/src/orchestration-v2/ThreadLaunchService.test.ts"
+    "apps/server/src/orchestration-v2/ThreadLaunchService.test.ts",
+    "apps/server/src/ws.ts"
   ],
   "requires": [
     "spec.jones-client-launch#req.idempotent-launch.001",
@@ -652,18 +685,20 @@ No sudo, credential, private-state or production effect is part of this task.
   ],
   "preserved_boundaries": [
     "Jones Code only: one dedicated non-main branch in an isolated linked worktree with one Git owner; never the primary checkout.",
-    "Write only the 26 cone paths; in McpToolAccess.ts only the additive startsOrContinuesThreads hook; in ThreadLaunchService.ts only the read-only preparationActive accessor and the keyed-only holdPreparationAfterProgress hold; only W21 additive test-fixture wiring and migration expected-list update without assertion relaxation; no other upstream test edit, Orchestrator.ts, EventSink.ts, CommandReceiptStore.ts, event or command type, upstream schema or new Layer change.",
+    "Write only the 27 cone paths; in McpToolAccess.ts only the additive startsOrContinuesThreads hook; in ThreadLaunchService.ts only the read-only preparationActive accessor and the keyed-only holdPreparationAfterProgress hold; in ws.ts only the W22 type-only imports, the WsLayerServices alias, the private layerWs binding and the same-value checked export; only W21 additive test-fixture wiring and migration expected-list update without assertion relaxation; no other upstream test edit, Orchestrator.ts, EventSink.ts, CommandReceiptStore.ts, event or command type, upstream schema or new Layer construction.",
     "Migration 112 only, jones_-prefixed, no foreign key to upstream; never renumber or delete a released migration.",
     "Focused checks only; never vp check, vp run -r test or vp run -r typecheck; CPU admission before each check batch.",
     "Merge the new main with an ordinary merge commit when main moves; no rebase, force push, squash or history rewrite.",
     "No PR review bots, credentials, live OAuth, session stores, installed-app update, sudo or deployment effect.",
-    "F3 (P2, Scratch folder allocation before the create/fence winner) stays deferred with its original severity and blocking claim: no Scratch allocation change and no narrowed Scratch contract."
+    "F3 (P2, Scratch folder allocation before the create/fence winner) stays deferred with its original severity and blocking claim: no Scratch allocation change and no narrowed Scratch contract.",
+    "W22 adds no cast, suppression, any/unknown erasure, narrowed service subset, compiler or config change and no server.ts edit; the direct initializer annotation and the effectDiscard form are rejected."
   ],
   "stop_conditions": [
     "Stale base, unexpected or unowned change, or an unknown prior effect.",
-    "A needed path outside the 26-path cone or a needed change to an excluded upstream surface; request a T1 rebind.",
+    "A needed path outside the 27-path cone or a needed change to an excluded upstream surface; request a T1 rebind.",
     "Migration 112 is taken on main by another change.",
-    "The keyed preparation hold cannot be made inside the W13 owned reservation section without changing unkeyed behaviour or the service interface; request a T1 rebind."
+    "The keyed preparation hold cannot be made inside the W13 owned reservation section without changing unkeyed behaviour or the service interface; request a T1 rebind.",
+    "ws.ts bytes differ from SHA-256 ddd1cd32b676824ba986c8fd56111f6f517385951b471d36f2ddd7664757cd38 when W22 is applied, or the unchanged typecheck still reports a diagnostic with the W22 form; request a T1 rebind instead of re-deriving the interface."
   ]
 }
 ```
@@ -679,10 +714,10 @@ No sudo, credential, private-state or production effect is part of this task.
     "spec.jones-client-launch#req.effect-truth.001",
     "spec.jones-client-launch#req.repository-boundary.001"
   ],
-  "scenario": "In the Jones Code task worktree, with synthetic namespaces and keys, in-memory SQLite and typed receipts, cases T1-T15 exercise keyed replay, conflict, lookup, fence, fault windows, bound-run states, the stale-retry preparation hold and authorization; the unkeyed path and upstream test behavior stay unchanged, with only W21 additive fixture updates.",
+  "scenario": "In the Jones Code task worktree, with synthetic namespaces and keys, in-memory SQLite and typed receipts, cases T1-T16 exercise keyed replay, conflict, lookup, fence, fault windows, bound-run states, the stale-retry preparation hold, the checked ws.ts export and authorization; the unkeyed path and upstream test behavior stay unchanged, with only W21 additive fixture updates.",
   "evidence": {
     "predicate": "At one exact Jones Code head the final focused union passes: the listed vp test run files, vp lint of every changed .ts file, the contracts and server typechecks, and check-boundary.ts --strict.",
-    "invalid": "A second thread, message or live preparation per key; automatic rescheduling after a progress receipt, including by a retry whose lookup was stale; a replay that widens authority; an upstream test edit beyond the W21 additive fixture updates; or a skipped check reported as a pass.",
+    "invalid": "A second thread, message or live preparation per key; automatic rescheduling after a progress receipt, including by a retry whose lookup was stale; a replay that widens authority; a ws.ts export that uses a cast, suppression or type erasure, or a cache-hit or instrumented typecheck reported as a pass; an upstream test edit beyond the W21 additive fixture updates; or a skipped check reported as a pass.",
     "unknown": "The Jones Code toolchain (Node ^24.13.1, pnpm 11.10.0 via vp) cannot run on the check host, or CPU admission holds; record the exact check as not run."
   },
   "environment": [
@@ -701,7 +736,8 @@ No sudo, credential, private-state or production effect is part of this task.
     "apps/server/src/jones/persistence/Migrations/",
     "apps/server/src/jones/orchestration/",
     "apps/server/src/mcp/toolkits/project/",
-    "apps/server/src/mcp/"
+    "apps/server/src/mcp/",
+    "apps/server/src/ws.ts"
   ],
   "affected_check_groups": [
     "hq-jones-client-launch"

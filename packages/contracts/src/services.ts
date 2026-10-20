@@ -1,3 +1,5 @@
+import type { CatalogParams, CatalogValues } from './catalog.js';
+import type { DesignRecordParams as importRecordParams, DesignRecordValues as importRecordValues } from './design-records.js';
 /** Closed desktop capabilities. One shared renderer realm: domain use is a convention, not isolation. */
 export type ServiceResponse<B = unknown> =
   | { readonly ok: true; readonly status: number; readonly body: B; readonly replayed: boolean }
@@ -18,10 +20,11 @@ export interface SocialServiceTransport {
   call<R extends SocialServiceRoute>(route: R, params: SocialServiceParams[R]): Promise<ServiceResponse>;
 }
 
-export const WORK_SERVICE_ROUTES = ['state', 'version', 'item', 'history', 'create', 'patch', 'move', 'archive', 'restore', 'reviewed', 'settings', 'replay'] as const;
+export const WORK_SERVICE_ROUTES = ['state', 'version', 'item', 'history', 'create', 'patch', 'move', 'archive', 'restore', 'reviewed', 'settings', 'replay', 'export'] as const;
 export type WorkServiceRoute = (typeof WORK_SERVICE_ROUTES)[number];
 export type WorkMutationRoute = 'create' | 'patch' | 'move' | 'archive' | 'restore' | 'reviewed' | 'settings';
 export interface WorkServiceParams {
+  readonly export: { readonly format: 'json' | 'markdown' };
   readonly state: Record<string, never>;
   readonly version: Record<string, never>;
   readonly item: { readonly id: string };
@@ -50,17 +53,17 @@ export interface StoredDocument {
   readonly value: JsonValue;
 }
 export type DesignStorageResult<T> = { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly kind: 'conflict' | 'invalid' | 'read-only' | 'unavailable' | 'unknown' };
-export const DESIGN_SERVICE_ROUTES = ['doc.get', 'doc.put', 'doc.list', 'cache.get'] as const;
+  | { readonly ok: false; readonly kind: 'conflict' | 'invalid' | 'read-only' | 'unavailable' | 'unknown'; readonly reason?: 'disabled' };
+export const DESIGN_SERVICE_ROUTES = ['doc.get', 'doc.put', 'doc.list', 'cache.get', 'cache.put', 'blob.put', 'blob.get', 'blob.has', 'event.append', 'event.read', 'import.commit', 'import.status', 'import.repair', 'storage.diagnostics', 'export.preview', 'export.save', 'catalog.roots', 'catalog.chooseRoot', 'catalog.forget', 'catalog.snapshot', 'catalog.preview'] as const;
 export type DesignServiceRoute = (typeof DESIGN_SERVICE_ROUTES)[number];
-export interface DesignServiceParams {
+export interface DesignServiceParams extends importRecordParams, CatalogParams {
   readonly 'doc.get': { readonly key: string };
   /** Absent: unconditional write. `null`: the key must not exist. A number: must equal the current revision. */
   readonly 'doc.put': { readonly key: string; readonly value: JsonValue; readonly expectedRevision?: number | null };
   readonly 'doc.list': { readonly prefix: string };
   readonly 'cache.get': { readonly key: string };
 }
-export interface DesignServiceValues {
+export interface DesignServiceValues extends importRecordValues, CatalogValues {
   readonly 'doc.get': StoredDocument | null;
   readonly 'doc.put': StoredDocument;
   readonly 'doc.list': string[];

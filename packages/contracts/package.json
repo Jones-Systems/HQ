@@ -6,6 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./services": "./src/services.ts",
-    "./wiki": "./src/wiki.ts"
+    "./wiki": "./src/wiki.ts",
+    "./references": "./src/references.ts",
+    "./design-records": "./src/design-records.ts",
+    "./catalog": "./src/catalog.ts"
   }
 }
