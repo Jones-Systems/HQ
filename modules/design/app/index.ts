@@ -14,7 +14,7 @@
  * Document storage uses the desktop bridge when present. Transport and dispatch remain none;
  * discovery source adapters and refresh-on-open remain unavailable. Chrome state persists
  * through a guarded `window.localStorage` (null when access throws, which T14 reports and survives).
- * Six sections use device storage when bridged; otherwise they retain labelled in-memory fakes.
+ * Nine sections use device storage when bridged; otherwise they retain labelled in-memory fakes.
  */
 import { createElement, type ComponentType } from 'react';
 import type { ModulePort } from '@hq/contracts';
@@ -40,3 +40,6 @@ export const designPresentation = designDomain.presentation;
 export const designDeactivate: () => void = createDeactivate(designDomain);
 
 export type { DesignDomain } from '../ui/contract.ts';
+
+export { createDesignReferenceProvider } from './references-provider/index.ts';
+export type { DesignReferenceKind, DesignReferenceRecord, DesignReferenceRead, DesignReferenceReads } from './references-provider/index.ts';

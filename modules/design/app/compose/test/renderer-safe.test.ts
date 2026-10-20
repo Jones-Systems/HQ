@@ -214,6 +214,9 @@ describe('production entry, compose and descriptors are renderer-safe', () => {
     for (const expected of [
       'app/index.ts', 'app/compose/workspace.ts', 'app/compose/bridge-documents.ts', 'app/storage/index.ts', 'app/storage/projects.ts', 'app/compose/storage-seam.ts', 'app/compose/views/CanvasView.tsx',
       'ui/src/registry-glob.ts', 'canvas/design-module.ts', 'imports/design-module.ts',
+      'requests/design-module.ts', 'connector/design-module.ts', 'references/design-module.ts',
+      'app/sections/requests/View.tsx', 'app/sections/runs/View.tsx', 'app/sections/references/View.tsx',
+      'app/sections/requests/env.ts', 'app/sections/runs/pipeline.ts', 'app/sections/references/env.ts',
     ]) assert.ok(names.includes(expected), `graph includes ${expected}`);
     assert.equal(names.includes('app/storage/node.ts'), false);
     assert.equal(names.some((name) => name.startsWith('app/compose/test/')), false);

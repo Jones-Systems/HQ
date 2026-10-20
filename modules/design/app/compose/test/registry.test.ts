@@ -13,7 +13,11 @@ import { designModule as imports } from '../../../imports/design-module.ts';
 import { designModule as projects } from '../../../projects/design-module.ts';
 import { designModule as taste } from '../../../taste/design-module.ts';
 
-const DESCRIPTORS = { annotations, canvas, compare, components, discovery, flows, imports, projects, taste };
+import { designModule as requests } from '../../../requests/design-module.ts';
+import { designModule as connector } from '../../../connector/design-module.ts';
+import { designModule as references } from '../../../references/design-module.ts';
+
+const DESCRIPTORS = { requests, connector, references, annotations, canvas, compare, components, discovery, flows, imports, projects, taste };
 const entries = Object.fromEntries(Object.entries(DESCRIPTORS).map(([id, designModule]) => [`../../${id}/design-module.ts`, { designModule }]));
 const DESIGN = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -28,10 +32,10 @@ describe('production descriptors through T14\'s buildRegistry', () => {
   it('carry the provisional placement T14 suggested', () => {
     const placement = (nav: 'projects' | 'resources' | 'review' | 'requests' | 'runs') => registry.byNav[nav].map((section) => section.id);
     assert.deepEqual(placement('projects'), ['projects', 'discovery']);
-    assert.deepEqual(placement('resources'), ['components', 'flows']);
+    assert.deepEqual(placement('resources'), ['references', 'components', 'flows']);
     assert.deepEqual(placement('review'), ['canvas', 'compare', 'annotations', 'taste']);
-    assert.deepEqual(placement('requests'), ['imports']);
-    assert.deepEqual(placement('runs'), []);
+    assert.deepEqual(placement('requests'), ['requests', 'imports']);
+    assert.deepEqual(placement('runs'), ['connector']);
   });
 
   it('keep ids equal to their directory, cheap descriptors, and lazy view loaders (not evaluated here)', () => {
@@ -55,10 +59,11 @@ describe('registration surface', () => {
     for (const directory of ['app', 'preview']) assert.equal(existsSync(`${DESIGN}${directory}/design-module.ts`), false, directory);
   });
 
-  it('creates descriptors for exactly the nine composed sections and none for the held request, connector or references cones', () => {
+  it('creates descriptors for exactly twelve composed sections with no held cones', () => {
     const present = readdirSync(DESIGN, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && existsSync(`${DESIGN}${entry.name}/design-module.ts`)).map((entry) => entry.name);
-    for (const held of ['requests', 'connector', 'references']) assert.equal(present.includes(held), false, held);
+    assert.equal(present.length, 12);
+    assert.deepEqual(present.sort(), Object.keys(DESCRIPTORS).sort());
     assert.ok(Object.keys(DESCRIPTORS).every((id) => present.includes(id)));
   });
 });
