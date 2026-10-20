@@ -166,7 +166,24 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
   - Native identities went to the root by native message only.
 - B is not launched.
 
-**T1 (now):** fan in A, then launch B, fan in B, keep PR #3 current, and hold after B's published candidate.
+**Owner direction delta (relayed by the root, 2026-10-20).** The Social/Work stack is to sit on top of the Local Design Hub stack, with all our content made compatible on the Design shared base, not merely handed off in documentation.
+
+- **A and B continue unchanged** under their exact scopes, so the usable source candidate is still produced. Child A keeps its model and worktree.
+- **Read-only scout.** The root is launching one read-only Design-parent scout.
+- **Before any Design-parent integration or PR retarget,** T1 consumes the scout's exact Design assembly branch, head and ownership evidence, and extends this same progressive spec. There is no second plan.
+- **Preferred shape:** one additive joint continuation based on the verified Design assembly parent, containing our accepted assembly.
+  - Published branch chains are recorded separately from native GitHub stack membership.
+  - Existing PR refs and history stay intact, and merges stay held.
+  - No mass rebase, force push or retarget.
+  - No overlapping Design, App, styles, config, contracts or catalog writes.
+- **Limits.** A future source child C needs an exact plan, base and ownership release from the root; the current allowance stays A+B. No Wiki work now.
+
+**Prerequisite observed by T1 (read-only, 2026-10-20).**
+
+- No published Design assembly parent exists yet. Origin has `work/hq-design-plan` at `fa244847` but no `work/hq-design-integration*` branch, and no open PR has such a head.
+- A local Design integration checkout exists. It is unpublished, so it is not a usable parent.
+
+**T1 (now):** fan in A, then launch B, fan in B, keep PR #3 current, and hold after B's published candidate. Then wait for the scout's evidence before any Design-parent step.
 
 **Root coordinator:** decide the remaining shared gates:
   - the catalog delta merge, with Design;
