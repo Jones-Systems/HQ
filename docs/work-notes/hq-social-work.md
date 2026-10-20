@@ -175,6 +175,11 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
   - Route: `delegate_task`, request `hq-wiki-contract-impl-20261020-r1`, target `claude-sonnet-5-5` / high, at `c67c23cd`.
   - Cone: exactly `modules/wiki/contract/**`, read from the immutable PR #30 plan without merging it. Its PR goes against this branch.
   - Acceptance belongs to the Wiki continuity owner.
+- **WK-C completed** (2026-10-20). This is not acceptance: the result was relayed to the root for the Wiki owner.
+  - PR #34: native branch `t3/50386c27`, head `76a1dbc6dd8ed1eb56400fbb9e18bc4e621038a9`, base this branch at `a385a6f` (merge base `c67c23cd`). Open, non-draft and mergeable, with no checks; merge held.
+  - T1's read-only check: the remote head equals the reported one, and all 22 authored paths are under `modules/wiki/contract/**`. Each of its three commits has a trailer.
+  - Author-reported checks: `node --test` gave 73 of 73 passing, and `tsc -p modules/wiki/contract` exited 0. T1 did not rerun them. Root `typecheck` and `test` do not include `modules/wiki`.
+  - Deferred, not fixed: the AST vocabulary and the chosen structural bounds (P3); 2 MiB for "2 MB" and the single-quote URL rejection (P4).
 - **B released** after A's acceptance. Its compiled capsule is `3d935de4…` at plan head `00afa36e`, with the actual ready set exactly `{domain-integration}`.
 
 **Owner direction delta (relayed by the root, 2026-10-20).** The Social/Work stack is to sit on top of the Local Design Hub stack, with all our content made compatible on the Design shared base, not merely handed off in documentation.
