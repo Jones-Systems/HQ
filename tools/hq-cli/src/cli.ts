@@ -21,7 +21,8 @@ export function parse(args: string[]): Invocation {
       if (Object.hasOwn(flags, key) && key !== 'date') throw usage(`Duplicate --${match[1]}.`, key);
       if (['dry_run', 'check'].includes(key) && match[2] === undefined) { flags[key] = true; continue; }
       const value = match[2] ?? args[++i];
-      if (value === undefined || value.startsWith('--') || value === '') throw usage(`Missing value for --${match[1]}.`, key);
+      // Only a separated value can be a mistakenly consumed option; --key=--text is explicit.
+      if (value === undefined || value === '' || match[2] === undefined && value.startsWith('--')) throw usage(`Missing value for --${match[1]}.`, key);
       if (key === 'date') flags[key] = [...(flags[key] ?? []), value]; else flags[key] = value;
     } else if (token.startsWith('-')) throw usage('Unknown option.');
     else words.push(token);

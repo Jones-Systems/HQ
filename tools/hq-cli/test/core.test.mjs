@@ -97,6 +97,11 @@ test('symlink launcher resolves checkout with spaces and prints exactly one JSON
   } finally { await rm(scratch, { recursive: true, force: true }); }
 });
 
+test('attached option values may begin with dashes; separated values still may not', () => {
+  assert.equal(parse(['planner', 'items', 'create', '--title=--draft']).input.title, '--draft');
+  assert.throws(() => parse(['planner', 'items', 'create', '--title', '--draft']), e => e.code === 'usage_error');
+});
+
 test('input-file errors keep their specific message instead of a generic read failure', async t => {
   const f = await scratch(t);
   const path = await f.write('large.json', { synthetic: 'x'.repeat(64) });
