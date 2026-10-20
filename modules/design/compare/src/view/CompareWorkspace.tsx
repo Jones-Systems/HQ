@@ -45,7 +45,7 @@ function PanelSlot(props: Omit<Parameters<typeof ComparePanel>[0], 'actions'> & 
 }
 
 /** Side-by-side comparison of N pinned versions. All effects go through the injected controller. */
-export function CompareWorkspace({ controller, title = 'Compare', renderOverlay, renderHostSurface }: CompareWorkspaceProps) {
+export function CompareWorkspace({ controller, title = 'Compare', renderOverlay, renderHostSurface, overlaysOpen, rendererZoomFactor, onHostSurfacePlacement }: CompareWorkspaceProps) {
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const { comparison } = snapshot;
   const baseline = baselineOf(comparison);
@@ -70,7 +70,8 @@ export function CompareWorkspace({ controller, title = 'Compare', renderOverlay,
         runtime={snapshot.runtime.get(panel.id)}
         versions={snapshot.runtime.get(panel.id)?.version == null ? undefined : snapshot.versions.get(snapshot.runtime.get(panel.id)!.version!.viewId)}
         preview={snapshot.preview} canRemove={comparison.panels.length > 1}
-        renderOverlay={renderOverlay} renderHostSurface={renderHostSurface} />)}
+        renderOverlay={renderOverlay} renderHostSurface={renderHostSurface}
+        overlaysOpen={overlaysOpen} rendererZoomFactor={rendererZoomFactor} onHostSurfacePlacement={onHostSurfacePlacement} />)}
     </div>
   </div>;
 }

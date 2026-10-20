@@ -28,3 +28,8 @@ export type { SandboxEvent } from './review/sandbox-channel.ts';
 export { COMPONENTS_PROVIDER_ID, componentItemKey, createComponentsCanvasProvider, motionItemKey, parseItemKey } from './review/canvas-provider.ts';
 export type { ComponentsCanvasProvider, ComponentsProviderOptions } from './review/canvas-provider.ts';
 export { buildProductDocument } from './product/product-document.ts';
+
+export type * from './runner.ts';
+export { componentRenderRequest } from './runner.ts';
+export { createFakeComponentRunner } from './workspace/fake-runner.ts';
+export { PROP_SLOT_SCHEMA, bindPropSlots } from './model/prop-slots.ts';

@@ -30,10 +30,9 @@ function imports(path: string): ImportLine[] {
 }
 
 describe('section boundaries', () => {
-  test('preview agent has no runtime import outside its folder', () => {
+  test('preview agent has no import outside its folder, including types', () => {
     for (const path of files(join(SRC, 'preview-agent'))) {
       for (const line of imports(path)) {
-        if (line.typeOnly) continue;
         assert.ok(line.specifier.startsWith('./'), `${relative(ROOT, path)} imports ${line.specifier}`);
       }
     }
