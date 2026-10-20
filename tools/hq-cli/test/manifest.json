@@ -3,8 +3,22 @@
   "groups": {
     "hq-cli-t2": {
       "command": "node --test --test-concurrency=1 test/core.test.mjs test/reads.test.mjs test/transport.test.mjs",
-      "modules": ["test/core.test.mjs", "test/reads.test.mjs", "test/transport.test.mjs"],
+      "modules": [
+        "test/core.test.mjs",
+        "test/reads.test.mjs",
+        "test/transport.test.mjs"
+      ],
       "environment": "Node >=22.18; injected fetch and clock; no unit-test sockets"
+    },
+    "hq-cli-t3": {
+      "command": "node --test --test-concurrency=1 test/writes.test.mjs test/write-dates.test.mjs test/replay.test.mjs test/batch.test.mjs",
+      "modules": [
+        "test/writes.test.mjs",
+        "test/write-dates.test.mjs",
+        "test/replay.test.mjs",
+        "test/batch.test.mjs"
+      ],
+      "environment": "Node >=22.18; injected fetch and clock; no sockets; caller-file fixtures cleaned by test teardown"
     }
   },
   "candidate": "node --test --test-concurrency=1 'test/**/*.test.mjs'"

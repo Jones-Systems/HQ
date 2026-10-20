@@ -67,7 +67,7 @@ test('explicit CLI URL wins over environment, options work before and after comm
 
 test('every implemented command returns the data fields its closed schema describes', async () => {
   const h = harness({ '/api/state': state({ items: [item({ dates: [date()] })] }), '/api/version': { state_version: 3, api: 2, features: [] }, '/api/items/item0001': { item: item() }, '/api/items/item0001/history': { history: [{ at: '2026-10-20T12:00:00Z', action: 'created', detail: { fields: [], changes: { status: [null, 'inbox'] } } }] } });
-  for (const command of commands) {
+  for (const command of commands.filter(c => !c.write)) {
     const args = [...command.words];
     if (command.positional === 'item_id') args.push('item0001');
     const value = await run(args, h.deps);

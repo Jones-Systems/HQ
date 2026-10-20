@@ -1,3 +1,4 @@
+import { executeWrite } from './writes.ts';
 import { commands, schemas, summaries, filters } from './commands.ts';
 import type { Command } from './commands.ts';
 import { conforms, historyResponse, item, object, state, version, array, STATUSES } from './schema.ts';
@@ -8,7 +9,7 @@ export type Dependencies = { fetch?: Fetch; clock?: () => Date; env?: Record<str
 export type Invocation = { command: Command; input: Record<string, any> };
 export function parse(args: string[]): Invocation {
   const words: string[] = [];
-  const flags: Record<string, string> = {};
+  const flags: Record<string, any> = {};
   let help = false;
   for (let i = 0; i < args.length; i++) {
     const token = args[i];
@@ -17,10 +18,11 @@ export function parse(args: string[]): Invocation {
       const match = /^--([a-z][a-z-]*)(?:=(.*))?$/.exec(token);
       if (!match) throw usage('Malformed option.');
       const key = match[1].replaceAll('-', '_');
-      if (Object.hasOwn(flags, key)) throw usage(`Duplicate --${match[1]}.`, key);
+      if (Object.hasOwn(flags, key) && key !== 'date') throw usage(`Duplicate --${match[1]}.`, key);
+      if (['dry_run', 'check'].includes(key) && match[2] === undefined) { flags[key] = true; continue; }
       const value = match[2] ?? args[++i];
       if (value === undefined || value.startsWith('--') || value === '') throw usage(`Missing value for --${match[1]}.`, key);
-      flags[key] = value;
+      if (key === 'date') flags[key] = [...(flags[key] ?? []), value]; else flags[key] = value;
     } else if (token.startsWith('-')) throw usage('Unknown option.');
     else words.push(token);
   }
@@ -32,7 +34,10 @@ export function parse(args: string[]): Invocation {
   const input: Record<string, any> = {};
   for (const [key, raw] of Object.entries(flags)) {
     if (key === selected.positional || !Object.hasOwn(selected.input.properties!, key)) throw usage(`Unknown option --${key.replaceAll('_', '-')}.`, key);
-    if (selected.input.properties![key].type === 'integer') {
+    if (selected.input.properties![key].type === 'boolean') {
+      if (raw !== true && raw !== 'true' && raw !== 'false') throw usage('Boolean flags accept only true or false.', key);
+      input[key] = raw === true || raw === 'true';
+    } else if (selected.input.properties![key].type === 'integer') {
       if (!/^\d+$/.test(raw)) throw usage(`--${key.replaceAll('_', '-')} requires an integer.`, key);
       input[key] = Number(raw);
     } else input[key] = raw;
@@ -119,6 +124,7 @@ export async function run(args: string[], deps: Dependencies = {}): Promise<{ ex
   try {
     const parsed = parse(args);
     id = parsed.command.id;
+    if (parsed.command.write) return await executeWrite(parsed, deps);
     const data = await execute(parsed, deps);
     return { exitCode: 0, result: { schema: 'hq.cli.result/v1', ok: true, command: id, effect: 'none', data } };
   } catch (error) {

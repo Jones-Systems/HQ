@@ -1,7 +1,9 @@
+import { writeCommands } from './write-commands.ts';
+import { writeEnvelope } from './write-schema.ts';
 import { array, bool, day, enumeration, errorSchema, failure, HORIZONS, integer, item, itemId, KINDS, object, resultSchema, settings, STATUSES, text, timestamp, DATE_KINDS, historyEntry, jsonValue } from './schema.ts';
 import type { Schema } from './schema.ts';
 import { WEEKDAYS } from './dates.ts';
-export type Command = { id: string; words: string[]; description: string; positional?: string; input: Schema; data: Schema };
+export type Command = { id: string; words: string[]; description: string; positional?: string; input: Schema; data: Schema; write?: boolean; files?: Record<string, Schema> };
 const globals = { planner_url: { ...text, description: 'Optional explicit service origin; CLI --planner-url overrides HQ_PLANNER_URL. HTTPS or loopback HTTP only.' }, timeout_ms: { type: 'integer', minimum: 1, maximum: 60000, description: 'Per-read timeout in milliseconds; --timeout-ms, default 10000.' } } satisfies Record<string, Schema>;
 const input = (properties: Record<string, Schema> = {}, required: string[] = []) => object({ ...globals, ...properties }, required);
 export const filters = {
@@ -25,7 +27,7 @@ const schemaDocument: Schema = object({
   minItems: integer, maxItems: integer, minLength: integer, maxLength: integer, pattern: text, minimum: { type: 'number' }, maximum: { type: 'number' }, description: text,
   $ref: text, $schema: text, $defs: { type: 'object', additionalProperties: { $ref: '#/$defs/schemaDocument' } },
 }, []);
-const schemaData = object({ commands: array(object({ id: text, invocation: text, description: text, input: { $ref: '#/$defs/schemaDocument' }, output: { $ref: '#/$defs/schemaDocument' }, errors: { $ref: '#/$defs/schemaDocument' } })) });
+const schemaData = object({ commands: array(object({ id: text, invocation: text, description: text, input: { $ref: '#/$defs/schemaDocument' }, output: { $ref: '#/$defs/schemaDocument' }, errors: { $ref: '#/$defs/schemaDocument' }, files: { type: 'object', additionalProperties: { $ref: '#/$defs/schemaDocument' } } }, ['id', 'invocation', 'description', 'input', 'output', 'errors'])) });
 export const commands: Command[] = [
   { id: 'hq.capabilities', words: ['capabilities'], description: 'Discover actual Planner availability and unavailable HQ domains.', input: input(), data: object({ domains: array(domain), multiple_boards: { const: false } }) },
   { id: 'hq.commands', words: ['commands'], description: 'List implemented command IDs and invocations. --help also returns this list.', input: input(), data: object({ commands: array(commandSummary) }) },
@@ -38,6 +40,7 @@ export const commands: Command[] = [
   { id: 'planner.items.history', words: ['planner', 'items', 'history'], description: 'Get up to 100 most recent history entries in service order.', positional: 'item_id', input: input({ item_id: itemId }, ['item_id']), data: object({ item_id: itemId, history: array(historyEntry, 100) }) },
   { id: 'planner.settings.get', words: ['planner', 'settings', 'get'], description: 'Get authoritative Planner timezone, week start and stale-day settings.', input: input(), data: object({ settings, state_version: count }) },
 ];
+commands.push(...writeCommands);
 export const invocation = (c: Command) => `hq ${c.words.join(' ')}${c.positional ? (c.id === 'hq.schema' ? ' [command-id]' : ' <item-id>') : ''}`;
 export const summaries = () => commands.map(c => ({ id: c.id, invocation: invocation(c), description: c.description }));
-export const schemas = (selected = commands) => selected.map(c => ({ id: c.id, invocation: invocation(c), description: c.description, input: { $schema: 'https://json-schema.org/draft/2020-12/schema', ...c.input }, output: { ...resultSchema(c.id, c.data), ...(c.id === 'hq.schema' ? { $defs: { schemaDocument, jsonValue } } : {}) }, errors: failure(c.id) }));
+export const schemas = (selected = commands) => selected.map(c => ({ id: c.id, invocation: invocation(c), description: c.description, input: { $schema: 'https://json-schema.org/draft/2020-12/schema', ...c.input }, output: { ...(c.write ? writeEnvelope(c.id) : resultSchema(c.id, c.data)), ...(c.id === 'hq.schema' ? { $defs: { schemaDocument, jsonValue } } : {}) }, errors: c.write ? writeEnvelope(c.id).anyOf![1] : failure(c.id), ...(c.files ? { files: c.files } : {}) }));
