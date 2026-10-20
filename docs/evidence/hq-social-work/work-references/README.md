@@ -1,5 +1,7 @@
 # Work reference source evidence
 
+The final section records the single normalization onto landed shared r3. Earlier sections retain the original source-candidate evidence; their statements about waiting for r3 describe that earlier qualification.
+
 This candidate implements `spec.hq-integration-parallel-execution#task.work-references.001`, step 1 of `ctx.lane-t11.001`, from foundation `f31ec739a0a270a2fa2ac711e6c0272828c23ba3`. All records, titles, projects and services used here are **synthetic**.
 
 Source acceptance is bounded to the module source boundary. Integration and native qualification stay held. Source fixture/recorder checks do **not** prove native or live persistence, foundation landing, shell provider registration, canonical assignability or the integrated reference round trip. Those wait for actual r3. Cross-domain Back is shell/r3-owned per T1's disposition: this module only accepts and renders informational `ReturnContext`, and passes the source context to `ReferencePort.open`. It neither fabricates a return envelope nor uses local navigation for cross-domain Back. The full product Back obligation remains with shell integration.
@@ -80,3 +82,48 @@ These are action-before/after checks on one source build, not native screenshots
 ## Remaining integration obligations
 
 The integration owner must supply actual r3, register the provider, prove canonical assignability and shell open/return/Back state restoration, then perform native qualification. RW-6 export UI/transport remains outside this candidate. Hosted checks and foundation landing are separate from these local source checks; the parent owns their observation and integration. No merge, deployment or installation is included.
+
+## Single normalization onto landed shared r3
+
+T1 accepted original source head `7f7b21ed37d2d87c35feb3662c837cfb32a01fb8` (tree `62a9722a27a16f062f241ec4fd8cc2f3ffee8009`). Its branch and origin ref matched and the worktree was clean before normalization. Shared r3 then landed at `fb08c4c607dad4ae954126fbf8ae6ed14565da05`, which is the sole cause for this bounded merge.
+
+Only the named immutable object was fetched with `git fetch --no-write-fetch-head --no-tags origin fb08c4c607dad4ae954126fbf8ae6ed14565da05`; no tracking ref or FETCH_HEAD was updated. Its verified tree is `e9d22303524b1ba17d91c9842ea5def21278bf98`, with parents `43a742b96cf484fe5453d798ca8177bf9b91230a` and `56b70b8f54360ec0dcfb53b13858070094ff9255`. The original foundation `f31ec739a0a270a2fa2ac711e6c0272828c23ba3` is its ancestor.
+
+The ordinary no-ff merge completed without conflicts:
+
+- Merge: `28a89e7d206bb63d342e0f0a2c3ade67e055ea81`.
+- Tree: `fbc6ebb9a63db4ec37baa60506ebf1d406d36c62`.
+- Parents, in order: `7f7b21ed37d2d87c35feb3662c837cfb32a01fb8`, `fb08c4c607dad4ae954126fbf8ae6ed14565da05`.
+- The entire authored cone at the merge is byte-identical to the accepted source head: the cone diff is empty.
+- Everything outside the cone is byte-identical to landed r3: the complementary diff is empty.
+- Root `package.json` and `package-lock.json` are unchanged. The imported contracts manifest adds exports only. Dependencies did not change, so `npm ci` was not run.
+- No production or test files were edited during normalization. This evidence-only follow-up is separate from the merge.
+
+Qualification ran exactly once as one serial sequence inside one `flock "$HQ_CHECK_LOCK" bash` invocation. Before any check, and while holding that lock, `python3 scripts/collect_work_capacity.py --format admission` ran from the supplied telemetry skill directory. Admission: CPU **10.03%**, available RAM **42.94 GiB**, effective capacity **16 logical cores**, one fully used core **6.25%** of host capacity; status `ok`. CPU was below 85% and one serial process was admitted.
+
+The batch used `set -e`, validated the telemetry JSON, then expanded the exact catalog groups `hq-work-references` and `hq-work-runtime` into one sorted, deduplicated list. The runtime group globs are `modules/work/**/*.test.ts` and `modules/work/**/*.test.tsx`; the reference globs are listed above. Exact union command:
+
+```python
+import glob, subprocess, tomllib
+with open('tests/check-groups.toml','rb') as f:
+    groups=tomllib.load(f)['groups']
+names=['hq-work-references','hq-work-runtime']
+paths=sorted({p for name in names for pattern in groups[name]['tests'] for p in glob.glob(pattern,recursive=True)})
+assert paths
+print('Deduplicated union: '+str(len(paths))+' files', flush=True)
+print('\n'.join(paths), flush=True)
+raise SystemExit(subprocess.call(['npx','vitest','run','--maxWorkers=1',*paths]))
+```
+
+The remaining commands ran sequentially under the same held lock:
+
+```sh
+npm run typecheck
+npm test -- --maxWorkers=1
+npm run build
+git diff --check 7f7b21ed37d2d87c35feb3662c837cfb32a01fb8..HEAD
+```
+
+Results: union **610 passed, 0 failed, 32 files**; root typecheck passed; root suite **1,387 passed, 0 failed, 73 files**; production build passed (393 renderer modules and Electron compilation); merge-range whitespace check passed. Vite emitted a non-fatal warning for a minified chunk over 500 kB. No stress loops, retries or semantic repairs were performed.
+
+The earlier browser screenshots and manifest remain evidence for the original source build; they were not recaptured or represented as browser qualification of the normalized build. All fixtures remain synthetic. Provider registration, integrated round trip, native/live persistence and Work export UI remain held for their later tasks. Cross-domain Back remains shell/r3-owned. This normalization makes no architecture amendment or canonical type change.
