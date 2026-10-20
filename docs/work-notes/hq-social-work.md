@@ -41,7 +41,16 @@ R0 (`task.bind-foundation.001`) is complete: a read-only binding with no rebind 
 
 R1 (`task.workspace-skeleton.001`) is complete at `cfdab378e28940662ddb6e731264afca164a1957`, on a normal merge of the foundation `35f9a3e` (`ff5ad79`). Fresh `npm ci`, typecheck, 30 tests in 6 files, and build all pass, with 0 vulnerabilities (`docs/evidence/hq-social-work/integration/r1-workspace-skeleton.md`).
 
-No module feature code was written, and no lane was launched.
+No module feature code was written by T1.
+
+**Revision 4 (2026-10-20, integration phase)** consumes the advisory integration-planner result, the root's supervision record and the root's corrections. It adds:
+
+- the accepted lane bindings and topology (`ctx.integration-bindings.001`);
+- native child containment (`ctx.child-launch-containment.001`);
+- the integration stages, Design-owned inputs, custody, verification semantics, no adopted merge order and the shared-boundary unknowns (`ctx.integration-stages.001`);
+- the expanded `ac.work-domain.001`, the Social+Work assembly (`ac.sw-assembly.001`) and the gated joint tasks: root checks, assembly, Electron smoke and CI.
+
+The plan now has 27 tasks and 27 Test Intents. It was validated at `7468e8844c2455e52afc5ddabf8d434454972caa` (`docs/evidence/hq-social-work/integration/integration-plan-validation.md`).
 <!-- codex-section:end id="worknote.hq-social-work#ctx.outcome.001" -->
 
 ## Current State And Evidence
@@ -107,6 +116,14 @@ No module feature code was written, and no lane was launched.
 
 Draft counts matched the ready sets in every round. With predicates unbound, `campaign-verification` is unreleased because it depends on `reference-integration`. The campaign is therefore not verifiable until the reference contract's custody arrives. That is a truthful gate, not a defect.
 
+**Helper validation record (revision 4).** The record is in `docs/evidence/hq-social-work/integration/integration-plan-validation.md`.
+
+- `parse_engineering_spec_plan` parsed 27 tasks and 27 intents at `7468e88`.
+- Every context is ≤ 32 KiB.
+- The actual round, using the ten root-accepted results, releases exactly `work-domain`. Its capsule SHA is `071dbea0…`.
+- Both from-actual projections compile with no writer collision, and the activated one releases everything by round 5.
+- The from-scratch activated counterfactual stops in round 3 with `reference_bound_exceeded`. That wave cannot occur, because three of its five tasks are accepted.
+
 **Thread registration.** Request `hq-t1-social-work-plan-20261020-r1` returned `registration_unavailable` with `effect: none`. This is nonfatal, and it was not retried. The identity arguments are withheld from this public note.
 
 **Scratch.** All helper scripts now live in `docs/work-notes/hq-social-work-tools/`. They read the catalog projection from the committed spec, and they write no scratch. The earlier task-owned `/tmp` scratch directory was removed after the move.
@@ -115,17 +132,32 @@ Draft counts matched the ready sets in every round. With predicates unbound, `ca
 ## Next Action
 
 <!-- codex-section:begin id="worknote.hq-social-work#ctx.next-action.001" -->
-**T1 (assigned):**
+**Owner execution direction (relayed by the root, 2026-10-20).** The owner explicitly authorizes proceeding through the Work domain to a usable, published Social+Work integration branch, in Claude Frontier mode. This supersedes only T1's earlier docs-only finish and no-descendants restriction. T1 is the HQ-native mechanical launch parent and bounded fan-in owner for **exactly two** fresh implementation children. Every new worker runs `claudeAgent` / `claude-opus-5-5` / `high` / `fastMode: false`. Both launch via `delegate_task` (role implementation, async, worktree isolation) from T1's committed, published plan head.
 
-- R1 is done. The coordination comment on issue #1 is posted (6280106200).
-- T1 is idle on this branch until root-requested plan deltas arrive or fan-in accounting is requested.
+1. **A: `task.work-domain.001`.** Request ID `hq-work-domain-impl-20261020-r1`.
+   - It merges exactly `3ca74d7479283d8ac7acf7c363bd262f34578ed4` into its own branch.
+   - Scope is exactly `modules/work/index.tsx`, `modules/work/nav/**`, `modules/work/skeleton.test.ts` and `docs/evidence/hq-social-work/work-domain/**`.
+   - Behavior follows `ac.work-domain.001`.
+   - It publishes a non-draft PR against `work/hq-work-board` and does not advance the board, planner or plan branches.
+2. **B: `task.domain-integration.001`.** Request ID `hq-sw-assembly-impl-20261020-r1`.
+   - It launches **only after** T1 has inspected A's published candidate and accepted it.
+   - It merges exactly `9735b741e94baad83d9f7dc5f3bb8ce9c3778b2d` and A's accepted head.
+   - Its authored paths are the new `apps/desktop/src/social-work.integration.test.tsx`, `docs/evidence/hq-social-work/integration/social-work/**`, and `apps/desktop/src/modules.tsx` only if needed.
+   - It proves `ac.sw-assembly.001` and publishes one non-draft PR against `work/hq-social-work-plan`.
 
-**Root coordinator:**
+**Constraints on both children:**
 
-- Launch UI, SOC-C, SOC-W, WRK-P and WRK-B on skeleton commit `cfdab378` from the capsules in `spec.hq-social-work#ctx.lane-capsules.001`.
-- Ready now: `ui-kit`, `social-core` and `work-core`.
-- SOC-W and WRK-B prepare first. Their first gates are `social-core` + `ui-kit`, and `work-core` + `ui-kit`.
-- Decide the remaining shared gates:
+- no other children, reviewers or top-level threads;
+- children have no descendants and never write in T1's checkout;
+- no PR merge, bots, timers, PR monitors, Design messaging or joint Design integration;
+- App, styles, contracts, storage, IPC and catalog stay held;
+- launches are admitted by fresh telemetry: none at CPU ≥ 90% or RAM ≤ 3 GiB, and tests only below 85% CPU, serially.
+
+Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, checks and cleanliness. Its acceptance is bounded fixture/source acceptance, not independent review or green CI. A material blocker goes once to the root; T1 makes no P2–P4 fixes.
+
+**T1 (now):** publish revision 4, launch A, fan in A, then launch B, fan in B, keep PR #3 current, and hold after B's published candidate.
+
+**Root coordinator:** decide the remaining shared gates:
   - the catalog delta merge, with Design;
   - reference contract and `App.tsx` custody;
   - contracts/IPC custody for the bridge;
@@ -166,5 +198,6 @@ All four are recorded in `spec.hq-social-work#ctx.research-decision-basis.001`.
 <!-- codex-section:begin id="worknote.hq-social-work#ctx.deferred-findings.001" -->
 - **Codex V3 planning helpers, P3 tooling inconsistency.** Against source `4beb491c44551b6e4207adcc7459c4b11407bcbc`, `specification_plan._scope_paths` accepts a trailing `/` on write-scope literals. But `wave_compiler._reject_writer_collisions` passes the raw literal to `portable_collision_key`, which rejects a trailing `/`. The result is `ValueError` at compile time. This plan works around it with slash-free directory literals. Not fixed here: it is outside this writer cone, and P2–P4 findings are not implemented without owner direction.
 - **Codex V3 planning helpers, P4 context bound.** Against `4beb491c…`, `compile_ready_wave` enforces a default 32 KiB resolved-context bound per task, which includes default context. This plan fits by moving the foundation binding record out of the default context. Recorded only.
+- **Codex V3 planning helpers, P4 wave aggregate bound.** Against `4beb491c…`, `compile_ready_wave` resolves one combined section request per wave under `ResolutionLimits.max_selected_bytes` (64 KiB by default). A from-scratch, all-predicates-satisfied round 3 of this plan therefore stops with `reference_bound_exceeded` at 66,117 bytes, even though every task is within its own 32 KiB bound. Live-path waves fit. Recorded only.
 - **Codex V3 planning helpers, P4 ergonomics.** `compile_ready_wave` requires model requests that exactly cover the ready set, so the caller must supply an expected ready set for the compiler to confirm. This matches the helper's own conformance tests. Recorded only.
 <!-- codex-section:end id="worknote.hq-social-work#ctx.deferred-findings.001" -->
