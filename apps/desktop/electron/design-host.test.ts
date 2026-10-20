@@ -75,3 +75,12 @@ it('real emitted T9 store: unconditional overwrites, null-existing conflict, sta
   expect(await readonly.call('doc.get', { key })).toMatchObject({ ok: true, value: { value: { x: 3 }, revision: 3 } });
   expect(await readonly.call('doc.put', { key, value: {} })).toEqual({ ok: false, kind: 'read-only' }); await readonly.close();
 });
+it('oversized stored workspace and cache values fail reads without crossing IPC', async () => {
+  const store = fake();
+  store.workspace.getDocument.mockResolvedValue({ value: 'x'.repeat(DESIGN_VALUE_CAP) });
+  store.cache.getDocument.mockResolvedValue({ value: 'x'.repeat(DESIGN_VALUE_CAP) });
+  const host = createDesignHost(async () => store);
+  expect(await host.call('doc.get', { key: 'design/projects/x' })).toEqual({ ok: false, kind: 'unavailable' });
+  expect(await host.call('cache.get', { key: 'design.discovery.catalog' })).toEqual({ ok: false, kind: 'unavailable' });
+  await host.close();
+});

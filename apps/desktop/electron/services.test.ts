@@ -133,11 +133,11 @@ describe('actual loopback HTTP transport', () => {
     expect(await sendHttp(url, { method: 'POST', path: '/', headers: {}, body: '{}', loss: 'unknown' })).toEqual(unavailable);
   });
   it('whole-response timeouts are 10s reads / 20s writes, with fake timers', async () => {
-    for (const method of ['GET', 'POST'] as const) {
+    for (const [method, path, loss, timeout] of [['GET', '/', 'unavailable', 10_000], ['POST', '/', 'unknown', 20_000], ['POST', '/api/requests/replay', 'unavailable', 10_000]] as const) {
       let arrived!: () => void; const incoming = new Promise<void>(r => { arrived = r; });
       const srv = await server(() => arrived());
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-      try { const result = sendHttp(srv.url, { method, path: '/', headers: {}, loss: method === 'GET' ? 'unavailable' : 'unknown' }); await incoming; await vi.advanceTimersByTimeAsync(method === 'GET' ? 10_000 : 20_000); expect(await result).toEqual({ ok: false, kind: method === 'GET' ? 'unavailable' : 'unknown' }); } finally { vi.useRealTimers(); await srv.close(); }
+      try { const result = sendHttp(srv.url, { method, path, headers: {}, loss }); await incoming; await vi.advanceTimersByTimeAsync(timeout); expect(await result).toEqual({ ok: false, kind: loss }); } finally { vi.useRealTimers(); await srv.close(); }
     }
   });
 });

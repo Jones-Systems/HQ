@@ -90,7 +90,7 @@ export const sendHttp: Transport = (url, call) => new Promise<ServiceResponse>(r
   const finish = (value: ServiceResponse) => { if (!settled) { settled = true; clearTimeout(timer); resolve(value); } };
   const fail = () => finish({ ok: false, kind: sent ? call.loss : 'unavailable' });
   let req: ReturnType<typeof httpRequest> | undefined;
-  const timer = setTimeout(() => { fail(); req?.destroy(); }, call.method === 'GET' ? 10_000 : 20_000);
+  const timer = setTimeout(() => { fail(); req?.destroy(); }, call.method === 'GET' || (call.path === '/api/requests/replay' && call.loss === 'unavailable') ? 10_000 : 20_000);
   try {
   req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, { method: call.method, headers: { ...call.headers, ...(call.body === undefined ? {} : { 'Content-Length': String(Buffer.byteLength(call.body)) }) } }, res => {
     sent = true;

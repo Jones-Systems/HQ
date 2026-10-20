@@ -20,6 +20,10 @@ export function allowedDocumentKey(value: unknown, prefix = false): value is str
     && !value.split('/').includes('..')
     && DOCUMENT_ROOTS.some(root => value.startsWith(root) && (prefix || value.length > root.length));
 }
+function checkedDocument(value: StoredDocument | null): StoredDocument | null {
+  if (value !== null && (!jsonValue(value.value) || Buffer.byteLength(JSON.stringify(value.value)) > DESIGN_VALUE_CAP)) throw new Error('Unavailable document');
+  return value;
+}
 export async function openEmittedDesignStore(userData: string): Promise<DesignStore> {
   const module = await import(new URL('./design-host/modules/design/app/storage/node.js', import.meta.url).href) as { openDesignStorage(options: { root: string }): Promise<DesignStore> };
   return module.openDesignStorage({ root: join(userData, 'design-store') });
@@ -46,8 +50,8 @@ export function createDesignHost(open: () => Promise<DesignStore>) {
     const p = params as Record<string, unknown>;
     try {
       switch (route) {
-        case 'cache.get': return { ok: true, value: await current.cache.getDocument(p.key as string) };
-        case 'doc.get': return { ok: true, value: await current.workspace.getDocument(p.key as string) };
+        case 'cache.get': return { ok: true, value: checkedDocument(await current.cache.getDocument(p.key as string)) };
+        case 'doc.get': return { ok: true, value: checkedDocument(await current.workspace.getDocument(p.key as string)) };
         case 'doc.list': return { ok: true, value: [...await current.workspace.listDocuments(p.prefix as string)] };
         default: return { ok: true, value: await current.workspace.putDocument(p.key as string, p.value as JsonValue, Object.hasOwn(p, 'expectedRevision') ? { expectedRevision: p.expectedRevision as number | null } : {}) };
       }
