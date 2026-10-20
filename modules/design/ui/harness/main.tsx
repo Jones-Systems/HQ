@@ -46,7 +46,7 @@ shell.onDomainChange((from) => { if (from === 'design') domain.deactivate(); });
 
 Object.assign(window, { __hqdHarness: { fake: true, shell, domain, writes, requests, registry } });
 
-const LABELS: Record<DomainId, string> = { design: 'Design', social: 'Social', work: 'Work' };
+const LABELS: Record<DomainId, string> = { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' };
 
 function FakeShellApp() {
   useSyncExternalStore((listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; }, () => tick);
