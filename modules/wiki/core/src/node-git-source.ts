@@ -6,12 +6,13 @@
 //   rev-parse --is-bare-repository                     bare-status read
 //   config --get remote.origin.url                     fixed remote lookup
 //   rev-parse --verify --end-of-options refs/heads/<ref>^{commit}
-//   show -s --format=%ct --end-of-options <commit>
+//   show -s --no-show-signature --format=%ct --end-of-options <commit>
 //   ls-tree -r -z -l --full-tree <commit>
 //   cat-file blob <oid>
 //
 // Every command is prefixed with: --git-dir=<realpath> --no-replace-objects --literal-pathspecs
 // -c core.fsmonitor=false. No fetch, pull, -C, worktree or write command exists in this file.
+// `show` passes --no-show-signature so a repository's log.showSignature cannot start its gpg.program.
 
 import { execFile as nodeExecFile } from 'node:child_process';
 import { realpath, stat } from 'node:fs/promises';
@@ -225,7 +226,7 @@ export function createNodeGitObjectSource(profileInput: unknown, options: NodeGi
       const commit = text(await run(dir, ['rev-parse', '--verify', '--end-of-options', `refs/heads/${profile.ref}^{commit}`], commandTimeout, SMALL_OUTPUT_BYTES));
       if (commit === null || !OBJECT_ID.test(commit)) return { ok: false, reason: 'unavailable' };
 
-      const seconds = text(await run(dir, ['show', '-s', '--format=%ct', '--end-of-options', commit], commandTimeout, SMALL_OUTPUT_BYTES));
+      const seconds = text(await run(dir, ['show', '-s', '--no-show-signature', '--format=%ct', '--end-of-options', commit], commandTimeout, SMALL_OUTPUT_BYTES));
       if (seconds === null || !/^\d{1,12}$/.test(seconds)) return { ok: false, reason: 'unavailable' };
 
       return { ok: true, value: { ref: profile.ref, commit, commitTime: secondsToIso(Number(seconds)) } };
