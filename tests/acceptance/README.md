@@ -15,7 +15,8 @@ npm run build
 ```
 
 The explicit Electron installer is needed when the package has not downloaded its
-binary. Route installer cache and temporary files into owned workspace scratch and
+binary. Set `electron_config_cache` (the installer’s case-sensitive cache variable),
+`npm_config_cache` and `TMPDIR` to owned workspace scratch directories and
 clean those exact directories when done; do not use shared runtime/build artifacts.
 Then take fresh CPU admission before each separate check command:
 

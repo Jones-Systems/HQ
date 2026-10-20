@@ -1,0 +1,268 @@
+{
+  "schema": "hq-electron-acceptance/v1",
+  "head": "c725fb01f505fffada4feb9dc5af6c66d3690006",
+  "mode": "shell-checkpoint",
+  "sourceDirty": false,
+  "checks": [
+    "real Electron renderer, isolated globals, preload and CSP present",
+    "domain round trip: Design, Social, Work, Wiki",
+    "actual process restart restores appearance and selected domain"
+  ],
+  "gaps": [
+    "live synthetic-service replay, reference round trips and unavailable/unknown scenarios await integrated service/UI binding"
+  ],
+  "rows": [
+    {
+      "id": "work-service-replay",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "work-restart-without-intent",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "social-save-and-unknown",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "reference-round-trips",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "wiki-committed-corpus",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "unavailable-service-ui",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "import-export",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "capability-closure",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "preview-qualification",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "component-containment",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "new-thread-qualification",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "integrated-scenario-catalog",
+      "status": "gap",
+      "prerequisites": [
+        {
+          "id": "integrated-scenario-implementation-and-binding",
+          "status": "gap"
+        }
+      ],
+      "evidence": [
+        "Not implemented by acceptance-infrastructure; requires separately authorized integrated scenarios."
+      ]
+    },
+    {
+      "id": "native-prerequisites",
+      "status": "pass",
+      "prerequisites": [
+        {
+          "id": "built-native-app",
+          "status": "pass"
+        }
+      ],
+      "evidence": [
+        "Owned display, built renderer, synthetic fixtures and profile started"
+      ]
+    },
+    {
+      "id": "renderer-isolation",
+      "status": "pass",
+      "prerequisites": [
+        {
+          "id": "built-native-app",
+          "status": "pass"
+        }
+      ],
+      "evidence": [
+        "real Electron renderer, isolated globals, preload and CSP present"
+      ]
+    },
+    {
+      "id": "domain-round-trip",
+      "status": "pass",
+      "prerequisites": [
+        {
+          "id": "built-native-app",
+          "status": "pass"
+        }
+      ],
+      "evidence": [
+        "domain round trip: Design, Social, Work, Wiki"
+      ]
+    },
+    {
+      "id": "shell-restart",
+      "status": "pass",
+      "prerequisites": [
+        {
+          "id": "built-native-app",
+          "status": "pass"
+        }
+      ],
+      "evidence": [
+        "actual process restart restores appearance and selected domain"
+      ]
+    }
+  ],
+  "outcome": "checkpoint-passed",
+  "build": {
+    "apps/desktop/dist/index.html": "9ccea324175ffd291e67d561d08c70110ef24fc61184ea97c07d41c0fe5400c8",
+    "apps/desktop/dist-electron/main.js": "de15e04a487d247c5ea5818290bd41757a3cb2665c7c17fba889c8a2f11134e7",
+    "apps/desktop/dist-electron/preload.cjs": "a6c690f68cd0163236588f3ff3938b4ce7d15900c35c4cb22022a944fb3721f1"
+  },
+  "fixturePrerequisites": {
+    "work": "owned-loopback",
+    "social": "owned-loopback",
+    "wiki": {
+      "bl": "e99bfc7661f6bd0a87c2f16d0e7893ea010004fa",
+      "appdev": "ace8ea6957b94180bd0e089f001761652feb469f"
+    },
+    "durableClientIntent": "not-provided-session-only-RW9-G3"
+  },
+  "electronVersion": "44.9.0",
+  "ledgers": {
+    "work": [
+      {
+        "method": "GET",
+        "path": "/api/state",
+        "body": "null",
+        "requestId": null,
+        "count": 1
+      },
+      {
+        "method": "GET",
+        "path": "/api/state",
+        "body": "null",
+        "requestId": null,
+        "count": 2
+      }
+    ],
+    "social": [
+      {
+        "method": "GET",
+        "path": "/api/workspace",
+        "body": "null",
+        "requestId": null,
+        "count": 1
+      }
+    ]
+  },
+  "cleanup": "passed"
+}
