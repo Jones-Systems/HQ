@@ -155,7 +155,18 @@ Draft counts matched the ready sets in every round. With predicates unbound, `ca
 
 Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, checks and cleanliness. Its acceptance is bounded fixture/source acceptance, not independent review or green CI. A material blocker goes once to the root; T1 makes no P2–P4 fixes.
 
-**T1 (now):** publish revision 4, launch A, fan in A, then launch B, fan in B, keep PR #3 current, and hold after B's published candidate.
+**Execution log.**
+
+- Revision 4 was published at plan head `72854ab6a7c78306dbf078d9b5db7412e4a13ab9`; its spec blob `aabcf8a1` is the validated one.
+- Thread registration request `hq-t1-social-work-plan-20261020-r4` returned `registration_unavailable` (`endpoint_unavailable`), with `effect: none`. It was not retried.
+- **A launched** on 2026-10-20 at 04:23Z.
+  - Route: `delegate_task` (implementation, async, worktree), request `hq-work-domain-impl-20261020-r1`, target `claudeAgent` / `claude-opus-5-5` / `high` / `fastMode: false`.
+  - Admission telemetry: CPU 19.50%, 44.23 GiB available.
+  - Before any write, the child read back its binding: a separate native HQ worktree on its own branch at `72854ab`, clean. Its capsule is the compiled `071dbea0…`.
+  - Native identities went to the root by native message only.
+- B is not launched.
+
+**T1 (now):** fan in A, then launch B, fan in B, keep PR #3 current, and hold after B's published candidate.
 
 **Root coordinator:** decide the remaining shared gates:
   - the catalog delta merge, with Design;
