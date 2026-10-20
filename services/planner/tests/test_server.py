@@ -500,6 +500,39 @@ class CliGuards(StoreTestCase):
             self.assertEqual(main(["--data", str(self.db_path.parent / "missing" / "x.sqlite3")]), 2)
         self.assertFalse((PUBLIC_DIR / "planning.sqlite3").exists())
 
+    def test_bound_loopback_host_is_an_allowed_host(self):
+        import contextlib
+        from unittest import mock
+
+        import planning.__main__ as entry
+
+        apps, statuses, real_app = [], [], entry.PlanningApp
+
+        class FakeServer:
+            def __init__(self, address, handler):
+                self.server_address = (address[0], 43210)
+
+            def serve_forever(self):
+                statuses.append([apps[-1].handle("GET", "/api/version", {"host": host}, b"").status
+                                 for host in (host_header, "127.0.0.3:43210")])
+                raise KeyboardInterrupt
+
+            def server_close(self):
+                pass
+
+        def capture(*args, **kwargs):
+            apps.append(real_app(*args, **kwargs))
+            return apps[-1]
+
+        cases = (("127.0.0.2", "127.0.0.2:43210"), ("0:0:0:0:0:0:0:1", "[::1]:43210"),
+                 ("localhost", "localhost:43210"))
+        for bound, host_header in cases:
+            with self.subTest(bound=bound), mock.patch.object(entry, "ThreadingHTTPServer", FakeServer), \
+                    mock.patch.object(entry, "PlanningApp", capture), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(entry.main(["--data", str(self.db_path.parent / "bound.sqlite3"),
+                                             "--host", bound, "--port", "0"]), 0)
+                self.assertEqual(statuses[-1], [200, 421])
+
     def test_out_of_range_port_is_a_usage_error_before_the_store_opens(self):
         import contextlib
 

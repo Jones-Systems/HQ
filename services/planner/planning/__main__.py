@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import socket
 import sys
 from pathlib import Path
@@ -16,6 +17,15 @@ def port_number(value: str) -> int:
     if not 0 <= port <= 65535:
         raise argparse.ArgumentTypeError("must be between 0 and 65535")
     return port
+
+
+def host_header(host: str, port: int) -> str:
+    """The Host header a browser sends for ``host:port`` (IPv6 compressed and bracketed)."""
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return f"{host.lower()}:{port}"
+    return f"[{address.compressed}]:{port}" if address.version == 6 else f"{address}:{port}"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -51,10 +61,10 @@ def main(argv: list[str] | None = None) -> int:
         server_class = type("ThreadingHTTPServerV6", (ThreadingHTTPServer,), {"address_family": socket.AF_INET6})
     server = server_class((args.host, args.port), None)
     port = server.server_address[1]
-    app = PlanningApp(store, port=port, extra_hosts=tuple(args.allowed_host))
+    bound = host_header(args.host, port)
+    app = PlanningApp(store, port=port, extra_hosts=(bound, *args.allowed_host))
     server.RequestHandlerClass = make_handler(app)
-    shown = f"[{args.host}]" if ":" in args.host else args.host
-    print(f"Planning hub on http://{shown}:{port}/  (data: {data})", flush=True)
+    print(f"Planning hub on http://{bound}/  (data: {data})", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
