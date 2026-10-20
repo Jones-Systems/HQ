@@ -395,12 +395,86 @@ import { FEATURE_HQ_EDITORIAL_TIMEBOX, PortFailure, fictionalSeed, type Draft } 
 import { changeDraft } from '../actions';
 
 describe('Social calendar service-backed timeboxes', () => {
+  async function showView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day') {
+    const group = await screen.findByRole('group', { name: 'Calendar view' });
+    for (let click = 0; click < 3; click += 1) {
+      if (within(group).queryByRole('button', { name })) return;
+      await user.click(within(group).getByRole('button'));
+    }
+    throw new Error(`Calendar did not cycle to ${name}`);
+  }
   const timedSeed = () => {
     const seed = fictionalSeed();
     seed.content = seed.content.map((draft) => draft.id === FIXTURE_IDS.autumnBlend
       ? { ...draft, planned_date: '2026-10-20', planning_slot: { start: '09:00', duration_minutes: 30, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } } : draft);
     return seed;
   };
+  it('cycles one view button Month to Week to Day to Month without saving', async () => {
+    const { recorded, user } = setup('calendar/2026-10');
+    const group = await screen.findByRole('group', { name: 'Calendar view' });
+    for (const [before, after, columns] of [['Month', 'Week', 7], ['Week', 'Day', 1], ['Day', 'Month', 0]] as const) {
+      expect(within(group).getAllByRole('button')).toHaveLength(1);
+      await user.click(within(group).getByRole('button', { name: before }));
+      expect(within(group).getByRole('button', { name: after })).toBeTruthy();
+      expect(document.querySelectorAll('[data-time-day]')).toHaveLength(columns);
+    }
+    expect(methods(recorded)).toEqual(['snapshot']);
+    expectNoExecution(recorded);
+  });
+
+  it('drags all-day into a scrolled time grid, then moves vertically with one save per release and Undo', async () => {
+    const seed = fictionalSeed();
+    seed.content = seed.content.map((draft) => draft.id === FIXTURE_IDS.autumnBlend ? { ...draft, planned_date: '2026-10-20' } : draft);
+    const { controls, recorded, user } = setup('calendar/2026-10', { features: [FEATURE_HQ_EDITORIAL_TIMEBOX], seed });
+    await showView(user, 'Day');
+    const rect = { x: 88, y: -236, left: 88, top: -236, right: 888, bottom: 916, width: 800, height: 1152, toJSON: () => ({}) };
+    const columns = document.querySelector('.hq-calendar-time-columns')!;
+    const day = document.querySelector('[data-time-day="2026-10-20"]')!;
+    vi.spyOn(columns, 'getBoundingClientRect').mockReturnValue(rect);
+    vi.spyOn(day, 'getBoundingClientRect').mockReturnValue(rect);
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(day);
+    const chip = screen.getByRole('button', { name: /^Autumn blend tasting notes/ });
+    recorded.clear();
+    fireEvent.pointerDown(chip, { pointerId: 10, button: 0, clientX: 300, clientY: 40 });
+    fireEvent.pointerMove(chip, { pointerId: 10, clientX: 300, clientY: 196 });
+    expect(methods(recorded)).toEqual([]);
+    fireEvent.pointerUp(chip, { pointerId: 10, clientX: 300, clientY: 196 });
+    await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)?.planning_slot).toMatchObject({ start: '09:00', duration_minutes: 30 }));
+    expect(methods(recorded)).toEqual(['saveDraft']);
+    const timed = await screen.findByRole('button', { name: /^Autumn blend tasting notes, 9:00 a\.m\./ });
+    fireEvent.pointerDown(timed, { pointerId: 11, button: 0, clientX: 300, clientY: 196 });
+    fireEvent.pointerMove(window, { pointerId: 11, clientX: 300, clientY: 244 });
+    expect(methods(recorded)).toEqual(['saveDraft']);
+    fireEvent.pointerUp(window, { pointerId: 11, clientX: 300, clientY: 244 });
+    await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)?.planning_slot).toMatchObject({ start: '10:00', duration_minutes: 30 }));
+    expect(methods(recorded)).toEqual(['saveDraft', 'saveDraft']);
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)?.planning_slot?.start).toBe('09:00'));
+    expect(methods(recorded)).toEqual(['saveDraft', 'saveDraft', 'saveDraft']);
+    expectNoExecution(recorded);
+  });
+
+  it('accepts a native HTML drop from the undated tray into scrolled time slots with a 30 minute default', async () => {
+    const { controls, recorded, user } = setup('calendar/2026-10', { features: [FEATURE_HQ_EDITORIAL_TIMEBOX] });
+    await showView(user, 'Day');
+    const draft = screen.getByRole('button', { name: /^Steeping times thread/ });
+    const day = document.querySelector('[data-time-day="2026-10-20"]')!;
+    vi.spyOn(day, 'getBoundingClientRect').mockReturnValue({ x: 88, y: -236, left: 88, top: -236, right: 888, bottom: 916, width: 800, height: 1152, toJSON: () => ({}) });
+    const payload = new Map<string, string>();
+    const dataTransfer = { setData: (type: string, value: string) => payload.set(type, value), getData: (type: string) => payload.get(type) ?? '',
+      get types() { return [...payload.keys()]; } };
+    recorded.clear();
+    fireEvent.dragStart(draft, { dataTransfer });
+    fireEvent.dragOver(day, { dataTransfer });
+    expect(methods(recorded)).toEqual([]);
+    // Happy DOM has no DragEvent constructor; MouseEvent preserves client coordinates plus the native drag payload.
+    const drop = new MouseEvent('drop', { bubbles: true, cancelable: true, clientX: 300, clientY: 436 });
+    Object.defineProperty(drop, 'dataTransfer', { value: dataTransfer });
+    fireEvent(day, drop);
+    await waitFor(() => expect(controls.inspect().content.find((item) => item.id === FIXTURE_IDS.steepingThread)).toMatchObject({ planned_date: '2026-10-20', planning_slot: { start: '14:00', duration_minutes: 30 } }));
+    expect(methods(recorded)).toEqual(['saveDraft']);
+    expectNoExecution(recorded);
+  });
   it('assigns a 30 minute time via the accessible dialog and Undo restores date-only state', async () => {
     const { recorded, controls, user } = setup('calendar/2026-10', { features: [FEATURE_HQ_EDITORIAL_TIMEBOX] });
     await user.click(await screen.findByRole('button', { name: /^Autumn blend tasting notes/ }));
@@ -418,13 +492,13 @@ describe('Social calendar service-backed timeboxes', () => {
   });
   it('uses shared keyboard moves and resize with one atomic save and exact Undo', async () => {
     const { controls, recorded, user } = setup('calendar/2026-10', { features: [FEATURE_HQ_EDITORIAL_TIMEBOX], seed: timedSeed() });
-    await user.click(await screen.findByRole('button', { name: 'Week' }));
-    const event = await screen.findByRole('button', { name: /^Autumn blend tasting notes, 09:00/ });
+    await showView(user, 'Week');
+    const event = await screen.findByRole('button', { name: /^Autumn blend tasting notes, 9:00 a\.m\./ });
     recorded.clear();
     fireEvent.keyDown(event, { altKey: true, key: 'ArrowDown' });
     await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)?.planning_slot?.start).toBe('09:15'));
     expect(methods(recorded)).toEqual(['saveDraft']);
-    fireEvent.keyDown(await screen.findByRole('button', { name: /^Autumn blend tasting notes, 09:15/ }), { altKey: true, shiftKey: true, key: 'ArrowDown' });
+    fireEvent.keyDown(await screen.findByRole('button', { name: /^Autumn blend tasting notes, 9:15 a\.m\./ }), { altKey: true, shiftKey: true, key: 'ArrowDown' });
     await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)?.planning_slot?.duration_minutes).toBe(45));
     await user.click(screen.getByRole('button', { name: 'Undo' }));
     await screen.findByText(/Undone/);
@@ -434,8 +508,8 @@ describe('Social calendar service-backed timeboxes', () => {
   });
   it('previews pointer movement without saving, commits on drop, and clears time into all-day', async () => {
     const { controls, recorded, user } = setup('calendar/2026-10', { features: [FEATURE_HQ_EDITORIAL_TIMEBOX], seed: timedSeed() });
-    await user.click(await screen.findByRole('button', { name: 'Week' }));
-    const event = await screen.findByRole('button', { name: /^Autumn blend tasting notes, 09:00/ });
+    await showView(user, 'Week');
+    const event = await screen.findByRole('button', { name: /^Autumn blend tasting notes, 9:00 a\.m\./ });
     const columns = document.querySelector('.hq-calendar-time-columns')!;
     vi.spyOn(columns, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 700, bottom: 1152, width: 700, height: 1152, toJSON: () => ({}) });
     const day = document.querySelector('[data-time-day="2026-10-21"]')!;
@@ -447,7 +521,7 @@ describe('Social calendar service-backed timeboxes', () => {
     fireEvent.pointerUp(window, { pointerId: 7, clientX: 250, clientY: 456 });
     await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)).toMatchObject({ planned_date: '2026-10-21', planning_slot: { start: '09:30', duration_minutes: 30 } }));
     expect(methods(recorded)).toEqual(['saveDraft']);
-    const moved = await screen.findByRole('button', { name: /^Autumn blend tasting notes, 09:30/ });
+    const moved = await screen.findByRole('button', { name: /^Autumn blend tasting notes, 9:30 a\.m\./ });
     const allDay = document.querySelector('[data-grid-all-day="2026-10-22"]')!;
     vi.mocked(document.elementFromPoint).mockReturnValue(allDay);
     fireEvent.pointerDown(moved, { button: 0, pointerId: 8, clientX: 250, clientY: 456 });
@@ -459,7 +533,7 @@ describe('Social calendar service-backed timeboxes', () => {
   });
   it('keeps unsupported time planning read-only and the collapsed tray a drop target', async () => {
     const { recorded, user } = setup('calendar/2026-10', { features: [] });
-    await user.click(await screen.findByRole('button', { name: 'Day' }));
+    await showView(user, 'Day');
     expect(screen.getByText(/Timed planning needs a newer Social service/)).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Collapse undated drafts' }));
     expect(document.querySelector('[data-calendar-remove]')).toBeTruthy();

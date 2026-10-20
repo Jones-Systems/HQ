@@ -6,6 +6,8 @@ import type { ShellState } from './state';
 import { Splitter } from '@hq/ui';
 import { Connections } from './Connections';
 import { ServiceSettings } from './ServiceSettings';
+import { DataSourcesProvider } from './settings/DataSources';
+import type { DataSource } from './services/data-source-status';
 import { DOMAIN_IDS, parseProjectContext, type Appearance, type DesktopPort } from '@hq/contracts';
 import { DOMAIN_LABELS, MODULES, MODULE_PRESENTATION } from './modules';
 import { APPEARANCE_KEY, RAIL_KEY, RAIL_MIN, RAIL_MAX, RAIL_COMPACT_MAX, readRail, resizeRail, toggleRail, cycleAppearance, navigate, navigationKey, persist, readAppearance, readNavigation, resolveAppearance, type StoragePort } from './state';
@@ -15,11 +17,31 @@ const BROWSER_PORT: DesktopPort = Object.freeze({ platform: 'browser', versions:
 const unavailableStorage: StoragePort = { getItem: () => null, setItem: () => { throw new Error('Storage unavailable'); } };
 function storagePort(): StoragePort { try { return window.localStorage; } catch { return unavailableStorage; } }
 
-export function App() {
+function WorkspaceApp() {
   const [storage] = useState(storagePort);
   const [rail, setRail] = useState(() => readRail(storage));
   const compact = rail.width <= RAIL_COMPACT_MAX;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTarget, setSettingsTarget] = useState<DataSource | 'appearance' | null>(null);
+  const settingsOpener = useRef<HTMLElement | null>(null);
+  const wasSettingsOpen = useRef(false);
+  const openSettings = (target: DataSource | 'appearance' | null, opener?: HTMLElement) => {
+    settingsOpener.current = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    setSettingsTarget(target); setSettingsOpen(true);
+  };
+  const closeSettings = () => setSettingsOpen(false);
+  useEffect(() => {
+    if (wasSettingsOpen.current && !settingsOpen) settingsOpener.current?.focus();
+    wasSettingsOpen.current = settingsOpen;
+  }, [settingsOpen]);
+  useEffect(() => {
+    const open = (event: Event) => {
+      const target: unknown = (event as CustomEvent).detail?.source;
+      openSettings(target === 'social' || target === 'work' || target === 'wiki' || target === 'appearance' ? target : null);
+    };
+    window.addEventListener('hq-open-settings', open);
+    return () => window.removeEventListener('hq-open-settings', open);
+  }, []);
   const [state, setState] = useState(() => readNavigation(storage, CONTEXT.id));
   const [appearance, setAppearance] = useState<Appearance>(() => readAppearance(storage));
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -34,6 +56,7 @@ export function App() {
     projectId: () => CONTEXT.id,
     notice: setReferenceNotice,
     open(envelope, destination, context) {
+      settingsOpener.current = null; setSettingsOpen(false);
       setReferenceNotice(null);
       setReturnFrame({ context, state: navigate(stateRef.current, context.to.domain, context.to.destination) });
       setState(previous => navigate(previous, envelope.domain, destination));
@@ -65,18 +88,19 @@ export function App() {
     <aside className={`rail${compact ? " is-compact" : ""}`} ref={element => { element?.style.setProperty("width", `${rail.width}px`); }} aria-label="HQ navigation">
       <div className="brand" aria-label="HQ">HQ<span className="brand-dot" /></div>
       <nav aria-label="Domains">{DOMAIN_IDS.map((domain) => <button key={domain}
-        className="domain-button" title={DOMAIN_LABELS[domain]} aria-current={state.domain === domain ? 'page' : undefined}
-        onClick={() => { references.cancelOpen(); setReturnFrame(null); setReferenceNotice(null); setState(previous => navigate(previous, domain)); }}>
+        className="domain-button" title={DOMAIN_LABELS[domain]} aria-current={!settingsOpen && state.domain === domain ? 'page' : undefined}
+        onClick={() => { settingsOpener.current = null; setSettingsOpen(false); references.cancelOpen(); setReturnFrame(null); setReferenceNotice(null); setState(previous => navigate(previous, domain)); }}>
         <svg className="domain-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
           {domain === 'wiki' ? <><path d="M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Z" /><path d="M12 5v15" /></> : domain === 'design' ? <path d="m12 3 9 9-9 9-9-9Z" /> : domain === 'social' ? <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /></> : <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 15h8" /></>}
         </svg>
         <span className="rail-label">{DOMAIN_LABELS[domain]}</span>
       </button>)}</nav>
       <div className="rail-footer">
-        <Connections compact={compact} onManage={() => setSettingsOpen(true)} />
-        <button className="rail-action" title="Service settings" onClick={() => setSettingsOpen(true)}>
+        <Connections compact={compact} onManage={(source, opener) => openSettings(source ?? null, opener)} />
+        <div className="rail-utilities">
+        <button className="rail-action" title="Settings" aria-current={settingsOpen ? 'page' : undefined} onClick={event => openSettings(null, event.currentTarget)}>
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg>
-          <span className="rail-label">Service settings</span>
+          <span className="rail-label">Settings</span>
         </button>
         <button className="rail-action" aria-label={`Appearance: ${appearance[0]!.toUpperCase() + appearance.slice(1)}`}
           title={`Appearance: ${appearance}. Switch to ${cycleAppearance(appearance)}`} onClick={() => setAppearance(cycleAppearance)}>
@@ -84,21 +108,25 @@ export function App() {
             {appearance === 'system' ? <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></> : appearance === 'dark' ? <path d="M20 14A9 9 0 0 1 10 4a9 9 0 1 0 10 10Z"/> : <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/></>}
           </svg><span className="rail-label">{appearance[0]!.toUpperCase() + appearance.slice(1)}</span>
         </button>
+        </div>
       </div>
     </aside>
     <Splitter label="Primary navigation width" value={rail.width} min={RAIL_MIN} max={RAIL_MAX}
       onResize={width => setRail(previous => resizeRail(previous, width))} onToggle={() => setRail(toggleRail)} />
     <div className={fill ? 'workspace is-fill' : 'workspace'}>
-      {returnFrame && <button onClick={goBack}>Back to {returnFrame.context.label}</button>}
-      {referenceNotice && <section role="status" aria-label="Read-only reference"><strong>{referenceNotice.title}</strong><p>{referenceNotice.message}</p><button onClick={() => setReferenceNotice(null)}>Dismiss reference</button></section>}
-      <main className={fill ? 'is-fill' : undefined} key={`${CONTEXT.id}:${state.domain}`}>
+      {returnFrame && <button hidden={settingsOpen} onClick={goBack}>Back to {returnFrame.context.label}</button>}
+      {referenceNotice && <section hidden={settingsOpen} role="status" aria-label="Read-only reference"><strong>{referenceNotice.title}</strong><p>{referenceNotice.message}</p><button onClick={() => setReferenceNotice(null)}>Dismiss reference</button></section>}
+      <main hidden={settingsOpen} className={fill ? 'is-fill' : undefined} key={`${CONTEXT.id}:${state.domain}`}>
         <Module context={CONTEXT} destination={state.destinations[state.domain]} appearance={theme} desktop={window.hqDesktop ?? BROWSER_PORT}
           references={references} {...(returnFrame ? { returnContext: returnFrame.context } : {})}
           navigate={destination => { references.cancelOpen(); setState(previous => navigate(previous, state.domain, destination)); }} />
       </main>
+      {settingsOpen && <ServiceSettings config={window.hqServices?.config} onClose={closeSettings}
+        returnLabel={DOMAIN_LABELS[state.domain]} target={settingsTarget} appearance={appearance} onAppearanceChange={setAppearance} />}
       <footer className="context-footer" aria-label="Workspace context"><span>{CONTEXT.name}</span><span>{DOMAIN_LABELS[state.domain]}</span></footer>
       {!storageAvailable && <p className="storage-notice" role="status">Preferences are available for this session. Local storage is unavailable.</p>}
     </div>
-    {settingsOpen && <ServiceSettings config={window.hqServices?.config} onClose={() => setSettingsOpen(false)} />}
   </div>;
 }
+
+export function App() { return <DataSourcesProvider><WorkspaceApp /></DataSourcesProvider>; }

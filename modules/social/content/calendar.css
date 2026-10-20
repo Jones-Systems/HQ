@@ -1,6 +1,8 @@
 .soc-calendar-layout.soc-calendar-body { display: grid; grid-template-columns: minmax(0, 1fr) 8px var(--soc-calendar-tray-width, 240px); gap: 0; align-items: stretch; }
 .soc-calendar-main { min-width: 0; overflow: auto; }
-.soc-calendar-layout > .soc-tray { min-width: 0; overflow: auto; }
+.soc-calendar-layout > .soc-tray { min-width: 0; overflow: auto; align-self: start; align-content: start; }
+.soc-calendar-layout > .soc-tray > .hq-btn { justify-self: end; }
+.soc-calendar-layout > .soc-tray .soc-day-items { align-content: start; gap: var(--hq-space-xs); }
 .soc-calendar-layout[data-tray-collapsed] { grid-template-columns: minmax(0, 1fr) 8px 48px; }
 .soc-calendar-layout[data-tray-collapsed] > .soc-tray { padding: 4px; }
 .soc-calendar-layout[data-tray-collapsed] > .soc-tray h3 { writing-mode: vertical-rl; margin: 12px auto; }
