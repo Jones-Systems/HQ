@@ -1,3 +1,4 @@
+import { SecondaryPanel } from '../../ui/src/secondary-panels.tsx';
 import { useId } from 'react';
 import type { CaptureId, SubjectId } from '../src/graph-contract.ts';
 import type { CaptureRow, GraphViewModel, SubjectRow } from './graph-view-model.ts';
@@ -34,7 +35,7 @@ export function ReferenceGraphView(props: ReferenceGraphViewProps) {
       <ul className="hq-graph-tree" aria-label="Sites, apps and their screens">
         {view.rows.map((row) => <li key={row.id} style={{ paddingLeft: `${row.depth * 16}px` }}><Row row={row} onSelectSubject={props.onSelectSubject} /></li>)}
       </ul>
-      {view.detail === null ? <p className="hq-refs-muted">Select a site, page, app, flow or screen.</p> : <aside className="hq-refs-detail hq-graph-detail" aria-label="Subject details">
+      {view.detail === null ? <p className="hq-refs-muted">Select a site, page, app, flow or screen.</p> : <SecondaryPanel name="reference-graph-detail" label="Subject details" initial={340}><aside className="hq-refs-detail hq-graph-detail" aria-label="Subject details">
         <div className="hq-refs-detail-head">
           <h3>{view.detail.subject.title}</h3>
           <button type="button" className="hq-refs-quiet" onClick={() => props.onSelectSubject(null)}>Close</button>
@@ -51,7 +52,7 @@ export function ReferenceGraphView(props: ReferenceGraphViewProps) {
             </li>)}
           </ul>
         </>}
-      </aside>}
+      </aside></SecondaryPanel>}
     </div>}
   </section>;
 }

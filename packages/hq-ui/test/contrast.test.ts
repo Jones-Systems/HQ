@@ -22,10 +22,10 @@ describe('contrast helper', () => {
   });
 });
 
-describe('T2 contrast pairs, recomputed', () => {
+describe('visual-system contrast pairs, recomputed', () => {
   const rows = contrastRows(tokens);
 
-  it('recomputes all 104 pairs and every one meets its T2 threshold', () => {
+  it('recomputes all 104 pairs and every one meets its text or control threshold', () => {
     expect(rows).toHaveLength(104);
     expect(rows.filter((row) => !row.pass)).toEqual([]);
     expect(rows.filter((row) => row.mode === 'light')).toHaveLength(52);
@@ -37,7 +37,7 @@ describe('T2 contrast pairs, recomputed', () => {
     expect(rows.filter((row) => row.fg === 'focus')).toHaveLength(10);
   });
 
-  it("agrees with T2's own generated report, pair by pair", () => {
+  it("agrees with the generated report, pair by pair", () => {
     expect(reported).toHaveLength(104);
     rows.forEach((row, index) => {
       const theirs = reported[index]!;

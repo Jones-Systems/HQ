@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ModulePort } from '@hq/contracts';
-import { Button, StateView, Toast, ToastRegion, type ReferencePort, type ReturnContext } from '@hq/ui';
+import { Button, Splitter, StateView, Toast, ToastRegion, type ReferencePort, type ReturnContext } from '@hq/ui';
 import { StatusBoard, SyncBanners, undoFromToast, useFeedback, WorkToasts, type Feedback } from '../board';
 import { DraftsPanel, QuickCapture, useCaptureShortcut } from '../capture';
 import {
@@ -15,6 +15,7 @@ import {
   type NavItem, type WorkPage, type WorkRoute,
 } from './routes';
 import { useWorkUi, workSession, type WorkUi } from './session';
+import { useCssVars, useRemembered } from '../views/env';
 import { ToolbarCapture } from './ToolbarCapture';
 import { workUndoHandler } from './undo';
 import './nav.css';
@@ -55,6 +56,22 @@ export function WorkDomain({ context, destination, navigate, now, pollMs, refere
   const view = useWorkUi(ui);
   const rootRef = useRef<HTMLDivElement>(null);
   const captureRef = useRef<HTMLInputElement>(null);
+  const [navWidth, setNavWidth] = useRemembered('work.nav.width', 184);
+  const [restoreWidth, setRestoreWidth] = useRemembered('work.nav.restore', 184);
+  const [detailWidth, setDetailWidth] = useRemembered('work.detail.width', 360);
+  const [detailRestore, setDetailRestore] = useRemembered('work.detail.restore', 360);
+  const [toolbarCollapsed, setToolbarCollapsed] = useRemembered('work.toolbar.collapsed', false);
+  useCssVars(rootRef, { '--wd-nav-width': `${navWidth}px`, '--wd-detail-width': `${detailWidth}px` });
+  const resizeDetail = (size: number) => {
+    const next = size < 112 ? 0 : Math.max(240, Math.min(640, size));
+    if (next > 0) setDetailRestore(next);
+    setDetailWidth(next);
+  };
+  const resizeNav = (size: number) => {
+    const next = size < 112 ? 0 : Math.min(280, size);
+    if (next > 0) setRestoreWidth(next);
+    setNavWidth(next);
+  };
   const [dialog, setDialog] = useState<Status | null>(null);
 
   const route = parseWorkDestination(destination);
@@ -77,7 +94,8 @@ export function WorkDomain({ context, destination, navigate, now, pollMs, refere
     editDate: (id: string) => navigate(itemDestination(id)),
     capture: ({ date }: { date?: DateInput }) => {
       ui.setCapture({ date: date ?? null });
-      captureRef.current?.focus();
+      if (toolbarCollapsed) { setToolbarCollapsed(false); requestAnimationFrame(() => captureRef.current?.focus()); }
+      else captureRef.current?.focus();
     },
     navigate: (to: WorkDestination) => navigate(viewLinkDestination(to)),
   };
@@ -118,30 +136,44 @@ export function WorkDomain({ context, destination, navigate, now, pollMs, refere
 
   return (
     <div className="wd-domain work-ui" ref={rootRef} onKeyDown={workUndoHandler(store, feedback)}>
-      <aside className="wd-side" aria-label="Work workspace">
+      <aside className="wd-side" aria-label="Work workspace" hidden={navWidth === 0}>
         <WorkNav current={page?.page ?? null} onOpen={(item) => navigate(item.destination)} />
       </aside>
-
+      <div className="wd-nav-divider">
+        <Splitter label="Work navigation width" value={navWidth} min={0} max={280} onResize={resizeNav} onToggle={() => resizeNav(navWidth === 0 ? restoreWidth : 0)} />
+        {navWidth === 0 && <button type="button" className="wd-nav-restore" aria-label="Show Work navigation" title="Show Work navigation" onClick={() => resizeNav(restoreWidth)}>›</button>}
+      </div>
       <div className="wd-main">
         {returnContext && <p className="hq-meta">From {returnContext.label} · {returnContext.to.domain} · {returnContext.to.destination}</p>}
         <h1 className="hq-sr-only">Work · {page ? PAGE_LABELS[page.page] : 'Unknown page'}</h1>
         {session.example && (
           <p className="wd-example" role="note"><span className="wd-tag">Example data</span> {EXAMPLE_NOTE}</p>
         )}
-        <div className="wd-toolbar">
+        <div className="wd-toolbar-toggle">
+          <Button size="sm" variant="ghost" aria-expanded={!toolbarCollapsed} onClick={() => setToolbarCollapsed(!toolbarCollapsed)}>
+            {toolbarCollapsed ? 'Show capture & filters' : 'Hide capture & filters'}{activeFilterCount(view.filters) > 0 ? ` · ${activeFilterCount(view.filters)} filters` : ''}
+          </Button>
+        </div>
+        <div className="wd-toolbar" hidden={toolbarCollapsed}>
           <ToolbarCapture ref={captureRef} session={session} state={state} {...(now ? { now } : {})} onMore={openCapture} />
           {page && page.page !== 'settings' && page.page !== 'plan' && <FilterBar ui={ui} filters={view.filters} state={state} />}
         </div>
         <DraftsPanel drafts={drafts} store={store} feedback={feedback} />
         <div className={`wd-workarea${itemId ? ' wd-workarea--detail' : ''}`}>
           <ScrollArea ui={ui} pageKey={pageKey} ready={state.confirmed !== null}>{body}</ScrollArea>
-          {itemId && (
+          {itemId && <>
+            <div className="wd-detail-divider">
+              <Splitter label="Work detail width" value={detailWidth} min={0} max={640} side="end" onResize={resizeDetail} onToggle={() => resizeDetail(detailWidth === 0 ? detailRestore : 0)} />
+              {detailWidth === 0 && <button type="button" className="wd-detail-restore" aria-label="Show item details" title="Show item details" onClick={() => resizeDetail(detailRestore)}>‹</button>}
+            </div>
+            <div className="wd-detail-host" hidden={detailWidth === 0}>
             <CardDetail
               projectId={context.id} {...(references ? { references } : {})}
               store={store} state={state} feedback={feedback} itemId={itemId} detail={detail} {...(now ? { now } : {})}
               onClose={() => navigate(view.lastPage)}
             />
-          )}
+            </div>
+          </>}
         </div>
       </div>
 

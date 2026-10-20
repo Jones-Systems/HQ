@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('hqDesktop', desktop);
 
 // The realm is shared by trusted modules; these objects are not hard domain isolation.
 const services: import('@hq/contracts/services').HqServices = Object.freeze({
+  wikiAdmin: Object.freeze<import('@hq/contracts/wiki-admin').WikiAdminTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:wiki-admin', route, params) }),
   wiki: Object.freeze<import('@hq/contracts/wiki').WikiServiceTransport>({
     listSources: () => ipcRenderer.invoke('hq:svc:wiki', 'listSources', []),
     search: request => ipcRenderer.invoke('hq:svc:wiki', 'search', [request]),

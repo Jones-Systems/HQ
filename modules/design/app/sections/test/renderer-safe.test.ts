@@ -1,11 +1,23 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { builtinModules } from 'node:module';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const workspace: Readonly<Record<string, string>> = {
+  '@hq/ui': resolve(root, '../../../../packages/hq-ui/src/index.ts'),
+  '@hq/contracts': resolve(root, '../../../../packages/contracts/src/index.ts'),
+};
+
+function resolveSource(from: string, specifier: string): string {
+  const base = resolve(dirname(from), specifier);
+  const target = [base, `${base}.ts`, `${base}.tsx`, join(base, 'index.ts')].find((path) => existsSync(path) && statSync(path).isFile());
+  assert.ok(target, `${from}: unresolved import ${specifier}`);
+  return target;
+}
+
 const builtins = new Set(builtinModules.map((name) => name.replace(/^node:/, '')));
 function runtimeImports(source: string): string[] {
   const clean = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -28,9 +40,12 @@ test('all section runtime imports remain renderer-safe; no descriptors or produc
     assert.equal(forbidden(path), false, path);
     visited.add(path);
     const text = readFileSync(path, 'utf8');
+    const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    assert.equal(/\bprocess\s*\.|\bBuffer\b|\brequire\s*\(|URL\.createObjectURL|\bfetch\s*\(|\bWebSocket\b/.test(code), false, path);
     for (const specifier of runtimeImports(text)) {
       assert.equal(forbidden(specifier), false, `${path}: ${specifier}`);
-      if (specifier.startsWith('.')) visit(resolve(dirname(path), specifier));
+      if (specifier.startsWith('.')) visit(resolveSource(path, specifier));
+      else if (Object.hasOwn(workspace, specifier)) visit(workspace[specifier]!);
       else assert.ok(['react', 'react/jsx-runtime'].includes(specifier), `unqualified package: ${specifier}`);
     }
   };
@@ -38,12 +53,11 @@ test('all section runtime imports remain renderer-safe; no descriptors or produc
     for (const name of readdirSync(resolve(root, section))) {
       assert.notEqual(name, 'design-module.ts');
       const path = resolve(root, section, name);
-      const text = readFileSync(path, 'utf8');
-      const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-      assert.equal(/\bprocess\s*\.|\bBuffer\b|\brequire\s*\(|URL\.createObjectURL|\bfetch\s*\(|\bWebSocket\b/.test(code), false, path);
       visit(path);
     }
   }
+  assert.ok(visited.has(workspace['@hq/ui']!), 'the shared kit is scanned, not exempted');
+  assert.ok(visited.has(resolve(root, '../../../../packages/hq-ui/src/components/Button.tsx')));
   assert.ok(visited.size > 20, 'follow the lane imports, not just section entry points');
 });
 

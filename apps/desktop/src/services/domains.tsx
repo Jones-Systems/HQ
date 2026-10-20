@@ -21,9 +21,8 @@ export async function selectService(services: HqServices | undefined, domain: Se
   } catch { return 'unavailable'; }
 }
 function Surface({ domain, selection, children }: { domain: string; selection: Selection; children?: ReactNode }) {
-  return <section aria-label={`${domain} service`}>
-    <p role="status">{domain}: {selection === 'live' ? 'Live service' : selection === 'example' ? 'Synthetic example' : 'Unavailable — service is not configured correctly'}.</p>
-    <p>{RELOAD_NOTE}</p>
+  return <section className="service-domain" aria-label={`${domain} service`}>
+    <div className="service-status" role="status" title={RELOAD_NOTE}>{domain}: {selection === 'live' ? 'Live service' : selection === 'example' ? 'Synthetic example' : 'Unavailable — service is not configured correctly'}.</div>
     {children}
   </section>;
 }

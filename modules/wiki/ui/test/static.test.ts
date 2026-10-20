@@ -63,10 +63,11 @@ test('imports are limited to react, relative src files and the accepted contract
   }
 });
 
-test('the stylesheet uses wiki- classes, supports both appearances and loads nothing', () => {
+test('the stylesheet uses wiki- classes and shared appearance roles without loading resources', () => {
   const css = readFileSync(new URL('wiki-view.css', SRC), 'utf8');
-  assert.match(css, /\[data-appearance="light"\]/u);
-  assert.match(css, /\[data-appearance="dark"\]/u);
+  assert.match(css, /--wiki-bg:\s*var\(--hq-surface\)/u);
+  assert.match(css, /--wiki-text:\s*var\(--hq-text\)/u);
+  assert.match(css, /--wiki-accent:\s*var\(--hq-accent-text\)/u);
   assert.equal(/@import|url\(/iu.test(css), false, 'no remote or file loads');
   const selectors = css.replace(/\/\*[\s\S]*?\*\//gu, '').match(/[^{}]+(?=\{)/gu) ?? [];
   for (const selector of selectors) {

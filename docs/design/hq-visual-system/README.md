@@ -2,13 +2,13 @@
 
 Preliminary desktop visual system for HQ's shared chrome: the window frame, the slim domain rail (Design, then Social, then Work), secondary navigation, global appearance and project context, and their component states. It provides light and dark themes, tokens in CSS and JSON, rendered mockups, and an integration note for the shell and module owners.
 
-**Status: design artifact, not application code.** Nothing here is wired into `apps/desktop`. The tokens are not a published package, and nothing has been tested in Electron or on a Mac. The Design, Social and Work pages are *illustrative*: they show chrome around fictional content. Each domain still owns its own pages, navigation entries and features; Design's canvas, gallery and preview loop belong to the Design coordinator. Continuity, sources and decisions are recorded in [work-note.md](work-note.md).
+**Status:** tokens are consumed by `@hq/ui` and the modernization source candidate. Historical mockups and screenshots below document the earlier proposal; they do not prove the current application or installed runtime. The current implementation contract is [HQ UI modernization](../../engineering-specs/hq-ui-modernization.md).
 
 ![Design landing in dark and light chrome](evidence/design-dark-1280.png)
 
 ## The direction in one paragraph
 
-The window is a **bezel and a sheet**. The titlebar and rail sit on a quiet canvas, and the working sheet is inset with one rounded corner. Neutrals are warm graphite in dark mode and paper in light mode. A single **lime signal** marks where you are, the primary action and keyboard focus, and it is never used for status. Status always pairs a shape with a word (filled, half or dashed dot plus "Fresh", "Stale" or "Unknown"). Provenance, revisions and timestamps are set in IBM Plex Mono, so you can tell a fact about a record apart from the interface around it. Captured artwork, exports and previews sit on a fixed neutral matte and never change colour with the theme. There are no gradients, glows or decorative cards: structure comes from hairlines and spacing.
+The current direction follows Design: cool neutral surfaces, restrained blue selection and accent, compact sans-serif interface text and consistent rounded controls. Status pairs a shape with a word. Captured artwork, exports and previews keep their own appearance. The oversized repeated context header is removed; project context is compact footer text. The primary rail resizes to icons and keeps connections, settings and appearance visible. Appearance cycles Light → Dark → System. Secondary panels resize fully closed with a restore grip.
 
 ## Files
 
@@ -23,7 +23,7 @@ The window is a **bezel and a sheet**. The titlebar and rail sit on a quiet canv
 | [`evidence/`](evidence/) | Screenshots, layout JSON and `manifest.json` (SHA-256 of every image plus check results). |
 | [`tools/`](tools/) | `hq_tokens.py` (build/check tokens and contrast), `render.sh` (headless Chromium capture), `compare_regions.py` (pixel invariance checks). Standard library only. |
 
-## Anatomy and sizes
+## Historical mockup anatomy and sizes
 
 | Part | Specification |
 | --- | --- |
@@ -36,7 +36,7 @@ The window is a **bezel and a sheet**. The titlebar and rail sit on a quiet canv
 | Spacing | 4px base: 2, 4, 6, 8, 12, 16, 20, 24, 32, 48. Controls are 24/30/36px tall; hit targets ≥24px. |
 | Type | Plex Sans: display 24/30, title 17/24, heading 14/20, body 13/20, label 12/16, rail 10.5/12. Plex Mono: eyebrow 10.5/14 uppercase +0.08em, meta 11/16 with tabular figures. |
 
-## States covered
+## Historical mockup states covered
 
 [`mockups/states.html`](mockups/states.html) renders each item below in light and dark ([evidence](evidence/states-1440.png)):
 
@@ -56,12 +56,14 @@ These are proposals for the owners named below. This lane edits only `docs/desig
 1. **Tokens (foundation owner).** Load `tokens/hq-tokens.css`, then `tokens/t0-bridge.css`, and remove the palette blocks from `apps/desktop/src/styles.css`. T0 already writes the resolved theme to `<html data-theme="light|dark">`, which is the selector the tokens use. Before React mounts, `:root { color-scheme: light dark }` follows the OS, so System renders correctly on first paint. Colour roles are `light-dark()` pairs, so a `[data-theme]` subtree resolves its own scheme. Shadows switch through explicit blocks because `light-dark()` only accepts colours.
 2. **Fonts (foundation owner).** Bundle IBM Plex Sans 400/500/600 and Plex Mono 400/500 (SIL OFL 1.1) as local woff2, which the CSP's `font-src 'self'` allows. The mockups load them from Google Fonts for preview only. The fallback stack (`system-ui` / `ui-monospace`) keeps the layout intact but loses the mono/sans contrast that carries provenance.
 3. **Window (foundation owner).** Replace the fixed `backgroundColor: '#17191d'` with the canvas colour for the resolved theme (`#E6E5DD` light, `#0B0C0A` dark) so a light launch doesn't flash dark. If the titlebar layout is adopted, use `titleBarStyle: 'hiddenInset'` on macOS with `-webkit-app-region: drag` on `.hq-titlebar` and `no-drag` on its controls.
-4. **Shell chrome (HQ shell owner).** Move the appearance choice from the rail footer `<select>` to the titlebar radio group, which becomes a menu button below 960px. Show project context in the titlebar. Keep `aria-current="page"` on the current rail item; render T0's unavailable Social/Work slots as `aria-disabled` items ([evidence](evidence/design-dark-t0-slots-1280.png)).
+4. **Shell chrome (modernization coordinator).** The owner superseded the titlebar proposal: use a cycling appearance button in the pinned rail footer, compact project text in the content footer, and no repeated domain/project header. The rail drags to 64px icons; secondary panels collapse to zero with restoration. Design's compact primary tab row stays available.
 5. **Preserved content (Design and every module that shows captures).** Mark captures, exports, artwork and producer previews with the RS-2 marker `data-hq-content="captured"` (or `"producer"` / `"export"`; add `data-hq-matte="checker"` for a fixed transparency grid). The token CSS styles any `[data-hq-content]`. Set `--hq-content-scheme` to the content's *recorded* theme through CSSOM (`el.style.setProperty`), since the CSP `style-src 'self'` blocks inline style attributes. A local probe in Chromium 155 found that an iframe's `prefers-color-scheme` follows the owner element's used `color-scheme`, not the OS. An SVG used as an `<img>` follows it too. Without this pin, switching HQ to Dark would silently re-theme a light preview. Never apply filter, blend mode or opacity to preserved content, and keep the matte constant.
 6. **Module chrome (all domains).** Use `--hq-*` roles for chrome only. Domain-specific colours (for example, Work's Manual Planner status hues) stay domain-owned under `--design-*`, `--social-*` or `--work-*` prefixes. Pair every status colour with a word and a shape.
 7. **Records stay distinct (Work, Design, Social).** Reference blocks name the owning domain in a mono eyebrow, a title snapshot, and kind/revision or "Other project · …". Execution records use the same block with a freshness line ("Running · observed 4 min ago", "Unknown · host unreachable 13:20"). Card moves confirm "Planning change only · no run started" with Undo.
 
-## Evidence
+## Historical mockup evidence
+
+The results below apply to the earlier warm/lime mockups and their recorded revision. Token values and current application geometry have since changed; regenerate current evidence before asserting the same results.
 
 The checks ran on Linux with headless Chromium 155 at device scale 1, with Plex fonts loaded on every page (`plex_fonts_loaded` in [`evidence/manifest.json`](evidence/manifest.json)).
 

@@ -148,7 +148,9 @@ describe('Social descriptor in the T0 registry', () => {
 
   it('follows the appearance the shell resolves without reading the OS theme itself', async () => {
     render(<App />);
-    await user().selectOptions(screen.getByLabelText('Appearance'), 'dark');
+    for (let step = 0; step < 3 && document.documentElement.dataset.theme !== 'dark'; step++) {
+      await user().click(screen.getByRole('button', { name: /^Appearance:/ }));
+    }
     await switchDomain('Social');
     await screen.findByRole('heading', { level: 1, name: 'Overview' });
     expect(document.documentElement.dataset.theme).toBe('dark');

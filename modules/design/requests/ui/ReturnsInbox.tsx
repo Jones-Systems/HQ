@@ -1,3 +1,4 @@
+import { Button } from '@hq/ui';
 import { useState } from 'react';
 import type { CandidateId, NavigationPort, ReturnsPort } from '../src/contract.ts';
 import { navigate } from '../src/intents.ts';
@@ -38,15 +39,15 @@ export function ReturnsInbox({ session, state, returnsPort = null, navigation = 
         </div>
         <div className="hqr-muted">{item.candidate.claims.length} claim{item.candidate.claims.length === 1 ? '' : 's'} · {item.candidate.evidence.length} artifact{item.candidate.evidence.length === 1 ? '' : 's'} · reported {item.candidate.observedAt.slice(0, 16).replace('T', ' ')} UTC</div>
         <div className="hqr-inline">
-          <button type="button" onClick={() => {
+          <Button type="button" onClick={() => {
             onSelect(item.candidate.candidateId);
             if (navigation) navigate(navigation, { type: 'open-returned', requestId: state.requestId, candidateId: item.candidate.candidateId });
-          }}>Open for review</button>
+          }}>Open for review</Button>
         </div>
       </li>;
     })}</ul>}
     {returnsPort && <div className="hqr-inline">
-      <button type="button" onClick={() => { void session.refreshReturns(returnsPort); }}>Check for returned work</button>
+      <Button type="button" onClick={() => { void session.refreshReturns(returnsPort); }}>Check for returned work</Button>
     </div>}
     {head && <form className="hqr-manual" onSubmit={(event) => {
       event.preventDefault();
@@ -63,7 +64,7 @@ export function ReturnsInbox({ session, state, returnsPort = null, navigation = 
       <label className="hqr-field">Artifact note (optional)
         <input value={artifact} disabled={disabled} maxLength={300} onChange={(event) => setArtifact(event.target.value)} />
       </label>
-      <button type="submit" disabled={disabled || claims.trim() === ''}>Record manual return for packet #{head.lineage.sequence}</button>
+      <Button type="submit" disabled={disabled || claims.trim() === ''}>Record manual return for packet #{head.lineage.sequence}</Button>
     </form>}
   </section>;
 }

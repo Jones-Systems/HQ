@@ -5,23 +5,23 @@
  * Rules are scoped under .hqd-chrome so shell element styles do not leak in.
  */
 .hqd-chrome {
-  display: flex; flex-direction: column; height: 100%; min-height: 520px; min-width: 0;
+  display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0;
   background: var(--hqd-background); color: var(--hqd-text);
-  font-size: 13px; line-height: 1.45;
+  font-family: var(--hq-font-family-sans, system-ui, sans-serif); font-size: 13px; line-height: 1.45;
 }
 .hqd-chrome *, .hqd-chrome *::before, .hqd-chrome *::after { box-sizing: border-box; }
 .hqd-chrome :focus-visible { outline: 2px solid var(--hqd-accent); outline-offset: 2px; }
-.hqd-chrome button { font: inherit; color: inherit; cursor: pointer; }
+.hqd-chrome :where(button) { font: inherit; cursor: pointer; }
 .hqd-chrome kbd { font: inherit; font-size: 11px; color: var(--hqd-muted); border: 1px solid var(--hqd-line); border-radius: 4px; padding: 0 5px; background: var(--hqd-background); }
 .hqd-chrome code { font-size: 12px; overflow-wrap: anywhere; }
 
 /* Bar: sub-navigation and tools */
-.hqd-chrome .hqd-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 48px; padding: 0 12px; border-bottom: 1px solid var(--hqd-line); background: var(--hqd-surface); }
-.hqd-chrome .hqd-subnav { display: flex; gap: 2px; overflow-x: auto; }
-.hqd-chrome .hqd-nav-item { border: 0; border-radius: 6px; padding: 7px 12px; background: transparent; color: var(--hqd-muted); white-space: nowrap; }
+.hqd-chrome .hqd-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 44px; min-height: 44px; flex: none; overflow: hidden; padding: 0 12px; border-bottom: 1px solid var(--hqd-line); background: var(--hqd-surface); }
+.hqd-chrome .hqd-subnav { display: flex; min-width: 0; gap: 2px; overflow-x: auto; }
+.hqd-chrome .hqd-nav-item { border: 0; border-radius: 6px; padding: 6px 10px; background: transparent; color: var(--hqd-muted); white-space: nowrap; }
 .hqd-chrome .hqd-nav-item:hover { color: var(--hqd-text); background: var(--hqd-selected); }
 .hqd-chrome .hqd-nav-item[aria-current="page"] { color: var(--hqd-text); background: var(--hqd-selected); font-weight: 600; }
-.hqd-chrome .hqd-bar-tools { display: flex; align-items: center; gap: 6px; }
+.hqd-chrome .hqd-bar-tools { flex: none; display: flex; align-items: center; gap: 6px; }
 .hqd-chrome .hqd-palette-button { display: flex; align-items: center; gap: 10px; border: 1px solid var(--hqd-line); border-radius: 6px; padding: 5px 6px 5px 10px; background: var(--hqd-background); color: var(--hqd-muted); }
 .hqd-chrome .hqd-palette-button:hover { color: var(--hqd-text); }
 .hqd-chrome .hqd-icon-button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--hqd-muted); }
@@ -30,7 +30,7 @@
 .hqd-chrome .hqd-icon-button[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 
 /* Panels */
-.hqd-chrome .hqd-body { display: flex; flex: 1; min-height: 0; }
+.hqd-chrome .hqd-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 .hqd-chrome .hqd-sidebar, .hqd-chrome .hqd-inspector { flex: none; overflow: auto; padding: 16px 12px; background: var(--hqd-surface); }
 .hqd-chrome .hqd-workspace { flex: 1; min-width: 0; overflow: auto; position: relative; }
 .hqd-chrome .hqd-workspace:focus-visible { outline-offset: -2px; }
@@ -39,10 +39,11 @@
 .hqd-chrome .hqd-splitter::after { content: ""; position: absolute; inset: 0 3px; background: var(--hqd-line); }
 .hqd-chrome .hqd-splitter:hover::after, .hqd-chrome .hqd-splitter:focus-visible::after { inset: 0 2px; background: var(--hqd-accent); }
 .hqd-chrome .hqd-splitter:focus-visible { outline: none; }
+.hqd-chrome .hqd-splitter.is-collapsed { width: 12px; margin: 0 -6px; background: var(--hqd-surface); }
+.hqd-chrome .hqd-splitter.is-collapsed::after { inset: calc(50% - 20px) 4px; border-radius: 4px; background: var(--hqd-muted); }
+.hqd-chrome .hqd-splitter.is-collapsed:hover::after, .hqd-chrome .hqd-splitter.is-collapsed:focus-visible::after { background: var(--hqd-accent); }
+.hqd-chrome .hqd-splitter.is-collapsed:focus-visible { outline: 2px solid var(--hqd-accent); outline-offset: -2px; }
 
-.hqd-chrome .hqd-project { display: grid; gap: 2px; padding: 4px 8px 14px; margin-bottom: 10px; border-bottom: 1px solid var(--hqd-line); }
-.hqd-chrome .hqd-project span { font-size: 11px; color: var(--hqd-muted); }
-.hqd-chrome .hqd-project strong { font-weight: 600; overflow-wrap: anywhere; }
 .hqd-chrome .hqd-heading { margin: 4px 8px 8px; font-size: 11px; font-weight: 650; letter-spacing: 0.6px; text-transform: uppercase; color: var(--hqd-muted); }
 .hqd-chrome .hqd-subheading { margin: 20px 0 8px; font-size: 11px; font-weight: 650; color: var(--hqd-muted); }
 .hqd-chrome .hqd-section-list { display: grid; gap: 1px; }
@@ -79,7 +80,7 @@
 .hqd-chrome .hqd-prompt h2 { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
 .hqd-chrome .hqd-prompt p { margin: 0 0 18px; color: var(--hqd-muted); line-height: 1.6; }
 .hqd-chrome .hqd-prompt-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-.hqd-chrome .hqd-button { border: 1px solid var(--hqd-line); border-radius: 6px; padding: 7px 12px; background: var(--hqd-surface); }
+.hqd-chrome .hqd-button { border: 1px solid var(--hqd-line); border-radius: 6px; padding: 6px 10px; background: var(--hqd-surface); }
 .hqd-chrome .hqd-button-primary { border-color: var(--hqd-accent); background: var(--hqd-accent); color: var(--hqd-surface); font-weight: 600; }
 .hqd-chrome .hqd-button:disabled { opacity: 0.5; cursor: not-allowed; }
 

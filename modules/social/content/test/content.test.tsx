@@ -11,6 +11,7 @@ import { BrandManager, SocialContent } from '..';
 afterEach(() => {
   cleanup();
   resetSocialSessions();
+  localStorage.removeItem('hq.social.library-panel.v1');
   vi.restoreAllMocks();
 });
 
@@ -360,5 +361,138 @@ describe('Social content: brands', () => {
     expect(await within(list).findByText('Fernhill Seed Library')).toBeTruthy();
     expect(methods(recorded)).toEqual(['addBrand', 'snapshot']);
     expectNoExecution(recorded);
+  });
+});
+
+
+describe('Library panel layout', () => {
+  it('remembers the list width and preserves unsaved editor text while the list is closed', async () => {
+    const { user, recorded, view, Host } = setup(`library/${FIXTURE_IDS.autumnBlend}`);
+    await screen.findByRole('heading', { name: 'Edit draft' });
+    await user.type(screen.getByLabelText('Body'), ' still editing');
+    const grip = screen.getByRole('separator', { name: 'Resize draft list' });
+    fireEvent.keyDown(grip, { key: 'ArrowRight' });
+    expect(grip.getAttribute('aria-valuenow')).toBe('348');
+    grip.focus();
+    fireEvent.keyDown(grip, { key: 'Home' });
+    expect(document.activeElement).toBe(grip);
+    expect(screen.queryByRole('list', { name: 'Drafts' })).toBeNull();
+    expect((screen.getByLabelText('Body') as HTMLTextAreaElement).value).toMatch(/ still editing$/u);
+    view.unmount();
+    render(<Host initial={`library/${FIXTURE_IDS.autumnBlend}`} />);
+    await screen.findByRole('heading', { name: 'Edit draft' });
+    const restoredGrip = screen.getByRole('separator', { name: 'Resize draft list' });
+    expect(restoredGrip.getAttribute('aria-valuenow')).toBe('0');
+    await user.click(screen.getByRole('button', { name: 'Show draft list' }));
+    expect(restoredGrip.getAttribute('aria-valuenow')).toBe('348');
+    expect((screen.getByLabelText('Body') as HTMLTextAreaElement).value).toMatch(/ still editing$/u);
+    expect(methods(recorded)).toEqual(['snapshot']);
+    expectNoExecution(recorded);
+  });
+});
+
+import { FEATURE_HQ_EDITORIAL_TIMEBOX, PortFailure, fictionalSeed, type Draft } from '../../core';
+import { changeDraft } from '../actions';
+
+describe('Social calendar service-backed timeboxes', () => {
+  const timedSeed = () => {
+    const seed = fictionalSeed();
+    seed.content = seed.content.map((draft) => draft.id === FIXTURE_IDS.autumnBlend
+      ? { ...draft, planned_date: '2026-10-20', planning_slot: { start: '09:00', duration_minutes: 30, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } } : draft);
+    return seed;
+  };
+  it('assigns a 30 minute time via the accessible dialog and Undo restores date-only state', async () => {
+    const { recorded, controls, user } = setup('calendar/2026-10', { features: [FEATURE_HQ_EDITORIAL_TIMEBOX] });
+    await user.click(await screen.findByRole('button', { name: /^Autumn blend tasting notes/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Set time' }));
+    expect((screen.getByLabelText('Duration (minutes)') as HTMLInputElement).value).toBe('30');
+    recorded.clear();
+    await user.click(screen.getByRole('button', { name: 'Save planning time' }));
+    await screen.findByRole('button', { name: 'Undo' });
+    expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)?.planning_slot).toMatchObject({ start: '09:00', duration_minutes: 30 });
+    expect(methods(recorded)).toEqual(['saveDraft']);
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await screen.findByText(/Undone/);
+    expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)?.planning_slot).toBeNull();
+    expectNoExecution(recorded);
+  });
+  it('uses shared keyboard moves and resize with one atomic save and exact Undo', async () => {
+    const { controls, recorded, user } = setup('calendar/2026-10', { features: [FEATURE_HQ_EDITORIAL_TIMEBOX], seed: timedSeed() });
+    await user.click(await screen.findByRole('button', { name: 'Week' }));
+    const event = await screen.findByRole('button', { name: /^Autumn blend tasting notes, 09:00/ });
+    recorded.clear();
+    fireEvent.keyDown(event, { altKey: true, key: 'ArrowDown' });
+    await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)?.planning_slot?.start).toBe('09:15'));
+    expect(methods(recorded)).toEqual(['saveDraft']);
+    fireEvent.keyDown(await screen.findByRole('button', { name: /^Autumn blend tasting notes, 09:15/ }), { altKey: true, shiftKey: true, key: 'ArrowDown' });
+    await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)?.planning_slot?.duration_minutes).toBe(45));
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await screen.findByText(/Undone/);
+    expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)?.planning_slot).toMatchObject({ start: '09:15', duration_minutes: 30 });
+    expect(methods(recorded)).toEqual(['saveDraft', 'saveDraft', 'saveDraft']);
+    expectNoExecution(recorded);
+  });
+  it('previews pointer movement without saving, commits on drop, and clears time into all-day', async () => {
+    const { controls, recorded, user } = setup('calendar/2026-10', { features: [FEATURE_HQ_EDITORIAL_TIMEBOX], seed: timedSeed() });
+    await user.click(await screen.findByRole('button', { name: 'Week' }));
+    const event = await screen.findByRole('button', { name: /^Autumn blend tasting notes, 09:00/ });
+    const columns = document.querySelector('.hq-calendar-time-columns')!;
+    vi.spyOn(columns, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 700, bottom: 1152, width: 700, height: 1152, toJSON: () => ({}) });
+    const day = document.querySelector('[data-time-day="2026-10-21"]')!;
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(day);
+    recorded.clear();
+    fireEvent.pointerDown(event, { button: 0, pointerId: 7, clientX: 150, clientY: 432 });
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 250, clientY: 456 });
+    expect(methods(recorded)).toEqual([]);
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 250, clientY: 456 });
+    await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)).toMatchObject({ planned_date: '2026-10-21', planning_slot: { start: '09:30', duration_minutes: 30 } }));
+    expect(methods(recorded)).toEqual(['saveDraft']);
+    const moved = await screen.findByRole('button', { name: /^Autumn blend tasting notes, 09:30/ });
+    const allDay = document.querySelector('[data-grid-all-day="2026-10-22"]')!;
+    vi.mocked(document.elementFromPoint).mockReturnValue(allDay);
+    fireEvent.pointerDown(moved, { button: 0, pointerId: 8, clientX: 250, clientY: 456 });
+    fireEvent.pointerMove(window, { pointerId: 8, clientX: 350, clientY: 10 });
+    fireEvent.pointerUp(window, { pointerId: 8, clientX: 350, clientY: 10 });
+    await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)).toMatchObject({ planned_date: '2026-10-22', planning_slot: null }));
+    expect(methods(recorded)).toEqual(['saveDraft', 'saveDraft']);
+    expectNoExecution(recorded);
+  });
+  it('keeps unsupported time planning read-only and the collapsed tray a drop target', async () => {
+    const { recorded, user } = setup('calendar/2026-10', { features: [] });
+    await user.click(await screen.findByRole('button', { name: 'Day' }));
+    expect(screen.getByText(/Timed planning needs a newer Social service/)).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Collapse undated drafts' }));
+    expect(document.querySelector('[data-calendar-remove]')).toBeTruthy();
+    expect(screen.getByRole('separator', { name: 'Undated drafts tray width' }).getAttribute('aria-valuenow')).toBe('0');
+    expect(methods(recorded)).toEqual(['snapshot']);
+  });
+  it('reconciles a lost timed-save response by one read, never by another save', async () => {
+    const fixture = createFixtureWorkspace({ features: [FEATURE_HQ_EDITORIAL_TIMEBOX] });
+    const session = socialSession('lost-time');
+    await session.load(fixture.port);
+    const draft = workspaceSnapshot(session.getState().workspace)!.content.find((item) => item.id === FIXTURE_IDS.autumnBlend)!;
+    const save = vi.fn(async (input: Parameters<typeof fixture.port.saveDraft>[0]) => {
+      await fixture.port.saveDraft(input);
+      throw new PortFailure({ kind: 'unknown', attemptedAt: NOW().toISOString() });
+    });
+    const snapshot = vi.fn(fixture.port.snapshot);
+    const port = { ...fixture.port, saveDraft: save, snapshot };
+    const slot = { start: '09:00', duration_minutes: 30, timezone: 'UTC' };
+    const result = await changeDraft(session, port, draft, { planning_slot: slot }, true);
+    expect(result).toMatchObject({ ok: true, draft: { planning_slot: slot, version: draft.version + 1 } });
+    expect(save).toHaveBeenCalledTimes(1); expect(snapshot).toHaveBeenCalledTimes(1);
+  });
+  it('refuses a changed slot during unknown recovery instead of treating matching text as success', async () => {
+    const fixture = createFixtureWorkspace({ features: [FEATURE_HQ_EDITORIAL_TIMEBOX] });
+    const session = socialSession('changed-time'); await session.load(fixture.port);
+    const draft = workspaceSnapshot(session.getState().workspace)!.content.find((item) => item.id === FIXTURE_IDS.autumnBlend)!;
+    const slot = { start: '09:00', duration_minutes: 30, timezone: 'UTC' };
+    const saveDraft = vi.fn(async (_input: Parameters<typeof fixture.port.saveDraft>[0]): Promise<Draft> => {
+      fixture.controls.editElsewhere(draft.id, { planning_slot: { ...slot, duration_minutes: 60 } });
+      throw new PortFailure({ kind: 'unknown', attemptedAt: NOW().toISOString() });
+    });
+    const result = await changeDraft(session, { ...fixture.port, saveDraft }, draft, { planning_slot: slot }, true);
+    expect(result).toMatchObject({ ok: false, reconciliation: 'changed', error: { kind: 'unknown' } });
+    expect(saveDraft).toHaveBeenCalledTimes(1);
   });
 });

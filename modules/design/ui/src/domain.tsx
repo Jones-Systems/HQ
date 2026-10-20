@@ -14,7 +14,7 @@ export interface DesignDomainOptions {
   readonly storage: UiStatePort | null;
   /**
    * Shell context with theme tokens and project switching. When omitted, Design
-   * adapts today's ModulePort: fallback tokens for its appearance and no
+   * adapts ModulePort using the shared kit palette with literal fallbacks and no
    * project switching. Root replaces this with the real shell adapter.
    */
   readonly shell?: ShellContextPort;
@@ -46,7 +46,7 @@ export function createDesignDomain(options: DesignDomainOptions): DesignDomain<C
   function DesignDomainView(port: ModulePort) {
     const adapted = useModulePortShell(port);
     return <DesignChrome port={port} shell={options.shell ?? adapted} core={core} registry={options.registry}
-      mac={mac} {...(options.projects ? { projects: options.projects } : {})} />;
+      mac={mac} useKitTheme={options.shell === undefined} {...(options.projects ? { projects: options.projects } : {})} />;
   }
   return {
     id: 'design', label: 'Design', order: 0, keepAlive: true, presentation: 'fill',

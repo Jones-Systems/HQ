@@ -1,20 +1,22 @@
 /**
  * Static egress scan of the preview's source import graph, starting at main.tsx
  * and following every relative static, side-effect and dynamic import plus
- * import.meta.glob patterns. The shared @hq/contracts source is scanned too.
+ * import.meta.glob patterns. The shared @hq/contracts and @hq/ui sources are scanned too.
  * It shows which modules the preview can load and that none of them names a
  * network, bridge or Node capability. React packages are listed, not scanned.
  * This is a source scan, not a network-isolation proof.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const previewRoot = fileURLToPath(new URL('../', import.meta.url));
 const designRoot = resolve(previewRoot, '..');
 const contractsEntry = fileURLToPath(new URL('../../../../packages/contracts/src/index.ts', import.meta.url));
+const uiEntry = fileURLToPath(new URL('../../../../packages/hq-ui/src/index.ts', import.meta.url));
+const workspace: Readonly<Record<string, string>> = { '@hq/contracts': contractsEntry, '@hq/ui': uiEntry };
 const SPECIFIER = /(?:(?:^|[}\s])from\s+|\bimport\s*\(\s*|^\s*import\s+)['"]([^'"\n]+)['"]/gmu;
 const GLOB = /import\.meta\.glob\(\s*['"]([^'"]+)['"]/gu;
 
@@ -44,10 +46,11 @@ function importGraph(entry: string): Graph {
     for (const match of source.matchAll(GLOB)) queue.push(...expandGlob(file, match[1]!));
     for (const match of source.matchAll(SPECIFIER)) {
       const specifier = match[1]!;
-      if (specifier === '@hq/contracts') { bare.add(specifier); queue.push(contractsEntry); continue; }
+      if (Object.hasOwn(workspace, specifier)) { bare.add(specifier); queue.push(workspace[specifier]!); continue; }
       if (!specifier.startsWith('.')) { bare.add(specifier); continue; }
-      const target = resolve(dirname(file), specifier);
-      assert.ok(existsSync(target), `${relative(designRoot, file)} imports missing ${specifier}`);
+      const base = resolve(dirname(file), specifier);
+      const target = [base, `${base}.ts`, `${base}.tsx`, join(base, 'index.ts')].find((path) => existsSync(path) && statSync(path).isFile());
+      assert.ok(target, `${relative(designRoot, file)} imports missing ${specifier}`);
       queue.push(target);
     }
   }
@@ -84,9 +87,11 @@ test('preview graph reaches every section cone through its real entry modules', 
   assert.ok(scanned.length > 100, `graph has ${scanned.length} source files`);
 });
 
-test('bare imports are React plus the shared contracts package, which is scanned', () => {
-  assert.deepEqual([...graph.bare].sort(), ['@hq/contracts', 'react', 'react-dom/client']);
+test('bare imports are React plus the shared contracts and UI kit, both scanned', () => {
+  assert.deepEqual([...graph.bare].sort(), ['@hq/contracts', '@hq/ui', 'react', 'react-dom/client']);
   assert.ok(scanned.includes(contractsEntry));
+  assert.ok(scanned.includes(uiEntry));
+  assert.ok(scanned.includes(resolve(dirname(uiEntry), 'components/Button.tsx')));
 });
 
 test('no module in the graph names a network, bridge or Node capability', () => {
@@ -107,7 +112,10 @@ test('isolation probe, Node adapters, producer, preview agent, app entry and the
   assert.ok(!paths.some((path) => path.startsWith('references/producer/')), 'Node-only reference producer is not loaded');
   assert.ok(!paths.some((path) => path.startsWith('app/')), 'production entry and its storage seam are not loaded');
   const outside = paths.filter((path) => path.startsWith('../'));
-  assert.deepEqual(outside, ['../../packages/contracts/src/index.ts'], 'only shared contracts load from outside modules/design; the Node store does not');
+  assert.ok(outside.includes('../../packages/contracts/src/index.ts'));
+  assert.ok(outside.includes('../../packages/hq-ui/src/index.ts'));
+  assert.deepEqual(outside.filter((path) => path !== '../../packages/contracts/src/index.ts' && !path.startsWith('../../packages/hq-ui/src/')), [],
+    'only shared contracts and scanned UI kit source load outside modules/design; the Node store does not');
 });
 
 test('remote URL literals in the graph are allowlisted inert data', () => {

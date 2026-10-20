@@ -8,32 +8,32 @@
 
 :root {
   /* Colour roles: light-dark(light, dark) */
-  --hq-canvas: light-dark(#E6E5DD, #0B0C0A);
-  --hq-nav: light-dark(#F0EFE8, #121311);
-  --hq-surface: light-dark(#FAF9F5, #171815);
-  --hq-surface-raised: light-dark(#FFFFFF, #1E1F1B);
-  --hq-surface-overlay: light-dark(#FFFFFF, #262722);
-  --hq-surface-sunken: light-dark(#F0EFE9, #0F100E);
-  --hq-surface-hover: light-dark(rgba(25, 26, 22, 0.055), rgba(237, 236, 229, 0.06));
-  --hq-surface-pressed: light-dark(rgba(25, 26, 22, 0.10), rgba(237, 236, 229, 0.11));
-  --hq-surface-selected: light-dark(rgba(25, 26, 22, 0.075), rgba(237, 236, 229, 0.085));
-  --hq-border: light-dark(#DEDDD4, #2B2C27);
-  --hq-border-strong: light-dark(#C8C7BD, #3B3C36);
-  --hq-border-control: light-dark(#8A897F, #6A6A61);
-  --hq-text: light-dark(#191A16, #EDECE5);
-  --hq-text-muted: light-dark(#52534B, #ABAAA0);
-  --hq-text-subtle: light-dark(#65665D, #8F8E84);
-  --hq-text-disabled: light-dark(#A3A299, #5E5E57);
-  --hq-accent: light-dark(#C6F04D, #C6F04D);
-  --hq-accent-hover: light-dark(#B8E43A, #D4F86E);
-  --hq-accent-pressed: light-dark(#A8D42A, #B5DE3B);
-  --hq-accent-edge: light-dark(rgba(38, 50, 0, 0.42), rgba(198, 240, 77, 0));
-  --hq-on-accent: light-dark(#151905, #151905);
-  --hq-accent-text: light-dark(#4A6407, #C6F04D);
-  --hq-accent-strong: light-dark(#557300, #C6F04D);
-  --hq-accent-soft: light-dark(rgba(85, 115, 0, 0.11), rgba(198, 240, 77, 0.12));
-  --hq-focus: light-dark(#3F5A00, #C6F04D);
-  --hq-selection: light-dark(rgba(85, 115, 0, 0.20), rgba(198, 240, 77, 0.24));
+  --hq-canvas: light-dark(#F3F5F9, #11151D);
+  --hq-nav: light-dark(#F6F8FB, #161B24);
+  --hq-surface: light-dark(#FAFBFD, #1B212C);
+  --hq-surface-raised: light-dark(#FFFFFF, #222A37);
+  --hq-surface-overlay: light-dark(#FFFFFF, #283242);
+  --hq-surface-sunken: light-dark(#F0F3F8, #151A23);
+  --hq-surface-hover: light-dark(rgba(24, 35, 54, 0.055), rgba(235, 241, 252, 0.06));
+  --hq-surface-pressed: light-dark(rgba(24, 35, 54, 0.10), rgba(235, 241, 252, 0.11));
+  --hq-surface-selected: light-dark(rgba(48, 92, 172, 0.09), rgba(148, 184, 248, 0.10));
+  --hq-border: light-dark(#DFE4ED, #343E4E);
+  --hq-border-strong: light-dark(#C9D1DE, #465268);
+  --hq-border-control: light-dark(#8290A5, #7D8AA1);
+  --hq-text: light-dark(#202A3A, #EDF2FA);
+  --hq-text-muted: light-dark(#526078, #BBC5D5);
+  --hq-text-subtle: light-dark(#606D82, #A9B5C8);
+  --hq-text-disabled: light-dark(#94A0B2, #69758A);
+  --hq-accent: light-dark(#285BB5, #A6C7FF);
+  --hq-accent-hover: light-dark(#224F9F, #C1D8FF);
+  --hq-accent-pressed: light-dark(#1C438B, #8AB4FB);
+  --hq-accent-edge: light-dark(rgba(20, 50, 100, 0.22), rgba(166, 199, 255, 0));
+  --hq-on-accent: light-dark(#FFFFFF, #142541);
+  --hq-accent-text: light-dark(#285BB5, #A6C7FF);
+  --hq-accent-strong: light-dark(#285BB5, #A6C7FF);
+  --hq-accent-soft: light-dark(rgba(40, 91, 181, 0.09), rgba(166, 199, 255, 0.10));
+  --hq-focus: light-dark(#285BB5, #A6C7FF);
+  --hq-selection: light-dark(rgba(40, 91, 181, 0.20), rgba(166, 199, 255, 0.24));
   --hq-success: light-dark(#16754B, #5DD39E);
   --hq-success-soft: light-dark(rgba(22, 117, 75, 0.11), rgba(93, 211, 158, 0.13));
   --hq-warning: light-dark(#8A5500, #F0B54F);
@@ -44,9 +44,9 @@
   --hq-on-danger: light-dark(#FFFFFF, #FFFFFF);
   --hq-info: light-dark(#2156B5, #8DBBFF);
   --hq-info-soft: light-dark(rgba(33, 86, 181, 0.10), rgba(141, 187, 255, 0.13));
-  --hq-skeleton: light-dark(rgba(25, 26, 22, 0.07), rgba(237, 236, 229, 0.07));
-  --hq-skeleton-sheen: light-dark(rgba(25, 26, 22, 0.12), rgba(237, 236, 229, 0.12));
-  --hq-scrim: light-dark(rgba(25, 26, 22, 0.34), rgba(0, 0, 0, 0.58));
+  --hq-skeleton: light-dark(rgba(24, 35, 54, 0.07), rgba(235, 241, 252, 0.07));
+  --hq-skeleton-sheen: light-dark(rgba(24, 35, 54, 0.12), rgba(235, 241, 252, 0.12));
+  --hq-scrim: light-dark(rgba(24, 35, 54, 0.34), rgba(0, 0, 0, 0.58));
 
   /* Invariant: identical in every chrome theme. Never wrap these in light-dark(). */
   --hq-artwork-matte: #8C8C8C;
@@ -74,9 +74,9 @@
   --hq-type-label-tracking: 0;
   --hq-type-rail: 500 10.5px/12px var(--hq-font-family-sans);
   --hq-type-rail-tracking: 0.01em;
-  --hq-type-eyebrow: 500 10.5px/14px var(--hq-font-family-mono);
+  --hq-type-eyebrow: 500 10.5px/14px var(--hq-font-family-sans);
   --hq-type-eyebrow-tracking: 0.08em;
-  --hq-type-meta: 400 11px/16px var(--hq-font-family-mono);
+  --hq-type-meta: 400 11px/16px var(--hq-font-family-sans);
   --hq-type-meta-tracking: 0;
 
   /* Space, radius, size */

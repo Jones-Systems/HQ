@@ -138,12 +138,12 @@ describe('content repository', () => {
 });
 
 describe('provisional local registry', () => {
-  test('is labelled provisional and keeps duplicate names as distinct projects', async () => {
+  test('labels device-local storage and keeps duplicate names as distinct projects', async () => {
     const storage = createSpyStorage();
     const registry = createProvisionalLocalRegistry({ storage, clock: createFakeClock(), ids: sequentialIds() });
     assert.equal(registry.provenance, PROVISIONAL_REGISTRY_PROVENANCE);
     assert.equal(registry.provenance.kind, 'provisional-local');
-    assert.match(registry.provenance.label, /provisional/iu);
+    assert.equal(registry.provenance.label, 'Projects saved on this device');
     const a = await registry.create({ name: 'Checkout' });
     const b = await registry.create({ name: 'Checkout' });
     assert.notEqual(a.id, b.id);

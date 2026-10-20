@@ -24,7 +24,8 @@ import { canvasId } from '../../canvas/src/contract.ts';
 import { createProviderRegistry } from '../../canvas/src/providers.ts';
 import { createCanvasProviderAdapter } from './canvas-adapter.ts';
 import { createProjectVersionsProvider } from './project-versions.ts';
-import { canvasProjectIdFor, shellProjectIdFor, discoveryEnv, tasteEnv, importsFor } from './fake-workspace.ts';
+import { canvasProjectIdFor, shellProjectIdFor, tasteEnv, importsFor } from './fake-workspace.ts';
+import { createBridgedDiscovery } from './bridged-discovery.ts';
 import type { EvidenceTag } from './labels.ts';
 
 function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
@@ -40,6 +41,8 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments) {
   const storageTag: EvidenceTag = Object.freeze({ status: 'workspace', text: DEVICE_STORAGE_LABEL });
   const clock = { now: () => new Date().toISOString() };
   const ids = { next: (kind: 'project' | 'view' | 'version') => `${kind}-${globalThis.crypto.randomUUID()}` };
+  let discovery: ReturnType<typeof createBridgedDiscovery> | undefined;
+  const discoveryEnv = () => discovery ??= createBridgedDiscovery();
   const projectStorage = createProjectsStorage(documents);
   const repository = new ProjectContentRepository(projectStorage, clock);
   // The document bridge has no blob capability: unavailable thumbnails remain unavailable.
@@ -52,7 +55,7 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments) {
   const projectsFor = perProject(async (_project) => {
     const { readPort } = await discoveryEnv();
     const registry = createProvisionalLocalRegistry({ storage: projectStorage, clock, ids });
-    const { controller, ready } = createProjectsSection({ registry, storage: projectStorage, thumbnails, catalog: readPort, clock, ids });
+    const { controller, ready } = createProjectsSection({ registry: { ...registry, provenance: { kind: 'provisional-local', label: 'Projects saved on this device' } }, storage: projectStorage, thumbnails, catalog: readPort, clock, ids });
     await ready;
     return controller;
   });

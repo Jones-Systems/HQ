@@ -1,5 +1,5 @@
 /**
- * Names of the T2 visual-system tokens copied into `tokens/hq-tokens.css` (spec `iface.ui-kit.001`).
+ * Names of the visual-system tokens generated into `tokens/hq-tokens.css` (spec `iface.ui-kit.001`).
  * Values live only in that CSS; `test/tokens.test.ts` proves this list equals its declarations.
  */
 

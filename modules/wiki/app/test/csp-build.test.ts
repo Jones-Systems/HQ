@@ -40,7 +40,8 @@ test('the build emits the stylesheets as an external CSS file', () => {
   const text = readFileSync(join(outDir, css[0] as string), 'utf8');
   assert.match(text, /\.wiki-view\b/);
   assert.match(text, /\.wiki-domain\b/);
-  assert.match(text, /\.wiki-view\[data-appearance="dark"\]/);
+  assert.match(text, /--wiki-bg:\s*var\(--hq-surface\)/);
+  assert.match(text, /--wiki-text:\s*var\(--hq-text\)/);
   assert.ok(!/@import|url\s*\(/i.test(text), 'no further requests from the stylesheet');
 });
 

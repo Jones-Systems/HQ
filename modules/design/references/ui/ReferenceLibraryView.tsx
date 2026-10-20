@@ -1,3 +1,4 @@
+import { SecondaryPanel } from '../../ui/src/secondary-panels.tsx';
 import { useId, useState } from 'react';
 import type { BlobDigest, CollectionId, ReferenceId } from '../src/contract.ts';
 import type { LibraryViewModel, ReferenceCard } from './view-model.ts';
@@ -44,7 +45,7 @@ export function ReferenceLibraryView(props: ReferenceLibraryViewProps) {
       <button type="button" onClick={props.onReload}>Reload</button>
     </div>}
     <div className="hq-refs-body">
-      <CollectionsNav {...props} />
+      <SecondaryPanel name="reference-collections" label="Reference collections" initial={200} side="start"><CollectionsNav {...props} /></SecondaryPanel>
       <div className="hq-refs-results">
         {view.emptyMessage === null
           ? <ul className="hq-refs-grid" aria-label="Reference results">
@@ -52,7 +53,7 @@ export function ReferenceLibraryView(props: ReferenceLibraryViewProps) {
           </ul>
           : <p className="hq-refs-empty">{view.emptyMessage}</p>}
       </div>
-      {view.detail === null ? null : <aside className="hq-refs-detail" aria-label="Reference details">
+      {view.detail === null ? null : <SecondaryPanel name="reference-detail" label="Reference details" initial={280}><aside className="hq-refs-detail" aria-label="Reference details">
         <div className="hq-refs-detail-head">
           <h3>{view.detail.title}</h3>
           <button type="button" className="hq-refs-quiet" onClick={() => props.onSelectReference(null)}>Close</button>
@@ -62,7 +63,7 @@ export function ReferenceLibraryView(props: ReferenceLibraryViewProps) {
         <h4>Used in</h4>
         {view.detail.usedIn.length === 0 ? <p className="hq-refs-muted">Not linked to a project.</p>
           : <ul className="hq-refs-uses">{view.detail.usedIn.map((item) => <li key={item}>{item}</li>)}</ul>}
-      </aside>}
+      </aside></SecondaryPanel>}
     </div>
   </section>;
 }

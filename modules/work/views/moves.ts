@@ -1,5 +1,5 @@
 import {
-  addDays, dateState, datedEntries, dayNum, HORIZONS, isOpen, periodBounds, plannerToday, stripDerived,
+  addDays, dateState, datedEntries, dayNum, HORIZONS, isOpen, periodBounds, plannerToday, stripDerived, normalizeFields,
   type DateInput, type DateKind, type Horizon, type Item, type ItemPatch, type PlanningDate, type Settings,
 } from '../core';
 
@@ -43,6 +43,46 @@ export function removeDatePatch(item: Item, dateId: string): ItemPatch | null {
 /** Scheduling an unscheduled item: a new day-precision date of the chosen kind. The service assigns its id. */
 export function addDatePatch(item: Item, kind: DateKind, day: string): ItemPatch {
   return datesPatch(item, null, { kind, precision: 'day', value: day, note: '' });
+}
+
+export const DEFAULT_TIMEBOX_MINUTES = 30;
+export const GRID_SNAP_MINUTES = 15;
+
+export const clockMinutes = (time: string): number => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+export const minuteClock = (minutes: number): string => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+function validDatePatch(item: Item, dateId: string | null, next: DateInput): ItemPatch | null {
+  const patch = datesPatch(item, dateId, next);
+  return normalizeFields(patch, { creating: false }).ok ? patch : null;
+}
+
+/** Wall-clock moves retain the stored zone and optional end; validation rejects DST gaps and crossing midnight. */
+export function retimeDatePatch(item: Item, dateId: string, day: string, start: number): ItemPatch | null {
+  const entry = item.dates.find((date) => date.id === dateId);
+  if (!entry || entry.precision !== 'day' || !entry.time || !entry.tz || !Number.isInteger(start)) return null;
+  const duration = entry.end_time ? clockMinutes(entry.end_time) - clockMinutes(entry.time) : DEFAULT_TIMEBOX_MINUTES;
+  if (start < 0 || start + duration >= 1440 || (entry.value === day && clockMinutes(entry.time) === start)) return null;
+  return validDatePatch(item, dateId, {
+    ...stripDerived(entry), value: day, time: minuteClock(start), end_time: entry.end_time ? minuteClock(start + duration) : null,
+  });
+}
+
+/** New timeboxes default to 30 minutes; resize supplies a duration. Existing dates retain kind, note and zone. */
+export function timeboxPatch(item: Item, dateId: string | null, day: string, start: number, zone: string, kind: DateKind = 'target', duration = DEFAULT_TIMEBOX_MINUTES): ItemPatch | null {
+  const entry = dateId ? item.dates.find((date) => date.id === dateId) : undefined;
+  if ((dateId && !entry) || (entry && entry.precision !== 'day') || !Number.isInteger(start) || !Number.isInteger(duration)
+    || start < 0 || duration < GRID_SNAP_MINUTES || start + duration >= 1440) return null;
+  const next = { ...(entry ? stripDerived(entry) : { kind, precision: 'day' as const, note: '' }), value: day,
+    time: minuteClock(start), end_time: minuteClock(start + duration), tz: entry?.tz || zone };
+  if (entry && entry.value === day && entry.time === next.time && entry.end_time === next.end_time) return null;
+  return validDatePatch(item, dateId, next);
+}
+
+/** Moving into the all-day lane clears all time fields together, without deleting the date. */
+export function clearTimePatch(item: Item, dateId: string, day: string): ItemPatch | null {
+  const entry = item.dates.find((date) => date.id === dateId);
+  if (!entry || entry.precision !== 'day' || (entry.value === day && !entry.time && !entry.end_time && !entry.tz)) return null;
+  return validDatePatch(item, dateId, { ...stripDerived(entry), value: day, time: null, end_time: null, tz: null });
 }
 
 /** The day the tray's Schedule uses: today when the shown month contains it, else the 1st of that month. */

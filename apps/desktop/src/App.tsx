@@ -3,18 +3,22 @@ import { createReferencePort, type ReferenceNotice } from './references';
 import { REFERENCE_PROVIDERS } from './reference-providers';
 import type { ReturnContext } from '@hq/contracts/references';
 import type { ShellState } from './state';
+import { Splitter } from '@hq/ui';
+import { Connections } from './Connections';
 import { ServiceSettings } from './ServiceSettings';
-import { APPEARANCES, DOMAIN_IDS, isAppearance, parseProjectContext, type Appearance, type DesktopPort } from '@hq/contracts';
+import { DOMAIN_IDS, parseProjectContext, type Appearance, type DesktopPort } from '@hq/contracts';
 import { DOMAIN_LABELS, MODULES, MODULE_PRESENTATION } from './modules';
-import { APPEARANCE_KEY, navigate, navigationKey, persist, readAppearance, readNavigation, resolveAppearance, type StoragePort } from './state';
+import { APPEARANCE_KEY, RAIL_KEY, RAIL_MIN, RAIL_MAX, RAIL_COMPACT_MAX, readRail, resizeRail, toggleRail, cycleAppearance, navigate, navigationKey, persist, readAppearance, readNavigation, resolveAppearance, type StoragePort } from './state';
 
-const CONTEXT = parseProjectContext({ id: 'hq-local', name: 'HQ workspace' })!;
+const CONTEXT = parseProjectContext({ id: 'hq-local', name: 'Local projects' })!;
 const BROWSER_PORT: DesktopPort = Object.freeze({ platform: 'browser', versions: Object.freeze({ electron: null }) });
 const unavailableStorage: StoragePort = { getItem: () => null, setItem: () => { throw new Error('Storage unavailable'); } };
 function storagePort(): StoragePort { try { return window.localStorage; } catch { return unavailableStorage; } }
 
 export function App() {
   const [storage] = useState(storagePort);
+  const [rail, setRail] = useState(() => readRail(storage));
+  const compact = rail.width <= RAIL_COMPACT_MAX;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [state, setState] = useState(() => readNavigation(storage, CONTEXT.id));
   const [appearance, setAppearance] = useState<Appearance>(() => readAppearance(storage));
@@ -53,28 +57,38 @@ export function App() {
   useEffect(() => {
     const navigationSaved = persist(storage, navigationKey(CONTEXT.id), JSON.stringify(state));
     const appearanceSaved = persist(storage, APPEARANCE_KEY, appearance);
-    setStorageAvailable(navigationSaved && appearanceSaved);
-  }, [storage, state, appearance]);
+    const railSaved = persist(storage, RAIL_KEY, JSON.stringify(rail));
+    setStorageAvailable(navigationSaved && appearanceSaved && railSaved);
+  }, [storage, state, appearance, rail]);
 
-  return <div className="shell">
-    <aside className="rail">
+  return <div className="shell" data-hq-chrome>
+    <aside className={`rail${compact ? " is-compact" : ""}`} ref={element => { element?.style.setProperty("width", `${rail.width}px`); }} aria-label="HQ navigation">
       <div className="brand" aria-label="HQ">HQ<span className="brand-dot" /></div>
       <nav aria-label="Domains">{DOMAIN_IDS.map((domain) => <button key={domain}
-        className="domain-button" aria-current={state.domain === domain ? 'page' : undefined}
+        className="domain-button" title={DOMAIN_LABELS[domain]} aria-current={state.domain === domain ? 'page' : undefined}
         onClick={() => { references.cancelOpen(); setReturnFrame(null); setReferenceNotice(null); setState(previous => navigate(previous, domain)); }}>
         <svg className="domain-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          {domain === 'design' ? <path d="m12 3 9 9-9 9-9-9Z" /> : domain === 'social' ? <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /></> : <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 15h8" /></>}
+          {domain === 'wiki' ? <><path d="M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Z" /><path d="M12 5v15" /></> : domain === 'design' ? <path d="m12 3 9 9-9 9-9-9Z" /> : domain === 'social' ? <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /></> : <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 15h8" /></>}
         </svg>
-        {DOMAIN_LABELS[domain]}
+        <span className="rail-label">{DOMAIN_LABELS[domain]}</span>
       </button>)}</nav>
-      <div className="rail-footer">{window.hqServices && <button onClick={() => setSettingsOpen(true)}>Service settings</button>}<label htmlFor="appearance">Appearance</label>
-        <select id="appearance" value={appearance} onChange={(event) => {
-          if (isAppearance(event.target.value)) setAppearance(event.target.value);
-        }}>{APPEARANCES.map((value) => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select>
+      <div className="rail-footer">
+        <Connections compact={compact} onManage={() => setSettingsOpen(true)} />
+        <button className="rail-action" title="Service settings" onClick={() => setSettingsOpen(true)}>
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg>
+          <span className="rail-label">Service settings</span>
+        </button>
+        <button className="rail-action" aria-label={`Appearance: ${appearance[0]!.toUpperCase() + appearance.slice(1)}`}
+          title={`Appearance: ${appearance}. Switch to ${cycleAppearance(appearance)}`} onClick={() => setAppearance(cycleAppearance)}>
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            {appearance === 'system' ? <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></> : appearance === 'dark' ? <path d="M20 14A9 9 0 0 1 10 4a9 9 0 1 0 10 10Z"/> : <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/></>}
+          </svg><span className="rail-label">{appearance[0]!.toUpperCase() + appearance.slice(1)}</span>
+        </button>
       </div>
     </aside>
+    <Splitter label="Primary navigation width" value={rail.width} min={RAIL_MIN} max={RAIL_MAX}
+      onResize={width => setRail(previous => resizeRail(previous, width))} onToggle={() => setRail(toggleRail)} />
     <div className={fill ? 'workspace is-fill' : 'workspace'}>
-      <header className="context-bar"><span>{DOMAIN_LABELS[state.domain]}</span><span className="project-context">Project <strong>{CONTEXT.name}</strong></span></header>
       {returnFrame && <button onClick={goBack}>Back to {returnFrame.context.label}</button>}
       {referenceNotice && <section role="status" aria-label="Read-only reference"><strong>{referenceNotice.title}</strong><p>{referenceNotice.message}</p><button onClick={() => setReferenceNotice(null)}>Dismiss reference</button></section>}
       <main className={fill ? 'is-fill' : undefined} key={`${CONTEXT.id}:${state.domain}`}>
@@ -82,8 +96,9 @@ export function App() {
           references={references} {...(returnFrame ? { returnContext: returnFrame.context } : {})}
           navigate={destination => { references.cancelOpen(); setState(previous => navigate(previous, state.domain, destination)); }} />
       </main>
+      <footer className="context-footer" aria-label="Workspace context"><span>{CONTEXT.name}</span><span>{DOMAIN_LABELS[state.domain]}</span></footer>
       {!storageAvailable && <p className="storage-notice" role="status">Preferences are available for this session. Local storage is unavailable.</p>}
     </div>
-    {settingsOpen && window.hqServices && <ServiceSettings config={window.hqServices.config} onClose={() => setSettingsOpen(false)} />}
+    {settingsOpen && <ServiceSettings config={window.hqServices?.config} onClose={() => setSettingsOpen(false)} />}
   </div>;
 }

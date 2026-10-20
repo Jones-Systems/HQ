@@ -1,8 +1,8 @@
 # @hq/ui
 
-HQ's shared visual tokens and accessible UI primitives for the Social and Work modules, and optionally for Design. This is task `task.ui-kit.001` in `docs/engineering-specs/hq-social-work.md`; the interface is `iface.ui-kit.001`. It is a workspace package that resolves by name and is not published to a registry.
+HQ's shared visual tokens and accessible UI primitives for the desktop shell, Design, Social, Work and Wiki. This is task `task.ui-kit.001` in `docs/engineering-specs/hq-social-work.md`; the interface is `iface.ui-kit.001`. It is a workspace package that resolves by name and is not published to a registry.
 
-**Status:** the source and its local checks are a candidate, with merge held for the integration owner. The kit is not wired into the shell yet. Loading the tokens in `apps/desktop` and retiring T0's palette (RS-4) belong to `task.shell-chrome.001`, which waits for a named owner of `App.tsx` and `styles.css`.
+**Status:** wired into the modernization source candidate. Merge remains held for the integration owner; source checks and browser evidence do not establish installed application status. The current shell and calendar contract is [HQ UI modernization](../../docs/engineering-specs/hq-ui-modernization.md).
 
 ## Use it
 
@@ -16,10 +16,11 @@ import { Button, PreservedContent, SaveIndicator, StatusChip } from '@hq/ui';
 </PreservedContent>
 ```
 
-Importing `@hq/ui` loads two stylesheets as side effects:
+Importing `@hq/ui` loads stylesheets as side effects:
 
 - `src/tokens/hq-tokens.css`: `--hq-*` custom properties, `color-scheme` on `:root` and `[data-theme]`, and the preserved-content rules for `[data-hq-content]`.
-- `src/components/hq-ui.css`: styles scoped to `.hq-*` classes, so it does not restyle shell or module elements.
+- `src/components/hq-ui.css`: shared primitives plus a modern baseline for ordinary native controls. Preserved content and Design capture surfaces are excluded.
+- `src/calendar/calendar.css`: shared timed-grid geometry and interaction states.
 
 The scheme comes from `<html data-theme="light|dark">`, which T0's shell already writes. Without that attribute the OS preference applies.
 
@@ -27,10 +28,12 @@ The scheme comes from `<html data-theme="light|dark">`, which T0's shell already
 
 | Export | What it is |
 | --- | --- |
-| Tokens | `src/tokens/hq-tokens.{css,json}` and `t0-bridge.css` are byte-for-byte copies of T2's visual system at `f3c1daff` (`docs/design/hq-visual-system/tokens/`). Edit them upstream in T2's JSON, never here. `test/tokens.test.ts` checks each copy's size, SHA-256 and Git blob ID. |
+| Tokens | `src/tokens/hq-tokens.{css,json}` and `t0-bridge.css` match `docs/design/hq-visual-system/tokens/`. The current palette follows Design's cool neutrals and blue accent. Keep both copies synchronized when regenerating; `test/tokens.test.ts` checks equality and generated provenance. |
 | `tokens.ts` | Token names only (`HQ_COLOR_ROLES`, `HQ_TOKEN_NAMES`, …): 39 colour roles, 4 artwork invariants, and type, space, radius, size, motion, layer, component and shadow roles. Values live only in the CSS. |
 | `contrast.ts` | `contrastRows(tokens)` recomputes T2's 104 contrast pairs from the JSON source (WCAG 2.x, translucent roles composited), plus `contrastRatio`, `parseColor`, `composite` and `resolveRole`. |
 | `Button`, `IconButton` | Primary, secondary, ghost and danger variants; `busy` shows a spinner and a verb in progress and ignores activation. `IconButton` requires a text `label`. Both default to `type="button"`. |
+| `Splitter` | Pointer and keyboard resizing, zero-width collapse, restoration and cancellation; dimensions are applied through CSSOM. |
+| `TimeGrid` | Shared Week/Day geometry and gestures: 15-minute snapping, overlapping blocks, move/resize cancellation and one callback on drop. Domain adapters own time zones, persistence and version guards. |
 | `Menu` | Menu button with roving focus. Enter, Space or ArrowDown open it on the first item and ArrowUp on the last. Arrow keys wrap, Home and End jump, and typing jumps to a matching label. Escape closes and returns focus. Disabled items can be focused but not activated. |
 | `Dialog` | Modal. Focus moves in on open, Tab is trapped, Escape closes, and focus returns to the opener. `role="alertdialog"` is available. |
 | `Toast`, `ToastRegion` | A polite live region with an action, usually Undo, and an optional Dismiss (also Escape). Toasts never dismiss themselves. |
@@ -48,8 +51,8 @@ An embedded iframe's `prefers-color-scheme`, and an SVG used as `<img>`, follow 
 
 ## Constraints for consumers
 
-- **No inline styles.** The CSP blocks `style` attributes, so the primitives never set them. Size and state come from classes.
-- **Fonts.** The token stacks name IBM Plex first, but no font file ships with the kit, so text renders in the system fallback (`system-ui` / `ui-monospace`) unless Plex happens to be installed locally. Bundling Plex is held for an exact-file SIL OFL 1.1 provenance check under root ownership. Runtime Google Fonts are never used.
+- **No inline styles.** The CSP blocks `style` attributes, so the primitives never set them. Size and state come from classes and explicit CSSOM custom properties.
+- **Fonts.** The token stacks name IBM Plex first, but no font file ships with the kit, so text renders in the system fallback (interface text uses sans-serif; code can use monospace) unless Plex happens to be installed locally. Bundling Plex is held for an exact-file SIL OFL 1.1 provenance check under root ownership. Runtime Google Fonts are never used.
 - **Domain roles.** Domain colours stay module-local under `--social-*` or `--work-*`. Each needs a light and a dark value and must be paired with a word and a shape.
 
 ## Checks
