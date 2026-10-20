@@ -12,6 +12,8 @@ Narrow, namespace-bound adapters between the Design sections and the T9 file sto
 | `requests.ts` | renderer-safe | T6 `StoragePort` adapter (create-only freeze). |
 | `outbox.ts` | renderer-safe | T12 `OutboxStorePort` adapter (revision CAS). |
 | `canvas.ts` | renderer-safe | T3 `CanvasStoragePort` adapter (one-shot read token → real CAS). |
+| `projects.ts`, `components.ts`, `flows.ts`, `compare.ts`, `annotations.ts` | renderer-safe | Section document adapters over `WorkspaceDocuments`. |
+| `section-documents.ts` | renderer-safe | Fixed section roots and scope validation. |
 | `export.ts` | renderer-safe | Privacy-projected request export, bound to the v1 packet at requests PR33. **Disabled by default.** |
 | `canonical.ts` | renderer-safe | Pure RFC 8785 serializer. |
 | `node.ts` | Node only | Opens the T9 store and binds the adapters. Never import it from the renderer. |
@@ -42,6 +44,32 @@ the no-deletion/retention hold: nothing here decides or implements retention.
   revision it saw; `writeDocument` consumes it and writes with that revision, or is refused.
 - **Streams.** T9 gained `listStreams` (sorted, optional prefix). A hashed journal file name cannot
   be mapped back to an id, so an authoritative namespace fails closed instead of omitting it.
+
+## Section documents (HQD-F1)
+
+`WorkspaceDocuments` selects only `kind`, `namespace`, `getDocument`, `putDocument` and
+`listDocuments`. The five factories require a workspace view bound to `workspace` and return
+frozen objects with exactly their lane port members. They expose no removal, blob, event,
+health or transaction capability. The renderer index exports these adapters; `node.ts` and
+`DesignStorage` do not wire them.
+
+- Projects: null on absent; string revisions over T9 numeric revisions. Null expected revision
+  is create-only; canonical positive safe-integer strings perform CAS. Malformed revisions and
+  T9 conflicts throw the projects lane's actual `StorageConflictError`.
+- Components and flows: undefined on absent; unconditional overwrite. Flows carries
+  `DEVICE_STORAGE_LABEL` (`Saved on this device`). Their `listKeys` strips the fixed root.
+- Compare: null on absent; unconditional overwrite of the exact `{format, text}` envelope
+  using `TEXT_FORMAT`. Text survives byte-for-byte; malformed envelopes fail.
+- Annotations: null on absent; unconditional overwrite keyed by `document.versionId`;
+  `adapter` is `real`.
+
+The fixed roots are `design/projects/`, `design/components/`, `design/flows/`,
+`design/compare/` and `design/annotations/`. Mapping always prepends the root to the complete
+lane key, including an existing lane prefix. No path normalization occurs. Empty document
+keys, leading slashes, `..` segments, controls, lone surrogates, invalid T9 lengths/trailing
+whitespace and other section/reserved root keys fail before store access. An empty listing
+prefix lists the adapter's whole root. JSON values go directly to T9's validator; unsupported
+members are not silently serialized away. Canvas retains its existing root and read-token CAS.
 
 ## Export (disabled)
 
