@@ -166,3 +166,11 @@ At commit `00afa36e1647f03bf3e3b7426954cff50e2e7cd4` (spec blob `8442f08687aa7e3
 - **Unbound:** the ready set is exactly `{domain-integration}`. Capsule `3d935de43099817703607d7664731c1d7328f86679c4a925e2df3ea93964402d`, 30,760 context bytes; no writer collision. All explicit tasks stay unreleased.
 - **Fixture-satisfied:** five rounds, all released, with no collisions.
 - **Context bound:** every context is ≤ 32 KiB. `work-domain`, now complete, is at 32,630.
+
+## Actual round after the Social+Work assembly fan-in
+
+At commit `c8179e11ff100d55780a55753e45118968842d90` (spec blob `6e44e24c58d79bfe4b638570eef97626ad306792`), the root-accepted assembly S is bound in `ac.joint-integration-gate.001` and `ctx.integration-bindings.001`: `562986d1852d7b4ef101ff6d4c9340c3751c727a`, PR #36. It is fed to the compiler as a twelfth actual result, `root-acceptance:domain-integration@562986d1852d`, with 19 in-scope changed paths against its second merge `55b751b`. `sections_cli check` reports the spec valid.
+
+- **Unbound:** the ready set is empty. Every remaining task waits on an explicit predicate, so nothing is launchable from this plan without a new root release.
+- **Fixture-satisfied:** five rounds, all released, with no writer collisions. `joint-root-checks` is `0ccfd071…` (context 27,192) and `joint-assembly` is `8fadffa4…` (context 31,640), both unchanged. The gate table is not in their resolved context, and `capsule_sha256` does not cover resolved context.
+- **Not recompiled:** the completed tasks (`work-domain`, `domain-integration`) are not compiled in actual mode, so their context sizes after this edit are not measured here.

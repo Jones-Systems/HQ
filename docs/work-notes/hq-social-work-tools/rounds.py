@@ -51,6 +51,7 @@ ACTUAL = {
     'work-views': ('8a3261dbd0d98dac3553ffc594cd8a88cc4dcb04', R1, 'work/hq-work-planner', 26, 'candidateAcceptanceEvents[4]'),
     'work-board': ('3ca74d7479283d8ac7acf7c363bd262f34578ed4', R1, 'work/hq-work-board', 28, 'candidateAcceptanceEvents[7]'),
     'work-domain': ('3426da769ca6a5cf1ba561859039b14fc745457a', '3ca74d7479283d8ac7acf7c363bd262f34578ed4', 't3/work-domain-integration', 31, 't1-fan-in:work-domain'),
+    'domain-integration': ('562986d1852d7b4ef101ff6d4c9340c3751c727a', '55b751ba96936631e6302811eed9cf81ea904db3', 't3/social-work-domain-assembly', 36, 'root-acceptance:S'),
 }
 def actual_result(task):
     key = task.task_ref.split('#task.')[1].removesuffix('.001')

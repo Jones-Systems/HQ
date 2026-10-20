@@ -480,10 +480,10 @@ Explicit activation predicate for the future joint child C. Every binding below 
 | Binding | Required value | State at T1's read (2026-10-20) |
 | --- | --- | --- |
 | **D**, the Design parent | The exact commit SHA that the Design owner names as its **accepted**, published assembly head, including Design-owned adapters, storage and section checks, plus the published Design branch that contains it | **Unbound.** No Design assembly branch is published. The local `work/hq-design-integration` head is not a parent. |
-| **S**, the Social+Work head | The exact published head of `task.domain-integration.001`, accepted by its fan-in | **Unbound.** B has not run yet. |
+| **S**, the Social+Work head | The exact published head of `task.domain-integration.001`, accepted by its fan-in | **Bound:** `562986d1852d7b4ef101ff6d4c9340c3751c727a`, PR #36 (root-accepted fixture/source assembly). |
 | **Design wiring** | Design's shared-wiring patch at an exact revision (Design slot of `modules.tsx`, root TypeScript/Vite resolution, mount), or an explicit Design decision to keep T0's placeholder | **Unbound** |
 | **Root-file custody** | A written single-writer record, confirmed by Design for the joint phase, naming C as sole writer of the six R0 root paths: `package.json`, `package-lock.json`, `tsconfig.json`, `vitest.config.ts`, `apps/desktop/package.json`, `apps/desktop/src/modules.tsx`. It must also record a decision on `apps/desktop/vite.config.ts`, which is outside T0's release and unassigned. | **Unbound.** T0's release covered R0/R1 only. |
-| **C release** | The root's exact plan revision, base (D), branch and ownership release for C | **Unbound.** The current child allowance is A+B only. |
+| **C release** | The root's exact plan revision, base (D), branch and ownership release for C | **Unbound.** The current child allowance is A+B+WK-C only. |
 
 Design's own predecessor PRs need not merge before this stacked continuation; the gate needs D accepted and published, not merged.
 <!-- codex-section:end id="spec.hq-social-work#ac.joint-integration-gate.001" -->
@@ -859,6 +859,7 @@ The 13 captures and zero-execution checks are **mockup evidence** against an in-
 | `work-views` | WRK-P | `8a3261dbd0d98dac3553ffc594cd8a88cc4dcb04` | `work/hq-work-planner`, PR #26 → plan branch |
 | `work-board` | WRK-B | `3ca74d7479283d8ac7acf7c363bd262f34578ed4` | `work/hq-work-board`, PR #28 → `work/hq-work-planner` |
 | `work-domain` | Work-domain child | `3426da769ca6a5cf1ba561859039b14fc745457a` | `t3/work-domain-integration`, PR #31 → `work/hq-work-board` |
+| `domain-integration` | B | `562986d1852d7b4ef101ff6d4c9340c3751c727a` | `t3/social-work-domain-assembly`, PR #36 → plan branch |
 
 **Notes on individual candidates.**
 
