@@ -1,0 +1,7 @@
+# Local scratch, bytecode and any store accidentally placed here.
+tests/.scratch/
+__pycache__/
+*.pyc
+*.sqlite3
+*.sqlite3-*
+*-backups/
