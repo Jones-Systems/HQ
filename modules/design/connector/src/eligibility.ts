@@ -36,10 +36,11 @@ export function transportQualifies(transport: TransportPort | undefined, kind: D
 }
 
 export function evaluateDestination(destination: Destination, transports: TransportRegistry): Eligibility {
-  if (destination.mode === 'new-thread') {
+  const transport = transports[destination.endpoint.transport];
+  if (destination.mode === 'new-thread' && (!transportQualifies(transport, destination.endpoint.transport)
+    || !transport.descriptor.modes?.includes('new-thread'))) {
     return { eligible: false, code: 'new-thread-unavailable', reason: NEW_THREAD_REASON };
   }
-  const transport = transports[destination.endpoint.transport];
   if (!transportQualifies(transport, destination.endpoint.transport)) {
     return {
       eligible: false,

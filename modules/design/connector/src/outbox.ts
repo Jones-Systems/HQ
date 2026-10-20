@@ -14,6 +14,8 @@
  *   owner acknowledges it. History only adds fences; it never clears one.
  */
 
+import type { ResolveUnknownConfirmation, ResolveUnknownResult } from './resolve-unknown.ts';
+import { resolveUnknownReason } from './resolve-unknown.ts';
 import type { Digest } from './canonical.ts';
 import type { Clock, Handoff, LookupOutcome, OutboxStorePort, ReadbackPort, SendOutcome, StoredDispatch, TransportPort, TransportRegistry } from './contract.ts';
 import type { SendConfirmation } from './confirmation.ts';
@@ -103,6 +105,7 @@ export interface OutboxOptions {
 }
 
 export interface Outbox {
+  resolveUnknown(request: { readonly dispatchId: DispatchId; readonly confirmation: ResolveUnknownConfirmation }): Promise<ResolveUnknownResult>;
   submit(request: SubmitRequest): Promise<SubmitResult>;
   /** Startup recovery: attempts left `submitting` by an earlier run become `unknown`. Never sends. */
   recover(): Promise<readonly ReconcileReport[]>;
@@ -139,6 +142,8 @@ export function createOutbox(options: OutboxOptions): Outbox {
     ?? (async (packet: PacketInput) => (await digestOf(packet.body)) === packet.packetDigest);
   /** Packets with a live submit in this process. Checked synchronously so a double click cannot interleave. */
   const inflight = new Set<string>();
+  const resolving = new Set<string>();
+  const usedResolutions = new Set<string>();
   const nowIso = () => new Date(clock.now()).toISOString();
 
   async function dispatchIdFor(packet: { readonly packetId: PacketId; readonly packetDigest: Digest }, destination: Destination): Promise<DispatchId> {
@@ -466,7 +471,75 @@ export function createOutbox(options: OutboxOptions): Outbox {
     return reports;
   }
 
+  async function resolveUnknown({ dispatchId, confirmation: c }: { readonly dispatchId: DispatchId; readonly confirmation: ResolveUnknownConfirmation }): Promise<ResolveUnknownResult> {
+    const refused = (reason: string): ResolveUnknownResult => ({ outcome: 'refused', reason });
+    const stored = await store.get(dispatchId);
+    const record = stored?.record ?? null;
+    const reason = resolveUnknownReason(record, transports, !!record && (inflight.has(record.packet.packetId) || resolving.has(record.packet.packetId)));
+    if (reason || !stored || !record) return refused(reason ?? 'Dispatch missing.');
+    const latest = latestAttempt(record)!;
+    const transport = transports[record.destination.transport]!;
+    if (c.dispatchId !== dispatchId || c.attemptId !== latest.attemptId || c.idempotencyKey !== latest.idempotencyKey
+      || c.readbacks !== latest.readbacks) return refused('The resolution confirmation is stale or mismatched.');
+    const confirmedAt = Date.parse(c.confirmedAt);
+    if (!Number.isFinite(confirmedAt) || confirmedAt > clock.now() || clock.now() - confirmedAt >= confirmationTtlMs) {
+      return refused('The resolution confirmation has expired.');
+    }
+    const key = JSON.stringify([dispatchId, c.attemptId, c.idempotencyKey, c.readbacks]);
+    if (usedResolutions.has(key)) return refused('This resolution confirmation was already used.');
+    resolving.add(record.packet.packetId);
+    usedResolutions.add(key);
+    try {
+      // Consume the generation before the effect, including across processes or a restart.
+      // A crash or lost answer leaves unknown; this confirmation cannot repeat the fence.
+      const reserved = transitionAttempt(latest, {
+        state: 'unknown', basis: latest.basis, at: nowIso(), readback: true,
+        reason: 'Owner-confirmed fence requested; no definite result recorded. Nothing is resent.',
+      });
+      const reservation = await store.put(withLatest(record, reserved), stored.revision);
+      if (!reservation.ok) return { outcome: 'persist-failed', reason: 'Record changed concurrently; confirmation not consumed here and no fence called.' };
+      let raw: unknown;
+      try {
+        raw = await withTimeout(probeTimeoutMs, (signal) => transport.fence!({
+          endpoint: { transport: record.destination.transport, locator: record.destination.locator },
+          idempotencyKey: latest.idempotencyKey,
+        }, signal));
+      } catch (error) {
+        raw = { kind: 'unavailable', detail: errorText(error) };
+      }
+      let next = reserved;
+      let detail = 'Still unknown: unrecognized fence result. Nothing is resent.';
+      if (isRecord(raw) && raw.kind === 'found' && isRecord(raw.receipt)
+        && (raw.receipt.status === 'accepted' || raw.receipt.status === 'held')
+        && isReceipt(raw.receipt, latest.idempotencyKey, raw.receipt.status)) {
+        next = transitionAttempt(reserved, {
+          state: raw.receipt.status, basis: 'readback', at: nowIso(), receipt: raw.receipt, reason: null,
+          variances: receiptVariances(record.destination, raw.receipt, transport.descriptor.provenance),
+        });
+        detail = `Receiver reports ${raw.receipt.status}.`;
+      } else if (isRecord(raw) && raw.kind === 'no-effect' && typeof raw.basis === 'string' && raw.basis.trim()) {
+        detail = `Owner-confirmed fence confirmed no effect (${raw.basis}). Nothing is resent.`;
+        next = transitionAttempt(reserved, { state: 'no-effect', basis: 'readback', at: nowIso(), reason: detail });
+      } else {
+        if (isRecord(raw) && raw.kind === 'unavailable' && typeof raw.detail === 'string') {
+          detail = `Still unknown: ${raw.detail}. Nothing is resent.`;
+        }
+        next = transitionAttempt(reserved, { state: 'unknown', basis: reserved.basis, at: nowIso(), reason: detail });
+      }
+      const put = await store.put(withLatest(record, next), reservation.revision);
+      return {
+        outcome: 'resolved', state: next.state as 'accepted' | 'held' | 'no-effect' | 'unknown', persisted: put.ok,
+        detail: put.ok ? detail : `${detail} Record changed concurrently; fence result not saved.`,
+      };
+    } catch (error) {
+      return { outcome: 'persist-failed', reason: `Resolution persistence failed; do not retry this confirmation (${errorText(error)}).` };
+    } finally {
+      resolving.delete(record.packet.packetId);
+    }
+  }
+
   return {
+    resolveUnknown,
     submit,
     recover,
     reconcile,
