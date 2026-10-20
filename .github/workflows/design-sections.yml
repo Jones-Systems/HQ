@@ -1,0 +1,265 @@
+name: HQ Design sections
+
+# Lane-inclusive checks for the assembled Design section cones. Root `npm test` and
+# `npm run typecheck` cover the foundation only, so the foundation check does not
+# evidence any Design cone. Every cone below runs its own typecheck, node:test and
+# Vitest commands, mirroring modules/design/preview/section-checks.sh.
+#
+# A consumer-owned workflow: no central reusable workflow fits (Jones-Systems/GitHub-Actions
+# provides Python/uv workflows only), and its commands are specific to this repository.
+
+on:
+  pull_request:
+    branches: [work/hq-design-plan, main]
+  push:
+    branches: [work/hq-design-integration, work/hq-design-plan, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hq-design-sections-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Explicit inventory: fourteen Design cones plus the integration preview, one row each.
+  # Fields: id|dir|nodeCwd|nodeTests|vitestConfig|vitestRoot|vitestTests|viteBuild
+  #   dir          repo-relative cone directory; must hold its own tsconfig.json
+  #   nodeCwd      root = run node --test from the repo root; cone = from dir (flows, design-store)
+  #   nodeTests    node:test glob relative to dir, or - for none
+  #   vitestConfig Vitest config file name inside dir, or - for none
+  #   vitestRoot   where that config roots its include: cone (relative to dir) or repo (relative to repo root)
+  #   vitestTests  Vitest include glob relative to dir, or - for none. The guard checks the config
+  #                declares it; compare src/*.test.ts and ui test/vite/*.test.ts run ONLY under Vitest
+  #   viteBuild    repo-relative Vite config to build, or - for none
+  # Every test file on disk under modules/design/** and packages/design-* must be claimed by exactly
+  # one runner of exactly one row, and every directory there must have a row. Adding a directory
+  # (for example modules/design/app) fails the inventory job until its row and HQD_EXPECTED_ROWS are
+  # added here.
+  HQD_EXPECTED_ROWS: '15'
+  HQD_INVENTORY: |
+    annotations|modules/design/annotations|root|test/*.test.ts|vitest.config.ts|repo|test/**/*.render.test.tsx|-
+    canvas|modules/design/canvas|root|test/*.test.ts|vitest.config.ts|cone|test/view/**/*.test.tsx|-
+    compare|modules/design/compare|root|-|vitest.config.ts|cone|src/**/*.test.ts|-
+    components|modules/design/components|root|tests/*.test.ts|vitest.config.ts|cone|ui/**/*.test.tsx|-
+    connector|modules/design/connector|root|test/*.test.ts|-|-|-|-
+    discovery|modules/design/discovery|root|test/*.test.ts|-|-|-|-
+    flows|modules/design/flows|cone|test/*.test.ts|-|-|-|-
+    imports|modules/design/imports|root|test/*.test.ts|-|-|-|-
+    projects|modules/design/projects|root|test/*.test.ts|-|-|-|-
+    references|modules/design/references|root|test/*.test.ts|vitest.config.ts|repo|**/*.render.test.tsx|-
+    requests|modules/design/requests|root|test/*.test.ts|vitest.config.ts|cone|test/**/*.test.tsx|-
+    taste|modules/design/taste|root|test/*.test.ts|vitest.config.ts|cone|test/ui/**/*.test.tsx|-
+    ui|modules/design/ui|root|test/node/*.test.ts|vitest.config.ts|cone|test/vite/**/*.test.ts|-
+    design-store|packages/design-store|cone|test/*.test.ts|-|-|-|-
+    preview|modules/design/preview|root|test/*.test.ts|-|-|-|modules/design/preview/vite.config.ts
+
+jobs:
+  inventory:
+    name: Design section inventory
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sections: ${{ steps.inventory.outputs.sections }}
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require every cone and assign each test file to exactly one runner
+        id: inventory
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          export LC_ALL=C
+          fail=0
+          err() { echo "::error::$*"; fail=1; }
+          in_list() { local needle=$1; shift; local item; for item in "$@"; do [ "$item" = "$needle" ] && return 0; done; return 1; }
+
+          declare -A seen=()
+          claimed=()
+          matrix=()
+          declared_modules=()
+          declared_packages=()
+          rows=0; preview_rows=0; node_total=0; vitest_total=0
+
+          while IFS= read -r line; do
+            case "$line" in ''|'#'*) continue ;; esac
+            if [[ "$line" =~ [\"\\[:space:]] ]]; then err "inventory row has a quote, backslash or whitespace: $line"; continue; fi
+            IFS='|' read -r id dir cwdmode node_glob vconfig vroot vglob build extra <<<"$line"
+            if [ -z "$id" ] || [ -z "$dir" ] || [ -z "$cwdmode" ] || [ -z "$node_glob" ] || [ -z "$vconfig" ] \
+              || [ -z "$vroot" ] || [ -z "$vglob" ] || [ -z "$build" ] || [ -n "$extra" ]; then
+              err "malformed inventory row (want 8 non-empty fields, - for none): $line"; continue
+            fi
+            rows=$((rows + 1))
+            if [ -n "${seen[$id]:-}" ]; then err "$id: duplicate inventory row"; continue; fi
+            seen[$id]=1
+            if [ "$id" = preview ]; then preview_rows=$((preview_rows + 1)); fi
+            if [ "$node_glob" = - ]; then node_glob=''; fi
+            if [ "$vconfig" = - ]; then vconfig=''; fi
+            if [ "$vglob" = - ]; then vglob=''; fi
+            if [ "$build" = - ]; then build=''; fi
+
+            case "$dir" in
+              modules/design/*) rest=${dir#modules/design/}; declared_modules+=("$rest") ;;
+              packages/design-*) rest=${dir#packages/}; declared_packages+=("$rest") ;;
+              *) err "$id: $dir is outside modules/design and packages/design-*"; continue ;;
+            esac
+            if [[ "$rest" == */* ]]; then err "$id: $dir must be a direct child directory"; continue; fi
+            if [ ! -f "$dir/tsconfig.json" ]; then err "$id: missing cone, no $dir/tsconfig.json"; continue; fi
+            case "$cwdmode" in
+              root) node_cwd=. ; node_run_glob="$dir/$node_glob" ;;
+              cone) node_cwd=$dir ; node_run_glob=$node_glob ;;
+              *) err "$id: nodeCwd must be root or cone, got $cwdmode"; continue ;;
+            esac
+            if [ -z "$node_glob" ] && [ -z "$vglob" ]; then err "$id: row claims no runner"; continue; fi
+            if [ -z "$node_glob" ]; then node_cwd=; node_run_glob=; fi
+
+            node_files=(); vitest_files=()
+            if [ -n "$node_glob" ]; then
+              node_files=( "$dir"/$node_glob )
+              if [ ${#node_files[@]} -eq 0 ]; then err "$id: empty glob $dir/$node_glob"; fi
+              for f in "${node_files[@]}"; do
+                case "$f" in *.tsx) err "$id: $f is TSX and cannot run under node --test" ;; esac
+              done
+            fi
+            if [ -n "$vconfig" ] || [ -n "$vglob" ]; then
+              if [ -z "$vconfig" ] || [ -z "$vglob" ]; then err "$id: vitestConfig and vitestTests go together"; continue; fi
+              if [ ! -f "$dir/$vconfig" ]; then err "$id: missing $dir/$vconfig"; continue; fi
+              case "$vroot" in
+                cone) literal=$vglob ;;
+                repo) literal="$dir/$vglob" ;;
+                *) err "$id: vitestRoot must be cone or repo, got $vroot"; continue ;;
+              esac
+              if ! grep -Fq -- "'$literal'" "$dir/$vconfig"; then err "$id: $dir/$vconfig does not declare include '$literal'"; fi
+              vitest_files=( "$dir"/$vglob )
+              if [ ${#vitest_files[@]} -eq 0 ]; then err "$id: empty glob $dir/$vglob"; fi
+            fi
+            if [ -n "$build" ]; then
+              case "$build" in "$dir"/*) ;; *) err "$id: viteBuild $build is outside $dir" ;; esac
+              if [ ! -f "$build" ]; then err "$id: missing $build"; fi
+            fi
+
+            both=$(comm -12 <(printf '%s\n' "${node_files[@]}" | sed '/^$/d' | sort -u) <(printf '%s\n' "${vitest_files[@]}" | sed '/^$/d' | sort -u))
+            if [ -n "$both" ]; then err "$id: claimed by both node and vitest: $both"; fi
+            claimed+=( "${node_files[@]}" "${vitest_files[@]}" )
+            node_total=$((node_total + ${#node_files[@]})); vitest_total=$((vitest_total + ${#vitest_files[@]}))
+            echo "$id: ${#node_files[@]} node, ${#vitest_files[@]} vitest"
+            matrix+=( "{\"id\":\"$id\",\"dir\":\"$dir\",\"nodeCwd\":\"$node_cwd\",\"nodeGlob\":\"$node_run_glob\",\"vitestConfig\":\"${vconfig:+$dir/$vconfig}\",\"viteBuild\":\"$build\"}" )
+          done <<<"$HQD_INVENTORY"
+
+          if [ "$rows" -ne "$HQD_EXPECTED_ROWS" ]; then err "inventory has $rows rows, expected $HQD_EXPECTED_ROWS"; fi
+          if [ "$preview_rows" -ne 1 ]; then err "inventory must have exactly one preview row, has $preview_rows"; fi
+
+          # Every directory that could hold a cone needs a row, so a new one (modules/design/app,
+          # a new packages/design-*) fails here until its row is added.
+          for path in modules/design/*/; do
+            name=${path#modules/design/}; name=${name%/}
+            in_list "$name" "${declared_modules[@]}" || err "modules/design/$name has no inventory row"
+          done
+          for path in packages/design-*/; do
+            name=${path#packages/}; name=${name%/}
+            in_list "$name" "${declared_packages[@]}" || err "packages/$name has no inventory row"
+          done
+
+          # Every test file on disk must be claimed exactly once.
+          mapfile -t on_disk < <(git ls-files --cached --others --exclude-standard | grep -E '^(modules/design/|packages/design-)' | grep -E '\.(test|spec)\.[cm]?[jt]sx?$' | sort -u || true)
+          if [ ${#on_disk[@]} -eq 0 ]; then err "no test files found on disk"; fi
+          mapfile -t omitted < <(comm -23 <(printf '%s\n' "${on_disk[@]}") <(printf '%s\n' "${claimed[@]}" | sort -u))
+          mapfile -t duplicated < <(printf '%s\n' "${claimed[@]}" | sort | uniq -d)
+          for f in "${omitted[@]}"; do err "test file claimed by no runner: $f"; done
+          for f in "${duplicated[@]}"; do err "test file claimed more than once: $f"; done
+          echo "claimed: $node_total node + $vitest_total vitest of ${#on_disk[@]} test files on disk"
+
+          if [ "$fail" -ne 0 ]; then echo "::error::Design section inventory failed"; exit 1; fi
+          joined=$(IFS=,; echo "${matrix[*]}")
+          echo "sections=[$joined]" >> "${GITHUB_OUTPUT:-/dev/stdout}"
+
+  section:
+    name: Design section (${{ matrix.id }})
+    needs: inventory
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.inventory.outputs.sections) }}
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      SECTION_DIR: ${{ matrix.dir }}
+      NODE_CWD: ${{ matrix.nodeCwd }}
+      NODE_GLOB: ${{ matrix.nodeGlob }}
+      VITEST_CONFIG: ${{ matrix.vitestConfig }}
+      VITE_BUILD_CONFIG: ${{ matrix.viteBuild }}
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+      - name: Create job scratch
+        run: |
+          set -euo pipefail
+          scratch=$(mktemp -d "$RUNNER_TEMP/hqd-section.XXXXXX")
+          echo "HQD_SCRATCH=$scratch" >> "$GITHUB_ENV"
+          echo "TMPDIR=$scratch" >> "$GITHUB_ENV"
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Require the locked TypeScript 7.0.2
+        run: |
+          set -euo pipefail
+          version=$(node_modules/.bin/tsc --version)
+          echo "$version"
+          [[ "$version" == *7.0.2* ]]
+      - name: Typecheck with the section's own tsconfig
+        run: node_modules/.bin/tsc -p "$SECTION_DIR/tsconfig.json"
+      - name: Node tests
+        if: matrix.nodeGlob != ''
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          cd "$NODE_CWD"
+          # shellcheck disable=SC2206
+          files=( $NODE_GLOB )
+          if [ ${#files[@]} -eq 0 ]; then echo "::error::no files match $NODE_GLOB in $NODE_CWD"; exit 1; fi
+          node --test --test-concurrency=1 "${files[@]}"
+      - name: Vitest
+        if: matrix.vitestConfig != ''
+        run: node_modules/.bin/vitest run --config "$VITEST_CONFIG"
+      - name: Build
+        if: matrix.viteBuild != ''
+        env:
+          HQD_PREVIEW_CANDIDATE: ${{ github.sha }}
+        run: node_modules/.bin/vite build --config "$VITE_BUILD_CONFIG"
+      - name: Remove job scratch
+        if: always()
+        run: |
+          set -euo pipefail
+          [ -n "${HQD_SCRATCH:-}" ] || exit 0
+          case "$HQD_SCRATCH" in
+            "$RUNNER_TEMP"/hqd-section.*) ;;
+            *) echo "::error::refusing to remove unexpected scratch path"; exit 1 ;;
+          esac
+          rm -rf -- "$HQD_SCRATCH"
+          if [ -e "$HQD_SCRATCH" ]; then echo "::error::could not remove $HQD_SCRATCH"; exit 1; fi
+
+  sections:
+    name: Design sections
+    needs: [inventory, section]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require the inventory and every section to pass
+        env:
+          INVENTORY_RESULT: ${{ needs.inventory.result }}
+          SECTION_RESULT: ${{ needs.section.result }}
+        run: |
+          if [ "$INVENTORY_RESULT" != success ] || [ "$SECTION_RESULT" != success ]; then
+            echo "::error::inventory=$INVENTORY_RESULT sections=$SECTION_RESULT"
+            exit 1
+          fi
