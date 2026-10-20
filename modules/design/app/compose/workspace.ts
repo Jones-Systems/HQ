@@ -4,7 +4,8 @@
  * Nothing in this file is durable, networked or real. Every slice is built from the lanes' own labelled
  * fakes and synthetic fixtures, once per project id and kept for the page's lifetime, so a domain switch
  * remounts the real section views over the same in-memory state. When the STORE seam lands, integration
- * replaces the fake ports named here with adapters; the lane-facing shapes do not change.
+ * replaces the fake ports named here with adapters; the lane-facing shapes do not change. The canvas fake is
+ * type-aligned to STORE's `CanvasDocumentPort` (storage-seam.ts); no storage module is imported at runtime.
  */
 import type { ProjectContext } from '@hq/contracts';
 import { arrangementKey, encodeArrangement } from '../../canvas/src/codec.ts';
@@ -63,6 +64,7 @@ import { createPreviewTaste } from '../../taste/preview/fake-client.ts';
 import { createCachedCatalogReadPort, type CachedCatalogReadPort } from './catalog-read-port.ts';
 import { createCanvasProviderAdapter, type CanvasProviderAdapter } from './canvas-adapter.ts';
 import { FAKE_TAG, SYNTHETIC_TAG } from './labels.ts';
+import type { CanvasDocumentPort } from './storage-seam.ts';
 import { bindFlowToProject, createProjectScreenPreviews, createProjectVersionsProvider, type FlowBindingReport, type ProjectScreenPreviews, type ProjectVersionsProvider } from './project-versions.ts';
 
 /** Memoise one async build per project id; the same promise is returned on every call. */
@@ -265,7 +267,8 @@ export const flowsFor = perProject(async (project): Promise<FlowsEnv> => {
 export interface CanvasEnv {
   readonly projectId: CanvasProjectId;
   readonly canvasId: CanvasId;
-  readonly storage: ReturnType<typeof createFakeCanvasStorage>;
+  /** T3's labelled fake, typed as STORE's `CanvasDocumentPort` too (compile-time alignment only; see storage-seam.ts). */
+  readonly storage: ReturnType<typeof createFakeCanvasStorage> & CanvasDocumentPort;
   readonly registry: ProviderRegistry;
   readonly ids: CanvasIdPort;
   readonly adapters: readonly CanvasProviderAdapter[];
