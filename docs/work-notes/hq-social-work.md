@@ -182,6 +182,14 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
   - Author-reported checks: `node --test` gave 73 of 73 passing, and `tsc -p modules/wiki/contract` exited 0. T1 did not rerun them. Root `typecheck` and `test` do not include `modules/wiki`.
   - Deferred, not fixed: the AST vocabulary and the chosen structural bounds (P3); 2 MiB for "2 MB" and the single-quote URL rejection (P4).
 - **B released** after A's acceptance. Its compiled capsule is `3d935de4…` at plan head `00afa36e`, with the actual ready set exactly `{domain-integration}`.
+- **B completed; the root accepted it as S** (2026-10-20) for bounded fixture/source use. This is not independent review, native proof or green CI.
+  - Candidate: PR #36, branch `t3/social-work-domain-assembly` (local, remote and PR head all agree), head `562986d1852d7b4ef101ff6d4c9340c3751c727a`. Its base is this branch, which was at `cec5d07` when it opened; B started at `a385a6f`. Open, non-draft and mergeable, with zero configured checks; merge held.
+  - Merges: `dc6402c` ← Social `9735b74`, then `55b751b` ← Work `3426da7`, with no conflicts.
+  - T1 inspection: ancestry includes `a385a6f`, `9735b74`, `3426da7`, `935dedf`, `3ca74d7`, `8a3261d` and `35f9a3e`. The 19 authored paths since `55b751b` are the new `apps/desktop/src/social-work.integration.test.tsx`, which did not exist before, plus 18 files under `docs/evidence/hq-social-work/integration/social-work/`. `modules/social`, `modules/work` and `packages/hq-ui` are byte-identical to their sources. The root files, contracts, `apps/desktop` (apart from the new test) and T1's plan docs are byte-identical to `a385a6f`. `modules.tsx` is unchanged.
+  - Checks: the author reported `npm ci` with the lockfile unchanged, typecheck, 748 tests in 47 files, and a build. Before the root's acceptance arrived, T1 had already rerun `npm test` once on the exact head, at 20.44% CPU: 748 passed in 47 files.
+  - Evidence: the browser production renderer under the app's CSP, in light and dark at two sizes, with round-trip restoration and theme persistence. Electron is **unverified**: the doctor probe rejected the worktree.
+  - Accuracy boundary kept: zero-write navigation is proven for clean paths only. Under WD-1/WD-2, leaving a dirty card-detail field flushes exactly one pending explicit edit.
+  - Deferred, not fixed: SWA-1 to SWA-4 (P3) and SWA-5 (P4).
 
 **Owner direction delta (relayed by the root, 2026-10-20).** The Social/Work stack is to sit on top of the Local Design Hub stack, with all our content made compatible on the Design shared base, not merely handed off in documentation.
 
@@ -214,7 +222,7 @@ Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, che
 - **Unchanged:** A→B, and the child allowance of A+B. No C checkout and no C source edit.
 - **Cross-owner proposal.** Posted on issue #1, comment 6283473057, as a proposal only: joint-phase root-file writer, `vite.config.ts` owner, wiring patch revision, and discovery approach. No custody is claimed.
 
-**T1 (now):** fan in A, then launch B, fan in B, keep PR #3 current, and hold after B's published candidate.
+**T1 (now):** A, B and WK-C are complete and S is bound. Holding after B's published candidate; nothing is launchable without a new root release.
 
 **Root coordinator:** decide the remaining shared gates:
   - the catalog delta merge, with Design;
