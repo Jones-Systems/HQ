@@ -64,6 +64,7 @@
   display: flex; align-items: center; min-height: 28px; padding: 0 var(--hq-space-sm);
   border-radius: var(--hq-radius-sm); font: var(--hq-type-label); color: var(--hq-text); cursor: default;
 }
+.hq-menu-check { display: inline-block; width: 1em; margin-right: var(--hq-space-sm); flex: 0 0 auto; color: var(--hq-accent-text); }
 .hq-menu-item:focus { background: var(--hq-surface-selected); }
 .hq-menu-item:focus-visible { outline-offset: calc(-1 * var(--hq-size-focus-width)); }
 .hq-menu-item--danger { color: var(--hq-danger); }

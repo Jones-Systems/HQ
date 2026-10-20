@@ -58,6 +58,8 @@ export function CalendarView() {
   const [dropChoice, setDropChoice] = useState<{ itemId: string; day: string; minute?: number } | null>(null);
   const drag = useRef<Drag | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
+  const focusTitle = useRef(false);
   useCssVars(root, { '--wv-cal-sidebar-width': `${sidebarWidth}px` });
 
   const { year, month } = cursor;
@@ -75,6 +77,10 @@ export function CalendarView() {
     const target = holder?.querySelector('button');
     if (target && document.activeElement !== target) target.focus();
   }, [focusKey, state.items, cursor]);
+
+  useEffect(() => {
+    if (focusTitle.current) { title.current?.focus(); focusTitle.current = false; }
+  }, [mode, dayCursor]);
 
   const latest = (id: string) => state.items.find((it) => it.id === id);
   const send = (item: Item, patch: ItemPatch | null, message: string): Promise<unknown> => (
@@ -187,9 +193,21 @@ export function CalendarView() {
   );
 
   const goTo = (iso: string) => { setDayCursor(iso); setCursor({ year: Number(iso.slice(0, 4)), month: Number(iso.slice(5, 7)) }); };
+  const selectMode = (next: Mode) => {
+    if (next === 'week' || next === 'day') {
+      if (!timed) {
+        const shownMonth = `${year}-${pad(month)}`;
+        goTo(dayCursor.startsWith(shownMonth) ? dayCursor : today.startsWith(shownMonth) ? today : `${shownMonth}-01`);
+      }
+    } else if (timed) goTo(dayCursor);
+    setMode(next);
+  };
+  const openDay = (iso: string, next: 'week' | 'day') => {
+    focusTitle.current = true; goTo(iso); setMode(next);
+  };
   const step = (delta: number) => {
     if (timed) { goTo(addDays(dayCursor, delta * (mode === 'week' ? 7 : 1))); return; }
-    const [y, m] = shiftMonth(year, month, delta); setCursor({ year: y, month: m }); setDayCursor(`${y}-${pad(m)}-01`);
+    const [y, m] = shiftMonth(year, month, delta); setCursor({ year: y, month: m });
   };
   const shownRange: [string, string] = timed ? [days[0]!, days[days.length - 1]!] : monthRange;
   const coarse = entries.filter(({ entry, bounds }) => (timed ? ['week', 'month', 'quarter', 'year'] : ['month', 'quarter', 'year']).includes(entry.precision) && overlaps(bounds, shownRange));
@@ -215,15 +233,16 @@ export function CalendarView() {
           <Button size="sm" variant="ghost" aria-label={`Previous ${timed ? mode : 'month'}`} onClick={() => step(-1)}>‹</Button>
           <Button size="sm" onClick={() => goTo(today)}>Today</Button>
           <Button size="sm" variant="ghost" aria-label={`Next ${timed ? mode : 'month'}`} onClick={() => step(1)}>›</Button>
-          <h2 className="wv-cal-title" aria-live="polite">{timed ? `${dayText(days[0]!)}${mode === 'week' ? ` – ${dayText(days[6]!)}` : ''}` : <>{MONTHS[month - 1]} <span className="wv-muted">{year}</span></>}</h2>
+          <h2 ref={title} tabIndex={-1} className="wv-cal-title" aria-live="polite">{timed ? `${dayText(days[0]!)}${mode === 'week' ? ` – ${dayText(days[6]!)}` : ''}` : <>{MONTHS[month - 1]} <span className="wv-muted">{year}</span></>}</h2>
         </div>
         <div className="wv-cal-controls">
           <div className="wv-seg" role="group" aria-label="Calendar layout">
-            <Button size="sm" variant="secondary" title={`Switch to ${mode === 'month' ? 'Week' : mode === 'week' ? 'Day' : 'Month'} view`}
-              onClick={() => setMode(mode === 'month' ? 'week' : mode === 'week' ? 'day' : 'month')}>
-              {mode === 'agenda' ? 'Month' : mode[0]!.toUpperCase() + mode.slice(1)}
-            </Button>
-            <Button size="sm" variant="ghost" aria-pressed={mode === 'agenda'} onClick={() => setMode('agenda')}>Agenda</Button>
+            <Menu size="sm" trigger={`${mode[0]!.toUpperCase() + mode.slice(1)} ▾`}
+              triggerLabel={`Calendar view: ${mode[0]!.toUpperCase() + mode.slice(1)}`}
+              items={(['month', 'week', 'day', 'agenda'] as const).map((value) => ({
+                id: value, label: value[0]!.toUpperCase() + value.slice(1), checked: mode === value,
+                onSelect: () => selectMode(value),
+              }))} />
           </div>
           <div className="wv-seg" role="group" aria-label="Show date kinds">
             {DATE_KIND_IDS.map((k) => {
@@ -261,7 +280,7 @@ export function CalendarView() {
               {coarse.length ? coarse.map((x) => chip(x, false, true)) : <span className="wv-muted">Month, quarter and year dates appear here.</span>}
             </div>
           </section>
-          {timed ? <TimeGrid days={days} entries={entries} chip={chip} onCommit={commitTime} onAllDay={allDay} onRemove={remove} onDrop={onGridDrop} acceptDrop={acceptDrop(['date', 'undated'])} /> : mode === 'month'
+          {timed ? <TimeGrid days={days} onOpenDay={mode === 'week' ? (day) => openDay(day, 'day') : undefined} entries={entries} chip={chip} onCommit={commitTime} onAllDay={allDay} onRemove={remove} onDrop={onGridDrop} acceptDrop={acceptDrop(['date', 'undated'])} /> : mode === 'month'
             ? (
               <div className="wv-month" role="group" aria-label={`${MONTHS[month - 1]} ${year}`}>
                 <div className="wv-month-head" aria-hidden="true">
@@ -288,14 +307,19 @@ export function CalendarView() {
                               onDragOver={acceptDrop(['date', 'undated'])}
                               onDrop={(event) => onDayDrop(event, iso)}
                             >
-                              <div className="wv-day-head">
-                                <span className="wv-day-num">{Number(iso.slice(8))}</span>
+                              <div className="wv-day-head" title="Double-click to open this week" onDoubleClick={() => openDay(iso, 'week')}>
+                                <button type="button" className="wv-day-num" aria-label={`Open week of ${formatDay(iso, { year: true })}`}
+                                  onClick={(event) => { if (event.detail === 0) openDay(iso, 'week'); }}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDay(iso, 'week'); }
+                                  }}>{Number(iso.slice(8))}</button>
                                 {env.capture && (
                                   <button
                                     type="button"
                                     className="wv-day-add"
                                     aria-label={`New item on ${formatDay(iso, { year: true })}`}
                                     title="New item on this day"
+                                    onDoubleClick={(event) => event.stopPropagation()}
                                     onClick={() => env.capture!({ date: { kind: 'target', precision: 'day', value: iso } })}
                                   >+</button>
                                 )}

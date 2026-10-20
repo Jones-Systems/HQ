@@ -19,13 +19,14 @@ export interface TimeGridProps {
   onAllDay?: (event: CalendarGridEvent, day: string) => void;
   onRemove?: (event: CalendarGridEvent) => void;
   onOpen?: (event: CalendarGridEvent) => void;
+  onOpenDay?: (day: string) => void;
   onAnnounce: (message: string) => void;
   renderAllDay?: (day: string) => ReactNode;
   onDrop?: (event: DragEvent, day: string, minute?: number) => void;
   acceptDrop?: (event: DragEvent) => void;
 }
 
-export function TimeGrid({ days, events, zone, now: clock, onChange, onAllDay, onRemove, onOpen, onAnnounce, renderAllDay, onDrop, acceptDrop }: TimeGridProps) {
+export function TimeGrid({ days, events, zone, now: clock, onChange, onAllDay, onRemove, onOpen, onOpenDay, onAnnounce, renderAllDay, onDrop, acceptDrop }: TimeGridProps) {
   const root = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const hours = useRef<HTMLDivElement>(null);
@@ -125,7 +126,10 @@ export function TimeGrid({ days, events, zone, now: clock, onChange, onAllDay, o
   return <section className="hq-calendar-time-grid" ref={root} aria-label="Timed calendar">
     <p className="hq-calendar-time-help">Times in {zone}. Drag to move · drag the lower edge to resize · Alt + arrows to move · Alt + Shift + ↑/↓ to resize.</p>
     <div className="hq-calendar-time-head"><span>All day</span>{days.map((day) => <div key={day} className={day === now.day ? 'is-today' : ''}>
-      <strong>{new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${day}T12:00:00Z`))}</strong>
+      {onOpenDay ? <button type="button" className="hq-calendar-day-header" aria-label={`Open day ${day}`}
+        onClick={(event) => { if (event.detail === 0) onOpenDay(day); }} onDoubleClick={() => onOpenDay(day)}>
+        <strong>{new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${day}T12:00:00Z`))}</strong>
+      </button> : <strong>{new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${day}T12:00:00Z`))}</strong>}
       <div className="hq-calendar-all-day" data-grid-all-day={day} aria-label={`All day ${day}`} onDragOver={acceptDrop} onDrop={(event) => onDrop?.(event, day)}>
         {renderAllDay?.(day)}
       </div>
@@ -155,11 +159,17 @@ function TimeEvent({ x, onPointerDown, onKeyDown, onClick }: {
   const ref = useRef<HTMLDivElement>(null);
   useCssVars(ref, { '--hq-calendar-event-top': `${x.start * CALENDAR_HOUR_HEIGHT / 60}px`, '--hq-calendar-event-height': `${Math.max(12, (x.end - x.start) * CALENDAR_HOUR_HEIGHT / 60)}px`,
     '--hq-calendar-event-left': `${x.column / x.columns * 100}%`, '--hq-calendar-event-width': `${100 / x.columns}%` });
-  return <div ref={ref} className="hq-calendar-time-event" data-event-id={x.event.id}>
+  const duration = x.end - x.start;
+  const density = duration <= 15 ? 'tiny' : duration < 45 ? 'compact' : 'full';
+  // Compact title and metadata need two 12px lines plus 4px of padding and borders.
+  const hasMetadataRoom = duration * CALENDAR_HOUR_HEIGHT / 60 >= 28;
+  const label = `${x.event.title}, ${calendarClock(x.start)}–${calendarClock(x.end)}, ${x.event.subtitle ?? ''}${x.event.estimated ? ', 30 minute display estimate' : ''}`;
+  const tooltip = `${x.event.title}, ${x.event.day} ${calendarClock(x.event.start)}–${x.event.endDay} ${calendarClock(x.event.end)}${x.event.subtitle ? `, ${x.event.subtitle}` : ''}`;
+  return <div ref={ref} className={`hq-calendar-time-event hq-calendar-time-event--${density}`} data-event-id={x.event.id}>
     <button className="hq-calendar-time-event-body" type="button" disabled={x.event.disabled}
-      aria-label={`${x.event.title}, ${calendarClock(x.start)}–${calendarClock(x.end)}, ${x.event.subtitle ?? ''}${x.event.estimated ? ', 30 minute display estimate' : ''}`}
+      aria-label={label} title={tooltip}
       onPointerDown={(event) => onPointerDown(event, false)} onKeyDown={onKeyDown} onClick={onClick}>
-      <strong>{x.event.title}</strong><span>{calendarClock(x.start)}–{calendarClock(x.end)}{x.event.estimated && ' · 30m'} · {x.event.subtitle}</span>
+      <strong>{x.event.title}</strong>{hasMetadataRoom && <span>{calendarClock(x.start)}–{calendarClock(x.end)}{x.event.estimated && ' · 30m'}{x.event.subtitle && ` · ${x.event.subtitle}`}</span>}
     </button>
     {x.lastSegment && <button type="button" className="hq-calendar-time-resize" aria-label={`Resize ${x.event.title}`} disabled={x.event.disabled}
       onPointerDown={(event) => onPointerDown(event, true)} onKeyDown={onKeyDown} onClick={(event) => event.stopPropagation()} />}

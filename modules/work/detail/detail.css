@@ -19,15 +19,23 @@
 .work-pill {
   display: inline-flex; align-items: center; gap: var(--hq-space-2xs); min-height: var(--hq-size-control-sm); padding: 0 var(--hq-space-sm);
   border: 0; border-radius: var(--hq-radius-pill); background: var(--hq-surface-sunken); color: var(--hq-text-muted);
-  box-shadow: inset 0 0 0 1px var(--hq-border); font: var(--hq-type-label); cursor: pointer;
+  font: var(--hq-type-label); cursor: pointer;
 }
 .work-pill:hover { background: var(--hq-surface-hover); color: var(--hq-text); }
-/* Pressed: weight, edge and a check, so the current status never depends on colour alone. */
-.work-pill[aria-pressed="true"] { background: var(--hq-surface-selected); color: var(--hq-text); font-weight: var(--hq-font-weight-semibold); box-shadow: inset 0 0 0 2px var(--hq-accent-edge); }
+/* Pressed weight and a check keep the current status identifiable without colour. */
+.work-pill[aria-pressed="true"] { background: var(--work-pill-fill, var(--hq-accent-soft)); color: var(--work-pill-ink, var(--hq-accent-text)); font-weight: var(--hq-font-weight-semibold); }
+.work-pill--inbox, .work-pill--on_hold { --work-pill-fill: var(--hq-surface-selected); --work-pill-ink: var(--hq-text); }
+.work-pill--considering { --work-pill-fill: var(--hq-warning-soft); --work-pill-ink: var(--hq-warning); }
+.work-pill--next { --work-pill-fill: var(--hq-info-soft); --work-pill-ink: var(--hq-info); }
+.work-pill--active { --work-pill-fill: var(--hq-success-soft); --work-pill-ink: var(--hq-success); }
+.work-pill--dropped { --work-pill-fill: var(--hq-danger-soft); --work-pill-ink: var(--hq-danger); }
 /* A drawn check, so it never depends on the fallback font having a ✓ glyph. */
 .work-pill[aria-pressed="true"]::after {
   content: ""; display: inline-block; width: 4px; height: 8px; margin: -2px 0 0 2px;
   border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+@media (forced-colors: active) {
+  .work-pill[aria-pressed="true"] { outline: 2px solid Highlight; }
 }
 
 .work-banner--conflict { background: var(--hq-warning-soft); box-shadow: inset 0 0 0 1px var(--hq-warning); }

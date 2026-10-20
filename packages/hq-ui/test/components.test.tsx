@@ -1,9 +1,9 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  Button, Dialog, IconButton, Menu, Splitter, SAVE_STATES, SaveIndicator, STATUS_TONES, StateView, StatusChip, Tabs, Toast, ToastRegion, VIEW_STATES,
+  Button, Dialog, IconButton, Menu, Splitter, SAVE_STATES, SaveIndicator, STATUS_TONES, StateView, StatusChip, Tabs, Toast, ToastRegion, TOAST_AUTO_DISMISS_MS, VIEW_STATES,
 } from '../src';
 
 // Happy-dom has no layout or colour engine: these prove roles, names and keyboard paths in each chrome scheme.
@@ -357,5 +357,178 @@ describe('resizable panel separator', () => {
     fireEvent.pointerDown(separator, { pointerId: 3, button: 0, clientX: 200 });
     view.unmount();
     expect(separator.releasePointerCapture).toHaveBeenLastCalledWith(3);
+  });
+});
+
+
+describe('selectable menu items', () => {
+  afterEach(cleanup);
+
+  it('exposes checked choices and retains mixed-role keyboard navigation and activation', async () => {
+    const user = userEvent.setup();
+    const choose = vi.fn();
+    const disabled = vi.fn();
+    render(<Menu trigger="Sort" items={[
+      { id: 'title', label: 'Title', checked: true, onSelect: vi.fn() },
+      { id: 'date', label: 'Date', checked: false, onSelect: choose },
+      { id: 'unavailable', label: 'Unavailable', checked: false, disabled: true, onSelect: disabled },
+      { id: 'reset', label: 'Reset', onSelect: vi.fn() },
+    ]} />);
+    const trigger = screen.getByRole('button', { name: 'Sort' });
+    await user.click(trigger);
+    const [title, date, unavailable] = screen.getAllByRole('menuitemradio');
+    expect(title!.getAttribute('aria-checked')).toBe('true');
+    expect(date!.getAttribute('aria-checked')).toBe('false');
+    expect(title!.querySelector('[aria-hidden="true"]')?.textContent).toBe('✓');
+    expect(date!.querySelector('[aria-hidden="true"]')?.textContent).toBe('');
+    await user.keyboard('{End}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Reset' }));
+    await user.keyboard('{ArrowUp}{Enter}');
+    expect(document.activeElement).toBe(unavailable);
+    expect(disabled).not.toHaveBeenCalled();
+    await user.keyboard('{Home}d');
+    expect(document.activeElement).toBe(date);
+    await user.keyboard(' ');
+    expect(choose).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    await user.keyboard('{ArrowUp}{ArrowDown}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'Title' }));
+    await user.keyboard('{Escape}');
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
+describe('opt-in toast expiry', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+  });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
+  const advance = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
+
+  it('dismisses at 8000ms, not 7999ms, and does not restart for a new callback identity', () => {
+    const original = vi.fn();
+    const current = vi.fn();
+    const { rerender } = render(<Toast message="Saved" autoDismissMs={TOAST_AUTO_DISMISS_MS} onDismiss={original} />);
+    advance(4000);
+    rerender(<Toast message="Saved" autoDismissMs={TOAST_AUTO_DISMISS_MS} onDismiss={current} />);
+    advance(3999);
+    expect(current).not.toHaveBeenCalled();
+    advance(1);
+    expect(original).not.toHaveBeenCalled();
+    expect(current).toHaveBeenCalledOnce();
+    advance(8000);
+    expect(current).toHaveBeenCalledOnce();
+  });
+
+  it.each(['hover', 'focus'] as const)('keeps independent overlapping pauses when %s ends first', first => {
+    const dismiss = vi.fn();
+    render(<Toast message="Saved" action={{ label: 'Undo', onAction: vi.fn() }} autoDismissMs={8000} onDismiss={dismiss} />);
+    const toast = screen.getByText('Saved').closest('.hq-toast')!;
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    const close = screen.getByRole('button', { name: 'Dismiss' });
+    advance(3000);
+    fireEvent.mouseEnter(toast);
+    fireEvent.focusIn(undo);
+    advance(10000);
+    fireEvent.focusOut(undo, { relatedTarget: close });
+    fireEvent.focusIn(close, { relatedTarget: undo });
+    if (first === 'hover') fireEvent.mouseLeave(toast);
+    else fireEvent.focusOut(close, { relatedTarget: document.body });
+    advance(10000);
+    expect(dismiss).not.toHaveBeenCalled();
+    if (first === 'hover') fireEvent.focusOut(close, { relatedTarget: document.body });
+    else fireEvent.mouseLeave(toast);
+    advance(4999);
+    expect(dismiss).not.toHaveBeenCalled();
+    advance(1);
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('pauses while the document is hidden and resumes only after hover also ends', () => {
+    const dismiss = vi.fn();
+    const hidden = vi.spyOn(document, 'hidden', 'get');
+    render(<Toast message="Saved" autoDismissMs={8000} onDismiss={dismiss} />);
+    const toast = screen.getByText('Saved').closest('.hq-toast')!;
+    advance(2000);
+    hidden.mockReturnValue(true);
+    fireEvent(document, new Event('visibilitychange'));
+    fireEvent.mouseEnter(toast);
+    advance(20000);
+    hidden.mockReturnValue(false);
+    fireEvent(document, new Event('visibilitychange'));
+    advance(20000);
+    expect(dismiss).not.toHaveBeenCalled();
+    fireEvent.mouseLeave(toast);
+    advance(5999);
+    expect(dismiss).not.toHaveBeenCalled();
+    advance(1);
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('waits for visibility when initially hidden', () => {
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    const dismiss = vi.fn();
+    render(<Toast message="Saved" autoDismissMs={8000} onDismiss={dismiss} />);
+    advance(10000);
+    expect(dismiss).not.toHaveBeenCalled();
+    hidden.mockReturnValue(false);
+    fireEvent(document, new Event('visibilitychange'));
+    advance(7999);
+    expect(dismiss).not.toHaveBeenCalled();
+    advance(1);
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('starts a full duration for a replacement message and removes timers and visibility listeners on unmount', () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const dismiss = vi.fn();
+    const { rerender, unmount } = render(<Toast message="First" autoDismissMs={8000} onDismiss={dismiss} />);
+    advance(6000);
+    rerender(<Toast message="Second" autoDismissMs={8000} onDismiss={dismiss} />);
+    advance(7999);
+    expect(dismiss).not.toHaveBeenCalled();
+    advance(1);
+    expect(dismiss).toHaveBeenCalledOnce();
+    rerender(<Toast message="Third" autoDismissMs={8000} onDismiss={dismiss} />);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    for (const [type, listener] of add.mock.calls.filter(([type]) => type === 'visibilitychange')) {
+      expect(remove).toHaveBeenCalledWith(type, listener);
+    }
+    advance(10000);
+    fireEvent(document, new Event('visibilitychange'));
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a replacement paused until the existing hover ends', () => {
+    const dismiss = vi.fn();
+    const { rerender } = render(<Toast message="First" autoDismissMs={8000} onDismiss={dismiss} />);
+    const toast = screen.getByText('First').closest('.hq-toast')!;
+    fireEvent.mouseEnter(toast);
+    rerender(<Toast message="Second" autoDismissMs={8000} onDismiss={dismiss} />);
+    advance(10000);
+    expect(dismiss).not.toHaveBeenCalled();
+    fireEvent.mouseLeave(toast);
+    advance(7999);
+    expect(dismiss).not.toHaveBeenCalled();
+    advance(1);
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('persists by default and exposes action shortcuts without changing action or Escape behavior', () => {
+    const undo = vi.fn();
+    const dismiss = vi.fn();
+    render(<Toast message="Saved" action={{ label: 'Undo', onAction: undo, keyshortcuts: 'Control+Z Meta+Z' }} onDismiss={dismiss} />);
+    advance(80000);
+    expect(dismiss).not.toHaveBeenCalled();
+    const action = screen.getByRole('button', { name: 'Undo' });
+    expect(action.getAttribute('aria-keyshortcuts')).toBe('Control+Z Meta+Z');
+    fireEvent.click(action);
+    expect(undo).toHaveBeenCalledOnce();
+    fireEvent.keyDown(action, { key: 'Escape' });
+    expect(dismiss).toHaveBeenCalledOnce();
   });
 });

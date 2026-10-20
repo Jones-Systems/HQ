@@ -14,13 +14,14 @@ import { lastWrite, setup } from './harness';
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 const VIEW_PROOF: Record<string, string[]> = {
   glance: ['Good morning', 'Now', 'Next 21 days', 'Inbox', 'Worth a look', 'Recently changed'],
   list: ['Repaint the garden shed', 'Draft the spring market stall list', 'Tune up the old bicycle'],
   calendar: ['October', 'This month, no set day', 'Unscheduled', 'Outside this month'],
-  timeline: ['No horizon', 'Someday', '2026 Q4'],
+  timeline: ['No horizon', 'Someday', '2026 · Q4'],
   review: ['Gentle prompts. Nothing changes until you choose an action.', 'Sort the Inbox', 'Overdue deadlines', 'Targets that have passed', 'Active but quiet', 'Horizon and date disagree', 'No “why” yet'],
   archive: ['Copy out the old recipe cards', 'Restore'],
   'by-date': ['Today', 'This week', 'Later', 'Undated'],
@@ -115,6 +116,47 @@ describe.each(['light', 'dark'] as const)('views in %s chrome', (theme) => {
 });
 
 describe('view behaviour', () => {
+  it.each(['ctrlKey', 'metaKey'] as const)('keeps %s Undo available after the success toast expires and applies its inverse once', async (modifier) => {
+    const { rec, store, container } = await setup({ view: 'timeline' });
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.keyDown(screen.getByLabelText(/^Tune up the old bicycle, horizon /), { key: 'ArrowUp', altKey: true });
+    });
+    expect(screen.getByRole('button', { name: 'Undo' }).getAttribute('aria-keyshortcuts')).toBe('Control+Z Meta+Z');
+    await act(async () => { await vi.advanceTimersByTimeAsync(7999); });
+    expect(screen.getByText('“Tune up the old bicycle” is now Later.')).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.queryByText('“Tune up the old bicycle” is now Later.')).toBeNull();
+    expect(store.getState().undo).toHaveLength(1);
+    await act(async () => { fireEvent.keyDown(container.querySelector('.wv')!, { key: 'z', [modifier]: true }); });
+    expect(rec.writes()).toHaveLength(2);
+    expect(lastWrite(rec)!.args.slice(0, 3)).toEqual(['ex-bike', 2, { horizon: 'someday' }]);
+    expect(screen.getByText('Undone.')).toBeTruthy();
+    expect(store.getState().undo).toHaveLength(0);
+    await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+    expect(screen.queryByText('Undone.')).toBeNull();
+    await act(async () => { fireEvent.keyDown(container.querySelector('.wv')!, { key: 'z', [modifier]: true }); });
+    expect(screen.getByText('Nothing to undo.')).toBeTruthy();
+    expect(rec.writes()).toHaveLength(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+    expect(screen.queryByText('Nothing to undo.')).toBeNull();
+  });
+
+  it('keeps a refused undo visible after eight seconds', async () => {
+    const { store, device, container } = await setup({ view: 'timeline' });
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.keyDown(screen.getByLabelText(/^Tune up the old bicycle, horizon /), { key: 'ArrowUp', altKey: true });
+    });
+    await device.patch('ex-bike', 2, { horizon: 'soon' }, 'toast-conflict-device');
+    await act(async () => { await store.poll(); });
+    await act(async () => { fireEvent.keyDown(container.querySelector('.wv')!, { key: 'z', ctrlKey: true }); });
+    const text = container.querySelector('.hq-toast-text')!.textContent;
+    expect(text).not.toContain('Undone.');
+    await act(async () => { await vi.advanceTimersByTimeAsync(16_000); });
+    expect(container.querySelector('.hq-toast-text')!.textContent).toBe(text);
+  });
+
   it('List sorts by column and moves status through move (top of the new status), with Undo restoring the place', async () => {
     const user = userEvent.setup();
     const { rec } = await setup({ view: 'list' });
@@ -150,7 +192,7 @@ describe('view behaviour', () => {
     const navigate = vi.fn();
     const { rec } = await setup({ view: 'glance', navigate });
     const upcoming = screen.getByRole('region', { name: 'Next 21 days' });
-    expect(within(upcoming).getByText('Overdue')).toBeTruthy();
+    expect(within(upcoming).getByRole('heading', { name: 'Overdue · 1' })).toBeTruthy();
     expect(within(upcoming).getByText('Return the seed-swap tray')).toBeTruthy();
     expect(within(upcoming).getByText('Today')).toBeTruthy();
     const now = screen.getByRole('region', { name: 'Now' });
@@ -246,8 +288,10 @@ describe('zero execution', () => {
     for (const view of PLANNING_VIEW_IDS) rerender({ view });
     rerender({ view: 'calendar' });
     await user.click(screen.getByRole('button', { name: 'Next month' }));
-    await user.click(screen.getByRole('button', { name: 'Agenda' }));
-    await user.click(screen.getByRole('button', { name: 'Month' }));
+    await user.click(screen.getByRole('button', { name: 'Calendar view: Month' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Agenda' }));
+    await user.click(screen.getByRole('button', { name: 'Calendar view: Agenda' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Month' }));
     await user.click(screen.getByRole('button', { name: 'Targets' }));
     await user.click(screen.getByRole('checkbox', { name: 'Show done & dropped' }));
     rerender({ view: 'list' });

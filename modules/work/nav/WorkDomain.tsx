@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ModulePort } from '@hq/contracts';
-import { Button, Splitter, StateView, Toast, ToastRegion, type ReferencePort, type ReturnContext } from '@hq/ui';
+import { Button, IconButton, Splitter, StateView, Toast, ToastRegion, TOAST_AUTO_DISMISS_MS, type ReferencePort, type ReturnContext } from '@hq/ui';
 import { StatusBoard, SyncBanners, undoFromToast, useFeedback, WorkToasts, type Feedback } from '../board';
 import { DraftsPanel, QuickCapture, useCaptureShortcut } from '../capture';
 import {
@@ -61,6 +61,7 @@ export function WorkDomain({ context, destination, navigate, now, pollMs, refere
   const [detailWidth, setDetailWidth] = useRemembered('work.detail.width', 360);
   const [detailRestore, setDetailRestore] = useRemembered('work.detail.restore', 360);
   const [toolbarCollapsed, setToolbarCollapsed] = useRemembered('work.toolbar.collapsed', false);
+  const toolbarId = useId();
   useCssVars(rootRef, { '--wd-nav-width': `${navWidth}px`, '--wd-detail-width': `${detailWidth}px` });
   const resizeDetail = (size: number) => {
     const next = size < 112 ? 0 : Math.max(240, Math.min(640, size));
@@ -149,14 +150,19 @@ export function WorkDomain({ context, destination, navigate, now, pollMs, refere
         {session.example && (
           <p className="wd-example" role="note"><span className="wd-tag">Example data</span> {EXAMPLE_NOTE}</p>
         )}
-        <div className="wd-toolbar-toggle">
-          <Button size="sm" variant="ghost" aria-expanded={!toolbarCollapsed} onClick={() => setToolbarCollapsed(!toolbarCollapsed)}>
-            {toolbarCollapsed ? 'Show capture & filters' : 'Hide capture & filters'}{activeFilterCount(view.filters) > 0 ? ` · ${activeFilterCount(view.filters)} filters` : ''}
+        {toolbarCollapsed && <div className="wd-toolbar-toggle">
+          <Button size="sm" variant="ghost" aria-expanded={false} aria-controls={toolbarId} onClick={() => setToolbarCollapsed(false)}>
+            Show capture &amp; filters · {activeFilterCount(view.filters)} filters
           </Button>
-        </div>
-        <div className="wd-toolbar" hidden={toolbarCollapsed}>
+        </div>}
+        <div className="wd-toolbar" id={toolbarId} hidden={toolbarCollapsed}>
           <ToolbarCapture ref={captureRef} session={session} state={state} {...(now ? { now } : {})} onMore={openCapture} />
           {page && page.page !== 'settings' && page.page !== 'plan' && <FilterBar ui={ui} filters={view.filters} state={state} />}
+          <IconButton
+            className="wd-toolbar-hide" size="sm" label="Hide capture & filters" aria-expanded={true} aria-controls={toolbarId}
+            onClick={() => setToolbarCollapsed(true)}
+            icon={<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6" /></svg>}
+          />
         </div>
         <DraftsPanel drafts={drafts} store={store} feedback={feedback} />
         <div className={`wd-workarea${itemId ? ' wd-workarea--detail' : ''}`}>
@@ -221,9 +227,9 @@ function FilterBar({ ui, filters, state }: { ui: WorkUi; filters: Filters; state
   const count = activeFilterCount(filters);
   return (
     <div className="wd-filters" role="group" aria-label="Filter planning">
-      <label className="wd-filter" htmlFor={`${id}-q`}>
-        <span className="work-field-label">Search</span>
-        <input id={`${id}-q`} className="work-input" type="search" value={filters.q} onChange={(event) => set({ q: event.target.value })} />
+      <label className="wd-filter wd-filter--search" htmlFor={`${id}-q`}>
+        <span className="hq-sr-only">Search</span>
+        <input id={`${id}-q`} className="work-input" type="search" placeholder="Search planning" value={filters.q} onChange={(event) => set({ q: event.target.value })} />
       </label>
       <label className="wd-filter" htmlFor={`${id}-kind`}>
         <span className="work-field-label">Kind</span>
@@ -333,7 +339,8 @@ function FeedbackToasts({ store, state, feedback }: { store: WorkStore; state: W
           className={`work-toast work-toast--${toast.tone}`}
           message={toast.message}
           meta={toast.meta}
-          action={toast.undoId && live.has(toast.undoId) ? { label: 'Undo', onAction: () => void undoFromToast(store, feedback, toast) } : undefined}
+          autoDismissMs={toast.tone === 'info' ? TOAST_AUTO_DISMISS_MS : undefined}
+          action={toast.undoId && live.has(toast.undoId) ? { label: 'Undo', keyshortcuts: 'Control+Z Meta+Z', onAction: () => void undoFromToast(store, feedback, toast) } : undefined}
           onDismiss={() => feedback.dismiss(toast.id)}
         />
       ))}
