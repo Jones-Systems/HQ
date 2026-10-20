@@ -4661,7 +4661,8 @@ No lane relays status through the owner.
     "spec.hq-integration-parallel-execution#task.design-compose-landing.001",
     "spec.hq-integration-parallel-execution#task.preview-compose-landing.001",
     "spec.hq-integration-parallel-execution#task.preview-scenarios-landing.001",
-    "spec.hq-integration-parallel-execution#task.new-thread-landing.001"
+    "spec.hq-integration-parallel-execution#task.new-thread-landing.001",
+    "spec.hq-integration-parallel-execution#task.source-registry-host-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -5811,11 +5812,12 @@ No lane relays status through the owner.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "lane-t8",
-  "objective": "PV-M3 by the CL1b owner after CL1b and the host land: adapters in modules/design/app/compose from hqServices.preview and the component routes to compare's PreviewCapability (host-surface surface, qualification from status), annotations' AgentChannelPort and components' ComponentRunnerPort. The Compare, Annotations and Components views use them and show unavailable while the host reports disabled. No generic invoke, URL fetch or path; extend the renderer-safe walk.",
+  "objective": "PV-M3 by the CL1b owner after CL1b; source may use structural fakes while landing waits for the host: adapters in modules/design/app/compose from hqServices.preview and the component routes to compare's PreviewCapability (host-surface surface, qualification from status), annotations' AgentChannelPort and components' ComponentRunnerPort. The Compare, Annotations and Components views use them and show unavailable while the host reports disabled. No generic invoke, URL fetch or path; extend the renderer-safe walk. Bind registry Open to the direct presentation main-frame document; persist route/state/capture-bound annotations and Add screen. Keep stale anchors explicit.",
   "context_refs": [
     "spec.hq-integration-parallel-execution#ctx.lane-t8.001",
     "spec.hq-integration-parallel-execution#iface.preview-host.001",
-    "spec.hq-integration-parallel-execution#iface.component-runner.001"
+    "spec.hq-integration-parallel-execution#iface.component-runner.001",
+    "spec.hq-integration-parallel-execution#ctx.project-experience-workflow.001"
   ],
   "read_scope": [
     "AGENTS.md",
@@ -5839,7 +5841,6 @@ No lane relays status through the owner.
   "produces": [],
   "dependencies": [
     "spec.hq-integration-parallel-execution#task.design-compose-landing.001",
-    "spec.hq-integration-parallel-execution#task.preview-host-landing.001",
     "spec.hq-integration-parallel-execution#task.preview-compare-landing.001"
   ],
   "dependency_inputs": [],
@@ -5899,7 +5900,8 @@ No lane relays status through the owner.
   ],
   "produces": [],
   "dependencies": [
-    "spec.hq-integration-parallel-execution#task.preview-compose.001"
+    "spec.hq-integration-parallel-execution#task.preview-compose.001",
+    "spec.hq-integration-parallel-execution#task.preview-host-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -5937,7 +5939,7 @@ No lane relays status through the owner.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "lane-t7",
-  "objective": "Extend the landed native harness with the suites of ctx.preview-qualification.001: synthetic fixture sites on loopback; CC-CANARY listeners on loopback and one host-owned non-loopback address with positive-control clients before and after each run; the named fault-hook driver; packaged-mode-ignores checks for every switch; and runners for Q-PV0–Q-PV10, Q-CS1–4 and Q-CX1–6 against the built app. A row without a positive control reports unmeasured. No npm dependency, sudo or packet capture; owned profile, listener and process cleanup on every exit path. Qualifying runs belong to the gate tasks.",
+  "objective": "Extend the landed native harness with the suites of ctx.preview-qualification.001: synthetic fixture sites on loopback; CC-CANARY listeners on loopback and one host-owned non-loopback address with positive-control clients before and after each run; the named fault-hook driver; packaged-mode-ignores checks for every switch; and runners for Q-PV0–Q-PV10, Q-CS1–4 and Q-CX1–6 against the built app. A row without a positive control reports unmeasured. No npm dependency, sudo or packet capture; owned profile, listener and process cleanup on every exit path. Qualifying runs belong to the gate tasks. Add synthetic enrollment → interactive click-through → pick/comment → capture flow → explicit qualification-stub send → receipt/readback.",
   "context_refs": [
     "spec.hq-integration-parallel-execution#ctx.lane-t7.001",
     "spec.hq-integration-parallel-execution#ctx.preview-qualification.001"
@@ -5966,7 +5968,10 @@ No lane relays status through the owner.
   "produces": [],
   "dependencies": [
     "spec.hq-integration-parallel-execution#task.scenarios-landing.001",
-    "spec.hq-integration-parallel-execution#task.preview-host-landing.001"
+    "spec.hq-integration-parallel-execution#task.preview-host-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-compose-landing.001",
+    "spec.hq-integration-parallel-execution#task.runs-live-dispatch-landing.001",
+    "spec.hq-integration-parallel-execution#task.source-registry-host-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -6629,7 +6634,8 @@ No lane relays status through the owner.
   "produces": [],
   "dependencies": [
     "spec.hq-integration-parallel-execution#task.preview-host-landing.001",
-    "spec.hq-integration-parallel-execution#task.connector-resolve-landing.001"
+    "spec.hq-integration-parallel-execution#task.connector-resolve-landing.001",
+    "spec.hq-integration-parallel-execution#task.source-registry-host-landing.001"
   ],
   "dependency_inputs": [],
   "activation": {
@@ -8390,3 +8396,528 @@ No lane relays status through the owner.
 }
 ```
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#test.new-thread-transport.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.project-experience-workflow.001" -->
+## Interactive Project Workflow Amendment
+
+The owner requests enrollment, full interactive project experiences, durable annotations and explicit Jones change requests. A catalog card or imported screenshot alone does not satisfy this requirement. This amendment reuses the existing receiver, Preview Host, keyed new-thread transport, annotation agent and qualification gates. No second receiver or gallery service is introduced.
+
+Research found existing interactive web presentations and a hashed gallery registry export; image collections are separate stills. Jones Code source `38ced3fb7857506779bf8f2f76af0ed1caf026db` implements keyed launch lookup/fencing. The paired gallery-window gateway needs an opener and is not HQ's preload-free preview transport. HQ retains its main-only MCP route.
+
+Architecture screen: registration metadata is consumed by Discovery, the desktop host and Design composition, so identities and experience classification are explicit. Host/root/project identities remain opaque; remote/path similarity only suggests a link. The existing SourceAdapter is read-only and never executes or clones a project. Compatibility is carried as bounded flat metadata until the single shared contract owner promotes it. Network fetching and credentials stay in main. Snapshots retain last-good state, and only complete snapshots can mark omissions missing. New module mappers require no shared runtime change.
+
+Web prototypes are the first interactive target. Native simulator execution needs a separately qualified toolchain, synthetic backend and device-control/streaming capability; it is not supplied by this plan. No measured native build-memory or build-time claim is available. Ordinary preview clicks must not rebuild an application.
+
+Preview targets keep HTTPS or loopback HTTP. Existing remote plain-HTTP deployments require an approved supported route; this amendment does not relax that policy. The existing gallery's ephemeral in-page comments and paired Send control are distinct from HQ's canonical durable annotations and explicit dispatch. Existing gallery-comment import is a follow-on compatibility mapping.
+
+Source tasks can proceed before host qualification. Production dispatch defaults to an honest disconnected state and accepts an injected qualified port; explicit example mode remains visibly simulated. No transport, reload, navigation, annotation or project enrollment triggers execution. Existing unknown outcomes remain lookup-only, never blind resend.
+
+Writer allocation: root owns Git, this amendment and check catalog; registry adapters own only new mapper/test files; Runs owns only its section. Shared T2 and preview composition scopes remain held until their existing custody is reconciled in #50. PR #95 touches cache/discovery/view-model and #99 touches requests; neither intersects these two new module cones. The current foundation has advanced, so any publication must qualify the actual target-base integration without rewriting unrelated work.
+
+Source delivery remains non-draft PRs with exact-head CI; integration merges remain held. Full acceptance still requires the existing S1, U1, S2/OS-MAC1, install and enablement predicates. Text-only handoff contains route, selector, quoted text, proposals and capture digest; image attachments require a coordinated follow-on contract and must not be implied.
+
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.project-experience-workflow.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#req.project-experience-workflow.001" -->
+## Interactive Project Requirements
+
+XR1: UI enrollment supports the laptop root, each registered Jones environment and gallery bases with explicit user confirmation. Subsequent refresh shows freshness, conflict and offline states without recurring terminal work. Repository identity suggests but never silently merges links.
+
+XR2: Open an interactive presentation document as the preview main frame, not iframe gallery chrome. Web prototypes, websites and stills are explicitly distinguished. Stills are never offered as interactive. Flow navigation binds route/state and coherent captures.
+
+XR3: Pick, Cite, comments and proposals persist against version, route, state, viewport and capture digest. Stale anchors remain stale until explicitly resolved.
+
+XR4: Only an explicit send dispatches a frozen verified packet through an injected qualified transport, targeting an existing thread or linked registered project. Missing or unqualified transport means Not connected — nothing sent, never synthetic success.
+
+XR5: Runs displays durable receipts, lookup, readback and status. Unknown effects are never automatically resent; a changed session truthfully reports when keyed resolution is unavailable.
+
+XR6: Capability holds remain visible until real qualification, activation and installation. Routine startup and refresh require no commands, TTY or password after enrollment.
+
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#req.project-experience-workflow.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.project-experience-source.001" -->
+## Interactive Project Acceptance
+
+Mapper fixtures cover stable host/root/project identity, bounded malformed input, hash mismatch, partial catalogs, remote URL policy and interactive-versus-still classification. Runs tests cover injected real-shaped ports, disconnected and unqualified states, explicit send, unknown lookup without resend, readback and labelled examples. Compose tests use a structural PreviewCapability fake; native tests qualify the actual preload-free browser.
+
+One synthetic end-to-end scenario enrolls a gallery and Jones list, opens a full document, clicks through, picks/comments, captures a flow, explicitly sends through the existing qualification stub and reads the receipt. Fixtures prove source behavior only. Separate owner-approved real enrollment and native consent verify actual projects; no fixture closes a live gate.
+
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.project-experience-source.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.project-experience-operators.001" -->
+## Operator Interaction Inventory
+
+| Phase | Concrete interaction and enforcement | Readback / failure / recovery |
+| --- | --- | --- |
+| Source/bootstrap preparation | None for bounded source, tests and PR publication. Shared custody is reconciled in #50 before shared edits. | Exact source/check identity; preserve merge hold. |
+| Enrollment | Existing authorization permits native Settings/project chooser setup; the product asks the owner to confirm each source/link. No terminal, source move or clone. | Persist bindings in private userData, restart and recheck; cancel leaves existing sources. |
+| Startup and steady state | None beyond ordinary HQ launch, selection and explicit Send. Main refreshes enrolled read-only sources. | Last-good cache with freshness; failed refresh never clears data or starts work. |
+| Routine diagnostics/recovery | None for read-only status/recheck. Unknown sends use lookup, never resend. | Receipts/session identity and held reasons; no automatic auth or network repair. |
+| Credentials/enrollment/rotation | Jones OAuth requires native browser consent; private secret route only if needed. No token extraction. | Main-only protected storage; 401 means needs authorization. Stop on unknown consent effect. |
+| Remote gallery route | Existing HTTPS/loopback policy applies. Any missing HTTPS service or SSH forwarding requires an exact host/command/data-path/verification/rollback envelope before activation. | Prepare concrete route first; no silent deployment or network change. |
+| Upgrade/rollback | Existing authorized unsigned development route only; preserve profile and source provenance. Persistent updater work remains its existing owner's scope. | Exact installed manifest and process readback; revert source forward or launch retained prior build with preserved data. |
+| Native simulator follow-on | Toolchain/backend qualification and device access remain separate; no build/boot is performed by this amendment. | Measure one bounded pilot before claims about cost; no signing/account/host changes. |
+| Destructive/forced effects | None planned. Removal, relocation, reset, forced restart or source cleanup is not authorized. | Reject outside-scope action; preserve sources/data/services. |
+| Exceptional fallback | Stop the affected capability and retain last-good state; no unmodeled privileged fallback. | Record exact failure and smallest missing approval or binding. |
+
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.project-experience-operators.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.registry-adapters.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t8",
+  "objective": "Implement pure Jones-project and gallery-index mappers to the existing CatalogSnapshot contract with stable host/root identity, bounded inputs, verified gallery hashes and explicit website/web-prototype/stills metadata. No network or source execution.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.project-experience-workflow.001"
+  ],
+  "read_scope": [
+    "modules/design/",
+    "apps/desktop/",
+    "packages/contracts/",
+    "docs/",
+    "tests/"
+  ],
+  "write_scope": [
+    "modules/design/discovery/src/adapters/",
+    "modules/design/discovery/test/adapters/"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.project-experience-workflow.001"
+  ],
+  "produces": [],
+  "dependencies": [],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.project-experience-source.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.registry-adapters.001"
+  ],
+  "affected_check_groups": [
+    "hq-source-registry",
+    "hq-design-local-catalog"
+  ],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Root is sole Git owner; each builder writes only its literal cone. No host changes, deployment, credentials, private data or live sends.",
+    "Existing T2 and composition custody must be reconciled before shared implementation. Source completion is distinct from live qualification."
+  ],
+  "stop_conditions": [
+    "Unexpected or unowned changes, unknown prior effect, overlap or a required change outside the assigned cone."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.registry-adapters.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.registry-adapters.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "integration",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.project-experience-workflow.001",
+    "spec.hq-integration-parallel-execution#ac.project-experience-source.001"
+  ],
+  "scenario": "Implement pure Jones-project and gallery-index mappers to the existing CatalogSnapshot contract with stable host/root identity, bounded inputs, verified gallery hashes and explicit website/web-prototype/stills metadata. No network or source execution.",
+  "evidence": {
+    "predicate": "Focused deterministic tests pass on the exact candidate, including negative and stale cases.",
+    "invalid": "Fixtures or simulated sends are presented as live operational success.",
+    "unknown": "Required native runtime or private binding is unavailable."
+  },
+  "environment": [
+    "Synthetic fixtures and task-local test storage; no private source or services."
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.registry-adapters.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.registry-adapters.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "modules/design/",
+    "apps/desktop/"
+  ],
+  "affected_check_groups": [
+    "hq-source-registry",
+    "hq-design-local-catalog"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.registry-adapters.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.registry-adapters-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "Integration owner qualifies the exact scoped candidate and lands only under accepted policy; read back ancestry. Merge hold remains until agreement.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.project-experience-workflow.001"
+  ],
+  "read_scope": [
+    "modules/design/",
+    "apps/desktop/",
+    "packages/contracts/",
+    "docs/",
+    "tests/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.project-experience-workflow.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.registry-adapters.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.project-experience-source.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [
+    "hq-source-registry",
+    "hq-design-local-catalog"
+  ],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Root is sole Git owner; each builder writes only its literal cone. No host changes, deployment, credentials, private data or live sends.",
+    "Existing T2 and composition custody must be reconciled before shared implementation. Source completion is distinct from live qualification."
+  ],
+  "stop_conditions": [
+    "Unexpected or unowned changes, unknown prior effect, overlap or a required change outside the assigned cone."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.registry-adapters-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.runs-live-dispatch.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t8",
+  "objective": "Replace implicit fake-only production composition with an injected TransportPort/catalog/readback seam; disconnected by default, visibly labelled explicit examples, explicit send, durable receipt and unknown lookup without blind resend.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.project-experience-workflow.001"
+  ],
+  "read_scope": [
+    "modules/design/",
+    "apps/desktop/",
+    "packages/contracts/",
+    "docs/",
+    "tests/"
+  ],
+  "write_scope": [
+    "modules/design/app/sections/runs/"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.project-experience-workflow.001"
+  ],
+  "produces": [],
+  "dependencies": [],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.project-experience-source.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.runs-live-dispatch.001"
+  ],
+  "affected_check_groups": [
+    "hq-design-app-sections"
+  ],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Root is sole Git owner; each builder writes only its literal cone. No host changes, deployment, credentials, private data or live sends.",
+    "Existing T2 and composition custody must be reconciled before shared implementation. Source completion is distinct from live qualification."
+  ],
+  "stop_conditions": [
+    "Unexpected or unowned changes, unknown prior effect, overlap or a required change outside the assigned cone."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.runs-live-dispatch.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.runs-live-dispatch.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "integration",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.project-experience-workflow.001",
+    "spec.hq-integration-parallel-execution#ac.project-experience-source.001"
+  ],
+  "scenario": "Replace implicit fake-only production composition with an injected TransportPort/catalog/readback seam; disconnected by default, visibly labelled explicit examples, explicit send, durable receipt and unknown lookup without blind resend.",
+  "evidence": {
+    "predicate": "Focused deterministic tests pass on the exact candidate, including negative and stale cases.",
+    "invalid": "Fixtures or simulated sends are presented as live operational success.",
+    "unknown": "Required native runtime or private binding is unavailable."
+  },
+  "environment": [
+    "Synthetic fixtures and task-local test storage; no private source or services."
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.runs-live-dispatch.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.runs-live-dispatch.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "modules/design/",
+    "apps/desktop/"
+  ],
+  "affected_check_groups": [
+    "hq-design-app-sections"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.runs-live-dispatch.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.runs-live-dispatch-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "Integration owner qualifies the exact scoped candidate and lands only under accepted policy; read back ancestry. Merge hold remains until agreement.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.project-experience-workflow.001"
+  ],
+  "read_scope": [
+    "modules/design/",
+    "apps/desktop/",
+    "packages/contracts/",
+    "docs/",
+    "tests/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.project-experience-workflow.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.runs-live-dispatch.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.project-experience-source.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [
+    "hq-design-app-sections"
+  ],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Root is sole Git owner; each builder writes only its literal cone. No host changes, deployment, credentials, private data or live sends.",
+    "Existing T2 and composition custody must be reconciled before shared implementation. Source completion is distinct from live qualification."
+  ],
+  "stop_conditions": [
+    "Unexpected or unowned changes, unknown prior effect, overlap or a required change outside the assigned cone."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.runs-live-dispatch-landing.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.source-registry-host.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "lane-t2",
+  "objective": "Implement main-only persisted source enrollment/refresh over the receiver MCP session and bounded gallery fetch; v1 catalog migration preserves preimage and generation. Wire native Settings and closed IPC under the reconciled single shared writer.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.project-experience-workflow.001"
+  ],
+  "read_scope": [
+    "modules/design/",
+    "apps/desktop/",
+    "packages/contracts/",
+    "docs/",
+    "tests/"
+  ],
+  "write_scope": [
+    "apps/desktop/electron/catalog-host.ts",
+    "apps/desktop/electron/sources/",
+    "packages/contracts/src/catalog.ts",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.ts",
+    "apps/desktop/src/environment.d.ts"
+  ],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.project-experience-workflow.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.preview-host-landing.001",
+    "spec.hq-integration-parallel-execution#task.receiver-landing.001",
+    "spec.hq-integration-parallel-execution#task.registry-adapters-landing.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.project-experience-source.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-registry-host.001"
+  ],
+  "affected_check_groups": [
+    "hq-source-registry",
+    "hq-root-build"
+  ],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Root is sole Git owner; each builder writes only its literal cone. No host changes, deployment, credentials, private data or live sends.",
+    "Existing T2 and composition custody must be reconciled before shared implementation. Source completion is distinct from live qualification."
+  ],
+  "stop_conditions": [
+    "Unexpected or unowned changes, unknown prior effect, overlap or a required change outside the assigned cone."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.source-registry-host.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#test.source-registry-host.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "integration",
+  "validates": [
+    "spec.hq-integration-parallel-execution#req.project-experience-workflow.001",
+    "spec.hq-integration-parallel-execution#ac.project-experience-source.001"
+  ],
+  "scenario": "Implement main-only persisted source enrollment/refresh over the receiver MCP session and bounded gallery fetch; v1 catalog migration preserves preimage and generation. Wire native Settings and closed IPC under the reconciled single shared writer.",
+  "evidence": {
+    "predicate": "Focused deterministic tests pass on the exact candidate, including negative and stale cases.",
+    "invalid": "Fixtures or simulated sends are presented as live operational success.",
+    "unknown": "Required native runtime or private binding is unavailable."
+  },
+  "environment": [
+    "Synthetic fixtures and task-local test storage; no private source or services."
+  ],
+  "obligation_owner_task": "spec.hq-integration-parallel-execution#task.source-registry-host.001",
+  "evidence_executor_task": "spec.hq-integration-parallel-execution#task.source-registry-host.001",
+  "acceptance_owner": "lane-t1",
+  "activation": {
+    "after_accepted": []
+  },
+  "target_hints": [
+    "modules/design/",
+    "apps/desktop/"
+  ],
+  "affected_check_groups": [
+    "hq-source-registry",
+    "hq-root-build"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#test.source-registry-host.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.source-registry-host-landing.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "lane-t1",
+  "objective": "Integration owner qualifies the exact scoped candidate and lands only under accepted policy; read back ancestry. Merge hold remains until agreement.",
+  "context_refs": [
+    "spec.hq-integration-parallel-execution#ctx.project-experience-workflow.001"
+  ],
+  "read_scope": [
+    "modules/design/",
+    "apps/desktop/",
+    "packages/contracts/",
+    "docs/",
+    "tests/"
+  ],
+  "write_scope": [],
+  "requires": [
+    "spec.hq-integration-parallel-execution#req.project-experience-workflow.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-integration-parallel-execution#task.source-registry-host.001"
+  ],
+  "dependency_inputs": [],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-integration-parallel-execution#ac.project-experience-source.001"
+  ],
+  "test_refs": [
+    "spec.hq-integration-parallel-execution#test.source-landing.001"
+  ],
+  "affected_check_groups": [
+    "hq-source-registry",
+    "hq-root-build"
+  ],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "produced_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "Root is sole Git owner; each builder writes only its literal cone. No host changes, deployment, credentials, private data or live sends.",
+    "Existing T2 and composition custody must be reconciled before shared implementation. Source completion is distinct from live qualification."
+  ],
+  "stop_conditions": [
+    "Unexpected or unowned changes, unknown prior effect, overlap or a required change outside the assigned cone."
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.source-registry-host-landing.001" -->
