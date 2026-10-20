@@ -122,7 +122,7 @@ tests = ["apps/desktop/electron/**/*.test.ts", "apps/desktop/src/**/*.integratio
 
 [groups.hq-electron-acceptance]
 summary = "Dependency-free Electron acceptance harness driven over CDP."
-covers = ["spec.hq-integration-parallel-execution#test.acceptance-harness.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001", "spec.hq-integration-parallel-execution#test.acceptance-scenarios.001", "spec.hq-integration-parallel-execution#test.preview-scenarios.001"]
+covers = ["spec.hq-integration-parallel-execution#test.acceptance-harness.001", "spec.hq-integration-parallel-execution#test.acceptance-infrastructure.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001", "spec.hq-integration-parallel-execution#test.acceptance-scenarios.001", "spec.hq-integration-parallel-execution#test.preview-scenarios.001"]
 direct_surfaces = ["tests/acceptance/"]
 tests = ["tests/acceptance/**/*.mjs"]
 
