@@ -2,8 +2,8 @@
   "schema": "hq-acceptance-infrastructure-evidence/v1",
   "task": "spec.hq-integration-parallel-execution#task.acceptance-infrastructure.001",
   "kind": "implementation-evidence-not-independent-review",
-  "testedSource": "c725fb01f505fffada4feb9dc5af6c66d3690006",
-  "testedTree": "e1a716841b33032b3e61a84ef0b67fdb2e93f83b",
+  "testedSource": "5f10f413048e2846025f34e7687c337c50bc26b5",
+  "testedTree": "f71a7f350f2f9688657fd179e34b5fede762d2fd",
   "acceptedFoundation": "5dc78aac0938211fbc387ecbaecb9355519f9627",
   "planCommit": "4d6e43614ea8ca56aff86f814a2eee986b11b62b",
   "nodeVersion": "24.19.0",
@@ -51,16 +51,16 @@
     "insideLock": true,
     "oneCorePercent": 6.25,
     "finalNode": {
-      "cpuUsedPercent": 10.41,
-      "availableRamGiB": 38.94
+      "cpuUsedPercent": 13.17,
+      "availableRamGiB": 41.32
     },
     "checkpoint": {
-      "cpuUsedPercent": 11.6,
-      "availableRamGiB": 39.3
+      "cpuUsedPercent": 16.51,
+      "availableRamGiB": 41.39
     },
     "full": {
-      "cpuUsedPercent": 7.57,
-      "availableRamGiB": 39.19
+      "cpuUsedPercent": 9.75,
+      "availableRamGiB": 41.78
     }
   },
   "cleanup": {
@@ -77,7 +77,18 @@
       "cleanup failure fails successful run",
       "cleanup failure preserves original failure"
     ],
-    "evidencePreservedBeforeTeardown": true
+    "evidencePreservedBeforeTeardown": true,
+    "installerCache": {
+      "bytes": 123314280,
+      "sha256": "ecced7ecb55697f92ca870939c5988557faa8acd8c222c232cae5913d318c8b9",
+      "fuserExit": 1,
+      "fuserOutputBytes": 0,
+      "removed": true,
+      "directoriesPreserved": true,
+      "worktreeElectronPreserved": true,
+      "ownerApproval": "Exact task-created archive removal authorized after identity and concurrent-use validation; other cache files and directories preserved.",
+      "deviation": "Initial uppercase cache variable was not recognized by Electron. Correct case-sensitive electron_config_cache is now documented. No archive residue remains."
+    }
   },
   "wikiClarification": "Owner permits only the checked-in inert https://example.invalid/synthetic/wiki.git metadata and matching expectedRemote. Local isolated Git only; no remote contact.",
   "durableIntent": "Not provided; Work unresolved intent remains session-only RW-9/G-3. Integrated post-restart no-intent behavior remains a gap.",
@@ -97,5 +108,6 @@
     "modules/social/live/port.ts": "51ea98dad27a06aa8193bac2f9e1b609785d1482b86798a477745866a04bcaa9",
     "modules/social/live/guards.ts": "da56c0264f37266224b05eb1b13902ae1242b8fae0a2358b34ebed955d03897b",
     "modules/work/live/test/contract/SHA256SUMS": "dafe2da70363b4db60b9bc5d5466a6c77097369f896fbbb7c1ac56f1c5c7733b"
-  }
+  },
+  "finalEvidenceCommitPolicy": "The following commit changes only these evidence records. No executable or build input differs from testedSource."
 }

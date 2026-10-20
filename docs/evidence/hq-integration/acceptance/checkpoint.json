@@ -1,6 +1,6 @@
 {
   "schema": "hq-electron-acceptance/v1",
-  "head": "c725fb01f505fffada4feb9dc5af6c66d3690006",
+  "head": "5f10f413048e2846025f34e7687c337c50bc26b5",
   "mode": "shell-checkpoint",
   "sourceDirty": false,
   "checks": [
