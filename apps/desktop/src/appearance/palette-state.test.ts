@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PALETTE_PRESETS } from '@hq/ui';
 import {
@@ -70,4 +71,11 @@ describe('palette edits', () => {
     expect(setPaletteColor(DEFAULT_PALETTE_STATE, 'accent', 'red')).toBe(DEFAULT_PALETTE_STATE);
     expect(setPaletteColor(DEFAULT_PALETTE_STATE, 'accent', '#abcdef')).toBe(DEFAULT_PALETTE_STATE);
   });
+});
+
+it('removes the selected-domain side stripe from the rail styling', () => {
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  const selected = [...css.matchAll(/[^{}]*\.domain-button\[aria-current="page"\][^{]*\{([^}]*)\}/g)].map(match => match[1]).join(';');
+  expect(selected).toContain('background: var(--hq-selected-bg)');
+  expect(css).not.toMatch(/box-shadow:\s*inset\s+[1-9]/);
 });

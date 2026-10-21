@@ -1,4 +1,3 @@
-import railCss from '../styles.css?raw';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { PALETTE_PRESETS } from '@hq/ui';
@@ -127,9 +126,3 @@ it('falls back from a corrupt preference and reports when changes cannot be save
   expect(within(settings).getByRole('alert').textContent).toMatch(/could not be saved/);
 });
 
-it('removes the selected-domain side stripe from the rail styling', () => {
-  const css = railCss;
-  const selected = [...css.matchAll(/[^{}]*\.domain-button\[aria-current="page"\][^{]*\{([^}]*)\}/g)].map(match => match[1]).join(';');
-  expect(selected).toContain('background: var(--hq-selected-bg)');
-  expect(css).not.toMatch(/box-shadow:\s*inset\s+[1-9]/);
-});
