@@ -15,6 +15,7 @@ window.addEventListener('pagehide', () => {
 }, { once: true });
 (window as unknown as { __referencesHarness: unknown }).__referencesHarness = {
   candidate: __HQD_CANDIDATE__, label: fixture.label, env: fixture.env,
+  get previewReads() { return fixture.previewReads; },
 };
 root.render(<>
   <p className="harness-label">Synthetic References section · in-memory fake storage · {__HQD_CANDIDATE__}</p>

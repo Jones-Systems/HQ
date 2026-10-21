@@ -21,6 +21,7 @@ test('selection retains loaded img nodes and pending reads instead of blanking t
   const images = [...container.querySelectorAll('.hq-refs-card img')];
   expect(images).toHaveLength(2);
   const reads = previewImage.mock.calls.length;
+  const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
   const cards = container.querySelectorAll<HTMLButtonElement>('.hq-refs-open');
   expect(cards).toHaveLength(2);
   for (const card of cards) {
@@ -28,6 +29,8 @@ test('selection retains loaded img nodes and pending reads instead of blanking t
     expect([...container.querySelectorAll('.hq-refs-card img')]).toEqual(images);
     expect(previewImage).toHaveBeenCalledTimes(reads);
   }
+  expect(scroll).toHaveBeenCalledTimes(1);
+  scroll.mockRestore();
 });
 
 test('pending selection is deduplicated; deleted assets and old providers cannot publish late images', async () => {

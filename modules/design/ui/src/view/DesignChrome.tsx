@@ -77,7 +77,7 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
 
   const [dragSize, setDragSize] = useState<{ projectId: string; panel: PanelId; size: number } | null>(null);
   const stopDrag = useRef<(() => void) | null>(null);
-  useEffect(() => () => { stopDrag.current?.(); }, [projectId]);
+  useEffect(() => { setDragSize(null); return () => { stopDrag.current?.(); }; }, [projectId]);
   const resting = resolveLayout(session.panels, width);
   const resolved = dragSize?.projectId === projectId && !resting.squeezed.includes(dragSize.panel)
     ? { ...resting, [dragSize.panel]: dragSize.size, main: resting.main + resting[dragSize.panel] - dragSize.size }
@@ -297,7 +297,7 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
     </header>
     <div className="hqd-body" ref={bodyRef}>
       {visible.sidebar &&
-        <aside id="hqd-sidebar" className="hqd-sidebar" style={{ width: resolved.sidebar }} aria-label={`${NAV_LABELS[location.nav]} sections`}>
+        <aside id="hqd-sidebar" className="hqd-sidebar" style={{ width: resolved.sidebar, paddingInline: Math.min(12, resolved.sidebar / 2) }} aria-label={`${NAV_LABELS[location.nav]} sections`}>
           <h2 className="hqd-heading" title={NAV_LABELS[location.nav]}>{NAV_LABELS[location.nav]}</h2>
           {sectionStops.length === 0
             ? <p className="hqd-empty">{`No ${NAV_LABELS[location.nav]} sections are installed yet.`}</p>

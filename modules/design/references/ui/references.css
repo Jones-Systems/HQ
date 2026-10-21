@@ -104,6 +104,7 @@
 /* SecondaryPanel persists inline widths; these local overrides preserve its toggles
    while moving expanded References details above the grid in narrow containers. */
 @container refs (max-width: 1099px) {
+  .hq-refs-body > [data-secondary-panel="reference-detail"] .hq-refs-detail { block-size: 40vh; overflow: auto; }
   .hq-refs-body > [data-secondary-panel="reference-detail"],
   .hq-graph-body > [data-secondary-panel] { flex: 1 1 100% !important; width: 100% !important; order: -1; }
   .hq-refs-body > [data-secondary-panel="reference-detail"] > div,

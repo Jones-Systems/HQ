@@ -29,13 +29,17 @@ export function ReferenceLibraryView(props: ReferenceLibraryViewProps) {
   const searchId = useId();
   const detailHeading = useRef<HTMLHeadingElement>(null);
   const cardButtons = useRef(new Map<ReferenceId, HTMLButtonElement>());
+  const previousSelection = useRef<ReferenceId | undefined>(undefined);
   const selectedId = view.detail?.id;
   const detailCard = view.cards.find((card) => card.id === selectedId);
   useEffect(() => {
     if (selectedId) {
-      detailHeading.current?.focus();
-      detailHeading.current?.scrollIntoView({ block: 'nearest' });
+      detailHeading.current?.focus({ preventScroll: true });
+      const detail = detailHeading.current?.closest('.hq-refs-detail');
+      if (detail) detail.scrollTop = 0;
+      if (!previousSelection.current) detailHeading.current?.scrollIntoView({ block: 'nearest' });
     }
+    previousSelection.current = selectedId;
   }, [selectedId]);
   const closeDetail = () => {
     props.onSelectReference(null);
