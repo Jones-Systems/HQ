@@ -82,7 +82,11 @@ The library owns header, collections, result grid and detail relationships in
 is image → heading/source → badges/caveat/tags → footer. Title space is two lines;
 source is ellipsized, with full provenance reachable in details. Footers align
 within a grid row through flexible card bodies. Images keep their intrinsic
-content colors in either theme. Existing card rules are unchanged by this repair.
+content colors in either theme. Thumbnails take a `data-presentation`: `banner`
+(landscape websites, top-anchored cover), `contained` (portrait or square images and
+non-phone app screens, whole on a neutral matte) or `phone` (phone-platform app
+screens, whole inside a simple device outline). It derives from source kind,
+platform and stored dimensions only; a missing preview keeps its label unframed.
 
 Measure the `.hq-refs` container, not just the viewport: at 599/600px the import
 form changes columns, at 759/760px collections/header change arrangement, and

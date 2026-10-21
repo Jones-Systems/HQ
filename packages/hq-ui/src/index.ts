@@ -9,6 +9,7 @@ import './references/references.css';
 
 export * from './components';
 export * from './contrast';
+export * from './palettes';
 export * from './tokens';
 export { ReferenceChip, type ReferenceChipProps } from './references/ReferenceChip';
 export { LinkList, type LinkListProps } from './references/LinkList';

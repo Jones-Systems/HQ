@@ -29,8 +29,8 @@ describe('token names', () => {
     expect(new Set(HQ_TOKEN_NAMES).size).toBe(HQ_TOKEN_NAMES.length);
   });
 
-  it('has 39 colour roles, each a light-dark() pair equal to the JSON source', () => {
-    expect(HQ_COLOR_ROLES).toHaveLength(39);
+  it('has 45 colour roles, each a light-dark() pair equal to the JSON source', () => {
+    expect(HQ_COLOR_ROLES).toHaveLength(45);
     expect(HQ_COLOR_ROLES.map((name) => name.slice('--hq-'.length))).toEqual(Object.keys(tokensJson.color));
     for (const role of HQ_COLOR_ROLES) {
       const { light, dark } = tokensJson.color[role.slice('--hq-'.length)]!;

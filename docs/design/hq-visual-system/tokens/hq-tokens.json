@@ -21,16 +21,22 @@
     "surface-sunken":  { "light": "#F0F3F8", "dark": "#151A23", "use": "Inputs, wells, code" },
     "surface-hover":   { "light": "rgba(24, 35, 54, 0.055)", "dark": "rgba(235, 241, 252, 0.06)", "use": "Hover overlay on any surface" },
     "surface-pressed": { "light": "rgba(24, 35, 54, 0.10)", "dark": "rgba(235, 241, 252, 0.11)", "use": "Pressed overlay" },
-    "surface-selected":{ "light": "rgba(48, 92, 172, 0.09)", "dark": "rgba(148, 184, 248, 0.10)", "use": "Selected rail/nav item fill (paired with an indicator bar)" },
+    "surface-selected":{ "light": "#D7E2F5", "dark": "#2B3A55", "use": "Filled selection for rail, nav, tabs and segmented controls; no side stripe" },
 
     "border":          { "light": "#DFE4ED", "dark": "#343E4E", "use": "Hairline dividers (foundation: border)" },
     "border-strong":   { "light": "#C9D1DE", "dark": "#465268", "use": "Panel and card outlines" },
     "border-control":  { "light": "#8290A5", "dark": "#7D8AA1", "use": "Input and control boundaries (3:1 non-text)" },
+    "border-control-hover": { "light": "#6B7A91", "dark": "#97A3B8", "use": "Control boundary on hover" },
+    "control":         { "light": "#EEF1F6", "dark": "#2A3444", "use": "Secondary button and control fill" },
+    "control-hover":   { "light": "#E3E8F0", "dark": "#333E50", "use": "Secondary button hover fill; nav and ghost hover" },
+    "control-pressed": { "light": "#D6DDE8", "dark": "#3C495D", "use": "Secondary button pressed fill" },
+    "control-disabled":{ "light": "#EEF0F3", "dark": "#1F2632", "use": "Flat disabled control fill (paired with text-disabled)" },
 
     "text":            { "light": "#202A3A", "dark": "#EDF2FA", "use": "Primary text (foundation: primary text)" },
     "text-muted":      { "light": "#526078", "dark": "#BBC5D5", "use": "Secondary text (foundation: muted text)" },
     "text-subtle":     { "light": "#606D82", "dark": "#A9B5C8", "use": "Metadata and placeholders; still 4.5:1" },
     "text-disabled":   { "light": "#94A0B2", "dark": "#69758A", "use": "Disabled labels (exempt from contrast minimums; never the only state cue)" },
+    "text-selected":   { "light": "#172234", "dark": "#FFFFFF", "use": "Text and icons on the selected fill" },
 
     "accent":          { "light": "#285BB5", "dark": "#A6C7FF", "use": "Primary action fill" },
     "accent-hover":    { "light": "#224F9F", "dark": "#C1D8FF", "use": "Primary action hover" },
@@ -92,7 +98,7 @@
     "lg": "16px", "xl": "20px", "2xl": "24px", "3xl": "32px", "4xl": "48px"
   },
   "radius": {
-    "xs": "3px", "sm": "5px", "md": "7px", "lg": "10px", "sheet": "12px", "pill": "999px"
+    "xs": "3px", "sm": "5px", "md": "7px", "lg": "10px", "sheet": "12px", "pill": "999px", "control": "8px"
   },
   "size": {
     "titlebar-height": "40px",
@@ -136,26 +142,36 @@
   "component": {
     "rail-item-fg":            "{text-muted}",
     "rail-item-fg-hover":      "{text}",
-    "rail-item-fg-selected":   "{text}",
-    "rail-item-bg-hover":      "{surface-hover}",
+    "rail-item-fg-selected":   "{text-selected}",
+    "rail-item-bg-hover":      "{control-hover}",
     "rail-item-bg-selected":   "{surface-selected}",
-    "rail-item-indicator":     "{accent-strong}",
+    "rail-item-indicator":     "{surface-selected}",
     "rail-item-fg-unavailable":"{text-disabled}",
     "nav-item-fg":             "{text-muted}",
-    "nav-item-fg-selected":    "{text}",
+    "nav-item-fg-selected":    "{text-selected}",
     "nav-item-bg-selected":    "{surface-selected}",
-    "nav-item-indicator":      "{accent-strong}",
+    "nav-item-indicator":      "{surface-selected}",
     "button-primary-bg":       "{accent}",
     "button-primary-bg-hover": "{accent-hover}",
     "button-primary-bg-pressed":"{accent-pressed}",
     "button-primary-fg":       "{on-accent}",
     "button-primary-edge":     "{accent-edge}",
-    "button-secondary-bg":     "{surface-raised}",
+    "button-secondary-bg":     "{control}",
+    "button-secondary-bg-hover":"{control-hover}",
+    "button-secondary-bg-pressed":"{control-pressed}",
     "button-secondary-fg":     "{text}",
     "button-secondary-edge":   "{border-control}",
+    "button-secondary-edge-hover":"{border-control-hover}",
     "button-ghost-fg":         "{text-muted}",
+    "button-ghost-bg-hover":   "{control}",
+    "button-ghost-bg-pressed": "{control-hover}",
+    "button-disabled-bg":      "{control-disabled}",
+    "button-disabled-fg":      "{text-disabled}",
+    "button-disabled-edge":    "{border}",
     "button-danger-bg":        "{danger-fill}",
     "button-danger-fg":        "{on-danger}",
+    "selected-bg":             "{surface-selected}",
+    "selected-fg":             "{text-selected}",
     "input-bg":                "{surface-sunken}",
     "input-edge":              "{border-control}",
     "input-edge-invalid":      "{danger}",
@@ -179,6 +195,8 @@
     { "fg": "focus",        "on": ["canvas", "nav", "surface", "surface-raised", "surface-overlay"], "min": 3.0 },
     { "fg": "accent-strong","on": ["canvas", "nav", "surface", "surface-selected@nav"], "min": 3.0 },
     { "fg": "border-control","on": ["surface", "surface-raised", "nav"], "min": 3.0 },
-    { "fg": "text-muted",   "on": ["surface-selected@canvas"], "min": 4.5 }
+    { "fg": "text-muted",   "on": ["surface-selected@canvas"], "min": 4.5 },
+    { "fg": "text-selected","on": ["surface-selected"], "min": 4.5 },
+    { "fg": "text",         "on": ["control", "control-hover", "control-pressed"], "min": 4.5 }
   ]
 }

@@ -229,3 +229,23 @@ Capture containment repair (Claude implementation sub-agent, builder evidence, n
 - Not shown: an OS composite screenshot (permission unavailable) and a real-pointer hit test; input containment rests on the measured native bounds and AppKit's frame-bounded hit-testing. A navigation that starts between the two shots can time out the capture, unscaled too; the frame is restored and nothing is written. A high-density display, the packaged app, the recorded callback exceptions and the intermittent Cite history remain as recorded.
 
 <!-- codex-section:end id="worknote.hq-interactive-projects#ctx.preview-workbench.001" -->
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.flow-reference-sidebar.001" -->
+## Saved flows, reference cards and narrow chrome
+
+The owner reported that saved flows printed raw source routes over map nodes, warned unhelpfully about unreachable screens, scattered Play buttons and showed a large blank player. iOS reference cards also cropped portrait phone screens into a landscape banner. The global rail, its data-source footer and the Design sidebar truncated labels to a few letters while spacing stayed fixed. Claude owned design and implementation.
+
+Causes, from source:
+- Captured screens store the route as their title, and the map printed it. The saved flows view passed a preview port that always returned no image, so the player drew an empty frame sized to the full viewport.
+- Interactive flows hold no hotspots, so every later screen was correctly unreachable from the start. The view listed that as a raw warning and offered only per-screen Play buttons.
+- The desktop host already stores each coherent capture's PNG in the Design blob store under its capture digest; the saved flow screen pins that same digest.
+- Reference thumbnails always used a 16:10 `object-fit: cover` banner.
+- Rail padding, item padding and gaps were fixed at 10/10/8 px. The source rows permanently reserved 30 px for a hidden recheck button. The sidebar floor was a fixed 120 px.
+
+Decisions (safe defaults within the owner's intent; no flow, player, repository, transport or host contract changed):
+- Flows show readable screen names derived from the route (owner titles shown as written), thumbnails in a numbered screen list beside the player, and Start, Previous, Next and the current position. With no recorded links, Previous and Next follow the saved order and say so. They never create or imply a link; link Back appears only when links exist. Images load only by exact capture digest, are re-hashed and must be PNG. A missing image says why. Recorded captures are labelled as still images, not the live page. Show this page in the live preview is offered only while a preview of that flow's exact source is open. Other enrolled sources' saved flows are listed and choosing one uses the existing explicit source selection. The map and issue list moved into disclosures with readable text.
+- App screenshots on phone platforms, portrait images and squares show the whole image on a neutral matte, with phones in a simple device outline. Landscape website screenshots keep the banner. Presentation derives from the source kind, platform and stored dimensions only; identities, blobs, rights and provenance are untouched.
+- Rail spacing scales with its width before labels shrink. Icon-only remains the compact threshold, with accessible labels. Source names and statuses wrap between words, and the recheck control overlays the row only on hover or focus. The selected rail item no longer has a side stripe. The Design sidebar floor is 80 px. Padding shrinks first, and an open sidebar is never narrower than its current labels while space allows. Drag and keyboard stop at that natural width, and window pressure can still squeeze to the floor.
+
+Builder evidence (not independent review): new rendering tests fail against the previous views and pass. The affected flows, references, Design UI, compose and desktop groups pass, as do the typechecks and the renderer build. A synthetic headless harness and the built browser fallback were inspected in light and dark at representative widths. At expanded rail widths 96–280 px no rail or source label truncates, and Design shows whole at 96 px. The Projects sidebar reaches a natural 92 px by pointer and keyboard, and Resources fits whole at 117 px. Native Electron, real enrolled sources, real capture blobs, the packaged app and 200% text remain unverified here. The Design sidebar's selected-item stripe and palette work are left to the separate theme lane. Private captures and measurements are retained outside this repository.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.flow-reference-sidebar.001" -->

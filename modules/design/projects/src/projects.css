@@ -50,7 +50,7 @@
 .hqp-root .hqp-tile { padding: 8px; }
 .hqp-tile-source { border-style: dashed; }
 .hqp-version { width: 200px; height: 180px; grid-template-rows: 1fr auto auto; }
-.hqp-version[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--selected); }
+.hqp-version[aria-pressed="true"] { border-color: var(--line); box-shadow: none; background: var(--hq-selected-bg); color: var(--hq-selected-fg); }
 .hqp-thumb { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 0; object-fit: cover;
   border-radius: 5px; background: var(--selected); font-size: 11px; color: var(--muted); image-rendering: auto; }
 .hqp-thumb-pending { animation: hqp-pulse 1.2s ease-in-out infinite; }

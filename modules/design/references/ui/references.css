@@ -39,6 +39,11 @@
 .hq-refs .hq-refs-open:focus-visible { outline-offset: -3px; }
 .hq-refs-thumb { display: grid; place-items: center; aspect-ratio: 16 / 10; overflow: hidden; border-bottom: 1px solid var(--line); background: var(--background); }
 .hq-refs-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; filter: none; }
+/* Whole-image presentations: app screens and portrait images are never cropped to fill the banner. */
+.hq-refs-thumb[data-presentation="contained"], .hq-refs-thumb[data-presentation="phone"] { grid-template: minmax(0, 1fr) / minmax(0, 1fr); box-sizing: border-box; padding: 10px; background: color-mix(in srgb, var(--line) 45%, var(--background)); }
+.hq-refs-thumb[data-presentation="contained"] img { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 3px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.18); }
+.hq-refs-device { display: flex; height: 100%; max-width: 100%; box-sizing: border-box; border: 3px solid #1c1c1e; border-radius: 12px; overflow: hidden; background: #1c1c1e; box-shadow: 0 1px 3px rgb(0 0 0 / 0.22); }
+.hq-refs-device img { display: block; width: auto; height: 100%; max-width: 100%; object-fit: contain; border-radius: 9px; }
 .hq-refs-card-heading { padding: 12px 12px 0; display: grid; gap: 8px; }
 .hq-refs-card-heading h3 { margin: 0; line-height: 20px; min-height: 40px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .hq-refs-source { color: var(--muted); font-size: 12px; margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -98,6 +103,7 @@
 .hq-refs-welcome p { max-width: 540px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
 .hq-refs-welcome-mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--selected); color: var(--accent); font-size: 28px; }
 .hq-refs-detail-image { width: 100%; height: auto; max-height: 40vh; border: 1px solid var(--line); box-sizing: border-box; background: var(--background); object-fit: contain; border-radius: 6px; margin-top: 12px; }
+.hq-refs-detail-image[data-presentation="phone"] { display: block; width: auto; max-width: 100%; margin-inline: auto; border: 4px solid #1c1c1e; border-radius: 18px; }
 .hq-graph { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
 @container refs (max-width: 599px) { .hq-refs-import-form { grid-template-columns: minmax(0, 1fr); } }
 
