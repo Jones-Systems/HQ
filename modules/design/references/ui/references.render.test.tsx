@@ -66,6 +66,19 @@ describe('ReferenceLibraryView rendered markup', () => {
     expect(html).toContain('No image');
   });
 
+  test('app screenshots show the whole phone screen; website screenshots keep the landscape banner', async () => {
+    const { library, ids } = await seeded();
+    const view = buildLibraryView(library.state, library.access, { query: '', collectionId: null, selectedId: ids[1]! }, null);
+    const html = renderToStaticMarkup(<ReferenceLibraryView view={view} previewUrl={(digest) => `hq-preview://${digest}`} {...actions} />);
+    expect(html).toMatch(/class="hq-refs-thumb" data-presentation="phone"><span class="hq-refs-device"><img[^>]+width="1179" height="2556"/u);
+    expect(html).toMatch(/class="hq-refs-thumb" data-presentation="banner"><img[^>]+width="1440" height="900"/u);
+    expect(html).toMatch(/class="hq-refs-detail-image" data-presentation="phone"/u);
+    // A missing preview is labelled, never framed as a device.
+    const missing = renderToStaticMarkup(<ReferenceLibraryView view={view} previewUrl={() => null} {...actions} />);
+    expect(missing).not.toContain('data-presentation');
+    expect(missing).toContain('Preview unavailable');
+  });
+
   test('search and import share the header and linked references expose a state instead of an action', async () => {
     const { library, ids } = await seeded();
     await library.useInProject(ids[0]!, 'project-alpha');

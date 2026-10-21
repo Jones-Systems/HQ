@@ -92,7 +92,7 @@ export function ReferenceLibraryView(props: ReferenceLibraryViewProps) {
         </div>
         {(() => { const thumbnail = view.cards.find((card) => card.id === view.detail?.id)?.thumbnail;
           const src = thumbnail ? props.previewUrl(thumbnail.digest) : null;
-          return src ? <img className="hq-refs-detail-image" src={src} alt={view.detail.title} /> : null; })()}
+          return src ? <img className="hq-refs-detail-image" data-presentation={thumbnail?.presentation} src={src} alt={view.detail.title} /> : null; })()}
         {detailCard && <><EvidenceChips card={detailCard} />{detailCard.caveat && <p className="hq-refs-caveat">{detailCard.caveat}</p>}</>}
         {view.detail.notes === '' ? null : <p>{view.detail.notes}</p>}
         <h4>Provenance</h4>
@@ -138,9 +138,11 @@ function Card({ card, view, previewUrl, onSelectReference, onUseInProject, openR
   const project = view.currentProject;
   return <article className="hq-refs-card" aria-current={card.selected ? 'true' : undefined}>
     <button ref={openRef} type="button" className="hq-refs-open" onClick={() => onSelectReference(card.id)} aria-label={`Show details for ${card.title}`}>
-      <div className="hq-refs-thumb">
+      <div className="hq-refs-thumb" data-presentation={src === null ? undefined : card.thumbnail?.presentation}>
         {src === null ? <span className="hq-refs-muted">{card.thumbnail === null ? 'No image' : 'Preview unavailable'}</span>
-          : <img src={src} alt="" loading="lazy" decoding="async" width={card.thumbnail?.w ?? undefined} height={card.thumbnail?.h ?? undefined} />}
+          : card.thumbnail?.presentation === 'phone'
+            ? <span className="hq-refs-device"><img src={src} alt="" loading="lazy" decoding="async" width={card.thumbnail.w ?? undefined} height={card.thumbnail.h ?? undefined} /></span>
+            : <img src={src} alt="" loading="lazy" decoding="async" width={card.thumbnail?.w ?? undefined} height={card.thumbnail?.h ?? undefined} />}
       </div>
       <div className="hq-refs-card-heading"><h3>{card.title}</h3>
       <p className="hq-refs-source" title={card.sourceLabel}>{card.sourceLabel}</p></div>
