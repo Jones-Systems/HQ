@@ -326,7 +326,9 @@ Binding activates the Tier S and Tier X qualification runs only. Component execu
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.preview-enablement.001" -->
 ## Preview Enablement Predicate
 
-Explicit activation predicate: `preview-s2-qualification` ran every preview row in `ctx.preview-qualification.001` and the public-website smoke at one exact head; C1–C6 passed there; and T1 accepted the claim set and its disclosed network reach for that head. `PREVIEW_PICK_QUALIFIED` may become true only if Q-PV4 and every Q-PV6 row passed at the same head; otherwise picks stay `stale` and unqualified. This qualifies Linux only; macOS waits for OS-MAC1. The owner's existing HQ fix and activation permission covers this; no further owner approval is required.
+Explicit activation predicate: `preview-s2-qualification` ran every preview row in `ctx.preview-qualification.001` and the public-website smoke at one exact head; C1–C6 passed there; and T1 accepted the claim set and its disclosed network reach for that head. `PREVIEW_PICK_QUALIFIED` may become true only if Q-PV4 and every Q-PV6 row passed at the same head; otherwise picks stay `stale` and unqualified. This general route qualifies Linux only; macOS requires the accepted OS-MAC1 evidence below. The owner's existing HQ fix and activation permission covers this; no further owner approval is required.
+
+The owner explicitly accepted Mac activation using native candidate `313cd0ab8936d8d4ee60ccfdb0aa90a786493d3a`: 58 passing rows, zero failing rows, and a separate passing packaged switch-refusal check on macOS 26.3 ARM64 / Electron 44.9.0. Q-PV4 and every Q-PV6 row passed. Bluetooth and client-certificate callback execution remain **unmeasured**: actual requests were refused before those callbacks were reached. The owner accepted precisely these two Q-PV2 exceptions, with retained runtime-source and fail-closed handler evidence, and normal browser network access. Raw native reports retain their original unmeasured status. This acceptance permits Mac preview and coherent-pick enablement on that candidate's unchanged preview implementation and its enabling descendant; it does not qualify Linux, Windows, component execution or Jones dispatch. No certificate identity or Bluetooth provisioning is required.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.preview-enablement.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.component-static-enablement.001" -->
@@ -613,7 +615,7 @@ Owned by T2; consumed by T7 and T8. The main-renderer CSP and `allowedSender` ar
   - Main pins the bundle's SHA-256 at startup and injects it into isolated world 1001 (never 999) on `dom-ready` and after each main-frame navigation. The script is idempotent.
   - Events go to a bounded isolated-world queue. Main drains it through the same API every 100 ms, only while a mode is on and the view is visible, and revalidates every output's shape and bounds.
   - The agent ignores untrusted events and runs in the main frame only.
-- **Status:** `PREVIEW_HOST_ENABLED` and `PREVIEW_PICK_QUALIFIED` live alone in `apps/desktop/electron/preview/status.ts`, with their own status test. Both stay false until `ac.preview-enablement.001`.
+- **Status:** `PREVIEW_HOST_ENABLED` and `PREVIEW_PICK_QUALIFIED` live alone in `apps/desktop/electron/preview/status.ts`, with their own status test. Both follow the platform qualification in `ac.preview-enablement.001`: enabled on the accepted Mac route, disabled on other platforms.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.preview-host.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#iface.component-runner.001" -->
