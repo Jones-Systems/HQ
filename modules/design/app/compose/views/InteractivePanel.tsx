@@ -6,6 +6,7 @@ import { anchorMatches } from '../interactive-workspace.ts';
 import { describePreviewError, fitFrame, frameFullyVisible, reviewBeside, stageHeightBudget, type FrameBox, type FrameFit } from '../preview-frame.ts';
 import { findPreview, openPreviewSource, previewCollection, previewGroups, previewIdentity, previewKey, previewKind, previewUnavailableReason } from '../preview-navigation.ts';
 import { interactiveTarget } from '../runtime-ports.ts';
+import { screenName, stateLabel } from '../../../flows/src/presentation.ts';
 import { useDesignWorkspace } from '../workspace-context.tsx';
 import './interactive-workbench.css';
 
@@ -130,7 +131,7 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
   const flowCard = flow && <section aria-label="Captured flow" className="hqw-card">
     <details><summary>{flow.title} · {flow.screens.length} {flow.screens.length === 1 ? 'screen' : 'screens'}</summary>
       <ol className="hqw-flow">{flow.screens.map((screen) => <li key={screen.id}>
-        {screen.title} · state {screen.state} · {screen.viewport.w} × {screen.viewport.h} · <code>{screen.captureDigest}</code>
+        <span title={screen.route}>{screenName(screen)}</span>{stateLabel(screen.state) ? ` · ${stateLabel(screen.state)}` : ''} · {screen.viewport.w} × {screen.viewport.h} · <code title={screen.captureDigest}>{screen.captureDigest?.slice(7, 19)}</code>
       </li>)}</ol>
     </details>
   </section>;

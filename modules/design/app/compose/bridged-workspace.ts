@@ -1,6 +1,6 @@
 /** Durable section composition. Construction and navigation never seed workspace documents. */
 import type { ProjectContext } from '@hq/contracts';
-import type { WorkspaceDocuments } from '../storage/index.ts';
+import type { WorkspaceDocuments, WorkspaceRecords } from '../storage/index.ts';
 import { createProjectsStorage, createComponentsStorage, createFlowsStorage, createCompareStorage, createAnnotationsStorage, createCanvasStorage, DEVICE_STORAGE_LABEL } from '../storage/index.ts';
 import { ProjectContentRepository } from '../../projects/src/repository.ts';
 import { createProjectsSection } from '../../projects/src/index.ts';
@@ -37,7 +37,7 @@ function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
   };
 }
 
-export function createBridgedWorkspace(documents: WorkspaceDocuments) {
+export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<Pick<WorkspaceRecords, 'getBlob'>>) {
   const storageTag: EvidenceTag = Object.freeze({ status: 'workspace', text: DEVICE_STORAGE_LABEL });
   const clock = { now: () => new Date().toISOString() };
   const ids = { next: (kind: 'project' | 'view' | 'version') => `${kind}-${globalThis.crypto.randomUUID()}` };
@@ -61,7 +61,10 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments) {
   });
   const componentsFor = perProject(async () => new ComponentLibrary(createComponentsStorage(documents), webCryptoDigest));
   const flowRepository = createFlowRepository(createFlowsStorage(documents));
-  const flowsFor = perProject(async (project) => ({ repository: flowRepository, flows: await flowRepository.listForProject(flowProjectId(project.id)) }));
+  // Preview captures are stored under their capture digest; document-only bridges have no capture images.
+  const getBlob = documents.getBlob?.bind(documents);
+  const readCapture = getBlob ? (digest: string) => getBlob(digest) : null;
+  const flowsFor = perProject(async (project) => ({ repository: flowRepository, flows: await flowRepository.listForProject(flowProjectId(project.id)), readCapture }));
   const compareFor = perProject(async (project) => {
     const storage = createCompareStorage(documents);
     const id = comparisonId(`${project.id}-compare`);
