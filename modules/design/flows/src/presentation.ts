@@ -23,7 +23,7 @@ const routeLike = (screen: Screen): boolean => screen.title === screen.route || 
 /** A short readable name for a route, e.g. `/site/v1/weddings/` → `Weddings`, `?screen=today` → `Today`. */
 export function routeName(route: string): string {
   let url: URL;
-  try { url = new URL(route, 'http://flow.invalid'); } catch { return route; }
+  try { url = new URL(route, 'https://example.com/'); } catch { return route; }
   for (const key of SCREEN_KEYS) {
     const value = url.searchParams.get(key);
     if (value) return humanize(value) || value;
