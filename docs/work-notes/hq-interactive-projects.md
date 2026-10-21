@@ -167,3 +167,13 @@ The latest full run stopped before a permission workload because the preview doc
 
 Root remains the sole Git owner. A bounded harness builder owns only the native runner; root owns this continuity record and serial verification. Product payload bytes remain those built and tested for the responsive capture correction. No runtime or dependency download is required.
 <!-- codex-section:end id="worknote.hq-interactive-projects#ctx.native-window-arrangement.001" -->
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.native-teardown-oracle.001" -->
+## Native teardown completion
+
+The uninterrupted foreground run completed every capture check and recorded 58 passes, two failures and the three existing unmeasured entries. Domain-switch teardown checked its completed-cleanup counter after observing only the synchronous session removal. A source-extracted asynchronous probe reproduced that intermediate state and proved the counter advances when data clearing finishes. The next reload also observed the completed cleanup. This is an acceptance-oracle race, not evidence of lost cleanup.
+
+The runner now waits for both session removal and the exact expected completed-cleanup count in one bounded observation for domain switching and reload. Domain restoration runs in `finally`, preserves the original failure and stops the matrix if restoration cannot be verified. Failed preview opens retain their actual result and native diagnostics. The later public-site load failure may have been contaminated by the skipped restoration; that causality remains unproved until the repaired matrix runs. Earlier raw results remain unchanged.
+
+Root implements this small prescribed harness correction from the bounded debugger's completed diagnosis; a second implementation lane would duplicate that settled mechanical work. Product payload bytes and all capture predicates remain unchanged. Syntax verification passes; the final native result is recorded separately. The shared-guidance bridge is absent in this checkout, so shared enrollment is unavailable; the current HQ and workstream agreements continue to govern.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.native-teardown-oracle.001" -->

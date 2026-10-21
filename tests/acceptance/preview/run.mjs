@@ -100,6 +100,7 @@ const check = async (id, scenario, fn) => {
   await emit({ type: 'row-end', id, scenario, outcome: row.outcome });
   if (stopped) throw stopped;
   if (row.cleanupError) throw Error('Row cleanup failed; stopping to prevent contamination: ' + row.cleanupError);
+  if (report.baselineRestoreError) throw Error('Domain baseline restoration failed; stopping to prevent contamination: ' + report.baselineRestoreError);
   assertNative();
 };
 const unmeasured = (id, scenario, reason) => report.rows.push({ id, scenario, outcome: 'unmeasured', reason });
@@ -113,7 +114,15 @@ const hook = expression => nativeCall(() => main.evaluate(`globalThis.__hqPrevie
 const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;color-scheme:dark;background:#17191d;color:#c2c6cd;font:16px monospace}#spacer{height:40px}#target{margin:20px;width:240px;height:60px;background:#303640;color:#c2c6cd;border:1px solid #454b55}#tail{height:1600px}</style></head><body><div id="spacer"></div><button id="target">Qualification target</button><p id="quote">Select this exact synthetic quote.</p><input id="file" type="file"><div id="tail"></div></body></html>`;
 let origin, crossOrigin, canaries;
 async function open(viewport = { w: 1280, h: 800, dpr: 1 }, url = origin) {
-  const session = value(await api('open', { versionId: 'preview-qualification', url, viewport, label: 'Synthetic native qualification' }));
+  const opened = await api('open', { versionId: 'preview-qualification', url, viewport, label: 'Synthetic native qualification' });
+  if (!opened.ok) {
+    const error = new Error('Native preview open failed: ' + JSON.stringify(opened));
+    error.observed = { result: opened };
+    try { if (report.hooksAvailable) error.observed.stats = await hook('stats()'); }
+    catch (diagnosticError) { error.observed.diagnosticError = diagnosticError.stack; }
+    throw error;
+  }
+  const session = value(opened);
   value(await api('place', { sessionId: session.sessionId, rect: { x: 0, y: 0, width: viewport.w, height: viewport.h }, visible: true }));
   const target = await until(async () => (await (await fetch(`http://${new URL(endpoint).host}/json/list`)).json()).find(t => t.type === 'page' && t.url.startsWith(url)), 'preview CDP target');
   await emit({type:'fixture-cdp-attach-start',targetId:target.id});
@@ -669,17 +678,31 @@ try {
     }));
     await check('Q-PV9', 'Domain switch closes views and clears session', async () => {
       const p = await open(); const before = await hook('stats()');
-      assert.equal(await shell.evaluate(`(()=>{const b=[...document.querySelectorAll('nav[aria-label="Domains"] button')].find(b=>b.textContent.trim()==='Work');b?.click();return !!b})()`), true);
-      await until(async () => (await hook('stats()')).sessions === 0, 'domain switch teardown');
-      const after = await hook('stats()'); assert.equal(after.clearedSessions, before.clearedSessions + 1); p.cdp.close();
-      await shell.evaluate(`(()=>{const b=[...document.querySelectorAll('nav[aria-label="Domains"] button')].find(b=>b.textContent.trim()==='Design');b?.click()})()`); return after;
+      let failure;
+      try {
+        assert.equal(await shell.evaluate(`(()=>{const b=[...document.querySelectorAll('nav[aria-label="Domains"] button')].find(b=>b.textContent.trim()==='Work');b?.click();return !!b})()`), true);
+        const after = await until(async () => { const stats = await hook('stats()'); return stats.sessions === 0 && stats.clearedSessions === before.clearedSessions + 1 ? stats : null; }, 'completed domain switch teardown');
+        assert.equal(after.clearedSessions, before.clearedSessions + 1); return after;
+      } catch (error) { failure = error; throw error; }
+      finally {
+        p.cdp.close();
+        try {
+          assert.equal(await shell.evaluate(`(()=>{const b=[...document.querySelectorAll('nav[aria-label="Domains"] button')].find(b=>b.textContent.trim()==='Design');b?.click();return !!b})()`), true);
+          await until(() => shell.evaluate(`document.querySelector('nav[aria-label="Domains"] button[aria-current="page"]')?.textContent.trim()==='Design'`), 'restored Design domain');
+        } catch (error) {
+          report.baselineRestoreError = error.stack;
+          if (failure) failure.observed = { ...failure.observed, baselineRestoreError: error.stack };
+          else throw error;
+        }
+      }
     });
     await check('Q-PV9', 'Main renderer reload closes views and clears session', async () => {
       const p = await open(); const before = await hook('stats()');
       await shell.send('Page.reload');
-      await until(async () => (await hook('stats()')).sessions === 0, 'reload view teardown');
+      const after = await until(async () => { const stats = await hook('stats()'); return stats.sessions === 0 && stats.clearedSessions === before.clearedSessions + 1 ? stats : null; }, 'completed reload view teardown');
       await until(() => shell.evaluate('!!window.hqServices?.preview'), 'reloaded preload');
-      const after = await hook('stats()'); assert.equal(after.clearedSessions, before.clearedSessions + 1); p.cdp.close(); return after;
+      await until(() => shell.evaluate(`document.querySelector('nav[aria-label="Domains"] button[aria-current="page"]')?.textContent.trim()==='Design'`), 'reloaded Design domain');
+      assert.equal(after.clearedSessions, before.clearedSessions + 1); p.cdp.close(); return after;
     });
   }
   const publicUrl = option('--public-url');
