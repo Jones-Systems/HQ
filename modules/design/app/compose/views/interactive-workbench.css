@@ -1,0 +1,60 @@
+/* Interactive project workbench. The live site is a native view above this renderer: nothing here may
+ * overlap .hqw-frame, and UI state changes must not resize it (a size change fences the preview). */
+.hqw-panel { container-type: inline-size; display: grid; gap: var(--hq-space-md); min-width: 0; scroll-margin-top: 16px; color: var(--hq-text); font: var(--hq-type-body); }
+/* Separates the workbench from whatever the host view renders after it (Projects folders, Flows). */
+.hqw-panel:not(:last-child) { margin-bottom: var(--hq-space-lg); padding-bottom: var(--hq-space-lg); border-bottom: 1px solid var(--hq-border); }
+.hqw-panel p { margin: 0; }
+.hqw-panel .hq-btn { height: auto; min-height: max(var(--hq-size-control-md), calc(1lh + 2 * var(--hq-space-2xs))); }
+.hqw-panel .hq-btn--sm { min-height: max(var(--hq-size-control-sm), calc(1lh + 2 * var(--hq-space-3xs))); }
+.hqw-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.hqw-spacer { flex: 1 1 0; }
+.hqw-panel .hqw-muted { color: var(--hq-text-muted); font: var(--hq-type-small); }
+
+.hqw-intro h2 { margin: 0; font: var(--hq-type-title); letter-spacing: var(--hq-type-title-tracking); }
+.hqw-intro p { margin-top: var(--hq-space-3xs); color: var(--hq-text-muted); font: var(--hq-type-small); }
+
+.hqw-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm); min-width: 0; }
+.hqw-header label { display: flex; align-items: center; gap: var(--hq-space-xs); min-width: 0; color: var(--hq-text-muted); font: var(--hq-type-label); }
+.hqw-source { flex: 1 1 260px; max-width: 560px; }
+.hqw-source select { flex: 1 1 auto; width: 100%; min-width: 0; text-overflow: ellipsis; }
+.hqw-notes { display: grid; gap: var(--hq-space-xs); font: var(--hq-type-small); color: var(--hq-text-muted); }
+.hqw-notes:empty { display: none; }
+.hqw-panel [role="alert"] { color: var(--hq-danger); }
+
+/* Review sits beside the frame when the panel is wide or the column costs the page little (reviewBeside,
+ * REVIEW_COLUMN/REVIEW_GAP in preview-frame.ts); otherwise it follows the workbench. */
+.hqw-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-lg); align-items: start; min-width: 0; }
+.hqw-review { display: grid; gap: var(--hq-space-md); align-content: start; min-width: 0; }
+@container (min-width: 720px) { .hqw-review { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.hqw-body.is-beside { grid-template-columns: minmax(0, 1fr) 320px; }
+.hqw-body.is-beside .hqw-review { grid-template-columns: minmax(0, 1fr); align-self: stretch; contain: size; overflow: auto; padding-right: var(--hq-space-3xs); }
+
+.hqw-workbench { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); background: var(--hq-surface); overflow: hidden; }
+.hqw-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); min-width: 0; padding: var(--hq-space-xs) var(--hq-space-sm); background: var(--hq-surface-raised); border-bottom: 1px solid var(--hq-border); }
+.hqw-route { display: flex; flex: 1 1 220px; min-width: 0; }
+.hqw-route input { flex: 1 1 auto; width: 100%; min-width: 0; font-family: var(--hq-font-family-mono); font-size: 12px; }
+.hqw-chip { padding: var(--hq-space-3xs) var(--hq-space-sm); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-pill); color: var(--hq-text-muted); font: var(--hq-type-meta); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hqw-modes { display: inline-flex; gap: var(--hq-space-3xs); padding: var(--hq-space-3xs); border: 1px solid var(--hq-border-control); border-radius: var(--hq-radius-md); }
+.hqw-modes .hq-btn { background: transparent; box-shadow: none; }
+.hqw-modes .hq-btn[aria-pressed="true"] { background: var(--hq-accent-soft); color: var(--hq-accent-text); box-shadow: inset 0 0 0 1px var(--hq-accent-edge); }
+
+/* One line whose height never depends on the message or mode, so the frame below keeps its size. */
+.hqw-context { display: flex; align-items: center; gap: var(--hq-space-sm); min-width: 0; min-height: calc(32px + 2 * var(--hq-space-2xs) + 1px); padding: var(--hq-space-2xs) var(--hq-space-sm); border-bottom: 1px solid var(--hq-border); box-sizing: border-box; }
+.hqw-context .hqw-message { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--hq-text-muted); font: var(--hq-type-small); text-overflow: ellipsis; white-space: nowrap; }
+.hqw-context .hqw-message.is-error { color: var(--hq-danger); }
+.hqw-context .hqw-comment { flex: 0 1 380px; box-sizing: border-box; height: 32px; min-height: 32px; min-width: 140px; padding-block: 0; }
+
+.hqw-stage { display: flex; justify-content: center; align-items: flex-start; min-width: 0; overflow: hidden; background: var(--hq-surface-sunken); }
+.hqw-frame { position: relative; flex: none; max-width: 100%; background: var(--hq-canvas); }
+.hqw-frame .hqw-frame-note { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: var(--hq-space-sm); padding: var(--hq-space-lg); color: var(--hq-text-muted); font: var(--hq-type-small); text-align: center; }
+.hqw-workbench .hqw-caption { padding: var(--hq-space-2xs) var(--hq-space-sm); border-top: 1px solid var(--hq-border); color: var(--hq-text-subtle); font: var(--hq-type-meta); }
+
+.hqw-card { display: grid; gap: var(--hq-space-sm); align-content: start; min-width: 0; padding: var(--hq-space-md); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); background: var(--hq-surface); }
+.hqw-card h3 { margin: 0; font: var(--hq-type-heading); }
+.hqw-card textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+.hqw-card summary { cursor: pointer; font: var(--hq-type-label); }
+.hqw-card code { font-family: var(--hq-font-family-mono); font-size: 11px; }
+.hqw-actions { display: flex; flex-wrap: wrap; gap: var(--hq-space-xs); }
+.hqw-thumb { display: block; width: 100%; height: auto; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-sm); }
+.hqw-identity { overflow-wrap: anywhere; }
+.hqw-flow { display: grid; gap: var(--hq-space-2xs); margin: var(--hq-space-sm) 0 0; padding-left: var(--hq-space-lg); font: var(--hq-type-small); overflow-wrap: anywhere; }

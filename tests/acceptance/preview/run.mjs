@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, writeFile, access, appendFile } from 'node:fs/promises';
 import { resolve, join, relative, isAbsolute } from 'node:path';
@@ -10,6 +11,8 @@ import { createRuntime, connect, until } from '../runtime.mjs';
 import { createNetworkCanaries } from './network.mjs';
 import { observeFileChooser } from './chooser.mjs';
 import { createSyntheticTls } from './tls.mjs';
+import { createImageFixture, scaledImageCaptures } from './images.mjs';
+import { heldCaptureContainment } from './containment.mjs';
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const args = process.argv.slice(2);
@@ -112,7 +115,7 @@ const api = async (route, params) => {
 const value = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 const hook = expression => nativeCall(() => main.evaluate(`globalThis.__hqPreviewQualification.${expression}`));
 const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;color-scheme:dark;background:#17191d;color:#c2c6cd;font:16px monospace}#spacer{height:40px}#target{margin:20px;width:240px;height:60px;background:#303640;color:#c2c6cd;border:1px solid #454b55}#tail{height:1600px}</style></head><body><div id="spacer"></div><button id="target">Qualification target</button><p id="quote">Select this exact synthetic quote.</p><input id="file" type="file"><div id="tail"></div></body></html>`;
-let origin, crossOrigin, canaries;
+let origin, crossOrigin, imageOrigin, canaries;
 async function open(viewport = { w: 1280, h: 800, dpr: 1 }, url = origin) {
   const opened = await api('open', { versionId: 'preview-qualification', url, viewport, label: 'Synthetic native qualification' });
   if (!opened.ok) {
@@ -180,6 +183,7 @@ try {
     else { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end(fixture); }
   }));
   crossOrigin = await runtime.listen(createServer((_req, res) => res.end('cross origin canary')));
+  imageOrigin = await runtime.listen(createServer(createImageFixture()));
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('HQ_') && !['NODE_OPTIONS', 'ELECTRON_RUN_AS_NODE'].includes(key)));
   await mkdir(join(runtime.root, 'tmp'));
   Object.assign(env, { HQ_USER_DATA_DIR: join(runtime.root, 'profile'), HQ_QUALIFY_PREVIEW: '1', TMPDIR: join(runtime.root, 'tmp') });
@@ -396,6 +400,65 @@ try {
       return { placement: { width: 519, height: 420 }, captures, mutation };
     }, { w: 1024, h: 720, dpr }));
   }
+  if (report.hooksAvailable) await check('Q-PV4', 'Image-heavy page captures byte-identically at scaled frames', async () => {
+    const { session, cdp } = await open({ w: 1024, h: 720, dpr: 1 }, imageOrigin + '/images?kind=img&decoding=async');
+    const { sessionId } = session;
+    try {
+      await drawable(cdp, 'workload');
+      return await nativeCall(() => scaledImageCaptures({
+        place: async rect => value(await api('place', { sessionId, rect, visible: true })),
+        settle: () => cdp.evaluate(`(async()=>{const e=window.imageEvents??={resize:0,media:0,viewport:0};if(!window.imageEventsBound){window.imageEventsBound=true;addEventListener('resize',()=>e.resize++);visualViewport.addEventListener('resize',()=>e.viewport++);for(const q of ['(max-width:1023px)','(resolution:2dppx)'])matchMedia(q).addEventListener('change',()=>e.media++);}
+          while(![...document.images].every(i=>i.complete&&i.naturalWidth>0))await new Promise(r=>setTimeout(r,50));await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));await new Promise(r=>setTimeout(r,500));return true})()`),
+        page: () => cdp.evaluate('({viewport:{w:innerWidth,h:innerHeight,dpr:devicePixelRatio},scroll:{x:scrollX,y:scrollY},events:{...window.imageEvents}})'),
+        capture: async () => capture(value(await api('status', { sessionId }))),
+        image: async captureId => value(await api('image', { captureId })),
+        pixels: (encoded, points) => shell.evaluate(`(async()=>{const bytes=Uint8Array.from(atob(${JSON.stringify(encoded)}),c=>c.charCodeAt(0));const bitmap=await createImageBitmap(new Blob([bytes],{type:'image/png'}));try{const canvas=new OffscreenCanvas(bitmap.width,bitmap.height);const context=canvas.getContext('2d');context.drawImage(bitmap,0,0);return ${JSON.stringify(points)}.map(([x,y])=>Array.from(context.getImageData(x,y,1,1).data))}finally{bitmap.close()}})()`),
+        view: async () => (await hook('sessions()')).find(s => s.sessionId === sessionId),
+        blobWrites: async () => (await hook('stats()')).blobWrites,
+        pauseAt: stage => hook(`pauseAt(${JSON.stringify(stage)})`),
+        waitForPause: () => hook('waitForPause()'),
+        resume: () => hook('resume()'),
+        evaluate: expression => cdp.evaluate(expression),
+      }));
+    } finally { if (!cancelled && !child.launchError && child.exitCode === null && child.signalCode === null) await api('close', { sessionId }); cdp.close(); }
+  });
+  if (report.hooksAvailable) await check('Q-PV4', 'Held scaled capture stays inside the fitted frame', async () => {
+    const { session, cdp } = await open({ w: 1024, h: 720, dpr: 1 }, imageOrigin + '/images?kind=img&decoding=async');
+    const { sessionId } = session, traceFile = join(runtime.root, 'tmp', 'containment-trace.json');
+    const owned = `globalThis.__hqPreviewQualification.sessions().find(s=>s.sessionId===${JSON.stringify(sessionId)})`;
+    const settingsButton = show => shell.evaluate(show ? `(()=>{const b=document.querySelector('button[title="Settings"]');b?.click();return !!b})()` : `(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Back to'));b?.click();return !!b})()`);
+    try {
+      await drawable(cdp, 'workload');
+      return await nativeCall(() => heldCaptureContainment({
+        place: async rect => value(await api('place', { sessionId, rect, visible: true })),
+        settle: () => until(() => cdp.evaluate(`(async()=>{if(document.readyState!=='complete'||![...document.images].every(i=>i.complete&&i.naturalWidth>0))return false;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));await new Promise(r=>setTimeout(r,500));return true})()`).catch(() => false), 'image page settled'),
+        view: async () => (await hook('sessions()')).find(s => s.sessionId === sessionId),
+        capture: async () => capture(value(await api('status', { sessionId }))),
+        blobWrites: async () => (await hook('stats()')).blobWrites,
+        traces: async () => (await hook('stats()')).traces.filter(t => t.sessionId === sessionId),
+        browserPid: async () => (await hook('stats()')).mainPid,
+        pauseAt: stage => hook(`pauseAt(${JSON.stringify(stage)})`),
+        waitForPause: () => hook('waitForPause()'),
+        resume: () => hook('resume()'),
+        navigate: async () => value(await api('navigate', { sessionId, route: '/images?kind=img&decoding=async&navigated=1' })),
+        settings: async show => {
+          assert.equal(await settingsButton(show), true, `Settings ${show ? 'open' : 'close'} control`);
+          await until(async () => (await hook('sessions()')).find(s => s.sessionId === sessionId)?.overlayHidden === show, `Settings overlay ${show}`);
+        },
+        displayScale: () => main.evaluate(`(()=>{const {BrowserWindow,screen}=${electronModule};const w=BrowserWindow.getAllWindows()[0];return screen.getDisplayMatching(w.getBounds()).scaleFactor})()`),
+        contentSize: () => main.evaluate(`(()=>{const {BrowserWindow}=${electronModule};const {width,height}=BrowserWindow.getAllWindows()[0].getContentBounds();return {width,height}})()`),
+        // CopyFromSurface at the widget's current size; it does not resize the widget or reset metrics.
+        widget: async () => { const bytes = Buffer.from(await main.evaluate(`(async()=>{const {webContents}=${electronModule};return (await webContents.fromId(${owned}.webContentsId).capturePage()).toPNG().toString('base64')})()`), 'base64'); return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }; },
+        traceStart: categories => main.evaluate(`${electronModule}.contentTracing.startRecording(${JSON.stringify({ included_categories: categories })}).then(()=>true)`),
+        traceStop: async () => {
+          const text = await readFile(await main.evaluate(`${electronModule}.contentTracing.stopRecording(${JSON.stringify(traceFile)})`), 'utf8');
+          await writeFile(join(evidence, 'containment-trace.json.gz'), gzipSync(text));
+          return JSON.parse(text);
+        },
+        delay, until,
+      }));
+    } finally { if (!cancelled && !child.launchError && child.exitCode === null && child.signalCode === null) await api('close', { sessionId }); cdp.close(); }
+  });
   await check('Q-PV2', 'Cross-origin main-frame navigation blocked', () => withPreview(async ({ session, cdp }) => {
     const before=await hook('stats()');
     await cdp.evaluate(`location.href=${JSON.stringify(crossOrigin)};void 0`);
@@ -752,7 +815,7 @@ finally {
   await evidenceWrites;
   report.pickQualified = false;
   report.runnerDigest = digest(await readFile(fileURLToPath(import.meta.url)));
-  report.harness={};for(const path of ['tests/acceptance/preview/run.mjs','tests/acceptance/preview/network.mjs','tests/acceptance/preview/chooser.mjs','tests/acceptance/preview/tls.mjs','tests/acceptance/preview/packaged.mjs','tests/check-groups.toml'])report.harness[path]=digest(await readFile(join(repo,path)));
+  report.harness={};for(const path of ['tests/acceptance/preview/run.mjs','tests/acceptance/preview/images.mjs','tests/acceptance/preview/containment.mjs','tests/acceptance/preview/network.mjs','tests/acceptance/preview/chooser.mjs','tests/acceptance/preview/tls.mjs','tests/acceptance/preview/packaged.mjs','tests/check-groups.toml'])report.harness[path]=digest(await readFile(join(repo,path)));
   for (const id of ['Q-PV0','Q-PV1','Q-PV2','Q-PV3','Q-PV3h','Q-PV4','Q-PV5','Q-PV6','Q-PV6d','Q-PV6a','Q-PV6h','Q-PV7','Q-PV8','Q-PV9','Q-PV10','PUBLIC-HTTPS','PACKAGED-SWITCH']) {
     if (!report.rows.some(row => row.id === id)) unmeasured(id, 'Required matrix row', 'Run stopped before this row');
   }

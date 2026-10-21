@@ -79,7 +79,42 @@ it('renders grouped openable entries and disabled stills; exact card Open preser
   await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close preview' })));
   expect(f.calls.filter((route) => route === 'open')).toHaveLength(1);
   expect(f.deactivate).not.toHaveBeenCalled();
-  expect(f.scroll.mock.instances).toContain(screen.getByLabelText('Host live preview surface'));
+  // The whole panel is revealed so its controls, the fitted frame and its caption share one scrollport.
+  const panel = screen.getByRole('region', { name: 'Interactive project' });
+  expect(f.scroll.mock.instances).toContain(panel);
+  expect(panel.contains(screen.getByLabelText('Host live preview surface'))).toBe(true);
+});
+
+it('an open preview keeps one concise toolbar, contextual review controls and a single disclosure', async () => {
+  const f = fixture({ read: () => ({ hostId: 'fixture-host', sourceProjectId: cards[0]!.sourceProjectId }), write() {} });
+  await act(async () => { render(<f.View />); });
+  await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Resume Fixture collection/Fixture website' })); });
+  await screen.findByRole('button', { name: 'Close preview' });
+  const bench = screen.getByRole('region', { name: 'Live preview workbench' });
+  const review = screen.getByRole('complementary', { name: 'Review' });
+  expect(within(bench).getByRole<HTMLInputElement>('textbox', { name: 'Preview route' }).value).toBe('/');
+  const modes = within(bench).getByRole('group', { name: 'Annotation mode' });
+  expect(within(modes).getByRole('button', { name: 'Browse' }).getAttribute('aria-pressed')).toBe('true');
+  // This fixture is not capture-qualified: Pick/Cite stay disabled and the reason is stated once, in context.
+  expect(within(modes).getByRole<HTMLButtonElement>('button', { name: 'Pick' }).disabled).toBe(true);
+  expect(within(bench).getByRole('status').textContent).toMatch(/Pick and Cite stay off/u);
+  expect(within(bench).getByText(/1024 × 720/u)).toBeTruthy();
+  expect(screen.getAllByText("Live preview: runs this site's code with normal browser network access; isolated from HQ")).toHaveLength(1);
+  expect(screen.queryByText(/^Observed route/u)).toBeNull();
+  expect(screen.queryByRole('combobox', { name: 'Preview viewport' })).toBeNull();
+  // Editing and provenance live with the frame's review controls, not above the site.
+  expect(within(review).getByRole('textbox', { name: 'Change proposal' })).toBeTruthy();
+  expect(within(review).getByRole('button', { name: 'Open Requests' })).toBeTruthy();
+  expect(within(review).getByRole<HTMLButtonElement>('button', { name: 'Add screen to flow' }).disabled).toBe(true);
+  expect(within(review).getByText(cards[0]!.sourceProjectId)).toBeTruthy();
+  expect(within(bench).queryByText(cards[0]!.sourceProjectId)).toBeNull();
+  // Navigation is a form: Enter in the route field submits exactly one navigate.
+  const route = within(bench).getByRole('textbox', { name: 'Preview route' });
+  fireEvent.change(route, { target: { value: '/about/' } });
+  await act(async () => { fireEvent.submit(route.closest('form')!); });
+  expect(f.calls.filter((call) => call === 'navigate')).toHaveLength(1);
+  // A zero-size surface (no layout here) has no fitted frame, so nothing is placed or shown natively.
+  expect(f.calls).not.toContain('place');
 });
 
 it('Resume stays passive on mount and refresh, then opens only on its explicit button', async () => {

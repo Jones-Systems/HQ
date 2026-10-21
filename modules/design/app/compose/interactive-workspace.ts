@@ -151,11 +151,25 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
   const agent: AgentChannelPort = {
     adapter: 'real',
     setMode(nextMode) {
+      const changed = nextMode !== mode;
       mode = nextMode;
+      // A finished action's notice would otherwise hide the new mode's instruction in the context line.
+      if (changed && state.notice) update({ notice: null });
       const session = state.session;
       if (!session) return;
-      void call('mode', { sessionId: session.sessionId, generation: session.generation, mode: nextMode })
-        .catch((error: unknown) => update({ error: error instanceof Error ? error.message : 'Pick/Cite unavailable.' }));
+      // Placement and in-site navigation advance the host generation between polls. Setting a mode is
+      // idempotent and sends nothing, so one stale reply re-reads the session and reapplies the mode.
+      const apply = async (current: PreviewSession, retry: boolean): Promise<void> => {
+        try { await call('mode', { sessionId: current.sessionId, generation: current.generation, mode: nextMode }); }
+        catch (error) {
+          if (!retry || !(error instanceof Error) || error.message !== 'Preview stale: navigation') throw error;
+          const latest = await call('status', { sessionId: current.sessionId });
+          if (mode !== nextMode || state.session?.sessionId !== current.sessionId) return;
+          observe(latest);
+          await apply(latest, false);
+        }
+      };
+      void apply(session, true).catch((error: unknown) => update({ error: error instanceof Error ? error.message : 'Pick/Cite unavailable.' }));
     },
     async resolve(requests) {
       const session = state.session;
@@ -261,6 +275,7 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
           if (!await acceptCapture(event.capture)) return;
           for (const listener of agentListeners) listener(event.event);
           await state.annotations?.save();
+          if (state.error?.startsWith('Preview stale: mark-')) update({ error: null });
         }
         after = Math.max(after, batch.after);
       } catch (error) { update({ error: error instanceof Error ? error.message : 'Preview observation unavailable.' }); }
