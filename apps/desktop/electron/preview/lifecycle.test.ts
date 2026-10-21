@@ -16,7 +16,7 @@ function fixture() {
   const contents = { on: vi.fn(), isDestroyed: () => destroyed, close: vi.fn(() => { destroyed = true; }), getURL: () => url,
     loadURL: vi.fn(async (value: string) => { url = value; }), executeJavaScriptInIsolatedWorld: vi.fn(async (_world: number, _scripts: { code: string }[]): Promise<unknown> => undefined),
     setWindowOpenHandler: vi.fn(), setAudioMuted: vi.fn(), setWebRTCIPHandlingPolicy: vi.fn(),
-    debugger: { isAttached: () => attached, attach: () => { attached = true; }, sendCommand: vi.fn(async (_method: string): Promise<unknown> => ({})) } };
+    debugger: { isAttached: () => attached, attach: () => { attached = true; }, sendCommand: vi.fn(async (_method: string, _params?: { captureBeyondViewport?: boolean }): Promise<unknown> => ({})) } };
   const session = { clearData: vi.fn(async () => {}), on: vi.fn(), webRequest: { onBeforeRequest: vi.fn() }, setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), setDevicePermissionHandler: vi.fn(), setDisplayMediaRequestHandler: vi.fn() };
   const view = { webContents: contents, getBounds: () => bounds, setBounds: vi.fn(value => { bounds = value; }), setVisible: vi.fn() };
   fake.readFile.mockResolvedValue('synthetic agent bundle'); fake.create.mockReturnValue({ view, session });
@@ -66,6 +66,32 @@ function captureFixture(contents: ReturnType<typeof fixture>['contents']) {
   contents.debugger.sendCommand.mockResolvedValue(pixels);
   return pixels;
 }
+it.each([false, true])('preserves responsive capture stability while refusing genuine mutation=%s', async genuineMutation => {
+  const { host, contents, putBlob } = fixture();
+  const opened = await host.call('open', openParams) as { ok: true; value: { sessionId: string; generation: number } };
+  const pixels = captureFixture(contents);
+  let mutationCounter = 0;
+  contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (_world, scripts) => scripts[0].code.includes('resolveExact') ? {
+    mutationCounter, frame: { viewport: openParams.viewport, scroll: { x: 0, y: 100 } }, results: [], contentSize: { w: 390, h: 1800 },
+  } : undefined);
+  contents.debugger.sendCommand.mockImplementation(async (method, params) => {
+    // Beyond-viewport capture can resize responsive content whose handlers write attributes.
+    if (method === 'Page.captureScreenshot' && (params?.captureBeyondViewport || genuineMutation)) mutationCounter++;
+    return pixels;
+  });
+  const result = await host.call('capture', { sessionId: opened.value.sessionId, expectedGeneration: opened.value.generation });
+  if (genuineMutation) {
+    expect(result).toEqual({ ok: false, kind: 'stale', reason: 'mutation' });
+    expect(putBlob).not.toHaveBeenCalled();
+  } else {
+    expect(result).toMatchObject({ ok: true, value: { scroll: { x: 0, y: 100 } } });
+    expect(putBlob).toHaveBeenCalledOnce();
+    expect(contents.debugger.sendCommand).toHaveBeenLastCalledWith('Page.captureScreenshot', {
+      format: 'png', fromSurface: true, captureBeyondViewport: false,
+      clip: { x: 0, y: 100, width: 390, height: 844, scale: 1 },
+    });
+  }
+});
 it('times out a stuck screenshot, releases the queue, and ignores its late result', async () => {
   vi.useFakeTimers();
   const { host, contents, putBlob } = fixture();

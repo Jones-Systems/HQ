@@ -15,6 +15,7 @@ const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const args = process.argv.slice(2);
 const option = name => { const at = args.indexOf(name); return at < 0 ? undefined : args[at + 1]; };
 const evidenceParent = option('--evidence');
+const keepTestWindowVisible = args.includes('--keep-test-window-visible');
 if (!evidenceParent || !isAbsolute(evidenceParent) || !relative(repo, resolve(evidenceParent)).startsWith('..')) throw Error('--evidence must be an absolute private path outside the repository');
 if (process.platform !== 'darwin') throw Error('This runner qualifies the native macOS route only');
 const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
@@ -23,7 +24,9 @@ await mkdir(evidenceParent, { recursive: true });
 const evidence = await mkdtemp(join(evidenceParent, 'evidence-'));
 const runtime = await createRuntime(join(evidenceParent, 'scratch'));
 const report = { schema: 'hq-preview-native/v1', head: git('rev-parse', 'HEAD'), branch: git('branch', '--show-current'), dirty: git('status', '--short'), platform: process.platform, architecture: process.arch, node: process.version, invocation: process.argv, evidence, rows: [], outcome: 'unmeasured', networkClaim: 'Normal browser network reach; literal URL filtering is hygiene only.' };
-let log = '', main, shell, child, endpoint, cancelled;
+report.windowArrangement = { requested: keepTestWindowVisible };
+let log = '', main, shell, child, endpoint, cancelled, arrangedWindow;
+const electronModule = "process.getBuiltinModule('module').createRequire(process.cwd()+'/package.json')('electron')";
 let evidenceWrites = Promise.resolve(), stopNative;
 const nativeStopped = new Promise(resolve => { stopNative = resolve; });
 class Unmeasured extends Error {}
@@ -97,6 +100,7 @@ const check = async (id, scenario, fn) => {
   await emit({ type: 'row-end', id, scenario, outcome: row.outcome });
   if (stopped) throw stopped;
   if (row.cleanupError) throw Error('Row cleanup failed; stopping to prevent contamination: ' + row.cleanupError);
+  if (report.baselineRestoreError) throw Error('Domain baseline restoration failed; stopping to prevent contamination: ' + report.baselineRestoreError);
   assertNative();
 };
 const unmeasured = (id, scenario, reason) => report.rows.push({ id, scenario, outcome: 'unmeasured', reason });
@@ -110,7 +114,15 @@ const hook = expression => nativeCall(() => main.evaluate(`globalThis.__hqPrevie
 const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;color-scheme:dark;background:#17191d;color:#c2c6cd;font:16px monospace}#spacer{height:40px}#target{margin:20px;width:240px;height:60px;background:#303640;color:#c2c6cd;border:1px solid #454b55}#tail{height:1600px}</style></head><body><div id="spacer"></div><button id="target">Qualification target</button><p id="quote">Select this exact synthetic quote.</p><input id="file" type="file"><div id="tail"></div></body></html>`;
 let origin, crossOrigin, canaries;
 async function open(viewport = { w: 1280, h: 800, dpr: 1 }, url = origin) {
-  const session = value(await api('open', { versionId: 'preview-qualification', url, viewport, label: 'Synthetic native qualification' }));
+  const opened = await api('open', { versionId: 'preview-qualification', url, viewport, label: 'Synthetic native qualification' });
+  if (!opened.ok) {
+    const error = new Error('Native preview open failed: ' + JSON.stringify(opened));
+    error.observed = { result: opened };
+    try { if (report.hooksAvailable) error.observed.stats = await hook('stats()'); }
+    catch (diagnosticError) { error.observed.diagnosticError = diagnosticError.stack; }
+    throw error;
+  }
+  const session = value(opened);
   value(await api('place', { sessionId: session.sessionId, rect: { x: 0, y: 0, width: viewport.w, height: viewport.h }, visible: true }));
   const target = await until(async () => (await (await fetch(`http://${new URL(endpoint).host}/json/list`)).json()).find(t => t.type === 'page' && t.url.startsWith(url)), 'preview CDP target');
   await emit({type:'fixture-cdp-attach-start',targetId:target.id});
@@ -128,7 +140,18 @@ let occlusionNoticed = false;
 async function drawable(cdp, stage) {
   const windows = await main.evaluate("process.getBuiltinModule('module').createRequire(process.cwd()+'/package.json')('electron').BrowserWindow.getAllWindows().map(w=>({id:w.id,visible:w.isVisible(),minimized:w.isMinimized(),focused:w.isFocused(),destroyed:w.isDestroyed()}))");
   const document = await cdp.evaluate('({visibility:document.visibilityState,focused:document.hasFocus()})');
-  const observed = {stage,windows,document};
+  const mainDocument = await shell.evaluate('({visibility:document.visibilityState,focused:document.hasFocus()})');
+  const bindings = [...previewConnections].filter(([, connection]) => connection === cdp);
+  assert.equal(bindings.length, 1, 'Drawable sentinel requires exactly one owned preview session');
+  let previewSession = null;
+  if (report.hooksAvailable) {
+    const sessions = (await hook('sessions()')).filter(session => session.sessionId === bindings[0][0]);
+    assert.equal(sessions.length, 1, 'Drawable sentinel requires the exact live preview session');
+    const {sessionId, visible, intendedVisible, overlayHidden, webContentsId} = sessions[0];
+    previewSession = {sessionId, visible, intendedVisible, overlayHidden, webContentsId};
+  }
+  const owningWindowId = arrangedWindow?.id ?? (windows.length === 1 ? windows[0].id : null);
+  const observed = {stage,owningWindowId,windows,document,mainDocument,sessionId:bindings[0][0],previewSession};
   await emit({type:'drawable-sentinel',...observed});
   if (!windows.some(w=>w.visible&&!w.minimized&&!w.destroyed) || document.visibility !== 'visible') {
     if (!occlusionNoticed) {occlusionNoticed=true;await emit({type:'environment-occluded',notice:'Native qualification stopped: keep the HQ test window visible and unobscured before a separately scheduled run.',...observed});}
@@ -146,7 +169,7 @@ async function click(cdp, x = 80, y = 80) {
   await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
 }
-const cancel = signal => { cancelled = signal; stopNative(new NativeStopped(`Cancelled: ${signal}`)); void emit({type:'cancelled',signal}); void runtime.close().catch(error => { report.cleanupError = error.stack; }); };
+const cancel = signal => { cancelled = signal; stopNative(new NativeStopped(`Cancelled: ${signal}`)); void emit({type:'cancelled',signal}); };
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => cancel(signal));
 try {
   canaries = await createNetworkCanaries(runtime);
@@ -171,7 +194,7 @@ try {
   await until(() => { if (child.exitCode !== null || child.launchError) throw Error('Native launch failed: ' + (child.launchError?.message ?? `exit=${child.exitCode}`) + '\n' + log); return endpoint && inspector; }, 'Electron debug endpoints');
   if(args.includes('--fail-after-launch')) throw Error('Deliberate qualification lifecycle failure after native launch');
   main = await connect(inspector, runtime);
-  try {report.nativeIdentity=await nativeCall(()=>main.evaluate("import('electron').then(({app})=>({isPackaged:app.isPackaged,architecture:process.arch,electron:process.versions.electron}))"));await emit({type:'native-identity',...report.nativeIdentity});}
+  try {report.nativeIdentity=await nativeCall(()=>main.evaluate(`(()=>{const {app}=${electronModule};return {isPackaged:app.isPackaged,architecture:process.arch,electron:process.versions.electron,userData:app.getPath('userData')}})()`));await emit({type:'native-identity',...report.nativeIdentity});}
   catch(error){assertNative();report.nativeIdentityUnavailable=error.message;await emit({type:'native-identity-unavailable',error:error.message});}
   if(report.nativeIdentity){assert.equal(report.nativeIdentity.isPackaged,false);assert.equal(report.nativeIdentity.architecture,'arm64');assert.equal(report.nativeIdentity.electron,'44.9.0');}
   const target = await until(async () => (await (await fetch(`http://${new URL(endpoint).host}/json/list`)).json()).find(t => t.type === 'page' && t.url.startsWith('file:')), 'HQ renderer');
@@ -180,6 +203,22 @@ try {
   report.desktop = await shell.evaluate('window.hqDesktop');
   assert.equal(report.desktop.versions.electron, '44.9.0');
   report.hooksAvailable = await main.evaluate('!!globalThis.__hqPreviewQualification');
+  if (keepTestWindowVisible) {
+    assert.ok(report.nativeIdentity, 'Window arrangement requires verified native identity');
+    assert.equal(report.nativeIdentity.userData, join(runtime.root, 'profile'), 'Window arrangement requires the owned private profile');
+    arrangedWindow = await until(async () => {
+      const windows = await nativeCall(() => main.evaluate(`${electronModule}.BrowserWindow.getAllWindows().map(w=>({id:w.id,initialAlwaysOnTop:w.isAlwaysOnTop(),webContentsId:w.webContents.id}))`));
+      assert.ok(windows.length <= 1, 'Window arrangement refuses multiple native windows');
+      return windows.length === 1 ? windows[0] : null;
+    }, 'exactly one owned test window');
+    report.windowArrangement.initial = arrangedWindow;
+    assertNative();
+    const state = await main.evaluate(`(()=>{const {BrowserWindow}=${electronModule};const windows=BrowserWindow.getAllWindows();if(windows.length!==1||windows[0].id!==${arrangedWindow.id})throw Error('Owned test window changed before arrangement');const w=windows[0];w.setAlwaysOnTop(true);return {id:w.id,alwaysOnTop:w.isAlwaysOnTop(),visible:w.isVisible(),minimized:w.isMinimized(),focused:w.isFocused()}})()`);
+    report.windowArrangement.arranged = state;
+    await emit({type:'test-window-arranged',...state});
+    assert.equal(state.alwaysOnTop, true, 'Owned test window stacking readback');
+    report.windowArrangement.claim = 'foreground-arranged test window only';
+  }
   for (const path of ['apps/desktop/dist/index.html', 'apps/desktop/dist-electron/main.js', 'apps/desktop/dist-electron/preload.cjs', 'apps/desktop/dist-electron/preview-agent/agent.js']) {
     report.build ??= {}; report.build[path] = digest(await readFile(join(repo, path)));
   }
@@ -302,6 +341,61 @@ try {
     assert.notEqual(scrolled.captureDigest, initial.captureDigest);
     return { initial, initialPixels, scrolled, scrolledPixels };
   }));
+  for (const dpr of [1, 2]) {
+    await check('Q-PV4', `Scaled responsive dark viewport retains full PNG coverage at DPR ${dpr}`, () => withPreview(async ({ session, cdp }) => {
+      value(await api('place', { sessionId: session.sessionId, rect: { x: 0, y: 0, width: 519, height: 420 }, visible: true }));
+      session = value(await api('status', { sessionId: session.sessionId }));
+      await cdp.evaluate(`(async()=>{
+        document.documentElement.style.cssText='margin:0;padding:0;color-scheme:dark;scroll-behavior:auto';
+        document.body.style.cssText='margin:0;padding:0';
+        document.body.innerHTML='<style>#responsive-surface{height:2160px;width:100%;background:repeating-linear-gradient(to bottom,rgb(23,25,29) 0 100px,rgb(35,39,45) 100px 200px)}.landmark{position:fixed;width:32px;height:32px}#nw{left:0;top:0;background:rgb(70,80,90)}#ne{right:0;top:0;background:rgb(90,80,70)}#sw{left:0;bottom:0;background:rgb(60,90,80)}#se{right:0;bottom:0;background:rgb(80,60,90)}#center{left:calc(50% - 16px);top:calc(50% - 16px);background:rgb(100,110,120)}@media(max-width:1023px){#responsive-surface{border-right:1px solid rgb(45,48,54)}}</style><main id="responsive-surface"></main><div class="landmark" id="nw"></div><div class="landmark" id="ne"></div><div class="landmark" id="sw"></div><div class="landmark" id="se"></div><div class="landmark" id="center"></div>';
+        const surface=document.querySelector('#responsive-surface');
+        const events=window.responsiveEvents={resize:0,observer:0,media:0,mutations:0};
+        const write=()=>surface.setAttribute('data-layout',innerWidth>=1024?'wide':'compact');
+        addEventListener('resize',()=>{events.resize++;write()});
+        const observer=new ResizeObserver(()=>{events.observer++;write()});observer.observe(surface);
+        for(const query of ['(max-width:1023px)','(resolution:2dppx)'])matchMedia(query).addEventListener('change',()=>{events.media++;write()});
+        new MutationObserver(records=>{events.mutations+=records.length}).observe(surface,{attributes:true});
+        write();scrollTo(0,0);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      })()`);
+      const geometry = () => cdp.evaluate(`({viewport:{w:innerWidth,h:innerHeight,dpr:devicePixelRatio},scroll:{x:scrollX,y:scrollY},client:{w:document.documentElement.clientWidth,h:document.documentElement.clientHeight},surface:document.querySelector('#responsive-surface').getBoundingClientRect().toJSON(),landmarks:[...document.querySelectorAll('.landmark')].map(n=>n.getBoundingClientRect().toJSON()),events:{...window.responsiveEvents}})`);
+      const captures = [];
+      for (const scroll of [0, 100]) {
+        await cdp.evaluate(`new Promise(r=>{scrollTo(0,${scroll});requestAnimationFrame(()=>requestAnimationFrame(r))})`);
+        const before = await geometry();
+        assert.deepEqual(before.viewport, { w: 1024, h: 720, dpr });
+        assert.deepEqual(before.scroll, { x: 0, y: scroll });
+        const record = value(await capture(session));
+        const image = value(await api('image', { captureId: record.captureId }));
+        const encoded = image.split(',')[1], bytes = Buffer.from(encoded, 'base64');
+        assert.equal(digest(bytes), record.captureDigest);
+        assert.deepEqual(record.viewport, before.viewport);
+        assert.deepEqual(record.scroll, before.scroll);
+        assert.equal(bytes.readUInt32BE(16), 1024 * dpr);
+        assert.equal(bytes.readUInt32BE(20), 720 * dpr);
+        const points = [[16,16],[1008,16],[16,704],[1008,704],[512,360],[80,10]];
+        const pixels = await shell.evaluate(`(async()=>{const bytes=Uint8Array.from(atob(${JSON.stringify(encoded)}),c=>c.charCodeAt(0));const bitmap=await createImageBitmap(new Blob([bytes],{type:'image/png'}));try{const canvas=new OffscreenCanvas(bitmap.width,bitmap.height);const context=canvas.getContext('2d');context.drawImage(bitmap,0,0);return ${JSON.stringify(points)}.map(([x,y])=>Array.from(context.getImageData(x*${dpr},y*${dpr},1,1).data))}finally{bitmap.close()}})()`);
+        assert.deepEqual(pixels, [[70,80,90,255],[90,80,70,255],[60,90,80,255],[80,60,90,255],[100,110,120,255],scroll === 0 ? [23,25,29,255] : [35,39,45,255]]);
+        await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+        const after = await geometry();
+        assert.deepEqual(after, before, 'Host capture preserves responsive geometry and emits no resize, media, or attribute mutations');
+        await writeFile(join(evidence, `responsive-${dpr}-scroll-${scroll}.png`), bytes);
+        captures.push({ record, before, after, pixels });
+      }
+      assert.notEqual(captures[0].record.captureDigest, captures[1].record.captureDigest);
+      const before = await hook('stats()');
+      await hook("pauseAt('pre-read')");
+      const pending = capture(session); pending.catch(() => {});
+      try {
+        assert.equal((await hook('waitForPause()')).sessionId, session.sessionId);
+        await cdp.evaluate("document.querySelector('#responsive-surface').setAttribute('data-genuine-change','changed')");
+      } finally { await hook('resume()'); await hook('pauseAt(null)'); }
+      const mutation = await pending;
+      assert.equal(mutation.kind, 'stale'); assert.equal(mutation.reason, 'mutation');
+      assert.equal((await hook('stats()')).blobWrites, before.blobWrites);
+      return { placement: { width: 519, height: 420 }, captures, mutation };
+    }, { w: 1024, h: 720, dpr }));
+  }
   await check('Q-PV2', 'Cross-origin main-frame navigation blocked', () => withPreview(async ({ session, cdp }) => {
     const before=await hook('stats()');
     await cdp.evaluate(`location.href=${JSON.stringify(crossOrigin)};void 0`);
@@ -455,13 +549,26 @@ try {
   await check('Q-PV7', 'Trusted selection produces cite only', () => withPreview(async ({ session, cdp }) => {
     value(await api('mode', { sessionId: session.sessionId, generation: session.generation, mode: 'cite' }));
     await drawable(cdp, 'trusted-selection');
+    const selection = () => cdp.evaluate(`(()=>{const s=getSelection(),r=s?.rangeCount?s.getRangeAt(0):null,q=document.querySelector('#quote');return {text:s?.toString()??'',collapsed:s?.isCollapsed,anchorOffset:s?.anchorOffset,focusOffset:s?.focusOffset,withinQuote:!!r&&q.contains(r.startContainer)&&q.contains(r.endContainer),rects:r?[...r.getClientRects()].map(r=>r.toJSON()):[],scroll:{x:scrollX,y:scrollY},visibility:document.visibilityState,focused:document.hasFocus()}})()`);
+    const observed = { session, beforeStats: report.hooksAvailable ? await hook('stats()') : null };
     const rect = await cdp.evaluate("(()=>{const r=document.querySelector('#quote').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()");
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x + 2, y: rect.y + 8, button: 'left', clickCount: 1 });
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x + 300, y: rect.y + 8, button: 'left', buttons: 1 });
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rect.x + 300, y: rect.y + 8, button: 'left', clickCount: 1 });
-    assert.ok(await cdp.evaluate('getSelection().toString().length>0'));
-    const events = await until(async () => { const result = value(await api('events', { sessionId: session.sessionId, after: 0 })); return result.events.length ? result.events : null; }, 'trusted citation', 5000);
-    assert.ok(events.every(event => event.event.type === 'text-cited')); return events;
+    try {
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x + 2, y: rect.y + 8, button: 'left', clickCount: 1 });
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x + 300, y: rect.y + 8, button: 'left', buttons: 1 });
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rect.x + 300, y: rect.y + 8, button: 'left', clickCount: 1 });
+      observed.initialSelection = await selection();
+      assert.ok(observed.initialSelection.text.length > 0);
+      assert.equal(observed.initialSelection.withinQuote, true);
+      const events = await until(async () => { const result = value(await api('events', { sessionId: session.sessionId, after: 0 })); observed.lastEvents = result; return result.events.length ? result.events : null; }, 'trusted citation', 5000);
+      observed.finalSelection = await selection();
+      assert.deepEqual(observed.finalSelection, observed.initialSelection);
+      assert.ok(events.every(event => event.event.type === 'text-cited' && event.event.target.quote === observed.initialSelection.text));
+      return { ...observed, events };
+    } catch (error) {
+      try { observed.finalSelection = await selection(); if (report.hooksAvailable) observed.afterStats = await hook('stats()'); }
+      catch (diagnosticError) { observed.diagnosticError = diagnosticError.stack; }
+      error.observed = observed; throw error;
+    }
   }));
   if (report.hooksAvailable) {
     for (const stage of ['pre-read', 'first-capture', 'post-read']) {
@@ -584,17 +691,31 @@ try {
     }));
     await check('Q-PV9', 'Domain switch closes views and clears session', async () => {
       const p = await open(); const before = await hook('stats()');
-      assert.equal(await shell.evaluate(`(()=>{const b=[...document.querySelectorAll('nav[aria-label="Domains"] button')].find(b=>b.textContent.trim()==='Work');b?.click();return !!b})()`), true);
-      await until(async () => (await hook('stats()')).sessions === 0, 'domain switch teardown');
-      const after = await hook('stats()'); assert.equal(after.clearedSessions, before.clearedSessions + 1); p.cdp.close();
-      await shell.evaluate(`(()=>{const b=[...document.querySelectorAll('nav[aria-label="Domains"] button')].find(b=>b.textContent.trim()==='Design');b?.click()})()`); return after;
+      let failure;
+      try {
+        assert.equal(await shell.evaluate(`(()=>{const b=[...document.querySelectorAll('nav[aria-label="Domains"] button')].find(b=>b.textContent.trim()==='Work');b?.click();return !!b})()`), true);
+        const after = await until(async () => { const stats = await hook('stats()'); return stats.sessions === 0 && stats.clearedSessions === before.clearedSessions + 1 ? stats : null; }, 'completed domain switch teardown');
+        assert.equal(after.clearedSessions, before.clearedSessions + 1); return after;
+      } catch (error) { failure = error; throw error; }
+      finally {
+        p.cdp.close();
+        try {
+          assert.equal(await shell.evaluate(`(()=>{const b=[...document.querySelectorAll('nav[aria-label="Domains"] button')].find(b=>b.textContent.trim()==='Design');b?.click();return !!b})()`), true);
+          await until(() => shell.evaluate(`document.querySelector('nav[aria-label="Domains"] button[aria-current="page"]')?.textContent.trim()==='Design'`), 'restored Design domain');
+        } catch (error) {
+          report.baselineRestoreError = error.stack;
+          if (failure) failure.observed = { ...failure.observed, baselineRestoreError: error.stack };
+          else throw error;
+        }
+      }
     });
     await check('Q-PV9', 'Main renderer reload closes views and clears session', async () => {
       const p = await open(); const before = await hook('stats()');
       await shell.send('Page.reload');
-      await until(async () => (await hook('stats()')).sessions === 0, 'reload view teardown');
+      const after = await until(async () => { const stats = await hook('stats()'); return stats.sessions === 0 && stats.clearedSessions === before.clearedSessions + 1 ? stats : null; }, 'completed reload view teardown');
       await until(() => shell.evaluate('!!window.hqServices?.preview'), 'reloaded preload');
-      const after = await hook('stats()'); assert.equal(after.clearedSessions, before.clearedSessions + 1); p.cdp.close(); return after;
+      await until(() => shell.evaluate(`document.querySelector('nav[aria-label="Domains"] button[aria-current="page"]')?.textContent.trim()==='Design'`), 'reloaded Design domain');
+      assert.equal(after.clearedSessions, before.clearedSessions + 1); p.cdp.close(); return after;
     });
   }
   const publicUrl = option('--public-url');
@@ -609,6 +730,21 @@ try {
 } catch (error) {if(error instanceof EnvironmentOccluded){report.environmentStop=error.observed;report.plannedStop=error.message;}else if(error instanceof PlannedStop)report.plannedStop=error.message;else report.error=error.stack;report.remainingScenarios='unmeasured: runner stopped before executing remaining scenarios';}
 finally {
   if (cancelled) report.cancelled = cancelled;
+  if (arrangedWindow) {
+    try {
+      if (child.launchError || child.exitCode !== null || child.signalCode !== null) {
+        report.windowArrangement.restore = {skipped:'native process already exited',id:arrangedWindow.id};
+      } else {
+        const state = await main.evaluate(`(()=>{const w=${electronModule}.BrowserWindow.fromId(${arrangedWindow.id});if(!w||w.isDestroyed())return {id:${arrangedWindow.id},skipped:'owned window no longer exists'};w.setAlwaysOnTop(${JSON.stringify(arrangedWindow.initialAlwaysOnTop)});return {id:w.id,alwaysOnTop:w.isAlwaysOnTop()}})()`);
+        report.windowArrangement.restore = state;
+        if (!state.skipped) assert.equal(state.alwaysOnTop, arrangedWindow.initialAlwaysOnTop, 'Owned test window stacking restored');
+      }
+      await emit({type:'test-window-restored',...report.windowArrangement.restore});
+    } catch (error) {
+      report.windowArrangement.restoreError = error.stack;
+      await emit({type:'test-window-restore-failed',error:error.stack});
+    }
+  }
   await evidenceWrites;
   await runtime.close().then(() => { report.cleanup = 'passed'; }, error => { report.cleanup = 'failed'; report.cleanupError = error.stack; });
   try {await access(runtime.root);report.cleanup='failed';report.cleanupError='Owned scratch root survived cleanup';}catch(error){if(error.code!=='ENOENT'){report.cleanup='failed';report.cleanupError=error.stack;}}
@@ -620,7 +756,7 @@ finally {
   for (const id of ['Q-PV0','Q-PV1','Q-PV2','Q-PV3','Q-PV3h','Q-PV4','Q-PV5','Q-PV6','Q-PV6d','Q-PV6a','Q-PV6h','Q-PV7','Q-PV8','Q-PV9','Q-PV10','PUBLIC-HTTPS','PACKAGED-SWITCH']) {
     if (!report.rows.some(row => row.id === id)) unmeasured(id, 'Required matrix row', 'Run stopped before this row');
   }
-  report.outcome = report.error || report.cancelled || report.evidenceError || report.cleanup !== 'passed' || report.rows.some(r => r.outcome === 'failed') ? 'failed' : report.rows.some(r => r.outcome === 'unmeasured') ? 'partial' : 'passed';
+  report.outcome = report.error || report.cancelled || report.evidenceError || report.windowArrangement.restoreError || report.cleanup !== 'passed' || report.rows.some(r => r.outcome === 'failed') ? 'failed' : report.rows.some(r => r.outcome === 'unmeasured') ? 'partial' : 'passed';
   report.endHead = git('rev-parse', 'HEAD');
   if (report.endHead !== report.head) { report.outcome = 'failed'; report.identityError = 'HEAD changed during run'; }
   await writeFile(join(evidence, 'report.json'), JSON.stringify(report, null, 2) + '\n');

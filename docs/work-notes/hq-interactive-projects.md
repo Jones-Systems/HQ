@@ -147,3 +147,35 @@ The owner accepted the documented two-callback exception and requested Mac web p
 
 The enabling change is limited to the Mac platform gate, its platform regression checks and this acceptance record. The preview host, agent, renderer containment, Linux/Windows gates and Jones dispatch qualification are not otherwise changed. Root remains the Git owner of the existing isolated task branch. This small one-path change requires no independent implementation or review lane. The affected root-build group and preview checks will run serially before staging from the existing Electron runtime; no simulator or runtime download is needed. Local validation passes 1,722 root Vitest tests across 100 files, nine preview Node checks and the assembled build. The emitted preview host and agent hashes equal the accepted native candidate. Installed interactive journeys and their private capture evidence must be recorded separately from source and CI results.
 <!-- codex-section:end id="worknote.hq-interactive-projects#ctx.mac-preview-activation.001" -->
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.responsive-preview-capture.001" -->
+## Responsive viewport capture repair
+
+The accepted Mac previews are installed. A real phone prototype supports navigation, coherent captures, trusted Pick/Cite notes, a frozen unsent request and exact authoring-record persistence across a normal process restart. A separate multi-page website supports navigation but its responsive handlers expose a capture defect: beyond-viewport screenshots temporarily change layout and trigger attribute writes, correctly rejected by the coherence check.
+
+A bounded native diagnosis compared screenshot options in the same Electron debugger session that owns device emulation. Changing only `captureBeyondViewport` to `false` preserved the full logical viewport, scroll, DOM and geometry with zero induced mutations and identical image bytes. Hiding scrollbars did not repair the defect. Separate debugger-session probes were confounded and are not candidate evidence.
+
+The repair retains the logical clip, surface capture and every mutation, target, generation, geometry, scroll, DPR and pixel-equality predicate. Root owns Git and documentation in the existing isolated task worktree; one bounded builder owns the host and its direct unit/native regressions. Affected checks are `hq-preview-host`, `hq-root-build`, `hq-preview-acceptance` and the preview Node checks. Native coverage must include scaled responsive pages at DPR 1 and 2, nonzero scroll, full-image landmarks and genuine-mutation refusal. The two owner-accepted callback exceptions remain unmeasured. No runtime, simulator or dependency download is needed.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.responsive-preview-capture.001" -->
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.native-window-arrangement.001" -->
+## Native foreground test arrangement
+
+The responsive viewport rows pass at DPR 1 and 2, including scroll, full-image landmarks and genuine-mutation refusal. Interrupted full runs retain their original results. One early phone capture refused unstable pixels; a later instrumented probe preserved twenty identical raw images across ten accepted captures, and the next canonical run passed all ten phone captures. The historical mismatch remains unexplained and is not claimed repaired.
+
+The latest full run stopped before a permission workload because the preview document was hidden while the native window remained visible and unminimized. Window occlusion is plausible; native view state or visibility propagation is not ruled out. An explicit `--keep-test-window-visible` runner option arranges only the owned unpackaged test window above other windows, with strict native identity/private-profile binding, recorded initial state, readback and restoration before cleanup. It makes no focus or host-setting change. Actual visibility checks, intentional Settings hiding and all capture/permission assertions remain intact. Sentinel evidence also records the main document and exact native view state. Results qualify this arranged foreground test environment only.
+
+Root remains the sole Git owner. A bounded harness builder owns only the native runner; root owns this continuity record and serial verification. Product payload bytes remain those built and tested for the responsive capture correction. No runtime or dependency download is required.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.native-window-arrangement.001" -->
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.native-teardown-oracle.001" -->
+## Native teardown completion
+
+The uninterrupted foreground run completed every capture check and recorded 58 passes, two failures and the three existing unmeasured entries. Domain-switch teardown checked its completed-cleanup counter after observing only the synchronous session removal. A source-extracted asynchronous probe reproduced that intermediate state and proved the counter advances when data clearing finishes. The next reload also observed the completed cleanup. This is an acceptance-oracle race, not evidence of lost cleanup.
+
+The runner now waits for both session removal and the exact expected completed-cleanup count in one bounded observation for domain switching and reload. Domain restoration runs in `finally`, preserves the original failure and stops the matrix if restoration cannot be verified. Failed preview opens retain their actual result and native diagnostics. The later public-site load failure may have been contaminated by the skipped restoration; that causality remains unproved until the repaired matrix runs. Earlier raw results remain unchanged.
+
+Root implements this small prescribed harness correction from the bounded debugger's completed diagnosis; a second implementation lane would duplicate that settled mechanical work. Product payload bytes and all capture predicates remain unchanged. Syntax verification passes; the final native result is recorded separately. The shared-guidance bridge is absent in this checkout, so shared enrollment is unavailable; the current HQ and workstream agreements continue to govern.
+
+The next complete run at `3252c19f582e6a2bf5684fc1183c436fad6e651a` passed teardown and public HTTPS, with 59 passes and one trusted-citation timeout. One isolated unchanged drag then passed with stable selection and a matching citation/capture; it establishes no repair of the historical timeout. [Issue #129](https://github.com/Jones-Systems/HQ/issues/129) retains that intermittent failure. The runner now preserves selection/range/frame and same-session native diagnostics on failure before close, and requires stable selection and exact emitted-quote equality. The gesture, timeout, synthetic-event rejection and capture checks remain intact; no automatic retry is added. A final instrumented matrix is required before this candidate's local update.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.native-teardown-oracle.001" -->
