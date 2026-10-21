@@ -70,9 +70,10 @@ Cite at 92%, 68% and 100% frames with repeated captures byte-identical; the Pick
 context row and preview generation stable while toggling; Show preview returning
 focus to the pressed mode; review beside the frame at panel width 1006 and
 stacked at 760; a closed phone preview resuming visible at its frame. During a
-scaled capture the native view briefly takes the full-resolution shot size at
-the frame origin (about 155 ms at 92%), the same transient Chromium already made
-for each screenshot. Failed-mark reporting, the mode notice and Project folders
+scaled capture the page briefly renders at the full-resolution shot size
+(about 155 ms at 92%), the same transient Chromium already made for each
+screenshot; the native view keeps the frame bounds and clips that surface to the
+frame, so nothing paints or takes input over HQ's controls. Failed-mark reporting, the mode notice and Project folders
 separation remain covered by source tests only; the packaged app and a
 high-density display were not part of that run.
 

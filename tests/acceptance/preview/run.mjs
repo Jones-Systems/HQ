@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, writeFile, access, appendFile } from 'node:fs/promises';
 import { resolve, join, relative, isAbsolute } from 'node:path';
@@ -11,6 +12,7 @@ import { createNetworkCanaries } from './network.mjs';
 import { observeFileChooser } from './chooser.mjs';
 import { createSyntheticTls } from './tls.mjs';
 import { createImageFixture, scaledImageCaptures } from './images.mjs';
+import { heldCaptureContainment } from './containment.mjs';
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const args = process.argv.slice(2);
@@ -420,6 +422,43 @@ try {
       }));
     } finally { if (!cancelled && !child.launchError && child.exitCode === null && child.signalCode === null) await api('close', { sessionId }); cdp.close(); }
   });
+  if (report.hooksAvailable) await check('Q-PV4', 'Held scaled capture stays inside the fitted frame', async () => {
+    const { session, cdp } = await open({ w: 1024, h: 720, dpr: 1 }, imageOrigin + '/images?kind=img&decoding=async');
+    const { sessionId } = session, traceFile = join(runtime.root, 'tmp', 'containment-trace.json');
+    const owned = `globalThis.__hqPreviewQualification.sessions().find(s=>s.sessionId===${JSON.stringify(sessionId)})`;
+    const settingsButton = show => shell.evaluate(show ? `(()=>{const b=document.querySelector('button[title="Settings"]');b?.click();return !!b})()` : `(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Back to'));b?.click();return !!b})()`);
+    try {
+      await drawable(cdp, 'workload');
+      return await nativeCall(() => heldCaptureContainment({
+        place: async rect => value(await api('place', { sessionId, rect, visible: true })),
+        settle: () => until(() => cdp.evaluate(`(async()=>{if(document.readyState!=='complete'||![...document.images].every(i=>i.complete&&i.naturalWidth>0))return false;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));await new Promise(r=>setTimeout(r,500));return true})()`).catch(() => false), 'image page settled'),
+        view: async () => (await hook('sessions()')).find(s => s.sessionId === sessionId),
+        capture: async () => capture(value(await api('status', { sessionId }))),
+        blobWrites: async () => (await hook('stats()')).blobWrites,
+        traces: async () => (await hook('stats()')).traces.filter(t => t.sessionId === sessionId),
+        browserPid: async () => (await hook('stats()')).mainPid,
+        pauseAt: stage => hook(`pauseAt(${JSON.stringify(stage)})`),
+        waitForPause: () => hook('waitForPause()'),
+        resume: () => hook('resume()'),
+        navigate: async () => value(await api('navigate', { sessionId, route: '/images?kind=img&decoding=async&navigated=1' })),
+        settings: async show => {
+          assert.equal(await settingsButton(show), true, `Settings ${show ? 'open' : 'close'} control`);
+          await until(async () => (await hook('sessions()')).find(s => s.sessionId === sessionId)?.overlayHidden === show, `Settings overlay ${show}`);
+        },
+        displayScale: () => main.evaluate(`(()=>{const {BrowserWindow,screen}=${electronModule};const w=BrowserWindow.getAllWindows()[0];return screen.getDisplayMatching(w.getBounds()).scaleFactor})()`),
+        contentSize: () => main.evaluate(`(()=>{const {BrowserWindow}=${electronModule};const {width,height}=BrowserWindow.getAllWindows()[0].getContentBounds();return {width,height}})()`),
+        // CopyFromSurface at the widget's current size; it does not resize the widget or reset metrics.
+        widget: async () => { const bytes = Buffer.from(await main.evaluate(`(async()=>{const {webContents}=${electronModule};return (await webContents.fromId(${owned}.webContentsId).capturePage()).toPNG().toString('base64')})()`), 'base64'); return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }; },
+        traceStart: categories => main.evaluate(`${electronModule}.contentTracing.startRecording(${JSON.stringify({ included_categories: categories })}).then(()=>true)`),
+        traceStop: async () => {
+          const text = await readFile(await main.evaluate(`${electronModule}.contentTracing.stopRecording(${JSON.stringify(traceFile)})`), 'utf8');
+          await writeFile(join(evidence, 'containment-trace.json.gz'), gzipSync(text));
+          return JSON.parse(text);
+        },
+        delay, until,
+      }));
+    } finally { if (!cancelled && !child.launchError && child.exitCode === null && child.signalCode === null) await api('close', { sessionId }); cdp.close(); }
+  });
   await check('Q-PV2', 'Cross-origin main-frame navigation blocked', () => withPreview(async ({ session, cdp }) => {
     const before=await hook('stats()');
     await cdp.evaluate(`location.href=${JSON.stringify(crossOrigin)};void 0`);
@@ -776,7 +815,7 @@ finally {
   await evidenceWrites;
   report.pickQualified = false;
   report.runnerDigest = digest(await readFile(fileURLToPath(import.meta.url)));
-  report.harness={};for(const path of ['tests/acceptance/preview/run.mjs','tests/acceptance/preview/network.mjs','tests/acceptance/preview/chooser.mjs','tests/acceptance/preview/tls.mjs','tests/acceptance/preview/packaged.mjs','tests/check-groups.toml'])report.harness[path]=digest(await readFile(join(repo,path)));
+  report.harness={};for(const path of ['tests/acceptance/preview/run.mjs','tests/acceptance/preview/images.mjs','tests/acceptance/preview/containment.mjs','tests/acceptance/preview/network.mjs','tests/acceptance/preview/chooser.mjs','tests/acceptance/preview/tls.mjs','tests/acceptance/preview/packaged.mjs','tests/check-groups.toml'])report.harness[path]=digest(await readFile(join(repo,path)));
   for (const id of ['Q-PV0','Q-PV1','Q-PV2','Q-PV3','Q-PV3h','Q-PV4','Q-PV5','Q-PV6','Q-PV6d','Q-PV6a','Q-PV6h','Q-PV7','Q-PV8','Q-PV9','Q-PV10','PUBLIC-HTTPS','PACKAGED-SWITCH']) {
     if (!report.rows.some(row => row.id === id)) unmeasured(id, 'Required matrix row', 'Run stopped before this row');
   }

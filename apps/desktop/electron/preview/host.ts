@@ -12,7 +12,7 @@ import { createQualificationBarrier } from './qualification.js';
 import { fitPlacement } from './placement.js';
 
 type Result = PreviewResult<unknown>;
-type Live = { view: WebContentsView; session: Session; target: URL; value: PreviewSession; visible: boolean; mode: 'off' | 'pick' | 'cite'; events: PreviewValues['events']['events'][number][]; sequence: number; draining: boolean; timer: ReturnType<typeof setInterval>; closing: boolean; epoch: number; captureSequence: number; queue: Promise<unknown>; blocked?: string; markFailure?: string; placement: number; fitted: { bounds: Rectangle; scale: number } };
+type Live = { view: WebContentsView; session: Session; target: URL; value: PreviewSession; visible: boolean; mode: 'off' | 'pick' | 'cite'; events: PreviewValues['events']['events'][number][]; sequence: number; draining: boolean; timer: ReturnType<typeof setInterval>; closing: boolean; epoch: number; captureSequence: number; queue: Promise<unknown>; blocked?: string; markFailure?: string; placement: number; fitted: { bounds: Rectangle; scale: number }; hold?: number };
 const fail = (kind: 'invalid' | 'unavailable' | 'stale' | 'blocked', reason?: string): Result => ({ ok: false, kind, ...(reason ? { reason } : {}) });
 const ok = (value: unknown): Result => ({ ok: true, value });
 class CaptureTimeout extends Error {}
@@ -45,7 +45,7 @@ export function createPreviewHost(options: {
   const diagnostics = { blobWrites: 0, clearedSessions: 0, deniedRequests: 0, lastPickOutcome: null as PreviewResult<CaptureRecord> | null };
   const sessions = new Map<string, Live>();
   const previewContents = new WeakSet<WebContents>();
-  let lifecycleEpoch = 0, overlayHidden = false;
+  let lifecycleEpoch = 0, overlayHidden = false, holds = 0;
   const images = new Map<string, { sessionId: string; data: string }>();
   let bundle: Promise<{ source: string; digest: string }> | undefined;
   const pinnedBundle = () => bundle ??= readFile(new URL('../preview-agent/agent.js', import.meta.url), 'utf8').then(source => ({ source, digest: createHash('sha256').update(source).digest('hex') }));
@@ -105,21 +105,30 @@ export function createPreviewHost(options: {
     if (bytes.length < 24 || bytes.subarray(1, 4).toString() !== 'PNG') throw Error('Invalid PNG');
     return { bytes, width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
   }
+  // Sizes only the widget inside the view, which stays at its frame. Chromium also stores this as the size of
+  // each new main-frame widget, so placement keeps it equal to the frame. It dereferences the widget without
+  // a null guard, so it is refused once the renderer has gone (checked in the same task as the send).
+  async function widgetSize(live: Live, { width, height }: { width: number; height: number }) {
+    const contents = live.view.webContents;
+    if (live.closing || contents.isDestroyed() || live.value.status === 'crashed' || contents.isCrashed()) throw Error('Preview unavailable');
+    if (!contents.debugger.isAttached()) contents.debugger.attach('1.3');
+    await contents.debugger.sendCommand('Emulation.setVisibleSize', { width, height });
+  }
   // Page.captureScreenshot sizes the widget to the full viewport × DPR for each shot and restores the fitted
   // size afterwards, so at a scaled frame the two shots read two rasters, which differed by one or two
-  // colour levels in resampled images. Holding that shot geometry across the pair lets both read one
-  // raster, as an unscaled frame does. The widget already took this size during each shot; the page sees
-  // no metrics change.
-  function shotGeometry(live: Live): { bounds: Rectangle; scale: number } | undefined {
+  // colour levels in resampled images. Holding that shot size and scale across the pair lets both read one
+  // raster, as an unscaled frame does; the page sees no metrics change. Only the widget grows, so the frame
+  // clip installed in open() contains it.
+  function shotGeometry(live: Live): { size: { width: number; height: number }; scale: number } | undefined {
     const window = options.window();
     const factor = window && !window.isDestroyed() ? screen.getDisplayMatching(window.getBounds()).scaleFactor : 1;
-    const { w, h, dpr } = live.value.viewport, scale = dpr / factor, { x, y, width, height } = live.fitted.bounds;
-    const bounds = { x, y, width: Math.round(w * scale), height: Math.round(h * scale) };
-    return bounds.width === width && bounds.height === height && live.fitted.scale === scale ? undefined : { bounds, scale };
+    const { w, h, dpr } = live.value.viewport, scale = dpr / factor, { width, height } = live.fitted.bounds;
+    const size = { width: Math.round(w * scale), height: Math.round(h * scale) };
+    return size.width === width && size.height === height && live.fitted.scale === scale ? undefined : { size, scale };
   }
   async function restoreFitted(live: Live) {
     if (live.closing || live.view.webContents.isDestroyed()) return;
-    live.view.setBounds(live.fitted.bounds); await emulate(live, live.fitted.scale);
+    await widgetSize(live, live.fitted.bounds); await emulate(live, live.fitted.scale);
   }
   async function capture(live: Live, expectedGeneration: number, event?: AgentEvent): Promise<PreviewResult<CaptureRecord>> {
     if (event && !pickQualified) return { ok: false, kind: 'stale', reason: 'unqualified' };
@@ -131,20 +140,21 @@ export function createPreviewHost(options: {
     const deadline = Date.now() + 6000;
     const withinCapture = <T>(operation: Promise<T>) => bounded(operation, deadline - Date.now());
     let accepted: Extract<ReturnType<typeof acceptCapture>, { ok: true }>;
-    let held = false;
+    let held = false, inFlight: Promise<unknown> | undefined;
+    const hold = ++holds;
     try {
       trace(live, 'capture', 'pre-read:start');
       const pre = await withinCapture(read(live, request ? [request] : [], captureSequence));
       trace(live, 'capture', 'pre-read:end');
       if (qualificationEnabled) await barrier.checkpoint('pre-read', live.value.sessionId);
       const shot = shotGeometry(live);
-      if (shot) { held = true; live.view.setBounds(shot.bounds); await withinCapture(emulate(live, shot.scale)); trace(live, 'capture', 'shot-geometry:held'); }
+      if (shot) { held = true; live.hold = hold; await withinCapture(widgetSize(live, shot.size)); await withinCapture(emulate(live, shot.scale)); trace(live, 'capture', 'shot-geometry:held'); }
       trace(live, 'capture', 'pixels-first:start');
-      const first = await withinCapture(pixels(live, pre.frame.scroll));
+      const first = await withinCapture(inFlight = pixels(live, pre.frame.scroll));
       trace(live, 'capture', 'pixels-first:end');
       if (qualificationEnabled) await barrier.checkpoint('first-capture', live.value.sessionId);
       trace(live, 'capture', 'pixels-second:start');
-      const second = await withinCapture(pixels(live, pre.frame.scroll));
+      const second = await withinCapture(inFlight = pixels(live, pre.frame.scroll));
       trace(live, 'capture', 'pixels-second:end');
       if (held) { held = false; await withinCapture(restoreFitted(live)); trace(live, 'capture', 'shot-geometry:restored'); }
       trace(live, 'capture', 'post-read:start');
@@ -157,16 +167,25 @@ export function createPreviewHost(options: {
       accepted = result;
     } catch (error) {
       trace(live, 'capture', 'error', error);
-      if (error instanceof CaptureTimeout) return { ok: false, kind: 'unavailable', reason: 'capture-timeout' };
+      if (error instanceof CaptureTimeout) {
+        // Chromium still completes a timed-out screenshot and then restores the widget size and metrics it
+        // started with, the shot's. Restore the frame again once it settles, unless a later capture holds it.
+        if (held && inFlight) void inFlight.catch(() => {}).then(async () => {
+          if (live.hold !== undefined && live.hold !== hold) return;
+          await restoreFitted(live); trace(live, 'capture', 'shot-geometry:late-restored');
+        }).catch(error => trace(live, 'capture', 'shot-geometry:error', error));
+        return { ok: false, kind: 'unavailable', reason: 'capture-timeout' };
+      }
       return live.closing || live.value.generation !== expectedGeneration
         ? { ok: false, kind: 'stale', reason: 'navigation' }
         : { ok: false, kind: 'unavailable', reason: 'capture-failed' };
     } finally {
       trace(live, 'capture', 'finalize:start');
       if (held && !live.closing && !live.view.webContents.isDestroyed()) {
-        // A failed or timed-out shot must not leave the view at the shot size; the attempt has already failed.
+        // A failed or timed-out shot must not leave the widget at the shot size; the attempt has already failed.
         try { await bounded(restoreFitted(live), 1000); } catch (error) { trace(live, 'capture', 'shot-geometry:error', error); }
       }
+      if (live.hold === hold) live.hold = undefined;
       if (!live.closing && !live.view.webContents.isDestroyed()) {
         try {
           // The half-step expires this attempt without overtaking the next integer token.
@@ -256,6 +275,10 @@ export function createPreviewHost(options: {
     contents.on('dom-ready', () => { if (!initializing) void install(live).catch(() => { live.blocked = 'agent-unavailable'; }); });
     contents.on('render-process-gone', () => { fence(live); live.value = { ...live.value, status: 'crashed' }; });
     made.view.setBounds({ x: 0, y: 0, width: params.viewport.w, height: params.viewport.h }); made.view.setVisible(false);
+    // CSS cannot clip a native view. On macOS the widget draws only through a layer under this view's host
+    // layer, whose rounded corners clip every descendant, and AppKit hit-tests it only inside the view's
+    // frame. So a widget larger than the view stays inside the frame; 1 DIP is the smallest radius that clips.
+    made.view.setBorderRadius(1);
     window.contentView.addChildView(made.view);
     live.timer = setInterval(() => { void drain(live); }, 100);
     try {
@@ -333,11 +356,12 @@ export function createPreviewHost(options: {
           const { bounds, scale } = fitPlacement(rect, live.value.viewport, options.window()?.webContents.getZoomFactor?.() ?? 1);
           // Placements overlap while install/emulate are awaited; only the newest one may touch the view.
           const placement = ++live.placement;
-          // Compare with the last fitted placement: a capture may be holding the view at its shot size.
+          // Compare with the last fitted placement: a capture may be holding the widget at its shot size.
           const old = live.fitted.bounds;
           if (old.width !== bounds.width || old.height !== bounds.height) { fence(live); await install(live); }
           if (placement !== live.placement) return ok(current(live));
           live.fitted = { bounds, scale }; live.view.setBounds(bounds);
+          await widgetSize(live, bounds);
           await emulate(live, scale);
           if (placement !== live.placement) return ok(current(live));
           live.view.setVisible(visible && !overlayHidden); live.visible = visible; return ok(current(live));
