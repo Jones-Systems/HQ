@@ -1,4 +1,4 @@
-import { app, type BrowserWindow, type WebContentsView, type Session, type WebContents } from 'electron';
+import { app, screen, type BrowserWindow, type WebContentsView, type Session, type WebContents, type Rectangle } from 'electron';
 import { randomUUID, createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { AgentEvent, CaptureRecord, PreviewParams, PreviewResult, PreviewSession, PreviewValues, ResolveRequest } from '@hq/contracts/preview';
@@ -12,7 +12,7 @@ import { createQualificationBarrier } from './qualification.js';
 import { fitPlacement } from './placement.js';
 
 type Result = PreviewResult<unknown>;
-type Live = { view: WebContentsView; session: Session; target: URL; value: PreviewSession; visible: boolean; mode: 'off' | 'pick' | 'cite'; events: PreviewValues['events']['events'][number][]; sequence: number; draining: boolean; timer: ReturnType<typeof setInterval>; closing: boolean; epoch: number; captureSequence: number; queue: Promise<unknown>; blocked?: string; markFailure?: string; placement: number };
+type Live = { view: WebContentsView; session: Session; target: URL; value: PreviewSession; visible: boolean; mode: 'off' | 'pick' | 'cite'; events: PreviewValues['events']['events'][number][]; sequence: number; draining: boolean; timer: ReturnType<typeof setInterval>; closing: boolean; epoch: number; captureSequence: number; queue: Promise<unknown>; blocked?: string; markFailure?: string; placement: number; fitted: { bounds: Rectangle; scale: number } };
 const fail = (kind: 'invalid' | 'unavailable' | 'stale' | 'blocked', reason?: string): Result => ({ ok: false, kind, ...(reason ? { reason } : {}) });
 const ok = (value: unknown): Result => ({ ok: true, value });
 class CaptureTimeout extends Error {}
@@ -105,6 +105,22 @@ export function createPreviewHost(options: {
     if (bytes.length < 24 || bytes.subarray(1, 4).toString() !== 'PNG') throw Error('Invalid PNG');
     return { bytes, width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
   }
+  // Page.captureScreenshot sizes the widget to the full viewport × DPR for each shot and restores the fitted
+  // size afterwards, so at a scaled frame the two shots read two rasters, which differed by one or two
+  // colour levels in resampled images. Holding that shot geometry across the pair lets both read one
+  // raster, as an unscaled frame does. The widget already took this size during each shot; the page sees
+  // no metrics change.
+  function shotGeometry(live: Live): { bounds: Rectangle; scale: number } | undefined {
+    const window = options.window();
+    const factor = window && !window.isDestroyed() ? screen.getDisplayMatching(window.getBounds()).scaleFactor : 1;
+    const { w, h, dpr } = live.value.viewport, scale = dpr / factor, { x, y, width, height } = live.fitted.bounds;
+    const bounds = { x, y, width: Math.round(w * scale), height: Math.round(h * scale) };
+    return bounds.width === width && bounds.height === height && live.fitted.scale === scale ? undefined : { bounds, scale };
+  }
+  async function restoreFitted(live: Live) {
+    if (live.closing || live.view.webContents.isDestroyed()) return;
+    live.view.setBounds(live.fitted.bounds); await emulate(live, live.fitted.scale);
+  }
   async function capture(live: Live, expectedGeneration: number, event?: AgentEvent): Promise<PreviewResult<CaptureRecord>> {
     if (event && !pickQualified) return { ok: false, kind: 'stale', reason: 'unqualified' };
     if (live.value.status === 'crashed' || live.value.generation !== expectedGeneration) return { ok: false, kind: 'stale', reason: 'navigation' };
@@ -115,11 +131,14 @@ export function createPreviewHost(options: {
     const deadline = Date.now() + 6000;
     const withinCapture = <T>(operation: Promise<T>) => bounded(operation, deadline - Date.now());
     let accepted: Extract<ReturnType<typeof acceptCapture>, { ok: true }>;
+    let held = false;
     try {
       trace(live, 'capture', 'pre-read:start');
       const pre = await withinCapture(read(live, request ? [request] : [], captureSequence));
       trace(live, 'capture', 'pre-read:end');
       if (qualificationEnabled) await barrier.checkpoint('pre-read', live.value.sessionId);
+      const shot = shotGeometry(live);
+      if (shot) { held = true; live.view.setBounds(shot.bounds); await withinCapture(emulate(live, shot.scale)); trace(live, 'capture', 'shot-geometry:held'); }
       trace(live, 'capture', 'pixels-first:start');
       const first = await withinCapture(pixels(live, pre.frame.scroll));
       trace(live, 'capture', 'pixels-first:end');
@@ -127,6 +146,7 @@ export function createPreviewHost(options: {
       trace(live, 'capture', 'pixels-second:start');
       const second = await withinCapture(pixels(live, pre.frame.scroll));
       trace(live, 'capture', 'pixels-second:end');
+      if (held) { held = false; await withinCapture(restoreFitted(live)); trace(live, 'capture', 'shot-geometry:restored'); }
       trace(live, 'capture', 'post-read:start');
       let post = await withinCapture(read(live, request ? [request] : [], captureSequence));
       trace(live, 'capture', 'post-read:end');
@@ -143,6 +163,10 @@ export function createPreviewHost(options: {
         : { ok: false, kind: 'unavailable', reason: 'capture-failed' };
     } finally {
       trace(live, 'capture', 'finalize:start');
+      if (held && !live.closing && !live.view.webContents.isDestroyed()) {
+        // A failed or timed-out shot must not leave the view at the shot size; the attempt has already failed.
+        try { await bounded(restoreFitted(live), 1000); } catch (error) { trace(live, 'capture', 'shot-geometry:error', error); }
+      }
       if (!live.closing && !live.view.webContents.isDestroyed()) {
         try {
           // The half-step expires this attempt without overtaking the next integer token.
@@ -200,7 +224,8 @@ export function createPreviewHost(options: {
     const target = previewTarget(params.url)!;
     const made = createIsolatedContents('hq-preview'), id = randomUUID();
     const live: Live = { ...made, target, value: { sessionId: id, versionId: params.versionId, generation: 0, route: target.pathname + target.search, state: target.hash, viewport: params.viewport, contentSize: { w: params.viewport.w, h: params.viewport.h }, status: 'open', pickQualified },
-      visible: false, mode: 'off', events: [], sequence: 0, draining: false, timer: undefined as never, closing: false, epoch: 0, captureSequence: 0, queue: Promise.resolve(), placement: 0 };
+      visible: false, mode: 'off', events: [], sequence: 0, draining: false, timer: undefined as never, closing: false, epoch: 0, captureSequence: 0, queue: Promise.resolve(), placement: 0,
+      fitted: { bounds: { x: 0, y: 0, width: params.viewport.w, height: params.viewport.h }, scale: 1 } };
     sessions.set(id, live);
     const contents = made.view.webContents, targetSession = made.session;
     previewContents.add(contents);
@@ -277,7 +302,7 @@ export function createPreviewHost(options: {
     closeNetworkControl,
     pauseAt: barrier.pauseAt, waitForPause: barrier.waitForPause, resume: barrier.resume,
     fault(value: string | null) { if (value !== null && !['mutation', 'pixels-unstable', 'dpr'].includes(value)) throw Error('Invalid fault'); fault = value ?? undefined; },
-    sessions: () => [...sessions.values()].map(live => ({ ...current(live), visible: live.view.getVisible(), intendedVisible: live.visible, overlayHidden, webContentsId: live.view.webContents.id, processId: live.view.webContents.getOSProcessId(), preloadScripts: live.session.getPreloadScripts(), preloads: live.session.getPreloads(), storagePath: live.session.storagePath, persistent: live.session.isPersistent() })),
+    sessions: () => [...sessions.values()].map(live => ({ ...current(live), visible: live.view.getVisible(), intendedVisible: live.visible, bounds: live.view.getBounds(), fitted: live.fitted, overlayHidden, webContentsId: live.view.webContents.id, processId: live.view.webContents.getOSProcessId(), preloadScripts: live.session.getPreloadScripts(), preloads: live.session.getPreloads(), storagePath: live.session.storagePath, persistent: live.session.isPersistent() })),
     stats: () => ({ ...diagnostics, overlayHidden, traces: [...traces], denials: { ...denials }, mainPid: process.pid, rendererPid: options.window()?.webContents.getOSProcessId(), sessions: sessions.size }),
   };
   return {
@@ -308,10 +333,11 @@ export function createPreviewHost(options: {
           const { bounds, scale } = fitPlacement(rect, live.value.viewport, options.window()?.webContents.getZoomFactor?.() ?? 1);
           // Placements overlap while install/emulate are awaited; only the newest one may touch the view.
           const placement = ++live.placement;
-          const old = live.view.getBounds();
+          // Compare with the last fitted placement: a capture may be holding the view at its shot size.
+          const old = live.fitted.bounds;
           if (old.width !== bounds.width || old.height !== bounds.height) { fence(live); await install(live); }
           if (placement !== live.placement) return ok(current(live));
-          live.view.setBounds(bounds);
+          live.fitted = { bounds, scale }; live.view.setBounds(bounds);
           await emulate(live, scale);
           if (placement !== live.placement) return ok(current(live));
           live.view.setVisible(visible && !overlayHidden); live.visible = visible; return ok(current(live));

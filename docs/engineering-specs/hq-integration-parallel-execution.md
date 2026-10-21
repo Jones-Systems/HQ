@@ -610,6 +610,8 @@ Owned by T2; consumed by T7 and T8. The main-renderer CSP and `allowedSender` ar
   3. main captures twice, giving `P1` and `P2`;
   4. a post-read repeats the first step.
 
+  At a scaled frame, `Page.captureScreenshot` sizes the widget to the full viewport × DPR for each shot and restores it afterwards, so two shots would read two rasters. Main therefore places the view at that shot size and scale after step 1, takes both shots from one raster, and restores the last fitted placement before step 4, also when a shot fails. An unscaled frame is not moved. Placement during a capture compares against the fitted placement and applies the newest one.
+
   The capture is accepted only if generation, URL, viewport, scroll, mutation counter and the re-resolved identity, text and rects are unchanged, `sha256(P1) = sha256(P2)`, and `P1`'s width divided by the viewport width equals the DPR. Otherwise it returns `stale` with reason `navigation`, `scroll`, `mutation`, `target-changed`, `pixels-unstable` or `dpr`, writes nothing, and allows one bounded retry. Only an accepted capture writes `P1`, once, through r3 `blob.put{expectedDigest}`. If static captures are not byte-identical on the host (Q-PV4), pick binding stays unqualified and always `stale`. The renderer reuses an anchor only on an exact `{versionId, route, state, viewport, captureDigest}` match.
 - **Agent (PV-AGENT):**
   - `build:preview-agent` bundles `modules/design/annotations/src/preview-agent/index.ts` as one IIFE with the existing Vite library mode, into ignored build output, with no new dependency.
@@ -851,7 +853,7 @@ T7 owns these suites in `tests/acceptance/**`. They run the native built HQ app 
 | Q-PV2 | Cross-origin main-frame navigation, `window.open`, a download, basic auth, client-certificate selection, each permission API, display media and a file input | Each blocked and counted (C3, C4); the file chooser row is recorded as observed |
 | Q-PV3 | Requests for `file:`, `hq-component:` and other custom schemes | Cancelled (C5) |
 | Q-PV3h | Literal private and loopback URLs; a canary reached through a DNS alias and through a 302; WebRTC TCP to a TURN-TCP canary, with positive controls | Recorded as observed; a hit is expected and disclosed under PV-NET; literal-URL cancellations count as hygiene only |
-| Q-PV4 | Ten repeated captures of a static page at 1280×800@1 and 390×844@3 | Viewport and DPR match; digests byte-identical, or recorded with pick binding left unqualified |
+| Q-PV4 | Ten repeated captures of a static page at 1280×800@1 and 390×844@3; repeated captures of a static image-heavy page at two scaled frames, with a compositor-only change between the shots as a positive control | Viewport and DPR match; digests byte-identical, or recorded with pick binding left unqualified; the scaled frames restore the fitted view, and the control is refused as `pixels-unstable` with no blob write |
 | Q-PV5 | Navigate, scroll and resize at each PV-COHERE pause point | `stale:<reason>`; the blob-store count is unchanged |
 | Q-PV6 | Pick, navigate, then drain | `stale:navigation` |
 | Q-PV6d | At a pause point: same-length text replacement; remove and reinsert an identical node; a sibling height change that moves the target | `stale:target-changed`, `stale:mutation`, `stale:target-changed`; no anchor |
@@ -8450,7 +8452,7 @@ Mapper fixtures cover stable host/root/project identity, bounded malformed input
 
 One synthetic end-to-end scenario enrolls a gallery and Jones list, opens a full document, clicks through, picks/comments, captures a flow, explicitly sends through the existing qualification stub and reads the receipt. Fixtures prove source behavior only. Separate owner-approved real enrollment and native consent verify actual projects; no fixture closes a live gate.
 
-Workbench geometry tests cover host fit, zoom conversion, `dontSetVisibleSize` on every metrics override, fencing only on fitted size changes, renderer fit without upscaling, scrollport visibility, one bounded mode retry after a host fence, newest-placement ordering, one-shot reporting of a refused mark and the review-column rule. Native acceptance must show desktop and phone sites filling the frame at several panel widths, in-site link navigation staying inside it, scrolled panels pausing rather than covering HQ, and unchanged capture, Pick/Cite and proposal behavior. Browser fixtures cannot verify native composition.
+Workbench geometry tests cover host fit, zoom conversion, `dontSetVisibleSize` on every metrics override, fencing only on fitted size changes, renderer fit without upscaling, scrollport visibility, one bounded mode retry after a host fence, newest-placement ordering, both scaled-frame screenshots reading one held raster with the fitted view restored after success or failure, one-shot reporting of a refused mark and the review-column rule. Native acceptance must show desktop and phone sites filling the frame at several panel widths, in-site link navigation staying inside it, scrolled panels pausing rather than covering HQ, and unchanged capture, Pick/Cite and proposal behavior. Browser fixtures cannot verify native composition.
 
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.project-experience-source.001" -->
 

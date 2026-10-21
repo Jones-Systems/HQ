@@ -10,6 +10,7 @@ import { createRuntime, connect, until } from '../runtime.mjs';
 import { createNetworkCanaries } from './network.mjs';
 import { observeFileChooser } from './chooser.mjs';
 import { createSyntheticTls } from './tls.mjs';
+import { createImageFixture, scaledImageCaptures } from './images.mjs';
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const args = process.argv.slice(2);
@@ -112,7 +113,7 @@ const api = async (route, params) => {
 const value = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 const hook = expression => nativeCall(() => main.evaluate(`globalThis.__hqPreviewQualification.${expression}`));
 const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;color-scheme:dark;background:#17191d;color:#c2c6cd;font:16px monospace}#spacer{height:40px}#target{margin:20px;width:240px;height:60px;background:#303640;color:#c2c6cd;border:1px solid #454b55}#tail{height:1600px}</style></head><body><div id="spacer"></div><button id="target">Qualification target</button><p id="quote">Select this exact synthetic quote.</p><input id="file" type="file"><div id="tail"></div></body></html>`;
-let origin, crossOrigin, canaries;
+let origin, crossOrigin, imageOrigin, canaries;
 async function open(viewport = { w: 1280, h: 800, dpr: 1 }, url = origin) {
   const opened = await api('open', { versionId: 'preview-qualification', url, viewport, label: 'Synthetic native qualification' });
   if (!opened.ok) {
@@ -180,6 +181,7 @@ try {
     else { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end(fixture); }
   }));
   crossOrigin = await runtime.listen(createServer((_req, res) => res.end('cross origin canary')));
+  imageOrigin = await runtime.listen(createServer(createImageFixture()));
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('HQ_') && !['NODE_OPTIONS', 'ELECTRON_RUN_AS_NODE'].includes(key)));
   await mkdir(join(runtime.root, 'tmp'));
   Object.assign(env, { HQ_USER_DATA_DIR: join(runtime.root, 'profile'), HQ_QUALIFY_PREVIEW: '1', TMPDIR: join(runtime.root, 'tmp') });
@@ -396,6 +398,28 @@ try {
       return { placement: { width: 519, height: 420 }, captures, mutation };
     }, { w: 1024, h: 720, dpr }));
   }
+  if (report.hooksAvailable) await check('Q-PV4', 'Image-heavy page captures byte-identically at scaled frames', async () => {
+    const { session, cdp } = await open({ w: 1024, h: 720, dpr: 1 }, imageOrigin + '/images?kind=img&decoding=async');
+    const { sessionId } = session;
+    try {
+      await drawable(cdp, 'workload');
+      return await nativeCall(() => scaledImageCaptures({
+        place: async rect => value(await api('place', { sessionId, rect, visible: true })),
+        settle: () => cdp.evaluate(`(async()=>{const e=window.imageEvents??={resize:0,media:0,viewport:0};if(!window.imageEventsBound){window.imageEventsBound=true;addEventListener('resize',()=>e.resize++);visualViewport.addEventListener('resize',()=>e.viewport++);for(const q of ['(max-width:1023px)','(resolution:2dppx)'])matchMedia(q).addEventListener('change',()=>e.media++);}
+          while(![...document.images].every(i=>i.complete&&i.naturalWidth>0))await new Promise(r=>setTimeout(r,50));await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));await new Promise(r=>setTimeout(r,500));return true})()`),
+        page: () => cdp.evaluate('({viewport:{w:innerWidth,h:innerHeight,dpr:devicePixelRatio},scroll:{x:scrollX,y:scrollY},events:{...window.imageEvents}})'),
+        capture: async () => capture(value(await api('status', { sessionId }))),
+        image: async captureId => value(await api('image', { captureId })),
+        pixels: (encoded, points) => shell.evaluate(`(async()=>{const bytes=Uint8Array.from(atob(${JSON.stringify(encoded)}),c=>c.charCodeAt(0));const bitmap=await createImageBitmap(new Blob([bytes],{type:'image/png'}));try{const canvas=new OffscreenCanvas(bitmap.width,bitmap.height);const context=canvas.getContext('2d');context.drawImage(bitmap,0,0);return ${JSON.stringify(points)}.map(([x,y])=>Array.from(context.getImageData(x,y,1,1).data))}finally{bitmap.close()}})()`),
+        view: async () => (await hook('sessions()')).find(s => s.sessionId === sessionId),
+        blobWrites: async () => (await hook('stats()')).blobWrites,
+        pauseAt: stage => hook(`pauseAt(${JSON.stringify(stage)})`),
+        waitForPause: () => hook('waitForPause()'),
+        resume: () => hook('resume()'),
+        evaluate: expression => cdp.evaluate(expression),
+      }));
+    } finally { if (!cancelled && !child.launchError && child.exitCode === null && child.signalCode === null) await api('close', { sessionId }); cdp.close(); }
+  });
   await check('Q-PV2', 'Cross-origin main-frame navigation blocked', () => withPreview(async ({ session, cdp }) => {
     const before=await hook('stats()');
     await cdp.evaluate(`location.href=${JSON.stringify(crossOrigin)};void 0`);

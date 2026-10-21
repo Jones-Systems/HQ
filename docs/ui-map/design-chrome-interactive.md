@@ -59,11 +59,22 @@ natively until rerun: an overlapping-placement race left a resumed phone view
 at a stale oversized box, hidden; a 1px context-row growth in Pick/Cite could
 fence a height-limited frame; failed marks vanished silently; a finished notice
 hid the mode instruction; focus was lost after Show preview; no separation
-before Project folders. Coherent capture at a scaled frame is intermittently
+before Project folders. Coherent capture at a scaled frame was intermittently
 `pixels-unstable` on a real image-heavy site (Pick at 92% failed twice; capture
-alternated), while unscaled frames passed. This is the recorded clipped-capture
-rescale residual and is not fixed. At 200% HQ zoom in a short window the stage
-floor cannot fit, so the preview correctly stays paused.
+alternated), while unscaled frames passed. At 200% HQ zoom in a short window the
+stage floor cannot fit, so the preview correctly stays paused.
+
+A later unpackaged qualification run on the repaired source (builder evidence)
+verified, on the real site and a synthetic image-heavy page: Capture, Pick and
+Cite at 92%, 68% and 100% frames with repeated captures byte-identical; the Pick
+context row and preview generation stable while toggling; Show preview returning
+focus to the pressed mode; review beside the frame at panel width 1006 and
+stacked at 760; a closed phone preview resuming visible at its frame. During a
+scaled capture the native view briefly takes the full-resolution shot size at
+the frame origin (about 155 ms at 92%), the same transient Chromium already made
+for each screenshot. Failed-mark reporting, the mode notice and Project folders
+separation remain covered by source tests only; the packaged app and a
+high-density display were not part of that run.
 
 The 2026-10-21 correction checks the rail through keyboard widths 64, 88, 96,
 104, 112, 120, 160 and 280: compact behavior is retained, and expanded rows
