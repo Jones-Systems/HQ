@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Screen, ScreenPreviewPort } from '../../flows/src/contract.ts';
 import { sha256Hex } from './canonical.ts';
+import { imageDataUrl } from '../sections/references/images.ts';
 
 export type CaptureReader = (digest: string) => Promise<Uint8Array | null>;
 export type CaptureState = { readonly status: 'loading' } | { readonly status: 'ready'; readonly url: string } | { readonly status: 'missing' | 'unreadable' };
@@ -27,14 +28,13 @@ export async function readCapture(read: CaptureReader, digest: string): Promise<
     const bytes = await read(digest);
     if (bytes === null) return { status: 'missing' };
     if (!PNG.every((byte, n) => bytes[n] === byte) || `sha256:${await sha256Hex(bytes)}` !== digest) return { status: 'unreadable' };
-    return { status: 'ready', url: URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' })) };
+    return { status: 'ready', url: imageDataUrl(bytes, 'image/png') };
   } catch { return { status: 'unreadable' }; }
 }
 
-/** One serial reader per mounted view; object URLs are revoked when the view unmounts. */
+/** One serial reader per mounted view; verified data URLs obey the desktop image policy. */
 export function useFlowCapturePreviews(screens: readonly Screen[], read: CaptureReader | null): ScreenPreviewPort {
   const [captures, setCaptures] = useState<ReadonlyMap<string, CaptureState>>(new Map());
-  const urls = useRef(new Set<string>());
   const requested = useRef(new Set<string>());
   const mounted = useRef(true);
   const digests = useMemo(() => [...new Set(screens.map((screen) => screen.captureDigest).filter((digest): digest is string => digest !== undefined && DIGEST.test(digest)))].sort(), [screens]);
@@ -49,15 +49,14 @@ export function useFlowCapturePreviews(screens: readonly Screen[], read: Capture
     void (async () => {
       for (const digest of pending) {
         const state = await readCapture(read, digest);
-        if (!mounted.current) { if (state.status === 'ready') URL.revokeObjectURL(state.url); return; }
-        if (state.status === 'ready') urls.current.add(state.url);
+        if (!mounted.current) return;
         setCaptures((previous) => new Map(previous).set(digest, state));
       }
     })();
   }, [wanted, read]);
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; for (const url of urls.current) URL.revokeObjectURL(url); urls.current.clear(); };
+    return () => { mounted.current = false; };
   }, []);
   return useMemo((): ScreenPreviewPort => ({
     label: read ? 'Saved captures on this device' : 'Saved capture images unavailable',

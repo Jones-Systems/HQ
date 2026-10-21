@@ -1,5 +1,6 @@
 /** Saved flow captures are read back only by their exact digest, and only as verified PNG bytes. */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 import type { ProjectContext } from '@hq/contracts';
@@ -10,14 +11,21 @@ const png = (seed: string) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a
 const digestOf = (bytes: Uint8Array) => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 
 describe('flow capture images', () => {
-  it('returns an object URL only for PNG bytes whose hash is the requested digest', async () => {
+  it('returns a desktop-policy-compatible image only for PNG bytes whose hash is the requested digest', async () => {
     const bytes = png('home');
     const digest = digestOf(bytes);
     const requested: string[] = [];
     const ready = await readCapture(async (value) => { requested.push(value); return bytes; }, digest);
     assert.deepEqual(requested, [digest]);
     assert.equal(ready.status, 'ready');
-    if (ready.status === 'ready') { assert.match(ready.url, /^blob:/u); URL.revokeObjectURL(ready.url); }
+    if (ready.status === 'ready') {
+      assert.match(ready.url, /^data:image\/png;base64,/u);
+      assert.deepEqual(Uint8Array.from(atob(ready.url.split(',')[1]!), character => character.charCodeAt(0)), bytes);
+      const desktop = readFileSync(new URL('../../../../../apps/desktop/index.html', import.meta.url), 'utf8');
+      const imagePolicy = /img-src ([^;]+);/u.exec(desktop)![1]!;
+      assert.ok(imagePolicy.split(/\s+/u).includes('data:'), 'the packaged desktop policy allows this representation');
+      assert.equal(imagePolicy.split(/\s+/u).includes('blob:'), false, 'the repair keeps the desktop policy unchanged');
+    }
     assert.deepEqual(await readCapture(async () => png('other'), digest), { status: 'unreadable' }, 'different bytes are never shown for this screen');
     const text = new TextEncoder().encode('not an image');
     assert.deepEqual(await readCapture(async () => text, digestOf(text)), { status: 'unreadable' });
