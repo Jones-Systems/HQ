@@ -36,7 +36,7 @@
 .hqw-chip { padding: var(--hq-space-3xs) var(--hq-space-sm); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-pill); color: var(--hq-text-muted); font: var(--hq-type-meta); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hqw-modes { display: inline-flex; gap: var(--hq-space-3xs); padding: var(--hq-space-3xs); border: 1px solid var(--hq-border-control); border-radius: var(--hq-radius-md); }
 .hqw-modes .hq-btn { background: transparent; box-shadow: none; }
-.hqw-modes .hq-btn[aria-pressed="true"] { background: var(--hq-accent-soft); color: var(--hq-accent-text); box-shadow: inset 0 0 0 1px var(--hq-accent-edge); }
+.hqw-modes .hq-btn[aria-pressed="true"] { background: var(--hq-selected-bg); color: var(--hq-selected-fg); box-shadow: none; }
 
 /* One line whose height never depends on the message or mode, so the frame below keeps its size. */
 .hqw-context { display: flex; align-items: center; gap: var(--hq-space-sm); min-width: 0; min-height: calc(32px + 2 * var(--hq-space-2xs) + 1px); padding: var(--hq-space-2xs) var(--hq-space-sm); border-bottom: 1px solid var(--hq-border); box-sizing: border-box; }

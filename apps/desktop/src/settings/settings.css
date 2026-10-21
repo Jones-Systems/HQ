@@ -5,7 +5,8 @@
 .settings-layout { display: flex; flex: 1; min-height: 0; min-width: 0; }
 .settings-categories { display: flex; flex-direction: column; flex: 0 0 172px; gap: 4px; padding: 20px 12px; border-right: 1px solid var(--hq-border); background: var(--hq-nav); }
 .settings-categories button { text-align: left; border: 0; background: transparent; padding: 9px 12px; color: var(--hq-text-muted); }
-.settings-categories button[aria-current="page"] { background: var(--hq-surface-selected); color: var(--hq-accent-text); }
+.settings-categories button:hover:not([aria-current="page"]) { background: var(--hq-control-hover); color: var(--hq-text); }
+.settings-categories button[aria-current="page"] { background: var(--hq-selected-bg); color: var(--hq-selected-fg); font-weight: 600; }
 .settings-scroll { flex: 1; min-width: 0; overflow: auto; padding: 28px; container: settings-content / inline-size; }
 .settings-content { max-width: 720px; margin-inline: auto; display: grid; gap: 24px; }
 .settings-section-heading h2 { font-size: 19px; font-weight: 600; letter-spacing: -.4px; margin: 0 0 10px; }
@@ -27,7 +28,7 @@
 .settings-source-edit form { display: grid; justify-items: start; gap: 10px; margin-top: 12px; }
 .settings-source-edit form input { width: 100%; }
 .settings-theme-options { display: flex; flex-wrap: wrap; gap: 5px; }
-.settings-theme-options [aria-pressed="true"] { background: var(--hq-surface-selected); color: var(--hq-accent-text); border-color: var(--hq-accent-text); }
+.settings-theme-options [aria-pressed="true"] { background: var(--hq-selected-bg); color: var(--hq-selected-fg); }
 .settings-page .wiki-manager { padding: 18px; }
 .settings-page .wiki-manager h3 { margin: 0; font: var(--hq-type-label); font-weight: 600; }
 .settings-page .wiki-manager p { font-size: 13px; }

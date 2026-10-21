@@ -13,13 +13,16 @@ html, body, #root { height: 100%; overflow: hidden; }
 /* The fallback is lower-specificity than module controls and excludes producer-owned content. */
 :where([data-hq-chrome], .hq-dialog) :where(button, select, input, textarea):not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) {
   font: var(--hq-type-body); color: var(--hq-text); border: 1px solid var(--hq-border-control);
-  background: var(--hq-surface-raised); border-radius: var(--hq-radius-md); padding: 6px 10px;
+  background: var(--hq-surface-raised); border-radius: var(--hq-radius-control); padding: 6px 10px;
   min-height: 30px; max-width: 100%;
 }
-:where([data-hq-chrome], .hq-dialog) :where(button):not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { cursor: pointer; font-weight: 500; }
-:where([data-hq-chrome], .hq-dialog) :where(button:hover:not(:disabled)):not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { background: var(--hq-surface-selected); }
+:where([data-hq-chrome], .hq-dialog) :where(button):not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { cursor: pointer; font-weight: 500; background: var(--hq-control); }
+:where([data-hq-chrome], .hq-dialog) :where(button:hover:not(:disabled)):not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { background: var(--hq-control-hover); border-color: var(--hq-border-control-hover); }
+:where([data-hq-chrome], .hq-dialog) :where(button:active:not(:disabled)):not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { background: var(--hq-control-pressed); }
+:where([data-hq-chrome], .hq-dialog) :where(button[aria-pressed="true"]):not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { background: var(--hq-selected-bg); color: var(--hq-selected-fg); }
 :where([data-hq-chrome], .hq-dialog) :where(button, input, select, textarea):focus-visible:not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { outline: 2px solid var(--hq-focus); outline-offset: 2px; }
 :where([data-hq-chrome], .hq-dialog) :where(button, input, select, textarea):disabled:not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { color: var(--hq-text-disabled); cursor: not-allowed; }
+:where([data-hq-chrome], .hq-dialog) :where(button:disabled):not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { background: var(--hq-control-disabled); border-color: var(--hq-border); }
 :where([data-hq-chrome], .hq-dialog) :where(textarea):not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { resize: vertical; }
 :where([data-hq-chrome], .hq-dialog) :where(input[type="checkbox"], input[type="radio"], input[type="range"], input[type="color"]):not(:where([data-hq-content], [data-hq-content] *, [data-hqd-surface], [data-hqd-surface] *)) { min-height: 0; padding: 0; width: auto; accent-color: var(--hq-accent-strong); }
 :where([data-hq-chrome], .hq-dialog) :where(input[type="hidden"]) { display: none; }
@@ -31,9 +34,11 @@ html, body, #root { height: 100%; overflow: hidden; }
 .brand { display: flex; align-items: center; gap: 7px; flex-shrink: 0; padding: 0 calc(var(--rail-item-pad) + 2px) 26px; font-size: 23px; font-weight: 750; letter-spacing: -1px; }
 .brand-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-top: 12px; }
 .rail > nav { display: grid; align-content: start; gap: 6px; min-height: 0; overflow: auto; }
-.domain-button, .rail-action { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: var(--rail-gap); flex-shrink: 0; width: 100%; min-height: 38px; border: 0; border-radius: 7px; padding: 8px var(--rail-item-pad); text-align: left; background: transparent; color: var(--muted); font: var(--hq-type-label); white-space: nowrap; cursor: pointer; }
-.domain-button:hover, .rail-action:hover, .domain-button[aria-current="page"] { background: var(--selected); color: var(--text); }
-.domain-button[aria-current="page"] { color: var(--hq-accent-text); font-weight: 600; }
+.domain-button, .rail-action { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: var(--rail-gap); flex-shrink: 0; width: 100%; min-height: 38px; border: 0; border-radius: var(--hq-radius-control); padding: 8px var(--rail-item-pad); text-align: left; background: transparent; color: var(--muted); font: var(--hq-type-label); white-space: nowrap; cursor: pointer; }
+/* Shared filled selection: no side stripe; selected text and weight keep selection from relying on colour alone. */
+.domain-button:hover, .rail-action:hover { background: var(--hq-control-hover); color: var(--text); }
+.domain-button[aria-current="page"], .rail-action[aria-current="page"] { background: var(--hq-selected-bg); color: var(--hq-selected-fg); font-weight: 600; }
+@media (forced-colors: active) { .domain-button[aria-current="page"], .rail-action[aria-current="page"] { outline: 2px solid Highlight; outline-offset: -2px; } }
 .domain-icon, .rail-action svg { width: 18px; height: 18px; justify-self: center; }
 .rail-footer { grid-template-columns: minmax(0, 1fr); min-width: 0; width: 100%; margin-top: auto; padding-top: 12px; display: grid; gap: 5px; flex-shrink: 0; }
 .rail.is-compact { padding-inline: 8px; }

@@ -24,31 +24,37 @@
 .hq-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--hq-space-xs);
   height: var(--hq-size-control-md); min-width: var(--hq-size-hit-min); padding: 0 var(--hq-space-md);
-  border: 0; border-radius: var(--hq-radius-md);
+  border: 0; border-radius: var(--hq-radius-control);
   font: var(--hq-type-label); white-space: nowrap; cursor: pointer;
-  transition: background var(--hq-duration-fast) var(--hq-ease-standard);
+  transition: background var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard);
 }
 .hq-btn svg { width: var(--hq-size-icon-md); height: var(--hq-size-icon-md); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .hq-btn .hq-icon { display: inline-flex; }
-.hq-btn--sm { height: var(--hq-size-control-sm); padding: 0 var(--hq-space-sm); border-radius: var(--hq-radius-sm); }
+.hq-btn--sm { height: var(--hq-size-control-sm); padding: 0 var(--hq-space-sm); }
 .hq-btn--primary { background: var(--hq-button-primary-bg); color: var(--hq-button-primary-fg); box-shadow: inset 0 0 0 1px var(--hq-button-primary-edge); }
 .hq-btn--primary:hover { background: var(--hq-button-primary-bg-hover); }
 .hq-btn--primary:active { background: var(--hq-button-primary-bg-pressed); }
 .hq-btn--secondary { background: var(--hq-button-secondary-bg); color: var(--hq-button-secondary-fg); box-shadow: inset 0 0 0 1px var(--hq-button-secondary-edge); }
-.hq-btn--secondary:hover { background: linear-gradient(var(--hq-surface-hover), var(--hq-surface-hover)), var(--hq-button-secondary-bg); }
-.hq-btn--secondary:active { background: linear-gradient(var(--hq-surface-pressed), var(--hq-surface-pressed)), var(--hq-button-secondary-bg); }
+.hq-btn--secondary:hover { background: var(--hq-button-secondary-bg-hover); box-shadow: inset 0 0 0 1px var(--hq-button-secondary-edge-hover); }
+.hq-btn--secondary:active { background: var(--hq-button-secondary-bg-pressed); }
 .hq-btn--ghost { background: transparent; color: var(--hq-button-ghost-fg); }
-.hq-btn--ghost:hover { background: var(--hq-surface-hover); color: var(--hq-text); }
-.hq-btn--ghost:active, .hq-btn--ghost[aria-pressed="true"], .hq-btn--ghost[aria-expanded="true"] { background: var(--hq-surface-pressed); color: var(--hq-text); }
+.hq-btn--ghost:hover { background: var(--hq-button-ghost-bg-hover); color: var(--hq-text); }
+.hq-btn--ghost:active, .hq-btn--ghost[aria-expanded="true"] { background: var(--hq-button-ghost-bg-pressed); color: var(--hq-text); }
+/* Shared filled selection (Warm Graphite language): a pressed toggle takes the selected fill, never a side stripe. */
+.hq-btn--secondary[aria-pressed="true"], .hq-btn--ghost[aria-pressed="true"] {
+  background: var(--hq-selected-bg); color: var(--hq-selected-fg); font-weight: var(--hq-font-weight-semibold);
+}
 .hq-btn--danger { background: var(--hq-button-danger-bg); color: var(--hq-button-danger-fg); }
 /* T2 brightens danger on hover with a filter; HQ uses a pressed overlay instead so no control relies on filter. */
 .hq-btn--danger:hover { background: linear-gradient(var(--hq-surface-hover), var(--hq-surface-hover)), var(--hq-button-danger-bg); }
+.hq-btn--danger:active { background: linear-gradient(var(--hq-surface-pressed), var(--hq-surface-pressed)), var(--hq-button-danger-bg); }
 .hq-btn--icon { width: var(--hq-size-control-md); padding: 0; }
 .hq-btn--sm.hq-btn--icon { width: var(--hq-size-control-sm); }
 .hq-btn:disabled, .hq-btn[aria-disabled="true"] {
-  background: var(--hq-surface-sunken); color: var(--hq-text-disabled);
-  box-shadow: inset 0 0 0 1px var(--hq-border); cursor: not-allowed;
+  background: var(--hq-button-disabled-bg); color: var(--hq-button-disabled-fg);
+  box-shadow: inset 0 0 0 1px var(--hq-button-disabled-edge); cursor: not-allowed;
 }
+.hq-btn--ghost:disabled, .hq-btn--ghost[aria-disabled="true"] { background: transparent; box-shadow: none; }
 .hq-btn[aria-busy="true"] { cursor: progress; }
 
 /* ---------- Menu ---------- */
@@ -65,7 +71,7 @@
   border-radius: var(--hq-radius-sm); font: var(--hq-type-label); color: var(--hq-text); cursor: default;
 }
 .hq-menu-check { display: inline-block; width: 1em; margin-right: var(--hq-space-sm); flex: 0 0 auto; color: var(--hq-accent-text); }
-.hq-menu-item:focus { background: var(--hq-surface-selected); }
+.hq-menu-item:focus { background: var(--hq-selected-bg); color: var(--hq-selected-fg); }
 .hq-menu-item:focus-visible { outline-offset: calc(-1 * var(--hq-size-focus-width)); }
 .hq-menu-item--danger { color: var(--hq-danger); }
 .hq-menu-item[aria-disabled="true"] { color: var(--hq-text-disabled); }
@@ -100,15 +106,11 @@
 .hq-tab {
   position: relative; height: var(--hq-size-control-md); padding: 0 var(--hq-space-md);
   border: 0; background: transparent; color: var(--hq-text-muted); font: var(--hq-type-label); cursor: pointer;
-  border-radius: var(--hq-radius-sm) var(--hq-radius-sm) 0 0;
+  border-radius: var(--hq-radius-control) var(--hq-radius-control) 0 0;
 }
-.hq-tab:hover { color: var(--hq-text); background: var(--hq-surface-hover); }
-/* Selected: text weight, colour and an indicator bar, so selection is never colour alone. */
-.hq-tab[aria-selected="true"] { color: var(--hq-text); font-weight: var(--hq-font-weight-semibold); }
-.hq-tab[aria-selected="true"]::after {
-  content: ""; position: absolute; left: var(--hq-space-sm); right: var(--hq-space-sm); bottom: -1px;
-  height: var(--hq-size-rail-indicator); border-radius: 2px 2px 0 0; background: var(--hq-accent-strong);
-}
+.hq-tab:hover { color: var(--hq-text); background: var(--hq-control); }
+/* Selected: the shared filled selection plus text weight, so selection is never colour alone and has no stripe. */
+.hq-tab[aria-selected="true"] { color: var(--hq-selected-fg); background: var(--hq-selected-bg); font-weight: var(--hq-font-weight-semibold); }
 .hq-tabpanel { padding: var(--hq-space-lg) 0; border-radius: var(--hq-radius-sm); }
 
 /* ---------- StatusChip (T2 .hq-fresh shapes plus HQ tones) ---------- */
@@ -174,7 +176,7 @@
   .hq-btn, .hq-toast, .hq-dialog, .hq-menu-list { border: 1px solid CanvasText; }
   .hq-btn:focus-visible, .hq-menu-item:focus-visible, .hq-tab:focus-visible { outline-color: Highlight; }
   .hq-status-shape { border: 1.5px solid CanvasText; }
-  .hq-tab[aria-selected="true"]::after { background: Highlight; }
+  .hq-tab[aria-selected="true"], .hq-btn[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
 }
 
 .hq-splitter { position: relative; flex: 0 0 6px; width: 6px; min-height: 24px; align-self: stretch; cursor: col-resize; touch-action: none; user-select: none; background: transparent; z-index: 2; }

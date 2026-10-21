@@ -25,10 +25,10 @@ describe('contrast helper', () => {
 describe('visual-system contrast pairs, recomputed', () => {
   const rows = contrastRows(tokens);
 
-  it('recomputes all 104 pairs and every one meets its text or control threshold', () => {
-    expect(rows).toHaveLength(104);
+  it('recomputes all 112 pairs and every one meets its text or control threshold', () => {
+    expect(rows).toHaveLength(112);
     expect(rows.filter((row) => !row.pass)).toEqual([]);
-    expect(rows.filter((row) => row.mode === 'light')).toHaveLength(52);
+    expect(rows.filter((row) => row.mode === 'light')).toHaveLength(56);
   });
 
   it('holds text to 4.5:1 and focus rings, indicators and control edges to 3:1', () => {
@@ -38,13 +38,13 @@ describe('visual-system contrast pairs, recomputed', () => {
   });
 
   it("agrees with the generated report, pair by pair", () => {
-    expect(reported).toHaveLength(104);
+    expect(reported).toHaveLength(112);
     rows.forEach((row, index) => {
       const theirs = reported[index]!;
       expect({ fg: row.fg, on: row.on, mode: row.mode, min: row.min }).toEqual({ fg: theirs.fg, on: theirs.on, mode: theirs.mode, min: theirs.min });
       expect(Math.abs(row.ratio - theirs.ratio)).toBeLessThanOrEqual(0.005 + 1e-9);
       expect(theirs.result).toBe('pass');
     });
-    expect(report).toContain('104 pairs checked, 0 below minimum.');
+    expect(report).toContain('112 pairs checked, 0 below minimum.');
   });
 });
