@@ -96,7 +96,7 @@ export function createPreviewHost(options: {
   async function pixels(live: Live, scroll: { x: number; y: number }) {
     const contents = live.view.webContents;
     if (!contents.debugger.isAttached()) contents.debugger.attach('1.3');
-    const result = await contents.debugger.sendCommand('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: true, clip: { x: scroll.x, y: scroll.y, width: live.value.viewport.w, height: live.value.viewport.h, scale: 1 } });
+    const result = await contents.debugger.sendCommand('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false, clip: { x: scroll.x, y: scroll.y, width: live.value.viewport.w, height: live.value.viewport.h, scale: 1 } });
     if (!record(result) || typeof result.data !== 'string' || result.data.length > 16 * 1024 * 1024) throw Error('Invalid capture');
     const bytes = Buffer.from(result.data, 'base64');
     if (bytes.length < 24 || bytes.subarray(1, 4).toString() !== 'PNG') throw Error('Invalid PNG');

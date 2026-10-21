@@ -302,6 +302,61 @@ try {
     assert.notEqual(scrolled.captureDigest, initial.captureDigest);
     return { initial, initialPixels, scrolled, scrolledPixels };
   }));
+  for (const dpr of [1, 2]) {
+    await check('Q-PV4', `Scaled responsive dark viewport retains full PNG coverage at DPR ${dpr}`, () => withPreview(async ({ session, cdp }) => {
+      value(await api('place', { sessionId: session.sessionId, rect: { x: 0, y: 0, width: 519, height: 420 }, visible: true }));
+      session = value(await api('status', { sessionId: session.sessionId }));
+      await cdp.evaluate(`(async()=>{
+        document.documentElement.style.cssText='margin:0;padding:0;color-scheme:dark;scroll-behavior:auto';
+        document.body.style.cssText='margin:0;padding:0';
+        document.body.innerHTML='<style>#responsive-surface{height:2160px;width:100%;background:repeating-linear-gradient(to bottom,rgb(23,25,29) 0 100px,rgb(35,39,45) 100px 200px)}.landmark{position:fixed;width:32px;height:32px}#nw{left:0;top:0;background:rgb(70,80,90)}#ne{right:0;top:0;background:rgb(90,80,70)}#sw{left:0;bottom:0;background:rgb(60,90,80)}#se{right:0;bottom:0;background:rgb(80,60,90)}#center{left:calc(50% - 16px);top:calc(50% - 16px);background:rgb(100,110,120)}@media(max-width:1023px){#responsive-surface{border-right:1px solid rgb(45,48,54)}}</style><main id="responsive-surface"></main><div class="landmark" id="nw"></div><div class="landmark" id="ne"></div><div class="landmark" id="sw"></div><div class="landmark" id="se"></div><div class="landmark" id="center"></div>';
+        const surface=document.querySelector('#responsive-surface');
+        const events=window.responsiveEvents={resize:0,observer:0,media:0,mutations:0};
+        const write=()=>surface.setAttribute('data-layout',innerWidth>=1024?'wide':'compact');
+        addEventListener('resize',()=>{events.resize++;write()});
+        const observer=new ResizeObserver(()=>{events.observer++;write()});observer.observe(surface);
+        for(const query of ['(max-width:1023px)','(resolution:2dppx)'])matchMedia(query).addEventListener('change',()=>{events.media++;write()});
+        new MutationObserver(records=>{events.mutations+=records.length}).observe(surface,{attributes:true});
+        write();scrollTo(0,0);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      })()`);
+      const geometry = () => cdp.evaluate(`({viewport:{w:innerWidth,h:innerHeight,dpr:devicePixelRatio},scroll:{x:scrollX,y:scrollY},client:{w:document.documentElement.clientWidth,h:document.documentElement.clientHeight},surface:document.querySelector('#responsive-surface').getBoundingClientRect().toJSON(),landmarks:[...document.querySelectorAll('.landmark')].map(n=>n.getBoundingClientRect().toJSON()),events:{...window.responsiveEvents}})`);
+      const captures = [];
+      for (const scroll of [0, 100]) {
+        await cdp.evaluate(`new Promise(r=>{scrollTo(0,${scroll});requestAnimationFrame(()=>requestAnimationFrame(r))})`);
+        const before = await geometry();
+        assert.deepEqual(before.viewport, { w: 1024, h: 720, dpr });
+        assert.deepEqual(before.scroll, { x: 0, y: scroll });
+        const record = value(await capture(session));
+        const image = value(await api('image', { captureId: record.captureId }));
+        const encoded = image.split(',')[1], bytes = Buffer.from(encoded, 'base64');
+        assert.equal(digest(bytes), record.captureDigest);
+        assert.deepEqual(record.viewport, before.viewport);
+        assert.deepEqual(record.scroll, before.scroll);
+        assert.equal(bytes.readUInt32BE(16), 1024 * dpr);
+        assert.equal(bytes.readUInt32BE(20), 720 * dpr);
+        const points = [[16,16],[1008,16],[16,704],[1008,704],[512,360],[80,10]];
+        const pixels = await shell.evaluate(`(async()=>{const bytes=Uint8Array.from(atob(${JSON.stringify(encoded)}),c=>c.charCodeAt(0));const bitmap=await createImageBitmap(new Blob([bytes],{type:'image/png'}));try{const canvas=new OffscreenCanvas(bitmap.width,bitmap.height);const context=canvas.getContext('2d');context.drawImage(bitmap,0,0);return ${JSON.stringify(points)}.map(([x,y])=>Array.from(context.getImageData(x*${dpr},y*${dpr},1,1).data))}finally{bitmap.close()}})()`);
+        assert.deepEqual(pixels, [[70,80,90,255],[90,80,70,255],[60,90,80,255],[80,60,90,255],[100,110,120,255],scroll === 0 ? [23,25,29,255] : [35,39,45,255]]);
+        await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+        const after = await geometry();
+        assert.deepEqual(after, before, 'Host capture preserves responsive geometry and emits no resize, media, or attribute mutations');
+        await writeFile(join(evidence, `responsive-${dpr}-scroll-${scroll}.png`), bytes);
+        captures.push({ record, before, after, pixels });
+      }
+      assert.notEqual(captures[0].record.captureDigest, captures[1].record.captureDigest);
+      const before = await hook('stats()');
+      await hook("pauseAt('pre-read')");
+      const pending = capture(session); pending.catch(() => {});
+      try {
+        assert.equal((await hook('waitForPause()')).sessionId, session.sessionId);
+        await cdp.evaluate("document.querySelector('#responsive-surface').setAttribute('data-genuine-change','changed')");
+      } finally { await hook('resume()'); await hook('pauseAt(null)'); }
+      const mutation = await pending;
+      assert.equal(mutation.kind, 'stale'); assert.equal(mutation.reason, 'mutation');
+      assert.equal((await hook('stats()')).blobWrites, before.blobWrites);
+      return { placement: { width: 519, height: 420 }, captures, mutation };
+    }, { w: 1024, h: 720, dpr }));
+  }
   await check('Q-PV2', 'Cross-origin main-frame navigation blocked', () => withPreview(async ({ session, cdp }) => {
     const before=await hook('stats()');
     await cdp.evaluate(`location.href=${JSON.stringify(crossOrigin)};void 0`);
