@@ -24,8 +24,11 @@ async function pick(user: ReturnType<typeof userEvent.setup>, trigger: HTMLEleme
 }
 
 async function showCalendarView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day' | 'Agenda') {
-  await user.click(screen.getByRole('button', { name: /^Calendar view:/ }));
-  await user.click(screen.getByRole('menuitemradio', { name }));
+  if (name === 'Agenda') { await user.click(screen.getByRole('button', { name: 'Agenda' })); return; }
+  if (screen.queryByRole('button', { name: 'Agenda', pressed: true })) await user.click(screen.getByRole('button', { name: 'Agenda' }));
+  for (let i = 0; i < 3 && !screen.getByRole('button', { name: /^Calendar view:/ }).textContent?.includes(name); i++) {
+    await user.click(screen.getByRole('button', { name: /^Calendar view:/ }));
+  }
 }
 
 describe('Calendar moves', () => {
@@ -171,7 +174,7 @@ describe('Calendar moves', () => {
     const { container } = await setup({ view: 'calendar', settings: { default_tz: 'America/New_York', week_start: 'mon', stale_days: 21 } });
     expect(container.querySelector('.wv-month-head')!.textContent).toBe('MonTueWedThuFriSatSun');
     await showCalendarView(user, 'Agenda');
-    expect(screen.getByRole('button', { name: 'Calendar view: Agenda' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Agenda', pressed: true })).toBeTruthy();
     expect(container.querySelector('.wv-agenda')!.textContent).toContain('Sat, Oct 24 · in 3 days');
     expect(container.querySelector('.wv-month')).toBeNull();
   });
@@ -258,9 +261,9 @@ describe('timed calendar interaction', () => {
     await user.click(screen.getByRole('button', { name: 'Today' }));
     expect(container.querySelector('[data-time-day="2026-10-21"]')).toBeTruthy();
     const layout = screen.getByRole('group', { name: 'Calendar layout' });
-    expect(within(layout).getAllByRole('button')).toHaveLength(1);
+    expect(within(layout).getAllByRole('button')).toHaveLength(2);
     await showCalendarView(user, 'Month');
-    expect(within(layout).getByRole('button', { name: 'Calendar view: Month' })).toBeTruthy();
+    expect(within(layout).getByRole('button', { name: /^Calendar view: Month\./ })).toBeTruthy();
     expect(container.querySelectorAll('[data-time-day]')).toHaveLength(0);
     await showCalendarView(user, 'Agenda');
     expect(container.querySelector('.wv-agenda')).toBeTruthy();

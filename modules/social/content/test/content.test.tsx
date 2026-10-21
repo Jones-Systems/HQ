@@ -337,8 +337,10 @@ describe('Social content: calendar', () => {
 
 describe('Social calendar navigation and notification lifetime', () => {
   async function selectView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day') {
-    await user.click(screen.getByRole('button', { name: /^Calendar view:/ }));
-    await user.click(screen.getByRole('menuitemradio', { name }));
+    if (screen.queryByRole('button', { name: 'Agenda', pressed: true })) await user.click(screen.getByRole('button', { name: 'Agenda' }));
+    for (let i = 0; i < 3 && !screen.getByRole('button', { name: /^Calendar view:/ }).textContent?.includes(name); i++) {
+      await user.click(screen.getByRole('button', { name: /^Calendar view:/ }));
+    }
   }
   async function moveTo(title: string, day: string) {
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${title}`) }));
@@ -350,13 +352,13 @@ describe('Social calendar navigation and notification lifetime', () => {
     const { recorded, user } = setup('calendar/2026-10');
     await screen.findByRole('heading', { name: 'October 2026' });
     fireEvent.doubleClick(document.querySelector('[data-drop-date="2026-10-22"] .soc-day-head')!);
-    expect(screen.getByRole('button', { name: 'Calendar view: Week' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Calendar view: Week\./ })).toBeTruthy();
     expect(document.querySelector('[data-time-day="2026-10-22"]')).toBeTruthy();
     const day = screen.getByRole('button', { name: 'Open day 2026-10-22' });
     await user.click(day);
-    expect(screen.getByRole('button', { name: 'Calendar view: Week' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Calendar view: Week\./ })).toBeTruthy();
     await user.dblClick(day);
-    expect(screen.getByRole('button', { name: 'Calendar view: Day' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Calendar view: Day\./ })).toBeTruthy();
     expect(document.querySelectorAll('[data-time-day]')).toHaveLength(1);
     expect(document.querySelector('[data-time-day="2026-10-22"]')).toBeTruthy();
     await selectView(user, 'Month');
@@ -369,7 +371,7 @@ describe('Social calendar navigation and notification lifetime', () => {
     const { recorded, visited, user } = setup('calendar/2026-10');
     const number = await screen.findByRole('button', { name: 'Open week of 1 Nov 2026' });
     await user.click(number);
-    expect(screen.getByRole('button', { name: 'Calendar view: Month' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Calendar view: Month\./ })).toBeTruthy();
     if (key === 'assistive click') fireEvent.click(number, { detail: 0 });
     else fireEvent.keyDown(number, { key });
     expect(visited.at(-1)).toBe('calendar/2026-11');
@@ -524,8 +526,11 @@ import { changeDraft } from '../actions';
 
 describe('Social calendar service-backed timeboxes', () => {
   async function showView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day') {
-    await user.click(await screen.findByRole('button', { name: /^Calendar view:/ }));
-    await user.click(screen.getByRole('menuitemradio', { name }));
+    await screen.findByRole('button', { name: /^Calendar view:/ });
+    if (screen.queryByRole('button', { name: 'Agenda', pressed: true })) await user.click(screen.getByRole('button', { name: 'Agenda' }));
+    for (let i = 0; i < 3 && !screen.getByRole('button', { name: /^Calendar view:/ }).textContent?.includes(name); i++) {
+      await user.click(screen.getByRole('button', { name: /^Calendar view:/ }));
+    }
   }
   const timedSeed = () => {
     const seed = fictionalSeed();
@@ -533,18 +538,22 @@ describe('Social calendar service-backed timeboxes', () => {
       ? { ...draft, planned_date: '2026-10-20', planning_slot: { start: '09:00', duration_minutes: 30, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } } : draft);
     return seed;
   };
-  it('selects every view from one checked menu without saving', async () => {
+  it('cycles grid modes with separate Agenda round trips and no saves', async () => {
     const { recorded, user } = setup('calendar/2026-10');
     const group = await screen.findByRole('group', { name: 'Calendar view' });
     for (const [name, columns] of [['Week', 7], ['Day', 1], ['Month', 0]] as const) {
-      expect(within(group).getAllByRole('button')).toHaveLength(1);
+      expect(within(group).getAllByRole('button')).toHaveLength(2);
       await showView(user, name);
-      expect(within(group).getByRole('button', { name: `Calendar view: ${name}` })).toBeTruthy();
+      expect(within(group).getByRole('button', { name: new RegExp(`^Calendar view: ${name}\\.`) })).toBeTruthy();
       expect(document.querySelectorAll('[data-time-day]')).toHaveLength(columns);
-      await user.click(within(group).getByRole('button'));
-      expect(screen.getByRole('menuitemradio', { name }).getAttribute('aria-checked')).toBe('true');
-      expect(screen.getAllByRole('menuitemradio')).toHaveLength(3);
-      await user.keyboard('{Escape}');
+      const cycle = within(group).getByRole('button', { name: /^Calendar view:/ });
+      await user.click(within(group).getByRole('button', { name: 'Agenda' }));
+      expect(screen.getByRole('region', { name: 'Planned drafts agenda' })).toBeTruthy();
+      expect(cycle.getAttribute('aria-pressed')).toBe('false');
+      cycle.focus(); await user.keyboard('{Enter}');
+      expect(cycle.textContent).toBe(name);
+      expect(document.querySelectorAll('[data-time-day]')).toHaveLength(columns);
+      expect(screen.queryByRole('menu')).toBeNull();
     }
     expect(methods(recorded)).toEqual(['snapshot']);
     expectNoExecution(recorded);

@@ -143,7 +143,10 @@
 }
 
 /* ---------- StateView (T2 .hq-empty and loading panel) ---------- */
-.hq-state { display: grid; justify-items: start; gap: var(--hq-space-sm); padding: var(--hq-space-2xl) var(--hq-space-lg); color: var(--hq-text); font: var(--hq-type-body); }
+.hq-state { display: grid; align-content: start; justify-items: start; gap: 0; padding: var(--hq-space-2xl) var(--hq-space-lg); color: var(--hq-text); font: var(--hq-type-body); }
+.hq-state-glyph { margin-bottom: var(--hq-space-xs); }
+.hq-state-title { margin-bottom: var(--hq-space-2xs); }
+.hq-state > .hq-btn { margin-top: var(--hq-space-md); }
 .hq-state--loading { justify-items: stretch; gap: 10px; padding: var(--hq-space-lg); }
 .hq-state-glyph {
   box-sizing: border-box; width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--hq-radius-md);

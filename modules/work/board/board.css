@@ -40,7 +40,7 @@
 textarea.work-input { min-height: 140px; padding: var(--hq-space-sm); resize: vertical; }
 
 /* ---------- Board frame ---------- */
-.work-board { display: grid; gap: var(--hq-space-md); min-width: 0; }
+.work-board { display: flex; flex-direction: column; min-height: 100%; gap: var(--hq-space-md); min-width: 0; }
 .work-board-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm) var(--hq-space-lg); }
 .work-board-title { display: grid; gap: var(--hq-space-3xs); margin-right: auto; }
 .work-board-title h2 { margin: 0; font: var(--hq-type-heading); letter-spacing: var(--hq-type-heading-tracking); }
@@ -48,7 +48,7 @@ textarea.work-input { min-height: 140px; padding: var(--hq-space-sm); resize: ve
 .work-board-hint { margin: 0; max-width: 46ch; font: var(--hq-type-small); color: var(--hq-text-muted); }
 .work-board[data-dragging="true"] { cursor: grabbing; user-select: none; }
 
-.work-columns { display: flex; align-items: flex-start; gap: var(--hq-space-md); overflow-x: auto; padding-bottom: var(--hq-space-md); }
+.work-columns { position: relative; display: flex; flex: 1 0 auto; min-width: 0; align-items: flex-start; gap: var(--hq-space-md); overflow-x: auto; padding-bottom: var(--hq-space-md); }
 
 /* ---------- Columns ---------- */
 .work-col {
@@ -170,3 +170,5 @@ textarea.work-input { min-height: 140px; padding: var(--hq-space-sm); resize: ve
 @media (prefers-reduced-motion: reduce) {
   .work-ui *, .work-drag-ghost { transition: none !important; animation: none !important; }
 }
+
+.work-board > .hq-state { padding-inline: 0; padding-block: var(--hq-space-lg); }

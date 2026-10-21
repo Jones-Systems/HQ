@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Button, Dialog, Menu, Splitter, StatusChip, TimeGrid, Toast, ToastRegion, TOAST_AUTO_DISMISS_MS, calendarGridSnap, CALENDAR_HOUR_HEIGHT, type CalendarGridEvent } from '@hq/ui';
+import { Button, Dialog, Splitter, StatusChip, TimeGrid, Toast, ToastRegion, TOAST_AUTO_DISMISS_MS, calendarGridSnap, CALENDAR_HOUR_HEIGHT, type CalendarGridEvent } from '@hq/ui';
 import { checkSlot, FEATURE_HQ_EDITORIAL_TIMEBOX, SLOT_MESSAGES, zonedSlotParts, type Draft, type PlanningSlot, type SocialSession, type SocialWorkspacePort, type WorkspaceSnapshot } from '../core';
 import { changeDraft, errorText } from './actions';
 import { calendarPlan, contentDestination, dateLabel, monthGrid, monthLabel, shiftMonth } from './model';
@@ -36,6 +36,9 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
   const [clock, setClock] = useState(now);
   const today = zonedSlotParts(clock.getTime(), zone).date;
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
+  const [agenda, setAgenda] = useState(false);
+  const nextView = view === 'month' ? 'week' : view === 'week' ? 'day' : 'month';
+  const labelView = (value: string) => value[0]!.toUpperCase() + value.slice(1);
   const [anchor, setAnchor] = useState(today.startsWith(month) ? today : `${month}-01`);
   const [selected, setSelected] = useState<Draft | null>(null);
   const [pickedDate, setPickedDate] = useState('');
@@ -222,13 +225,17 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
         <Button size="sm" variant="secondary" onClick={() => goTo(today)}>{view === 'month' ? 'This month' : 'Today'}</Button>
         <Button size="sm" variant="secondary" onClick={() => rangeNavigate(1)} aria-label={`Next ${view}`}>→</Button>
       </span>
-      <div className="soc-inline" role="group" aria-label="Calendar view">
-        <Menu size="sm" trigger={`${view[0]!.toUpperCase() + view.slice(1)} ▾`}
-          triggerLabel={`Calendar view: ${view[0]!.toUpperCase() + view.slice(1)}`}
-          items={(['month', 'week', 'day'] as const).map((value) => ({
-            id: value, label: value[0]!.toUpperCase() + value.slice(1), checked: view === value,
-            onSelect: () => selectView(value),
-          }))} />
+      <div className="soc-inline" role="group" aria-label="Calendar view" ref={(element) => {
+        element?.style.setProperty('gap', 'var(--hq-space-sm)');
+        element?.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
+          button.style.setProperty('height', 'auto');
+          button.style.setProperty('min-height', 'max(var(--hq-size-control-sm), calc(1lh + 2 * var(--hq-space-2xs)))');
+        });
+      }}>
+        <Button size="sm" aria-pressed={agenda} onClick={() => setAgenda(!agenda)}>Agenda</Button>
+        <Button size="sm" aria-pressed={!agenda}
+          aria-label={`Calendar view: ${labelView(view)}. ${agenda ? 'Return to' : 'Switch to'} ${labelView(agenda ? view : nextView)}`}
+          onClick={() => { if (agenda) setAgenda(false); else selectView(nextView); }}>{labelView(view)}</Button>
       </div>
       {undoOffer && <Button size="sm" variant="ghost" disabled={disabled(undoOffer.draft)} onClick={undoLastChange}>Undo last calendar change</Button>}
       <label className="soc-field soc-field--inline"><span>Brand</span><select value={brand} onChange={(event) => onBrandChange(event.target.value)}>
@@ -241,7 +248,13 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
     {uncertain.length > 0 && <p role="alert">Moves for drafts with an unresolved save are paused. Reload and inspect the stored draft before making another change.</p>}
     <div className="soc-calendar-body soc-calendar-layout" ref={body} data-tray-collapsed={trayWidth === 0 || undefined}>
       <div className="soc-calendar-main">
-        {view === 'month' ? <table className="soc-month" aria-label={`Planned drafts, ${monthLabel(month)}`}>
+        {agenda ? <section aria-label="Planned drafts agenda">
+          {[...monthDates].filter(([day]) => (view === 'month' ? day.startsWith(month) : days[0]! <= day && day <= days[days.length - 1]!))
+            .sort(([a], [b]) => a.localeCompare(b)).map(([day, drafts]) => <section key={day}>
+              <h3>{dateLabel(day)}</h3><ul className="soc-day-items">{drafts.map(chip)}</ul>
+            </section>)}
+          {![...monthDates.keys()].some((day) => (view === 'month' ? day.startsWith(month) : days[0]! <= day && day <= days[days.length - 1]!)) && <p className="hq-meta">No planned drafts in this range.</p>}
+        </section> : view === 'month' ? <table className="soc-month" aria-label={`Planned drafts, ${monthLabel(month)}`}>
           <thead><tr>{WEEKDAYS.map((day) => <th key={day} scope="col">{day}</th>)}</tr></thead>
           <tbody>{monthGrid(month, today).map((week) => <tr key={week[0]!.date}>{week.map((day) => {
             const items = monthDates.get(day.date) ?? [];
