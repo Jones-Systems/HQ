@@ -204,7 +204,8 @@ button.wv-strip-pill { cursor: pointer; }
 .wv-kind-toggle[aria-pressed="false"] .wv-dk-shape { opacity: .45; }
 .wv-cal-layout { display: grid; gap: 0; grid-template-columns: minmax(0, 1fr) 10px var(--wv-cal-sidebar-width, 280px); align-items: start; }
 .wv-cal-main, .wv-cal-side { display: grid; gap: var(--hq-space-md); min-width: 0; }
-.wv-cal-main { grid-column: 1; }
+.wv-cal-main { grid-column: 1; grid-template-columns: minmax(0, 1fr); }
+.wv-cal-main > .wv-period-band { grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; }
 .wv-cal-side { grid-column: 3; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
 .wv-cal-side[hidden] { display: none; }
 .wv-cal-divider { grid-column: 2; display: flex; position: relative; align-self: stretch; }
@@ -251,12 +252,15 @@ button.wv-strip-pill { cursor: pointer; }
 .wv-outside-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
 .wv-outside-row .wv-link { min-width: 0; overflow-wrap: anywhere; }
 .wv-outside-row .hq-btn { margin-left: auto; }
-.wv-agenda { display: grid; gap: var(--hq-space-sm); }
-.wv-agenda-day { display: grid; gap: var(--hq-space-2xs); padding: var(--hq-space-sm); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-md); background: var(--hq-surface); }
+.wv-agenda { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-sm); }
+.wv-agenda-day { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-2xs); padding: var(--hq-space-sm); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-md); background: var(--hq-surface); overflow-wrap: anywhere; }
 .wv-agenda-day.is-today { border-color: var(--hq-accent-strong); }
 .wv-agenda-label { font: var(--hq-type-heading); }
 .wv-agenda-entry { display: flex; align-items: center; gap: var(--hq-space-sm); }
 .wv-agenda-entry .wv-cal-chip { flex: 1; }
+.wv-agenda .wv-cal-chip .hq-btn { flex-wrap: wrap; white-space: normal; }
+.wv-agenda .wv-chip-title { white-space: normal; overflow-wrap: anywhere; }
+.wv-agenda .wv-chip-time, .wv-agenda .wv-chip-period { flex-shrink: 1; }
 .wv-kind-choice { display: flex; flex-wrap: wrap; gap: var(--hq-space-xs); }
 
 /* Timeline */

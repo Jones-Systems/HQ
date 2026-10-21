@@ -32,3 +32,11 @@ Electron and real-store journeys are unverified. Existing unrelated compact
 controls may still need a broader text-enlargement pass; this correction only
 adjusts the changed calendar controls and Interactive actions. Private logs and
 capture manifests bind the observations to the candidate; see the Work Note.
+
+The same-source enlarged-calendar follow-up adds an explicit separation probe:
+at 760/1280px, both normal and 200% text, all Agenda element and text-range
+rectangles remain outside the Unscheduled tray. Main/tray separation is 10px;
+long titles, dates and times wrap inside the constrained left grid. The earlier
+zero-document-overflow observation alone missed this overlap and must not be
+used as proof of column separation. Fresh normal/enlarged captures and exact
+source/build correspondence supersede the earlier calendar stress capture.
