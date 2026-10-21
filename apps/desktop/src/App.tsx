@@ -99,7 +99,7 @@ function WorkspaceApp() {
   }, [storage, state, appearance, rail, context.id]);
 
   return <div className="shell" data-hq-chrome>
-    <aside className={`rail${compact ? " is-compact" : ""}`} ref={element => { element?.style.setProperty("width", `${rail.width}px`); }} aria-label="HQ navigation">
+    <aside className={`rail${compact ? " is-compact" : ""}`} ref={element => { element?.style.setProperty("width", `${rail.width}px`); element?.style.setProperty("--rail-w", `${rail.width}px`); }} aria-label="HQ navigation">
       <div className="brand" aria-label="HQ">HQ<span className="brand-dot" /></div>
       <nav aria-label="Domains">{DOMAIN_IDS.map((domain) => <button key={domain}
         className="domain-button" title={DOMAIN_LABELS[domain]} aria-current={!settingsOpen && state.domain === domain ? 'page' : undefined}

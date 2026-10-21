@@ -160,16 +160,16 @@ it('previews pointer widths continuously, commits only on release and cancels wi
   const drag = (target: number, release: 'pointerUp' | 'pointerCancel' = 'pointerUp') => {
     const start = width();
     fireEvent.pointerDown(grip, { pointerId: 1, button: 0, clientX: start });
-    for (const sample of [200, 150, 130, 121, target]) {
+    for (const sample of [200, 150, 120, 90, target]) {
       fireEvent.pointerMove(grip, { pointerId: 1, clientX: sample });
       expect(width()).toBe(sample);
     }
     fireEvent[release](grip, { pointerId: 1, clientX: target });
   };
-  drag(100); expect(width()).toBe(120);
+  drag(70); expect(width()).toBe(80);
   fireEvent.keyDown(grip, { key: 'End' }); expect(width()).toBe(420);
-  drag(50, 'pointerCancel'); expect(width()).toBe(420);
-  drag(50); expect(width()).toBe(0);
+  drag(30, 'pointerCancel'); expect(width()).toBe(420);
+  drag(30); expect(width()).toBe(0);
   expect(grip.tabIndex).toBe(0);
   fireEvent.keyDown(grip, { key: 'Enter' }); expect(width()).toBe(420);
 });

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { ModulePort } from '@hq/contracts';
 import { DESIGN_NAV_IDS, type DesignLocation, type ShellContextPort } from '../../contract.ts';
 import type { DesignCore } from '../domain-core.ts';
 import { navTarget, regionStop, resolveShortcut, rovingNext, SHORTCUT_HINTS, tabStops, type ChromeView } from '../focus.ts';
 import { formatDestination, NAV_LABELS, parseDestination, sameLocation } from '../navigation.ts';
 import { buildCommands, CLOSED_PALETTE, paletteReduce, type PaletteAction, type ProjectCandidate } from '../palette.ts';
-import { maxSize, resolveLayout, setPanelSize, splitterKey, togglePanel, type PanelId } from '../panels.ts';
+import { fitSidebar, maxSize, naturalSidebar, PANEL_BOUNDS, resolveLayout, setPanelSize, sidebarPadding, splitterKey, togglePanel, type PanelId } from '../panels.ts';
 import { cancelSwitch, confirmSwitch, INITIAL_GUARD, proposeSwitch, type GuardState } from '../project-guard.ts';
 import type { DesignRegistry } from '../registry.ts';
 import { chromeTheme } from '../theme.ts';
@@ -78,7 +78,11 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
   const [dragSize, setDragSize] = useState<{ projectId: string; panel: PanelId; size: number } | null>(null);
   const stopDrag = useRef<(() => void) | null>(null);
   useEffect(() => { setDragSize(null); return () => { stopDrag.current?.(); }; }, [projectId]);
-  const resting = resolveLayout(session.panels, width);
+  // Width the current sidebar labels need; null until measured (and in layout-less test DOMs).
+  const [natural, setNatural] = useState<number | null>(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const panels = fitSidebar(session.panels, natural);
+  const resting = resolveLayout(panels, width);
   const resolved = dragSize?.projectId === projectId && !resting.squeezed.includes(dragSize.panel)
     ? { ...resting, [dragSize.panel]: dragSize.size, main: resting.main + resting[dragSize.panel] - dragSize.size }
     : resting;
@@ -117,6 +121,32 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
   };
   // A panel hidden only because the window is narrow cannot be shown; its toggle explains why.
   const toggle = (panel: PanelId) => { if (!resolved.squeezed.includes(panel)) setPanels(togglePanel(session.panels, panel)); };
+  const labelKey = `${location.nav}\u0000${registry.byNav[location.nav].map((section) => section.title).join('\u0000')}`;
+  useLayoutEffect(() => {
+    const aside = sidebarRef.current;
+    if (!aside || typeof document.createRange !== 'function') return;
+    let live = true;
+    const measure = () => {
+      if (!live) return;
+      let content = 0;
+      for (const element of aside.querySelectorAll<HTMLElement>('.hqd-heading, .hqd-section-item')) {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        if (typeof range.getBoundingClientRect !== 'function') return;
+        const style = getComputedStyle(element);
+        const box = ['paddingLeft', 'paddingRight', 'marginLeft', 'marginRight', 'borderLeftWidth', 'borderRightWidth'] as const;
+        const margins = (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0);
+        // An ellipsized label reports its clipped text; its scroll width still holds the whole label.
+        const overflowing = element.scrollWidth > element.clientWidth ? element.scrollWidth + margins : 0;
+        content = Math.max(content, overflowing, range.getBoundingClientRect().width + box.reduce((sum, key) => sum + (parseFloat(style[key]) || 0), 0));
+      }
+      // One pixel absorbs subpixel text widths.
+      if (content > 0) setNatural(naturalSidebar(content + 1));
+    };
+    measure();
+    void document.fonts?.ready.then(measure);
+    return () => { live = false; };
+  }, [labelKey, visible.sidebar]);
 
   const [palette, paletteDispatch] = useReducer(paletteReduce, CLOSED_PALETTE);
   const [guard, guardDispatch] = useReducer(guardReduce, INITIAL_GUARD);
@@ -218,7 +248,9 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
 
   const splitter = (panel: PanelId) => {
     const size = resolved[panel];
-    const max = maxSize(session.panels, panel, width);
+    const max = maxSize(panels, panel, width);
+    // Dragging stops at the labels' natural width; going past half the bound minimum collapses.
+    const floor = (raw: number) => panel === 'sidebar' && natural !== null && raw >= PANEL_BOUNDS.sidebar.min / 2 ? Math.max(raw, natural) : raw;
     return <div key={`splitter:${panel}`} {...stopProps(`splitter:${panel}`)}
       className={`hqd-splitter hqd-splitter-${panel}${size === 0 ? ' is-collapsed' : ''}`} role="separator" tabIndex={0}
       aria-orientation="vertical" aria-label={`Resize ${panel}`} aria-controls={`hqd-${panel}`}
@@ -226,8 +258,8 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
       aria-valuetext={size === 0 ? `Collapsed; press Enter to restore ${panel}` : `${size} pixels; Home collapses, Enter toggles`}
       title={`Drag to resize ${panel}; click a closed edge or press Enter to restore`}
       onKeyDown={(event) => {
-        const next = splitterKey(session.panels, panel, event.key, event.shiftKey, width);
-        if (next) { event.preventDefault(); setPanels(next); }
+        const next = splitterKey(panels, panel, event.key, event.shiftKey, width);
+        if (next) { event.preventDefault(); setPanels(fitSidebar(next, natural)); }
       }}
       onDoubleClick={() => toggle(panel)}
       onPointerDown={(event) => {
@@ -238,13 +270,13 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
         target.focus();
         target.setPointerCapture(event.pointerId);
         const startX = event.clientX;
-        const startLayout = session.panels;
+        const startLayout = panels;
         const direction = panel === 'sidebar' ? 1 : -1;
         let distance = 0;
         const startSize = startLayout[panel].collapsed ? 0 : size;
         const move = (moveEvent: PointerEvent) => {
           distance = moveEvent.clientX - startX;
-          setDragSize({ projectId, panel, size: Math.max(0, Math.min(max, startSize + distance * direction)) });
+          setDragSize({ projectId, panel, size: Math.max(0, Math.min(max, floor(startSize + distance * direction))) });
         };
         const cleanup = () => {
           target.removeEventListener('pointermove', move); target.removeEventListener('pointerup', end); target.removeEventListener('pointercancel', end);
@@ -256,7 +288,7 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
           setDragSize(null);
           if (endEvent.type !== 'pointerup') return;
           if (startLayout[panel].collapsed && Math.abs(distance) < 4) setPanels(togglePanel(startLayout, panel));
-          else setPanels(setPanelSize(startLayout, panel, startSize + distance * direction, width));
+          else setPanels(setPanelSize(startLayout, panel, floor(startSize + distance * direction), width));
         };
         stopDrag.current = cleanup;
         target.addEventListener('pointermove', move);
@@ -297,7 +329,7 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
     </header>
     <div className="hqd-body" ref={bodyRef}>
       {visible.sidebar &&
-        <aside id="hqd-sidebar" className="hqd-sidebar" style={{ width: resolved.sidebar, paddingInline: Math.min(12, resolved.sidebar / 2) }} aria-label={`${NAV_LABELS[location.nav]} sections`}>
+        <aside ref={sidebarRef} id="hqd-sidebar" className="hqd-sidebar" style={{ width: resolved.sidebar, paddingInline: sidebarPadding(resolved.sidebar) }} aria-label={`${NAV_LABELS[location.nav]} sections`}>
           <h2 className="hqd-heading" title={NAV_LABELS[location.nav]}>{NAV_LABELS[location.nav]}</h2>
           {sectionStops.length === 0
             ? <p className="hqd-empty">{`No ${NAV_LABELS[location.nav]} sections are installed yet.`}</p>

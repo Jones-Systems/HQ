@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_LOCATION, formatDestination, parseDestination } from '../../src/navigation.ts';
-import { DEFAULT_LAYOUT, MAIN_MIN, PANEL_BOUNDS, parseLayout, resizePanel, setPanelSize, resolveLayout, splitterKey, togglePanel } from '../../src/panels.ts';
+import { DEFAULT_LAYOUT, fitSidebar, MAIN_MIN, naturalSidebar, PANEL_BOUNDS, parseLayout, resizePanel, setPanelSize, resolveLayout, sidebarPadding, splitterKey, togglePanel } from '../../src/panels.ts';
 import { chromeTheme, FALLBACK_TOKENS, isCssColor, surfaceProps } from '../../src/theme.ts';
 
 test('dark tokens recolour every chrome variable', () => {
@@ -123,16 +123,34 @@ test('absent shell tokens use only trusted kit variable names with literal stand
 });
 
 test('sidebar accepts narrow resting widths and keyboard stops at its floor', () => {
-  for (const size of [150, 130, 121, 120]) {
+  for (const size of [150, 120, 96, 81, 80]) {
     const layout = setPanelSize(DEFAULT_LAYOUT, 'sidebar', size, 1600);
     assert.equal(layout.sidebar.size, size);
     assert.equal(resolveLayout(layout, 1600).sidebar, size);
     assert.deepEqual(parseLayout(layout), layout);
   }
-  const floor = setPanelSize(DEFAULT_LAYOUT, 'sidebar', 120, 1600);
+  const floor = setPanelSize(DEFAULT_LAYOUT, 'sidebar', 80, 1600);
   assert.deepEqual(splitterKey(floor, 'sidebar', 'ArrowLeft', false, 1600), floor);
-  assert.equal(setPanelSize(DEFAULT_LAYOUT, 'sidebar', 100, 1600).sidebar.size, 120);
-  const closed = setPanelSize(DEFAULT_LAYOUT, 'sidebar', 50, 1600);
+  assert.equal(setPanelSize(DEFAULT_LAYOUT, 'sidebar', 60, 1600).sidebar.size, 80);
+  const closed = setPanelSize(DEFAULT_LAYOUT, 'sidebar', 39, 1600);
   assert.deepEqual(closed.sidebar, { size: 240, collapsed: true });
   assert.deepEqual(splitterKey(closed, 'sidebar', 'Enter', false, 1600), DEFAULT_LAYOUT);
+});
+
+test('sidebar fits its labels: padding gives way first and the open width never drops below the labels', () => {
+  assert.deepEqual([80, 88, 100, 120, 240].map(sidebarPadding), [4, 4, 7, 12, 12]);
+  // Widest label box (text plus item padding and margins) of 76px needs 76 + 2 × 4.
+  assert.equal(naturalSidebar(76), 84);
+  for (const content of [76, 81, 82, 82.5, 92, 95, 140]) {
+    const size = naturalSidebar(content);
+    assert.ok(size - 2 * sidebarPadding(size) >= content, `${content}px of labels fit at ${size}`);
+    assert.ok(size === PANEL_BOUNDS.sidebar.min || size - 1 - 2 * sidebarPadding(size - 1) < content, `${size} is the smallest fit for ${content}`);
+  }
+  assert.equal(naturalSidebar(20), PANEL_BOUNDS.sidebar.min);
+  assert.equal(naturalSidebar(1000), PANEL_BOUNDS.sidebar.max);
+  const narrow = setPanelSize(DEFAULT_LAYOUT, 'sidebar', 80, 1600);
+  assert.equal(fitSidebar(narrow, 84).sidebar.size, 84);
+  assert.equal(fitSidebar(DEFAULT_LAYOUT, 84), DEFAULT_LAYOUT, 'wider preferences are kept');
+  assert.equal(fitSidebar(narrow, null), narrow);
+  assert.equal(resolveLayout(fitSidebar(narrow, 84), 80 + 320).sidebar, 80, 'window pressure may still squeeze to the minimum');
 });

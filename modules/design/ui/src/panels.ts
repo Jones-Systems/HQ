@@ -11,7 +11,7 @@ export type PanelLayout = Readonly<Record<PanelId, PanelState>>;
 
 export interface PanelBounds { readonly min: number; readonly max: number; readonly initial: number }
 export const PANEL_BOUNDS: Readonly<Record<PanelId, PanelBounds>> = {
-  sidebar: { min: 120, max: 420, initial: 240 },
+  sidebar: { min: 80, max: 420, initial: 240 },
   inspector: { min: 240, max: 560, initial: 300 },
 };
 /** The workspace (canvas, gallery…) always keeps at least this much width. */
@@ -61,6 +61,28 @@ export function resolveLayout(layout: PanelLayout, width: number): ResolvedLayou
     }
     squeezed.push(hide);
   }
+}
+
+/** Sidebar inline padding: spacing shrinks with the sidebar before its labels have to. */
+export function sidebarPadding(size: number): number {
+  return Math.round(Math.min(12, Math.max(4, (size - 72) / 4)));
+}
+
+/** Sidebar width that shows labels of `content` px (the widest label box) whole, at its own padding. */
+export function naturalSidebar(content: number): number {
+  // The content box (size less padding) never shrinks as size grows, so the first fit is the smallest.
+  let size = Math.min(PANEL_BOUNDS.sidebar.max, Math.max(PANEL_BOUNDS.sidebar.min, Math.ceil(content)));
+  while (size < PANEL_BOUNDS.sidebar.max && size - 2 * sidebarPadding(size) < content) size += 1;
+  return size;
+}
+
+/**
+ * An open sidebar is never narrower than its current labels need, so labels stay whole while space
+ * allows; window pressure can still shrink it to the bound minimum in `resolveLayout`.
+ */
+export function fitSidebar(layout: PanelLayout, natural: number | null): PanelLayout {
+  if (natural === null || layout.sidebar.size >= natural) return layout;
+  return { ...layout, sidebar: { ...layout.sidebar, size: natural } };
 }
 
 /** Largest size this panel may take without pushing the workspace below MAIN_MIN. */
