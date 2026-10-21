@@ -77,6 +77,18 @@ frame, so nothing paints or takes input over HQ's controls. Failed-mark reportin
 separation remain covered by source tests only; the packaged app and a
 high-density display were not part of that run.
 
+Narrow chrome (later 2026-10-21 repair): rail padding, item padding and gaps scale
+with the rail width (`--rail-w`) before labels shrink; below the compact threshold the
+rail stays icon-only with accessible names. Data-source names and statuses wrap
+between words, and the recheck control overlays its row on hover or focus. The
+selected rail item has no side stripe. The Design sidebar floor is 80 px, its padding
+shrinks first, and an open sidebar is never narrower than its current labels while
+space allows (`fitSidebar`); pointer drag and keyboard stop at that natural width
+and window pressure can still squeeze to the floor. Synthetic checks of the built
+fallback in both appearances: no rail or source label truncates at rail widths
+96–280; the Projects sidebar reaches 92 px by pointer and keyboard and Resources fits
+at 117 px. The earlier observations below are historical.
+
 The 2026-10-21 correction checks the rail through keyboard widths 64, 88, 96,
 104, 112, 120, 160 and 280: compact behavior is retained, and expanded rows
 have only icon/label tracks. At 112px the Design label fits its full intrinsic
@@ -92,6 +104,19 @@ private sources, annotation actions and native installation remain unverified.
 Light/dark and exact candidate hashes are retained in private task evidence.
 These checks predate the live preview workbench layout and are historical for
 its open state.
+
+## Saved flows in Flows
+
+Above the Interactive panel, Flows shows the saved flow for the current project and
+buttons for other enrolled sources' saved flows (choosing one is the explicit source
+selection). A numbered screen list with thumbnails sits beside the player and wraps
+above it when narrow. Start, Previous and Next step through the list; with no
+recorded links they follow the saved order and say so, and never create links.
+Images are read from the Design blob store by exact capture digest, re-hashed and
+PNG-checked; a missing image states why. Show this page in the live preview
+appears only while a preview of the flow's exact source is open. Synthetic harness
+checks cover web, phone, linked and missing-image flows; real stored captures and
+native preview navigation from a flow are unverified.
 
 ## Project-to-preview navigation
 
