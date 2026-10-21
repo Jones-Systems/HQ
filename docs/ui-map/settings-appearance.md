@@ -25,4 +25,4 @@ Preset values, role labels and the role → `--hq-*` mapping live in [`@hq/ui` p
 
 ## Checks
 
-Unit and App journeys: `apps/desktop/src/appearance/*.test.*`, `packages/hq-ui/test/palettes.test.ts`, `packages/hq-ui/test/styles.test.ts`. Runtime evidence for this entry is `unverified` until recorded against a candidate; native Electron, installed app and real owner profile are separate gates. Other module-owned selection styles listed in the [modernization spec](../engineering-specs/hq-ui-modernization.md) are not covered by this entry.
+Unit and App journeys: `apps/desktop/src/appearance/*.test.*`, `packages/hq-ui/test/palettes.test.ts`, `packages/hq-ui/test/styles.test.ts`. The integrated production build, unit and App journeys passed. Headless production-renderer captures show all four presets at 760–1440px. Native Electron, installed app and real owner profile remain separate pending gates. Other module-owned selection styles listed in the [modernization spec](../engineering-specs/hq-ui-modernization.md) are not covered by this entry.

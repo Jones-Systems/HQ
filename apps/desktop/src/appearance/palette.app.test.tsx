@@ -125,4 +125,3 @@ it('falls back from a corrupt preference and reports when changes cannot be save
   expect(token('--hq-canvas')).toBe(PALETTE_PRESETS.sage.colors.canvas);
   expect(within(settings).getByRole('alert').textContent).toMatch(/could not be saved/);
 });
-
