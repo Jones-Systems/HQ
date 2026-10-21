@@ -94,9 +94,13 @@ test('gallery direct app URL comes from verified collection directory and declar
   assert.equal(entry.metadata.stateId, null);
   assert.equal(entry.metadata.selectionBasis, 'first-declared');
   assert.equal(entry.metadata.inventoryIntegrity, 'sha256-verified');
+  assert.equal(entry.metadata.collectionId, 'sample');
+  assert.equal(entry.metadata.collectionName, 'Example');
+  assert.equal(entry.relativePath, 'sample/direction-a');
   assert.equal(entry.revision, 'r1');
   assert.equal(entry.metadata.provenance, undefined);
   const renamed = index({ ...galleryEntry, title: 'New title' });
+  renamed.projects[0]!.name = 'Renamed collection';
   assert.equal((await mapGalleryIndex(await fixture(renamed, collection()), context)).entries[0]!.sourceProjectId, entry.sourceProjectId);
 });
 

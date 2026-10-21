@@ -25,3 +25,24 @@ width instead of being squeezed beside Refresh. At 200% text, the controls
 remain reachable through the existing compose scroll region. Live preview,
 private sources, annotation actions and native installation remain unverified.
 Light/dark and exact candidate hashes are retained in private task evidence.
+
+## Project-to-preview navigation
+
+The interactive selector groups available websites and prototypes by registered
+collection, falling back to the enrolled host label. Stills and unavailable
+sources appear disabled with a reason. In Projects, opening a source card shows
+details with an explicit Open website or Open prototype action when available.
+The action preserves the current interactive destination and reveals the native
+preview surface. Workspace project records organize saved views; they do not
+implicitly identify a source by name.
+
+The last explicitly selected source is remembered by opaque host/source identity.
+After catalog refresh, Resume offers that source when available. Startup itself
+does not change project context or open a preview. A missing or unavailable saved
+source keeps a visible explanation. The same Interactive panel is also reachable
+through Flows; both entry points need navigation-preservation checks.
+
+Affected checks cover collection metadata and stable identities, disabled stills,
+exact source selection, explicit Resume and desktop mount preservation. Native
+card-to-preview, domain return and restart journeys require separate evidence;
+browser fixtures cannot verify an Electron WebContentsView.

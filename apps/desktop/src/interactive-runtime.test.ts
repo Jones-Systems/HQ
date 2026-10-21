@@ -5,7 +5,7 @@ afterEach(() => vi.restoreAllMocks());
 it('changes actual shell context using the selected catalog identity', () => {
   const listener = vi.fn(), unsubscribe = subscribeDesktopProject(listener);
   selectDesktopProject({ id: 'source-project-digest', label: 'Selected prototype' });
-  expect(listener).toHaveBeenCalledWith({ id: 'source-project-digest', name: 'Selected prototype' });
+  expect(listener).toHaveBeenCalledWith({ id: 'source-project-digest', name: 'Selected prototype' }, 'restore-saved');
   unsubscribe(); selectDesktopProject({ id: 'another', label: 'Other' }); expect(listener).toHaveBeenCalledOnce();
 });
 it('uses closed read-only lookup and calls fence only through its explicit method', async () => {

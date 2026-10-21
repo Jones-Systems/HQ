@@ -1,3 +1,4 @@
+import { previewIdentity, rendererPreviewBookmark, type PreviewIdentity } from './preview-navigation.ts';
 import type { CaptureRecord, PreviewParams, PreviewSession, PreviewValues, PreviewRect, PreviewViewport } from '@hq/contracts/preview';
 import type { AgentChannelPort, AgentEvent, AgentMode, SourceFrame } from '../../annotations/src/contract.ts';
 import { annotationId, versionId as annotationVersionId } from '../../annotations/src/contract.ts';
@@ -15,6 +16,7 @@ import { authoringDigest } from './canonical.ts';
 import { catalogProject, interactiveTarget } from './runtime-ports.ts';
 
 export interface InteractiveSnapshot {
+  readonly bookmark: PreviewIdentity | null;
   readonly items: readonly InteractiveCatalogItem[];
   readonly selected: InteractiveCatalogItem | null;
   readonly session: PreviewSession | null;
@@ -49,7 +51,8 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
   const annotationsStore = records ? createAnnotationsStorage(records) : null;
   const repository = records ? new ProjectContentRepository(createProjectsStorage(records), requests.clock) : null;
   const flows = records ? createFlowRepository(createFlowsStorage(records)) : null;
-  let state: InteractiveSnapshot = { items: [], selected: null, session: null, capture: null, version: null, image: null, annotations: null, flow: null,
+  const bookmarkStore = ports.previewBookmark ?? rendererPreviewBookmark;
+  let state: InteractiveSnapshot = { bookmark: bookmarkStore.read(), items: [], selected: null, session: null, capture: null, version: null, image: null, annotations: null, flow: null,
     busy: false, held: false, error: null, notice: null, history: [] };
   let after = 0;
   let polling = false;
@@ -193,9 +196,12 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
       await close();
       const selected = state.items.find((candidate) => candidate.entry.sourceProjectId === item.entry.sourceProjectId && candidate.entry.hostId === item.entry.hostId);
       if (!selected) throw new Error('Source selection is stale. Refresh the catalog.');
+      if (!interactiveTarget(selected)) throw new Error('This source has no available interactive presentation.');
       flowWritable = false;
-      update({ selected, flow: null });
-      ports.onSelectProject?.({ id: String(selected.entry.sourceProjectId), label: selected.entry.displayName });
+      const bookmark = previewIdentity(selected);
+      bookmarkStore.write(bookmark);
+      update({ selected, flow: null, bookmark });
+      ports.onSelectProject?.({ id: String(selected.entry.sourceProjectId), label: selected.entry.displayName, navigation: 'preserve-design' });
       const existing = await flows?.load(flowId(`interactive-${selected.entry.sourceProjectId}`));
       if (existing && existing.status !== 'ok' && existing.status !== 'missing') throw new Error('Saved interactive flow is invalid or unsupported; it was not replaced.');
       flowWritable = existing?.status === 'ok' || existing?.status === 'missing';

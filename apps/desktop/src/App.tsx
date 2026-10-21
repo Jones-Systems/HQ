@@ -22,8 +22,14 @@ function WorkspaceApp() {
   const [storage] = useState(storagePort);
   const [context, setContext] = useState(CONTEXT);
   const contextRef = useRef(context); contextRef.current = context;
-  useEffect(() => subscribeDesktopProject(project => {
-    void deactivateDesktopPreview(); setContext(project); setState(readNavigation(storage, project.id)); setReturnFrame(null); setReferenceNotice(null);
+  const [projectMountId, setProjectMountId] = useState(CONTEXT.id);
+  useEffect(() => subscribeDesktopProject((project, navigation) => {
+    if (navigation !== 'preserve-design' || stateRef.current.domain !== 'design') {
+      void deactivateDesktopPreview();
+      setProjectMountId(project.id);
+      setState(readNavigation(storage, project.id));
+    }
+    setContext(project); setReturnFrame(null); setReferenceNotice(null);
   }), [storage]);
   const [rail, setRail] = useState(() => readRail(storage));
   const compact = rail.width <= RAIL_COMPACT_MAX;
@@ -124,7 +130,7 @@ function WorkspaceApp() {
     <div className={fill ? 'workspace is-fill' : 'workspace'} data-hq-overlay={settingsOpen ? 'open' : undefined}>
       {returnFrame && <button hidden={settingsOpen} onClick={goBack}>Back to {returnFrame.context.label}</button>}
       {referenceNotice && <section hidden={settingsOpen} role="status" aria-label="Read-only reference"><strong>{referenceNotice.title}</strong><p>{referenceNotice.message}</p><button onClick={() => setReferenceNotice(null)}>Dismiss reference</button></section>}
-      <main hidden={settingsOpen} className={fill ? 'is-fill' : undefined} key={`${context.id}:${state.domain}`}>
+      <main hidden={settingsOpen} className={fill ? 'is-fill' : undefined} key={`${projectMountId}:${state.domain}`}>
         <Module context={context} destination={state.destinations[state.domain]} appearance={theme} desktop={window.hqDesktop ?? BROWSER_PORT}
           references={references} {...(returnFrame ? { returnContext: returnFrame.context } : {})}
           navigate={destination => { references.cancelOpen(); setState(previous => navigate(previous, state.domain, destination)); }} />

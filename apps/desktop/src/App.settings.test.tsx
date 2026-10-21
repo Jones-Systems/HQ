@@ -1,8 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { HqServices } from '@hq/contracts/services';
-vi.mock('./modules', () => ({ designReferenceReads: { list: vi.fn(async () => { throw Error('Design unavailable in settings fixture'); }), read: vi.fn(async () => ({ status: 'unavailable' as const })) }, DOMAIN_LABELS: { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' }, MODULES: { design: () => <div>Design stub<input aria-label="Design draft" defaultValue="" /></div>, wiki: () => <div>Wiki home stub</div> }, MODULE_PRESENTATION: { design: 'fill' } }));
+vi.mock('./modules', () => ({ designReferenceReads: { list: vi.fn(async () => { throw Error('Design unavailable in settings fixture'); }), read: vi.fn(async () => ({ status: 'unavailable' as const })) }, DOMAIN_LABELS: { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' }, MODULES: { design: ({ destination }: { destination: string }) => <div>Design stub<span data-testid="design-destination">{destination}</span><input aria-label="Design draft" defaultValue="" /></div>, wiki: () => <div>Wiki home stub</div> }, MODULE_PRESENTATION: { design: 'fill' } }));
 import { App } from './App';
+import { selectDesktopProject } from './interactive-runtime';
+import { DEFAULT_STATE, navigationKey } from './state';
 afterEach(() => { cleanup(); delete (window as { hqServices?: HqServices }).hqServices; });
 it('keeps settings accessible without a bridge and reads only sanitized configuration before explicit recheck', async () => {
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} }); window.localStorage.clear();
@@ -115,4 +117,37 @@ it('opens a specific source, keeps Escape within an address edit, and closes on 
   expect(screen.queryByRole('region', { name: 'Settings page' })).toBeNull(); expect(document.activeElement).toBe(source);
   fireEvent.click(source); fireEvent.click(screen.getByRole('button', { name: 'Wiki' }));
   expect(screen.queryByRole('region', { name: 'Settings page' })).toBeNull(); expect(screen.getByText('Wiki home stub')).toBeTruthy();
+});
+
+
+it.each(['projects', 'flows'])('preserves the mounted Design %s destination on explicit source selection without a competing preview close', (destination) => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} });
+  window.localStorage.clear();
+  window.localStorage.setItem(navigationKey('hq-local'), JSON.stringify({ ...DEFAULT_STATE, destinations: { ...DEFAULT_STATE.destinations, design: destination } }));
+  window.localStorage.setItem(navigationKey('synthetic-source'), JSON.stringify({ ...DEFAULT_STATE, domain: 'wiki' }));
+  const call = vi.fn(async (_route: string) => ({ ok: true, value: null }));
+  Object.defineProperty(window, 'hqServices', { configurable: true, value: { preview: { call } } });
+  render(<App />);
+  const draft = screen.getByRole('textbox', { name: 'Design draft' });
+  fireEvent.change(draft, { target: { value: 'Unsaved draft' } });
+  call.mockClear();
+  const selected = { id: 'synthetic-source', label: 'Synthetic source', navigation: 'preserve-design' as const };
+  act(() => selectDesktopProject(selected));
+  expect(screen.getByTestId('design-destination').textContent).toBe(destination);
+  expect(screen.getByRole('textbox', { name: 'Design draft' })).toBe(draft);
+  expect(draft).toHaveProperty('value', 'Unsaved draft');
+  expect(within(screen.getByRole('contentinfo', { name: 'Workspace context' })).getByText('Synthetic source')).toBeTruthy();
+  expect(call).not.toHaveBeenCalled();
+  act(() => selectDesktopProject({ id: 'synthetic-regular', label: 'Regular project' }));
+  expect(screen.getByTestId('design-destination').textContent).toBe('home');
+  expect(call.mock.calls.map(([route]) => route)).toEqual(['deactivate']);
+});
+
+it('restores an ordinary project saved domain and destination', () => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} });
+  window.localStorage.clear();
+  window.localStorage.setItem(navigationKey('synthetic-regular'), JSON.stringify({ ...DEFAULT_STATE, domain: 'wiki' }));
+  render(<App />);
+  act(() => selectDesktopProject({ id: 'synthetic-regular', label: 'Regular project' }));
+  expect(screen.getByText('Wiki home stub')).toBeTruthy();
 });

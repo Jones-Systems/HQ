@@ -31,4 +31,4 @@ function BridgedFlows({ context, navigate, workspace }: { navigate: DesignSectio
   </SectionFrame>;
 }
 
-export const FlowsView = withSectionErrorBoundary(FlowsViewContent);
+export const FlowsView = withSectionErrorBoundary(FlowsViewContent, true);

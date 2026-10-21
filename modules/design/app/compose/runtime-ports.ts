@@ -1,3 +1,4 @@
+import type { PreviewBookmarkStore } from './preview-navigation.ts';
 import type { CatalogEntry } from '@hq/contracts/catalog';
 import type { PreviewTransport } from '@hq/contracts/preview';
 import type { RunsConnection } from '../sections/runs/env.ts';
@@ -15,11 +16,12 @@ export interface InteractiveCatalogPort {
 }
 
 export interface DesignRuntimePorts {
+  readonly previewBookmark?: PreviewBookmarkStore;
   readonly documents?: WorkspaceRecords | null;
   readonly preview?: PreviewTransport;
   readonly sources?: InteractiveCatalogPort;
   readonly runsConnection?: RunsConnection;
-  readonly onSelectProject?: (project: { readonly id: string; readonly label: string }) => void;
+  readonly onSelectProject?: (project: { readonly id: string; readonly label: string; readonly navigation?: 'preserve-design' }) => void;
 }
 
 export function interactiveTarget(item: InteractiveCatalogItem): { readonly url: string; readonly kind: 'website' | 'web-prototype' } | null {
