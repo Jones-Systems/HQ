@@ -147,3 +147,19 @@ The source cone is the References view/stylesheet/rendered checks, graph header/
 
 Verification uses synthetic references with short and long titles/source text, generated image bytes, expanded/collapsed collections, details and import states, light/dark appearance and wide/narrow content widths. Browser measurements must show no unintended inner card border, readable provenance, consistent title/action rows and no page overflow. Focused References/sections checks and production typecheck/build cover the final candidate. Actual owner screenshots and project metadata are not test fixtures or public evidence.
 <!-- codex-section:end id="spec.hq-ui-modernization#impl.references-alignment.001" -->
+
+<!-- codex-section:begin id="spec.hq-ui-modernization#impl.insets-stability.001" -->
+## Insets and selection stability correction
+
+This accepted existing-system correction supersedes the earlier checked-menu requirement: both Work and Social now have separate Agenda (left) and Month → Week → Day cycle (right) buttons, with the existing small spacing token between them. The cycle returns from Agenda to its last grid without advancing. Work keeps its existing persisted mode and date keys; Social keeps its existing in-session grid state. View changes never write planning data or launch work.
+
+The primary rail reserves only its actual icon and label tracks; compact mode remains at widths up to 95px. Design's secondary sidebar rests at 120px or wider. Pointer movement is transient and continuous; release below 60px collapses while retaining the previous open size, and release between 60px and 120px settles at 120px. Keyboard shrinking stops at the floor; Home collapses and Enter restores. Inspector bounds and persistence shapes are unchanged.
+
+Reference preview identity follows asset metadata, with bounded caching, deduplicated pending reads and stale-completion guards. Selecting another card retains loaded image elements. Genuine media replacement reloads, and deleted/unavailable media cannot publish late. Below the existing 1100px container breakpoint, the details body uses a bounded scroll region so different detail lengths cannot move the card grid; first-open movement is retained, subsequent selection does not scroll the outer page.
+
+Interactive source, viewport and actions form compact wrapping groups using existing tokens. Work owns a medium gutter on all four content edges, including the bottom at the scroll endpoint. Empty-state glyph/title/description form one group with a larger action separation; Work removes redundant inline state padding. Status columns own the remaining board height for horizontal wheel/keyboard access while visible lanes keep their natural height. Navigation, drag/drop, scroll restoration and backend contracts remain intact.
+
+Guidance pins: Codex-V3 `ecf72e1c8d165ea60f4ae947ec5fe560f05c4f8e`; Frontend-Development `76c9d22500ad81624eb3d06c78e822aabdf32a14`; canonical website edge-gutter update `9a01d7131a057aee382c78485a2610eeba689b54`. Gallery/export is not applicable. The single assigned writer owns this correction on the verified foundation; PR #105's separate source/finding ownership and holds remain. Its raw Area, unknown-save, link and store behavior are outside this correction.
+
+Acceptance uses deterministic pointer/cache/calendar regressions and actual production-renderer synthetic fixtures. Record light/dark, breakpoint widths, selection geometry, blank-board scroll and 200% text observations per entry in the partial UI map. Native Electron, private data, live services and installed rollout are separate gates. Root retains qualifying merge; this implementation lane publishes an open source candidate only.
+<!-- codex-section:end id="spec.hq-ui-modernization#impl.insets-stability.001" -->
