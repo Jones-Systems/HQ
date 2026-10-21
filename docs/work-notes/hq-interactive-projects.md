@@ -157,3 +157,13 @@ A bounded native diagnosis compared screenshot options in the same Electron debu
 
 The repair retains the logical clip, surface capture and every mutation, target, generation, geometry, scroll, DPR and pixel-equality predicate. Root owns Git and documentation in the existing isolated task worktree; one bounded builder owns the host and its direct unit/native regressions. Affected checks are `hq-preview-host`, `hq-root-build`, `hq-preview-acceptance` and the preview Node checks. Native coverage must include scaled responsive pages at DPR 1 and 2, nonzero scroll, full-image landmarks and genuine-mutation refusal. The two owner-accepted callback exceptions remain unmeasured. No runtime, simulator or dependency download is needed.
 <!-- codex-section:end id="worknote.hq-interactive-projects#ctx.responsive-preview-capture.001" -->
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.native-window-arrangement.001" -->
+## Native foreground test arrangement
+
+The responsive viewport rows pass at DPR 1 and 2, including scroll, full-image landmarks and genuine-mutation refusal. Interrupted full runs retain their original results. One early phone capture refused unstable pixels; a later instrumented probe preserved twenty identical raw images across ten accepted captures, and the next canonical run passed all ten phone captures. The historical mismatch remains unexplained and is not claimed repaired.
+
+The latest full run stopped before a permission workload because the preview document was hidden while the native window remained visible and unminimized. Window occlusion is plausible; native view state or visibility propagation is not ruled out. An explicit `--keep-test-window-visible` runner option arranges only the owned unpackaged test window above other windows, with strict native identity/private-profile binding, recorded initial state, readback and restoration before cleanup. It makes no focus or host-setting change. Actual visibility checks, intentional Settings hiding and all capture/permission assertions remain intact. Sentinel evidence also records the main document and exact native view state. Results qualify this arranged foreground test environment only.
+
+Root remains the sole Git owner. A bounded harness builder owns only the native runner; root owns this continuity record and serial verification. Product payload bytes remain those built and tested for the responsive capture correction. No runtime or dependency download is required.
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.native-window-arrangement.001" -->

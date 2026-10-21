@@ -15,6 +15,7 @@ const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const args = process.argv.slice(2);
 const option = name => { const at = args.indexOf(name); return at < 0 ? undefined : args[at + 1]; };
 const evidenceParent = option('--evidence');
+const keepTestWindowVisible = args.includes('--keep-test-window-visible');
 if (!evidenceParent || !isAbsolute(evidenceParent) || !relative(repo, resolve(evidenceParent)).startsWith('..')) throw Error('--evidence must be an absolute private path outside the repository');
 if (process.platform !== 'darwin') throw Error('This runner qualifies the native macOS route only');
 const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
@@ -23,7 +24,9 @@ await mkdir(evidenceParent, { recursive: true });
 const evidence = await mkdtemp(join(evidenceParent, 'evidence-'));
 const runtime = await createRuntime(join(evidenceParent, 'scratch'));
 const report = { schema: 'hq-preview-native/v1', head: git('rev-parse', 'HEAD'), branch: git('branch', '--show-current'), dirty: git('status', '--short'), platform: process.platform, architecture: process.arch, node: process.version, invocation: process.argv, evidence, rows: [], outcome: 'unmeasured', networkClaim: 'Normal browser network reach; literal URL filtering is hygiene only.' };
-let log = '', main, shell, child, endpoint, cancelled;
+report.windowArrangement = { requested: keepTestWindowVisible };
+let log = '', main, shell, child, endpoint, cancelled, arrangedWindow;
+const electronModule = "process.getBuiltinModule('module').createRequire(process.cwd()+'/package.json')('electron')";
 let evidenceWrites = Promise.resolve(), stopNative;
 const nativeStopped = new Promise(resolve => { stopNative = resolve; });
 class Unmeasured extends Error {}
@@ -128,7 +131,18 @@ let occlusionNoticed = false;
 async function drawable(cdp, stage) {
   const windows = await main.evaluate("process.getBuiltinModule('module').createRequire(process.cwd()+'/package.json')('electron').BrowserWindow.getAllWindows().map(w=>({id:w.id,visible:w.isVisible(),minimized:w.isMinimized(),focused:w.isFocused(),destroyed:w.isDestroyed()}))");
   const document = await cdp.evaluate('({visibility:document.visibilityState,focused:document.hasFocus()})');
-  const observed = {stage,windows,document};
+  const mainDocument = await shell.evaluate('({visibility:document.visibilityState,focused:document.hasFocus()})');
+  const bindings = [...previewConnections].filter(([, connection]) => connection === cdp);
+  assert.equal(bindings.length, 1, 'Drawable sentinel requires exactly one owned preview session');
+  let previewSession = null;
+  if (report.hooksAvailable) {
+    const sessions = (await hook('sessions()')).filter(session => session.sessionId === bindings[0][0]);
+    assert.equal(sessions.length, 1, 'Drawable sentinel requires the exact live preview session');
+    const {sessionId, visible, intendedVisible, overlayHidden, webContentsId} = sessions[0];
+    previewSession = {sessionId, visible, intendedVisible, overlayHidden, webContentsId};
+  }
+  const owningWindowId = arrangedWindow?.id ?? (windows.length === 1 ? windows[0].id : null);
+  const observed = {stage,owningWindowId,windows,document,mainDocument,sessionId:bindings[0][0],previewSession};
   await emit({type:'drawable-sentinel',...observed});
   if (!windows.some(w=>w.visible&&!w.minimized&&!w.destroyed) || document.visibility !== 'visible') {
     if (!occlusionNoticed) {occlusionNoticed=true;await emit({type:'environment-occluded',notice:'Native qualification stopped: keep the HQ test window visible and unobscured before a separately scheduled run.',...observed});}
@@ -146,7 +160,7 @@ async function click(cdp, x = 80, y = 80) {
   await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
 }
-const cancel = signal => { cancelled = signal; stopNative(new NativeStopped(`Cancelled: ${signal}`)); void emit({type:'cancelled',signal}); void runtime.close().catch(error => { report.cleanupError = error.stack; }); };
+const cancel = signal => { cancelled = signal; stopNative(new NativeStopped(`Cancelled: ${signal}`)); void emit({type:'cancelled',signal}); };
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => cancel(signal));
 try {
   canaries = await createNetworkCanaries(runtime);
@@ -171,7 +185,7 @@ try {
   await until(() => { if (child.exitCode !== null || child.launchError) throw Error('Native launch failed: ' + (child.launchError?.message ?? `exit=${child.exitCode}`) + '\n' + log); return endpoint && inspector; }, 'Electron debug endpoints');
   if(args.includes('--fail-after-launch')) throw Error('Deliberate qualification lifecycle failure after native launch');
   main = await connect(inspector, runtime);
-  try {report.nativeIdentity=await nativeCall(()=>main.evaluate("import('electron').then(({app})=>({isPackaged:app.isPackaged,architecture:process.arch,electron:process.versions.electron}))"));await emit({type:'native-identity',...report.nativeIdentity});}
+  try {report.nativeIdentity=await nativeCall(()=>main.evaluate(`(()=>{const {app}=${electronModule};return {isPackaged:app.isPackaged,architecture:process.arch,electron:process.versions.electron,userData:app.getPath('userData')}})()`));await emit({type:'native-identity',...report.nativeIdentity});}
   catch(error){assertNative();report.nativeIdentityUnavailable=error.message;await emit({type:'native-identity-unavailable',error:error.message});}
   if(report.nativeIdentity){assert.equal(report.nativeIdentity.isPackaged,false);assert.equal(report.nativeIdentity.architecture,'arm64');assert.equal(report.nativeIdentity.electron,'44.9.0');}
   const target = await until(async () => (await (await fetch(`http://${new URL(endpoint).host}/json/list`)).json()).find(t => t.type === 'page' && t.url.startsWith('file:')), 'HQ renderer');
@@ -180,6 +194,22 @@ try {
   report.desktop = await shell.evaluate('window.hqDesktop');
   assert.equal(report.desktop.versions.electron, '44.9.0');
   report.hooksAvailable = await main.evaluate('!!globalThis.__hqPreviewQualification');
+  if (keepTestWindowVisible) {
+    assert.ok(report.nativeIdentity, 'Window arrangement requires verified native identity');
+    assert.equal(report.nativeIdentity.userData, join(runtime.root, 'profile'), 'Window arrangement requires the owned private profile');
+    arrangedWindow = await until(async () => {
+      const windows = await nativeCall(() => main.evaluate(`${electronModule}.BrowserWindow.getAllWindows().map(w=>({id:w.id,initialAlwaysOnTop:w.isAlwaysOnTop(),webContentsId:w.webContents.id}))`));
+      assert.ok(windows.length <= 1, 'Window arrangement refuses multiple native windows');
+      return windows.length === 1 ? windows[0] : null;
+    }, 'exactly one owned test window');
+    report.windowArrangement.initial = arrangedWindow;
+    assertNative();
+    const state = await main.evaluate(`(()=>{const {BrowserWindow}=${electronModule};const windows=BrowserWindow.getAllWindows();if(windows.length!==1||windows[0].id!==${arrangedWindow.id})throw Error('Owned test window changed before arrangement');const w=windows[0];w.setAlwaysOnTop(true);return {id:w.id,alwaysOnTop:w.isAlwaysOnTop(),visible:w.isVisible(),minimized:w.isMinimized(),focused:w.isFocused()}})()`);
+    report.windowArrangement.arranged = state;
+    await emit({type:'test-window-arranged',...state});
+    assert.equal(state.alwaysOnTop, true, 'Owned test window stacking readback');
+    report.windowArrangement.claim = 'foreground-arranged test window only';
+  }
   for (const path of ['apps/desktop/dist/index.html', 'apps/desktop/dist-electron/main.js', 'apps/desktop/dist-electron/preload.cjs', 'apps/desktop/dist-electron/preview-agent/agent.js']) {
     report.build ??= {}; report.build[path] = digest(await readFile(join(repo, path)));
   }
@@ -664,6 +694,21 @@ try {
 } catch (error) {if(error instanceof EnvironmentOccluded){report.environmentStop=error.observed;report.plannedStop=error.message;}else if(error instanceof PlannedStop)report.plannedStop=error.message;else report.error=error.stack;report.remainingScenarios='unmeasured: runner stopped before executing remaining scenarios';}
 finally {
   if (cancelled) report.cancelled = cancelled;
+  if (arrangedWindow) {
+    try {
+      if (child.launchError || child.exitCode !== null || child.signalCode !== null) {
+        report.windowArrangement.restore = {skipped:'native process already exited',id:arrangedWindow.id};
+      } else {
+        const state = await main.evaluate(`(()=>{const w=${electronModule}.BrowserWindow.fromId(${arrangedWindow.id});if(!w||w.isDestroyed())return {id:${arrangedWindow.id},skipped:'owned window no longer exists'};w.setAlwaysOnTop(${JSON.stringify(arrangedWindow.initialAlwaysOnTop)});return {id:w.id,alwaysOnTop:w.isAlwaysOnTop()}})()`);
+        report.windowArrangement.restore = state;
+        if (!state.skipped) assert.equal(state.alwaysOnTop, arrangedWindow.initialAlwaysOnTop, 'Owned test window stacking restored');
+      }
+      await emit({type:'test-window-restored',...report.windowArrangement.restore});
+    } catch (error) {
+      report.windowArrangement.restoreError = error.stack;
+      await emit({type:'test-window-restore-failed',error:error.stack});
+    }
+  }
   await evidenceWrites;
   await runtime.close().then(() => { report.cleanup = 'passed'; }, error => { report.cleanup = 'failed'; report.cleanupError = error.stack; });
   try {await access(runtime.root);report.cleanup='failed';report.cleanupError='Owned scratch root survived cleanup';}catch(error){if(error.code!=='ENOENT'){report.cleanup='failed';report.cleanupError=error.stack;}}
@@ -675,7 +720,7 @@ finally {
   for (const id of ['Q-PV0','Q-PV1','Q-PV2','Q-PV3','Q-PV3h','Q-PV4','Q-PV5','Q-PV6','Q-PV6d','Q-PV6a','Q-PV6h','Q-PV7','Q-PV8','Q-PV9','Q-PV10','PUBLIC-HTTPS','PACKAGED-SWITCH']) {
     if (!report.rows.some(row => row.id === id)) unmeasured(id, 'Required matrix row', 'Run stopped before this row');
   }
-  report.outcome = report.error || report.cancelled || report.evidenceError || report.cleanup !== 'passed' || report.rows.some(r => r.outcome === 'failed') ? 'failed' : report.rows.some(r => r.outcome === 'unmeasured') ? 'partial' : 'passed';
+  report.outcome = report.error || report.cancelled || report.evidenceError || report.windowArrangement.restoreError || report.cleanup !== 'passed' || report.rows.some(r => r.outcome === 'failed') ? 'failed' : report.rows.some(r => r.outcome === 'unmeasured') ? 'partial' : 'passed';
   report.endHead = git('rev-parse', 'HEAD');
   if (report.endHead !== report.head) { report.outcome = 'failed'; report.identityError = 'HEAD changed during run'; }
   await writeFile(join(evidence, 'report.json'), JSON.stringify(report, null, 2) + '\n');
