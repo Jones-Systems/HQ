@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { CaptureRecord, PreviewSession, PreviewTransport, PreviewParams, PreviewValues } from '@hq/contracts/preview';
 import type { CatalogEntry } from '@hq/contracts/catalog';
+import { findPreview, openPreviewSource, previewGroups, previewIdentity, previewKey, previewUnavailableReason, type PreviewBookmarkStore } from '../preview-navigation.ts';
 import type { InteractiveCatalogItem } from '../runtime-ports.ts';
 import { interactiveTarget } from '../runtime-ports.ts';
 import { createDesignWorkspace } from '../workspace.ts';
@@ -20,7 +21,7 @@ const entry: CatalogEntry = { sourceProjectId: 'a'.repeat(64) as CatalogEntry['s
   repoIdentity: { localOnly: true }, previews: [], metadata: { experienceKind: 'website', launchStatus: 'available', launchUrl: 'https://example.com/document.html' } };
 const item: InteractiveCatalogItem = { entry, hostLabel: 'Fixture source', freshness: 'fresh' };
 
-function fixture(connection?: RunsConnection) {
+function fixture(connection?: RunsConnection, previewBookmark?: PreviewBookmarkStore) {
   const d = createTransportDouble();
   d.failWith((route) => route === 'event.read' ? { ok: true, value: { events: [], status: { state: 'ok' } } } : undefined);
   const records = createBridgeWorkspaceDocuments(d.transport);
@@ -57,7 +58,7 @@ function fixture(connection?: RunsConnection) {
       return { ok: true as const, value: value as PreviewValues[R] };
     },
   };
-  const workspace = createDesignWorkspace(records, { preview, sources: { async list() { return [item]; } },
+  const workspace = createDesignWorkspace(records, { previewBookmark, preview, sources: { async list() { return [item]; } },
     onSelectProject: (project) => selected.push(project), runsConnection: connection });
   return { d, records, workspace, ui: workspace.interactive, calls, selected, stale: () => { stale = true; },
     loseCaptureReply: () => { loseCaptureReply = true; },
@@ -86,7 +87,7 @@ async function open(f: ReturnType<typeof fixture>) {
 test('catalog selection opens the full document only after explicit Open and binds the real catalog identity', async () => {
   const f = fixture();
   await f.ui.refresh(); await f.ui.select(item);
-  assert.deepEqual(f.selected, [{ id: entry.sourceProjectId, label: entry.displayName }]);
+  assert.deepEqual(f.selected, [{ id: entry.sourceProjectId, label: entry.displayName, navigation: 'preserve-design' }]);
   assert.equal(f.calls.length, 0);
   assert.equal(f.d.documents.size, 0);
   await f.ui.open();
@@ -239,4 +240,72 @@ test('one app session captures two routes into distinct immutable versions and r
   const recovered = await reopened.closure.requests.open(proposalId);
   assert.equal(recovered.state.packets[0]?.authoringDigest, packet.authoringDigest);
   assert.equal(recovered.state.sends.length, 0);
+});
+
+
+test('unavailable source selection never changes project context', async () => {
+  const f = fixture(); await f.ui.refresh();
+  const unavailable = { ...item, entry: { ...entry, metadata: { ...entry.metadata, launchStatus: 'unavailable' } } };
+  const ui = createDesignWorkspace(f.records, { sources: { async list() { return [unavailable]; } }, onSelectProject: (project) => f.selected.push(project) }).interactive;
+  await ui.refresh(); await ui.select(unavailable);
+  assert.equal(f.selected.length, 0);
+  assert.equal(ui.snapshot().selected, null);
+});
+
+
+test('preview groups keep collection identities distinct and place held sources outside openable groups', () => {
+  const collection = (host: string, root: string, id: string, name: string): InteractiveCatalogItem => ({ ...item, entry: { ...entry,
+    hostId: host as CatalogEntry['hostId'], rootId: root as CatalogEntry['rootId'],
+    metadata: { ...entry.metadata, collectionId: id, collectionName: name } } });
+  const still = { ...item, entry: { ...entry, metadata: { experienceKind: 'stills' } } };
+  const held = { ...item, freshness: 'offline' };
+  const result = previewGroups([collection('one', 'root', 'a', 'Collection'), collection('one', 'root', 'b', 'Collection'),
+    collection('two', 'root', 'a', 'Collection'), collection('one', 'other-root', 'a', 'Collection'), item, still, held]);
+  assert.equal(result.groups.length, 5);
+  assert.equal(result.groups.at(-1)?.label, item.hostLabel);
+  assert.deepEqual(result.unavailable, [still, held]);
+  assert.match(previewUnavailableReason(still), /Still images/);
+  assert.match(previewUnavailableReason(held), /offline/);
+  assert.notEqual(previewKey({ hostId: 'one', sourceProjectId: entry.sourceProjectId }), previewKey({ hostId: 'two', sourceProjectId: entry.sourceProjectId }));
+});
+
+test('explicit card action resolves host and source identity before selection and opening', async () => {
+  const f = fixture(); await f.ui.refresh();
+  assert.equal(await openPreviewSource(f.ui, { hostId: 'another-host', sourceProjectId: entry.sourceProjectId }), false);
+  assert.equal(await openPreviewSource(f.ui, { hostId: entry.hostId, sourceProjectId: 'same-title-is-not-identity' }), false);
+  assert.equal(f.selected.length, 0); assert.equal(f.calls.length, 0);
+  assert.equal(await openPreviewSource(f.ui, previewIdentity(item)), true);
+  assert.equal(f.selected.length, 1); assert.equal(f.calls[0]?.route, 'open');
+  assert.equal(f.ui.snapshot().selected?.entry.hostId, entry.hostId);
+  await f.ui.close();
+});
+
+test('persisted Resume remains passive through startup and refresh until explicit click', async () => {
+  let saved: ReturnType<typeof previewIdentity> | null = null;
+  let writes = 0;
+  const store: PreviewBookmarkStore = { read: () => saved, write: (identity) => { saved = identity; writes++; } };
+  const original = fixture(undefined, store); await original.ui.refresh(); await original.ui.select(item);
+  assert.deepEqual(saved, { hostId: entry.hostId, sourceProjectId: entry.sourceProjectId });
+  assert.equal(writes, 1);
+  const restarted = fixture(undefined, store);
+  await restarted.ui.refresh(); await restarted.ui.refresh();
+  assert.equal(restarted.ui.snapshot().selected, null);
+  assert.equal(restarted.selected.length, 0); assert.equal(restarted.calls.length, 0); assert.equal(writes, 1);
+  assert.deepEqual(restarted.ui.snapshot().bookmark, saved);
+  assert.equal(await openPreviewSource(restarted.ui, restarted.ui.snapshot().bookmark!), true);
+  assert.equal(restarted.calls[0]?.route, 'open');
+  await restarted.ui.close();
+});
+
+test('missing or unavailable Resume retains the opaque bookmark and never selects or opens', async () => {
+  for (const items of [[], [{ ...item, freshness: 'offline' }]]) {
+    const saved = previewIdentity(item); let writes = 0; let selected = 0;
+    const ui = createDesignWorkspace(null, { previewBookmark: { read: () => saved, write: () => { writes++; } },
+      sources: { async list() { return items; } }, onSelectProject: () => { selected++; } }).interactive;
+    await ui.refresh();
+    assert.deepEqual(ui.snapshot().bookmark, saved);
+    assert.equal(await openPreviewSource(ui, saved), false);
+    assert.equal(selected, 0); assert.equal(writes, 0); assert.equal(ui.snapshot().session, null);
+    assert.match(previewUnavailableReason(findPreview(ui.snapshot().items, saved)), /not in|offline/);
+  }
 });

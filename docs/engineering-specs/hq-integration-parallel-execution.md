@@ -8435,6 +8435,8 @@ XR5: Runs displays durable receipts, lookup, readback and status. Unknown effect
 
 XR6: Capability holds remain visible until real qualification, activation and installation. Routine startup and refresh require no commands, TTY or password after enrollment.
 
+XR7: Interactive choices retain their registered collection names. Stills and unavailable entries cannot be selected as interactive targets and display a reason. Source details provide an explicit Open action for an available website or prototype, preserving the current interactive destination and revealing the preview. A saved opaque source identity offers an explicit Resume action after refresh or restart; restoration alone never selects a project, opens a preview or dispatches work. Source identities and existing authoring links remain unchanged, and workspace records are never matched by display name.
+
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#req.project-experience-workflow.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.project-experience-source.001" -->

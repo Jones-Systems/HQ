@@ -3,6 +3,7 @@ import { Button } from '@hq/ui';
 import type { DesignSectionProps } from '../../../ui/contract.ts';
 import { AnnotationList } from '../../../annotations/src/ui/AnnotationsPanel.tsx';
 import { anchorMatches } from '../interactive-workspace.ts';
+import { findPreview, openPreviewSource, previewCollection, previewGroups, previewIdentity, previewKey, previewKind, previewUnavailableReason } from '../preview-navigation.ts';
 import { interactiveTarget } from '../runtime-ports.ts';
 import { useDesignWorkspace } from '../workspace-context.tsx';
 
@@ -11,6 +12,8 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
   const snapshot = useSyncExternalStore(interactive.subscribe, interactive.snapshot, interactive.snapshot);
   const { selected, session, annotations, capture, error, flow } = snapshot;
   const busy = snapshot.busy || snapshot.held;
+  const revealedSession = useRef<string | null>(null);
+  const closePreview = useRef<HTMLButtonElement>(null);
   const placeholder = useRef<HTMLDivElement>(null);
   const [route, setRoute] = useState('');
   const [device, setDevice] = useState<'auto' | 'phone' | 'desktop'>('auto');
@@ -44,6 +47,15 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
     place();
     return () => { size.disconnect(); overlays.disconnect(); window.removeEventListener('resize', place); document.removeEventListener('scroll', place, true); document.removeEventListener('visibilitychange', place); };
   }, [interactive, session?.sessionId]);
+  useEffect(() => {
+    if (!session) { revealedSession.current = null; return; }
+    if (snapshot.busy || revealedSession.current === session.sessionId) return;
+    revealedSession.current = session.sessionId;
+    placeholder.current?.scrollIntoView({ block: 'center' });
+    closePreview.current?.focus({ preventScroll: true });
+  }, [session?.sessionId, snapshot.busy]);
+  const grouped = previewGroups(snapshot.items);
+  const resume = snapshot.bookmark ? findPreview(snapshot.items, snapshot.bookmark) : null;
   const documentState = annotations?.snapshot.editor.document;
   const target = selected ? interactiveTarget(selected) : null;
   const bound = selected?.entry.sourceProjectId === context.id;
@@ -53,18 +65,26 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
     <p>Select an enrolled web prototype or website. Image collections remain static references.</p>
     {!interactive.catalogAvailable && <p role="status">Source catalog not connected. Enroll a source in Settings.</p>}
     <div className="hqi-toolbar">
-      <div className="hqi-group"><label>Source project <select aria-label="Interactive source project" value={selected?.entry.sourceProjectId ?? ''} disabled={busy}
-        onChange={(event) => { const item = snapshot.items.find((item) => item.entry.sourceProjectId === event.target.value); if (item) void interactive.select(item); }}>
+      <div className="hqi-group"><label>Source project <select aria-label="Interactive source project" value={selected ? previewKey(previewIdentity(selected)) : ''} disabled={busy}
+        onChange={(event) => { const item = snapshot.items.find((item) => previewKey(previewIdentity(item)) === event.target.value); if (item) void interactive.select(item); }}>
         <option value="">Choose a source project</option>
-        {snapshot.items.map((item) => <option key={item.entry.sourceProjectId} value={item.entry.sourceProjectId}>
-          {item.entry.displayName} · {String(item.entry.metadata.experienceKind ?? 'source only')} · {item.freshness}
-        </option>)}
+        {grouped.groups.map((group) => <optgroup key={group.key} label={group.label}>
+          {group.items.map((item) => <option key={previewKey(previewIdentity(item))} value={previewKey(previewIdentity(item))}>{item.entry.displayName} · {previewKind(item)}{item.freshness !== 'fresh' ? ` · ${item.freshness}` : ''}</option>)}
+        </optgroup>)}
+        {grouped.unavailable.length > 0 && <optgroup label="Not interactive">
+          {grouped.unavailable.map((item) => <option disabled key={previewKey(previewIdentity(item))} value={previewKey(previewIdentity(item))}>{item.entry.displayName} · {previewUnavailableReason(item)}</option>)}
+        </optgroup>}
       </select></label>
       <Button variant="secondary" disabled={busy || !interactive.catalogAvailable} onClick={() => void interactive.refresh()}>Refresh sources</Button></div>
       <div className="hqi-group"><label>Viewport <select aria-label="Preview viewport" value={device} disabled={busy || session !== null} onChange={(event) => setDevice(event.target.value as 'auto' | 'phone' | 'desktop')}><option value="auto">Source default</option><option value="phone">Phone · 390 × 844</option><option value="desktop">Desktop · 1024 × 720</option></select></label></div>
       <div className="hqi-group"><Button disabled={busy || !target || !interactive.available || !bound} onClick={() => void interactive.open(device === 'auto' ? undefined : device === 'phone' ? { w: 390, h: 844, dpr: 1 } : { w: 1024, h: 720, dpr: 1 })}>Open live preview</Button>
-      {session && <Button variant="secondary" disabled={snapshot.busy} onClick={() => void interactive.close()}>Close preview</Button>}</div>
+      {session && <Button ref={closePreview} variant="secondary" disabled={snapshot.busy} onClick={() => void interactive.close()}>Close preview</Button>}</div>
     </div>
+    {snapshot.bookmark && <div aria-label="Resume preview">
+      {resume && interactiveTarget(resume)
+        ? <Button variant="secondary" disabled={busy || !interactive.available || !interactive.selectProjectAvailable} onClick={() => void openPreviewSource(interactive, snapshot.bookmark!)}>Resume {previewCollection(resume)}/{resume.entry.displayName}</Button>
+        : <p role="status">Saved preview unavailable. {previewUnavailableReason(resume)} Your bookmark is retained.</p>}
+    </div>}
     {selected && <p>{selected.hostLabel} · {selected.freshness} · Source identity <code>{selected.entry.sourceProjectId}</code></p>}
     {selected && !bound && <p role="status">Select this source in the project context before opening it. Project selection sends nothing.</p>}
     {selected && !target && <p role="status">{selected.entry.metadata.experienceKind === 'stills' ? 'Still images: use the existing reference import workflow.' : String(selected.entry.metadata.holdReason ?? 'No available interactive presentation.')}</p>}

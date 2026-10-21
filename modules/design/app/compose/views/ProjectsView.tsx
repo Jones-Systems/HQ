@@ -5,6 +5,8 @@ import type { DesignSectionProps } from '../../../ui/contract.ts';
 import { ProjectsSection } from '../../../projects/src/index.ts';
 import '../../../projects/src/projects.css';
 import { useDesignWorkspace } from '../workspace-context.tsx';
+import { findPreview, openPreviewSource, previewKind, previewUnavailableReason, type PreviewIdentity } from '../preview-navigation.ts';
+import { interactiveTarget } from '../runtime-ports.ts';
 import { InteractivePanel } from './InteractivePanel.tsx';
 import { SectionFrame } from './SectionFrame.tsx';
 
@@ -17,10 +19,12 @@ function ProjectsViewContent({ context, navigate }: DesignSectionProps) {
   const status = useSyncExternalStore(readPort.subscribe, readPort.status, readPort.status);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<PreviewIdentity | null>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const close = useRef<HTMLButtonElement | null>(null);
-  const entry = readPort.current().find((item) => item.sourceProjectId === selected);
+  const entry = readPort.current().find((item) => item.sourceProjectId === selected?.sourceProjectId && item.hostId === selected.hostId);
+  const preview = useSyncExternalStore(workspace.interactive.subscribe, workspace.interactive.snapshot, workspace.interactive.snapshot);
+  const previewItem = selected ? findPreview(preview.items, selected) : null;
   useEffect(() => { if (entry) close.current?.focus(); }, [selected]);
   async function run(action: () => Promise<void>) {
     setBusy(true); setError(null); setSelected(null);
@@ -51,10 +55,13 @@ function ProjectsViewContent({ context, navigate }: DesignSectionProps) {
         <dt>Repository</dt><dd>{entry.repoIdentity.normalizedRemote ?? 'Local repository'}</dd>
         <dt>Catalog status</dt><dd>{entry.freshness.status}</dd>
       </dl>
+      {previewItem && interactiveTarget(previewItem)
+        ? <Button disabled={preview.busy || preview.held || !workspace.interactive.available || !workspace.interactive.selectProjectAvailable} onClick={() => void openPreviewSource(workspace.interactive, selected!)}>Open {previewKind(previewItem).toLowerCase()}</Button>
+        : <p role="status">{previewUnavailableReason(previewItem)}</p>}
       <p>Source discovery provides repository details. Create a workspace project below to organize design views and versions.</p>
     </section>}
-    <ProjectsSection controller={controller} gallery={{ onOpenSource: (item, button) => { trigger.current = button; setSelected(item.sourceProjectId); } }} />
+    <ProjectsSection controller={controller} gallery={{ onOpenSource: (item, button) => { trigger.current = button; setSelected({ hostId: item.hostId, sourceProjectId: item.sourceProjectId }); } }} />
   </SectionFrame>;
 }
 
-export const ProjectsView = withSectionErrorBoundary(ProjectsViewContent);
+export const ProjectsView = withSectionErrorBoundary(ProjectsViewContent, true);

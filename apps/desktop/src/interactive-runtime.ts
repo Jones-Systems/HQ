@@ -5,9 +5,12 @@ import type { RunsConnection } from '../../../modules/design/app/sections/runs/e
 import type { TransportPort, EvidenceReadbackPort } from '../../../modules/design/connector/src/contract.ts';
 import type { HostCatalog } from '../../../modules/design/connector/src/host-catalog.ts';
 
-const listeners = new Set<(project: ProjectContext) => void>();
-export function selectDesktopProject(project: { id: string; label: string }) { for (const listener of listeners) listener({ id: project.id, name: project.label }); }
-export function subscribeDesktopProject(listener: (project: ProjectContext) => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
+export type ProjectNavigation = 'restore-saved' | 'preserve-design';
+const listeners = new Set<(project: ProjectContext, navigation: ProjectNavigation) => void>();
+export function selectDesktopProject(project: { id: string; label: string; navigation?: 'preserve-design' }) {
+  for (const listener of listeners) listener({ id: project.id, name: project.label }, project.navigation ?? 'restore-saved');
+}
+export function subscribeDesktopProject(listener: (project: ProjectContext, navigation: ProjectNavigation) => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
 export const desktopPreview: PreviewTransport = {
   async call(route, params) {
     const transport = window.hqServices?.preview;

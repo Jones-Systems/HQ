@@ -60,7 +60,7 @@ export async function mapGalleryIndex(input: GalleryRegistryRead, supplied: Regi
     const projectId = registryId(project.id);
     if (projectIds.has(projectId)) throw new TypeError('Duplicate project ID');
     projectIds.add(projectId);
-    registryText(project.name, 160);
+    const collectionName = registryText(project.name, 160);
     if (!['collection', 'external', 'source-only'].includes(String(project.sourceType))) throw new TypeError('Invalid source type');
     if (project.collectionHref !== undefined) registryUrl(project.collectionHref, base);
     const revision = project.runtimeRelease === undefined ? `sha256:${String(hashes['data/gallery-index.json'])}` : registryText(project.runtimeRelease, 300);
@@ -75,7 +75,7 @@ export async function mapGalleryIndex(input: GalleryRegistryRead, supplied: Regi
       seen.add(relativePath);
       const type = registryText(entry.presentationType, 32);
       if (!['app', 'website', 'pages', 'screens', 'video', 'external'].includes(type)) throw new TypeError('Invalid presentation type');
-      const metadata: Record<string, MetadataValue> = { sourceKind: 'gallery-index', sourceType: String(project.sourceType),
+      const metadata: Record<string, MetadataValue> = { sourceKind: 'gallery-index', sourceType: String(project.sourceType), collectionId: projectId, collectionName,
         launchStatus: 'unavailable', holdReason: 'No verified direct presentation', inventoryIntegrity: 'sha256-verified' };
       const declared = entry.launchHref === undefined ? undefined : new URL(registryText(entry.launchHref), base);
       const externalPolicyHold = type === 'external' && project.sourceType === 'external' && declared
