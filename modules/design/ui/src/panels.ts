@@ -11,7 +11,7 @@ export type PanelLayout = Readonly<Record<PanelId, PanelState>>;
 
 export interface PanelBounds { readonly min: number; readonly max: number; readonly initial: number }
 export const PANEL_BOUNDS: Readonly<Record<PanelId, PanelBounds>> = {
-  sidebar: { min: 180, max: 420, initial: 240 },
+  sidebar: { min: 120, max: 420, initial: 240 },
   inspector: { min: 240, max: 560, initial: 300 },
 };
 /** The workspace (canvas, gallery…) always keeps at least this much width. */
@@ -80,12 +80,11 @@ export function setPanelSize(layout: PanelLayout, panel: PanelId, size: number, 
   return { ...layout, [panel]: { size: next, collapsed: false } };
 }
 
-/** Pointer drag or keyboard step expressed as a change of panel size (positive = wider). */
+/** Keyboard step expressed as a change of panel size (positive = wider). */
 export function resizePanel(layout: PanelLayout, panel: PanelId, delta: number, width: number): PanelLayout {
   if (!Number.isFinite(delta) || delta === 0) return layout;
   if (layout[panel].collapsed) return delta > 0 ? togglePanel(layout, panel) : layout;
-  if (delta < 0 && layout[panel].size <= PANEL_BOUNDS[panel].min) return togglePanel(layout, panel);
-  return setPanelSize(layout, panel, layout[panel].size + delta, width);
+  return setPanelSize(layout, panel, Math.max(PANEL_BOUNDS[panel].min, layout[panel].size + delta), width);
 }
 
 export function togglePanel(layout: PanelLayout, panel: PanelId): PanelLayout {

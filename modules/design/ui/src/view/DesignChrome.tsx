@@ -75,7 +75,13 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
     return () => { window.removeEventListener('pagehide', flush); flush(); };
   }, [core]);
 
-  const resolved = resolveLayout(session.panels, width);
+  const [dragSize, setDragSize] = useState<{ projectId: string; panel: PanelId; size: number } | null>(null);
+  const stopDrag = useRef<(() => void) | null>(null);
+  useEffect(() => () => { stopDrag.current?.(); }, [projectId]);
+  const resting = resolveLayout(session.panels, width);
+  const resolved = dragSize?.projectId === projectId && !resting.squeezed.includes(dragSize.panel)
+    ? { ...resting, [dragSize.panel]: dragSize.size, main: resting.main + resting[dragSize.panel] - dragSize.size }
+    : resting;
   const visible = { sidebar: resolved.sidebar > 0, inspector: resolved.inspector > 0 };
   const sectionsByNav = registry.byNav;
   const requested = parseDestination(port.destination);
@@ -223,7 +229,10 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
         const next = splitterKey(session.panels, panel, event.key, event.shiftKey, width);
         if (next) { event.preventDefault(); setPanels(next); }
       }}
+      onDoubleClick={() => toggle(panel)}
       onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        stopDrag.current?.();
         const target = event.currentTarget;
         event.preventDefault();
         target.focus();
@@ -235,13 +244,21 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
         const startSize = startLayout[panel].collapsed ? 0 : size;
         const move = (moveEvent: PointerEvent) => {
           distance = moveEvent.clientX - startX;
-          setPanels(setPanelSize(startLayout, panel, startSize + distance * direction, width));
+          setDragSize({ projectId, panel, size: Math.max(0, Math.min(max, startSize + distance * direction)) });
         };
-        const end = (endEvent: PointerEvent) => {
-          if (endEvent.type === 'pointerup' && startLayout[panel].collapsed && Math.abs(distance) < 4) setPanels(togglePanel(startLayout, panel));
+        const cleanup = () => {
           target.removeEventListener('pointermove', move); target.removeEventListener('pointerup', end); target.removeEventListener('pointercancel', end);
           target.removeEventListener('lostpointercapture', end);
+          stopDrag.current = null;
         };
+        const end = (endEvent: PointerEvent) => {
+          cleanup();
+          setDragSize(null);
+          if (endEvent.type !== 'pointerup') return;
+          if (startLayout[panel].collapsed && Math.abs(distance) < 4) setPanels(togglePanel(startLayout, panel));
+          else setPanels(setPanelSize(startLayout, panel, startSize + distance * direction, width));
+        };
+        stopDrag.current = cleanup;
         target.addEventListener('pointermove', move);
         target.addEventListener('pointerup', end);
         target.addEventListener('pointercancel', end);
@@ -281,12 +298,12 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
     <div className="hqd-body" ref={bodyRef}>
       {visible.sidebar &&
         <aside id="hqd-sidebar" className="hqd-sidebar" style={{ width: resolved.sidebar }} aria-label={`${NAV_LABELS[location.nav]} sections`}>
-          <h2 className="hqd-heading">{NAV_LABELS[location.nav]}</h2>
+          <h2 className="hqd-heading" title={NAV_LABELS[location.nav]}>{NAV_LABELS[location.nav]}</h2>
           {sectionStops.length === 0
             ? <p className="hqd-empty">{`No ${NAV_LABELS[location.nav]} sections are installed yet.`}</p>
             : <nav className="hqd-section-list" aria-label={`${NAV_LABELS[location.nav]} sections`}
               onKeyDown={(event) => roving(event, sectionStops.map((stop) => stop.id), 'vertical')}>
-              {sectionStops.map((stop) => <button key={stop.id} type="button" {...stopProps(stop.id)} className="hqd-section-item"
+              {sectionStops.map((stop) => <button key={stop.id} type="button" {...stopProps(stop.id)} className="hqd-section-item" title={stop.label}
                 aria-current={stop.action.type === 'navigate' && stop.action.location.section === location.section ? 'page' : undefined}
                 onClick={() => { if (stop.action.type === 'navigate') go(stop.action.location); }}>{stop.label}</button>)}
             </nav>}
@@ -307,7 +324,7 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
       {visible.inspector &&
         <aside id="hqd-inspector" {...stopProps('inspector')} className="hqd-inspector"
           style={{ width: resolved.inspector }} tabIndex={0} aria-label="Inspector">
-          <h2 className="hqd-heading">Inspector</h2>
+          <h2 className="hqd-heading" title="Inspector">Inspector</h2>
           <dl className="hqd-facts">
             <dt>Location</dt><dd>{NAV_LABELS[location.nav]}{activeSection ? ` / ${activeSection.title}` : ''}</dd>
             <dt>Appearance</dt><dd>{snapshot.appearance === 'dark' ? 'Dark' : 'Light'} chrome; captures keep their own colours</dd>

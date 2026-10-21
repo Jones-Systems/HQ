@@ -28,7 +28,7 @@ html, body, #root { height: 100%; overflow: hidden; }
 .brand { display: flex; align-items: center; gap: 7px; flex-shrink: 0; padding: 0 12px 26px; font-size: 23px; font-weight: 750; letter-spacing: -1px; }
 .brand-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-top: 12px; }
 .rail > nav { display: grid; align-content: start; gap: 6px; min-height: 0; overflow: auto; }
-.domain-button, .rail-action { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 8px; flex-shrink: 0; width: 100%; min-height: 38px; border: 0; border-radius: 7px; padding: 8px 10px; text-align: left; background: transparent; color: var(--muted); font: var(--hq-type-label); white-space: nowrap; cursor: pointer; }
+.domain-button, .rail-action { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 8px; flex-shrink: 0; width: 100%; min-height: 38px; border: 0; border-radius: 7px; padding: 8px 10px; text-align: left; background: transparent; color: var(--muted); font: var(--hq-type-label); white-space: nowrap; cursor: pointer; }
 .domain-button:hover, .rail-action:hover, .domain-button[aria-current="page"] { background: var(--selected); color: var(--text); }
 .domain-button[aria-current="page"] { color: var(--hq-accent-text); font-weight: 600; box-shadow: inset 2px 0 var(--hq-accent-strong); }
 .domain-icon, .rail-action svg { width: 18px; height: 18px; justify-self: center; }

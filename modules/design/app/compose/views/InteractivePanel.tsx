@@ -48,22 +48,22 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
   const target = selected ? interactiveTarget(selected) : null;
   const bound = selected?.entry.sourceProjectId === context.id;
   const stale = documentState?.annotations.some((annotation) => !anchorMatches(annotation.anchor, capture, snapshot.version));
-  return <section aria-label="Interactive project" className="hqp-detail">
+  return <section aria-label="Interactive project" className="hqp-detail hqi-panel">
     <h2>Interactive project</h2>
     <p>Select an enrolled web prototype or website. Image collections remain static references.</p>
     {!interactive.catalogAvailable && <p role="status">Source catalog not connected. Enroll a source in Settings.</p>}
-    <div className="hqp-toolbar">
-      <label>Source project <select aria-label="Interactive source project" value={selected?.entry.sourceProjectId ?? ''} disabled={busy}
+    <div className="hqi-toolbar">
+      <div className="hqi-group"><label>Source project <select aria-label="Interactive source project" value={selected?.entry.sourceProjectId ?? ''} disabled={busy}
         onChange={(event) => { const item = snapshot.items.find((item) => item.entry.sourceProjectId === event.target.value); if (item) void interactive.select(item); }}>
         <option value="">Choose a source project</option>
         {snapshot.items.map((item) => <option key={item.entry.sourceProjectId} value={item.entry.sourceProjectId}>
           {item.entry.displayName} · {String(item.entry.metadata.experienceKind ?? 'source only')} · {item.freshness}
         </option>)}
       </select></label>
-      <Button variant="secondary" disabled={busy || !interactive.catalogAvailable} onClick={() => void interactive.refresh()}>Refresh sources</Button>
-      <label>Viewport <select aria-label="Preview viewport" value={device} disabled={busy || session !== null} onChange={(event) => setDevice(event.target.value as 'auto' | 'phone' | 'desktop')}><option value="auto">Source default</option><option value="phone">Phone · 390 × 844</option><option value="desktop">Desktop · 1024 × 720</option></select></label>
-      <Button disabled={busy || !target || !interactive.available || !bound} onClick={() => void interactive.open(device === 'auto' ? undefined : device === 'phone' ? { w: 390, h: 844, dpr: 1 } : { w: 1024, h: 720, dpr: 1 })}>Open live preview</Button>
-      {session && <Button variant="secondary" disabled={snapshot.busy} onClick={() => void interactive.close()}>Close preview</Button>}
+      <Button variant="secondary" disabled={busy || !interactive.catalogAvailable} onClick={() => void interactive.refresh()}>Refresh sources</Button></div>
+      <div className="hqi-group"><label>Viewport <select aria-label="Preview viewport" value={device} disabled={busy || session !== null} onChange={(event) => setDevice(event.target.value as 'auto' | 'phone' | 'desktop')}><option value="auto">Source default</option><option value="phone">Phone · 390 × 844</option><option value="desktop">Desktop · 1024 × 720</option></select></label></div>
+      <div className="hqi-group"><Button disabled={busy || !target || !interactive.available || !bound} onClick={() => void interactive.open(device === 'auto' ? undefined : device === 'phone' ? { w: 390, h: 844, dpr: 1 } : { w: 1024, h: 720, dpr: 1 })}>Open live preview</Button>
+      {session && <Button variant="secondary" disabled={snapshot.busy} onClick={() => void interactive.close()}>Close preview</Button>}</div>
     </div>
     {selected && <p>{selected.hostLabel} · {selected.freshness} · Source identity <code>{selected.entry.sourceProjectId}</code></p>}
     {selected && !bound && <p role="status">Select this source in the project context before opening it. Project selection sends nothing.</p>}
@@ -73,15 +73,15 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
     {snapshot.notice && <p role="status">{snapshot.notice}</p>}
     {session && <>
       <p>Live preview: runs this site's code with normal browser network access; isolated from HQ</p>
-      <div className="hqp-toolbar">
-        <Button variant="secondary" disabled={busy || snapshot.history.length < 2} onClick={() => void interactive.back()}>Back</Button>
+      <div className="hqi-toolbar">
+        <div className="hqi-group hqi-route"><Button variant="secondary" disabled={busy || snapshot.history.length < 2} onClick={() => void interactive.back()}>Back</Button>
         <label>Route <input aria-label="Preview route" value={route} maxLength={2048} onChange={(event) => setRoute(event.target.value)} /></label>
-        <Button variant="secondary" disabled={busy} onClick={() => void interactive.navigate(route)}>Go</Button>
-        <Button variant="secondary" disabled={busy} onClick={() => annotations?.selectTool(null)}>Browse</Button>
+        <Button variant="secondary" disabled={busy} onClick={() => void interactive.navigate(route)}>Go</Button></div>
+        <div className="hqi-group"><Button variant="secondary" disabled={busy} onClick={() => annotations?.selectTool(null)}>Browse</Button>
         <Button variant="secondary" disabled={busy || !annotations?.canPickOrCite} onClick={() => annotations?.selectTool('pick')}>Pick</Button>
         <Button variant="secondary" disabled={busy || !annotations?.canPickOrCite} onClick={() => annotations?.selectTool('cite')}>Cite</Button>
         <Button disabled={busy} onClick={() => void interactive.capture()}>Capture</Button>
-        <Button variant="secondary" disabled={busy || !capture} onClick={() => void interactive.addScreen()}>Add screen to flow</Button>
+        <Button variant="secondary" disabled={busy || !capture} onClick={() => void interactive.addScreen()}>Add screen to flow</Button></div>
       </div>
       {!session.pickQualified && <p role="status">Pick and Cite remain unavailable until the host’s coherent capture qualification passes.</p>}
       <p>Observed route: {session.route} · State: {session.state || '(empty hash)'} · {session.viewport.w} × {session.viewport.h} at {session.viewport.dpr}× · {session.status}</p>
@@ -95,7 +95,7 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
           selectedId={null} readOnly={annotations.snapshot.readOnly} revisitOnly={revisitOnly} onRevisitOnly={setRevisitOnly}
           onSelect={() => undefined} onNote={(id, note) => { annotations.setNote(id, note); void interactive.saveAnnotations(); }}
           onToggleRevisit={(id) => { annotations.toggleRevisit(id); void interactive.saveAnnotations(); }} onDelete={(id) => { annotations.remove(id); void interactive.saveAnnotations(); }} />
-        <div className="hqp-toolbar"><Button variant="secondary" disabled={busy} onClick={() => void interactive.saveAnnotations()}>Save annotations</Button>
+        <div className="hqi-toolbar"><Button variant="secondary" disabled={busy} onClick={() => void interactive.saveAnnotations()}>Save annotations</Button>
           <Button variant="secondary" disabled={busy || !capture} onClick={() => void interactive.resolve()}>Resolve current anchors</Button></div>
       </>}
       {snapshot.image && <details><summary>Saved coherent capture</summary><img src={snapshot.image} alt={`Capture of ${capture?.route}`} style={{ maxWidth: '100%' }} /></details>}

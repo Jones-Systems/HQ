@@ -148,3 +148,28 @@ describe('section provenance', () => {
     expect(html).toContain('Workspace record');
   });
 });
+
+it('previews pointer widths continuously, commits only on release and cancels without persistence', () => {
+  const shell = createFakeShell({ id: 'resize', name: 'Resize fixture' }, 'light');
+  const domain = createDesignDomain({ registry, storage: createFakeStorage(), shell, mac: false });
+  const port: ModulePort = { context: shell.getSnapshot().context, destination: 'projects/projects', appearance: 'light', desktop: FAKE_DESKTOP, navigate: () => undefined };
+  const mounted = renderDom(createElement(domain.Component, port));
+  const grip = mounted.getByRole('separator', { name: 'Resize sidebar' });
+  grip.setPointerCapture = () => undefined;
+  const width = () => Number(grip.getAttribute('aria-valuenow'));
+  const drag = (target: number, release: 'pointerUp' | 'pointerCancel' = 'pointerUp') => {
+    const start = width();
+    fireEvent.pointerDown(grip, { pointerId: 1, button: 0, clientX: start });
+    for (const sample of [200, 150, 130, 121, target]) {
+      fireEvent.pointerMove(grip, { pointerId: 1, clientX: sample });
+      expect(width()).toBe(sample);
+    }
+    fireEvent[release](grip, { pointerId: 1, clientX: target });
+  };
+  drag(100); expect(width()).toBe(120);
+  fireEvent.keyDown(grip, { key: 'End' }); expect(width()).toBe(420);
+  drag(50, 'pointerCancel'); expect(width()).toBe(420);
+  drag(50); expect(width()).toBe(0);
+  expect(grip.tabIndex).toBe(0);
+  fireEvent.keyDown(grip, { key: 'Enter' }); expect(width()).toBe(420);
+});
