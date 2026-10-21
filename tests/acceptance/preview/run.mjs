@@ -549,13 +549,26 @@ try {
   await check('Q-PV7', 'Trusted selection produces cite only', () => withPreview(async ({ session, cdp }) => {
     value(await api('mode', { sessionId: session.sessionId, generation: session.generation, mode: 'cite' }));
     await drawable(cdp, 'trusted-selection');
+    const selection = () => cdp.evaluate(`(()=>{const s=getSelection(),r=s?.rangeCount?s.getRangeAt(0):null,q=document.querySelector('#quote');return {text:s?.toString()??'',collapsed:s?.isCollapsed,anchorOffset:s?.anchorOffset,focusOffset:s?.focusOffset,withinQuote:!!r&&q.contains(r.startContainer)&&q.contains(r.endContainer),rects:r?[...r.getClientRects()].map(r=>r.toJSON()):[],scroll:{x:scrollX,y:scrollY},visibility:document.visibilityState,focused:document.hasFocus()}})()`);
+    const observed = { session, beforeStats: report.hooksAvailable ? await hook('stats()') : null };
     const rect = await cdp.evaluate("(()=>{const r=document.querySelector('#quote').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()");
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x + 2, y: rect.y + 8, button: 'left', clickCount: 1 });
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x + 300, y: rect.y + 8, button: 'left', buttons: 1 });
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rect.x + 300, y: rect.y + 8, button: 'left', clickCount: 1 });
-    assert.ok(await cdp.evaluate('getSelection().toString().length>0'));
-    const events = await until(async () => { const result = value(await api('events', { sessionId: session.sessionId, after: 0 })); return result.events.length ? result.events : null; }, 'trusted citation', 5000);
-    assert.ok(events.every(event => event.event.type === 'text-cited')); return events;
+    try {
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x + 2, y: rect.y + 8, button: 'left', clickCount: 1 });
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x + 300, y: rect.y + 8, button: 'left', buttons: 1 });
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rect.x + 300, y: rect.y + 8, button: 'left', clickCount: 1 });
+      observed.initialSelection = await selection();
+      assert.ok(observed.initialSelection.text.length > 0);
+      assert.equal(observed.initialSelection.withinQuote, true);
+      const events = await until(async () => { const result = value(await api('events', { sessionId: session.sessionId, after: 0 })); observed.lastEvents = result; return result.events.length ? result.events : null; }, 'trusted citation', 5000);
+      observed.finalSelection = await selection();
+      assert.deepEqual(observed.finalSelection, observed.initialSelection);
+      assert.ok(events.every(event => event.event.type === 'text-cited' && event.event.target.quote === observed.initialSelection.text));
+      return { ...observed, events };
+    } catch (error) {
+      try { observed.finalSelection = await selection(); if (report.hooksAvailable) observed.afterStats = await hook('stats()'); }
+      catch (diagnosticError) { observed.diagnosticError = diagnosticError.stack; }
+      error.observed = observed; throw error;
+    }
   }));
   if (report.hooksAvailable) {
     for (const stage of ['pre-read', 'first-capture', 'post-read']) {
