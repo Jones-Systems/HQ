@@ -87,3 +87,5 @@
 @media (prefers-reduced-motion: no-preference) {
   .hqd-chrome .hqd-nav-item, .hqd-chrome .hqd-section-item, .hqd-chrome .hqd-splitter::after { transition: background-color 120ms ease, color 120ms ease; }
 }
+
+.hqd-chrome .hqd-heading, .hqd-chrome .hqd-section-item { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

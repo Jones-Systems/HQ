@@ -9,5 +9,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   define: { __HQD_CANDIDATE__: JSON.stringify(process.env.HQD_PREVIEW_CANDIDATE ?? 'unrecorded') },
+  build: { rollupOptions: { input: { graph: fileURLToPath(new URL('./index.html', import.meta.url)), combined: fileURLToPath(new URL('./combined.html', import.meta.url)) } } },
+  preview: { host: '127.0.0.1', port: 5191, strictPort: true },
   server: { host: '127.0.0.1', port: 5191, strictPort: true, fs: { allow: [fileURLToPath(new URL('../../../..', import.meta.url))] } },
 });

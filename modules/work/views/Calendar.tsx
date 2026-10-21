@@ -43,6 +43,10 @@ export function CalendarView() {
   const { today, state, settings } = env;
   const [cursor, setCursor] = useRemembered('calendar.cursor', () => ({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) }));
   const [mode, setMode] = useRemembered<Mode>('calendar.mode', () => (narrow() ? 'agenda' : 'month'));
+  const [lastGridMode, setLastGridMode] = useState<Exclude<Mode, 'agenda'>>(() => mode === 'agenda' ? 'month' : mode);
+  const gridMode = mode === 'agenda' ? lastGridMode : mode;
+  const nextGridMode = gridMode === 'month' ? 'week' : gridMode === 'week' ? 'day' : 'month';
+  const labelMode = (value: string) => value[0]!.toUpperCase() + value.slice(1);
   const [dayCursor, setDayCursor] = useRemembered('calendar.day', today);
   const [kinds, setKinds] = useRemembered<readonly DateKind[]>('calendar.kinds', DATE_KIND_IDS);
   const [showFinished, setShowFinished] = useRemembered('calendar.finished', false);
@@ -200,10 +204,11 @@ export function CalendarView() {
         goTo(dayCursor.startsWith(shownMonth) ? dayCursor : today.startsWith(shownMonth) ? today : `${shownMonth}-01`);
       }
     } else if (timed) goTo(dayCursor);
+    if (next !== 'agenda') setLastGridMode(next);
     setMode(next);
   };
   const openDay = (iso: string, next: 'week' | 'day') => {
-    focusTitle.current = true; goTo(iso); setMode(next);
+    focusTitle.current = true; goTo(iso); setLastGridMode(next); setMode(next);
   };
   const step = (delta: number) => {
     if (timed) { goTo(addDays(dayCursor, delta * (mode === 'week' ? 7 : 1))); return; }
@@ -236,13 +241,11 @@ export function CalendarView() {
           <h2 ref={title} tabIndex={-1} className="wv-cal-title" aria-live="polite">{timed ? `${dayText(days[0]!)}${mode === 'week' ? ` – ${dayText(days[6]!)}` : ''}` : <>{MONTHS[month - 1]} <span className="wv-muted">{year}</span></>}</h2>
         </div>
         <div className="wv-cal-controls">
-          <div className="wv-seg" role="group" aria-label="Calendar layout">
-            <Menu size="sm" trigger={`${mode[0]!.toUpperCase() + mode.slice(1)} ▾`}
-              triggerLabel={`Calendar view: ${mode[0]!.toUpperCase() + mode.slice(1)}`}
-              items={(['month', 'week', 'day', 'agenda'] as const).map((value) => ({
-                id: value, label: value[0]!.toUpperCase() + value.slice(1), checked: mode === value,
-                onSelect: () => selectMode(value),
-              }))} />
+          <div className="wv-cal-view-controls" role="group" aria-label="Calendar layout">
+            <Button size="sm" aria-pressed={mode === 'agenda'} onClick={() => selectMode(mode === 'agenda' ? gridMode : 'agenda')}>Agenda</Button>
+            <Button size="sm" aria-pressed={mode !== 'agenda'}
+              aria-label={`Calendar view: ${labelMode(gridMode)}. ${mode === 'agenda' ? 'Return to' : 'Switch to'} ${labelMode(mode === 'agenda' ? gridMode : nextGridMode)}`}
+              onClick={() => selectMode(mode === 'agenda' ? gridMode : nextGridMode)}>{labelMode(gridMode)}</Button>
           </div>
           <div className="wv-seg" role="group" aria-label="Show date kinds">
             {DATE_KIND_IDS.map((k) => {

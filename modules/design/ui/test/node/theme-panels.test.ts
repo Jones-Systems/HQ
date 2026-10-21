@@ -52,7 +52,7 @@ test('resizing one panel never changes the other panel', () => {
 });
 
 test('panels clamp to their bounds and keep the workspace at its minimum', () => {
-  assert.equal(resizePanel(DEFAULT_LAYOUT, 'sidebar', -500, 1400).sidebar.collapsed, true);
+  assert.equal(resizePanel(DEFAULT_LAYOUT, 'sidebar', -500, 1400).sidebar.size, PANEL_BOUNDS.sidebar.min);
   assert.equal(resizePanel(DEFAULT_LAYOUT, 'sidebar', 5000, 3000).sidebar.size, PANEL_BOUNDS.sidebar.max);
   const tight = resizePanel(DEFAULT_LAYOUT, 'sidebar', 5000, 900);
   assert.equal(tight.sidebar.size, 900 - DEFAULT_LAYOUT.inspector.size - MAIN_MIN);
@@ -65,14 +65,14 @@ test('narrow windows squeeze effective widths without rewriting stored preferenc
   assert.equal(resolved.sidebar + resolved.inspector + resolved.main, 700);
   const tiny = resolveLayout(DEFAULT_LAYOUT, 500);
   assert.deepEqual(tiny.squeezed, ['inspector']);
-  assert.equal(tiny.sidebar, PANEL_BOUNDS.sidebar.min);
+  assert.equal(tiny.sidebar, 500 - MAIN_MIN);
   assert.deepEqual(DEFAULT_LAYOUT.inspector, { size: 300, collapsed: false });
 });
 
 test('splitter keyboard model: arrows move the edge, Home collapses, End expands, Enter toggles', () => {
   const width = 1400;
   assert.equal(splitterKey(DEFAULT_LAYOUT, 'sidebar', 'ArrowRight', false, width)?.sidebar.size, 256);
-  assert.equal(splitterKey(DEFAULT_LAYOUT, 'sidebar', 'ArrowLeft', true, width)?.sidebar.size, 180);
+  assert.equal(splitterKey(DEFAULT_LAYOUT, 'sidebar', 'ArrowLeft', true, width)?.sidebar.size, 176);
   assert.equal(splitterKey(DEFAULT_LAYOUT, 'inspector', 'ArrowLeft', false, width)?.inspector.size, 316);
   assert.equal(splitterKey(DEFAULT_LAYOUT, 'inspector', 'Home', false, width)?.inspector.collapsed, true);
   assert.equal(splitterKey(DEFAULT_LAYOUT, 'inspector', 'End', false, width)?.inspector.size, PANEL_BOUNDS.inspector.max);
@@ -102,15 +102,14 @@ test('dragging either panel fully closed retains its stored width and restores i
   }
 });
 
-test('keyboard shrinking at the minimum closes a panel instead of trapping the edge', () => {
+test('keyboard shrinking stops at the floor; Home closes and Enter restores', () => {
   for (const panel of ['sidebar', 'inspector'] as const) {
     const minimum = setPanelSize(DEFAULT_LAYOUT, panel, PANEL_BOUNDS[panel].min, 1600);
     const inward = panel === 'sidebar' ? 'ArrowLeft' : 'ArrowRight';
-    const outward = panel === 'sidebar' ? 'ArrowRight' : 'ArrowLeft';
-    const closed = splitterKey(minimum, panel, inward, false, 1600)!;
+    assert.deepEqual(splitterKey(minimum, panel, inward, false, 1600), minimum);
+    const closed = splitterKey(minimum, panel, 'Home', false, 1600)!;
     assert.equal(closed[panel].collapsed, true);
-    assert.equal(splitterKey(closed, panel, inward, false, 1600), closed);
-    assert.deepEqual(splitterKey(closed, panel, outward, false, 1600), minimum);
+    assert.deepEqual(splitterKey(closed, panel, 'Enter', false, 1600), minimum);
   }
 });
 
@@ -121,4 +120,19 @@ test('absent shell tokens use only trusted kit variable names with literal stand
   assert.deepEqual(theme.rejected, []);
   assert.equal(isCssColor('var(--hq-text)'), false);
   assert.equal(isCssColor('url(https://example.invalid)'), false);
+});
+
+test('sidebar accepts narrow resting widths and keyboard stops at its floor', () => {
+  for (const size of [150, 130, 121, 120]) {
+    const layout = setPanelSize(DEFAULT_LAYOUT, 'sidebar', size, 1600);
+    assert.equal(layout.sidebar.size, size);
+    assert.equal(resolveLayout(layout, 1600).sidebar, size);
+    assert.deepEqual(parseLayout(layout), layout);
+  }
+  const floor = setPanelSize(DEFAULT_LAYOUT, 'sidebar', 120, 1600);
+  assert.deepEqual(splitterKey(floor, 'sidebar', 'ArrowLeft', false, 1600), floor);
+  assert.equal(setPanelSize(DEFAULT_LAYOUT, 'sidebar', 100, 1600).sidebar.size, 120);
+  const closed = setPanelSize(DEFAULT_LAYOUT, 'sidebar', 50, 1600);
+  assert.deepEqual(closed.sidebar, { size: 240, collapsed: true });
+  assert.deepEqual(splitterKey(closed, 'sidebar', 'Enter', false, 1600), DEFAULT_LAYOUT);
 });

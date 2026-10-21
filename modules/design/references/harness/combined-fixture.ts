@@ -10,8 +10,10 @@ export async function createCombinedFixture() {
   const urls = new Map<BlobDigest, string>();
   const dispose = () => { for (const url of urls.values()) URL.revokeObjectURL(url); urls.clear(); };
   let sequence = 0;
+  let previewReads = 0;
   const env = await createReferencesEnvironment({
     storage: ports.storage, clock: ports.clock,
+    readBlob: async (digest) => { previewReads += 1; return ports.storage.blobs.get(digest)?.bytes ?? null; },
     ids: { label: 'fake:combined-reference-ids', next: (kind) => `${kind}_synthetic-${++sequence}` },
     compareSlot: () => null,
     previewUrl: (digest) => {
@@ -51,6 +53,6 @@ export async function createCombinedFixture() {
       const result = await env.graph.importTree(tree);
       if (!result.ok) throw new Error('Synthetic graph seed was rejected.');
     }
-    return { env, dispose, label: ports.storage.label };
+    return { env, dispose, label: ports.storage.label, get previewReads() { return previewReads; } };
   } catch (error) { dispose(); throw error; }
 }

@@ -90,3 +90,16 @@
 .hqp-information-body[hidden] { display: none; }
 .hqp-information-grip { width: 6px; flex: 0 0 6px; touch-action: none; cursor: col-resize; }
 .hqp-information-toggle { position: absolute; top: 2px; right: 6px; z-index: 2; padding: 2px 6px; }
+
+/* Interactive controls form compact groups independently of the Projects toolbar. */
+.hqi-panel { gap: var(--hq-space-md); min-width: 0; }
+.hqi-panel > h2, .hqi-panel > p { margin: 0; }
+.hqi-panel > h2 + p { margin-top: calc(var(--hq-space-xs) - var(--hq-space-md)); }
+.hqi-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-lg); min-width: 0; }
+.hqi-group { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm); min-width: 0; max-width: 100%; }
+.hqi-group label { display: flex; align-items: center; gap: var(--hq-space-xs); min-width: 0; max-width: 100%; white-space: nowrap; }
+.hqi-group select, .hqi-group input { min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+.hqi-group .hq-btn { flex-shrink: 0; white-space: normal; height: auto; min-height: max(var(--hq-size-control-md), calc(1lh + 2 * var(--hq-space-2xs))); }
+.hqi-route { flex: 1 1 320px; }
+.hqi-route label { flex: 1; }
+.hqi-route input { flex: 1 1 auto; width: 100%; }

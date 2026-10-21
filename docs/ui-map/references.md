@@ -34,7 +34,8 @@ From the HQ root after dependency setup:
 
 ```sh
 HQD_PREVIEW_CANDIDATE="$(git rev-parse HEAD)" \
-  node_modules/.bin/vite --config modules/design/references/harness/vite.config.ts
+  node_modules/.bin/vite build --config modules/design/references/harness/vite.config.ts
+node_modules/.bin/vite preview --config modules/design/references/harness/vite.config.ts
 ```
 
 For uncommitted source, supply an exact working-candidate label and retain a
@@ -50,7 +51,9 @@ its unknown owner.
 uses the real `createReferencesEnvironment` with fresh labelled fake storage.
 It seeds three varied cards (long/short titles, long app source, optional tags
 and rights/native status), site/page and app/flow/screen subjects, and two Pricing
-captures. Synthetic source URLs are data, not fetch targets. Thumbnail blobs
+captures. Synthetic source URLs are data, not fetch targets. The fixture's blob
+reader exercises production validated data-URL previews; `previewReads` on
+`window.__referencesHarness` counts reads. The fallback blob URLs, if used,
 are owned by this page and revoked on page exit; seed failure also disposes them.
 Reload recreates all fixture data and clears selection. Shared panel widths
 persist in origin-local preferences; use visible Show/Hide and resize controls,
@@ -106,3 +109,18 @@ The combined rendered check proves that real composition exposes a nonempty
 graph beside the library/import controls. Graph rendered checks cover guidance
 association/order and selected detail semantics. They do not prove browser geometry.
 Browser observations for this candidate are recorded in [graph evidence](reference-graph.md#candidate-evidence).
+
+## Insets/stability candidate evidence
+
+The 2026-10-21 correction uses this real composed section. Deterministic effect
+tests reproduce the former image-node removal, then prove retained image identity,
+no repeated selection reads, deduplicated pending reads and stale provider/deletion
+handling. Browser checks at container widths 1099, 1100 and 1440 in both themes
+use three seeded cards plus one explicitly imported synthetic image: zero card
+rectangle movement, zero removed thumbnails and zero extra preview reads when
+switching between already-open details. First open may reposition content.
+The narrow details body scrolls at 40vh; full provenance remains reachable.
+At 760px viewport and 200% text, the checked details endpoint remains reachable
+without horizontal overflow. Other extreme text-spacing/native journeys are not
+inferred. Exact source/build hashes and captures stay in the task's private
+evidence; the evolving Work Note records publication and check status.

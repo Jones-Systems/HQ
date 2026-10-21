@@ -275,12 +275,13 @@ function ScrollArea({ ui, pageKey, ready, children }: { ui: WorkUi; pageKey: str
     // Set on the work area, so the card detail beside the page shares the same height.
     const area = el.parentElement ?? el;
     const fit = () => {
-      const top = el.getBoundingClientRect().top + window.scrollY;
-      area.style.setProperty('--wd-scroll-max', `${Math.max(320, Math.round(window.innerHeight - top - 24))}px`);
+      area.style.setProperty('--wd-scroll-max', `${area.clientHeight}px`);
     };
     fit();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fit);
+    observer?.observe(area);
     window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', fit); };
   }, []);
 
   useLayoutEffect(() => {

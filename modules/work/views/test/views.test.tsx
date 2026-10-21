@@ -288,10 +288,8 @@ describe('zero execution', () => {
     for (const view of PLANNING_VIEW_IDS) rerender({ view });
     rerender({ view: 'calendar' });
     await user.click(screen.getByRole('button', { name: 'Next month' }));
-    await user.click(screen.getByRole('button', { name: 'Calendar view: Month' }));
-    await user.click(screen.getByRole('menuitemradio', { name: 'Agenda' }));
-    await user.click(screen.getByRole('button', { name: 'Calendar view: Agenda' }));
-    await user.click(screen.getByRole('menuitemradio', { name: 'Month' }));
+    await user.click(screen.getByRole('button', { name: 'Agenda' }));
+    await user.click(screen.getByRole('button', { name: 'Agenda' }));
     await user.click(screen.getByRole('button', { name: 'Targets' }));
     await user.click(screen.getByRole('checkbox', { name: 'Show done & dropped' }));
     rerender({ view: 'list' });
