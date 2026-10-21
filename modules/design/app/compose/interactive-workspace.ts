@@ -151,7 +151,10 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
   const agent: AgentChannelPort = {
     adapter: 'real',
     setMode(nextMode) {
+      const changed = nextMode !== mode;
       mode = nextMode;
+      // A finished action's notice would otherwise hide the new mode's instruction in the context line.
+      if (changed && state.notice) update({ notice: null });
       const session = state.session;
       if (!session) return;
       // Placement and in-site navigation advance the host generation between polls. Setting a mode is
@@ -272,6 +275,7 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
           if (!await acceptCapture(event.capture)) return;
           for (const listener of agentListeners) listener(event.event);
           await state.annotations?.save();
+          if (state.error?.startsWith('Preview stale: mark-')) update({ error: null });
         }
         after = Math.max(after, batch.after);
       } catch (error) { update({ error: error instanceof Error ? error.message : 'Preview observation unavailable.' }); }

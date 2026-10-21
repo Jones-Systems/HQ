@@ -1,6 +1,8 @@
 /* Interactive project workbench. The live site is a native view above this renderer: nothing here may
  * overlap .hqw-frame, and UI state changes must not resize it (a size change fences the preview). */
 .hqw-panel { container-type: inline-size; display: grid; gap: var(--hq-space-md); min-width: 0; scroll-margin-top: 16px; color: var(--hq-text); font: var(--hq-type-body); }
+/* Separates the workbench from whatever the host view renders after it (Projects folders, Flows). */
+.hqw-panel:not(:last-child) { margin-bottom: var(--hq-space-lg); padding-bottom: var(--hq-space-lg); border-bottom: 1px solid var(--hq-border); }
 .hqw-panel p { margin: 0; }
 .hqw-panel .hq-btn { height: auto; min-height: max(var(--hq-size-control-md), calc(1lh + 2 * var(--hq-space-2xs))); }
 .hqw-panel .hq-btn--sm { min-height: max(var(--hq-size-control-sm), calc(1lh + 2 * var(--hq-space-3xs))); }
@@ -19,14 +21,13 @@
 .hqw-notes:empty { display: none; }
 .hqw-panel [role="alert"] { color: var(--hq-danger); }
 
-/* Side review column only when the frame keeps most of the width; otherwise it follows the workbench. */
+/* Review sits beside the frame when the panel is wide or the column costs the page little (reviewBeside,
+ * REVIEW_COLUMN/REVIEW_GAP in preview-frame.ts); otherwise it follows the workbench. */
 .hqw-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-lg); align-items: start; min-width: 0; }
 .hqw-review { display: grid; gap: var(--hq-space-md); align-content: start; min-width: 0; }
-@container (min-width: 720px) and (max-width: 1179px) { .hqw-review { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container (min-width: 1180px) {
-  .hqw-body { grid-template-columns: minmax(0, 1fr) 320px; }
-  .hqw-review { align-self: stretch; contain: size; overflow: auto; padding-right: var(--hq-space-3xs); }
-}
+@container (min-width: 720px) { .hqw-review { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.hqw-body.is-beside { grid-template-columns: minmax(0, 1fr) 320px; }
+.hqw-body.is-beside .hqw-review { grid-template-columns: minmax(0, 1fr); align-self: stretch; contain: size; overflow: auto; padding-right: var(--hq-space-3xs); }
 
 .hqw-workbench { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); background: var(--hq-surface); overflow: hidden; }
 .hqw-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); min-width: 0; padding: var(--hq-space-xs) var(--hq-space-sm); background: var(--hq-surface-raised); border-bottom: 1px solid var(--hq-border); }
@@ -38,7 +39,7 @@
 .hqw-modes .hq-btn[aria-pressed="true"] { background: var(--hq-accent-soft); color: var(--hq-accent-text); box-shadow: inset 0 0 0 1px var(--hq-accent-edge); }
 
 /* One line whose height never depends on the message or mode, so the frame below keeps its size. */
-.hqw-context { display: flex; align-items: center; gap: var(--hq-space-sm); min-width: 0; min-height: calc(32px + 2 * var(--hq-space-2xs)); padding: var(--hq-space-2xs) var(--hq-space-sm); border-bottom: 1px solid var(--hq-border); box-sizing: border-box; }
+.hqw-context { display: flex; align-items: center; gap: var(--hq-space-sm); min-width: 0; min-height: calc(32px + 2 * var(--hq-space-2xs) + 1px); padding: var(--hq-space-2xs) var(--hq-space-sm); border-bottom: 1px solid var(--hq-border); box-sizing: border-box; }
 .hqw-context .hqw-message { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--hq-text-muted); font: var(--hq-type-small); text-overflow: ellipsis; white-space: nowrap; }
 .hqw-context .hqw-message.is-error { color: var(--hq-danger); }
 .hqw-context .hqw-comment { flex: 0 1 380px; box-sizing: border-box; height: 32px; min-height: 32px; min-width: 140px; padding-block: 0; }

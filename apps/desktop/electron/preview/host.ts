@@ -12,7 +12,7 @@ import { createQualificationBarrier } from './qualification.js';
 import { fitPlacement } from './placement.js';
 
 type Result = PreviewResult<unknown>;
-type Live = { view: WebContentsView; session: Session; target: URL; value: PreviewSession; visible: boolean; mode: 'off' | 'pick' | 'cite'; events: PreviewValues['events']['events'][number][]; sequence: number; draining: boolean; timer: ReturnType<typeof setInterval>; closing: boolean; epoch: number; captureSequence: number; queue: Promise<unknown>; blocked?: string };
+type Live = { view: WebContentsView; session: Session; target: URL; value: PreviewSession; visible: boolean; mode: 'off' | 'pick' | 'cite'; events: PreviewValues['events']['events'][number][]; sequence: number; draining: boolean; timer: ReturnType<typeof setInterval>; closing: boolean; epoch: number; captureSequence: number; queue: Promise<unknown>; blocked?: string; markFailure?: string; placement: number };
 const fail = (kind: 'invalid' | 'unavailable' | 'stale' | 'blocked', reason?: string): Result => ({ ok: false, kind, ...(reason ? { reason } : {}) });
 const ok = (value: unknown): Result => ({ ok: true, value });
 class CaptureTimeout extends Error {}
@@ -179,10 +179,12 @@ export function createPreviewHost(options: {
       for (const event of events) {
         if (!validAgentEvent(event)) continue;
         if (overlayHidden) continue;
-        if (event.generation !== live.value.generation) { diagnostics.lastPickOutcome = { ok: false, kind: 'stale', reason: 'navigation' }; continue; }
+        // A mark the user made but HQ could not keep is reported once through status instead of vanishing.
+        if (event.generation !== live.value.generation) { diagnostics.lastPickOutcome = { ok: false, kind: 'stale', reason: 'navigation' }; live.markFailure = 'mark-navigation'; continue; }
         const operation = live.queue.then(() => capture(live, event.generation, event)); live.queue = operation.catch(() => {});
         const result = await operation; diagnostics.lastPickOutcome = result;
-        if (result.ok && !overlayHidden && event.generation === live.value.generation && !live.closing) {
+        if (!result.ok) { if (!live.closing) live.markFailure = `mark-${result.reason ?? result.kind}`; continue; }
+        if (!overlayHidden && event.generation === live.value.generation && !live.closing) {
           live.events.push({ sequence: ++live.sequence, generation: event.generation, event, capture: result.value });
           if (live.events.length > 64) live.events.shift();
         }
@@ -198,7 +200,7 @@ export function createPreviewHost(options: {
     const target = previewTarget(params.url)!;
     const made = createIsolatedContents('hq-preview'), id = randomUUID();
     const live: Live = { ...made, target, value: { sessionId: id, versionId: params.versionId, generation: 0, route: target.pathname + target.search, state: target.hash, viewport: params.viewport, contentSize: { w: params.viewport.w, h: params.viewport.h }, status: 'open', pickQualified },
-      visible: false, mode: 'off', events: [], sequence: 0, draining: false, timer: undefined as never, closing: false, epoch: 0, captureSequence: 0, queue: Promise.resolve() };
+      visible: false, mode: 'off', events: [], sequence: 0, draining: false, timer: undefined as never, closing: false, epoch: 0, captureSequence: 0, queue: Promise.resolve(), placement: 0 };
     sessions.set(id, live);
     const contents = made.view.webContents, targetSession = made.session;
     previewContents.add(contents);
@@ -295,15 +297,23 @@ export function createPreviewHost(options: {
         if (route === 'image') return images.has(String(p.captureId)) ? ok(images.get(String(p.captureId))!.data) : fail('unavailable');
         if (route === 'close') { await close(String(p.sessionId)); return ok(null); }
         const live = sessions.get(String(p.sessionId)); if (!live || live.closing) return fail('unavailable');
-        if (route === 'status') { if (live.blocked) { const reason = live.blocked; live.blocked = undefined; return fail('blocked', reason); } return ok(current(live)); }
+        if (route === 'status') {
+          if (live.blocked) { const reason = live.blocked; live.blocked = undefined; return fail('blocked', reason); }
+          if (live.markFailure) { const reason = live.markFailure; live.markFailure = undefined; return fail('stale', reason); }
+          return ok(current(live));
+        }
         if (live.value.status === 'crashed') return fail('unavailable', 'crashed');
         if (route === 'place') {
           const { rect, visible } = raw as PreviewParams['place'];
           const { bounds, scale } = fitPlacement(rect, live.value.viewport, options.window()?.webContents.getZoomFactor?.() ?? 1);
+          // Placements overlap while install/emulate are awaited; only the newest one may touch the view.
+          const placement = ++live.placement;
           const old = live.view.getBounds();
           if (old.width !== bounds.width || old.height !== bounds.height) { fence(live); await install(live); }
+          if (placement !== live.placement) return ok(current(live));
           live.view.setBounds(bounds);
           await emulate(live, scale);
+          if (placement !== live.placement) return ok(current(live));
           live.view.setVisible(visible && !overlayHidden); live.visible = visible; return ok(current(live));
         }
         if (route === 'navigate') {

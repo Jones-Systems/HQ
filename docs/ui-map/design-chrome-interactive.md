@@ -25,8 +25,10 @@ and frame "Host live preview surface", and the network disclosure caption. The
 complementary region "Review" holds Capture (thumbnail, Add screen to flow),
 Annotations (Save annotations, Check anchors), Proposal (Change proposal, Save
 unsent proposal, Open Requests), the captured flow and Source identity. Review
-becomes a 320px side column when the panel is at least 1180px wide and follows
-the workbench below that width.
+is a 320px side column when the panel is at least 1180px wide, or when the stage
+height already limits the page so the column costs it under a tenth of its scale
+(short windows, phone viewports; `reviewBeside`). Otherwise it follows the
+workbench. A divider separates the open panel from content after it.
 
 Layout contract: the frame is the logical viewport scaled to the stage width and
 one scrollport height, never above 100%. The desktop host fits native bounds to
@@ -34,14 +36,34 @@ the same box, so no native background appears beside the page. Nothing may
 overlap the frame. Mode, messages and review changes must not resize it, because a
 size change fences the preview. The native view shows only while the whole frame is
 inside the window and its scrollport; otherwise the frame says it is paused and
-offers Show preview. Entry points are Projects → source details → Open, Resume,
-and the Interactive panel in Flows.
+offers Show preview, which returns focus to the pressed mode button. Changing
+mode replaces an older notice with the mode instruction. A Pick or Cite mark that
+could not be kept is reported in the context line until the next mark succeeds.
+Entry points are Projects → source details → Open, Resume, and the Interactive
+panel in Flows; gallery sources open from the source selector.
 
 Evidence: synthetic rendered tests cover labels, the single disclosure, review
-placement and route submission. Geometry and native composition are `unverified`
-until the focused native rows run on the exact candidate. Required native rows are
-desktop and phone fill at panel widths 760, 1006, 1280 and 1600; link navigation
-staying inside the frame; scrolling to pause; and Settings/dialog hiding.
+placement and route submission. Native acceptance of candidate `e9d98e6` on the
+staged packaged app (Electron 44.9.0, 1x display) verified, against a real
+loopback gallery website and phone prototype: native bounds equal to the DOM
+frame within 1 DIP at panel widths 524, 760, 1006, 1280 and 1600 and two window
+heights, with widget surfaces exactly the bounds (no native background); in-site
+link navigation keeping bounds and widget size; phone centring; HQ zoom 125%
+conversion; scrolling to pause and Show preview restoring; Settings hiding and
+restoring one session; 200% text without horizontal overflow; keyboard order and
+`aria-pressed`. OS window capture was unavailable, so composite pixels are
+inferred from shell captures plus measured bounds and widget images.
+
+That run also found defects, corrected in source after it and `unverified`
+natively until rerun: an overlapping-placement race left a resumed phone view
+at a stale oversized box, hidden; a 1px context-row growth in Pick/Cite could
+fence a height-limited frame; failed marks vanished silently; a finished notice
+hid the mode instruction; focus was lost after Show preview; no separation
+before Project folders. Coherent capture at a scaled frame is intermittently
+`pixels-unstable` on a real image-heavy site (Pick at 92% failed twice; capture
+alternated), while unscaled frames passed. This is the recorded clipped-capture
+rescale residual and is not fixed. At 200% HQ zoom in a short window the stage
+floor cannot fit, so the preview correctly stays paused.
 
 The 2026-10-21 correction checks the rail through keyboard widths 64, 88, 96,
 104, 112, 120, 160 and 280: compact behavior is retained, and expanded rows

@@ -37,6 +37,7 @@ function fixture(connection?: RunsConnection, previewBookmark?: PreviewBookmarkS
   let enteredOpen: (() => void) | undefined;
   let queued: PreviewValues['events']['events'] = [];
   let modeStale: 'never' | 'generation' | 'always' = 'never';
+  let markFailure: string | undefined;
   const capture = (): CaptureRecord => ({ ...session, captureId: `fixture-capture-${++captures}`, scroll: { x: 0, y: 0 }, captureDigest: session.route.includes('workout') ? `sha256:${'b'.repeat(64)}` : digest,
     capturedAt: '2026-01-01T00:00:00Z' });
   const preview: PreviewTransport = {
@@ -45,6 +46,7 @@ function fixture(connection?: RunsConnection, previewBookmark?: PreviewBookmarkS
       if (route === 'mode' && (modeStale === 'always' || (modeStale === 'generation' && (params as PreviewParams['mode']).generation !== session.generation))) {
         return { ok: false as const, kind: 'stale' as const, reason: 'navigation' };
       }
+      if (route === 'status' && markFailure) { const reason = markFailure; markFailure = undefined; return { ok: false as const, kind: 'stale' as const, reason }; }
       let value: PreviewValues[keyof PreviewValues];
       if (route === 'open') { enteredOpen?.(); if (opening) await opening; session = { ...session, versionId: (params as PreviewParams['open']).versionId }; value = session; }
       else if (route === 'navigate') {
@@ -66,6 +68,8 @@ function fixture(connection?: RunsConnection, previewBookmark?: PreviewBookmarkS
     onSelectProject: (project) => selected.push(project), runsConnection: connection });
   return { d, records, workspace, ui: workspace.interactive, calls, selected, stale: () => { stale = true; },
     loseCaptureReply: () => { loseCaptureReply = true; },
+    /** The host could not keep a mark the user made and reports it once on the next status read. */
+    failMark: (reason: string) => { markFailure = reason; },
     /** The host fences (placement or in-site navigation) before the renderer's next poll observes it. */
     advanceHostGeneration(stale: 'generation' | 'always' = 'generation') { modeStale = stale; session = { ...session, generation: session.generation + 1 }; },
     holdOpen() { opening = new Promise<void>((resolve) => { releaseOpen = resolve; }); return { release: () => releaseOpen!(), entered: new Promise<void>((resolve) => { enteredOpen = resolve; }) }; },
@@ -233,6 +237,20 @@ test('a mode change that stays stale is reported after one bounded retry', async
   await settle(() => false);
   assert.equal(modeCalls(f).length, before + 2);
   assert.equal(f.ui.snapshot().error, 'Preview stale: navigation');
+  await f.ui.close();
+});
+
+test('a mode change replaces a finished notice; a failed mark is reported until the next mark succeeds', async () => {
+  const f = fixture(); await open(f);
+  await f.ui.capture();
+  assert.equal(f.ui.snapshot().notice, 'Coherent capture saved.');
+  f.ui.snapshot().annotations!.selectTool('cite');
+  assert.equal(f.ui.snapshot().notice, null, 'the Cite instruction is no longer hidden by an older notice');
+  f.failMark('mark-pixels-unstable'); await f.ui.poll();
+  assert.equal(f.ui.snapshot().error, 'Preview stale: mark-pixels-unstable');
+  f.cite(); await f.ui.poll();
+  assert.equal(f.ui.snapshot().annotations!.snapshot.editor.document.annotations.length, 1);
+  assert.equal(f.ui.snapshot().error, null);
   await f.ui.close();
 });
 

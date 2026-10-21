@@ -79,6 +79,39 @@ it('converts placeholder CSS pixels by the main renderer zoom before placing the
   await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 100, y: 50, width: 1024, height: 720 }, visible: true });
   expect(view.setBounds).toHaveBeenLastCalledWith({ x: 80, y: 40, width: 819, height: 576 });
 });
+it('applies only the newest of overlapping placements', async () => {
+  const { host, view, contents } = fixture();
+  const opened = await host.call('open', { ...openParams, viewport: { w: 390, h: 844, dpr: 1 } }) as { ok: true; value: { sessionId: string } };
+  const sessionId = opened.value.sessionId;
+  // Native Resume: the pre-fit placeholder is reported, then the fitted frame, while the first install is still pending.
+  let release!: () => void;
+  contents.executeJavaScriptInIsolatedWorld.mockImplementationOnce(() => new Promise(resolve => { release = () => resolve(undefined); }));
+  const stale = host.call('place', { sessionId, rect: { x: 432, y: 232, width: 942, height: 2039 }, visible: false });
+  await host.call('place', { sessionId, rect: { x: 708, y: 232, width: 390, height: 844 }, visible: true });
+  release(); await stale;
+  expect(view.setBounds).toHaveBeenLastCalledWith({ x: 708, y: 232, width: 390, height: 844 });
+  expect(view.setVisible).toHaveBeenLastCalledWith(true);
+  expect(metrics(contents).at(-1)!.scale).toBe(1);
+});
+it('reports a mark whose coherent capture failed once instead of dropping it silently', async () => {
+  const { host, contents } = fixture();
+  const opened = await host.call('open', desktopOpen) as { ok: true; value: { sessionId: string } };
+  const sessionId = opened.value.sessionId;
+  await host.call('place', { sessionId, rect: { x: 0, y: 0, width: 942, height: 662 }, visible: true });
+  const { generation } = (await host.call('status', { sessionId }) as { ok: true; value: { generation: number } }).value;
+  expect(await host.call('mode', { sessionId, generation, mode: 'pick' })).toEqual({ ok: true, value: null });
+  const rect = { x: 10, y: 10, width: 100, height: 20 };
+  const event = { type: 'element-picked', target: { kind: 'element', path: 'body > h1', rect }, frame: { viewport: { w: 1024, h: 720, dpr: 1 }, scroll: { x: 0, y: 0 } }, generation, snapshot: { identity: 'h1', text: 'Heading', rects: [rect] } };
+  let drained = false;
+  // The agent queue yields one pick; the capture's agent reading is unusable, so the capture fails.
+  contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (_world, scripts) => {
+    if (scripts[0]!.code.includes('.drain()') && !drained) { drained = true; return [event]; }
+    return scripts[0]!.code.includes('.drain()') ? [] : undefined;
+  });
+  await vi.waitFor(async () => expect(await host.call('status', { sessionId })).toEqual({ ok: false, kind: 'stale', reason: 'mark-capture-failed' }));
+  expect(await host.call('status', { sessionId })).toMatchObject({ ok: true });
+  expect(await host.call('events', { sessionId, after: 0 })).toMatchObject({ ok: true, value: { events: [] } });
+});
 it('accepts only the closed lifecycle route payloads', () => {
   expect(previewParams('deactivate', {})).toBe(true); expect(previewParams('overlay', { hidden: true })).toBe(true);
   expect(previewParams('deactivate', { sessionId: 'arbitrary' })).toBe(false);

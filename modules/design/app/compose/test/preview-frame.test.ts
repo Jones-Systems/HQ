@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { describePreviewError, fitFrame, frameFullyVisible, MIN_STAGE_HEIGHT, stageHeightBudget, STAGE_GUTTER } from '../preview-frame.ts';
+import { describePreviewError, fitFrame, frameFullyVisible, MIN_STAGE_HEIGHT, reviewBeside, stageHeightBudget, STAGE_GUTTER } from '../preview-frame.ts';
 
 const desktop = { w: 1024, h: 720 };
 const phone = { w: 390, h: 844 };
@@ -51,6 +51,30 @@ test('transport failures read as actions; unknown text is preserved', () => {
   assert.match(describePreviewError('Preview stale: navigation'), /page changed/u);
   assert.match(describePreviewError('Preview stale: pixels-unstable'), /still changing.*pixels-unstable/u);
   assert.match(describePreviewError('Preview blocked: navigation'), /leaves this site/u);
+  assert.match(describePreviewError('Preview stale: mark-pixels-unstable'), /mark was not saved.*Mark it again \(pixels-unstable\)/u);
+  assert.match(describePreviewError('Preview stale: mark-navigation'), /mark was not saved because the page changed/u);
   const held = 'Preview capture outcome is unknown. Close the preview and reconcile before continuing.';
   assert.equal(describePreviewError(held), held);
+});
+
+test('review sits beside the frame when the column costs the page little, and below when it would shrink it', () => {
+  // Native walkthrough: a 1006px panel in a 788px-tall window limits the desktop page by height (68%).
+  assert.equal(reviewBeside(1006, 487, desktop), true);
+  assert.equal(reviewBeside(1006, 487, phone), true);
+  assert.equal(reviewBeside(760, 487, phone), true);
+  // With room to grow the page would lose a third of its width, so review follows the workbench.
+  assert.equal(reviewBeside(1006, 900, desktop), false);
+  assert.equal(reviewBeside(760, 487, desktop), false);
+  assert.equal(reviewBeside(600, 487, phone), false, 'too narrow for a stage beside the column');
+  assert.equal(reviewBeside(1180, 2000, desktop), true);
+});
+
+test('a shorter stage never turns a beside decision into stacking, so switching layout cannot oscillate', () => {
+  for (const viewport of [desktop, phone]) {
+    for (let width = 700; width < 1180; width += 37) {
+      for (let height = MIN_STAGE_HEIGHT; height < 1000; height += 23) {
+        if (reviewBeside(width, height + 60, viewport)) assert.equal(reviewBeside(width, height, viewport), true, `${width}×${height}`);
+      }
+    }
+  }
 });

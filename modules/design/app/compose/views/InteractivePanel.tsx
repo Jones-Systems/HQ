@@ -3,7 +3,7 @@ import { Button, StatusChip } from '@hq/ui';
 import type { DesignSectionProps } from '../../../ui/contract.ts';
 import { AnnotationList } from '../../../annotations/src/ui/AnnotationsPanel.tsx';
 import { anchorMatches } from '../interactive-workspace.ts';
-import { describePreviewError, fitFrame, frameFullyVisible, stageHeightBudget, type FrameBox, type FrameFit } from '../preview-frame.ts';
+import { describePreviewError, fitFrame, frameFullyVisible, reviewBeside, stageHeightBudget, type FrameBox, type FrameFit } from '../preview-frame.ts';
 import { findPreview, openPreviewSource, previewCollection, previewGroups, previewIdentity, previewKey, previewKind, previewUnavailableReason } from '../preview-navigation.ts';
 import { interactiveTarget } from '../runtime-ports.ts';
 import { useDesignWorkspace } from '../workspace-context.tsx';
@@ -45,7 +45,11 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
   const [proposal, setProposal] = useState('');
   const [revisitOnly, setRevisitOnly] = useState(false);
   const [fit, setFit] = useState<FrameFit | null>(null);
+  const [beside, setBeside] = useState(false);
   const [paused, setPaused] = useState(false);
+  const fitted = useRef(false);
+  fitted.current = fit !== null && fit.width > 0;
+  const placeNow = useRef<(() => void) | null>(null);
   const viewportW = session?.viewport.w, viewportH = session?.viewport.h;
   useEffect(() => { void interactive.refresh(); return () => { void interactive.deactivate(); }; }, [interactive]);
   useEffect(() => { if (session) setRoute(session.route + session.state); }, [session?.route, session?.state]);
@@ -62,6 +66,7 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
     const measure = () => {
       const rootRect = root.getBoundingClientRect(), stageRect = box.getBoundingClientRect(), benchRect = bench.getBoundingClientRect();
       const height = stageHeightBudget(scroller?.clientHeight ?? window.innerHeight, stageRect.top - rootRect.top, benchRect.bottom - stageRect.bottom);
+      setBeside(reviewBeside(root.clientWidth, height, { w: viewportW, h: viewportH }));
       const next = fitFrame({ width: box.clientWidth, height }, { w: viewportW, h: viewportH });
       setFit((previous) => previous && previous.width === next.width && previous.height === next.height ? previous : next);
     };
@@ -74,25 +79,33 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
     const element = frame.current;
     if (!element || !session) return;
     const scroller = panel.current ? scrollportOf(panel.current) : null;
-    let previous = '';
-    const place = () => {
-      const rect = element.getBoundingClientRect();
-      const clips = [{ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }, ...(scroller ? [innerBox(scroller)] : [])];
-      const inView = frameFullyVisible({ x: rect.x, y: rect.y, width: rect.width, height: rect.height }, clips);
-      const visible = inView && !document.hidden && !document.querySelector(OVERLAYS);
-      setPaused(!inView && rect.width > 0 && rect.height > 0);
-      const placement = { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) };
+    let previous = '', last: { x: number; y: number; width: number; height: number } | null = null;
+    const send = (placement: NonNullable<typeof last>, visible: boolean) => {
       const key = JSON.stringify([placement, visible]);
       if (key === previous) return;
       previous = key;
       void interactive.place(placement, visible);
     };
+    const place = () => {
+      // Unfitted boxes (the pre-fit fallback, a collapsed panel) are never sent: an oversized placement could
+      // land after the fitted one. The last fitted placement is hidden instead, which keeps its size.
+      if (!fitted.current) { setPaused(false); if (last) send(last, false); return; }
+      const rect = element.getBoundingClientRect();
+      const clips = [{ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }, ...(scroller ? [innerBox(scroller)] : [])];
+      const inView = frameFullyVisible({ x: rect.x, y: rect.y, width: rect.width, height: rect.height }, clips);
+      const visible = inView && !document.hidden && !document.querySelector(OVERLAYS);
+      setPaused(!inView && rect.width > 0 && rect.height > 0);
+      last = { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) };
+      send(last, visible);
+    };
     const size = new ResizeObserver(place); size.observe(element);
     const overlays = new MutationObserver(place); overlays.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'role', 'aria-modal', 'hidden', 'data-hq-overlay'] });
     window.addEventListener('resize', place); document.addEventListener('scroll', place, true); document.addEventListener('visibilitychange', place);
-    place();
-    return () => { size.disconnect(); overlays.disconnect(); window.removeEventListener('resize', place); document.removeEventListener('scroll', place, true); document.removeEventListener('visibilitychange', place); };
+    place(); placeNow.current = place;
+    return () => { placeNow.current = null; size.disconnect(); overlays.disconnect(); window.removeEventListener('resize', place); document.removeEventListener('scroll', place, true); document.removeEventListener('visibilitychange', place); };
   }, [interactive, session?.sessionId]);
+  // A fit that leaves the frame box unchanged produces no resize observation, so place explicitly.
+  useEffect(() => { placeNow.current?.(); }, [fit]);
   useEffect(() => {
     if (!session) { revealedSession.current = null; return; }
     if (snapshot.busy || revealedSession.current === session.sessionId) return;
@@ -158,7 +171,7 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
       {!session && error && <p role="alert">{describePreviewError(error)}</p>}
       {!session && snapshot.notice && <p role="status">{snapshot.notice}</p>}
     </div>
-    {session && <div className="hqw-body">
+    {session && <div className={beside ? 'hqw-body is-beside' : 'hqw-body'}>
       <section ref={workbench} aria-label="Live preview workbench" className="hqw-workbench">
         <form className="hqw-bar" aria-label="Preview navigation and tools" onSubmit={(event) => { event.preventDefault(); void interactive.navigate(route); }}>
           <Button size="sm" variant="ghost" disabled={busy || snapshot.history.length < 2} onClick={() => void interactive.back()}>Back</Button>
@@ -185,7 +198,7 @@ export function InteractivePanel({ context, navigate }: Pick<DesignSectionProps,
             style={fit ? { width: fit.width, height: fit.height } : { width: '100%', aspectRatio: `${session.viewport.w} / ${session.viewport.h}` }}>
             {paused
               ? <div className="hqw-frame-note"><p>Preview paused while it is out of view.</p>
-                <Button size="sm" onClick={() => panel.current?.scrollIntoView({ block: 'start' })}>Show preview</Button></div>
+                <Button size="sm" onClick={() => { panel.current?.scrollIntoView({ block: 'start' }); workbench.current?.querySelector<HTMLElement>('.hqw-modes [aria-pressed="true"]')?.focus({ preventScroll: true }); }}>Show preview</Button></div>
               : <p className="hqw-visually-hidden">Live content appears in the desktop preview surface. It hides while HQ dialogs are open or the surface is out of view.</p>}
           </div>
         </div>

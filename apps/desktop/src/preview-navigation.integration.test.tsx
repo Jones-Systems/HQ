@@ -113,8 +113,8 @@ it('an open preview keeps one concise toolbar, contextual review controls and a 
   fireEvent.change(route, { target: { value: '/about/' } });
   await act(async () => { fireEvent.submit(route.closest('form')!); });
   expect(f.calls.filter((call) => call === 'navigate')).toHaveLength(1);
-  // A zero-size surface (no layout here) is never shown natively.
-  expect(f.calls).toContain('place');
+  // A zero-size surface (no layout here) has no fitted frame, so nothing is placed or shown natively.
+  expect(f.calls).not.toContain('place');
 });
 
 it('Resume stays passive on mount and refresh, then opens only on its explicit button', async () => {
