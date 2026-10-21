@@ -10,7 +10,7 @@ import { createPreviewHost } from './host';
 import { previewParams } from './validation';
 const hosts: ReturnType<typeof createPreviewHost>[] = [];
 afterEach(async () => { await Promise.all(hosts.splice(0).map(host => host.closeAll())); vi.useRealTimers(); vi.unstubAllEnvs(); vi.clearAllMocks(); });
-function fixture() {
+function fixture(zoomFactor?: number) {
   vi.stubEnv('HQ_USER_DATA_DIR', 'synthetic-owned-profile'); vi.stubEnv('HQ_QUALIFY_PREVIEW', '1');
   let destroyed = false, url = 'about:blank', attached = false, bounds = { x: 0, y: 0, width: 0, height: 0 };
   const contents = { on: vi.fn(), isDestroyed: () => destroyed, close: vi.fn(() => { destroyed = true; }), getURL: () => url,
@@ -20,7 +20,7 @@ function fixture() {
   const session = { clearData: vi.fn(async () => {}), on: vi.fn(), webRequest: { onBeforeRequest: vi.fn() }, setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), setDevicePermissionHandler: vi.fn(), setDisplayMediaRequestHandler: vi.fn() };
   const view = { webContents: contents, getBounds: () => bounds, setBounds: vi.fn(value => { bounds = value; }), setVisible: vi.fn() };
   fake.readFile.mockResolvedValue('synthetic agent bundle'); fake.create.mockReturnValue({ view, session });
-  const window = { webContents: { getOSProcessId: () => 123 }, isDestroyed: () => false, contentView: { addChildView: vi.fn(), removeChildView: vi.fn() } } as unknown as BrowserWindow;
+  const window = { webContents: { getOSProcessId: () => 123, ...(zoomFactor === undefined ? {} : { getZoomFactor: () => zoomFactor }) }, isDestroyed: () => false, contentView: { addChildView: vi.fn(), removeChildView: vi.fn() } } as unknown as BrowserWindow;
   const putBlob = vi.fn(async () => true);
   const host = createPreviewHost({ window: () => window, putBlob }); hosts.push(host);
   return { host, contents, session, view, putBlob };
@@ -50,6 +50,34 @@ it('keeps late placement hidden under Settings and restores intended visibility'
   await host.call('overlay', { hidden: false }); expect(view.setVisible).toHaveBeenLastCalledWith(true);
   await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 0, y: 0, width: 390, height: 844 }, visible: false });
   await host.call('overlay', { hidden: true }); await host.call('overlay', { hidden: false }); expect(view.setVisible).toHaveBeenLastCalledWith(false);
+});
+const desktopOpen = { ...openParams, viewport: { w: 1024, h: 720, dpr: 1 } };
+const metrics = (contents: ReturnType<typeof fixture>['contents']) => contents.debugger.sendCommand.mock.calls
+  .filter(([method]) => method === 'Emulation.setDeviceMetricsOverride').map(([, params]) => params as unknown as Record<string, unknown>);
+it('places native bounds on the fitted page and never lets emulation size the widget', async () => {
+  const { host, view, contents } = fixture();
+  const opened = await host.call('open', desktopOpen) as { ok: true; value: { sessionId: string; generation: number } };
+  const placed = await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 120, y: 179, width: 1006, height: 420 }, visible: true }) as { ok: true; value: { generation: number } };
+  // Before the repair the view took the whole 1006×420 placeholder and painted background beside a 597px page.
+  expect(view.setBounds).toHaveBeenLastCalledWith({ x: 325, y: 179, width: 597, height: 420 });
+  const applied = metrics(contents);
+  expect(applied.length).toBeGreaterThanOrEqual(2);
+  // A stored emulation size would resize each new main-frame widget to 1024×720 after link navigation.
+  for (const params of applied) expect(params).toMatchObject({ width: 1024, height: 720, deviceScaleFactor: 1, dontSetVisibleSize: true });
+  expect(applied.at(-1)!.scale).toBeCloseTo(597 / 1024, 6);
+  expect(placed.value.generation).toBe(opened.value.generation + 1);
+  const again = await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 0, y: 64, width: 597, height: 420 }, visible: true }) as { ok: true; value: { generation: number } };
+  expect(again.value.generation).toBe(placed.value.generation);
+  expect(view.setBounds).toHaveBeenLastCalledWith({ x: 0, y: 64, width: 597, height: 420 });
+  const resized = await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 0, y: 64, width: 1024, height: 720 }, visible: true }) as { ok: true; value: { generation: number } };
+  expect(resized.value.generation).toBe(placed.value.generation + 1);
+  expect(metrics(contents).at(-1)!.scale).toBe(1);
+});
+it('converts placeholder CSS pixels by the main renderer zoom before placing the native view', async () => {
+  const { host, view } = fixture(0.8);
+  const opened = await host.call('open', desktopOpen) as { ok: true; value: { sessionId: string } };
+  await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 100, y: 50, width: 1024, height: 720 }, visible: true });
+  expect(view.setBounds).toHaveBeenLastCalledWith({ x: 80, y: 40, width: 819, height: 576 });
 });
 it('accepts only the closed lifecycle route payloads', () => {
   expect(previewParams('deactivate', {})).toBe(true); expect(previewParams('overlay', { hidden: true })).toBe(true);

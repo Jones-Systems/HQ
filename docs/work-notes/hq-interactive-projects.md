@@ -191,3 +191,22 @@ The shared-guidance bridge remains absent. Exact task identity, private evidence
 
 Local source verification passes: 182 composition tests, 68 discovery tests, both cone typechecks, the complete desktop suite and the assembled build. The first broad attempt lacked emitted Electron artifacts and used dependencies whose workspace resolution escaped the candidate. Its failures remain preserved. Reusing the same locked dependency files through a task-local clone corrected resolution; the unchanged Work registry then passed all seven tests, followed by the final cumulative checks. No Work source or tests were changed. Native installation and interaction results remain separate. Registration is unavailable because the local broker endpoint is absent; no submission or permission repair occurred.
 <!-- codex-section:end id="worknote.hq-interactive-projects#ctx.preview-navigation.001" -->
+
+<!-- codex-section:begin id="worknote.hq-interactive-projects#ctx.preview-workbench.001" -->
+## Website-first preview workbench
+
+The owner reported that websites rendered about 590 px wide inside a roughly 1000 px pale preview, that link navigation painted the native view outside and below its area, and that provenance, warnings and controls overwhelmed the site. The owner asked Claude to make the design decisions and implement them.
+
+Causes, from source and Chromium 152 / Electron 44.9 source reading:
+- Confirmed: a fixed 420 px placeholder and a contain-fit emulation scale of `420/720` painted a 1024 px page into about 597 px. The rest was the native view's background.
+- Mechanism confirmed in source, native observation pending: metrics overrides without `dontSetVisibleSize` store the logical size as the WebContents emulation size. Chromium sizes each new main-frame widget to it, so after a link navigation the view painted 1024×720 regardless of its placed bounds.
+- Confirmed: visibility checked only the window, so a scrolled panel could place the view over HQ chrome.
+- Contract gap, owner impact unknown: renderer CSS px were used as DIP regardless of HQ zoom.
+- A mode change racing a placement or navigation fence surfaced as a persistent `Preview stale: navigation`.
+
+Decision (one safe default inside scope; a responsive logical viewport and a full-window mode would change capture anchoring or shell ownership): the page fills a frame sized to its logical viewport, at no more than 100 % scale. One browser bar and a fixed-height context line sit above it, and capture, annotations, proposal, flow and source details move to a review column. Main fits the bounds authoritatively. The design keeps frame size independent of UI state. Contract text: `spec.hq-integration-parallel-execution#iface.preview-host.001` PV-ARCH and XR8. Capture's own temporary widget resize during `Page.captureScreenshot` is unchanged and remains a recorded residual.
+
+Root remains the sole Git owner; the Claude implementation sub-agent wrote source, tests and docs only. Preview-host bytes changed, so earlier native evidence for placement, navigation and capture is historical until the focused native rows run. Private diagnosis and design checkpoint, Chromium/Electron source excerpts and screenshot measurements are retained outside this repository.
+Source verification passes the assembled build, root and compose typechecks, 1,742 root tests across 102 files and 190 compose Node tests. Native containment and visual verification remain pending on this candidate. Existing locked dependencies were reused with task-local workspace bindings; no package or runtime download was needed.
+
+<!-- codex-section:end id="worknote.hq-interactive-projects#ctx.preview-workbench.001" -->

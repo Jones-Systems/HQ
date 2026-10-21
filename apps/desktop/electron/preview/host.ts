@@ -9,6 +9,7 @@ import { requestAllowed, previewTarget } from './policy.js';
 import { acceptCapture, type CaptureReading } from './coherence.js';
 import { previewParams, validAgentEvent, validResolution } from './validation.js';
 import { createQualificationBarrier } from './qualification.js';
+import { fitPlacement } from './placement.js';
 
 type Result = PreviewResult<unknown>;
 type Live = { view: WebContentsView; session: Session; target: URL; value: PreviewSession; visible: boolean; mode: 'off' | 'pick' | 'cite'; events: PreviewValues['events']['events'][number][]; sequence: number; draining: boolean; timer: ReturnType<typeof setInterval>; closing: boolean; epoch: number; captureSequence: number; queue: Promise<unknown>; blocked?: string };
@@ -91,7 +92,9 @@ export function createPreviewHost(options: {
     const debuggerPort = live.view.webContents.debugger;
     if (!debuggerPort.isAttached()) debuggerPort.attach('1.3');
     const { w, h, dpr } = live.value.viewport;
-    await debuggerPort.sendCommand('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: dpr, mobile: false, scale });
+    // Without dontSetVisibleSize Chromium stores w×h as the emulation size and sizes each new main-frame
+    // widget to it, so after a link navigation the view painted w×h outside its placed bounds.
+    await debuggerPort.sendCommand('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: dpr, mobile: false, scale, dontSetVisibleSize: true });
   }
   async function pixels(live: Live, scroll: { x: number; y: number }) {
     const contents = live.view.webContents;
@@ -296,10 +299,11 @@ export function createPreviewHost(options: {
         if (live.value.status === 'crashed') return fail('unavailable', 'crashed');
         if (route === 'place') {
           const { rect, visible } = raw as PreviewParams['place'];
+          const { bounds, scale } = fitPlacement(rect, live.value.viewport, options.window()?.webContents.getZoomFactor?.() ?? 1);
           const old = live.view.getBounds();
-          if (old.width !== Math.round(rect.width) || old.height !== Math.round(rect.height)) { fence(live); await install(live); }
-          live.view.setBounds({ x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) });
-          await emulate(live, Math.max(0.01, Math.min(rect.width / live.value.viewport.w, rect.height / live.value.viewport.h)));
+          if (old.width !== bounds.width || old.height !== bounds.height) { fence(live); await install(live); }
+          live.view.setBounds(bounds);
+          await emulate(live, scale);
           live.view.setVisible(visible && !overlayHidden); live.visible = visible; return ok(current(live));
         }
         if (route === 'navigate') {

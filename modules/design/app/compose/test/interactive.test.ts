@@ -36,11 +36,15 @@ function fixture(connection?: RunsConnection, previewBookmark?: PreviewBookmarkS
   let releaseOpen: (() => void) | undefined;
   let enteredOpen: (() => void) | undefined;
   let queued: PreviewValues['events']['events'] = [];
+  let modeStale: 'never' | 'generation' | 'always' = 'never';
   const capture = (): CaptureRecord => ({ ...session, captureId: `fixture-capture-${++captures}`, scroll: { x: 0, y: 0 }, captureDigest: session.route.includes('workout') ? `sha256:${'b'.repeat(64)}` : digest,
     capturedAt: '2026-01-01T00:00:00Z' });
   const preview: PreviewTransport = {
     async call<R extends keyof PreviewParams>(route: R, params: PreviewParams[R]) {
       calls.push({ route, params });
+      if (route === 'mode' && (modeStale === 'always' || (modeStale === 'generation' && (params as PreviewParams['mode']).generation !== session.generation))) {
+        return { ok: false as const, kind: 'stale' as const, reason: 'navigation' };
+      }
       let value: PreviewValues[keyof PreviewValues];
       if (route === 'open') { enteredOpen?.(); if (opening) await opening; session = { ...session, versionId: (params as PreviewParams['open']).versionId }; value = session; }
       else if (route === 'navigate') {
@@ -62,6 +66,8 @@ function fixture(connection?: RunsConnection, previewBookmark?: PreviewBookmarkS
     onSelectProject: (project) => selected.push(project), runsConnection: connection });
   return { d, records, workspace, ui: workspace.interactive, calls, selected, stale: () => { stale = true; },
     loseCaptureReply: () => { loseCaptureReply = true; },
+    /** The host fences (placement or in-site navigation) before the renderer's next poll observes it. */
+    advanceHostGeneration(stale: 'generation' | 'always' = 'generation') { modeStale = stale; session = { ...session, generation: session.generation + 1 }; },
     holdOpen() { opening = new Promise<void>((resolve) => { releaseOpen = resolve; }); return { release: () => releaseOpen!(), entered: new Promise<void>((resolve) => { enteredOpen = resolve; }) }; },
     cite() {
       const captured = capture();
@@ -201,6 +207,34 @@ test('an unknown capture outcome is held and never retried by another click', as
   assert.equal(f.d.documents.size, 0); await f.ui.close();
 });
 
+async function settle(done: () => boolean) {
+  for (let turn = 0; turn < 50 && !done(); turn++) await new Promise((resolve) => setImmediate(resolve));
+}
+const modeCalls = (f: ReturnType<typeof fixture>) => f.calls.filter((call) => call.route === 'mode').map((call) => call.params as PreviewParams['mode']);
+
+test('a mode change racing a host fence re-reads the session and applies the mode once at the new generation', async () => {
+  const f = fixture(); await open(f);
+  const before = modeCalls(f).length, generation = f.ui.snapshot().session!.generation;
+  f.advanceHostGeneration();
+  f.ui.snapshot().annotations!.selectTool('pick');
+  await settle(() => modeCalls(f).length >= before + 2);
+  assert.deepEqual(modeCalls(f).slice(before).map((call) => [call.mode, call.generation]), [['pick', generation], ['pick', generation + 1]]);
+  assert.equal(f.ui.snapshot().session?.generation, generation + 1);
+  assert.equal(f.ui.snapshot().error, null, 'a benign fence is not reported as a stale failure');
+  await f.ui.close();
+});
+
+test('a mode change that stays stale is reported after one bounded retry', async () => {
+  const f = fixture(); await open(f);
+  const before = modeCalls(f).length;
+  f.advanceHostGeneration('always');
+  f.ui.snapshot().annotations!.selectTool('cite');
+  await settle(() => f.ui.snapshot().error !== null);
+  await settle(() => false);
+  assert.equal(modeCalls(f).length, before + 2);
+  assert.equal(f.ui.snapshot().error, 'Preview stale: navigation');
+  await f.ui.close();
+});
 
 test('one app session captures two routes into distinct immutable versions and reopens flow, annotations and frozen proposal', async () => {
   const f = fixture(); await open(f);

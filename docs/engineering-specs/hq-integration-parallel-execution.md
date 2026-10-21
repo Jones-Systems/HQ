@@ -562,6 +562,7 @@ Owned by T2; consumed by T7 and T8. The main-renderer CSP and `allowedSender` ar
   - Each view has no preload. `sandbox`, `contextIsolation` and `webSecurity` are on; `nodeIntegration`, `nodeIntegrationInSubFrames`, `webviewTag`, `allowRunningInsecureContent`, `experimentalFeatures`, `plugins`, `spellcheck`, `enableWebSQL` and `navigateOnDragDrop` are off; `disableDialogs` is on; devtools exist only unpackaged.
   - Each preview session has a fresh partition without the `persist:` prefix, so its storage is in memory.
   - Child views draw above the renderer, so the renderer reports a placeholder rect and hides the view while HQ overlays are open.
+  - Main converts the placeholder from renderer CSS px to window DIP with the main renderer's zoom factor, sets the view to the largest centred box with the logical viewport's aspect inside it, and emulates that fit with `dontSetVisibleSize`, so neither placement nor a new document can paint outside the placeholder. The renderer shows the view only while the whole placeholder is inside the window and its scrollport.
   - Close runs `webContents.close()`, `removeChildView`, then `session.clearData()`. A main-renderer reload, crash, domain switch or window close tears down every view.
 - **Trust (PV-TRUST):** every HQ `webContents` is created by one factory, `apps/desktop/electron/contents-factory.ts`, in one of three classes with literal webPreferences:
   - `hq-main`: `WINDOW_SECURITY` plus the exact `EXPECTED_MAIN_PRELOAD`, computed once at startup;
@@ -8437,6 +8438,8 @@ XR6: Capability holds remain visible until real qualification, activation and in
 
 XR7: Interactive choices retain their registered collection names. Stills and unavailable entries cannot be selected as interactive targets and display a reason. Source details provide an explicit Open action for an available website or prototype, preserving the current interactive destination and revealing the preview. A saved opaque source identity offers an explicit Resume action after refresh or restart; restoration alone never selects a project, opens a preview or dispatches work. Source identities and existing authoring links remain unchanged, and workspace records are never matched by display name.
 
+XR8: An open preview is a website-first workbench. The page fills a frame sized to its logical viewport within the available width and one scrollport height, never above 100 % scale, with no native background beside it. One browser bar holds route, viewport, Browse/Pick/Cite and Capture; one fixed-height context line holds status, errors and the next-mark comment. Capture, annotations, proposal, flow and source provenance sit in an adjacent review column, or below the frame on narrow panels. Ordinary UI state does not resize the frame, because a size-changing placement fences the session. Open, Resume, capture anchoring, proposal locality and explicit Requests/Runs sending are unchanged.
+
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#req.project-experience-workflow.001" -->
 
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.project-experience-source.001" -->
@@ -8445,6 +8448,8 @@ XR7: Interactive choices retain their registered collection names. Stills and un
 Mapper fixtures cover stable host/root/project identity, bounded malformed input, hash mismatch, partial catalogs, remote URL policy and interactive-versus-still classification. Runs tests cover injected real-shaped ports, disconnected and unqualified states, explicit send, unknown lookup without resend, readback and labelled examples. Compose tests use a structural PreviewCapability fake; native tests qualify the actual preload-free browser.
 
 One synthetic end-to-end scenario enrolls a gallery and Jones list, opens a full document, clicks through, picks/comments, captures a flow, explicitly sends through the existing qualification stub and reads the receipt. Fixtures prove source behavior only. Separate owner-approved real enrollment and native consent verify actual projects; no fixture closes a live gate.
+
+Workbench geometry tests cover host fit, zoom conversion, `dontSetVisibleSize` on every metrics override, fencing only on fitted size changes, renderer fit without upscaling, scrollport visibility and one bounded mode retry after a host fence. Native acceptance must show desktop and phone sites filling the frame at several panel widths, in-site link navigation staying inside it, scrolled panels pausing rather than covering HQ, and unchanged capture, Pick/Cite and proposal behavior. Browser fixtures cannot verify native composition.
 
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.project-experience-source.001" -->
 

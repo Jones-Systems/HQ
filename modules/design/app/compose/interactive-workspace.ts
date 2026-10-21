@@ -154,8 +154,19 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
       mode = nextMode;
       const session = state.session;
       if (!session) return;
-      void call('mode', { sessionId: session.sessionId, generation: session.generation, mode: nextMode })
-        .catch((error: unknown) => update({ error: error instanceof Error ? error.message : 'Pick/Cite unavailable.' }));
+      // Placement and in-site navigation advance the host generation between polls. Setting a mode is
+      // idempotent and sends nothing, so one stale reply re-reads the session and reapplies the mode.
+      const apply = async (current: PreviewSession, retry: boolean): Promise<void> => {
+        try { await call('mode', { sessionId: current.sessionId, generation: current.generation, mode: nextMode }); }
+        catch (error) {
+          if (!retry || !(error instanceof Error) || error.message !== 'Preview stale: navigation') throw error;
+          const latest = await call('status', { sessionId: current.sessionId });
+          if (mode !== nextMode || state.session?.sessionId !== current.sessionId) return;
+          observe(latest);
+          await apply(latest, false);
+        }
+      };
+      void apply(session, true).catch((error: unknown) => update({ error: error instanceof Error ? error.message : 'Pick/Cite unavailable.' }));
     },
     async resolve(requests) {
       const session = state.session;
