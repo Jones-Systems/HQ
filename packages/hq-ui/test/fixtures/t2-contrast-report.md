@@ -38,10 +38,10 @@ focus rings, indicators and control boundaries 3:1. `text-disabled` is intention
 | `text-subtle` | `surface-raised` | dark | 6.97 | 4.5 | pass |
 | `text-subtle` | `surface-sunken` | light | 4.71 | 4.5 | pass |
 | `text-subtle` | `surface-sunken` | dark | 8.41 | 4.5 | pass |
-| `text` | `surface-selected@nav` | light | 11.95 | 4.5 | pass |
-| `text` | `surface-selected@nav` | dark | 12.70 | 4.5 | pass |
-| `text` | `surface-selected@canvas` | light | 11.66 | 4.5 | pass |
-| `text` | `surface-selected@canvas` | dark | 13.62 | 4.5 | pass |
+| `text` | `surface-selected@nav` | light | 11.07 | 4.5 | pass |
+| `text` | `surface-selected@nav` | dark | 10.16 | 4.5 | pass |
+| `text` | `surface-selected@canvas` | light | 11.07 | 4.5 | pass |
+| `text` | `surface-selected@canvas` | dark | 10.16 | 4.5 | pass |
 | `text` | `surface-hover@surface` | light | 12.56 | 4.5 | pass |
 | `text` | `surface-hover@surface` | dark | 12.22 | 4.5 | pass |
 | `accent-text` | `nav` | light | 6.07 | 4.5 | pass |
@@ -100,15 +100,23 @@ focus rings, indicators and control boundaries 3:1. `text-disabled` is intention
 | `accent-strong` | `nav` | dark | 10.06 | 3.0 | pass |
 | `accent-strong` | `surface` | light | 6.23 | 3.0 | pass |
 | `accent-strong` | `surface` | dark | 9.41 | 3.0 | pass |
-| `accent-strong` | `surface-selected@nav` | light | 5.34 | 3.0 | pass |
-| `accent-strong` | `surface-selected@nav` | dark | 8.32 | 3.0 | pass |
+| `accent-strong` | `surface-selected@nav` | light | 4.94 | 3.0 | pass |
+| `accent-strong` | `surface-selected@nav` | dark | 6.65 | 3.0 | pass |
 | `border-control` | `surface` | light | 3.13 | 3.0 | pass |
 | `border-control` | `surface` | dark | 4.63 | 3.0 | pass |
 | `border-control` | `surface-raised` | light | 3.24 | 3.0 | pass |
 | `border-control` | `surface-raised` | dark | 4.14 | 3.0 | pass |
 | `border-control` | `nav` | light | 3.05 | 3.0 | pass |
 | `border-control` | `nav` | dark | 4.95 | 3.0 | pass |
-| `text-muted` | `surface-selected@canvas` | light | 5.13 | 4.5 | pass |
-| `text-muted` | `surface-selected@canvas` | dark | 8.79 | 4.5 | pass |
+| `text-muted` | `surface-selected@canvas` | light | 4.87 | 4.5 | pass |
+| `text-muted` | `surface-selected@canvas` | dark | 6.56 | 4.5 | pass |
+| `text-selected` | `surface-selected` | light | 12.23 | 4.5 | pass |
+| `text-selected` | `surface-selected` | dark | 11.42 | 4.5 | pass |
+| `text` | `control` | light | 12.76 | 4.5 | pass |
+| `text` | `control` | dark | 11.17 | 4.5 | pass |
+| `text` | `control-hover` | light | 11.74 | 4.5 | pass |
+| `text` | `control-hover` | dark | 9.60 | 4.5 | pass |
+| `text` | `control-pressed` | light | 10.57 | 4.5 | pass |
+| `text` | `control-pressed` | dark | 8.11 | 4.5 | pass |
 
-104 pairs checked, 0 below minimum.
+112 pairs checked, 0 below minimum.

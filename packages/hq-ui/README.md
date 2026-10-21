@@ -29,7 +29,7 @@ The scheme comes from `<html data-theme="light|dark">`, which T0's shell already
 | Export | What it is |
 | --- | --- |
 | Tokens | `src/tokens/hq-tokens.{css,json}` and `t0-bridge.css` match `docs/design/hq-visual-system/tokens/`. The current palette follows Design's cool neutrals and blue accent. Keep both copies synchronized when regenerating; `test/tokens.test.ts` checks equality and generated provenance. |
-| `tokens.ts` | Token names only (`HQ_COLOR_ROLES`, `HQ_TOKEN_NAMES`, …): 39 colour roles, 4 artwork invariants, and type, space, radius, size, motion, layer, component and shadow roles. Values live only in the CSS. |
+| `tokens.ts` | Token names only (`HQ_COLOR_ROLES`, `HQ_TOKEN_NAMES`, …): 45 colour roles, 4 artwork invariants, and type, space, radius, size, motion, layer, component and shadow roles. Values live only in the CSS. |
 | `contrast.ts` | `contrastRows(tokens)` recomputes T2's 104 contrast pairs from the JSON source (WCAG 2.x, translucent roles composited), plus `contrastRatio`, `parseColor`, `composite` and `resolveRole`. |
 | `Button`, `IconButton` | Primary, secondary, ghost and danger variants; `busy` shows a spinner and a verb in progress and ignores activation. `IconButton` requires a text `label`. Both default to `type="button"`. |
 | `Splitter` | Pointer and keyboard resizing, zero-width collapse, restoration and cancellation; dimensions are applied through CSSOM. |

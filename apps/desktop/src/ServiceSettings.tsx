@@ -6,6 +6,8 @@ import type { ServiceConfigTransport, ServiceDomain } from '@hq/contracts/servic
 import type { WikiAdminStatus, WikiAdminTransport, WikiSelection, WikiAdminNamespace } from '@hq/contracts/wiki-admin';
 import { SOURCE_NAMES, type DataSource } from './services/data-source-status';
 import { useDataSources } from './settings/DataSources';
+import { PaletteSettings } from './appearance/PaletteSettings';
+import type { PaletteController } from './appearance/usePalette';
 import './connections/connections.css';
 import './settings/settings.css';
 const changed = () => window.dispatchEvent(new Event('hq-connections-changed'));
@@ -102,9 +104,11 @@ function WikiSettings({ admin }: { admin?: WikiAdminTransport }) {
 type SettingsCategory = 'sources' | 'appearance';
 const CATEGORIES: readonly { id: SettingsCategory; label: string }[] = [{ id: 'sources', label: 'Data sources' }, { id: 'appearance', label: 'Appearance' }];
 /** Existing endpoint values stay in native configuration and are never read into this page. */
-export function ServiceSettings({ config, onClose, returnLabel = 'Design', target = null, appearance = 'system', onAppearanceChange }: {
+export function ServiceSettings({ config, onClose, returnLabel = 'Design', target = null, appearance = 'system', onAppearanceChange, palette, dark = false }: {
   config?: ServiceConfigTransport; onClose: () => void; returnLabel?: string; target?: DataSource | 'appearance' | null;
   appearance?: Appearance; onAppearanceChange?: (value: Appearance) => void;
+  /** Dark palette presets and colour edits; `dark` is the resolved theme the palette applies to. */
+  palette?: PaletteController; dark?: boolean;
 }) {
   const [category, setCategory] = useState<SettingsCategory>(target === 'appearance' ? 'appearance' : 'sources');
   const heading = useRef<HTMLHeadingElement>(null);
@@ -131,8 +135,9 @@ export function ServiceSettings({ config, onClose, returnLabel = 'Design', targe
           <div className="settings-group"><ProjectSources /></div>
           <div id="settings-wiki" className={`settings-group${target === 'wiki' ? ' is-target' : ''}`}><WikiSettings admin={window.hqServices?.wikiAdmin} /></div>
         </> : <>
-          <div className="settings-section-heading"><h2>Appearance</h2><p>Choose a light or dark workspace, or follow your device. Captured designs keep their own appearance.</p></div>
+          <div className="settings-section-heading"><h2>Appearance</h2><p>Choose a light or dark workspace, or follow your device, and pick the colors HQ uses when it is dark. Captured designs, previews and artwork keep their own appearance.</p></div>
           <div className="settings-group"><div className="settings-row"><div className="settings-row-copy"><h3>Color theme</h3><p>System follows changes to your device’s appearance.</p></div><div className="settings-row-control"><div className="settings-theme-options" role="group" aria-label="Color theme">{(['light', 'dark', 'system'] as const).map(mode => <Button key={mode} size="sm" aria-pressed={appearance === mode} onClick={() => onAppearanceChange?.(mode)}>{mode[0]!.toUpperCase() + mode.slice(1)}</Button>)}</div></div></div></div>
+          {palette && <PaletteSettings palette={palette} dark={dark} />}
         </>}
       </div></div>
     </div>

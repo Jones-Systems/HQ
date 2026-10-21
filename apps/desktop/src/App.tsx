@@ -7,6 +7,7 @@ import { Splitter } from '@hq/ui';
 import { deactivateDesktopPreview, overlayDesktopPreview, subscribeDesktopProject } from './interactive-runtime';
 import { Connections } from './Connections';
 import { ServiceSettings } from './ServiceSettings';
+import { usePalette } from './appearance/usePalette';
 import { DataSourcesProvider } from './settings/DataSources';
 import type { DataSource } from './services/data-source-status';
 import { DOMAIN_IDS, parseProjectContext, type Appearance, type DesktopPort } from '@hq/contracts';
@@ -60,6 +61,7 @@ function WorkspaceApp() {
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [storageAvailable, setStorageAvailable] = useState(true);
   const theme = resolveAppearance(appearance, systemDark);
+  const palette = usePalette(storage, theme === 'dark');
   const stateRef = useRef(state);
   stateRef.current = state;
   const Module = MODULES[state.domain];
@@ -136,9 +138,9 @@ function WorkspaceApp() {
           navigate={destination => { references.cancelOpen(); setState(previous => navigate(previous, state.domain, destination)); }} />
       </main>
       {settingsOpen && <ServiceSettings config={window.hqServices?.config} onClose={closeSettings}
-        returnLabel={DOMAIN_LABELS[state.domain]} target={settingsTarget} appearance={appearance} onAppearanceChange={setAppearance} />}
+        returnLabel={DOMAIN_LABELS[state.domain]} target={settingsTarget} appearance={appearance} onAppearanceChange={setAppearance} palette={palette} dark={theme === 'dark'} />}
       <footer className="context-footer" aria-label="Workspace context"><span>{context.name}</span><span>{DOMAIN_LABELS[state.domain]}</span></footer>
-      {!storageAvailable && <p className="storage-notice" role="status">Preferences are available for this session. Local storage is unavailable.</p>}
+      {!(storageAvailable && palette.saved) && <p className="storage-notice" role="status">Preferences are available for this session. Local storage is unavailable.</p>}
     </div>
   </div>;
 }
