@@ -33,7 +33,14 @@ async function inventory(root, prefix = '') {
 }
 
 function sourceClosure() {
-  return { name: 'browser-preview-source-closure', async generateBundle() {
+  return { name: 'browser-preview-source-closure', async generateBundle(_options, bundle) {
+    // Rolldown exposes no plugin-context watch-file enumeration. Cover source-only
+    // dependencies conservatively, including CSS imports and inlined assets.
+    const supplementalSourceRoots = [
+      'apps/desktop/src', 'apps/desktop/preview', 'apps/desktop/scripts',
+      'modules/work', 'modules/social', 'modules/wiki/contract',
+      'packages/contracts', 'packages/hq-ui',
+    ];
     const inputs = new Set([
       'package.json', 'package-lock.json', 'tsconfig.json', 'apps/desktop/package.json',
       'apps/desktop/vite.browser-preview.config.ts', 'apps/desktop/scripts/build-browser-preview.mjs',
@@ -57,7 +64,10 @@ function sourceClosure() {
       const path = modulePath(id);
       if (path) graph.push({ path, imports: [...info.importedIds, ...info.dynamicallyImportedIds].map(modulePath).filter(Boolean).sort() });
     }
-    for (const id of this.getWatchFiles()) modulePath(id);
+    for (const item of Object.values(bundle)) {
+      if (item.type === 'asset') for (const id of item.originalFileNames) modulePath(isAbsolute(id) ? id : resolve(this.environment.config.root, id));
+    }
+    for (const path of git('ls-files', '-z', '--', ...supplementalSourceRoots).split('\0').filter(Boolean)) inputs.add(path);
     // Package exports and compiler options participate in resolution even when they emit no module.
     for (const path of [...inputs]) {
       let directory = dirname(join(repository, path));
@@ -97,7 +107,15 @@ function sourceClosure() {
       visit(source);
     }
     this.emitFile({ type: 'asset', fileName: 'source-closure.json', source: canonicalJSON({
-      schema: 'hq-preview-source-closure/v1', revision, files, graph: graph.sort((a, b) => a.path.localeCompare(b.path)),
+      schema: 'hq-preview-source-closure/v1', revision,
+      coverage: {
+        moduleGraph: 'all resolved modules and their imports',
+        assetProvenance: 'emitted asset originalFileNames',
+        watchFiles: 'unavailable in the pinned Rolldown plugin API; not observed',
+        supplementalSourceRoots,
+        supplementalInputs: 'all tracked files under declared source roots; conservative superset, not runtime edges',
+      },
+      files, graph: graph.sort((a, b) => a.path.localeCompare(b.path)),
       lockedDependencyModules: [...dependencies].sort(), virtualModules: [...virtualModules].sort(), typeOnlyImports,
     }) + '\n' });
   } };
