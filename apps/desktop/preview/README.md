@@ -24,13 +24,35 @@ Files and every bundle directory become read-only on success. Failed builds remo
 the output directory allocated by that invocation. An unhandled process/host
 termination may leave an incomplete output; it must not be served or reused.
 
+`source-closure.json` is an inventoried bundle artifact emitted from the actual
+Vite build. It records repository files and digests from all resolved modules and
+watched styles/assets, graph edges, compiler/package metadata, the lockfile,
+build recipe and gallery descriptor. Locked dependency modules and Vite virtual
+modules are classified separately. Explicit type-only imports are recorded with
+source locations as erased build-time edges; they are not silently discarded or
+claimed to be runtime dependencies. This includes the Design types referenced by
+`interactive-runtime.ts`, whose runtime exports do not import Design composition.
+
+The gallery producer must cover every `files[].path` in this artifact with its
+complete input roots and validate those roots under its unchanged path guard.
+Build success alone is not producer acceptance or proof of freshness. Do not
+filter rejected required paths from the inventory. Typechecking remains a
+separate whole-application check, including native types.
+
 `--verify-production` rebuilds the normal renderer in memory, rejects preview
 module identities and session markers, and compares every generated file to
 `apps/desktop/dist`. Run the normal build first. Neither command serves or
 deploys anything.
 
+Production `App` and the browser entry mount the same `PresentationShell`.
+Production retains its native module registration and reference providers. The
+browser supplies the existing Work/Social fixture adapters and explicit
+Design/Wiki unavailable surfaces; it does not import the production registry.
+Registered preview references stay unavailable (Design project references and
+unregistered kinds stay unknown); fixture items do not become live reference targets.
+
 Each document installs independent in-memory local/session storage before
-importing App or its modules. It never reads or clears the origin's real stores.
+importing the shared presentation shell or its modules. It never reads or clears the origin's real stores.
 A missing insecure-origin `crypto.randomUUID` uses only `getRandomValues` to
 produce version 4 UUIDs. Secure-origin UUID support is left unchanged. No service
 or desktop bridge is assigned. The normal production CSP blocks connections.
@@ -43,7 +65,7 @@ navigation, appearance, rail resize, example Work create/edit and example Social
 navigation are available. Native previews/dialogs, Wiki, endpoint settings,
 Jones Code, project sources, live services, persistence and insecure-origin
 clipboard are unavailable. The same [capability constant](../src/preview/capabilities.ts)
-feeds the disclosure and manifest. A bootstrap failure leaves App unmounted and
+feeds the disclosure and manifest. A bootstrap failure leaves the shell unmounted and
 displays an alert with `data-preview-state="failed"`.
 
 The requested error entry is omitted: the existing Work `FixtureControl` has no
