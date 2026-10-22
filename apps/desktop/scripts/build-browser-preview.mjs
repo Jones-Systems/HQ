@@ -4,6 +4,7 @@ import { chmod, lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/p
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, version as viteVersion } from 'vite';
+import ts from 'typescript';
 import { browserPreviewConfig } from '../vite.browser-preview.config.ts';
 import { CAPABILITIES, ENTRIES } from '../src/preview/capabilities.ts';
 import { canonicalJSON, safeBundlePath, validateManifest } from '../src/preview/bundle.ts';
@@ -29,6 +30,77 @@ async function inventory(root, prefix = '') {
     } else throw new Error(`Nonregular output: ${path}`);
   }
   return files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+}
+
+function sourceClosure() {
+  return { name: 'browser-preview-source-closure', async generateBundle() {
+    const inputs = new Set([
+      'package.json', 'package-lock.json', 'tsconfig.json', 'apps/desktop/package.json',
+      'apps/desktop/vite.browser-preview.config.ts', 'apps/desktop/scripts/build-browser-preview.mjs',
+      'apps/desktop/preview/gallery-project.json', 'apps/desktop/src/preview/capabilities.ts',
+      'apps/desktop/src/preview/bundle.ts',
+    ]);
+    const dependencies = new Set();
+    const virtualModules = new Set();
+    const modulePath = id => {
+      if (id.startsWith('\0')) { virtualModules.add(id.replaceAll(repository, '<repository>')); return null; }
+      const path = relative(repository, id.split('?')[0]).replaceAll('\\', '/');
+      if (path.startsWith('../') || isAbsolute(path)) throw new Error('Preview input outside repository');
+      if (path.startsWith('node_modules/')) { dependencies.add(path); return null; }
+      inputs.add(path);
+      return path;
+    };
+    const graph = [];
+    for (const id of this.getModuleIds()) {
+      const info = this.getModuleInfo(id);
+      if (info.isExternal) throw new Error(`Unbundled preview dependency: ${id}`);
+      const path = modulePath(id);
+      if (path) graph.push({ path, imports: [...info.importedIds, ...info.dynamicallyImportedIds].map(modulePath).filter(Boolean).sort() });
+    }
+    for (const id of this.getWatchFiles()) modulePath(id);
+    // Package exports and compiler options participate in resolution even when they emit no module.
+    for (const path of [...inputs]) {
+      let directory = dirname(join(repository, path));
+      while (directory.startsWith(repository + '/') || directory === repository) {
+        for (const name of ['package.json', 'tsconfig.json']) {
+          const candidate = join(directory, name);
+          try { if ((await lstat(candidate)).isFile()) inputs.add(relative(repository, candidate)); }
+          catch (error) { if (error.code !== 'ENOENT') throw error; }
+        }
+        if (directory === repository) break;
+        directory = dirname(directory);
+      }
+    }
+    const files = [];
+    const typeOnlyImports = [];
+    for (const path of [...inputs].sort()) {
+      const bytes = await readFile(join(repository, path));
+      files.push({ path, sha256: sha256(bytes), bytes: bytes.length });
+      if (!/\.[cm]?[jt]sx?$/.test(path)) continue;
+      const source = ts.createSourceFile(path, bytes.toString('utf8'), ts.ScriptTarget.Latest, true);
+      const record = (node, specifier) => typeOnlyImports.push({
+        importer: path, specifier, line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+        classification: 'erased-type-only; not a browser module resolution or emitted input',
+      });
+      const visit = node => {
+        if (ts.isImportDeclaration(node) && node.importClause) {
+          const clause = node.importClause;
+          const bindings = clause.namedBindings;
+          if (clause.isTypeOnly || (!clause.name && bindings && ts.isNamedImports(bindings)
+            && bindings.elements.length > 0 && bindings.elements.every(item => item.isTypeOnly))) record(node, node.moduleSpecifier.text);
+        } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && (node.isTypeOnly
+          || (node.exportClause && ts.isNamedExports(node.exportClause) && node.exportClause.elements.length > 0
+            && node.exportClause.elements.every(item => item.isTypeOnly)))) record(node, node.moduleSpecifier.text);
+        else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) record(node, node.argument.literal.text);
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+    }
+    this.emitFile({ type: 'asset', fileName: 'source-closure.json', source: canonicalJSON({
+      schema: 'hq-preview-source-closure/v1', revision, files, graph: graph.sort((a, b) => a.path.localeCompare(b.path)),
+      lockedDependencyModules: [...dependencies].sort(), virtualModules: [...virtualModules].sort(), typeOnlyImports,
+    }) + '\n' });
+  } };
 }
 
 if (args.length === 1 && args[0] === '--verify-production') {
@@ -64,7 +136,7 @@ if (args.length === 1 && args[0] === '--verify-production') {
   await mkdir(out); // Exclusive allocation: never overwrite or empty an existing output.
   let sealed = false;
   try {
-    await build({ ...browserPreviewConfig(revision, out), configFile: false });
+    await build({ ...browserPreviewConfig(revision, out), configFile: false, plugins: [sourceClosure()] });
     if (git('rev-parse', 'HEAD') !== revision || git('status', '--porcelain', '--untracked-files=all')) throw new Error('Source changed during the build.');
     const manifest = {
       schema: 'jones-preview-bundle/v1', product: 'hq-desktop', target: 'browser',
