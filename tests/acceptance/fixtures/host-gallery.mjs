@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -8,20 +9,38 @@ import { fileURLToPath } from 'node:url';
 import { createRuntime } from '../runtime.mjs';
 import { galleryBytes, sha256, startGallery } from './remote-gallery.mjs';
 
+async function processGroupId() {
+  let value;
+  if (process.platform === 'linux') {
+    const stat = await readFile('/proc/self/stat', 'utf8');
+    value = stat.slice(stat.lastIndexOf(') ') + 2).split(' ')[2];
+  } else {
+    // A controller may launch us without detaching: PID is not proof of PGID.
+    value = execFileSync('/bin/ps', ['-o', 'pgid=', '-p', String(process.pid)], {
+      encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL', maxBuffer: 1024,
+    }).trim();
+  }
+  assert.match(value ?? '', /^[1-9]\d*$/, 'Host process group must be observed');
+  const pgid = Number(value);
+  assert.ok(Number.isSafeInteger(pgid), 'Host process group must be a safe integer');
+  return pgid;
+}
+
 // This control listener belongs only to the synthetic fixture, never HQ.
 export async function serveHostGallery(parent, evidence, input = process.stdin) {
   const runtime = await createRuntime(parent);
   const report = { schema: 'hq-gallery-host/v1', runId: randomUUID(), host: hostname(), pid: process.pid,
-    pgid: Number((await readFile('/proc/self/stat', 'utf8')).split(') ')[1].split(' ')[2]), root: runtime.root };
-  let gallery, finish;
+    root: runtime.root };
+  let gallery, finish, watchdog;
   const done = new Promise(resolve => { finish = resolve; });
   const cancel = () => finish('signal');
   const eof = () => finish('controller-closed');
-  process.on('SIGTERM', cancel); process.on('SIGINT', cancel);
-  input.once('end', eof); input.resume();
-  const watchdog = setTimeout(() => finish('lifetime-exceeded'), 120000);
   let mode = 'normal';
   try {
+    process.on('SIGTERM', cancel); process.on('SIGINT', cancel);
+    input.once('end', eof); input.resume();
+    watchdog = setTimeout(() => finish('lifetime-exceeded'), 120000);
+    report.pgid = await processGroupId();
     gallery = await startGallery(runtime);
     const snapshot = async () => ({ ...report, origin: gallery.origin, mode, ledger: gallery.ledger,
       digests: await gallery.diskDigests() });
