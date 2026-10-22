@@ -57,7 +57,8 @@ cannot execute cleanup; a surviving exact run directory requires explicit recove
 
 Reports, bounded runtime diagnostics and screenshots remain in a unique directory
 under `.t3/acceptance-evidence/`, outside disposable scratch. Reports include Git
-head, dirty-source status and hashes of the built entry points. They do not certify
+head, dirty-source status, the existing entry-point hashes and a complete
+compiled-build inventory. They do not certify
 that an independently produced build corresponds to source: build immediately
 before acceptance. Evidence is local and may contain paths; inspect and sanitize
 before publishing. Tests intentionally use synthetic/default app content only.
@@ -95,7 +96,7 @@ screenshots capture the renderer only, not native window chrome.
 Run the Node-only affected group before any native check:
 
 ```sh
-node --test --test-concurrency=1 tests/acceptance/fixtures/fixtures.test.mjs tests/acceptance/fixtures/scenarios.test.mjs tests/acceptance/fixtures/host-gallery.test.mjs tests/acceptance/cleanup.test.mjs
+node --test --test-concurrency=1 tests/acceptance/build-inventory.test.mjs tests/acceptance/fixtures/fixtures.test.mjs tests/acceptance/fixtures/scenarios.test.mjs tests/acceptance/fixtures/host-gallery.test.mjs tests/acceptance/cleanup.test.mjs
 ```
 
 `fixtures/http.mjs` supplies scripted Work/Social HTTP exchanges on ephemeral
@@ -250,3 +251,46 @@ This is synthetic HTTP through SSH forwarding, not remote TLS, SSH filesystem,
 provider authentication, native folder chooser, live preview, installed-app or
 production-source qualification. It does not replace the campaign's larger cold/
 warm portfolio or root's independent integrated-candidate exercise.
+
+## Complete build identity for target evidence
+
+The Node-only affected group above includes `build-inventory.test.mjs`.
+For the focused inner loop use:
+
+```sh
+node --test --test-concurrency=1 tests/acceptance/build-inventory.test.mjs
+```
+
+Each run retains `build-inventory.json`, a closed
+`hq-electron-build/v1` object with `schema`, `roots` and `files`.
+The fixed roots are `apps/desktop/dist` and `apps/desktop/dist-electron`.
+Every regular file beneath both trees is included, together with
+`apps/desktop/package.json` and `package.json`, so renderer assets and compiled
+Design/Wiki/preview helpers participate in the identity. Each closed file entry
+contains `path`, `bytes` and `sha256`. Entries are sorted by unique ASCII path;
+components match `[A-Za-z0-9_][A-Za-z0-9_.-]*`, with a 512-character path bound.
+Missing required index/main/preload/package files, symlinks (including
+ancestors), unsafe paths and nonregular files fail closed. The inventory allows
+at most 10,000 files and at most 512 MiB per file.
+
+Final reports add `buildIdentity:{schema:"hq-electron-build/v1",sha256:"<digest>"}`.
+The digest hashes canonical inventory JSON: recursively sorted object keys,
+compact comma/colon separators, UTF-8, no trailing newline. The runner checks
+the complete inventory and source HEAD again after cleanup before adding this
+binding. A changed build or HEAD fails the run; source dirt observed at either
+boundary stays recorded. Existing report schema, three-entry `build` hashes,
+rows and mode-specific outcome meanings remain available.
+
+The matching Frontend Development `target_evidence.py verify-t7` command takes
+the exact final `report.json`, inventory and quiescent build tree. The target
+record's artifact SHA is the canonical inventory digest; its harness report SHA
+is the SHA-256 of the exact report bytes, including the newline. Combined stdout
+logs and command receipts are not report files. Old reports without
+`buildIdentity` cannot satisfy that command.
+
+This identifies the complete compiled app payload and its package metadata.
+It does not hash Electron/OS binaries, dependency installations, services,
+fixtures or captures, nor prove source-to-build provenance. Build the exact
+clean candidate immediately before native acceptance, retain its compiled
+files, and keep them quiescent during both execution and verification.
+A matching subset of T7 rows never upgrades overall T7 acceptance or HQ-07.
