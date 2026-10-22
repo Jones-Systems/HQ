@@ -3,7 +3,7 @@ import type { ProjectContext } from '@hq/contracts';
 import { Button, StateView, StatusChip } from '@hq/ui';
 import { isRunId, isToolId, workspaceSnapshot, type SocialWorkspacePort, type ToolId } from '../core';
 import { DELIVERED_LIMITS } from './catalog';
-import { Catalog } from './Catalog';
+import { Catalog } from './WorkbenchCatalog';
 import { WorkbenchEnvironmentProvider, useWorkbench } from './env';
 import { formatTime } from './format';
 import type { Visibility } from './polling';
