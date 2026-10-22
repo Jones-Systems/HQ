@@ -120,7 +120,7 @@ function sourceClosure() {
       if (!/\.[cm]?[jt]sx?$/.test(path)) continue;
       typeOnlyImports.push(...classifyTypeImports(path, bytes.toString('utf8')));
     }
-    this.emitFile({ type: 'asset', fileName: 'source-closure.json', source: canonicalJSON({
+    const closureSource = canonicalJSON({
       schema: 'hq-preview-source-closure/v1', revision,
       coverage: {
         moduleGraph: 'all resolved modules and their imports',
@@ -131,7 +131,8 @@ function sourceClosure() {
       },
       files, graph: graph.sort((a, b) => a.path.localeCompare(b.path)),
       lockedDependencyModules: [...dependencies].sort(), virtualModules: [...virtualModules].sort(), typeOnlyImports,
-    }) + '\n' });
+    }) + '\n';
+    this.emitFile({ type: 'asset', fileName: `source-closure-${sha256(closureSource)}.json`, source: closureSource });
   } };
 }
 
