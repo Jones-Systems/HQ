@@ -12,6 +12,27 @@ REF = VECTORS["cases"][0]["expected"][0]
 
 
 class HQReferences(StoreTestCase):
+    def test_fixture_cancellation_cleans_interrupted_store(self):
+        for phase in ("setup", "test"):
+            with self.subTest(phase=phase):
+                class Interrupted(StoreTestCase):
+                    def setUp(self):
+                        super().setUp()
+                        if phase == "setup":
+                            raise KeyboardInterrupt("intended cancellation")
+
+                    def runTest(self):
+                        raise KeyboardInterrupt("intended cancellation")
+
+                interrupted = Interrupted()
+                try:
+                    with self.assertRaisesRegex(KeyboardInterrupt, "intended cancellation"):
+                        interrupted.run()
+                    self.assertFalse(interrupted.db_path.parent.exists())
+                    self.assertTrue(self.db_path.exists())
+                finally:
+                    interrupted.doCleanups()
+
     def test_shared_reference_vectors(self):
         for case in VECTORS["cases"]:
             with self.subTest(case=case["id"]), patch("planning.validation.new_id", return_value=VECTORS["generated_entry_id"]):

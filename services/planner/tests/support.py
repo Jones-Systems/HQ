@@ -35,6 +35,13 @@ except ValueError:
 
 
 class StoreTestCase(unittest.TestCase):
+    def run(self, result=None):
+        try:
+            return super().run(result)
+        finally:
+            # unittest skips doCleanups when KeyboardInterrupt escapes setup or a test.
+            self.doCleanups()
+
     def setUp(self):
         SCRATCH.mkdir(exist_ok=True)
         self._tmp = tempfile.TemporaryDirectory(dir=SCRATCH, prefix="store-")
