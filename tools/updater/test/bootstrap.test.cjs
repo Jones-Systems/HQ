@@ -6,7 +6,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { run, getContext } = require('../bootstrap.cjs');
 const { fixture, identity, fakeApp } = require('./fixtures.cjs');
-const { readJson, recordPath } = require('../contract.cjs');
+const { atomicWrite, readJson, recordPath } = require('../contract.cjs');
 
 function useAppProcess(f, pid = 401) {
   f.processes.clear();
@@ -71,6 +71,66 @@ test('only a later clean bootstrap hands off and exits before any replacement', 
   assert.equal(f.calls.some(call => call[0] === 'copyBundle'), false);
   assert.deepEqual(app.calls.slice(-2), [['releaseSingleton'], ['exit', 0]]);
   assert.equal((await f.engine.read(f.record)).initiating.pid, 402);
+});
+
+test('HQ-REV-001 resumed exact consent cannot block ordinary startup after healthy installation', async t => {
+  let armed = false;
+  const f = await fixture(t, { checkpoint: async name => { if (armed && name === 'prepared') { armed = false; throw new Error('interrupted consent handoff'); } } });
+  await f.writeRecord();
+  useAppProcess(f);
+  await run(options(f, fakeApp(f.record.appName), async () => {}));
+  await getContext().schedule(f.candidate);
+  await getContext().dispose();
+  useAppProcess(f, 402);
+  armed = true;
+  await assert.rejects(run(options(f, fakeApp(f.record.appName), async () => assert.fail('interrupted bootstrap imported main'))), /interrupted consent handoff/);
+  assert.equal((await f.engine.read(f.record)).state, 'prepared');
+  assert.equal((await readJson(path.join(f.record.stateRoot, 'scheduled.json'))).candidate.candidateId, f.candidate.candidateId);
+
+  useAppProcess(f, 403);
+  assert.equal((await run(options(f, fakeApp(f.record.appName), async () => assert.fail('resumed bootstrap imported main')))).state, 'handoff');
+  f.processes.clear();
+  f.setSelf(f.helperIdentity);
+  let journal = await f.activate();
+  journal = await f.locked(() => f.engine.requestLaunch(f.record, journal, f.self));
+  const row = f.processes.get(303);
+  f.setSelf({ pid: row.pid, start: row.start, boot: row.boot, executable: row.executable });
+  await run(options(f, fakeApp(f.record.appName), async () => {
+    assert.equal(await getContext().markMainReady(), false);
+    assert.equal(await getContext().markRendererReady(), true);
+  }, { argv: [`--hq-update-operation=${journal.operationId}`, `--hq-update-sequence=${journal.sequence}`] }));
+  await getContext().dispose();
+
+  useAppProcess(f, 404);
+  let imported = false;
+  assert.equal((await run(options(f, fakeApp(f.record.appName), async () => { imported = true; }))).state, 'running');
+  assert.equal(imported, true);
+  assert.equal(getContext().record.installed.buildSequence, f.candidate.manifest.buildSequence);
+  await assert.rejects(fs.stat(path.join(f.record.stateRoot, 'scheduled.json')), { code: 'ENOENT' });
+  assert.equal(await fs.readFile(path.join(f.record.userData, 'untouched.data'), 'utf8'), 'synthetic profile bytes');
+  await getContext().dispose();
+});
+
+for (const mismatch of ['prior', 'candidate']) test(`HQ-REV-001 resumed transaction preserves ${mismatch}-mismatched consent and holds`, async t => {
+  let armed = false;
+  const f = await fixture(t, { checkpoint: async name => { if (armed && name === 'prepared') { armed = false; throw new Error('interrupted consent handoff'); } } });
+  await f.writeRecord();
+  useAppProcess(f);
+  await run(options(f, fakeApp(f.record.appName), async () => {}));
+  await getContext().schedule(f.candidate);
+  await getContext().dispose();
+  useAppProcess(f, 402);
+  armed = true;
+  await assert.rejects(run(options(f, fakeApp(f.record.appName), async () => assert.fail('main imported'))), /interrupted consent handoff/);
+  const filename = path.join(f.record.stateRoot, 'scheduled.json');
+  const consent = await readJson(filename);
+  if (mismatch === 'prior') consent.installedId = 'f'.repeat(64);
+  else consent.candidate.bundlePath = path.join(f.record.stateRoot, 'other-candidate', path.basename(f.record.targetPath));
+  await atomicWrite(filename, consent);
+  useAppProcess(f, 403);
+  await assert.rejects(run(options(f, fakeApp(f.record.appName), async () => assert.fail('main imported'))), { code: 'stale-candidate' });
+  assert.deepEqual(await readJson(filename), consent);
+  assert.equal(f.calls.some(call => call[0] === 'spawnHelper'), false);
 });
 
 test('profile arguments, environment overrides and application identity mismatch stop before import', async t => {

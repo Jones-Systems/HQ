@@ -13,12 +13,15 @@ function binding(record) {
 }
 const paths = transactionPaths;
 function validateJournal(value, record) {
-  object(value, ['schemaVersion', 'installationId', 'binding', 'operationId', 'sequence', 'state', 'resumeState', 'kind', 'candidate', 'prior', 'priorEpoch', 'targetPath', 'stagePath', 'priorPath', 'failedPath', 'initiating', 'helper', 'launch', 'profileOpened', 'launchAttempted', 'health', 'deadline', 'reason'], 'transaction journal');
+  const keys = ['schemaVersion', 'installationId', 'binding', 'operationId', 'sequence', 'state', 'resumeState', 'kind', 'candidate', 'prior', 'priorEpoch', 'targetPath', 'stagePath', 'priorPath', 'failedPath', 'initiating', 'helper', 'launch', 'profileOpened', 'launchAttempted', 'health', 'deadline', 'reason'];
+  if (value && Object.hasOwn(value, 'consentId')) keys.push('consentId');
+  object(value, keys, 'transaction journal');
   ensure(value.schemaVersion === 1 && value.installationId === record.installationId && value.binding === binding(record), 'Transaction binding differs.', 'recovery-required');
   ensure(typeof value.operationId === 'string' && /^[a-f0-9]{32}$/.test(value.operationId) && Number.isSafeInteger(value.sequence) && value.sequence > 0 && STATES.includes(value.state), 'Invalid transaction sequence or state.', 'recovery-required');
   ensure(value.resumeState === null || STATES.filter(state => state !== 'held').includes(value.resumeState), 'Invalid recovery phase.', 'recovery-required');
   ensure((value.state === 'held') === (value.resumeState !== null), 'Invalid held transaction.', 'recovery-required');
   ensure(['fresh', 'adopt', 'update'].includes(value.kind), 'Invalid transaction kind.', 'recovery-required');
+  ensure(value.consentId === undefined || (value.kind === 'update' && typeof value.consentId === 'string' && /^[a-f0-9]{32}$/.test(value.consentId)), 'Invalid transaction consent binding.', 'recovery-required');
   validatePreparedCandidate(value.candidate, { synthetic: record.synthetic });
   ensure(inside(record.stateRoot, value.candidate.bundlePath), 'Candidate is outside installation-owned storage.', 'recovery-required');
   if (value.prior !== null) {
@@ -104,7 +107,7 @@ function createTransaction({ native = createNativeAdapter(), clock = Date.now, c
     ensure(existing === null || digest(existing) === digest(previous), 'Retained operation identity differs.', 'recovery-required');
     if (!existing) await state.write(archive, previous);
   }
-  async function prepare(record, candidate, { kind = 'update', initiating = null } = {}) {
+  async function prepare(record, candidate, { kind = 'update', initiating = null, consentId = null } = {}) {
     admit(record, candidate, kind);
     if (initiating) validateProcess(initiating);
     await native.verifyBundle(candidate.bundlePath, receiptOf(candidate.manifest));
@@ -117,6 +120,7 @@ function createTransaction({ native = createNativeAdapter(), clock = Date.now, c
       state: 'prepared', resumeState: null, kind, candidate: clone(candidate), prior: kind === 'fresh' ? null : clone(record.installed),
       priorEpoch: record.compatibilityEpoch, targetPath: record.targetPath, ...paths(record, operationId),
       initiating, helper: null, launch: null, profileOpened: false, launchAttempted: false, health: null, deadline: 0, reason: null,
+      ...(consentId === null ? {} : { consentId }),
     };
     for (const filename of [journal.stagePath, journal.priorPath, journal.failedPath]) ensure(await absent(filename), 'Transaction staging path already exists.', 'recovery-required');
     await state.write(journalFile(record), validateJournal(journal, record));
@@ -127,7 +131,7 @@ function createTransaction({ native = createNativeAdapter(), clock = Date.now, c
     if (TERMINAL.includes(journal.state)) return journal;
     return save(record, journal, { state: 'held', resumeState: journal.resumeState ?? journal.state, reason });
   }
-  async function rename(record, journal, from, to, label, self) {
+  async function rename(record, journal, from, to, label, self, beforeRename = async () => {}) {
     await state.excludeWriters(record, journal, self ? [self] : []);
     await assertNoSymlink(from, { fs: io });
     ensure(await absent(to), 'Rename destination already exists.', 'recovery-required');
@@ -135,6 +139,7 @@ function createTransaction({ native = createNativeAdapter(), clock = Date.now, c
     const toParent = await io.stat(path.dirname(to));
     ensure(fromParent.dev === toParent.dev, 'Replacement must stay on the target filesystem.', 'recovery-required');
     await checkpoint(`before-${label}`, clone(journal));
+    await beforeRename();
     await io.rename(from, to);
     await checkpoint(`after-${label}`, clone(journal));
     await syncDirectory(path.dirname(to), { fs: io });
@@ -143,6 +148,91 @@ function createTransaction({ native = createNativeAdapter(), clock = Date.now, c
   async function resume(record, journal) {
     if (journal.state !== 'held') return journal;
     return save(record, journal, { state: journal.resumeState, resumeState: null, reason: null });
+  }
+  const stageClaimFile = (record, journal) => path.join(record.stateRoot, `stage-${journal.operationId}.json`);
+  function stageBinding(record, journal) {
+    return digest({ installation: binding(record), operationId: journal.operationId, candidate: journal.candidate, prior: journal.prior, targetPath: journal.targetPath, ...paths(record, journal.operationId) });
+  }
+  function fileIdentity(stat) { return { dev: String(stat.dev), ino: String(stat.ino), uid: String(stat.uid) }; }
+  function validateFileIdentity(value) {
+    object(value, ['dev', 'ino', 'uid'], 'stage filesystem identity');
+    ensure(Object.values(value).every(part => typeof part === 'string' && /^[0-9]{1,24}$/.test(part)), 'Invalid stage filesystem identity.', 'recovery-required');
+  }
+  function validateStageClaim(value, record, journal) {
+    object(value, ['schemaVersion', 'binding', 'phase', 'parent', 'partial'], 'stage ownership record');
+    ensure(value.schemaVersion === 1 && value.binding === stageBinding(record, journal) && ['copying', 'quarantining', 'retrying'].includes(value.phase), 'Stage ownership binding differs.', 'recovery-required');
+    validateFileIdentity(value.parent);
+    ensure(value.parent.uid === String(process.getuid()), 'Stage owner differs.', 'recovery-required');
+    if (value.partial !== null) validateFileIdentity(value.partial);
+    ensure((value.phase === 'copying') === (value.partial === null), 'Stage recovery identity is incomplete.', 'recovery-required');
+    ensure(value.phase !== 'retrying' || journal.kind === 'fresh', 'Only fresh preparation may retry a quarantined stage.', 'recovery-required');
+    return value;
+  }
+  async function stageParent(record, claim) {
+    const parentPath = path.dirname(record.targetPath);
+    await assertNoSymlink(parentPath, { fs: io });
+    const parent = await io.lstat(parentPath, { bigint: true });
+    ensure(parent.isDirectory() && String(parent.uid) === String(process.getuid()), 'Stage parent ownership differs.', 'recovery-required');
+    const identity = fileIdentity(parent);
+    if (claim) ensure(canonical(identity) === canonical(claim.parent), 'Stage parent identity changed.', 'recovery-required');
+    return identity;
+  }
+  async function ownedStage(record, filename, claim, expected = null) {
+    await stageParent(record, claim);
+    await assertNoSymlink(filename, { fs: io });
+    const stat = await io.lstat(filename, { bigint: true });
+    const identity = fileIdentity(stat);
+    ensure(stat.isDirectory() && identity.uid === claim.parent.uid && identity.dev === claim.parent.dev, 'Partial stage ownership differs.', 'recovery-required');
+    if (expected) ensure(canonical(identity) === canonical(expected), 'Partial stage filesystem identity changed.', 'recovery-required');
+    return identity;
+  }
+  async function untouchedTarget(record, journal) {
+    if (journal.prior) await exact(record.targetPath, journal.prior, record);
+    else ensure(await absent(record.targetPath), 'Fresh target is no longer absent.', 'recovery-required');
+    ensure(await absent(journal.priorPath), 'Prior retention has an unknown effect.', 'recovery-required');
+  }
+  async function readStageClaim(record, journal) {
+    const claim = await state.optional(stageClaimFile(record, journal));
+    return claim === null ? null : validateStageClaim(claim, record, journal);
+  }
+  async function claimStageCopy(record, journal, claim) {
+    if (claim !== null) { await stageParent(record, claim); return claim; }
+    ensure(await absent(journal.stagePath) && await absent(journal.failedPath), 'Stage preparation is not uniquely absent.', 'recovery-required');
+    claim = { schemaVersion: 1, binding: stageBinding(record, journal), phase: 'copying', parent: await stageParent(record), partial: null };
+    await state.write(stageClaimFile(record, journal), claim);
+    return claim;
+  }
+  async function quarantineStage(record, journal, self, claim) {
+    ensure(claim !== null, 'Partial stage lacks durable ownership evidence.', 'recovery-required');
+    await untouchedTarget(record, journal);
+    await state.excludeWriters(record, journal, [self]);
+    if (claim.phase === 'retrying') return { journal: await hold(record, journal, 'unknown-effect'), claim };
+    if (claim.phase === 'copying') {
+      ensure(await absent(journal.failedPath), 'Partial-stage quarantine is already occupied.', 'recovery-required');
+      claim = { ...claim, phase: 'quarantining', partial: await ownedStage(record, journal.stagePath, claim) };
+      // The inode-bound intent precedes the rename so interruption cannot make a retry guess.
+      await state.write(stageClaimFile(record, journal), claim);
+      await checkpoint('stage-quarantine-recorded', clone(journal));
+    }
+    const stageExists = !await absent(journal.stagePath);
+    const failedExists = !await absent(journal.failedPath);
+    ensure(stageExists !== failedExists, 'Partial-stage quarantine effect is unknown.', 'recovery-required');
+    if (stageExists) {
+      await rename(record, journal, journal.stagePath, journal.failedPath, 'quarantine-stage', self, async () => {
+        ensure(digest(await read(record)) === digest(journal), 'Stage transaction changed.', 'stale-candidate');
+        await untouchedTarget(record, journal);
+        await ownedStage(record, journal.stagePath, claim, claim.partial);
+        ensure(await absent(journal.failedPath), 'Partial-stage quarantine is already occupied.', 'recovery-required');
+      });
+    } else await ownedStage(record, journal.failedPath, claim, claim.partial);
+    await syncDirectory(path.dirname(journal.failedPath), { fs: io });
+    await untouchedTarget(record, journal);
+    if (journal.prior) return { journal: await save(record, journal, { state: 'restored', resumeState: null, reason: null }), claim };
+    // Fresh recovery keeps its one quarantine slot; a second partial copy or failed health must hold.
+    claim = { ...claim, phase: 'retrying' };
+    await state.write(stageClaimFile(record, journal), claim);
+    await checkpoint('stage-retry-ready', clone(journal));
+    return { journal, claim };
   }
   async function activate(record, self) {
     let journal = await read(record);
@@ -159,13 +249,30 @@ function createTransaction({ native = createNativeAdapter(), clock = Date.now, c
     if (!journal.helper || !sameProcess(journal.helper, self)) journal = await save(record, journal, { helper: self });
     journal = await resume(record, journal);
     await native.verifyBundle(journal.candidate.bundlePath, receiptOf(journal.candidate.manifest));
-    await native.checkTarget(record, journal.candidate.manifest.archive.expandedSize * 2 + 64 * 1024 * 1024);
+    await native.checkTarget(record, 0);
     const receipt = receiptOf(journal.candidate.manifest);
     if (journal.state === 'prepared') {
-      if (journal.prior) await verifyIdentity(record.targetPath, journal.prior, record);
-      else ensure(await absent(record.targetPath), 'Unexpected fresh target.', 'recovery-required');
+      await untouchedTarget(record, journal);
+      let claim = await readStageClaim(record, journal);
+      if (claim?.phase === 'quarantining') ({ journal, claim } = await quarantineStage(record, journal, self, claim));
+      if (journal.state !== 'prepared') return journal;
+      if (claim?.phase === 'retrying') await ownedStage(record, journal.failedPath, claim, claim.partial);
+      else ensure(await absent(journal.failedPath), 'Partial-stage quarantine is unexpectedly occupied.', 'recovery-required');
+      if (!await absent(journal.stagePath)) {
+        try { await exact(journal.stagePath, receipt, record); } catch (error) {
+          if (!['ENOENT', 'ENOTDIR', 'integrity', 'invalid'].includes(error.code)) throw error;
+          ({ journal, claim } = await quarantineStage(record, journal, self, claim));
+          if (journal.state !== 'prepared') return journal;
+        }
+      }
       if (await absent(journal.stagePath)) {
+        claim = await claimStageCopy(record, journal, claim);
+        await state.excludeWriters(record, journal, [self]);
+        await untouchedTarget(record, journal);
         await checkpoint('before-stage-copy', clone(journal));
+        await stageParent(record, claim);
+        ensure(await absent(journal.stagePath), 'Stage destination changed before copying.', 'recovery-required');
+        await native.checkTarget(record, journal.candidate.manifest.archive.expandedSize * 2 + 64 * 1024 * 1024);
         await native.copyBundle(journal.candidate.bundlePath, journal.stagePath);
         await checkpoint('after-stage-copy', clone(journal));
       }

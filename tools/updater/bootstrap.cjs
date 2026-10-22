@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { createTransaction } = require('./transaction.cjs');
 const { ensure, UpdateError, object, validateInstallation, validatePreparedCandidate, validateProcess, sameProcess, receiptOf, digest, recordPath, readBuildReceipt, assertNoSymlink, syncDirectory } = require('./contract.cjs');
 
@@ -25,8 +26,15 @@ function launchArguments(argv) {
   ensure(/^[a-f0-9]{32}$/.test(operationId) && Number.isSafeInteger(expectedSequence) && expectedSequence > 0, 'Invalid bootstrap launch binding.');
   return { operationId, expectedSequence };
 }
+function validateConsentShape(value) {
+  const keys = ['schemaVersion', 'installationId', 'installedId', 'candidate'];
+  if (value && Object.hasOwn(value, 'consentId')) keys.push('consentId');
+  object(value, keys, 'update consent');
+  ensure(value.consentId === undefined || (typeof value.consentId === 'string' && /^[a-f0-9]{32}$/.test(value.consentId)), 'Invalid consent identity.', 'stale-candidate');
+  return value;
+}
 function validateConsent(value, record, engine) {
-  object(value, ['schemaVersion', 'installationId', 'installedId', 'candidate'], 'update consent');
+  validateConsentShape(value);
   ensure(value.schemaVersion === 1 && value.installationId === record.installationId && value.installedId === digest(record.installed), 'Scheduled installation identity changed.', 'stale-candidate');
   engine.admit(record, value.candidate);
   return value;
@@ -63,6 +71,25 @@ async function run({ app, importMain, bundlePath, adapters = {} }) {
   let gate;
   let journal;
   let handoff = false;
+  const consentFile = path.join(record.stateRoot, 'scheduled.json');
+  async function consumeTransactionConsent(current, consent) {
+    if (consent === null) return null;
+    validateConsentShape(consent);
+    const matches = current.kind === 'update' && current.prior !== null
+      && (current.consentId ?? null) === (consent.consentId ?? null)
+      && consent.installationId === record.installationId
+      && consent.installedId === digest(current.prior)
+      && digest(consent.candidate) === digest(current.candidate);
+    if (!matches) {
+      ensure(['committed', 'restored'].includes(current.state), 'Scheduled consent differs from the prepared transaction.', 'stale-candidate');
+      return consent;
+    }
+    validateConsent(consent, { ...record, installed: current.prior, compatibilityEpoch: current.priorEpoch }, engine);
+    ensure(digest(await state.json(consentFile)) === digest(consent), 'Scheduled consent changed before consumption.', 'stale-candidate');
+    await state.fs.unlink(consentFile);
+    await syncDirectory(record.stateRoot, { fs: state.fs });
+    return null;
+  }
   try {
     gate = await state.acquireGate(record, self);
     journal = await engine.read(record);
@@ -75,12 +102,13 @@ async function run({ app, importMain, bundlePath, adapters = {} }) {
     if (launch) {
       ensure(journal, 'No update owns this launch.', 'stale-candidate');
       await state.excludeWriters(record, journal, [self, journal.helper].filter(Boolean));
+      await consumeTransactionConsent(journal, await state.optional(consentFile));
       lease = await state.claimSession(record, self);
       journal = await engine.registerLaunch(record, self, launch.operationId, launch.expectedSequence);
     } else {
       await state.excludeWriters(record, journal, [self]);
-      const consentFile = path.join(record.stateRoot, 'scheduled.json');
-      const consent = await state.optional(consentFile);
+      let consent = await state.optional(consentFile);
+      if (journal) consent = await consumeTransactionConsent(journal, consent);
       if (journal && !['committed', 'restored'].includes(journal.state)) {
         if (journal.launch) {
           const evidence = await native.observe(journal.launch);
@@ -92,9 +120,8 @@ async function run({ app, importMain, bundlePath, adapters = {} }) {
         handoff = true;
       } else if (consent !== null) {
         validateConsent(consent, record, engine);
-        journal = await engine.prepare(record, consent.candidate, { initiating: self });
-        await state.fs.unlink(consentFile);
-        await syncDirectory(record.stateRoot, { fs: state.fs });
+        journal = await engine.prepare(record, consent.candidate, { initiating: self, consentId: consent.consentId ?? null });
+        await consumeTransactionConsent(journal, consent);
         handoff = true;
       } else {
         ensure(!launch, 'Unexpected launch state.');
@@ -169,7 +196,7 @@ async function run({ app, importMain, bundlePath, adapters = {} }) {
         ensure(!active || ['committed', 'restored'].includes(active.state), 'Another transaction needs recovery.', 'recovery-required');
         engine.admit(record, candidate);
         await native.verifyBundle(candidate.bundlePath, receiptOf(candidate.manifest));
-        await state.write(path.join(record.stateRoot, 'scheduled.json'), { schemaVersion: 1, installationId: record.installationId, installedId: digest(record.installed), candidate });
+        await state.write(path.join(record.stateRoot, 'scheduled.json'), { schemaVersion: 1, installationId: record.installationId, installedId: digest(record.installed), consentId: crypto.randomBytes(16).toString('hex'), candidate });
       });
     },
     async cancelScheduled() {

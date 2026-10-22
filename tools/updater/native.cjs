@@ -76,6 +76,12 @@ function createNativeAdapter({ fs: io = fs, execFile = promisify(cp.execFile), s
     return path.join(bundlePath, 'Contents/MacOS', receipt?.bundleId === SYNTHETIC_ID ? 'HQ Updater Test' : 'HQ');
   }
   async function verifyBundle(bundlePath, expected) {
+    try { return await verifyBundleContents(bundlePath, expected); } catch (cause) {
+      if (Number.isInteger(cause.code) && cause.code > 0 && !cause.killed && !cause.signal) throw new UpdateError('integrity', 'Native bundle verification rejected the bundle contents.', { cause });
+      throw cause;
+    }
+  }
+  async function verifyBundleContents(bundlePath, expected) {
     supported();
     await assertNoSymlink(bundlePath, { fs: io });
     const synthetic = expected.bundleId === SYNTHETIC_ID;

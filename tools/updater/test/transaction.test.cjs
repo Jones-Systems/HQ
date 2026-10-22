@@ -4,7 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { fixture, identity, writeBundle } = require('./fixtures.cjs');
+const { fixture, identity, writeBundle, fakeApp } = require('./fixtures.cjs');
+const { run, getContext } = require('../bootstrap.cjs');
 const { createTransaction, isCandidateRetained } = require('../transaction.cjs');
 const { atomicWrite, readJson, recordPath, receiptOf } = require('../contract.cjs');
 
@@ -107,6 +108,53 @@ test('target substitution, stage symlinks and disk shortage fail before a rename
   f.native.checkTarget = async () => { const error = new Error('space'); error.code = 'space'; throw error; };
   await assert.rejects(f.activate(), { code: 'space' });
   assert.equal(await fs.readFile(path.join(f.record.userData, 'untouched.data'), 'utf8'), 'synthetic profile bytes');
+});
+
+test('HQ-REV-004 partial staging recovery preserves the partial tree and lets the unchanged app boot', async t => {
+  const f = await fixture(t);
+  await f.writeRecord();
+  f.native.copyBundle = async (_source, destination) => {
+    await fs.mkdir(destination);
+    await fs.writeFile(path.join(destination, 'partial.data'), 'owned incomplete copy');
+    throw new Error('interrupted stage copy');
+  };
+  await f.prepare();
+  await assert.rejects(f.activate(), /interrupted stage copy/);
+  const partial = await f.engine.read(f.record);
+  assert.equal(partial.state, 'prepared');
+  const recovered = await f.locked(() => f.engine.recover(f.record, f.self, { operationId: partial.operationId, expectedSequence: partial.sequence }));
+  assert.equal(recovered.state, 'restored');
+  assert.deepEqual(await f.native.verifyBundle(f.record.targetPath, f.prior), f.prior);
+  assert.equal(await fs.readFile(path.join(recovered.failedPath, 'partial.data'), 'utf8'), 'owned incomplete copy');
+  await assert.rejects(fs.stat(recovered.stagePath), { code: 'ENOENT' });
+  assert.equal(await fs.readFile(path.join(f.record.userData, 'untouched.data'), 'utf8'), 'synthetic profile bytes');
+  f.processes.clear();
+  f.setSelf(identity(path.join(f.record.targetPath, 'Contents/MacOS', f.record.appName), 404));
+  let imported = false;
+  assert.equal((await run({ app: fakeApp(f.record.appName), bundlePath: f.record.targetPath, adapters: { ...f.adapters, argv: [], environment: {} }, importMain: async () => { imported = true; } })).state, 'running');
+  assert.equal(imported, true);
+  await getContext().dispose();
+});
+
+for (const evidence of ['live-stage', 'unknown-process']) test(`HQ-REV-004 ${evidence} holds partial staging without moving either tree`, async t => {
+  const f = await fixture(t);
+  f.native.copyBundle = async (_source, destination) => {
+    await fs.mkdir(destination);
+    await fs.writeFile(path.join(destination, 'partial.data'), 'owned incomplete copy');
+    throw new Error('interrupted stage copy');
+  };
+  await f.prepare();
+  await assert.rejects(f.activate(), /interrupted stage copy/);
+  const partial = await f.engine.read(f.record);
+  if (evidence === 'live-stage') {
+    const writer = identity(path.join(partial.stagePath, 'Contents/MacOS', f.record.appName), 707);
+    f.processes.set(writer.pid, { ...writer, ppid: 0 });
+  } else f.setComplete(false);
+  const held = await f.locked(() => f.engine.recover(f.record, f.self, { operationId: partial.operationId, expectedSequence: partial.sequence }));
+  assert.equal(held.state, 'held');
+  assert.equal(await fs.readFile(path.join(partial.stagePath, 'partial.data'), 'utf8'), 'owned incomplete copy');
+  await assert.rejects(fs.stat(partial.failedPath), { code: 'ENOENT' });
+  assert.deepEqual(await f.native.verifyBundle(f.record.targetPath, f.prior), f.prior);
 });
 
 test('journal nonce, sequence and expected current identity are compare-and-set guards', async t => {
