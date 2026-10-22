@@ -280,3 +280,33 @@ summary = "Registered-project and gallery source mapping, persisted enrollment a
 covers = ["spec.hq-integration-parallel-execution#test.registry-adapters.001", "spec.hq-integration-parallel-execution#test.source-registry-host.001"]
 direct_surfaces = ["modules/design/discovery/src/adapters/", "apps/desktop/electron/sources/", "apps/desktop/src/settings/ProjectSources.tsx", "apps/desktop/src/interactive-runtime.ts", "packages/contracts/src/catalog.ts"]
 tests = ["modules/design/discovery/test/adapters/**/*.test.ts", "apps/desktop/electron/sources/**/*.test.ts", "apps/desktop/src/settings/ProjectSources.test.tsx", "apps/desktop/src/interactive-runtime.test.ts"]
+
+[groups.hq-updates-bridge]
+summary = "Updater sender authorization, narrow preload and durable shell-health gate."
+covers = ["spec.app-updates-hq#ac.verification.001"]
+direct_surfaces = ["apps/desktop/electron/main.ts", "apps/desktop/electron/preload.cts", "apps/desktop/electron/update-bridge.ts", "apps/desktop/src/main.tsx", "packages/contracts/src/updates.ts"]
+tests = ["apps/desktop/electron/update-bridge.test.ts", "apps/desktop/electron/update-preload.test.ts", "apps/desktop/electron/r3-preload.test.ts"]
+
+[groups.hq-updates-ui]
+summary = "Settings update discovery, progress, exact candidate scheduling and subscription lifetime."
+covers = ["spec.app-updates-hq#ac.verification.001"]
+direct_surfaces = ["apps/desktop/src/settings/Updates.tsx", "apps/desktop/src/settings/updates.css", "apps/desktop/src/ServiceSettings.tsx", "apps/desktop/src/environment.d.ts"]
+tests = ["apps/desktop/src/settings/Updates.test.tsx", "apps/desktop/src/ServiceSettings.test.tsx"]
+
+[groups.hq-updates-discovery]
+summary = "Release provenance, bounded downloads, candidate preparation and updater state lifetime."
+covers = ["spec.app-updates-hq#ac.verification.001"]
+direct_surfaces = ["apps/desktop/electron/updates/"]
+tests = ["apps/desktop/electron/updates/**/*.test.ts"]
+
+[groups.hq-updates-transaction]
+summary = "Installation records, process leases, profile fencing and interrupted binary transactions."
+covers = ["spec.app-updates-hq#ac.verification.001"]
+direct_surfaces = ["tools/updater/"]
+tests = ["tools/updater/*.test.cjs", "tools/updater/test/**/*.test.cjs"]
+
+[groups.hq-updates-package]
+summary = "Package identity, compatibility epoch and synthetic native install/update qualification."
+covers = ["spec.app-updates-hq#ac.verification.001"]
+direct_surfaces = ["tools/updater/packaging/", ".github/workflows/hq-desktop-package.yml"]
+tests = ["tools/updater/packaging/**/*.test.cjs"]

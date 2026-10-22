@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "packageName": "hq",
+    "appName": "HQ",
+    "bundleId": "org.jones-systems.hq.local",
+    "electronMajor": 44
+  },
+  "profileLayouts": {
+    "userData": "installation-record.userData/v1",
+    "sessionData": "installation-record.sessionData/v1"
+  },
+  "stores": [
+    {
+      "id": "profile-binding",
+      "roots": [
+        "apps/desktop/electron/main.ts",
+        "tools/updater/bootstrap.cjs"
+      ],
+      "sha256": "136dae02ac8a59ce5a3dca5e0b9c0e3361b5ea48e9afb2fe809bb38408d76d77",
+      "anchors": {
+        "apps/desktop/electron/main.ts": [
+          "app\\.getPath\\([\\x27\\\"]userData[\\x27\\\"]\\)"
+        ],
+        "tools/updater/bootstrap.cjs": [
+          "app\\.setPath\\([\\x27\\\"]userData[\\x27\\\"],\\s*record\\.userData\\)",
+          "app\\.setPath\\([\\x27\\\"]sessionData[\\x27\\\"],\\s*record\\.sessionData\\)"
+        ]
+      }
+    },
+    {
+      "id": "wiki",
+      "roots": [
+        "apps/desktop/electron/wiki-host.ts",
+        "apps/desktop/electron/wiki-runtime.mts",
+        "modules/wiki/core/src",
+        "modules/wiki/contract/src"
+      ],
+      "sha256": "631af6bf1c4715f43d4a08a70cbd392054f4166fa88bf0465e28b96b31c2a87e"
+    },
+    {
+      "id": "sources-catalog",
+      "roots": [
+        "apps/desktop/electron/catalog-host.ts",
+        "apps/desktop/electron/sources",
+        "packages/contracts/src/catalog.ts"
+      ],
+      "sha256": "4b605375f3656bc342b89f9495eb3da0897f512db30c941acd724e1ede8ca04b"
+    },
+    {
+      "id": "design-store-compare",
+      "roots": [
+        "apps/desktop/electron/design-host.ts",
+        "packages/design-store/src",
+        "modules/design/app/storage",
+        "modules/design/compare/src"
+      ],
+      "sha256": "ea99444848ec38843bd479d87c7ef7a67d1bc9269b298d87f83c873ea4a57696"
+    },
+    {
+      "id": "jones-profiles-credentials",
+      "roots": [
+        "apps/desktop/electron/jones-code",
+        "packages/contracts/src/jones-code.ts"
+      ],
+      "sha256": "51b63bf42d3d3316e5a36004c6e22c9e521dc9f8415145f64ce26077cd4c190b"
+    },
+    {
+      "id": "service-config",
+      "roots": [
+        "apps/desktop/electron/service-config.ts",
+        "packages/contracts/src/services.ts"
+      ],
+      "sha256": "4c3c00a55eaa66e272e36a976cc1df3f3afcaf16bc54a63379f60a8195bd51e9"
+    },
+    {
+      "id": "renderer-storage",
+      "roots": [
+        "apps/desktop/src/App.tsx",
+        "modules/design/app/compose/preview-navigation.ts",
+        "modules/design/app/compose/session.ts",
+        "modules/design/app/index.ts",
+        "modules/design/projects/src/views/detail.ts",
+        "modules/design/ui/src/secondary-panels.tsx",
+        "modules/social/content/Library.tsx",
+        "modules/social/nav/SocialDomain.tsx",
+        "modules/social/workbench/ToolWorkbench.tsx",
+        "modules/wiki/ui/src/view.ts"
+      ],
+      "sha256": "1fc92e128687497b9984e91df8ae0cc4332e44d2324a9ffe39e87145aa49db85"
+    }
+  ],
+  "nonProfileSources": [
+    {
+      "id": "explicit-export",
+      "roots": [
+        "apps/desktop/electron/save-dialog.ts"
+      ],
+      "reason": "User-selected export output, outside the profile; no migration authority.",
+      "sha256": "9044f0e95dab0e1b9405bda0ecac879fa46fa61c1f23527667169f3aaef16295"
+    },
+    {
+      "id": "preview-fixtures",
+      "roots": [
+        "modules/design/components/src/review/isolation-probe.ts",
+        "modules/design/preview/main.tsx",
+        "modules/design/preview/vite.config.ts"
+      ],
+      "reason": "Synthetic preview and storage isolation fixtures, not installed profile writers.",
+      "sha256": "69c3a036f3b919eceeeb65b44e270642aae0aa7842f01bf7a6cec0d4a7e7f995"
+    },
+    {
+      "id": "reference-producer",
+      "roots": [
+        "modules/design/references/producer/src/store.ts"
+      ],
+      "reason": "Producer output directory, not an Electron profile.",
+      "sha256": "b922d20c361db76b825d48282381677d597d83e985d8ef28ead4092231612e29"
+    },
+    {
+      "id": "taste-library",
+      "roots": [
+        "modules/design/taste/src/node-file-system.ts"
+      ],
+      "reason": "Explicit library filesystem adapter, not an Electron profile.",
+      "sha256": "070ccf6cc54b887e65bc477bf6581172417c9e5a79656d52bc8a415308ec63c9"
+    },
+    {
+      "id": "updater-record-schema",
+      "roots": [
+        "packages/contracts/src/updates.ts"
+      ],
+      "reason": "Updater-owned external records and profile binding types; persisted profile layout is registered separately.",
+      "sha256": "6a39663ed9bb1e426110f3dab2cb1bfab1a0490503b2d1e674911dec81c15a8e"
+    },
+    {
+      "id": "updater-external-state",
+      "roots": [
+        "apps/desktop/electron/updates"
+      ],
+      "reason": "Downloads, extraction and updater records live outside userData/sessionData; no profile migration authority.",
+      "sha256": "532f01492a1d4424f5241dc330d57bf8dc6bc95e9ec61e50b3689522f00b525d"
+    }
+  ]
+}
