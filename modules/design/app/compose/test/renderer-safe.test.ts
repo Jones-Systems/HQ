@@ -216,6 +216,7 @@ describe('production entry, compose and descriptors are renderer-safe', () => {
     for (const expected of [
       '../../packages/hq-ui/src/index.ts', '../../packages/hq-ui/src/components/Button.tsx',
       'app/compose/reference-reads.ts',
+      'app/compose/thumbnail-port.ts',
       'app/index.ts', 'app/compose/workspace.ts', 'app/compose/bridge-documents.ts', 'app/storage/index.ts', 'app/storage/projects.ts', 'app/compose/storage-seam.ts', 'app/compose/views/CanvasView.tsx',
       'ui/src/registry-glob.ts', 'canvas/design-module.ts', 'imports/design-module.ts',
       'requests/design-module.ts', 'connector/design-module.ts', 'references/design-module.ts',
