@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { App } from '../App';
+import { PresentationShell } from '../PresentationShell';
 import { DEFAULT_STATE, navigationKey } from '../state';
-import { previewModules } from './composition';
+import { previewModules, PREVIEW_PRESENTATION, PREVIEW_REFERENCE_PROVIDERS } from './composition';
 import { PreviewChrome } from './PreviewChrome';
 import type { PreviewEntry } from './capabilities';
 import '../styles.css';
@@ -13,7 +13,7 @@ export function mountPreview(entry: PreviewEntry, revision: string) {
   const modules = previewModules(entry);
   function Preview() {
     useEffect(() => { document.documentElement.dataset.previewState = 'ready'; }, []);
-    return <App modules={modules} />;
+    return <PresentationShell modules={modules} presentation={PREVIEW_PRESENTATION} referenceProviders={PREVIEW_REFERENCE_PROVIDERS} />;
   }
   const onUncaughtError = () => { document.documentElement.dataset.previewState = 'failed'; };
   createRoot(document.getElementById('preview-chrome')!).render(<PreviewChrome revision={revision} />);
