@@ -1,9 +1,10 @@
 # HQ native Electron acceptance
 
-This Linux runner drives the actual production Electron renderer through CDP and
+This Linux/macOS runner drives the actual production Electron renderer through CDP and
 Node's built-in WebSocket. It adds no npm dependency or root script. Node 22.18+
-(or the campaign's Node 24), the pinned Electron executable, Xvfb, bubblewrap,
-user namespaces and fonts are prerequisites. It never disables Chromium's sandbox.
+(or the campaign's Node 24) and the pinned Electron executable are prerequisites.
+Linux also requires Xvfb, bubblewrap, user namespaces and fonts; see the macOS
+section below for Darwin prerequisites. It never disables Chromium's sandbox.
 The app's preload, context isolation, security policy and production layout remain intact.
 
 After CPU admission, install/build in this isolated checkout:
@@ -41,7 +42,7 @@ binary/display/namespace capability also fails.
 Final acceptance requires T1's exact assembled candidate and a fresh build.
 
 Each invocation allocates a unique profile and temporary root under
-`.t3/acceptance-scratch/`. Bubblewrap maps its temporary directory to `/tmp` for
+`.t3/acceptance-scratch/`. On Linux, bubblewrap maps its temporary directory to `/tmp` for
 Xvfb and Electron and provides private PID/user namespaces and device nodes. The
 checkout is then bound back at its own path, so a checkout under `/tmp` still
 works. CDP
@@ -60,6 +61,34 @@ head, dirty-source status and hashes of the built entry points. They do not cert
 that an independently produced build corresponds to source: build immediately
 before acceptance. Evidence is local and may contain paths; inspect and sanitize
 before publishing. Tests intentionally use synthetic/default app content only.
+
+## macOS (Darwin)
+
+The same runner selects
+`node_modules/electron/dist/Electron.app/Contents/MacOS/Electron` on Darwin.
+Use an available native graphical session, Git for the synthetic Wiki corpus,
+and a fresh macOS build of the exact candidate. Selected/full scenarios also
+require `python3` for the repository's stdlib-only Planner. The install/build and
+check commands above are unchanged. Run `--checkpoint` before `--selected`.
+Darwin source support alone does not establish native qualification.
+
+Electron launches directly through the existing runtime's owned process group.
+It retains the same environment filtering (inherited `HQ_*`, `NODE_OPTIONS` and
+`ELECTRON_RUN_AS_NODE` are removed), owned HOME/profile and synthetic fixtures.
+TMPDIR points to that invocation's `tmp` directory; DISPLAY is removed and no
+Xvfb or bubblewrap process is started. Darwin provides no Linux PID/user namespace
+or private `/tmp` mapping. Process-group cleanup covers children remaining in
+those owned groups; it is not namespace containment or protection against a
+descendant escaping its group. Chromium's sandbox remains enabled.
+
+`cleanup.test.mjs` runs unchanged on Darwin, including success/failure, partial
+startup, handled signals, socket closure, cleanup-error preservation and the
+negative peer-survival assertion. It has no namespace-specific assertions or
+platform skips and does not scan or terminate unrelated processes. Native
+Darwin cleanup and scenario results remain unverified until executed there.
+Reports retain the platform and the native-prerequisite containment limitation;
+HQ-07 remains held and makes selected mode nonzero as described below. CDP
+screenshots capture the renderer only, not native window chrome.
 
 ## Infrastructure fixtures and row evidence
 
@@ -115,7 +144,7 @@ signals, an open HTTP socket, concurrent peers and injected cleanup failure.
 
 ## Selected T7 scenarios
 
-After a fresh build and serial execution admission on the bound Linux host:
+After a fresh build and serial execution admission on the bound Linux or macOS host:
 
 ```sh
 node tests/acceptance/run.mjs --selected

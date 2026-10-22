@@ -50,7 +50,8 @@ const until = (probe, label, timeout) => poll(() => { if (cancelled) throw new E
 try {
   begin('native-prerequisites');
   if (cancelled) throw new Error('Harness cancelled during startup');
-  const binary = join(repo, 'node_modules/electron/dist/electron');
+  const darwin = process.platform === 'darwin';
+  const binary = join(repo, 'node_modules/electron/dist', darwin ? 'Electron.app/Contents/MacOS/Electron' : 'electron');
   const main = join(repo, 'apps/desktop/dist-electron/main.js');
   await access(binary);
   await access(main);
@@ -61,21 +62,30 @@ try {
   for (const path of ['apps/desktop/dist/index.html', 'apps/desktop/dist-electron/main.js', 'apps/desktop/dist-electron/preload.cjs']) report.build[path] = createHash('sha256').update(await readFile(join(repo, path))).digest('hex');
   for (const dir of ['tmp', 'home', 'config', 'cache', 'profile']) await mkdir(join(runtime.root, dir));
   const env = isolatedEnvironment(runtime.root);
+  if (darwin) {
+    env.TMPDIR = join(runtime.root, 'tmp');
+    delete env.DISPLAY;
+  }
   const fixtureStarted = performance.now();
   fixtures = await setupFixtures(runtime, repo, env.HQ_USER_DATA_DIR, { scenarios: !checkpoint && !galleryOnly, observe: partial => { fixtures = partial; } });
   if (hostBinding) fixtures.hostGallery = await bindHostGallery(hostBinding);
   report.timings.fixtureSetupMs = Math.round(performance.now() - fixtureStarted);
   report.fixturePrerequisites = { work: checkpoint || galleryOnly ? 'scripted-loopback' : 'real-owned-Planner-and-recording-proxy', social: 'owned-loopback', wiki: fixtures.wiki.commits, durableClientIntent: 'not-provided-session-only-RW9-G3' };
-  const wrapped = (command, args, options = {}) => runtime.spawn('bwrap', ['--die-with-parent', '--unshare-user', '--unshare-pid', '--bind', '/', '/', '--bind', join(runtime.root, 'tmp'), '/tmp', '--bind', repo, repo, '--proc', '/proc', '--dev', '/dev', command, ...args], { cwd: repo, env, ...options });
-  let display = '';
-  const xvfb = wrapped('/usr/bin/Xvfb', ['-displayfd', '3', '-screen', '0', '1280x900x24', '-nolisten', 'tcp'], { stdio: ['ignore', 'ignore', 'pipe', 'pipe'] });
-  xvfb.stdio[3].on('data', data => { display += data; });
-  xvfb.stderr.on('data', data => { log = (log + data).slice(-32000); });
-  await until(() => {
-    if (xvfb.exitCode !== null || xvfb.launchError) throw new Error('Platform gap: Xvfb/bubblewrap unavailable');
-    return /^\d+\s*$/.test(display);
-  }, 'owned Xvfb display');
-  env.DISPLAY = `:${display.trim()}`;
+  // Darwin uses owned process groups, without Linux PID/user namespaces.
+  const wrapped = darwin
+    ? (command, args, options = {}) => runtime.spawn(command, args, { cwd: repo, env, ...options })
+    : (command, args, options = {}) => runtime.spawn('bwrap', ['--die-with-parent', '--unshare-user', '--unshare-pid', '--bind', '/', '/', '--bind', join(runtime.root, 'tmp'), '/tmp', '--bind', repo, repo, '--proc', '/proc', '--dev', '/dev', command, ...args], { cwd: repo, env, ...options });
+  if (!darwin) {
+    let display = '';
+    const xvfb = wrapped('/usr/bin/Xvfb', ['-displayfd', '3', '-screen', '0', '1280x900x24', '-nolisten', 'tcp'], { stdio: ['ignore', 'ignore', 'pipe', 'pipe'] });
+    xvfb.stdio[3].on('data', data => { display += data; });
+    xvfb.stderr.on('data', data => { log = (log + data).slice(-32000); });
+    await until(() => {
+      if (xvfb.exitCode !== null || xvfb.launchError) throw new Error('Platform gap: Xvfb/bubblewrap unavailable');
+      return /^\d+\s*$/.test(display);
+    }, 'owned Xvfb display');
+    env.DISPLAY = `:${display.trim()}`;
+  }
   async function launch() {
     const launchStarted = performance.now();
     let endpoint;
@@ -112,7 +122,9 @@ try {
   async function restartApp() { await stopApp(); await launchApp(); }
   async function capture(name) { await writeFile(join(evidence, `${name}.png`), Buffer.from((await cdp.send('Page.captureScreenshot')).data, 'base64')); }
   report.electronVersion = await cdp.evaluate('window.hqDesktop.versions.electron');
-  passed('Owned display, built renderer, synthetic fixtures and profile started');
+  passed(darwin
+    ? 'Native macOS display, owned process groups, built renderer, synthetic fixtures and profile started; Linux namespaces unavailable'
+    : 'Owned display, built renderer, synthetic fixtures and profile started');
   begin('renderer-isolation');
   assert.equal(await cdp.evaluate(`typeof window.require === 'undefined' && typeof window.process === 'undefined' && !!window.hqDesktop?.versions.electron`), true, 'isolated Electron renderer and preload');
   assert.ok(await cdp.evaluate(`document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.content`), 'CSP present');
