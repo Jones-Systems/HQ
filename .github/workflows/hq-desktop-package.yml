@@ -29,9 +29,11 @@ jobs:
     timeout-minutes: 35
     env:
       HQ_PACKAGE_ARCH: ${{ matrix.arch }}
-      HQ_PACKAGE_OUTPUT: ${{ runner.temp }}/hq-package-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
-      HQ_NATIVE_SCRATCH: ${{ runner.temp }}/hq-native-smoke
     steps:
+      - name: Bind invocation output roots on the allocated runner
+        run: |
+          printf 'HQ_PACKAGE_OUTPUT=%s/hq-package-%s-%s-%s\n' "$RUNNER_TEMP" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$HQ_PACKAGE_ARCH" >> "$GITHUB_ENV"
+          printf 'HQ_NATIVE_SCRATCH=%s/hq-native-smoke\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Check out exact source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
