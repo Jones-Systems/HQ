@@ -71,7 +71,15 @@ gets a fresh CPU/core/free-memory-lower-bound sample through `ci-run.cjs`.
 CPU at or above 85% or missing evidence holds a new start. Compiler concurrency
 is at most six and never exceeds the observed logical CPU count.
 
-Native smoke uses a new synthetic package/app/bundle identity and owned profile.
+Native smoke uses two independent installations of the synthetic package/app/
+bundle identity, with separate owned profiles under one fresh scratch root.
+Each installation initializes its state directory through the production state
+API before placing candidates inside that directory. The lifecycle installation
+runs fresh install, next launch and interrupted recovery. The failed-health
+installation first establishes a healthy baseline, then exercises restoration.
+Each stays within the unchanged two-history-plus-active transaction limit.
+The portable regression consumes this same scenario plan and exercises actual
+transaction admission, activation, health and recovery with fake native I/O.
 Every GUI process starts with `--use-mock-keychain`; the fixture asserts it
 before creating a window. A signed synthetic helper entry supplies that test
 flag while delegating to the unchanged transaction helper implementation.
@@ -81,9 +89,30 @@ replacement, next-launch handoff, retained prior identity, staged interruption,
 dead failed-health recovery and preserved synthetic writes. These do not prove
 real-profile credential continuity or Gatekeeper approval.
 
+Before creating any synthetic bundle copy, the harness measures the source
+bundle and available bytes on the filesystem receiving its owned scratch root.
+For each source entry it counts the greater of logical bytes and allocated
+512-byte blocks; symlink targets are not followed. Let this measured total be
+`B`. Five candidate copies plus five staged/installed/retained copies give a
+peak of ten full bundles. Admission requires:
+
+```text
+additional peak = 10 * B + 1 GiB metadata/profile allowance
+required available = additional peak + 2 GiB reserve
+available = statfs(scratch root).bavail * statfs(scratch root).bsize
+```
+
+Unknown, malformed, out-of-range or insufficient measurements fail before
+cloning. Already-present source/archive/build files are reflected in measured
+free space and are not subtracted again. No sweep or unrelated cleanup makes
+room. The harness owns the fresh root and its exact cleanup; root scheduling
+and host-operation approval remain separate from this storage admission.
+
 `native-smoke.json` records source identity, archive metrics, observed checks,
-old/new receipts and sampled peak allocated disk. On failure,
-`native-smoke-failure.json` records the failure before scratch cleanup. Cleanup
+old/new receipts, per-installation checks, storage admission measurements and
+sampled peak allocated disk. On failure,
+`native-smoke-failure.json` records the failure and whether scratch cleanup
+completed. Cleanup
 signals only exact processes within the newly created synthetic root, checks
 their exit and removes that root. Unknown/live process evidence retains the
 root and fails; the hosted runner's lifetime is a second containment boundary.
