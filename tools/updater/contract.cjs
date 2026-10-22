@@ -155,11 +155,16 @@ function transactionPaths(record, operationId) {
 function recordPath(targetPath) { absolute(targetPath, 'target path'); return path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.installation.json`); }
 async function readJson(file, { fs: io = fs, maxBytes = 1024 * 1024 } = {}) {
   const handle = await io.open(file, require('node:fs').constants.O_RDONLY | require('node:fs').constants.O_NOFOLLOW);
+  let contents;
   try {
     const stat = await handle.stat();
     ensure(stat.isFile() && stat.size <= maxBytes, 'Invalid updater record.');
-    return JSON.parse(await handle.readFile('utf8'));
+    contents = await handle.readFile('utf8');
   } finally { await handle.close(); }
+  try { return JSON.parse(contents); } catch (cause) {
+    if (cause instanceof SyntaxError) throw new UpdateError('invalid', 'Updater JSON is malformed.', { cause });
+    throw cause;
+  }
 }
 async function syncDirectory(directory, { fs: io = fs } = {}) {
   const handle = await io.open(directory, 'r');

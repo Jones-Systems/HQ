@@ -8,6 +8,7 @@ const { EventEmitter } = require('node:events');
 const { createNativeAdapter } = require('../native.cjs');
 const { fixture, identity, fakeApp, writeBundle } = require('./fixtures.cjs');
 const { run, getContext } = require('../bootstrap.cjs');
+const { runHelper } = require('../helper.cjs');
 const { receiptOf, atomicWrite, readJson, digest } = require('../contract.cjs');
 
 const inventoryPath = path.resolve(__dirname, '../process-inventory');
@@ -89,7 +90,9 @@ test('bundle copy refuses escaped symlinks and preserves internal relative frame
   await fs.writeFile(path.join(contents, 'internal/asset'), 'synthetic resource');
   await fs.symlink('internal', path.join(contents, 'relative-link'));
   const destination = path.join(path.dirname(f.record.targetPath), 'Stage.app');
-  await native.copyBundle(f.candidate.bundlePath, destination);
+  await fs.mkdir(destination);
+  const stat = await fs.stat(destination, { bigint: true });
+  await native.copyBundle(f.candidate.bundlePath, destination, Object.fromEntries(['dev', 'ino', 'uid'].map(key => [key, String(stat[key])])));
   assert.equal(await fs.readlink(path.join(destination, 'Contents/relative-link')), 'internal');
   await fs.writeFile(path.join(f.root, 'external'), 'outside');
   await fs.symlink(path.join(f.root, 'external'), path.join(contents, 'escaped'));
@@ -172,7 +175,7 @@ function interruptStageCopy(f, { repeat = false } = {}) {
     assert.equal(f.calls.at(-1)[0], 'checkTarget');
     assert.equal(f.calls.at(-1)[2], f.candidate.manifest.archive.expandedSize * 2 + 64 * 1024 * 1024);
     if (attempts === 1 || repeat) {
-      await fs.mkdir(destination);
+      assert.equal((await fs.lstat(destination)).isDirectory(), true);
       await fs.writeFile(path.join(destination, 'partial.data'), `partial attempt ${attempts}`);
       throw new Error('interrupted stage copy');
     }
@@ -349,4 +352,194 @@ test('HQ-REV-001 existing nonce-less consent is consumed only by its exact prepa
   assert.equal((await run({ app: fakeApp(f.record.appName), bundlePath: f.record.targetPath, adapters: { ...f.adapters, argv: [], environment: {} }, importMain: async () => assert.fail('resumed bootstrap imported main') })).state, 'handoff');
   assert.equal((await f.engine.read(f.record)).operationId, journal.operationId);
   await assert.rejects(fs.stat(filename), { code: 'ENOENT' });
+});
+
+async function resumePartialThroughBootstrap(f, partial) {
+  await f.writeRecord();
+  f.processes.clear();
+  f.setSelf(identity(path.join(f.record.targetPath, 'Contents/MacOS', f.record.appName), 401));
+  const handoff = await run({ app: fakeApp(f.record.appName), bundlePath: f.record.targetPath, adapters: { ...f.adapters, argv: [], environment: {} }, importMain: async () => assert.fail('partial preparation imported main') });
+  assert.equal(handoff.state, 'handoff');
+  assert.equal(handoff.operationId, partial.operationId);
+  f.processes.clear();
+  f.setSelf(f.helperIdentity);
+  return runHelper({ record: f.record, operationId: partial.operationId, adapters: f.adapters });
+}
+
+for (const metadata of ['build-receipt.json', 'package.json']) test(`HQ-REV-004 truncated ${metadata} recovers through ordinary bootstrap`, async t => {
+  const f = await fixture(t);
+  const native = createNativeAdapter({ platform: 'darwin', architecture: 'arm64', execFile: commands(f.record).execFile });
+  f.native.verifyBundle = native.verifyBundle;
+  const copy = f.native.copyBundle;
+  f.native.copyBundle = async (source, destination) => {
+    await copy(source, destination);
+    await fs.writeFile(path.join(destination, 'Contents/Resources/app', metadata), '{"interrupted":');
+    throw new Error('interrupted metadata copy');
+  };
+  await f.prepare();
+  await assert.rejects(f.activate(), /interrupted metadata copy/);
+  const partial = await f.engine.read(f.record);
+  const recovered = await resumePartialThroughBootstrap(f, partial);
+  assert.equal(recovered.state, 'restored');
+  assert.equal(recovered.operationId, partial.operationId);
+  assert.equal(await fs.readFile(path.join(recovered.failedPath, 'Contents/Resources/app', metadata), 'utf8'), '{"interrupted":');
+  assert.deepEqual(await native.verifyBundle(f.record.targetPath, f.prior), f.prior);
+  f.processes.clear();
+  f.setSelf(identity(path.join(f.record.targetPath, 'Contents/MacOS', f.record.appName), 402));
+  let imported = false;
+  assert.equal((await run({ app: fakeApp(f.record.appName), bundlePath: f.record.targetPath, adapters: { ...f.adapters, argv: [], environment: {} }, importMain: async () => { imported = true; } })).state, 'running');
+  assert.equal(imported, true);
+  await getContext().dispose();
+  assert.equal(await fs.readFile(path.join(f.record.userData, 'untouched.data'), 'utf8'), 'synthetic profile bytes');
+});
+
+test('HQ-REV-004 uncertain metadata I/O remains held through ordinary bootstrap', async t => {
+  const f = await fixture(t);
+  let unavailable = null;
+  const failure = Object.assign(new Error('metadata read unavailable'), { code: 'EIO' });
+  const io = { ...fs, open: async (filename, ...args) => {
+    if (filename === unavailable) throw failure;
+    return fs.open(filename, ...args);
+  } };
+  const native = createNativeAdapter({ fs: io, platform: 'darwin', architecture: 'arm64', execFile: commands(f.record).execFile });
+  f.native.verifyBundle = native.verifyBundle;
+  const copy = f.native.copyBundle;
+  f.native.copyBundle = async (source, destination) => {
+    await copy(source, destination);
+    throw new Error('interrupted metadata copy');
+  };
+  await f.prepare();
+  await assert.rejects(f.activate(), /interrupted metadata copy/);
+  const partial = await f.engine.read(f.record);
+  unavailable = path.join(partial.stagePath, 'Contents/Resources/app/build-receipt.json');
+  const stage = await fs.stat(partial.stagePath, { bigint: true });
+  await assert.rejects(resumePartialThroughBootstrap(f, partial), error => error === failure);
+  assert.equal((await fs.stat(partial.stagePath, { bigint: true })).ino, stage.ino);
+  assert.equal((await f.engine.read(f.record)).state, 'prepared');
+  await assert.rejects(fs.stat(partial.failedPath), { code: 'ENOENT' });
+  assert.deepEqual(await native.verifyBundle(f.record.targetPath, f.prior), f.prior);
+});
+
+for (const replacement of ['partial', 'complete']) test(`HQ-REV-005 ${replacement} stage substitution before first quarantine intent is preserved without mutation`, async t => {
+  const f = await fixture(t);
+  f.native.copyBundle = async (_source, destination) => {
+    await fs.mkdir(destination, { recursive: true });
+    await fs.writeFile(path.join(destination, 'partial.data'), 'owned interrupted stage');
+    throw new Error('interrupted stage copy');
+  };
+  const partial = await preparedPartial(f);
+  const claimFile = path.join(f.record.stateRoot, `stage-${partial.operationId}.json`);
+  const claim = await fs.readFile(claimFile, 'utf8');
+  const original = path.join(f.root, 'retained-original-stage');
+  await fs.rename(partial.stagePath, original);
+  if (replacement === 'complete') await writeBundle(partial.stagePath, receiptOf(f.candidate.manifest));
+  else await fs.mkdir(partial.stagePath);
+  await fs.writeFile(path.join(partial.stagePath, 'foreign.data'), 'unowned replacement');
+  const foreign = await fs.stat(partial.stagePath, { bigint: true });
+  await assert.rejects(recoverCurrent(f), { code: 'recovery-required' });
+  assert.equal((await fs.stat(partial.stagePath, { bigint: true })).ino, foreign.ino);
+  assert.equal(await fs.readFile(path.join(partial.stagePath, 'foreign.data'), 'utf8'), 'unowned replacement');
+  assert.equal(await fs.readFile(path.join(original, 'partial.data'), 'utf8'), 'owned interrupted stage');
+  assert.equal(await fs.readFile(claimFile, 'utf8'), claim);
+  assert.deepEqual(await f.engine.read(f.record), partial);
+  await assert.rejects(fs.stat(partial.failedPath), { code: 'ENOENT' });
+  await assert.rejects(fs.stat(partial.priorPath), { code: 'ENOENT' });
+  assert.deepEqual(await f.native.verifyBundle(f.record.targetPath, f.prior), f.prior);
+});
+
+for (const boundary of ['stage-created', 'atomic-file-synced']) test(`HQ-REV-005 ${boundary} interruption before durable creation ownership holds the directory`, async t => {
+  let armed = true;
+  const f = await fixture(t, { checkpoint: async (name, value) => {
+    if (armed && name === boundary && (name !== 'atomic-file-synced' || /\/stage-[a-f0-9]{32}\.json$/.test(value))) {
+      armed = false;
+      throw new Error('creation claim interruption');
+    }
+  } });
+  await f.prepare();
+  await assert.rejects(f.activate(), /creation claim interruption/);
+  const partial = await f.engine.read(f.record);
+  const created = await fs.stat(partial.stagePath, { bigint: true });
+  await assert.rejects(fs.stat(path.join(f.record.stateRoot, `stage-${partial.operationId}.json`)), { code: 'ENOENT' });
+  await assert.rejects(recoverCurrent(f), { code: 'recovery-required' });
+  assert.equal((await fs.stat(partial.stagePath, { bigint: true })).ino, created.ino);
+  assert.deepEqual(await fs.readdir(partial.stagePath), []);
+  await assert.rejects(fs.stat(partial.failedPath), { code: 'ENOENT' });
+  assert.deepEqual(await f.native.verifyBundle(f.record.targetPath, f.prior), f.prior);
+  assert.equal(f.calls.some(call => call[0] === 'copyBundle'), false);
+});
+
+test('HQ-REV-005 durable creation ownership permits exact recovery before copying starts', async t => {
+  let armed = true;
+  const f = await fixture(t, { checkpoint: async name => {
+    if (armed && name === 'stage-creation-recorded') { armed = false; throw new Error('claimed creation interruption'); }
+  } });
+  await f.prepare();
+  await assert.rejects(f.activate(), /claimed creation interruption/);
+  const partial = await f.engine.read(f.record);
+  const created = await fs.stat(partial.stagePath, { bigint: true });
+  const claim = await readJson(path.join(f.record.stateRoot, `stage-${partial.operationId}.json`));
+  assert.deepEqual(claim.stage, Object.fromEntries(['dev', 'ino', 'uid'].map(key => [key, String(created[key])])));
+  assert.equal((await recoverCurrent(f)).state, 'restored');
+  assert.equal((await fs.stat(partial.failedPath, { bigint: true })).ino, created.ino);
+  assert.deepEqual(await fs.readdir(partial.failedPath), []);
+  assert.equal(f.calls.some(call => call[0] === 'copyBundle'), false);
+});
+
+test('HQ-REV-005 fresh retry interrupted before its durable creation claim preserves both slots', async t => {
+  let armed = false;
+  const f = await fixture(t, { kind: 'fresh', checkpoint: async name => {
+    if (armed && name === 'stage-created') { armed = false; throw new Error('retry creation interruption'); }
+  } });
+  const attempts = interruptStageCopy(f);
+  const partial = await preparedPartial(f);
+  armed = true;
+  await assert.rejects(recoverCurrent(f), /retry creation interruption/);
+  const second = await fs.stat(partial.stagePath, { bigint: true });
+  await assert.rejects(recoverCurrent(f), { code: 'recovery-required' });
+  assert.equal((await fs.stat(partial.stagePath, { bigint: true })).ino, second.ino);
+  assert.deepEqual(await fs.readdir(partial.stagePath), []);
+  assert.equal(await fs.readFile(path.join(partial.failedPath, 'partial.data'), 'utf8'), 'partial attempt 1');
+  assert.equal(attempts(), 1);
+  await assert.rejects(fs.stat(f.record.targetPath), { code: 'ENOENT' });
+});
+
+for (const timing of ['before', 'during']) test(`HQ-REV-005 native copy refuses a destination replaced ${timing} copying`, async t => {
+  const f = await fixture(t);
+  const destination = path.join(path.dirname(f.record.targetPath), 'NativeStage.app');
+  const retained = path.join(f.root, 'native-created-stage');
+  await fs.mkdir(destination);
+  const created = await fs.stat(destination, { bigint: true });
+  const expected = Object.fromEntries(['dev', 'ino', 'uid'].map(key => [key, String(created[key])]));
+  async function replace() {
+    await fs.rename(destination, retained);
+    await fs.mkdir(destination);
+    await fs.writeFile(path.join(destination, 'foreign.data'), 'preserve unknown copy destination');
+  }
+  const io = { ...fs, cp: async (source, target, options) => { await replace(); return fs.cp(source, target, options); } };
+  const native = createNativeAdapter({ fs: timing === 'during' ? io : fs, platform: 'darwin' });
+  if (timing === 'before') await replace();
+  await assert.rejects(native.copyBundle(f.candidate.bundlePath, destination, expected), { code: 'recovery-required' });
+  assert.deepEqual(await fs.readdir(destination), ['foreign.data']);
+  assert.equal(await fs.readFile(path.join(destination, 'foreign.data'), 'utf8'), 'preserve unknown copy destination');
+  assert.deepEqual(await fs.readdir(retained), []);
+});
+
+test('HQ-REV-005 the created stage identity is rechecked immediately before installation rename', async t => {
+  let f;
+  f = await fixture(t, { checkpoint: async (name, journal) => {
+    if (name === 'before-install-replacement') {
+      await fs.rename(journal.stagePath, path.join(f.root, 'retained-complete-stage'));
+      await writeBundle(journal.stagePath, receiptOf(f.candidate.manifest));
+      await fs.writeFile(path.join(journal.stagePath, 'foreign.data'), 'preserve unowned ready stage');
+    }
+  } });
+  await f.prepare();
+  await assert.rejects(f.activate(), { code: 'recovery-required' });
+  const journal = await f.engine.read(f.record);
+  assert.equal(journal.state, 'prior-retained');
+  assert.equal(await fs.readFile(path.join(journal.stagePath, 'foreign.data'), 'utf8'), 'preserve unowned ready stage');
+  assert.deepEqual(await f.native.verifyBundle(journal.priorPath, f.prior), f.prior);
+  await assert.rejects(fs.stat(f.record.targetPath), { code: 'ENOENT' });
+  await assert.rejects(fs.stat(journal.failedPath), { code: 'ENOENT' });
+  assert.equal(f.calls.some(call => call[0] === 'launch'), false);
 });

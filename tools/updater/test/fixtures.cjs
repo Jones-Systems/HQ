@@ -93,7 +93,11 @@ async function fixture(t, { kind = 'update', checkpoint, synthetic = true, fs: i
     legacyIdentity,
     verifyLegacy: async (bundlePath, expected) => { ensure(canonical(await legacyIdentity(bundlePath)) === canonical(expected), 'Legacy mismatch.', 'integrity'); return expected; },
     checkTarget: async (value, bytes) => { calls.push(['checkTarget', value.targetPath, bytes]); },
-    copyBundle: async (source, destination) => { calls.push(['copyBundle', source, destination]); await fs.cp(source, destination, { recursive: true, force: false, errorOnExist: true }); },
+    copyBundle: async (source, destination) => {
+      calls.push(['copyBundle', source, destination]);
+      ensure((await fs.lstat(destination)).isDirectory(), 'Synthetic stage was not created.', 'recovery-required');
+      for (const name of await fs.readdir(source)) await fs.cp(path.join(source, name), path.join(destination, name), { recursive: true, force: false, errorOnExist: true });
+    },
     spawnHelper: async (...args) => { calls.push(['spawnHelper', ...args]); return { pid: 202 }; },
     launch: async (value, journal) => {
       calls.push(['launch', value.targetPath, journal.sequence]);

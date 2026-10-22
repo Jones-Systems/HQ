@@ -114,7 +114,7 @@ test('HQ-REV-004 partial staging recovery preserves the partial tree and lets th
   const f = await fixture(t);
   await f.writeRecord();
   f.native.copyBundle = async (_source, destination) => {
-    await fs.mkdir(destination);
+    assert.equal((await fs.lstat(destination)).isDirectory(), true);
     await fs.writeFile(path.join(destination, 'partial.data'), 'owned incomplete copy');
     throw new Error('interrupted stage copy');
   };
@@ -139,7 +139,7 @@ test('HQ-REV-004 partial staging recovery preserves the partial tree and lets th
 for (const evidence of ['live-stage', 'unknown-process']) test(`HQ-REV-004 ${evidence} holds partial staging without moving either tree`, async t => {
   const f = await fixture(t);
   f.native.copyBundle = async (_source, destination) => {
-    await fs.mkdir(destination);
+    assert.equal((await fs.lstat(destination)).isDirectory(), true);
     await fs.writeFile(path.join(destination, 'partial.data'), 'owned incomplete copy');
     throw new Error('interrupted stage copy');
   };

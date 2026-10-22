@@ -161,11 +161,32 @@ function createNativeAdapter({ fs: io = fs, execFile = promisify(cp.execFile), s
     await visit(bundlePath);
     return { bytes, entries };
   }
-  async function copyBundle(source, destination) {
-    await inspectTree(source);
-    await io.cp(source, destination, { recursive: true, errorOnExist: true, force: false, dereference: false, verbatimSymlinks: true });
-    await inspectTree(destination, { synchronize: true });
-    await syncDirectory(path.dirname(destination), { fs: io });
+  async function copyBundle(source, destination, expected) {
+    object(expected, ['dev', 'ino', 'uid'], 'created stage identity');
+    ensure(Object.values(expected).every(part => typeof part === 'string' && /^[0-9]{1,24}$/.test(part)) && expected.uid === String(process.getuid()), 'Created stage identity is unavailable.', 'recovery-required');
+    const constants = require('node:fs').constants;
+    const handle = await io.open(destination, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    try {
+      async function sameDestination() {
+        await assertNoSymlink(destination, { fs: io });
+        for (const stat of [await handle.stat({ bigint: true }), await io.lstat(destination, { bigint: true })]) {
+          ensure(stat.isDirectory() && ['dev', 'ino', 'uid'].every(key => String(stat[key]) === expected[key]), 'Created stage directory changed during copy.', 'recovery-required');
+        }
+      }
+      await sameDestination();
+      ensure((await io.readdir(destination)).length === 0, 'Created stage directory is not empty.', 'recovery-required');
+      await inspectTree(source);
+      await sameDestination();
+      ensure((await io.readdir(destination)).length === 0, 'Created stage directory changed before copying.', 'recovery-required');
+      for (const name of await io.readdir(source)) {
+        await sameDestination();
+        await io.cp(path.join(source, name), path.join(destination, name), { recursive: true, errorOnExist: true, force: false, dereference: false, verbatimSymlinks: true, filter: async () => { await sameDestination(); return true; } });
+      }
+      await sameDestination();
+      await inspectTree(destination, { synchronize: true });
+      await sameDestination();
+      await syncDirectory(path.dirname(destination), { fs: io });
+    } finally { await handle.close(); }
   }
   async function spawnDetached(executable, args, environment) {
     return new Promise((resolve, reject) => {
