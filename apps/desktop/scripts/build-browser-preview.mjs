@@ -4,7 +4,7 @@ import { chmod, lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/p
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, version as viteVersion } from 'vite';
-import ts from 'typescript';
+import { parseSync } from 'rolldown/utils';
 import { browserPreviewConfig } from '../vite.browser-preview.config.ts';
 import { CAPABILITIES, ENTRIES } from '../src/preview/capabilities.ts';
 import { canonicalJSON, safeBundlePath, validateManifest } from '../src/preview/bundle.ts';
@@ -30,6 +30,37 @@ async function inventory(root, prefix = '') {
     } else throw new Error(`Nonregular output: ${path}`);
   }
   return files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+}
+
+function classifyTypeImports(path, source) {
+  const parsed = parseSync(path, source);
+  if (parsed.errors.length) throw new Error(`Cannot classify preview source: ${path} (${parsed.errors.length} parse errors)`);
+  const imports = [];
+  const record = (node, classification) => imports.push({
+    importer: path, specifier: node.source.value,
+    line: source.slice(0, node.start).split(/\r\n|[\n\r\u2028\u2029]/u).length,
+    classification,
+  });
+  const erased = 'erased-type-only; not a browser module resolution or emitted input';
+  const specifiersOnly = 'type-only-specifiers; runtime module edge, if retained, is represented by the resolved graph';
+  const visit = node => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'ImportDeclaration') {
+      if (node.importKind === 'type') record(node, erased);
+      else if (node.specifiers.length && node.specifiers.every(item => item.importKind === 'type')) record(node, specifiersOnly);
+    } else if ((node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') && node.source) {
+      if (node.exportKind === 'type') record(node, erased);
+      else if (node.type === 'ExportNamedDeclaration' && node.specifiers.length
+        && node.specifiers.every(item => item.exportKind === 'type')) record(node, specifiersOnly);
+    } else if (node.type === 'TSImportType') record(node, erased);
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'parent') continue;
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === 'object' && typeof value.type === 'string') visit(value);
+    }
+  };
+  visit(parsed.program);
+  return imports;
 }
 
 function sourceClosure() {
@@ -87,24 +118,7 @@ function sourceClosure() {
       const bytes = await readFile(join(repository, path));
       files.push({ path, sha256: sha256(bytes), bytes: bytes.length });
       if (!/\.[cm]?[jt]sx?$/.test(path)) continue;
-      const source = ts.createSourceFile(path, bytes.toString('utf8'), ts.ScriptTarget.Latest, true);
-      const record = (node, specifier) => typeOnlyImports.push({
-        importer: path, specifier, line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
-        classification: 'erased-type-only; not a browser module resolution or emitted input',
-      });
-      const visit = node => {
-        if (ts.isImportDeclaration(node) && node.importClause) {
-          const clause = node.importClause;
-          const bindings = clause.namedBindings;
-          if (clause.isTypeOnly || (!clause.name && bindings && ts.isNamedImports(bindings)
-            && bindings.elements.length > 0 && bindings.elements.every(item => item.isTypeOnly))) record(node, node.moduleSpecifier.text);
-        } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && (node.isTypeOnly
-          || (node.exportClause && ts.isNamedExports(node.exportClause) && node.exportClause.elements.length > 0
-            && node.exportClause.elements.every(item => item.isTypeOnly)))) record(node, node.moduleSpecifier.text);
-        else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) record(node, node.argument.literal.text);
-        ts.forEachChild(node, visit);
-      };
-      visit(source);
+      typeOnlyImports.push(...classifyTypeImports(path, bytes.toString('utf8')));
     }
     this.emitFile({ type: 'asset', fileName: 'source-closure.json', source: canonicalJSON({
       schema: 'hq-preview-source-closure/v1', revision,
