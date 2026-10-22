@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { createReferencePort, type ReferenceNotice } from './references';
 import { REFERENCE_PROVIDERS } from './reference-providers';
 import type { ReturnContext } from '@hq/contracts/references';
@@ -10,7 +10,7 @@ import { ServiceSettings } from './ServiceSettings';
 import { usePalette } from './appearance/usePalette';
 import { DataSourcesProvider } from './settings/DataSources';
 import type { DataSource } from './services/data-source-status';
-import { DOMAIN_IDS, parseProjectContext, type Appearance, type DesktopPort } from '@hq/contracts';
+import { DOMAIN_IDS, parseProjectContext, type Appearance, type DesktopPort, type DomainId, type ModulePort } from '@hq/contracts';
 import { DOMAIN_LABELS, MODULES, MODULE_PRESENTATION } from './modules';
 import { APPEARANCE_KEY, RAIL_KEY, RAIL_MIN, RAIL_MAX, RAIL_COMPACT_MAX, readRail, resizeRail, toggleRail, cycleAppearance, navigate, navigationKey, persist, readAppearance, readNavigation, resolveAppearance, type StoragePort } from './state';
 
@@ -19,7 +19,7 @@ const BROWSER_PORT: DesktopPort = Object.freeze({ platform: 'browser', versions:
 const unavailableStorage: StoragePort = { getItem: () => null, setItem: () => { throw new Error('Storage unavailable'); } };
 function storagePort(): StoragePort { try { return window.localStorage; } catch { return unavailableStorage; } }
 
-function WorkspaceApp() {
+function WorkspaceApp({ modules }: { modules: Readonly<Record<DomainId, ComponentType<ModulePort>>> }) {
   const [storage] = useState(storagePort);
   const [context, setContext] = useState(CONTEXT);
   const contextRef = useRef(context); contextRef.current = context;
@@ -64,7 +64,7 @@ function WorkspaceApp() {
   const palette = usePalette(storage, theme === 'dark');
   const stateRef = useRef(state);
   stateRef.current = state;
-  const Module = MODULES[state.domain];
+  const Module = modules[state.domain];
   const [returnFrame, setReturnFrame] = useState<{ context: ReturnContext; state: ShellState } | null>(null);
   const [referenceNotice, setReferenceNotice] = useState<ReferenceNotice | null>(null);
   const [references] = useState(() => createReferencePort(REFERENCE_PROVIDERS, {
@@ -145,4 +145,4 @@ function WorkspaceApp() {
   </div>;
 }
 
-export function App() { return <DataSourcesProvider><WorkspaceApp /></DataSourcesProvider>; }
+export function App({ modules = MODULES }: { modules?: Readonly<Record<DomainId, ComponentType<ModulePort>>> } = {}) { return <DataSourcesProvider><WorkspaceApp modules={modules} /></DataSourcesProvider>; }
