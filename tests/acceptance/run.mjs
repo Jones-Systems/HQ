@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRuntime, connect, until as poll, isolatedEnvironment } from './runtime.mjs';
 
+import { BUILD_SCHEMA, collectBuildInventory, inventoryDigest } from './build-inventory.mjs';
 import { bindHostGallery } from './fixtures/host-gallery.mjs';
 import { setupFixtures } from './fixtures/setup.mjs';
 import { row, scenarioGaps, fullOutcome, selectedOutcome, replaceRow } from './fixtures/results.mjs';
@@ -37,6 +38,7 @@ const runtime = await createRuntime(join(repo, '.t3/acceptance-scratch'));
 let cdp;
 let fixtures;
 let activeRow;
+let buildInventory;
 const prerequisite = [{ id: 'built-native-app', status: 'pass' }];
 let rowStarted;
 function begin(id) { activeRow = id; rowStarted = performance.now(); }
@@ -57,9 +59,11 @@ try {
   await access(main);
   await access(join(repo, 'apps/desktop/dist/index.html'));
   report.harness = {};
-  for (const path of ['run.mjs', 'runtime.mjs', 'fixtures/setup.mjs', 'fixtures/remote-gallery.mjs', 'fixtures/host-gallery.mjs', 'scenarios/sources.mjs', 'scenarios/ui.mjs', 'scenarios/work.mjs']) report.harness[path] = createHash('sha256').update(await readFile(join(repo, 'tests/acceptance', path))).digest('hex');
+  for (const path of ['run.mjs', 'runtime.mjs', 'build-inventory.mjs', 'fixtures/setup.mjs', 'fixtures/remote-gallery.mjs', 'fixtures/host-gallery.mjs', 'scenarios/sources.mjs', 'scenarios/ui.mjs', 'scenarios/work.mjs']) report.harness[path] = createHash('sha256').update(await readFile(join(repo, 'tests/acceptance', path))).digest('hex');
+  buildInventory = await collectBuildInventory(repo);
+  await writeFile(join(evidence, 'build-inventory.json'), JSON.stringify(buildInventory, null, 2) + '\n');
   report.build = {};
-  for (const path of ['apps/desktop/dist/index.html', 'apps/desktop/dist-electron/main.js', 'apps/desktop/dist-electron/preload.cjs']) report.build[path] = createHash('sha256').update(await readFile(join(repo, path))).digest('hex');
+  for (const path of ['apps/desktop/dist/index.html', 'apps/desktop/dist-electron/main.js', 'apps/desktop/dist-electron/preload.cjs']) report.build[path] = buildInventory.files.find(file => file.path === path).sha256;
   for (const dir of ['tmp', 'home', 'config', 'cache', 'profile']) await mkdir(join(runtime.root, dir));
   const env = isolatedEnvironment(runtime.root);
   if (darwin) {
@@ -192,6 +196,18 @@ try {
   await writeFile(join(evidence, 'runtime.log'), log).catch(error => { report.evidenceError = error.message; report.outcome = 'failed'; });
   cdp?.close();
   try { report.cleanupReadback = await runtime.close(); report.cleanup = 'passed'; } catch (error) { report.cleanup = 'failed'; report.cleanupError = error.message; report.outcome = 'failed'; }
+  if (buildInventory) {
+    try {
+      assert.equal(inventoryDigest(await collectBuildInventory(repo)), inventoryDigest(buildInventory), 'Build changed during acceptance');
+      assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim(), report.head, 'Source head changed during acceptance');
+      report.sourceDirty ||= execFileSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' }).trim().length > 0;
+      report.buildIdentity = { schema: BUILD_SCHEMA, sha256: inventoryDigest(buildInventory) };
+    } catch (error) {
+      report.buildBindingError = error.message;
+      report.outcome = 'failed';
+      replaceRow(report.rows, row('build-binding', 'fail', [{ id: 'unchanged-build-and-source', status: 'fail' }], [error.message]));
+    }
+  }
   report.timings.totalMs = Math.round(performance.now() - startedAt);
   if (cancelled) report.outcome = 'cancelled';
   process.off('SIGINT', onSignal);
