@@ -27,6 +27,7 @@ import { createProjectVersionsProvider } from './project-versions.ts';
 import { canvasProjectIdFor, shellProjectIdFor, tasteEnv, importsFor } from './fake-workspace.ts';
 import { createBridgedDiscovery } from './bridged-discovery.ts';
 import { createWorkspaceThumbnailPort } from './thumbnail-port.ts';
+import { createProjectCompareCatalog } from './compare-catalog.ts';
 import type { EvidenceTag } from './labels.ts';
 
 function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
@@ -70,9 +71,10 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
     const id = comparisonId(`${project.id}-compare`);
     const loaded = await loadComparison(storage, id);
     if (loaded.status !== 'ok' && loaded.status !== 'missing') throw new Error(`Comparison unavailable: ${loaded.status}`);
+    if (loaded.status === 'ok' && loaded.state.projectId !== project.id) throw new Error('Comparison belongs to another project');
     return createCompareController(loaded.status === 'ok' ? loaded.state : createComparison(id, compareProjectId(project.id), []), {
       storage,
-      catalog: { async listViews() { return []; }, async getVersion() { return null; }, async listVersions() { return []; } },
+      catalog: createProjectCompareCatalog(repository, projectId(project.id)),
     });
   });
   const store = createAnnotationsStorage(documents);
