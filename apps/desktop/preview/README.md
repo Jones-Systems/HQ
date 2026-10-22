@@ -24,8 +24,9 @@ Files and every bundle directory become read-only on success. Failed builds remo
 the output directory allocated by that invocation. An unhandled process/host
 termination may leave an incomplete output; it must not be served or reused.
 
-`source-closure.json` is an inventoried bundle artifact emitted from the actual
-Vite build. It records repository files and digests from all resolved modules and
+`source-closure-<sha256>.json` is an inventoried bundle artifact emitted from the
+actual Vite build. Its filename hashes the exact emitted UTF-8 bytes, including
+the trailing newline. It records repository files and digests from all resolved modules and
 emitted asset provenance and the conservative tracked-source supplement, graph edges, compiler/package metadata, the lockfile,
 build recipe and gallery descriptor. Locked dependency modules and Vite virtual
 modules are classified separately. Explicit type-only imports are recorded with
