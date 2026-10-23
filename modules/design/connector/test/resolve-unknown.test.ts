@@ -150,6 +150,38 @@ test('result CAS conflict is reported without overwriting competing state', asyn
   assert.equal(h.receiver.fenceCalls(), 1);
 });
 
+test('reconcile during an in-flight fence leaves the record for the fence result', async () => {
+  const h = await setupUnknown();
+  const reports: string[] = [];
+  let outbox!: ReturnType<typeof h.make>;
+  const port: TransportPort = { ...h.receiver, async fence(query, signal) {
+    for (const report of await outbox.reconcile(h.record.dispatchId)) reports.push(report.detail);
+    return h.receiver.fence!(query, signal);
+  } };
+  outbox = h.make({ transports: { 'fake-receiver': port } });
+  const result = await outbox.resolveUnknown(h.request);
+  assert.deepEqual(reports, ['owner-confirmed resolution in progress in this session']);
+  assert.equal(result.outcome, 'resolved');
+  if (result.outcome === 'resolved') { assert.equal(result.persisted, true); assert.equal(result.state, 'no-effect'); }
+  assert.equal(latestAttempt((await h.outbox.get(h.record.dispatchId))!)!.state, 'no-effect');
+  assert.equal(h.receiver.fenceCalls(), 1);
+});
+
+test('a failed result write after the fence reports the lost answer and stays unknown', async () => {
+  const h = await setupUnknown();
+  const port: TransportPort = { ...h.receiver, async fence(query, signal) {
+    h.store.failNextPut('throw-before-write');
+    return h.receiver.fence!(query, signal);
+  } };
+  const result = await h.make({ transports: { 'fake-receiver': port } }).resolveUnknown(h.request);
+  assert.equal(result.outcome, 'persist-failed');
+  if (result.outcome === 'persist-failed') assert.match(result.reason, /fence was called and answered \(no-effect: /);
+  assert.equal(latestAttempt((await h.outbox.get(h.record.dispatchId))!)!.state, 'unknown');
+  assert.equal((await h.outbox.resolveUnknown(h.request)).outcome, 'refused');
+  assert.equal(h.receiver.fenceCalls(), 1);
+  assert.equal(h.receiver.calls.send, 1);
+});
+
 test('in-flight send of the packet refuses resolution before a fence', async () => {
   const h = await setupUnknown();
   let entered!: () => void;
