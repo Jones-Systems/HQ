@@ -165,6 +165,89 @@ test('inventory lifetime recheck accepts not-run and sanitizes unknown or malfor
   }
 });
 
+test('inventory path diagnostic preserves only fixed before and same-birth recheck classes', async () => {
+  for (const stage of ['path-before', 'path-after']) for (const pathResult of ['zero', 'negative', 'invalid-positive']) {
+    for (const state of ['idle', 'run', 'sleep', 'stop', 'zombie', 'other']) {
+      const before = { pid: 'pid1', parent: 'zero', system: 'yes', exiting: 'no', state, effectiveUid: 'root', realUid: 'caller', savedUid: 'other' };
+      const recheckClass = { pid: 'pid1', parent: 'nonzero', system: 'no', exiting: 'yes', state: 'run', effectiveUid: 'other', realUid: 'root', savedUid: 'caller' };
+      const stderr = `HQ inventory failure: stage=${stage} errno=2 recheck=same-live path-result=${pathResult} before=pid1,zero,yes,no,${state},root,caller,other recheck-class=pid1,nonzero,no,yes,run,other,root,caller\n`;
+      let queries = 0;
+      const native = createNativeAdapter({ platform: 'darwin', execFile: async (file, args) => {
+        queries++;
+        assert.equal(file, inventoryPath);
+        assert.deepEqual(args, []);
+        throw Object.assign(new Error('PRIVATE command'), { code: 2, stderr, stdout: 'PRIVATE process data' });
+      } });
+      await assert.rejects(native.processTable(), error => {
+        const expected = { stage, errno: 2, exitCode: 2, signal: null, recheck: 'same-live', pathResult, before, recheckClass };
+        assert.equal(error.code, 'recovery-required');
+        assert.deepEqual(error.inventoryFailure, expected);
+        assert.ok(error.message.includes(JSON.stringify(expected)));
+        assert.doesNotMatch(error.message, /PRIVATE/);
+        return true;
+      });
+      assert.equal(queries, 1);
+      assert.equal(await native.observe({}), 'unknown');
+      assert.equal(queries, 2);
+    }
+  }
+});
+
+test('inventory path diagnostic never trusts unavailable, reused or unrun recheck classes', async () => {
+  for (const recheck of ['unavailable', 'reused', 'not-run']) {
+    const recheckClass = recheck === 'not-run' ? 'not-run' : 'unknown';
+    const stderr = `HQ inventory failure: stage=path-before errno=2 recheck=${recheck} path-result=zero before=other,nonzero,no,yes,sleep,caller,other,root recheck-class=${recheckClass}\n`;
+    const native = createNativeAdapter({ platform: 'darwin', execFile: async () => {
+      throw Object.assign(new Error('PRIVATE command'), { code: 2, stderr });
+    } });
+    await assert.rejects(native.processTable(), error => {
+      assert.equal(error.code, 'recovery-required');
+      assert.deepEqual(error.inventoryFailure, {
+        stage: 'path-before', errno: 2, exitCode: 2, signal: null, recheck, pathResult: 'zero',
+        before: { pid: 'other', parent: 'nonzero', system: 'no', exiting: 'yes', state: 'sleep', effectiveUid: 'caller', realUid: 'other', savedUid: 'root' }, recheckClass,
+      });
+      return true;
+    });
+    assert.equal(await native.observe({}), 'unknown');
+  }
+});
+
+test('inventory path diagnostic rejects malformed, inconsistent and private class records', async () => {
+  const classes = 'other,nonzero,no,yes,sleep,caller,other,root';
+  const valid = `HQ inventory failure: stage=path-before errno=2 recheck=same-live path-result=zero before=${classes} recheck-class=${classes}`;
+  const cases = [
+    `${valid} pid=101`, `${valid} uid=501`, `${valid} flags=8192`, `${valid} path=/PRIVATE`,
+    `${valid}\nPRIVATE`, `${valid}\n\n`, `${valid} recheck-class=unknown`,
+    valid.replace('path-result=zero', 'path-result=4096'), valid.replace('errno=2', 'errno=4096'),
+    valid.replace('path-before', 'enumeration'), valid.replace('before=other', 'before=101'),
+    valid.replace('nonzero', '999'), valid.replace(',no,', ',8192,'), valid.replace(',yes,', ',true,'),
+    valid.replace(',sleep,', ',PRIVATE,'), valid.replace(',caller,', ',501,'),
+    valid.replace(',other,root', ',other,501'), valid.replace(',other,root', ',501,root'),
+    valid.replace(`before=${classes}`, 'before=unknown'), valid.replace(`before=${classes}`, `before=${classes},PRIVATE`),
+    valid.replace(`recheck-class=${classes}`, 'recheck-class=unknown'),
+    valid.replace(`recheck-class=${classes}`, 'recheck-class=not-run'),
+    valid.replace('recheck=same-live', 'recheck=unavailable'), valid.replace('recheck=same-live', 'recheck=reused'),
+    valid.replace('recheck=same-live', 'recheck=not-run'),
+    valid.replace(`recheck-class=${classes}`, 'recheck-class=other,nonzero,no,yes,zombie,caller,other,root'),
+    valid.replace(`recheck-class=${classes}`, 'recheck-class=pid1,nonzero,no,yes,sleep,caller,other,root'),
+    valid.replace('recheck=same-live', 'recheck=reused').replace(`recheck-class=${classes}`, 'recheck-class=not-run'),
+    valid.replace('recheck=same-live', 'recheck=not-run').replace(`recheck-class=${classes}`, 'recheck-class=unknown'),
+  ];
+  for (const stderr of cases) {
+    const native = createNativeAdapter({ platform: 'darwin', execFile: async () => {
+      throw Object.assign(new Error('PRIVATE command'), { code: 2, stderr, stdout: 'PRIVATE process data' });
+    } });
+    await assert.rejects(native.processTable(), error => {
+      const expected = { stage: 'unavailable', errno: null, exitCode: 2, signal: null, recheck: 'unavailable' };
+      assert.deepEqual(error.inventoryFailure, expected);
+      assert.ok(error.message.includes(JSON.stringify(expected)));
+      assert.doesNotMatch(error.message, /PRIVATE|101|501|8192|4096/);
+      return true;
+    });
+    assert.equal(await native.observe({}), 'unknown');
+  }
+});
+
 test('bundle copy refuses escaped symlinks and preserves internal relative framework links', async t => {
   const f = await fixture(t);
   const native = createNativeAdapter({ platform: 'darwin', execFile: commands(f.record).execFile });

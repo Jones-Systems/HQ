@@ -20,11 +20,19 @@
 static const char *failure_stage = "allocation";
 static int failure_errno = 0;
 static const char *failure_recheck = "not-run";
+static const char *failure_path_result = NULL;
+static char failure_before_class[96] = "not-run";
+static char failure_recheck_class[96] = "not-run";
+static uid_t failure_caller_uid = 0;
 
 static void stage(const char *value) {
     failure_stage = value;
     failure_errno = 0;
     failure_recheck = "not-run";
+    failure_path_result = NULL;
+    strcpy(failure_before_class, "not-run");
+    strcpy(failure_recheck_class, "not-run");
+    failure_caller_uid = 0;
 }
 
 struct output {
@@ -114,20 +122,58 @@ static bool same_birth(const struct kinfo_proc *left, const struct kinfo_proc *r
     return left->kp_proc.p_pid == right->kp_proc.p_pid && same_time(&left->kp_proc.p_starttime, &right->kp_proc.p_starttime);
 }
 
+static const char *uid_class(uid_t uid) {
+    return uid == 0 ? "root" : uid == failure_caller_uid ? "caller" : "other";
+}
+
+static void process_class(const struct kinfo_proc *information, char *buffer, size_t capacity) {
+    const char *state;
+    switch (information->kp_proc.p_stat) {
+        case SIDL: state = "idle"; break;
+        case SRUN: state = "run"; break;
+        case SSLEEP: state = "sleep"; break;
+        case SSTOP: state = "stop"; break;
+        case SZOMB: state = "zombie"; break;
+        default: state = "other";
+    }
+    /* Fixed labels only; caller means effective UID, with root taking precedence. */
+    snprintf(buffer, capacity, "%s,%s,%s,%s,%s,%s,%s,%s",
+        information->kp_proc.p_pid == 1 ? "pid1" : "other",
+        information->kp_eproc.e_ppid == 0 ? "zero" : "nonzero",
+        information->kp_proc.p_flag & P_SYSTEM ? "yes" : "no",
+        information->kp_proc.p_flag & P_WEXIT ? "yes" : "no", state,
+        uid_class(information->kp_eproc.e_ucred.cr_uid),
+        uid_class(information->kp_eproc.e_pcred.p_ruid),
+        uid_class(information->kp_eproc.e_pcred.p_svuid));
+}
+
 static bool inactive(const struct kinfo_proc *expected) {
     struct kinfo_proc current;
     int found = read_process(expected->kp_proc.p_pid, &current);
     bool is_inactive = found == 0 || (found == 1 && same_birth(expected, &current) && current.kp_proc.p_stat == SZOMB);
     /* Classify only the existing recheck; uncertainty and PID reuse still fail closed. */
-    if (!is_inactive) failure_recheck = found < 0 ? "unavailable" : same_birth(expected, &current) ? "same-live" : "reused";
+    if (!is_inactive) {
+        failure_recheck = found < 0 ? "unavailable" : same_birth(expected, &current) ? "same-live" : "reused";
+        if (failure_path_result) {
+            if (found == 1 && same_birth(expected, &current)) process_class(&current, failure_recheck_class, sizeof(failure_recheck_class));
+            else strcpy(failure_recheck_class, "unknown");
+        }
+    }
     return is_inactive;
 }
 
-static bool executable_path(pid_t pid, char *buffer) {
+static bool executable_path(const struct kinfo_proc *expected, char *buffer) {
     memset(buffer, 0, PROC_PIDPATHINFO_MAXSIZE);
-    int length = proc_pidpath(pid, buffer, PROC_PIDPATHINFO_MAXSIZE);
+    errno = 0;
+    int length = proc_pidpath(expected->kp_proc.p_pid, buffer, PROC_PIDPATHINFO_MAXSIZE);
     if (length <= 0) failure_errno = errno;
-    return length > 0 && length < PROC_PIDPATHINFO_MAXSIZE && buffer[0] == '/' && strnlen(buffer, PROC_PIDPATHINFO_MAXSIZE) < PROC_PIDPATHINFO_MAXSIZE;
+    bool valid = length > 0 && length < PROC_PIDPATHINFO_MAXSIZE && buffer[0] == '/' && strnlen(buffer, PROC_PIDPATHINFO_MAXSIZE) < PROC_PIDPATHINFO_MAXSIZE;
+    if (!valid) {
+        failure_path_result = length == 0 ? "zero" : length < 0 ? "negative" : "invalid-positive";
+        failure_caller_uid = geteuid();
+        process_class(expected, failure_before_class, sizeof(failure_before_class));
+    }
+    return valid;
 }
 
 static bool list_processes(struct kinfo_proc **information, size_t *count) {
@@ -196,7 +242,7 @@ int main(int argc, char **argv) {
         stage("zombie-before");
         if (before.kp_proc.p_stat == SZOMB) { if (inactive(&before)) continue; goto failure; }
         stage("path-before");
-        if (!executable_path(pid, first_path)) { int original_errno = failure_errno; if (inactive(&before)) continue; failure_errno = original_errno; goto failure; }
+        if (!executable_path(&before, first_path)) { int original_errno = failure_errno; if (inactive(&before)) continue; failure_errno = original_errno; goto failure; }
         stage("process-middle");
         found = read_process(pid, &middle);
         if (found == 0) continue;
@@ -204,7 +250,7 @@ int main(int argc, char **argv) {
         stage("zombie-middle");
         if (middle.kp_proc.p_stat == SZOMB) { if (inactive(&middle)) continue; goto failure; }
         stage("path-after");
-        if (!executable_path(pid, second_path)) { int original_errno = failure_errno; if (inactive(&middle)) continue; failure_errno = original_errno; goto failure; }
+        if (!executable_path(&middle, second_path)) { int original_errno = failure_errno; if (inactive(&middle)) continue; failure_errno = original_errno; goto failure; }
         stage("process-after");
         found = read_process(pid, &after);
         if (found == 0) continue;
@@ -228,8 +274,10 @@ int main(int argc, char **argv) {
     result = 0;
     goto finish;
 failure:
-    /* Fixed stages/recheck classes and bounded original errno expose no process identities or paths. */
-    fprintf(stderr, "HQ inventory failure: stage=%s errno=%d recheck=%s\n", failure_stage, failure_errno >= 0 && failure_errno <= 4095 ? failure_errno : 0, failure_recheck);
+    /* Fixed classes and bounded original errno expose no process identities or paths. */
+    fprintf(stderr, "HQ inventory failure: stage=%s errno=%d recheck=%s", failure_stage, failure_errno >= 0 && failure_errno <= 4095 ? failure_errno : 0, failure_recheck);
+    if (failure_path_result) fprintf(stderr, " path-result=%s before=%s recheck-class=%s", failure_path_result, failure_before_class, failure_recheck_class);
+    fputc('\n', stderr);
 finish:
     free(processes);
     free(out.bytes);
