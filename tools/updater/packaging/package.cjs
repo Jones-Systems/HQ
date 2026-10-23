@@ -165,7 +165,7 @@ function signAndVerify(bundle, architecture, run = command, signing = { mode: 'a
     for (const { filename, identifier } of signingTargets(bundle, run)) {
       const entitlements = filename.endsWith('.app') ? ['--entitlements', path.join(__dirname, 'entitlements.plist')] : [];
       run('/usr/bin/codesign', ['--force', '--sign', signing.identity, '--keychain', signing.keychain, '--timestamp', '--options', 'runtime', '--identifier', identifier, ...entitlements, filename]);
-      run('/usr/bin/codesign', ['--verify', '--strict', '-R', requirement(identifier), filename]);
+      run('/usr/bin/codesign', ['--verify', '--strict', '-R', `=${requirement(identifier)}`, filename]);
       verifySignatureDetails(run('/usr/bin/codesign', ['--display', '--verbose=4', filename], { captureStderr: true }), identifier, true);
     }
     verifyDesignatedRequirement(run('/usr/bin/codesign', ['--display', '-r-', bundle], { captureStderr: true }), PRODUCT.bundleId);
@@ -190,7 +190,7 @@ function notarizeAndStaple(bundle, output, signing, run = command) {
     run('/usr/bin/xcrun', ['stapler', 'staple', bundle]);
     run('/usr/bin/xcrun', ['stapler', 'validate', bundle]);
     run('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=2', bundle]);
-    run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '-R', requirement(), bundle]);
+    run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '-R', `=${requirement()}`, bundle]);
   } finally { fs.rmSync(submission, { force: true }); }
 }
 

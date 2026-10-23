@@ -101,7 +101,7 @@ function createNativeAdapter({ fs: io = fs, execFile = promisify(cp.execFile), s
     try {
       verifySignatureDetails(details, receipt.bundleId, Boolean(receipt.signingPolicy));
       if (receipt.signingPolicy) {
-        await execute('/usr/bin/codesign', ['--verify', '--deep', '--strict', '-R', requirement(receipt.bundleId), bundlePath]);
+        await execute('/usr/bin/codesign', ['--verify', '--deep', '--strict', '-R', `=${requirement(receipt.bundleId)}`, bundlePath]);
         const designated = await execute('/usr/bin/codesign', ['--display', '-r-', bundlePath]);
         verifyDesignatedRequirement(String(designated.stderr || designated.stdout), receipt.bundleId);
         await execute('/usr/bin/xcrun', ['stapler', 'validate', bundlePath]);

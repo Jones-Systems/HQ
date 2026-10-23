@@ -206,7 +206,7 @@ test('Developer ID signs nested code inside out with stable IDs, timestamp and h
     assert.equal(signs.length, targets.length);
     assert.equal(signs.at(-1)[1].at(-1), bundle);
     assert.ok(signs.every(([, args]) => args.includes('--timestamp') && args.includes('runtime') && !args.includes('--deep') && !args.includes('-')));
-    assert.ok(calls.some(([, args]) => args.includes('-R') && args.includes(requirement())));
+    assert.ok(targets.every(target => calls.some(([, args]) => args.includes('-R') && args.includes(`=${requirement(target.identifier)}`))));
     assert.throws(() => signAndVerify(bundle, 'arm64', run, { mode: 'developer-id' }), /identity and isolated keychain/);
     assert.throws(() => signAndVerify(bundle, 'arm64', run, { mode: 'automatic' }), /explicit signing mode/);
   });
@@ -234,6 +234,8 @@ test('notarization must be accepted and stapled before distribution; failed subm
     const accepted = exercise('Accepted');
     assert.ok(accepted.some(([, args]) => args[0] === 'stapler' && args[1] === 'validate'));
     assert.ok(accepted.some(([file]) => file === '/usr/sbin/spctl'));
+    const { requirement } = require('../../signing.cjs');
+    assert.ok(accepted.some(([, args]) => args.includes('-R') && args.includes(`=${requirement()}`)));
     assert.ok(!exercise('Invalid').some(([, args]) => args[0] === 'stapler'));
   });
 });

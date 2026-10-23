@@ -569,7 +569,7 @@ test('production verification rejects wrong team, wrong ID, ad-hoc fallback and 
     return calls;
   };
   const calls = await verify();
-  assert.ok(calls.some(([file, args]) => file === '/usr/bin/codesign' && args.includes(requirement())));
+  assert.ok(calls.some(([file, args]) => file === '/usr/bin/codesign' && args.includes(`=${requirement()}`)));
   assert.ok(calls.some(([file]) => file === '/usr/bin/xcrun'));
   for (const change of [
     { details: details.replaceAll('2CUPSQS986', 'WRONGTEAM00') },
