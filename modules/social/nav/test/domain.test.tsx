@@ -268,6 +268,19 @@ describe('Overview', () => {
     expect(effects(s)).toHaveLength(0);
   });
 
+  it('opens an unsaved Start draft from Needs attention at its run receipt, not a missing page', async () => {
+    socialSession(FIXTURE_PROJECT_ID).openEditor(`workbench-run:${FIXTURE_IDS.exampleRun}`, null, {
+      title: 'Draft from a run', body: 'Half-written', brand_id: FIXTURE_IDS.larkspur, channel: 'General', planned_date: '', archived: 0,
+    });
+    const s = setup();
+    await overview();
+    const attention = within(screen.getByRole('region', { name: 'Needs attention' }));
+    await s.user.click(attention.getByRole('button', { name: /^Draft from a run/u }));
+    expect(s.destination()).toBe(`runs/${FIXTURE_IDS.exampleRun}`);
+    expect(screen.queryByText("This Social page doesn't exist")).toBeNull();
+    expect(effects(s)).toHaveLength(0);
+  });
+
   it('shows Offline with the last synced time and Unknown for active runs when the service is unreachable', async () => {
     const s = setup();
     await overview();

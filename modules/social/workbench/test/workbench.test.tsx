@@ -31,8 +31,8 @@ interface Setup {
   readonly unmount: () => void;
 }
 
-function setup({ destination = 'workbenches', features, visible = true }: { destination?: string; features?: string[]; visible?: boolean } = {}): Setup {
-  const fixture = createWorkbenchFixture(features ? { features } : {});
+function setup({ destination = 'workbenches', features, visible = true, delay }: { destination?: string; features?: string[]; visible?: boolean; delay?: () => Promise<void> } = {}): Setup {
+  const fixture = createWorkbenchFixture({ ...(features ? { features } : {}), ...(delay ? { delay } : {}) });
   const recorded = recordCalls(fixture.port);
   const visibleControl = visibilityControl(visible);
   let current = destination;
@@ -328,6 +328,41 @@ describe('Start draft from a result', () => {
     await s.user.click(screen.getByRole('button', { name: 'Open in library' }));
     expect(s.destination()).toBe(`library/${draft.id}`);
     expect(executions(s.recorded)).toHaveLength(1);
+  });
+
+  it('shows an unknown save with Check and blocks saving again until the check says it did not happen', async () => {
+    const s = setup({ destination: 'workbenches/x-studio' });
+    await finishedStudioRun(s);
+    const before = s.fixture.controls.inspect().content.length;
+    const saves = () => s.recorded.calls().filter((call) => call.method === 'saveDraft');
+    await s.user.click(screen.getByRole('button', { name: 'Start draft' }));
+    s.fixture.controls.failNext('saveDraft', { kind: 'unknown', attemptedAt: '2026-10-20T12:00:00Z' });
+    await s.user.click(screen.getByRole('button', { name: 'Save to library' }));
+    expect(await screen.findByText('Save result unknown')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    await s.user.click(screen.getByRole('button', { name: 'Save to library' }));
+    expect(saves()).toHaveLength(1);
+    await s.user.click(screen.getByRole('button', { name: 'Check' }));
+    expect(await screen.findByText(/the save did not happen/u)).toBeTruthy();
+    await s.user.click(screen.getByRole('button', { name: 'Save to library' }));
+    await screen.findByText('Draft in library');
+    expect(saves()).toHaveLength(2);
+    expect(s.fixture.controls.inspect().content).toHaveLength(before + 1);
+    expect(executions(s.recorded)).toHaveLength(1);
+  });
+
+  it('keeps Discard unavailable while the first save is in flight', async () => {
+    let release: () => void = () => undefined;
+    let gate: Promise<void> = Promise.resolve();
+    const s = setup({ destination: 'workbenches/x-studio', delay: () => gate });
+    await finishedStudioRun(s);
+    await s.user.click(screen.getByRole('button', { name: 'Start draft' }));
+    gate = new Promise((resolve) => { release = resolve; });
+    await s.user.click(screen.getByRole('button', { name: 'Save to library' }));
+    expect(await screen.findByText('Saving…', { selector: '[role="status"]' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Discard' }) as HTMLButtonElement).disabled).toBe(true);
+    act(() => release());
+    await screen.findByText('Draft in library');
   });
 
   it('without hq-references-v1 the citation is shown as not saved and never silently dropped', async () => {
