@@ -1,0 +1,25 @@
+/* HQD-12 imports surface. Uses shell variables; root decides when to load. */
+.hqd-imports { display: grid; gap: 28px; max-width: 760px; }
+.hqd-imports__header h2 { margin: 0 0 6px; font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+.hqd-imports__group { display: grid; gap: 10px; border: 0; border-top: 1px solid var(--line); margin: 0; padding: 18px 0 0; min-width: 0; }
+.hqd-imports__group h3, .hqd-imports__group legend { margin: 0; padding: 0; font-size: 13px; font-weight: 600; }
+.hqd-imports__group legend { float: left; width: 100%; margin-bottom: 10px; }
+.hqd-imports button { justify-self: start; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 7px 12px; font-size: 13px; }
+.hqd-imports button:disabled { cursor: not-allowed; opacity: 0.55; }
+.hqd-imports button:focus-visible, .hqd-imports input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hqd-imports__primary { background: var(--accent) !important; color: var(--surface) !important; border-color: transparent !important; }
+.hqd-imports__hint, .hqd-imports__detail, .hqd-imports__unavailable { margin: 0; font-size: 12px; color: var(--muted); }
+.hqd-imports__headline { margin: 0; font-size: 13px; color: var(--text); }
+.hqd-imports__rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.hqd-imports__rows li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 6px; background: var(--selected); font-size: 12px; }
+.hqd-imports__rows li[data-tone="attention"] { box-shadow: inset 3px 0 0 var(--accent); }
+.hqd-imports__rows li[data-undone="true"] { opacity: 0.6; }
+.hqd-imports__key { min-width: 0; overflow-wrap: anywhere; }
+.hqd-imports__action { color: var(--muted); white-space: nowrap; }
+.hqd-imports__buttons { display: flex; gap: 6px; }
+.hqd-imports__choice, .hqd-imports__confirm { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; }
+.hqd-imports__choice span { display: grid; gap: 2px; }
+.hqd-imports__choice small { color: var(--muted); font-size: 12px; }
+.hqd-imports__export { margin: 6px 0 0; border-top: 0; padding-top: 0; }
+.hqd-imports__export code { font-size: 11px; overflow-wrap: anywhere; }
+.hqd-imports__message { margin: 0; font-size: 12px; }
