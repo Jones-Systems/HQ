@@ -19,10 +19,12 @@
 
 static const char *failure_stage = "allocation";
 static int failure_errno = 0;
+static const char *failure_recheck = "not-run";
 
 static void stage(const char *value) {
     failure_stage = value;
     failure_errno = 0;
+    failure_recheck = "not-run";
 }
 
 struct output {
@@ -115,7 +117,10 @@ static bool same_birth(const struct kinfo_proc *left, const struct kinfo_proc *r
 static bool inactive(const struct kinfo_proc *expected) {
     struct kinfo_proc current;
     int found = read_process(expected->kp_proc.p_pid, &current);
-    return found == 0 || (found == 1 && same_birth(expected, &current) && current.kp_proc.p_stat == SZOMB);
+    bool is_inactive = found == 0 || (found == 1 && same_birth(expected, &current) && current.kp_proc.p_stat == SZOMB);
+    /* Classify only the existing recheck; uncertainty and PID reuse still fail closed. */
+    if (!is_inactive) failure_recheck = found < 0 ? "unavailable" : same_birth(expected, &current) ? "same-live" : "reused";
+    return is_inactive;
 }
 
 static bool executable_path(pid_t pid, char *buffer) {
@@ -223,8 +228,8 @@ int main(int argc, char **argv) {
     result = 0;
     goto finish;
 failure:
-    /* Fixed stages and bounded errno never expose process identities or paths. */
-    fprintf(stderr, "HQ inventory failure: stage=%s errno=%d\n", failure_stage, failure_errno >= 0 && failure_errno <= 4095 ? failure_errno : 0);
+    /* Fixed stages/recheck classes and bounded original errno expose no process identities or paths. */
+    fprintf(stderr, "HQ inventory failure: stage=%s errno=%d recheck=%s\n", failure_stage, failure_errno >= 0 && failure_errno <= 4095 ? failure_errno : 0, failure_recheck);
 finish:
     free(processes);
     free(out.bytes);

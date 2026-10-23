@@ -82,7 +82,7 @@ test('process evidence distinguishes dead PID, reused start, reboot and unavaila
   assert.equal(await denied.observe(current), 'unknown');
 });
 
-test('inventory failure reports only bounded stage, errno and child status without native output', async () => {
+test('inventory failure reports only bounded stage, errno, recheck and child status without native output', async () => {
   const cases = [
     [{ code: 2, signal: null, stderr: 'HQ inventory failure: stage=path-before errno=1\n', stdout: 'private process data' },
       { stage: 'path-before', errno: 1, exitCode: 2, signal: null }],
@@ -98,9 +98,67 @@ test('inventory failure reports only bounded stage, errno and child status witho
     const native = createNativeAdapter({ platform: 'darwin', execFile: async () => { throw cause; } });
     await assert.rejects(native.processTable(), error => {
       assert.equal(error.code, 'recovery-required');
+      const diagnostic = { ...expected, recheck: 'unavailable' };
+      assert.deepEqual(error.inventoryFailure, diagnostic);
+      assert.ok(error.message.includes(JSON.stringify(diagnostic)));
+      assert.doesNotMatch(error.message, /private|PRIVATE|999999/);
+      return true;
+    });
+    assert.equal(await native.observe({}), 'unknown');
+  }
+});
+
+test('inventory lifetime recheck distinguishes same-live, reused and unavailable while holding activation', async () => {
+  for (const stage of ['path-before', 'path-after']) for (const recheck of ['same-live', 'reused', 'unavailable']) {
+    let queries = 0;
+    const native = createNativeAdapter({ platform: 'darwin', execFile: async (file, args) => {
+      queries++;
+      assert.equal(file, inventoryPath);
+      assert.deepEqual(args, []);
+      throw Object.assign(new Error('private command line'), {
+        code: 2, stderr: `HQ inventory failure: stage=${stage} errno=2 recheck=${recheck}\n`,
+        stdout: 'private process data',
+      });
+    } });
+    const expected = { stage, errno: 2, exitCode: 2, signal: null, recheck };
+    await assert.rejects(native.processTable(), error => {
+      assert.equal(error.code, 'recovery-required');
       assert.deepEqual(error.inventoryFailure, expected);
       assert.ok(error.message.includes(JSON.stringify(expected)));
-      assert.doesNotMatch(error.message, /private|PRIVATE|999999/);
+      assert.doesNotMatch(error.message, /private/);
+      return true;
+    });
+    assert.equal(queries, 1);
+    await assert.rejects(native.identity(101), { code: 'recovery-required' });
+    assert.equal(queries, 2);
+    assert.equal(await native.observe({ pid: 101 }), 'unknown');
+    assert.equal(queries, 3);
+  }
+});
+
+test('inventory lifetime recheck accepts not-run and sanitizes unknown or malformed diagnostics', async () => {
+  const valid = 'HQ inventory failure: stage=path-before errno=2 recheck=same-live';
+  const cases = [
+    ['HQ inventory failure: stage=enumeration errno=12 recheck=not-run\n', { stage: 'enumeration', errno: 12, recheck: 'not-run' }],
+    ['HQ inventory failure: stage=path-after errno=4095 recheck=unavailable', { stage: 'path-after', errno: 4095, recheck: 'unavailable' }],
+    ...[
+      valid.replace('same-live', 'PRIVATE'), valid.replace('same-live', 'dead'),
+      valid.replace('same-live', ''), valid.replace('same-live', '101'),
+      valid.replace('same-live', '/private/path'), valid.replace('errno=2', 'errno=4096'),
+      valid.replace('path-before', 'private-stage'), `${valid} pid=101`,
+      `${valid} recheck=reused`, `${valid}\nprivate output`, `${valid}\n\n`,
+    ].map(stderr => [stderr, { stage: 'unavailable', errno: null, recheck: 'unavailable' }]),
+  ];
+  for (const [stderr, fields] of cases) {
+    const native = createNativeAdapter({ platform: 'darwin', execFile: async () => {
+      throw Object.assign(new Error('private command line'), { code: 2, stderr });
+    } });
+    await assert.rejects(native.processTable(), error => {
+      const expected = { stage: fields.stage, errno: fields.errno, exitCode: 2, signal: null, recheck: fields.recheck };
+      assert.equal(error.code, 'recovery-required');
+      assert.deepEqual(error.inventoryFailure, expected);
+      assert.ok(error.message.includes(JSON.stringify(expected)));
+      assert.doesNotMatch(error.message, /private|PRIVATE|pid=101/);
       return true;
     });
     assert.equal(await native.observe({}), 'unknown');

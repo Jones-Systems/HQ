@@ -13,16 +13,19 @@ const INVENTORY_PATH = path.join(__dirname, 'process-inventory');
 const MAX_INVENTORY_BYTES = 4 * 1024 * 1024;
 const MAX_INVENTORY_PROCESSES = 32768;
 const INVENTORY_FAILURE_STAGES = new Set(['allocation', 'boot', 'enumeration', 'output', 'process-before', 'kernel', 'process-identity', 'zombie-before', 'path-before', 'process-middle', 'zombie-middle', 'path-after', 'process-after', 'zombie-after', 'observer', 'boot-after']);
+const INVENTORY_FAILURE_RECHECKS = new Set(['not-run', 'same-live', 'reused', 'unavailable']);
 
 function inventoryFailure(cause) {
   // Native output may contain process data; only this closed diagnostic record is publishable.
-  const match = typeof cause?.stderr === 'string' && /^HQ inventory failure: stage=([a-z-]+) errno=([0-9]{1,4})\n?$/.exec(cause.stderr);
-  const valid = match && INVENTORY_FAILURE_STAGES.has(match[1]) && Number(match[2]) <= 4095;
+  const match = typeof cause?.stderr === 'string' && /^HQ inventory failure: stage=([a-z-]+) errno=([0-9]{1,4})(?: recheck=([a-z-]+))?\n?$/.exec(cause.stderr);
+  const valid = match && match[0] === cause.stderr && INVENTORY_FAILURE_STAGES.has(match[1]) && Number(match[2]) <= 4095 && (match[3] === undefined || INVENTORY_FAILURE_RECHECKS.has(match[3]));
   const launchErrno = Number.isInteger(cause?.errno) && Math.abs(cause.errno) <= 4095 ? Math.abs(cause.errno) : null;
   return {
     stage: valid ? match[1] : 'unavailable', errno: valid ? Number(match[2]) : launchErrno,
     exitCode: Number.isInteger(cause?.code) && cause.code >= 0 && cause.code <= 255 ? cause.code : null,
     signal: ['SIGABRT', 'SIGBUS', 'SIGILL', 'SIGINT', 'SIGKILL', 'SIGSEGV', 'SIGTERM', 'SIGTRAP'].includes(cause?.signal) ? cause.signal : null,
+    // Legacy helpers supply no recheck evidence; diagnostic labels never authorize activation.
+    recheck: valid && match[3] !== undefined ? match[3] : 'unavailable',
   };
 }
 
