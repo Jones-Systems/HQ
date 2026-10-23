@@ -113,7 +113,11 @@ test('retained symlinks and directory identity changes fail closed', async t => 
   await fs.mkdir(dist);
   await assert.rejects(inspectStorage(plan, { testContext, previous: before }), /identity|mount/);
   await fs.symlink(evidence, path.join(dist, 'unsafe'));
-  await assert.rejects(inspectStorage(plan, { testContext }), /Unsafe retained/);
+  await assert.rejects(inspectStorage(plan, { testContext }), error => {
+    assert.match(error.message, /^(?:Unsafe retained entry|Ambiguous ownership): /);
+    assert.ok(error.message.endsWith(path.join(dist, 'unsafe')));
+    return true;
+  });
 });
 
 test('filesystem unknowns and changed mount measurements refuse before callback', async t => {
