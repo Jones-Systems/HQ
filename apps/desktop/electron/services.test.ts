@@ -206,3 +206,17 @@ it('invalid outbound headers fail before send and clear the timeout', async () =
   expect(await sendHttp(new URL('http://127.0.0.1:1'), { method: 'POST', path: '/', body: '{}', headers: { 'X-Workspace-Token': '\u1234' }, loss: 'unknown' })).toEqual(unavailable);
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it('Social saveContent allows only a null or exact-shaped planning slot on the existing route', () => {
+  const draft = { title: 'Editorial plan', body: '', brand_id: 'default', channel: 'X', planned_date: '2026-10-22', archived: 0 };
+  const slot = { start: '09:15', duration_minutes: 30, timezone: 'America/New_York' };
+  for (const planning_slot of [null, slot]) {
+    const encoded = encodeSocial('saveContent', { ...draft, planning_slot });
+    expect(encoded).toMatchObject({ path: '/api/content', method: 'POST', loss: 'unknown' });
+    expect(JSON.parse(encoded!.body!)).toEqual({ ...draft, planning_slot });
+  }
+  for (const planning_slot of [[], '09:15', {}, { ...slot, duration_minutes: '30' }, { ...slot, timezone: 3 }, { ...slot, end: '09:45' }]) {
+    expect(encodeSocial('saveContent', { ...draft, planning_slot })).toBeNull();
+  }
+  expect(JSON.parse(encodeSocial('saveContent', draft)!.body!)).not.toHaveProperty('planning_slot');
+});

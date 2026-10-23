@@ -1,3 +1,4 @@
+import { Button } from '@hq/ui';
 import type { CSSProperties } from 'react';
 import type { Tool } from '../editor.ts';
 
@@ -38,8 +39,6 @@ const bar: CSSProperties = {
   display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, padding: 8,
   borderBottom: '1px solid var(--line)', background: 'var(--surface)', fontSize: 12,
 };
-const button: CSSProperties = { border: '1px solid var(--line)', borderRadius: 6, padding: '6px 10px', background: 'transparent' };
-const pressed: CSSProperties = { ...button, background: 'var(--selected)', borderColor: 'var(--accent)', fontWeight: 600 };
 const separator: CSSProperties = { width: 1, alignSelf: 'stretch', background: 'var(--line)', margin: '0 4px' };
 
 export function AnnotationToolbar(props: ToolbarProps) {
@@ -49,22 +48,22 @@ export function AnnotationToolbar(props: ToolbarProps) {
       const needsLive = spec.tool === 'pick' || spec.tool === 'cite';
       const disabled = readOnly || (needsLive && !liveAvailable);
       const active = tool === spec.tool;
-      return <button key={spec.tool} type="button" data-tool={spec.tool} aria-pressed={active}
-        aria-keyshortcuts={spec.shortcut} disabled={disabled} style={active ? pressed : button}
+      return <Button size="sm" key={spec.tool} type="button" data-tool={spec.tool} aria-pressed={active}
+        aria-keyshortcuts={spec.shortcut} disabled={disabled} variant={active ? 'primary' : 'secondary'}
         title={needsLive && !liveAvailable ? `${spec.label} needs a live preview` : `${spec.hint} (${spec.shortcut})`}
-        onClick={() => props.onTool(active ? null : spec.tool)}>{spec.label}</button>;
+        onClick={() => props.onTool(active ? null : spec.tool)}>{spec.label}</Button>;
     })}
     <span style={separator} aria-hidden="true" />
-    <button type="button" style={button} disabled={readOnly || !props.canUndo} aria-keyshortcuts="Control+Z Meta+Z" onClick={props.onUndo}>Undo</button>
-    <button type="button" style={button} disabled={readOnly || !props.canRedo} aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" onClick={props.onRedo}>Redo</button>
+    <Button size="sm" type="button" disabled={readOnly || !props.canUndo} aria-keyshortcuts="Control+Z Meta+Z" onClick={props.onUndo}>Undo</Button>
+    <Button size="sm" type="button" disabled={readOnly || !props.canRedo} aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" onClick={props.onRedo}>Redo</Button>
     <span style={separator} aria-hidden="true" />
     <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--muted)' }}>
       Note for next mark
       <input type="text" value={props.pendingNote} disabled={readOnly} maxLength={4000}
         onChange={(event) => props.onPendingNote(event.target.value)}
-        style={{ ...button, minWidth: 160, color: 'var(--text)' }} />
+        style={{ minWidth: 160, color: 'var(--hq-text)', background: 'var(--hq-surface)', border: '1px solid var(--hq-border-control)', borderRadius: 7, padding: '6px 10px', font: 'inherit' }} />
     </label>
-    <button type="button" style={button} onClick={props.onCopy}>Copy</button>
+    <Button size="sm" type="button" onClick={props.onCopy}>Copy</Button>
   </div>;
 }
 

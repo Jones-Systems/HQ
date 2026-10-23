@@ -247,6 +247,32 @@ describe('unknown writes: no automatic retry; Check looks up, Apply is explicit 
     expect(stored().filter((i) => i.title === 'Lost twice')).toHaveLength(1);
   });
 
+  it('a Check or Apply that cannot reach the Planner withdraws Apply: nothing is offered that the adapter would refuse', async () => {
+    const { store, wire, sent, idOf, stored } = await liveSetup();
+    wire.next('create', 'drop');
+    const requestId = idOf(await store.create({ title: 'Recheck offline' }));
+    await store.reconcile();
+    expect(store.canApply(requestId)).toBe(true);
+    // A second Check that cannot reach the Planner consumes the adapter's Apply authorization.
+    wire.next('replay', 'unavailable');
+    expect(await store.checkUnconfirmed(requestId)).toBe('stopped');
+    expect(store.getState().unconfirmed[0]).toMatchObject({ requestId, state: 'unconfirmed' });
+    expect(store.getState().unconfirmed[0]!.recovery).toBeUndefined();
+    expect(store.canApply(requestId)).toBe(false);
+    expect(await store.retryUnconfirmed(requestId)).toBe('refused');
+    // An Apply that cannot reach the Planner also needs a fresh Check.
+    await store.reconcile();
+    expect(store.canApply(requestId)).toBe(true);
+    wire.next('replay', 'unavailable');
+    expect(await store.retryUnconfirmed(requestId)).toBe('stopped');
+    expect(store.canApply(requestId)).toBe(false);
+    expect(store.getState().unconfirmed[0]!.recovery).toBeUndefined();
+    await store.reconcile();
+    expect(await store.retryUnconfirmed(requestId)).toBe('confirmed');
+    expect(sent(requestId)).toEqual(['create', 'replay:lookup', 'replay:lookup', 'replay:lookup', 'replay:resend', 'replay:lookup', 'replay:resend']);
+    expect(stored().filter((i) => i.title === 'Recheck offline')).toHaveLength(1);
+  });
+
   it('flags a same-title item as possibly saved, never as proof', async () => {
     const { store, faults, device, otherRid } = await setup();
     faults.next('drop');

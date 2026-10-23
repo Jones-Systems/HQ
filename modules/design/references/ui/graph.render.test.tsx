@@ -4,6 +4,7 @@
  */
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, test } from 'vitest';
+import { Window } from 'happy-dom';
 import { fakePorts } from '../src/fakes.ts';
 import { deriveSubjectId } from '../src/graph-identity.ts';
 import { ReferenceGraph } from '../src/graph-service.ts';
@@ -29,6 +30,23 @@ async function seeded() {
 }
 
 describe('ReferenceGraphView rendered markup', () => {
+  test('unselected guidance introduces and describes the subject list, outside the detail layout', async () => {
+    const graph = await seeded();
+    const view = buildGraphView(graph.state, graph.access, { subjectId: null, captureId: null }, null);
+    const window = new Window();
+    try {
+      const document = window.document;
+      document.body.innerHTML = renderToStaticMarkup(<ReferenceGraphView view={view} {...actions} />);
+      const tree = document.querySelector('ul[aria-label="Sites, apps and their screens"]')!;
+      const instruction = document.getElementById(tree.getAttribute('aria-describedby') ?? '');
+      expect(instruction?.textContent).toBe('Select a site, page, app, flow or screen.');
+      expect(instruction?.parentElement).toBe(document.querySelector('section'));
+      expect(instruction?.nextElementSibling?.contains(tree)).toBe(true);
+    } finally {
+      await window.happyDOM.close();
+    }
+  });
+
   test('the tree shows sites, pages, apps, flows and screens with distinct availability states', async () => {
     const graph = await seeded();
     const view = buildGraphView(graph.state, graph.access, { subjectId: null, captureId: null }, { id: 'proj_a', name: 'Alpha' });
@@ -47,6 +65,8 @@ describe('ReferenceGraphView rendered markup', () => {
     const html = renderToStaticMarkup(<ReferenceGraphView view={view} {...actions} />);
     expect(html).toContain('aria-label="Subject details"');
     expect(html).toContain('Captures, newest first');
+    expect(html).not.toContain('Select a site, page, app, flow or screen.');
+    expect(html).not.toContain('aria-describedby');
     expect(html).toContain('Screenshot of website');
     expect(html).toContain('Rights unknown');
     expect(html).toContain('Pin this capture in Alpha');

@@ -1,3 +1,4 @@
+import { SecondaryBar, SecondaryPanel } from '../../../ui/src/secondary-panels.tsx';
 import { useEffect, useMemo, useReducer, useState, type Dispatch } from 'react';
 import {
   artboardId, canvasItemId, type CanvasId, type CanvasItemDescriptor, type CanvasStoragePort, type IdPort, type ProjectId, type Size,
@@ -100,11 +101,11 @@ export function CanvasWorkspace({ projectId, canvasId, storage, registry, ids, r
   }, [state.camera, state.selection, state.focusId, status.kind]);
 
   return <div className="hq-canvas-workspace">
-    <Toolbar state={state} dispatch={dispatch} registry={registry} projectId={projectId} ids={ids} />
+    <SecondaryBar name="canvas-tools" label="Canvas tools"><Toolbar state={state} dispatch={dispatch} registry={registry} projectId={projectId} ids={ids} /></SecondaryBar>
     <div className="hq-canvas-body">
       <CanvasView state={state} dispatch={dispatch} registry={registry} platform={platform} renderers={renderers} />
-      <Inspector model={model} selection={state.selection} gridSize={arrangement.grid.size} gridSnap={arrangement.grid.snap}
-        readOnly={state.readOnly} hiddenIds={arrangement.items.filter((item) => item.hidden).map((item) => item.id)} dispatch={dispatch} />
+      <SecondaryPanel name="canvas-inspector" label="Canvas inspector" initial={280}><Inspector model={model} selection={state.selection} gridSize={arrangement.grid.size} gridSnap={arrangement.grid.snap}
+        readOnly={state.readOnly} hiddenIds={arrangement.items.filter((item) => item.hidden).map((item) => item.id)} dispatch={dispatch} /></SecondaryPanel>
     </div>
     <p className="hq-canvas-status" role="status" data-status={status.kind}>
       {STATUS_TEXT[status.kind]}{status.kind === 'read-only' || status.kind === 'error' ? ` — ${status.message}` : ''}

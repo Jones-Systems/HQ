@@ -9,6 +9,10 @@ contextBridge.exposeInMainWorld('hqDesktop', desktop);
 
 // The realm is shared by trusted modules; these objects are not hard domain isolation.
 const services: import('@hq/contracts/services').HqServices = Object.freeze({
+  jonesCode: Object.freeze<import('@hq/contracts/jones-code').JonesTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:design', route, params) }),
+  sources: Object.freeze<import('@hq/contracts/catalog').SourceTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:sources', route, params) }),
+  preview: Object.freeze<import('@hq/contracts/preview').PreviewTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:preview', route, params) }),
+  wikiAdmin: Object.freeze<import('@hq/contracts/wiki-admin').WikiAdminTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:wiki-admin', route, params) }),
   wiki: Object.freeze<import('@hq/contracts/wiki').WikiServiceTransport>({
     listSources: () => ipcRenderer.invoke('hq:svc:wiki', 'listSources', []),
     search: request => ipcRenderer.invoke('hq:svc:wiki', 'search', [request]),

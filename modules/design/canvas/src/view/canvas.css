@@ -55,3 +55,6 @@
 .hq-inspector-actions div { display: flex; flex-wrap: wrap; gap: 4px; }
 .hq-inspector button { padding: 3px 8px; border: 1px solid var(--line, #e2e5eb); border-radius: 4px; background: transparent; }
 .hq-inspector-warning { padding: 6px 8px; border-radius: 4px; background: color-mix(in srgb, #f59e0b 16%, transparent); }
+
+.hq-canvas-body { display: flex; }
+.hq-canvas-body > :first-child { flex: 1; min-width: 0; }

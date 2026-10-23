@@ -61,3 +61,21 @@ test('read-only and fenced access produce banners and disable editing', async ()
     { query: '', collectionId: null, selectedId: null }, null);
   assert.match(empty.emptyMessage!, /No references yet/u);
 });
+
+test('thumbnail presentation follows source kind and stored dimensions', async () => {
+  const { thumbnailPresentation } = await import('../ui/view-model.ts');
+  const ios = { kind: 'app', platform: 'ios', appId: 'com.example.app', appName: 'Example', screen: null } as const;
+  const web = { kind: 'url', url: 'https://example.test/' } as const;
+  assert.equal(thumbnailPresentation(ios, 1179, 2556), 'phone');
+  assert.equal(thumbnailPresentation(ios, null, null), 'phone', 'a phone app screen is never cropped when its size is unknown');
+  assert.equal(thumbnailPresentation(ios, 2556, 1179), 'contained', 'a landscape phone capture stays whole without a portrait frame');
+  assert.equal(thumbnailPresentation({ ...ios, platform: 'ipados' }, 1640, 2360), 'contained');
+  assert.equal(thumbnailPresentation({ ...ios, platform: 'android' }, 1080, 2400), 'phone');
+  assert.equal(thumbnailPresentation(web, 1440, 900), 'banner');
+  assert.equal(thumbnailPresentation(web, null, null), 'banner');
+  assert.equal(thumbnailPresentation(web, 800, 800), 'contained', 'square images stay whole');
+  assert.equal(thumbnailPresentation(web, 390, 844), 'contained', 'portrait website captures stay whole');
+  const { library, ids } = await setup();
+  const view = buildLibraryView(library.state, library.access, { query: '', collectionId: null, selectedId: null }, null);
+  assert.deepEqual(ids.map((id) => view.cards.find((card) => card.id === id)?.thumbnail?.presentation ?? null), ['banner', 'phone', null]);
+});

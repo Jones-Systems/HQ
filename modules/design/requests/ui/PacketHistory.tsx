@@ -1,3 +1,4 @@
+import { Button } from '@hq/ui';
 import { useState } from 'react';
 import type { DispatchSlot, NavigationPort } from '../src/contract.ts';
 import type { RequestSession, SessionState } from '../src/session.ts';
@@ -38,22 +39,22 @@ export function PacketHistory({ session, state, dispatch, now, navigation = null
           {' '}· {packet.attachments.length} selected attachment{packet.attachments.length === 1 ? '' : 's'}
         </div>
         {navigation && <div className="hqr-inline">
-          <button type="button" onClick={() => { navigate(navigation, { type: 'open-packet', requestId: state.requestId, packetId: packet.packetId }); }}>Open packet</button>
+          <Button type="button" onClick={() => { navigate(navigation, { type: 'open-packet', requestId: state.requestId, packetId: packet.packetId }); }}>Open packet</Button>
         </div>}
       </li>;
     })}</ol>
     <div className="hqr-send">
       {dispatch
         ? <>
-          <button type="button" disabled={!view?.canSend || state.busy !== null || confirming} onClick={() => setConfirming(true)}>
+          <Button type="button" disabled={!view?.canSend || state.busy !== null || confirming} onClick={() => setConfirming(true)}>
             Send packet #{head.lineage.sequence}…
-          </button>
+          </Button>
           {view && view.blockers.length > 0 && <ul className="hqr-blockers" aria-label="Why sending is unavailable">{view.blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
           {confirming && destination && <div className="hqr-alert" role="group" aria-label="Confirm send">
             <p>Send packet #{head.lineage.sequence} to <strong>{destination.label}</strong>? This hands the frozen packet over once. It cannot be sent again.</p>
             <div className="hqr-inline">
-              <button type="button" className="hqr-primary" onClick={() => { setConfirming(false); void session.send(dispatch, head.packetId, destination.destinationId); }}>Confirm send</button>
-              <button type="button" onClick={() => setConfirming(false)}>Cancel</button>
+              <Button type="button" variant="primary" onClick={() => { setConfirming(false); void session.send(dispatch, head.packetId, destination.destinationId); }}>Confirm send</Button>
+              <Button type="button" onClick={() => setConfirming(false)}>Cancel</Button>
             </div>
           </div>}
         </>

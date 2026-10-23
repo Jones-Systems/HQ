@@ -177,7 +177,7 @@ describe('fixed argv, minimal environment, no shell', () => {
       /^rev-parse --is-bare-repository$/,
       /^config --get remote\.origin\.url$/,
       /^rev-parse --verify --end-of-options refs\/heads\/main\^\{commit\}$/,
-      new RegExp(`^show -s --format=%ct --end-of-options ${HEX}$`),
+      new RegExp(`^show -s --no-show-signature --format=%ct --end-of-options ${HEX}$`),
       new RegExp(`^ls-tree -r -z -l --full-tree ${HEX}$`),
       new RegExp(`^cat-file blob ${HEX}$`),
     ];
@@ -247,6 +247,36 @@ describe('fixed argv, minimal environment, no shell', () => {
     }
     assert.equal(existsSync(marker), false, 'no repository hook, monitor or alias was executed');
     assert.equal(existsSync(join(scratch.root, 'index-poison')), false);
+  });
+
+  test('a signed tip with repository log.showSignature never starts its gpg.program', async () => {
+    const r = repo([{ path: 'a.md', content: 'signed' }]);
+    const marker = join(scratch.root, 'gpg-ran');
+    const program = join(scratch.root, 'gpg.sh');
+    writeExecutable(program, `#!/bin/sh\necho ran >> '${marker}'\nexit 1\n`);
+    const tree = execFileSync('git', [`--git-dir=${r.gitDir}`, 'rev-parse', `${r.commit}^{tree}`], { env: isolatedGitEnv(), encoding: 'utf8' }).trim();
+    const object = [
+      `tree ${tree}`,
+      'author a <a@example.invalid> 1700000000 +0000',
+      'committer a <a@example.invalid> 1700000000 +0000',
+      'gpgsig -----BEGIN PGP SIGNATURE-----',
+      ' ',
+      ' c2lnbmF0dXJl',
+      ' -----END PGP SIGNATURE-----',
+      '',
+      'signed',
+      '',
+    ].join('\n');
+    const signed = execFileSync('git', [`--git-dir=${r.gitDir}`, 'hash-object', '-w', '-t', 'commit', '--stdin'], { env: isolatedGitEnv(), input: object, encoding: 'utf8' }).trim();
+    execFileSync('git', [`--git-dir=${r.gitDir}`, 'update-ref', 'refs/heads/main', signed], { env: isolatedGitEnv() });
+    execFileSync('git', [`--git-dir=${r.gitDir}`, 'config', 'log.showSignature', 'true'], { env: isolatedGitEnv() });
+    execFileSync('git', [`--git-dir=${r.gitDir}`, 'config', 'gpg.program', program], { env: isolatedGitEnv() });
+
+    const pin = await createNodeGitObjectSource(profile(r.gitDir)).resolvePin();
+    assert.ok(pin.ok);
+    assert.equal(pin.ok && pin.value.commit, signed);
+    assert.equal(pin.ok && pin.value.commitTime, '2023-11-14T22:13:20Z');
+    assert.equal(existsSync(marker), false, 'the repository gpg.program was not executed');
   });
 
   test('replacement refs cannot substitute page content (--no-replace-objects)', async () => {

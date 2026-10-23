@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { it } from 'node:test';
+import { afterEach, it } from 'node:test';
+import type { DesignServiceTransport, DesignServiceValues, DesignServiceParams, DesignServiceRoute, DesignStorageResult, StoredDocument } from '@hq/contracts/services';
 import { createBridgeWorkspaceDocuments } from '../bridge-documents.ts';
 import { createDesignWorkspace } from '../workspace.ts';
 import * as fake from '../fake-workspace.ts';
@@ -12,9 +13,33 @@ import { emptyArrangement } from '../../../canvas/src/arrangement.ts';
 import { createCanvasState, reduceCanvas } from '../../../canvas/src/controller.ts';
 import { loadArrangement, saveArrangement } from '../../../canvas/src/codec.ts';
 
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+afterEach(() => {
+  if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+  else Reflect.deleteProperty(globalThis, 'window');
+});
+
 const project = { id: 'synthetic-project', name: 'Synthetic project' };
 function setup() {
   const double = createTransportDouble();
+  let catalogCache: StoredDocument | null = null;
+  const nativeTransport: DesignServiceTransport = {
+    async call<R extends DesignServiceRoute>(route: R, params: DesignServiceParams[R]): Promise<DesignStorageResult<DesignServiceValues[R]>> {
+      if (!['catalog.roots', 'cache.get', 'cache.put'].includes(route)) return double.transport.call(route, params);
+      double.calls.push({ route, params: structuredClone(params) });
+      let value: DesignServiceValues[DesignServiceRoute];
+      if (route === 'catalog.roots') value = [];
+      else if (route === 'cache.get') value = catalogCache;
+      else {
+        const input = params as DesignServiceParams['cache.put'];
+        catalogCache = { namespace: 'cache', key: input.key, value: input.value, revision: (catalogCache?.revision ?? 0) + 1,
+          valueDigest: `sha256:${'0'.repeat(64)}`, updatedAt: '2026-01-01T00:00:00Z' };
+        value = catalogCache;
+      }
+      return { ok: true, value: value as DesignServiceValues[R] };
+    },
+  };
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { hqServices: { design: nativeTransport } } });
   const workspace = createDesignWorkspace(createBridgeWorkspaceDocuments(double.transport));
   assert.equal(workspace.bridged, true);
   if (!workspace.bridged) throw new Error('Expected bridge');
@@ -45,7 +70,11 @@ it('all six sections use F1 roots; navigation and reads never put documents', as
   const canvas = await workspace.canvasFor(project);
   assert.ok(canvas);
   assert.deepEqual(await loadArrangement(canvas.storage, canvas.canvasId), { status: 'missing' });
-  assert.equal(workspace.discoveryEnv, fake.discoveryEnv);
+  assert.notEqual(workspace.discoveryEnv, fake.discoveryEnv);
+  const discovery = await workspace.discoveryEnv();
+  assert.equal(discovery.tag.status, 'cached');
+  assert.deepEqual(discovery.readPort.current(), []);
+  assert.equal(double.calls.some(({ route }) => route === 'catalog.snapshot'), false);
   assert.equal(workspace.tasteEnv, fake.tasteEnv);
   assert.equal(workspace.importsFor, fake.importsFor);
   for (const root of ['design/projects/', 'design/components/', 'design/flows/', 'design/compare/', 'design/annotations/', 'design.canvas.arrangement.v1/']) {

@@ -5,7 +5,7 @@
  * descriptor: static imports, side-effect imports, dynamic `import()`, `export … from`, and
  * `import.meta.glob`. Only `import type` / `export type` edges are erased. It asserts that no runtime
  * path reaches `storage/node.ts`, `packages/design-store/src/**`, a Node
- * builtin, or electron, and that compose code uses no `process`/`Buffer`/`require` globals.
+ * builtin, or electron, and that reachable source uses no `process`/`Buffer`/`require` globals.
  * Runtime entry to storage is only through storage/index.ts; its graph is then walked. Erased type
  * imports of storage may name only `storage/index.ts`, never `node.ts` or another storage file.
  *
@@ -120,7 +120,6 @@ function analyze(host: Host, layout: Layout): Analysis {
     const descriptor = join(layout.designDir, name, 'design-module.ts');
     if (host.read(descriptor) !== null) roots.add(descriptor);
   }
-  const scope = new Set(roots);
 
   const files = new Set<string>();
   const parent = new Map<string, string>();
@@ -144,7 +143,7 @@ function analyze(host: Host, layout: Layout): Analysis {
     files.add(file);
     const source = host.read(file);
     if (source === null || !CODE.test(file)) continue;
-    if (scope.has(file) && NODE_GLOBALS.test(withoutStrings(source))) flag(file, 'Node global (process/Buffer/require)');
+    if (NODE_GLOBALS.test(withoutStrings(source))) flag(file, 'Node global (process/Buffer/require)');
     const { edges, unanalysable } = edgesOf(source);
     for (const message of unanalysable) flag(file, message);
     for (const edge of edges) {
@@ -192,7 +191,10 @@ const LAYOUT: Layout = {
   appDir: join(DESIGN, 'app'),
   storageDir: join(DESIGN, 'app/storage'),
   storeSrc: resolve(DESIGN, '../../packages/design-store/src'),
-  workspace: { '@hq/contracts': resolve(DESIGN, '../../packages/contracts/src/index.ts') },
+  workspace: {
+    '@hq/contracts': resolve(DESIGN, '../../packages/contracts/src/index.ts'),
+    '@hq/ui': resolve(DESIGN, '../../packages/hq-ui/src/index.ts'),
+  },
 };
 const diskHost: Host = {
   read: (path) => (existsSync(path) && statSync(path).isFile() ? readFileSync(path, 'utf8') : null),
@@ -212,8 +214,13 @@ describe('production entry, compose and descriptors are renderer-safe', () => {
   it('actually walked the production graph (the proof is not vacuous)', () => {
     const names = analysis.files.map((file) => relative(DESIGN, file));
     for (const expected of [
+      '../../packages/hq-ui/src/index.ts', '../../packages/hq-ui/src/components/Button.tsx',
+      'app/compose/reference-reads.ts',
       'app/index.ts', 'app/compose/workspace.ts', 'app/compose/bridge-documents.ts', 'app/storage/index.ts', 'app/storage/projects.ts', 'app/compose/storage-seam.ts', 'app/compose/views/CanvasView.tsx',
       'ui/src/registry-glob.ts', 'canvas/design-module.ts', 'imports/design-module.ts',
+      'requests/design-module.ts', 'connector/design-module.ts', 'references/design-module.ts',
+      'app/sections/requests/View.tsx', 'app/sections/runs/View.tsx', 'app/sections/references/View.tsx',
+      'app/sections/requests/env.ts', 'app/sections/runs/pipeline.ts', 'app/sections/references/env.ts',
     ]) assert.ok(names.includes(expected), `graph includes ${expected}`);
     assert.equal(names.includes('app/storage/node.ts'), false);
     assert.equal(names.some((name) => name.startsWith('app/compose/test/')), false);
@@ -253,7 +260,10 @@ const VLAYOUT: Layout = {
   appDir: `${ROOT}/modules/design/app`,
   storageDir: `${ROOT}/modules/design/app/storage`,
   storeSrc: `${ROOT}/packages/design-store/src`,
-  workspace: { '@hq/contracts': `${ROOT}/packages/contracts/src/index.ts` },
+  workspace: {
+    '@hq/contracts': `${ROOT}/packages/contracts/src/index.ts`,
+    '@hq/ui': `${ROOT}/packages/hq-ui/src/index.ts`,
+  },
 };
 
 /** A renderer-safe baseline; each scenario overrides or adds files. */
@@ -267,6 +277,10 @@ function baseline(): Record<string, string> {
     'packages/design-store/src/fs.ts': "import { open } from 'node:fs/promises';\nexport const storeFs = open;\n",
     'packages/design-store/src/contract.ts': 'export type Doc = string;\n',
     'packages/contracts/src/index.ts': 'export const isDestination = (value: string) => value.length > 0;\n',
+    'packages/hq-ui/src/index.ts': "import './theme.css';\nexport { Button } from './components';\n",
+    'packages/hq-ui/src/theme.css': ':root { --hq-text: #20232a; }',
+    'packages/hq-ui/src/components/index.ts': "export { Button } from './Button';\n",
+    'packages/hq-ui/src/components/Button.tsx': "import { createElement } from 'react';\nexport const Button = () => createElement('button');\n",
   };
 }
 
@@ -361,6 +375,27 @@ describe('the analyzer catches each kind of violation (in-memory fixtures)', () 
     const walked = run({ [A]: "import { isDestination } from '@hq/contracts';\nexport const a = isDestination;\n" });
     assert.deepEqual(walked.external, []);
     assert.ok(walked.files.includes(`${ROOT}/packages/contracts/src/index.ts`));
+  });
+
+  it('walks the shared UI kit through CSS, directory exports and extensionless component imports', () => {
+    const walked = run({ [A]: "import { Button } from '@hq/ui';\nexport const a = Button;\n" });
+    assert.deepEqual(walked.violations, []);
+    assert.deepEqual(walked.external, ['react']);
+    for (const path of ['index.ts', 'theme.css', 'components/index.ts', 'components/Button.tsx']) {
+      assert.ok(walked.files.includes(`${ROOT}/packages/hq-ui/src/${path}`));
+    }
+  });
+
+  it('does not let a shared UI dependency bypass Node globals, builtins or protected storage boundaries', () => {
+    for (const source of [
+      "import { open } from 'node:fs';\nexport const Button = open;\n",
+      'export const Button = process.cwd();\n',
+      "export { nodeFs as Button } from '../../../../modules/design/app/storage/node.ts';\n",
+      "export { storeFs as Button } from '../../../design-store/src/fs.ts';\n",
+    ]) {
+      const result = run({ [A]: "import { Button } from '@hq/ui';\nexport const a = Button;\n", 'packages/hq-ui/src/components/Button.tsx': source });
+      assert.ok(result.violations.length > 0, source);
+    }
   });
 
   it('flags a Node builtin reached through a workspace package', () => {

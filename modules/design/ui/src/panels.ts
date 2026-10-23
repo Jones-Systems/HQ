@@ -11,7 +11,7 @@ export type PanelLayout = Readonly<Record<PanelId, PanelState>>;
 
 export interface PanelBounds { readonly min: number; readonly max: number; readonly initial: number }
 export const PANEL_BOUNDS: Readonly<Record<PanelId, PanelBounds>> = {
-  sidebar: { min: 180, max: 420, initial: 240 },
+  sidebar: { min: 80, max: 420, initial: 240 },
   inspector: { min: 240, max: 560, initial: 300 },
 };
 /** The workspace (canvas, gallery…) always keeps at least this much width. */
@@ -63,23 +63,50 @@ export function resolveLayout(layout: PanelLayout, width: number): ResolvedLayou
   }
 }
 
+/** Sidebar inline padding: spacing shrinks with the sidebar before its labels have to. */
+export function sidebarPadding(size: number): number {
+  return Math.round(Math.min(12, Math.max(4, (size - 72) / 4)));
+}
+
+/** Sidebar width that shows labels of `content` px (the widest label box) whole, at its own padding. */
+export function naturalSidebar(content: number): number {
+  // The content box (size less padding) never shrinks as size grows, so the first fit is the smallest.
+  let size = Math.min(PANEL_BOUNDS.sidebar.max, Math.max(PANEL_BOUNDS.sidebar.min, Math.ceil(content)));
+  while (size < PANEL_BOUNDS.sidebar.max && size - 2 * sidebarPadding(size) < content) size += 1;
+  return size;
+}
+
+/**
+ * An open sidebar is never narrower than its current labels need, so labels stay whole while space
+ * allows; window pressure can still shrink it to the bound minimum in `resolveLayout`.
+ */
+export function fitSidebar(layout: PanelLayout, natural: number | null): PanelLayout {
+  if (natural === null || layout.sidebar.size >= natural) return layout;
+  return { ...layout, sidebar: { ...layout.sidebar, size: natural } };
+}
+
 /** Largest size this panel may take without pushing the workspace below MAIN_MIN. */
 export function maxSize(layout: PanelLayout, panel: PanelId, width: number): number {
   const neighbour = resolveLayout(layout, width)[other(panel)];
   return clamp(width - neighbour - MAIN_MIN, PANEL_BOUNDS[panel].min, PANEL_BOUNDS[panel].max);
 }
 
-/** Change one panel's size. The other panel is never resized; the workspace absorbs the difference. */
+/** Collapse below half the minimum width and retain the last open size; never resize the other panel. */
 export function setPanelSize(layout: PanelLayout, panel: PanelId, size: number, width: number): PanelLayout {
   if (!Number.isFinite(size)) return layout;
+  if (size < PANEL_BOUNDS[panel].min / 2) {
+    return layout[panel].collapsed ? layout : togglePanel(layout, panel);
+  }
   const next = Math.round(clamp(size, PANEL_BOUNDS[panel].min, maxSize(layout, panel, width)));
   if (next === layout[panel].size && !layout[panel].collapsed) return layout;
   return { ...layout, [panel]: { size: next, collapsed: false } };
 }
 
-/** Pointer drag or keyboard step expressed as a change of panel size (positive = wider). */
+/** Keyboard step expressed as a change of panel size (positive = wider). */
 export function resizePanel(layout: PanelLayout, panel: PanelId, delta: number, width: number): PanelLayout {
-  return setPanelSize(layout, panel, layout[panel].size + delta, width);
+  if (!Number.isFinite(delta) || delta === 0) return layout;
+  if (layout[panel].collapsed) return delta > 0 ? togglePanel(layout, panel) : layout;
+  return setPanelSize(layout, panel, Math.max(PANEL_BOUNDS[panel].min, layout[panel].size + delta), width);
 }
 
 export function togglePanel(layout: PanelLayout, panel: PanelId): PanelLayout {
@@ -97,7 +124,7 @@ export function splitterKey(layout: PanelLayout, panel: PanelId, key: string, sh
   switch (key) {
     case 'ArrowRight': return resizePanel(layout, panel, step * direction, width);
     case 'ArrowLeft': return resizePanel(layout, panel, -step * direction, width);
-    case 'Home': return setPanelSize(layout, panel, PANEL_BOUNDS[panel].min, width);
+    case 'Home': return setPanelSize(layout, panel, 0, width);
     case 'End': return setPanelSize(layout, panel, maxSize(layout, panel, width), width);
     case 'Enter': return togglePanel(layout, panel);
     default: return null;

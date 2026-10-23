@@ -2,7 +2,8 @@ name: HQ CLI and Planner
 
 on:
   pull_request:
-    branches: [work/hq-foundation]
+    # main is listed so the CLI and Planner jobs also gate PR #2 (foundation -> main) and PRs into main after it lands.
+    branches: [main, work/hq-foundation]
   push:
     branches: [main]
   workflow_dispatch:

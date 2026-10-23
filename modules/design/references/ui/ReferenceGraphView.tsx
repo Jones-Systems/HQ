@@ -1,4 +1,6 @@
+import { SecondaryPanel } from '../../ui/src/secondary-panels.tsx';
 import { useId } from 'react';
+import { IconButton } from '@hq/ui';
 import type { CaptureId, SubjectId } from '../src/graph-contract.ts';
 import type { CaptureRow, GraphViewModel, SubjectRow } from './graph-view-model.ts';
 import './references.css';
@@ -18,9 +20,10 @@ export interface ReferenceGraphViewProps extends ReferenceGraphActions {
 export function ReferenceGraphView(props: ReferenceGraphViewProps) {
   const { view } = props;
   const titleId = useId();
+  const instructionId = useId();
   return <section className="hq-refs hq-graph" aria-labelledby={titleId}>
     <header className="hq-refs-header">
-      <div>
+      <div className="hq-refs-heading">
         <span className="eyebrow">Design</span>
         <h2 id={titleId}>Reference graph</h2>
         <p className="hq-refs-count">{view.rows.length} {view.rows.length === 1 ? 'subject' : 'subjects'}</p>
@@ -30,14 +33,16 @@ export function ReferenceGraphView(props: ReferenceGraphViewProps) {
       <span>{view.banner}</span>
       <button type="button" onClick={props.onReload}>Reload</button>
     </div>}
+    {view.emptyMessage === null && view.detail === null
+      ? <p id={instructionId} className="hq-refs-muted">Select a site, page, app, flow or screen.</p> : null}
     {view.emptyMessage !== null ? <p className="hq-refs-empty">{view.emptyMessage}</p> : <div className="hq-graph-body">
-      <ul className="hq-graph-tree" aria-label="Sites, apps and their screens">
+      <ul className="hq-graph-tree" aria-label="Sites, apps and their screens" aria-describedby={view.detail === null ? instructionId : undefined}>
         {view.rows.map((row) => <li key={row.id} style={{ paddingLeft: `${row.depth * 16}px` }}><Row row={row} onSelectSubject={props.onSelectSubject} /></li>)}
       </ul>
-      {view.detail === null ? <p className="hq-refs-muted">Select a site, page, app, flow or screen.</p> : <aside className="hq-refs-detail hq-graph-detail" aria-label="Subject details">
+      {view.detail === null ? null : <SecondaryPanel name="reference-graph-detail" label="Subject details" initial={340}><aside className="hq-refs-detail hq-graph-detail" aria-label="Subject details">
         <div className="hq-refs-detail-head">
           <h3>{view.detail.subject.title}</h3>
-          <button type="button" className="hq-refs-quiet" onClick={() => props.onSelectSubject(null)}>Close</button>
+          <IconButton size="sm" label="Close subject details" icon="×" onClick={() => props.onSelectSubject(null)} />
         </div>
         <p className="hq-refs-muted">{view.detail.subject.kindLabel}{view.detail.subject.rating === null ? '' : ` · Rated ${view.detail.subject.rating} of 5`}</p>
         <h4>Captures, newest first</h4>
@@ -51,7 +56,7 @@ export function ReferenceGraphView(props: ReferenceGraphViewProps) {
             </li>)}
           </ul>
         </>}
-      </aside>}
+      </aside></SecondaryPanel>}
     </div>}
   </section>;
 }

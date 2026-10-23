@@ -86,7 +86,7 @@ describe('Work descriptor in the T0 registry', () => {
     expect(screen.getByText('Example data')).toBeTruthy();
     expect(screen.getByText('Planner items aren’t project-scoped · showing all planning')).toBeTruthy();
     // The shell's project context is unchanged; Work never switches it.
-    expect(screen.getByText('HQ workspace')).toBeTruthy();
+    expect(screen.getByText('Local projects')).toBeTruthy();
     expect(recorded.writes()).toHaveLength(0);
     expect(recorded.execution()).toHaveLength(0);
   });
@@ -125,6 +125,27 @@ describe('Work descriptor in the T0 registry', () => {
     expect(recorded.calls.filter((call) => call.method === 'snapshot')).toHaveLength(1);
     expect(recorded.writes()).toHaveLength(0);
     expect(recorded.execution()).toHaveLength(0);
+  });
+
+  it('opens a page not visited before at the top, then restores each page its own scroll', async () => {
+    render(<App />);
+    await switchDomain('Work');
+    await screen.findByRole('heading', { level: 2, name: 'Status board' });
+    act(() => {
+      scroller().scrollTop = 500;
+      scroller().scrollLeft = 40;
+      fireEvent.scroll(scroller());
+    });
+
+    await user().click(workNav().getByRole('button', { name: 'List' }));
+    expect(main().querySelector('.wv')?.getAttribute('data-view')).toBe('list');
+    expect(scroller().scrollTop).toBe(0);
+    expect(scroller().scrollLeft).toBe(0);
+
+    await user().click(workNav().getByRole('button', { name: 'Status board' }));
+    await screen.findByRole('heading', { level: 2, name: 'Status board' });
+    expect(scroller().scrollTop).toBe(500);
+    expect(scroller().scrollLeft).toBe(40);
   });
 
   it('restores detail text the Planner could not take (changed elsewhere) with no writes', async () => {

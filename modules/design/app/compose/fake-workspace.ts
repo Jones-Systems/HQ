@@ -156,6 +156,7 @@ const NOW = Date.UTC(2026, 9, 20, 12);
 const HOSTS: readonly (readonly [HostId, string])[] = [[FAKE_HOSTS.laptop, 'Laptop (synthetic)'], [FAKE_HOSTS.studio, 'Studio (synthetic)']];
 
 export interface DiscoveryEnv {
+  readonly tag: typeof SYNTHETIC_TAG;
   readonly cache: MemoryCachePort;
   readonly clock: DiscoveryFakeClock;
   /** No adapter is registered and refresh-on-open is off: the service can only show the cached catalog. */
@@ -188,7 +189,7 @@ export function discoveryEnv(): Promise<DiscoveryEnv> {
       cache, hostLabels: Object.fromEntries(HOSTS), dataTag: SYNTHETIC_TAG, provenance: 'synthetic fixture cache (no source adapter registered)',
     });
     await readPort.load();
-    return { cache, clock, service, adapterLabels: { fake: { label: 'Synthetic fake source', fake: true } }, readPort };
+    return { tag: SYNTHETIC_TAG, cache, clock, service, adapterLabels: { fake: { label: 'Synthetic fake source', fake: true } }, readPort };
   })();
   return discovery;
 }

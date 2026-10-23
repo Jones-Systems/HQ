@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { StateView, StatusChip } from '@hq/ui';
+import { StateView, StatusChip, type ReferencePort } from '@hq/ui';
 import { useSocialSession, workspaceSnapshot, type SocialWorkspacePort } from '../core';
 import { Calendar } from './Calendar';
 import { Library } from './Library';
@@ -7,6 +7,7 @@ import { localToday, parseContentDestination } from './model';
 import './content.css';
 
 export interface SocialContentProps {
+  readonly references?: ReferencePort;
   readonly port: SocialWorkspacePort;
   /** The HQ project ID; session state is kept per project and survives remounts. */
   readonly projectId: string;
@@ -25,7 +26,7 @@ function clock(iso: string): string {
  * Social content pages: the library with its draft editor, and the editorial calendar.
  * Only content-class calls are made; nothing here can start a run.
  */
-export function SocialContent({ port, projectId, destination, navigate, now = () => new Date() }: SocialContentProps) {
+export function SocialContent({ port, projectId, destination, navigate, references, now = () => new Date() }: SocialContentProps) {
   const { state, session } = useSocialSession(projectId);
   const location = parseContentDestination(destination) ?? { page: 'library' as const };
   const load = state.workspace;
@@ -70,7 +71,7 @@ export function SocialContent({ port, projectId, destination, navigate, now = ()
           brand={brand} onBrandChange={(value) => session.setView('calendarBrand', value)} navigate={navigate} paused={paused} now={now}
         />
       ) : (
-        <Library session={session} state={state} port={port} snapshot={snapshot} draftId={location.draftId} navigate={navigate} paused={paused} />
+        <Library projectId={projectId} references={references} session={session} state={state} port={port} snapshot={snapshot} draftId={location.draftId} navigate={navigate} paused={paused} />
       )}
     </div>
   );

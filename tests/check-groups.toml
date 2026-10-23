@@ -10,7 +10,7 @@ tests = ["modules/design/projects/**/*.test.ts", "modules/design/projects/**/*.t
 summary = "canvas behavioral checks owned by its section."
 covers = ["spec.hq-design#test.canvas.001"]
 direct_surfaces = ["modules/design/canvas/"]
-tests = ["modules/design/canvas/**/*.test.ts", "modules/design/canvas/**/*.test.mjs"]
+tests = ["modules/design/canvas/**/*.test.ts", "modules/design/canvas/**/*.test.tsx", "modules/design/canvas/**/*.test.mjs"]
 
 [groups.design-compare]
 summary = "compare behavioral checks owned by its section."
@@ -22,13 +22,13 @@ tests = ["modules/design/compare/**/*.test.ts", "modules/design/compare/**/*.tes
 summary = "annotations behavioral checks owned by its section."
 covers = ["spec.hq-design#test.annotations.001", "spec.hq-integration-parallel-execution#test.preview-agent.001"]
 direct_surfaces = ["modules/design/annotations/"]
-tests = ["modules/design/annotations/**/*.test.ts", "modules/design/annotations/**/*.test.mjs"]
+tests = ["modules/design/annotations/**/*.test.ts", "modules/design/annotations/**/*.test.tsx", "modules/design/annotations/**/*.test.mjs"]
 
 [groups.design-requests]
 summary = "requests behavioral checks owned by its section."
 covers = ["spec.hq-design#test.requests.001"]
 direct_surfaces = ["modules/design/requests/"]
-tests = ["modules/design/requests/**/*.test.ts", "modules/design/requests/**/*.test.mjs"]
+tests = ["modules/design/requests/**/*.test.ts", "modules/design/requests/**/*.test.tsx", "modules/design/requests/**/*.test.mjs"]
 
 [groups.design-taste]
 summary = "taste behavioral checks owned by its section."
@@ -40,7 +40,7 @@ tests = ["modules/design/taste/**/*.test.ts", "modules/design/taste/**/*.test.mj
 summary = "references behavioral checks owned by its section."
 covers = ["spec.hq-design#test.references.001"]
 direct_surfaces = ["modules/design/references/"]
-tests = ["modules/design/references/**/*.test.ts", "modules/design/references/**/*.test.mjs"]
+tests = ["modules/design/references/**/*.test.ts", "modules/design/references/**/*.test.tsx", "modules/design/references/**/*.test.mjs"]
 
 [groups.design-store]
 summary = "store behavioral checks owned by its section."
@@ -52,7 +52,7 @@ tests = ["packages/design-store/**/*.test.ts", "packages/design-store/**/*.test.
 summary = "components behavioral checks owned by its section."
 covers = ["spec.hq-design#test.components.001", "spec.hq-integration-parallel-execution#test.component-runner-port.001"]
 direct_surfaces = ["modules/design/components/"]
-tests = ["modules/design/components/**/*.test.ts", "modules/design/components/**/*.test.mjs"]
+tests = ["modules/design/components/**/*.test.ts", "modules/design/components/**/*.test.tsx", "modules/design/components/**/*.test.mjs"]
 
 [groups.design-flows]
 summary = "flows behavioral checks owned by its section."
@@ -86,7 +86,7 @@ tests = ["modules/design/discovery/**/*.test.ts", "modules/design/discovery/**/*
 
 [groups.hq-root-build]
 summary = "Root npm ci, typecheck, Vitest and build over every mounted domain."
-covers = ["spec.hq-integration-parallel-execution#test.joint-shell.001", "spec.hq-integration-parallel-execution#test.wiki-mount.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001", "spec.hq-integration-parallel-execution#test.shared-r3.001", "spec.hq-integration-parallel-execution#test.reference-round-trip.001", "spec.hq-integration-parallel-execution#test.receiver-adapter.001", "spec.hq-integration-parallel-execution#test.closure-qualification.001", "spec.hq-integration-parallel-execution#test.preview-host.001", "spec.hq-integration-parallel-execution#test.preview-enablement.001", "spec.hq-integration-parallel-execution#test.component-static-enablement.001", "spec.hq-integration-parallel-execution#test.component-scripted-enablement.001", "spec.hq-integration-parallel-execution#test.new-thread-transport.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+covers = ["spec.hq-ui-modernization#test.acceptance.001", "spec.hq-integration-parallel-execution#test.joint-shell.001", "spec.hq-integration-parallel-execution#test.wiki-mount.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001", "spec.hq-integration-parallel-execution#test.shared-r3.001", "spec.hq-integration-parallel-execution#test.reference-round-trip.001", "spec.hq-integration-parallel-execution#test.receiver-adapter.001", "spec.hq-integration-parallel-execution#test.closure-qualification.001", "spec.hq-integration-parallel-execution#test.preview-host.001", "spec.hq-integration-parallel-execution#test.preview-enablement.001", "spec.hq-integration-parallel-execution#test.component-static-enablement.001", "spec.hq-integration-parallel-execution#test.component-scripted-enablement.001", "spec.hq-integration-parallel-execution#test.new-thread-transport.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
 direct_surfaces = ["package.json", "package-lock.json", "tsconfig.json", "vitest.config.ts", "apps/desktop/", "packages/contracts/"]
 tests = ["apps/desktop/**/*.test.ts", "apps/desktop/**/*.test.tsx", "packages/contracts/**/*.test.ts"]
 
@@ -98,13 +98,13 @@ tests = ["tools/hq-cli/**/*.test.*", "services/planner/tests/**"]
 
 [groups.hq-social-live]
 summary = "Social live adapter contract tests over a wire stub."
-covers = ["spec.hq-integration-parallel-execution#test.social-live.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+covers = ["spec.hq-ui-modernization#test.work-calendar.001", "spec.hq-integration-parallel-execution#test.social-live.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
 direct_surfaces = ["modules/social/"]
 tests = ["modules/social/**/*.test.ts", "modules/social/**/*.test.tsx"]
 
 [groups.hq-work-runtime]
 summary = "Work live runtime and replay tests over Planner wire fixtures."
-covers = ["spec.hq-integration-parallel-execution#test.work-runtime.001", "spec.hq-integration-parallel-execution#test.work-session-injection.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+covers = ["spec.hq-ui-modernization#test.work-calendar.001", "spec.hq-integration-parallel-execution#test.work-runtime.001", "spec.hq-integration-parallel-execution#test.work-session-injection.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
 direct_surfaces = ["modules/work/"]
 tests = ["modules/work/**/*.test.ts", "modules/work/**/*.test.tsx"]
 
@@ -116,13 +116,13 @@ tests = ["modules/wiki/**/*.test.ts", "modules/wiki/**/*.test.tsx"]
 
 [groups.hq-shared-bridge]
 summary = "Electron main/preload, closed routes, shared contracts and live wiring."
-covers = ["spec.hq-integration-parallel-execution#test.shared-bridge.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+covers = ["spec.hq-ui-modernization#test.acceptance.001", "spec.hq-integration-parallel-execution#test.shared-bridge.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
 direct_surfaces = ["apps/desktop/electron/", "apps/desktop/src/services/", "packages/contracts/"]
 tests = ["apps/desktop/electron/**/*.test.ts", "apps/desktop/src/**/*.integration.test.tsx"]
 
 [groups.hq-electron-acceptance]
 summary = "Dependency-free Electron acceptance harness driven over CDP."
-covers = ["spec.hq-integration-parallel-execution#test.acceptance-harness.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001", "spec.hq-integration-parallel-execution#test.acceptance-scenarios.001", "spec.hq-integration-parallel-execution#test.preview-scenarios.001"]
+covers = ["spec.hq-integration-parallel-execution#test.acceptance-harness.001", "spec.hq-integration-parallel-execution#test.acceptance-infrastructure.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001", "spec.hq-integration-parallel-execution#test.acceptance-scenarios.001", "spec.hq-integration-parallel-execution#test.preview-scenarios.001"]
 direct_surfaces = ["tests/acceptance/"]
 tests = ["tests/acceptance/**/*.mjs"]
 
@@ -244,16 +244,14 @@ tests = ["apps/desktop/electron/contents-factory.test.ts", "apps/desktop/electro
 summary = "Native preview and component suites on the built app; qualifying runs need a display."
 covers = ["spec.hq-integration-parallel-execution#test.preview-scenarios.001", "spec.hq-integration-parallel-execution#test.preview-s2-qualification.001", "spec.hq-integration-parallel-execution#test.component-containment-gate.001"]
 direct_surfaces = ["tests/acceptance/preview/"]
-tests = ["tests/acceptance/preview/**/*.test.mjs"]
+tests = ["tests/acceptance/preview/**/*.test.mjs", "tests/acceptance/preview/run.mjs", "tests/acceptance/preview/packaged.mjs"]
 
 [groups.hq-jones-client-launch]
 # Cross-repository group: the checks execute in a Jones-Systems/Jones-Code task
 # worktree (target base fa7c6c013811db33d128422027697dbaa1517b60), not in HQ, so
-# tests = [] in HQ. Bound focused commands, from the Jones Code root, serial:
-#   vp test run packages/contracts/src/jones/clientLaunch.test.ts packages/contracts/src/orchestratorMcp.test.ts apps/server/src/jones/persistence/Migrations/112_JonesClientLaunchRequests.test.ts apps/server/src/jones/persistence/UpstreamIsolation.test.ts apps/server/src/jones/persistence/ForeignHistoryCompatibility.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchIdentity.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchService.test.ts apps/server/src/jones/mcp/clientLaunch/ClientLaunchHandlers.test.ts apps/server/src/jones/orchestration/ThreadLaunchService.jones.test.ts apps/server/src/orchestration-v2/ThreadLaunchService.test.ts apps/server/src/mcp/toolkits/project/handlers.test.ts apps/server/src/mcp/toolkits/worktree/registration.test.ts apps/server/src/mcp/McpToolAccess.test.ts apps/server/src/mcp/McpToolAccess.race.test.ts --maxWorkers=1 --no-file-parallelism
-#   vp lint <each changed .ts file in W1-W16 and W20-W21>
-#   vp run --filter @t3tools/contracts --filter t3 --concurrency-limit 1 typecheck
-#   node scripts/jones/check-boundary.ts --strict
+# tests = [] in HQ. The bound focused commands, run serially from the Jones Code
+# root, are the final candidate union in spec.jones-client-launch#ctx.test-plan.001;
+# they are not duplicated here, so this comment cannot drift from the plan.
 summary = "Jones-Code target (fa7c6c0) focused client-launch checks; run in a Jones-Code task worktree, not HQ; commands in spec.jones-client-launch#ctx.test-plan.001."
 covers = ["spec.jones-client-launch#test.client-launch.001"]
 direct_surfaces = ["docs/engineering-specs/jones-client-launch.md"]
@@ -270,3 +268,15 @@ summary = "Main-only new-thread Jones Code transport against the Q-N wire stub; 
 covers = ["spec.hq-integration-parallel-execution#test.new-thread-transport.001"]
 direct_surfaces = ["apps/desktop/electron/jones-code/", "packages/contracts/src/jones-code.ts"]
 tests = ["apps/desktop/electron/jones-code/**/*.test.ts"]
+
+[groups.hq-ui]
+summary = "Shared visual tokens, primitives, splitters and calendar interactions."
+covers = ["spec.hq-ui-modernization#test.work-calendar.001", "spec.hq-ui-modernization#test.acceptance.001"]
+direct_surfaces = ["packages/hq-ui/", "docs/design/hq-visual-system/tokens/"]
+tests = ["packages/hq-ui/**/*.test.ts", "packages/hq-ui/**/*.test.tsx"]
+
+[groups.hq-source-registry]
+summary = "Registered-project and gallery source mapping, persisted enrollment and native Settings behavior."
+covers = ["spec.hq-integration-parallel-execution#test.registry-adapters.001", "spec.hq-integration-parallel-execution#test.source-registry-host.001"]
+direct_surfaces = ["modules/design/discovery/src/adapters/", "apps/desktop/electron/sources/", "apps/desktop/src/settings/ProjectSources.tsx", "apps/desktop/src/interactive-runtime.ts", "packages/contracts/src/catalog.ts"]
+tests = ["modules/design/discovery/test/adapters/**/*.test.ts", "apps/desktop/electron/sources/**/*.test.ts", "apps/desktop/src/settings/ProjectSources.test.tsx", "apps/desktop/src/interactive-runtime.test.ts"]
