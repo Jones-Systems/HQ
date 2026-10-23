@@ -82,6 +82,31 @@ test('process evidence distinguishes dead PID, reused start, reboot and unavaila
   assert.equal(await denied.observe(current), 'unknown');
 });
 
+test('inventory failure reports only bounded stage, errno and child status without native output', async () => {
+  const cases = [
+    [{ code: 2, signal: null, stderr: 'HQ inventory failure: stage=path-before errno=1\n', stdout: 'private process data' },
+      { stage: 'path-before', errno: 1, exitCode: 2, signal: null }],
+    [{ code: null, signal: 'SIGKILL', stderr: 'private path /fixture/private', stdout: 'private argv' },
+      { stage: 'unavailable', errno: null, exitCode: null, signal: 'SIGKILL' }],
+    [{ code: 'PRIVATE_CODE', signal: 'PRIVATE_SIGNAL', stderr: 'HQ inventory failure: stage=private-name errno=1\n', errno: -999999 },
+      { stage: 'unavailable', errno: null, exitCode: null, signal: null }],
+    [{ code: 999999, stderr: 'HQ inventory failure: stage=path-before errno=999999\n' },
+      { stage: 'unavailable', errno: null, exitCode: null, signal: null }],
+  ];
+  for (const [fields, expected] of cases) {
+    const cause = Object.assign(new Error('private command line'), fields);
+    const native = createNativeAdapter({ platform: 'darwin', execFile: async () => { throw cause; } });
+    await assert.rejects(native.processTable(), error => {
+      assert.equal(error.code, 'recovery-required');
+      assert.deepEqual(error.inventoryFailure, expected);
+      assert.ok(error.message.includes(JSON.stringify(expected)));
+      assert.doesNotMatch(error.message, /private|PRIVATE|999999/);
+      return true;
+    });
+    assert.equal(await native.observe({}), 'unknown');
+  }
+});
+
 test('bundle copy refuses escaped symlinks and preserves internal relative framework links', async t => {
   const f = await fixture(t);
   const native = createNativeAdapter({ platform: 'darwin', execFile: commands(f.record).execFile });

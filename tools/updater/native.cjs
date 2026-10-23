@@ -12,6 +12,19 @@ const { requirement, verifySignatureDetails, verifyDesignatedRequirement } = req
 const INVENTORY_PATH = path.join(__dirname, 'process-inventory');
 const MAX_INVENTORY_BYTES = 4 * 1024 * 1024;
 const MAX_INVENTORY_PROCESSES = 32768;
+const INVENTORY_FAILURE_STAGES = new Set(['allocation', 'boot', 'enumeration', 'output', 'process-before', 'kernel', 'process-identity', 'zombie-before', 'path-before', 'process-middle', 'zombie-middle', 'path-after', 'process-after', 'zombie-after', 'observer', 'boot-after']);
+
+function inventoryFailure(cause) {
+  // Native output may contain process data; only this closed diagnostic record is publishable.
+  const match = typeof cause?.stderr === 'string' && /^HQ inventory failure: stage=([a-z-]+) errno=([0-9]{1,4})\n?$/.exec(cause.stderr);
+  const valid = match && INVENTORY_FAILURE_STAGES.has(match[1]) && Number(match[2]) <= 4095;
+  const launchErrno = Number.isInteger(cause?.errno) && Math.abs(cause.errno) <= 4095 ? Math.abs(cause.errno) : null;
+  return {
+    stage: valid ? match[1] : 'unavailable', errno: valid ? Number(match[2]) : launchErrno,
+    exitCode: Number.isInteger(cause?.code) && cause.code >= 0 && cause.code <= 255 ? cause.code : null,
+    signal: ['SIGABRT', 'SIGBUS', 'SIGILL', 'SIGINT', 'SIGKILL', 'SIGSEGV', 'SIGTERM', 'SIGTRAP'].includes(cause?.signal) ? cause.signal : null,
+  };
+}
 
 function parseProcessInventory(output, observerPid) {
   try {
@@ -56,7 +69,10 @@ function createNativeAdapter({ fs: io = fs, execFile = promisify(cp.execFile), s
     supported();
     let observation;
     try { observation = await execute(INVENTORY_PATH, []); } catch (cause) {
-      throw new UpdateError('recovery-required', 'Process inventory is unavailable; activation is held.', { cause });
+      const diagnostic = inventoryFailure(cause);
+      const error = new UpdateError('recovery-required', `Process inventory is unavailable; activation is held. ${JSON.stringify(diagnostic)}`, { cause });
+      error.inventoryFailure = diagnostic;
+      throw error;
     }
     return parseProcessInventory(observation.stdout, observation.observerPid);
   }
