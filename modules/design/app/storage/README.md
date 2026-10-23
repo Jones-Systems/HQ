@@ -78,7 +78,7 @@ never enables it. A T6 freeze record also holds the consumed draft and the conti
 namespace membership is not enough: the projection copies `schema`, `packet` and `consumed` only,
 never reads `draft` documents, exports only attachments selected into a packet, omits and counts
 keys it does not know, and refuses the whole export on any record that is not the pinned v1 shape.
-Pin: requests head `896a726dd92754c17f45e732b5c2cbd07a5ab3fa` (PR33; packet, freeze and review schemas unchanged since PR17 `2438d6ff`) (`export.test.ts` also fails if the
+Pin: requests head `fb392cf5fa99ab5656df8b22b4a316b05153d5b5` (PR99's fixes on PR33 `896a726d`; packet, freeze and review schemas unchanged since PR17 `2438d6ff`) (`export.test.ts` also fails if the
 requests source changes). Wiring for an extension adapter waits for its accepted delta.
 
 PR33 inputs (same port, new documents): candidates and review events go through allow-lists of

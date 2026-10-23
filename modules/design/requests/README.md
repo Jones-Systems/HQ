@@ -29,7 +29,8 @@ Task `spec.hq-design#task.requests.001`, checks `spec.hq-design#test.requests.00
   candidate's evidence.
 - **Export** (`hq.design.requests-export/v1`) includes frozen packets, review
   events, reviewed candidates and the selected image bytes. It reports every
-  omitted store: drafts, draft history, unselected attachments and cache.
+  omitted store: drafts, draft history, unselected attachments, cache, send
+  records and handoff statuses.
 
 Freezing never dispatches. `RequestStore` has no dispatch dependency. The only
 hand-off is the explicit **Send packet** button, which calls the injected
