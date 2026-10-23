@@ -84,10 +84,11 @@ export function createPlayer(flow: FlowDocument): Player {
     : { ...state, current: null, history: [], notice: { kind: 'missing-start', screenId } };
 
   const back = (state: PlayerState, from: ScreenId, edgeId: HotspotId | null): PlayerState => {
-    const previous = state.history.at(-1);
-    return previous === undefined
-      ? record(state, from, edgeId, { kind: 'back-unavailable' }, from, state.history)
-      : record(state, from, edgeId, { kind: 'back', to: previous }, previous, state.history.slice(0, -1));
+    // A flow revision may have removed screens still in history; skip those entries.
+    const at = state.history.findLastIndex((screenId) => index.screensById.has(screenId));
+    return at < 0
+      ? record(state, from, edgeId, { kind: 'back-unavailable' }, from, [])
+      : record(state, from, edgeId, { kind: 'back', to: state.history[at]! }, state.history[at]!, state.history.slice(0, at));
   };
 
   const activate = (state: PlayerState, hotspotId: HotspotId): PlayerState => {
