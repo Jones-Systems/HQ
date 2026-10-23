@@ -1,0 +1,29 @@
+.connections { min-width: 0; width: 100%; color: var(--hq-text-muted); font: var(--hq-type-small); }
+.connections-heading { padding: 5px var(--rail-item-pad, 10px) 7px; font-weight: 600; }
+.connection-row { position: relative; width: 100%; min-width: 0; min-height: 38px; }
+/* Names and statuses wrap between words instead of truncating; the recheck control overlays the row
+   only while it is hovered or focused, so no width is reserved for it. */
+.connection-row .source-action { min-height: 38px; padding-block: 6px; }
+.connection-row:hover .source-action { background: var(--selected); color: var(--text); }
+.connection-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: left; font-size: 11px; line-height: 1.2; white-space: normal; overflow-wrap: normal; }
+.connection-copy strong { color: var(--hq-text); font-size: 11px; font-weight: 500; }
+.connection-copy > span { font-size: 10px; }
+.connection-shape { justify-self: center; color: var(--hq-text-muted); font-size: 11px; }
+.connection-row--good .connection-shape { color: var(--hq-success, #24724c); }
+.connection-row--bad .connection-shape { color: var(--hq-warning, #94701c); }
+.source-recheck.hq-btn { position: absolute; right: 1px; top: 50%; translate: 0 -50%; min-width: 28px; min-height: 28px; width: 28px; height: 28px; padding: 0; opacity: 0; background: var(--selected); }
+.connection-row:hover .source-recheck, .connection-row:focus-within .source-recheck { opacity: 1; }
+.source-summary { position: relative; }
+.connection-summary-dot { position: absolute; right: 6px; bottom: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--hq-text-muted); }
+.connection-row--good .connection-summary-dot { background: var(--hq-success, #24724c); }
+.connection-row--bad .connection-summary-dot { background: var(--hq-warning, #94701c); }
+.connections--compact { display: grid; min-width: 0; width: 100%; }
+.wiki-manager { display: grid; gap: 10px; }
+.wiki-manager-source { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-block: 12px; border-top: 1px solid var(--hq-border); min-width: 0; }
+.wiki-manager-source > span:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.wiki-manager-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@container rail (min-width: 180px) {
+  .connection-copy { flex-direction: row; align-items: baseline; gap: 6px; }
+  .connection-copy strong { flex: 0 0 auto; white-space: nowrap; }
+}
+@media (hover: none) { .source-recheck.hq-btn { opacity: 1; } .connection-row .source-action { padding-right: 30px; } }

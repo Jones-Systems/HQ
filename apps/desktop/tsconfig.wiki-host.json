@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "target": "ES2023", "module": "NodeNext", "moduleResolution": "NodeNext",
+    "rewriteRelativeImportExtensions": true, "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true, "strict": true, "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true, "lib": ["ES2023"], "types": ["node"],
+    "rootDir": "../..", "outDir": "dist-electron/wiki-host"
+  },
+  "files": ["electron/wiki-runtime.mts"]
+}

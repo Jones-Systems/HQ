@@ -1,0 +1,32 @@
+{
+  "schema": "hq.planner.exchange/v1",
+  "request": {
+    "method": "POST",
+    "path": "/api/requests/replay",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-Planning-Request": "1"
+    },
+    "body_utf8": "{\"mode\":\"lookup\",\"request_id\":\"contract-unseen\",\"method\":\"POST\",\"path\":\"/api/items\",\"body_b64\":\"eyJmaWVsZHMiOnsidGl0bGUiOiJDb250cmFjdCBleGFtcGxlIiwicmVmZXJlbmNlcyI6W3siaWQiOiJyZWYwMDEiLCJraW5kIjoiaHEiLCJsYWJlbCI6IkV4YW1wbGUgZGVzaWduIiwidGFyZ2V0Ijp7InZlcnNpb24iOjEsImRvbWFpbiI6ImRlc2lnbiIsInByb2plY3RJZCI6InByb2plY3QtZXhhbXBsZSIsImtpbmQiOiJhcnRpZmFjdCIsImVudGl0eUlkIjoiYXJ0aWZhY3QtZXhhbXBsZSIsInRpdGxlIjoiRXhhbXBsZSBkZXNpZ24iLCJyZXR1cm5EZXN0aW5hdGlvbiI6eyJkb21haW4iOiJkZXNpZ24iLCJkZXN0aW5hdGlvbiI6ImFydGlmYWN0L2V4YW1wbGUifX19XSwiZGF0ZXMiOlt7ImlkIjoiZGF0ZTAwMSIsImtpbmQiOiJ0YXJnZXQiLCJwcmVjaXNpb24iOiJxdWFydGVyIiwidmFsdWUiOiIyMDI3LVEyIn0seyJpZCI6ImRhdGUwMDIiLCJraW5kIjoiZGVhZGxpbmUiLCJwcmVjaXNpb24iOiJkYXkiLCJ2YWx1ZSI6IjIwMjctMDYtMzAifV19fQ==\",\"sent_after_version\":0}"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Length": "26"
+    },
+    "body": {
+      "outcome": "not_applied"
+    }
+  }
+}

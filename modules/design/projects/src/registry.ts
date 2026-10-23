@@ -16,7 +16,7 @@ export const PROVISIONAL_REGISTRY_KEY = `${PROJECTS_KEY_PREFIX}provisional-regis
 export const PROVISIONAL_REGISTRY_SCHEMA = 'hq.design.projects.provisional-registry/v1';
 export const PROVISIONAL_REGISTRY_PROVENANCE: RegistryProvenance = Object.freeze({
   kind: 'provisional-local',
-  label: 'Provisional local registry: not the HQ shared project registry',
+  label: 'Projects saved on this device',
 });
 
 function parseRecords(value: unknown): ProjectRecord[] | null {

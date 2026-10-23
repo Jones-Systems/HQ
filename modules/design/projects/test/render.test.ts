@@ -36,11 +36,11 @@ async function render(prepare?: (controller: ReturnType<typeof createProjectsCon
 }
 
 describe('rendered projects section (server render)', () => {
-  test('gallery labels the provisional registry and marks source entries read-only with host and freshness', async () => {
+  test('gallery labels device-local projects and marks source entries read-only with host and freshness', async () => {
     const html = await render();
     assert.match(html, /data-registry="provisional-local"/u);
-    assert.match(html, /Provisional registry/u);
-    assert.match(html, /Provisional local registry: not the HQ shared project registry/u);
+    assert.match(html, /On this device/u);
+    assert.match(html, /Projects saved on this device/u);
     assert.match(html, /Atlas 1 on Synthetic host A, read-only source entry/u);
     assert.match(html, /Stale/u);
     assert.match(html, /Missing at source/u);

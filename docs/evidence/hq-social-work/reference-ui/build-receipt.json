@@ -1,0 +1,29 @@
+{
+  "schema": "hq-reference-ui-build/v1",
+  "sourceCommit": "3e2bffbd1ecc65836f27b127c50b720921a23640",
+  "comparisonCommit": "d9f9682d43cc36b234248c7375018d067bbd3ca5",
+  "sourceCleanAtBuild": true,
+  "command": "npx vite build --config packages/hq-ui/test/references/preview/vite.config.ts",
+  "sourceFiles": {
+    "packages/hq-ui/src/index.ts": "984859752cd8fbed8e11c6a06e6ebebca103e956c17265659111085aa6185256",
+    "packages/hq-ui/src/references/LinkList.tsx": "154afb17fa2b119339c0dc401dd1a8feec4818a1322fd70f6d02409807101953",
+    "packages/hq-ui/src/references/LinkPicker.tsx": "8b035680254ae5f6c5854ed5b2c0984645adcc3a13d44236d14a2cd2d1d5eaa2",
+    "packages/hq-ui/src/references/ReferenceChip.tsx": "90ff16c5375313cd2e0d088208794c9d95ec89f0bb477261bc233e34e2ee4a07",
+    "packages/hq-ui/src/references/freshness.ts": "2e13bbac50548ae945853b48a248ba9c89703fd607ec90cf2cce42aa0d90f713",
+    "packages/hq-ui/src/references/references.css": "5b5884fa5a73d2086ac6e004d95ed8a4c4bfc6b234fb2ca259382513407c38df",
+    "packages/hq-ui/src/references/types.ts": "b2a12bb3c0ff44d3978f9beaa8ab7b842a850a55fc14f690cfde203a2b81f6f8",
+    "packages/hq-ui/test/references/fixtures.ts": "1d8b7aa9f095a7f62a8ace21f848aebec02647ddd1a0487c9731c1a4e107e8e1",
+    "packages/hq-ui/test/references/preview/index.html": "ea3d0a2d4bf4cfc98b14f3e8bda9283c58becd3e09c30a3931285120b4a78dbc",
+    "packages/hq-ui/test/references/preview/main.tsx": "611434c63257aa2989f9eea5f57ac6cdbbc2a7bb523bbe3a7c1536fdac3481a2",
+    "packages/hq-ui/test/references/preview/preview.css": "c7fb6a8e6409efa37bf54e95f8b8cdc99243a038211d2e691c212d92304048a2",
+    "packages/hq-ui/test/references/preview/vite.config.ts": "d4cbe84ed3ed33e00034dd0668fd7eadbd2ee5ca334e27909433a87fea8ad52b",
+    "packages/hq-ui/test/references/references.test.tsx": "af339e6a00744a8bdee9dfe3c96837113ce6294838ece89621e08e77b0145455"
+  },
+  "outputFiles": {
+    "assets/index-CoH9lPTb.css": "c7cf2c32b244bbf60254e16eda94088d4cc2a58bd5d8aeba71c5741a24a4af28",
+    "assets/index-bjCZd-ku.js": "8cd66dd8eac263ec5774bb2715d5a223ab226b208fe145a92abd26c058a9319a",
+    "index.html": "2e70d7aa153e90c17559c111bf44e287760ac465075b4ee05bf8a18f86a9bbb7"
+  },
+  "fixture": "Synthetic only; fixed clock 2026-10-20T12:00:30Z",
+  "correspondence": "Built from clean sourceCommit; output names read back through collaborative browser."
+}
