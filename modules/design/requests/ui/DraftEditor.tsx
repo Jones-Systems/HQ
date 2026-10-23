@@ -1,3 +1,4 @@
+import { Button } from '@hq/ui';
 import { useId, useState } from 'react';
 import type { AttachmentId, ClarificationId, RequestDraft } from '../src/contract.ts';
 import type { RequestSession, SessionState } from '../src/session.ts';
@@ -76,14 +77,14 @@ export function DraftEditor({ session, state, draft, newId }: DraftEditorProps) 
     }}>
       <input aria-label="New clarifying question" placeholder="Ask a clarifying question" value={question} disabled={disabled}
         onChange={(event) => setQuestion(event.target.value)} />
-      <button type="submit" disabled={disabled || question.trim() === ''}>Ask</button>
+      <Button type="submit" disabled={disabled || question.trim() === ''}>Ask</Button>
     </form>
 
     <footer className="hqr-freeze">
-      <button type="button" className="hqr-primary" disabled={disabled || state.blockers.length > 0}
+      <Button type="button" variant="primary" disabled={disabled || state.blockers.length > 0}
         aria-describedby={blockersId} onClick={() => { void session.freeze(); }}>
         {state.busy === 'freezing' ? 'Freezing…' : 'Freeze request'}
-      </button>
+      </Button>
       <div id={blockersId}>
         {state.blockers.length > 0
           ? <ul className="hqr-blockers">{state.blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul>
@@ -104,9 +105,9 @@ function Clarification({ session, disabled, id, question, answer, dismissed }: {
     {dismissed && answer === undefined ? <p className="hqr-muted">Dismissed</p> : <>
       <textarea aria-label={`Answer: ${question}`} rows={2} value={text} disabled={disabled} onChange={(event) => setText(event.target.value)} />
       <div className="hqr-inline">
-        <button type="button" disabled={disabled || text.trim() === '' || text === answer}
-          onClick={() => session.edit({ type: 'answer', clarificationId: id, answer: text })}>{answer === undefined ? 'Save answer' : 'Update answer'}</button>
-        {!resolved && <button type="button" disabled={disabled} onClick={() => session.edit({ type: 'dismiss', clarificationId: id })}>Dismiss</button>}
+        <Button type="button" disabled={disabled || text.trim() === '' || text === answer}
+          onClick={() => session.edit({ type: 'answer', clarificationId: id, answer: text })}>{answer === undefined ? 'Save answer' : 'Update answer'}</Button>
+        {!resolved && <Button type="button" disabled={disabled} onClick={() => session.edit({ type: 'dismiss', clarificationId: id })}>Dismiss</Button>}
       </div>
     </>}
   </li>;

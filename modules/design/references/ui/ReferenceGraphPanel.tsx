@@ -12,10 +12,11 @@ export interface ReferenceGraphPanelProps {
   readonly currentProject: ProjectRef | null;
   /** Optional sink for failed mutations; defaults to ignoring them. */
   readonly onError?: (code: string) => void;
+  readonly hideWhenEmpty?: boolean;
 }
 
 /** Connects the graph service to the view. Selection is view-local state. */
-export function ReferenceGraphPanel({ graph, currentProject, onError }: ReferenceGraphPanelProps) {
+export function ReferenceGraphPanel({ graph, currentProject, onError, hideWhenEmpty }: ReferenceGraphPanelProps) {
   const subscribe = useCallback((listener: () => void) => graph.subscribe(listener), [graph]);
   const readState = () => graph.state;
   const readAccess = () => graph.access;
@@ -23,6 +24,7 @@ export function ReferenceGraphPanel({ graph, currentProject, onError }: Referenc
   const access = useSyncExternalStore(subscribe, readAccess, readAccess);
   const [selection, setSelection] = useState<GraphSelection>({ subjectId: null, captureId: null });
   const view = useMemo(() => buildGraphView(state, access, selection, currentProject), [state, access, selection, currentProject]);
+  if (hideWhenEmpty && view.rows.length === 0 && view.banner === null) return null;
   return <ReferenceGraphView view={view}
     onSelectSubject={(subjectId: SubjectId | null) => setSelection({ subjectId, captureId: null })}
     onSelectCapture={(captureId: CaptureId) => setSelection((current) => ({ ...current, captureId }))}

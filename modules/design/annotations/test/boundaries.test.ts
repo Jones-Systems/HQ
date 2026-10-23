@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -30,19 +30,23 @@ function imports(path: string): ImportLine[] {
 }
 
 describe('section boundaries', () => {
-  test('preview agent has no runtime import outside its folder', () => {
+  test('preview agent has no import outside its folder, including types', () => {
     for (const path of files(join(SRC, 'preview-agent'))) {
       for (const line of imports(path)) {
-        if (line.typeOnly) continue;
         assert.ok(line.specifier.startsWith('./'), `${relative(ROOT, path)} imports ${line.specifier}`);
       }
     }
   });
 
-  test('framework-free source never imports React; no cross-section or app imports anywhere', () => {
+  test('React and the public UI kit stay in ui/; no cross-section or app imports anywhere', () => {
     for (const path of files(SRC)) {
-      const inUi = relative(SRC, path).startsWith('ui');
+      const inUi = path.startsWith(`${join(SRC, 'ui')}${sep}`);
       for (const line of imports(path)) {
+        // The shared kit is a React UI dependency only; core and preview-agent code remain isolated.
+        if (line.specifier === '@hq/ui') {
+          assert.ok(inUi, `${relative(ROOT, path)} imports the shared UI kit outside ui/`);
+          continue;
+        }
         if (line.specifier === 'react' || line.specifier.startsWith('react/') || line.specifier.startsWith('react-dom')) {
           assert.ok(inUi, `${relative(ROOT, path)} imports React outside ui/`);
           continue;

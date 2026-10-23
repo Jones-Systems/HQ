@@ -58,6 +58,14 @@ export interface WorkspaceBacking {
   listStreams(prefix?: string): Promise<readonly string[]>;
 }
 
+/** Document-only workspace capability for section adapters. */
+export type WorkspaceDocuments = Pick<WorkspaceBacking, 'kind' | 'namespace' | 'getDocument' | 'putDocument' | 'listDocuments'>;
+
+export type WorkspaceRecords = WorkspaceDocuments & Pick<WorkspaceBacking, 'putBlob' | 'getBlob' | 'hasBlob'> & {
+  appendEvent(stream: string, event: EventInput): Promise<Pick<EventRecord, 'seq' | 'payload'>>;
+  readEvents(stream: string): Promise<{ readonly events: readonly Pick<EventRecord, 'seq' | 'payload'>[]; readonly status: EventStreamRead['status'] }>;
+};
+
 /** Read-only subset used by export and inspection code. */
 export type WorkspaceReader = Pick<WorkspaceBacking, 'kind' | 'namespace' | 'getDocument' | 'listDocuments' | 'getBlob' | 'hasBlob' | 'listBlobs' | 'readEvents' | 'listStreams'>;
 

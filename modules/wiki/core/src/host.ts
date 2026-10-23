@@ -1,6 +1,6 @@
 // The Wiki host: owns the sources, the index lifecycle and the read-only WikiService.
-// `refresh` is host-only and deliberately not part of WikiService: the renderer can never trigger
-// source access beyond reading a page blob that the current index already knows.
+// `refresh` is deliberately absent from the read-only WikiService.
+// Native source administration is a separate, closed host capability.
 
 import {
   MAX_PAGE_BLOB_BYTES,

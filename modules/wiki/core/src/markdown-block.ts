@@ -14,6 +14,20 @@ export const MAX_CONTAINER_DEPTH = 24;
 const LANG = /^[^\s\u0000-\u001f\u007f-\u009f]{1,64}$/;
 const BLANK = /^[ \t]*$/;
 const ATX = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/;
+
+/**
+ * Drop an ATX closing sequence: a run of `#` preceded by a space, a tab or nothing, then optional
+ * spaces/tabs. A right-to-left scan, because the equivalent regex backtracks quadratically on long space runs.
+ */
+function stripClosingHashes(content: string): string {
+  let end = content.length;
+  while (end > 0 && (content[end - 1] === ' ' || content[end - 1] === '\t')) end--;
+  let start = end;
+  while (start > 0 && content[start - 1] === '#') start--;
+  if (start === end) return content;
+  if (start > 0 && content[start - 1] !== ' ' && content[start - 1] !== '\t') return content;
+  return content.slice(0, start);
+}
 const THEMATIC = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 const SETEXT = /^ {0,3}(=+|-+)[ \t]*$/;
 const QUOTE = /^ {0,3}>[ ]?/;
@@ -250,7 +264,7 @@ function parseBlocks(lines: readonly string[], depth: number, state: State): Pre
 
     const atx = ATX.exec(line);
     if (atx !== null) {
-      const content = (atx[2] ?? '').replace(/(?:^|[ \t]+)#+[ \t]*$/, '').trim();
+      const content = stripClosingHashes(atx[2] ?? '').trim();
       out.push({ type: 'heading', depth: (atx[1] as string).length as 1 | 2 | 3 | 4 | 5 | 6, raw: content });
       i++;
       continue;

@@ -7,10 +7,10 @@
  * treat it as a real Jones transport.
  */
 
-import type { Clock, EvidenceChange, EvidenceFeedPort, EvidenceReadbackOutcome, EvidenceReadbackPort, EvidenceReadbackQuery, EvidenceStorePort, Handoff, LookupOutcome, ObservedIdentity, OutboxStorePort, PutResult, SendOutcome, StoredDispatch, TransportDescriptor, TransportPort } from './contract.ts';
+import type { Clock, EvidenceChange, EvidenceFeedPort, EvidenceReadbackOutcome, EvidenceReadbackPort, EvidenceReadbackQuery, EvidenceStorePort, FenceOutcome, Handoff, LookupOutcome, ObservedIdentity, OutboxStorePort, PutResult, SendOutcome, StoredDispatch, TransportDescriptor, TransportPort } from './contract.ts';
 import type { DispatchRecord, Receipt } from './dispatch.ts';
 import type { EvidenceEntry, ResultEvidence } from './evidence.ts';
-import type { Destination, DestinationEndpoint, HostCatalog, ModelPin } from './host-catalog.ts';
+import type { Destination, DestinationEndpoint, DestinationMode, HostCatalog, ModelPin } from './host-catalog.ts';
 import type { DestinationId, DispatchId, EvidenceId, HostId, PacketId, ReceiptId, ReceiverId, ThreadRef } from './ids.ts';
 import type { ManualHandoffHistoryPort, ManualHandoffRecord } from './route-fence.ts';
 import type { Digest } from './canonical.ts';
@@ -66,12 +66,16 @@ export type FakeSendFault =
 /** authoritative: absent keys are fenced and reported no-effect; absence-only: plain not-found; unavailable: readback fails. */
 export type FakeLookupMode = 'authoritative' | 'absence-only' | 'unavailable';
 
+export type FakeFenceMode = 'authoritative' | 'unavailable' | 'throw' | 'timeout' | 'malformed';
+
 export interface FakeReceiver extends TransportPort, EvidenceReadbackPort {
   /** Effects: handoffs the receiver durably took (accepted or held). */
   readonly handoffs: readonly Handoff[];
   readonly calls: { readonly identify: number; readonly send: number; readonly lookup: number };
   /** Evidence readbacks served; kept out of `calls` so that v1 shape is unchanged. */
   evidenceReads(): number;
+  fenceCalls(): number;
+  setFenceMode(mode: FakeFenceMode): void;
   failNextSend(fault: FakeSendFault): void;
   setLookupMode(mode: FakeLookupMode): void;
   setIdentity(identity: ObservedIdentity): void;
@@ -86,8 +90,10 @@ export function createFakeReceiver(options: {
   readonly identity: ObservedIdentity;
   readonly clock: Clock;
   readonly trace?: Trace;
+  readonly modes?: readonly DestinationMode[];
 }): FakeReceiver {
   const descriptor: TransportDescriptor = {
+    ...(options.modes ? { modes: options.modes } : {}),
     kind: 'fake-receiver',
     label: FAKE_RECEIVER_LABEL,
     provenance: 'fake',
@@ -102,6 +108,8 @@ export function createFakeReceiver(options: {
   const evidenceLedger = new Map<string, readonly unknown[]>();
   const calls = { identify: 0, send: 0, lookup: 0 };
   let evidenceReads = 0;
+  let fenceCalls = 0;
+  let fenceMode: FakeFenceMode = 'authoritative';
   const at = () => new Date(options.clock.now()).toISOString();
 
   function record(handoff: Handoff, status: Receipt['status'], overrides: { model?: ModelPin | null; hostId?: HostId } = {}): Receipt {
@@ -128,6 +136,20 @@ export function createFakeReceiver(options: {
     handoffs,
     calls,
     evidenceReads: () => evidenceReads,
+    fenceCalls: () => fenceCalls,
+    setFenceMode(mode) { fenceMode = mode; },
+    async fence(query): Promise<FenceOutcome> {
+      fenceCalls += 1;
+      options.trace?.push('transport', 'fence');
+      if (fenceMode === 'throw') throw new Error('fake fence failure');
+      if (fenceMode === 'timeout') return never;
+      if (fenceMode === 'malformed') return { kind: 'rejected' } as unknown as FenceOutcome;
+      if (fenceMode === 'unavailable') return { kind: 'unavailable', detail: 'fake fence unavailable' };
+      const receipt = ledger.get(query.idempotencyKey);
+      if (receipt) return { kind: 'found', receipt };
+      fenced.add(query.idempotencyKey);
+      return { kind: 'no-effect', basis: 'labelled fake fence; key permanently disabled' };
+    },
     failNextSend(fault) { nextFault = fault; },
     setLookupMode(mode) { lookupMode = mode; },
     setIdentity(value) { identity = value; },

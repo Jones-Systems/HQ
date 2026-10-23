@@ -52,6 +52,7 @@ export function analyze(entry: string, storeContract: string): { readonly files:
         else violations.push(`${from}: runtime import of the store contract`);
       }
       else if (target.startsWith(`${dirname(storeContract)}/`)) violations.push(`${from}: ${edge.typeOnly ? 'type import of ' : ''}store implementation file ${relative(dirname(storeContract), target)}`);
+      else if (edge.typeOnly) continue;
       else if (!existsSync(target)) violations.push(`${from}: unresolved ${edge.specifier}`);
       else visit(target);
     }
@@ -68,14 +69,16 @@ describe('storage/index.ts is renderer-safe', () => {
     const names = files.map((file) => relative(STORAGE, file)).sort();
     assert.deepEqual(names, [
       '../../../../packages/design-store/src/contract.ts',
-      'backing.ts', 'canonical.ts', 'canvas.ts', 'discovery-cache.ts', 'export.ts', 'index.ts', 'outbox.ts', 'requests.ts', 'text-envelope.ts',
+      '../../projects/src/contract.ts',
+      'annotations.ts', 'components.ts', 'compare.ts', 'flows.ts', 'projects.ts', 'section-documents.ts',
+      'references.ts', 'evidence.ts', 'backing.ts', 'canonical.ts', 'canvas.ts', 'discovery-cache.ts', 'export.ts', 'index.ts', 'outbox.ts', 'requests.ts', 'text-envelope.ts',
     ].sort(), 'the graph is exactly the expected renderer-safe set');
   });
 
   it('keeps the Node wiring and the unaccepted proposal out of the graph', () => {
     const { files } = analyze(join(STORAGE, 'index.ts'), STORE_CONTRACT);
     const names = files.map((file) => relative(STORAGE, file));
-    for (const banned of ['node.ts', 'proposal/imports-txn.ts']) assert.equal(names.includes(banned), false, banned);
+    for (const banned of ['node.ts', 'proposal/imports-txn.ts', 'transactions.ts', 'transaction-gate.ts', 'design-export.ts', 'design-export-projections.ts']) assert.equal(names.includes(banned), false, banned);
     assert.equal(names.some((name) => /design-store\/src\/(?!contract\.ts)/u.test(name)), false, 'no store implementation file is reachable');
   });
 

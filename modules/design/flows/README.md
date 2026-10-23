@@ -33,6 +33,8 @@ Every `PlayerStep.evidence` is a `WebApproximation` whose `nativeEvidence` has t
 
 `src/views.ts` provides `FlowMapView`, `PrototypePlayerView`, `FlowsWorkspace` and `FlowCanvasItemView`. They are written with `createElement` so that Node 24 type stripping can render them under `node --test` without a JSX transform. Hotspots are keyboard-focusable buttons. Broken targets appear in an alert, and every step in the log shows its web-approximation label.
 
+`src/presentation.ts` derives display-only screen names from routes (`?screen=today` → `Today`, `…/weddings/` → `Weddings`, `index.html` → `Home`), labels captured states and orders screens: the start screen, then screens its links reach, then saved order. Owner-authored titles are shown as written. Nothing there edits a document or creates a link. The workspace shows a numbered screen list beside the player, with Start, Previous and Next stepping through that list. Previous and Next open screens; they never follow or imply a link. `ScreenPreviewPort.unavailableReason` lets a port explain a missing image.
+
 ## Checks
 
 Run the following from this directory:

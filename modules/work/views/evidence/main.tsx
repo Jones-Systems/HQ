@@ -1,4 +1,4 @@
-import { StrictMode, useEffect } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@hq/ui';
 import {
@@ -6,6 +6,10 @@ import {
 } from '../../core';
 import { VIEW_NOW, viewItems } from '../fixtures';
 import { PLANNING_VIEW_IDS, PlanningViews, type PlanningViewId } from '..';
+import { WorkDomain } from '../../nav/WorkDomain';
+import { setWorkSessionPort } from '../../nav/session';
+import { SocialContent } from '../../../social/content';
+import { createFixtureWorkspace } from '../../../social/core';
 import './page.css';
 
 // Evidence page for task.work-views.001: every planning view, and the RS-3
@@ -82,8 +86,26 @@ function MoveOnce() {
   return null;
 }
 
+function DomainFixture() {
+  const [destination, navigate] = useState('home');
+  return <div className="ev-domain" data-hq-chrome=""><WorkDomain context={{ id: 'synthetic-layout', name: 'Synthetic layout' }}
+    destination={destination} navigate={navigate} appearance={theme} desktop={{ platform: 'browser', versions: { electron: null } }}
+    now={fixedNow} pollMs={3_600_000} /></div>;
+}
+const socialFixture = createFixtureWorkspace(params.has('empty') ? { seed: { brands: [{ id: 'default', name: 'Synthetic workspace' }], content: [], runs: [] } } : {});
+function SocialFixture() {
+  const [destination, navigate] = useState(params.has('empty') ? 'library' : 'calendar/2026-10');
+  return <div className="ev-page"><SocialContent projectId="synthetic-calendar" port={socialFixture.port}
+    destination={destination} navigate={navigate} now={fixedNow} /></div>;
+}
+
 async function main() {
   const root = createRoot(document.getElementById('root')!);
+  if (params.has('domain')) {
+    setWorkSessionPort(fixture(params.has('empty') ? [] : viewItems()).port);
+    root.render(<DomainFixture />); return;
+  }
+  if (params.has('social')) { root.render(<SocialFixture />); return; }
   if (params.has('states')) {
     const stores = await Promise.all(STATES.map(async (name) => ({ name, ...(await stateStore(name)) })));
     root.render(

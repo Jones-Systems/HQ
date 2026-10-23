@@ -13,7 +13,7 @@ import type { CompareError, ComparisonState, ContentMetrics, Outcome, Panel, Pan
 import { comparisonKey, parseComparison, serializeComparison } from './persist.ts';
 import { presetById } from './presets.ts';
 
-export type PanelStatus = 'loading' | 'ready' | 'failed' | 'unavailable';
+export type PanelStatus = 'loading' | 'ready' | 'failed' | 'unavailable' | 'stale';
 
 export interface PanelRuntime {
   readonly status: PanelStatus;
@@ -48,6 +48,8 @@ export interface CompareDeps {
 export interface CompareController {
   getSnapshot(): CompareSnapshot;
   subscribe(listener: () => void): () => void;
+  /** Host notifications are fenced to the currently resolved session. Stale stays held until reopened. */
+  markPreviewStale(id: PanelId, sessionId: string): void;
   resize(id: PanelId, width: number): void;
   scroll(id: PanelId, position: ScrollPosition): void;
   setSyncScroll(enabled: boolean, leaderId: PanelId | null): void;
@@ -248,6 +250,12 @@ export function createCompareController(initial: ComparisonState, deps: CompareD
   return {
     getSnapshot: () => snapshot,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    markPreviewStale(id, sessionId) {
+      const resolution = resolutions.get(id);
+      const runtime = snapshot.runtime.get(id);
+      if (resolution === undefined || runtime?.session?.sessionId !== sessionId || runtime.status !== 'ready') return;
+      setRuntime(id, resolution, { ...runtime, status: 'stale', error: 'Stale preview session. Reopen the preview to continue.' });
+    },
     resize: (id, width) => commit(model.resizePanel(snapshot.comparison, id, width)),
     scroll: (id, position) => commit(model.scrollPanel(snapshot.comparison, id, position, metrics())),
     setSyncScroll: (enabled, leaderId) => commit(model.setSyncScroll(snapshot.comparison, enabled, leaderId, metrics())),

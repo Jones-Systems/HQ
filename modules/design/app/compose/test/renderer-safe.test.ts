@@ -4,8 +4,9 @@
  * Walks the RUNTIME import graph from `app/index.ts`, every compose module and every section
  * descriptor: static imports, side-effect imports, dynamic `import()`, `export … from`, and
  * `import.meta.glob`. Only `import type` / `export type` edges are erased. It asserts that no runtime
- * path reaches any storage module (including `storage/index.ts`), `packages/design-store/src/**`, a Node
- * builtin, or electron, and that compose code uses no `process`/`Buffer`/`require` globals. Erased type
+ * path reaches `storage/node.ts`, `packages/design-store/src/**`, a Node
+ * builtin, or electron, and that reachable source uses no `process`/`Buffer`/`require` globals.
+ * Runtime entry to storage is only through storage/index.ts; its graph is then walked. Erased type
  * imports of storage may name only `storage/index.ts`, never `node.ts` or another storage file.
  *
  * The analyzer follows the approach of STORE's storage/test/renderer-safe.test.ts (read, not imported),
@@ -119,7 +120,6 @@ function analyze(host: Host, layout: Layout): Analysis {
     const descriptor = join(layout.designDir, name, 'design-module.ts');
     if (host.read(descriptor) !== null) roots.add(descriptor);
   }
-  const scope = new Set(roots);
 
   const files = new Set<string>();
   const parent = new Map<string, string>();
@@ -143,7 +143,7 @@ function analyze(host: Host, layout: Layout): Analysis {
     files.add(file);
     const source = host.read(file);
     if (source === null || !CODE.test(file)) continue;
-    if (scope.has(file) && NODE_GLOBALS.test(withoutStrings(source))) flag(file, 'Node global (process/Buffer/require)');
+    if (NODE_GLOBALS.test(withoutStrings(source))) flag(file, 'Node global (process/Buffer/require)');
     const { edges, unanalysable } = edgesOf(source);
     for (const message of unanalysable) flag(file, message);
     for (const edge of edges) {
@@ -168,11 +168,12 @@ function analyze(host: Host, layout: Layout): Analysis {
         if (target === null) { flag(file, `unresolved ${edge.kind} import ${specifier}`); continue; }
         if (edge.typeOnly) {
           typeTargets.push({ from: file, target });
-          if (inside(target, layout.storageDir) && target !== join(layout.storageDir, 'index.ts')) flag(file, `type-only import of storage module ${rel(target)} (only storage/index.ts is allowed)`);
-          if (inside(target, layout.storeSrc)) flag(file, `type-only import of design-store ${relative(layout.storeSrc, target)}`);
+          if (!inside(file, layout.storageDir) && inside(target, layout.storageDir) && target !== join(layout.storageDir, 'index.ts')) flag(file, `type-only import of storage module ${rel(target)} (only storage/index.ts is allowed)`);
+          if (!inside(file, layout.storageDir) && inside(target, layout.storeSrc)) flag(file, `type-only import of design-store ${relative(layout.storeSrc, target)}`);
           continue;
         }
-        if (inside(target, layout.storageDir)) flag(file, `${edge.kind} import reaches storage module ${rel(target)}`);
+        if (inside(target, layout.storageDir) && (target === join(layout.storageDir, 'node.ts')
+          || (!inside(file, layout.storageDir) && target !== join(layout.storageDir, 'index.ts')))) flag(file, `${edge.kind} import reaches storage module ${rel(target)}`);
         if (inside(target, layout.storeSrc)) { flag(file, `${edge.kind} import reaches design-store ${relative(layout.storeSrc, target)}`); continue; }
         if (!files.has(target) && !parent.has(target) && !roots.has(target)) parent.set(target, file);
         queue.push(target);
@@ -190,7 +191,10 @@ const LAYOUT: Layout = {
   appDir: join(DESIGN, 'app'),
   storageDir: join(DESIGN, 'app/storage'),
   storeSrc: resolve(DESIGN, '../../packages/design-store/src'),
-  workspace: { '@hq/contracts': resolve(DESIGN, '../../packages/contracts/src/index.ts') },
+  workspace: {
+    '@hq/contracts': resolve(DESIGN, '../../packages/contracts/src/index.ts'),
+    '@hq/ui': resolve(DESIGN, '../../packages/hq-ui/src/index.ts'),
+  },
 };
 const diskHost: Host = {
   read: (path) => (existsSync(path) && statSync(path).isFile() ? readFileSync(path, 'utf8') : null),
@@ -203,17 +207,22 @@ const ALLOWED_EXTERNAL = new Set(['react', 'react-dom']);
 describe('production entry, compose and descriptors are renderer-safe', () => {
   const analysis = analyze(diskHost, LAYOUT);
 
-  it('reach no storage module, design-store file, Node builtin, electron or Node global at runtime', () => {
+  it('reach no storage/node.ts, design-store file, Node builtin, electron or Node global at runtime', () => {
     assert.deepEqual(analysis.violations, []);
   });
 
   it('actually walked the production graph (the proof is not vacuous)', () => {
     const names = analysis.files.map((file) => relative(DESIGN, file));
     for (const expected of [
-      'app/index.ts', 'app/compose/workspace.ts', 'app/compose/storage-seam.ts', 'app/compose/views/CanvasView.tsx',
+      '../../packages/hq-ui/src/index.ts', '../../packages/hq-ui/src/components/Button.tsx',
+      'app/compose/reference-reads.ts',
+      'app/index.ts', 'app/compose/workspace.ts', 'app/compose/bridge-documents.ts', 'app/storage/index.ts', 'app/storage/projects.ts', 'app/compose/storage-seam.ts', 'app/compose/views/CanvasView.tsx',
       'ui/src/registry-glob.ts', 'canvas/design-module.ts', 'imports/design-module.ts',
+      'requests/design-module.ts', 'connector/design-module.ts', 'references/design-module.ts',
+      'app/sections/requests/View.tsx', 'app/sections/runs/View.tsx', 'app/sections/references/View.tsx',
+      'app/sections/requests/env.ts', 'app/sections/runs/pipeline.ts', 'app/sections/references/env.ts',
     ]) assert.ok(names.includes(expected), `graph includes ${expected}`);
-    assert.equal(names.some((name) => name.startsWith('app/storage/')), false);
+    assert.equal(names.includes('app/storage/node.ts'), false);
     assert.equal(names.some((name) => name.startsWith('app/compose/test/')), false);
   });
 
@@ -222,20 +231,20 @@ describe('production entry, compose and descriptors are renderer-safe', () => {
   });
 
   it('points every erased storage import at storage/index.ts, never node.ts or another storage file', () => {
-    const storage = analysis.typeTargets.filter(({ target }) => target.startsWith(`${LAYOUT.storageDir}/`));
+    const storage = analysis.typeTargets.filter(({ from, target }) => !from.startsWith(`${LAYOUT.storageDir}/`) && target.startsWith(`${LAYOUT.storageDir}/`));
     assert.ok(storage.length > 0, 'compose has at least one type-only storage import');
     assert.deepEqual([...new Set(storage.map(({ target }) => relative(DESIGN, target)))], ['app/storage/index.ts']);
-    assert.deepEqual(analysis.typeTargets.filter(({ target }) => target.startsWith(`${LAYOUT.storeSrc}/`)), []);
+    assert.deepEqual(analysis.typeTargets.filter(({ from, target }) => from.startsWith(`${LAYOUT.appDir}/compose/`) && target.startsWith(`${LAYOUT.storeSrc}/`)), []);
   });
 
-  it('uses `import type` for every storage import in compose source (no inline `type` specifiers that keep the edge at runtime)', () => {
+  it('uses only storage/index.ts as the compose storage seam', () => {
     const offenders: string[] = [];
     const scan = (dir: string): void => {
       for (const name of readdirSync(dir)) {
         const path = join(dir, name);
         if (statSync(path).isDirectory()) { if (name !== 'test') scan(path); continue; }
         if (!CODE.test(name)) continue;
-        for (const edge of edgesOf(readFileSync(path, 'utf8')).edges) if (/(^|\/)storage(\/|$)/u.test(edge.specifier) && !edge.typeOnly) offenders.push(`${relative(DESIGN, path)}: ${edge.specifier}`);
+        for (const edge of edgesOf(readFileSync(path, 'utf8')).edges) if (/(^|\/)storage(\/|$)/u.test(edge.specifier) && !edge.specifier.endsWith('/storage/index.ts')) offenders.push(`${relative(DESIGN, path)}: ${edge.specifier}`);
       }
     };
     scan(join(DESIGN, 'app/compose'));
@@ -251,7 +260,10 @@ const VLAYOUT: Layout = {
   appDir: `${ROOT}/modules/design/app`,
   storageDir: `${ROOT}/modules/design/app/storage`,
   storeSrc: `${ROOT}/packages/design-store/src`,
-  workspace: { '@hq/contracts': `${ROOT}/packages/contracts/src/index.ts` },
+  workspace: {
+    '@hq/contracts': `${ROOT}/packages/contracts/src/index.ts`,
+    '@hq/ui': `${ROOT}/packages/hq-ui/src/index.ts`,
+  },
 };
 
 /** A renderer-safe baseline; each scenario overrides or adds files. */
@@ -265,6 +277,10 @@ function baseline(): Record<string, string> {
     'packages/design-store/src/fs.ts': "import { open } from 'node:fs/promises';\nexport const storeFs = open;\n",
     'packages/design-store/src/contract.ts': 'export type Doc = string;\n',
     'packages/contracts/src/index.ts': 'export const isDestination = (value: string) => value.length > 0;\n',
+    'packages/hq-ui/src/index.ts': "import './theme.css';\nexport { Button } from './components';\n",
+    'packages/hq-ui/src/theme.css': ':root { --hq-text: #20232a; }',
+    'packages/hq-ui/src/components/index.ts': "export { Button } from './Button';\n",
+    'packages/hq-ui/src/components/Button.tsx': "import { createElement } from 'react';\nexport const Button = () => createElement('button');\n",
   };
 }
 
@@ -292,6 +308,12 @@ describe('the analyzer catches each kind of violation (in-memory fixtures)', () 
     assert.equal(ok.typeTargets.length, 1);
   });
 
+  it('allows the runtime storage seam and continues walking its exports', () => {
+    const result = run({ [A]: "import { backing } from '../storage/index.ts';\nexport const a = backing;\n" });
+    assert.deepEqual(result.violations, []);
+    assert.ok(result.files.includes(`${ROOT}/modules/design/app/storage/backing.ts`));
+  });
+
   const cases: ReadonlyArray<readonly [string, Record<string, string>, RegExp]> = [
     ['a direct node: import', { [A]: "import { readFile } from 'node:fs/promises';\nexport const a = readFile;\n" }, /compose\/a\.ts: static import of Node builtin node:fs\/promises/u],
     ['a bare Node builtin without the node: prefix', { [A]: "import { join } from 'path';\nexport const a = join;\n" }, /import of Node builtin path/u],
@@ -303,7 +325,7 @@ describe('the analyzer catches each kind of violation (in-memory fixtures)', () 
     ['a runtime import of storage/index.ts that re-exports a Node path', {
       [A]: "import { backing } from '../storage/index.ts';\nexport const a = backing;\n",
       'modules/design/app/storage/index.ts': "export * from './backing.ts';\nexport * from './node.ts';\n",
-    }, /static import reaches storage module app\/storage\/index\.ts/u],
+    }, /reexport import reaches storage module app\/storage\/node\.ts/u],
     ['a dynamic import of a module that reaches Node', {
       [A]: "export const lazy = () => import('./lazy.ts');\n",
       'modules/design/app/compose/lazy.ts': "import { open } from 'node:fs';\nexport const l = open;\n",
@@ -318,7 +340,8 @@ describe('the analyzer catches each kind of violation (in-memory fixtures)', () 
     ['a type-only import of another storage module', { [A]: "export type { backing } from '../storage/backing.ts';\n" }, /type-only import of storage module app\/storage\/backing\.ts/u],
     ['a type-only import of design-store', { [A]: "import type { Doc } from '../../../../packages/design-store/src/contract.ts';\nexport type A = Doc;\n" }, /type-only import of design-store contract\.ts/u],
     ['a runtime import of design-store', { [A]: "export { storeFs } from '../../../../packages/design-store/src/fs.ts';\n" }, /reexport import reaches design-store fs\.ts/u],
-    ['an inline `type` specifier, which keeps the runtime edge', { [A]: "import { type backing } from '../storage/index.ts';\nexport const a = 1;\n" }, /static import reaches storage module app\/storage\/index\.ts/u],
+    ['a direct storage adapter import', { [A]: "import { backing } from '../storage/projects.ts';\n", 'modules/design/app/storage/projects.ts': 'export const backing = 1;' }, /static import reaches storage module app\/storage\/projects\.ts/u],
+    ['storage seam reaching design-store runtime', { [A]: "import '../storage/index.ts';\n", 'modules/design/app/storage/index.ts': "export * from '../../../../packages/design-store/src/fs.ts';\n" }, /reexport import reaches design-store fs\.ts/u],
     ['a type-only export hiding a neighbouring runtime re-export', {
       [A]: "export type A = string\nexport { nodeFs } from '../storage/node.ts';\n",
     }, /reexport import reaches storage module app\/storage\/node\.ts/u],
@@ -352,6 +375,27 @@ describe('the analyzer catches each kind of violation (in-memory fixtures)', () 
     const walked = run({ [A]: "import { isDestination } from '@hq/contracts';\nexport const a = isDestination;\n" });
     assert.deepEqual(walked.external, []);
     assert.ok(walked.files.includes(`${ROOT}/packages/contracts/src/index.ts`));
+  });
+
+  it('walks the shared UI kit through CSS, directory exports and extensionless component imports', () => {
+    const walked = run({ [A]: "import { Button } from '@hq/ui';\nexport const a = Button;\n" });
+    assert.deepEqual(walked.violations, []);
+    assert.deepEqual(walked.external, ['react']);
+    for (const path of ['index.ts', 'theme.css', 'components/index.ts', 'components/Button.tsx']) {
+      assert.ok(walked.files.includes(`${ROOT}/packages/hq-ui/src/${path}`));
+    }
+  });
+
+  it('does not let a shared UI dependency bypass Node globals, builtins or protected storage boundaries', () => {
+    for (const source of [
+      "import { open } from 'node:fs';\nexport const Button = open;\n",
+      'export const Button = process.cwd();\n',
+      "export { nodeFs as Button } from '../../../../modules/design/app/storage/node.ts';\n",
+      "export { storeFs as Button } from '../../../design-store/src/fs.ts';\n",
+    ]) {
+      const result = run({ [A]: "import { Button } from '@hq/ui';\nexport const a = Button;\n", 'packages/hq-ui/src/components/Button.tsx': source });
+      assert.ok(result.violations.length > 0, source);
+    }
   });
 
   it('flags a Node builtin reached through a workspace package', () => {

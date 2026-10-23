@@ -1,3 +1,4 @@
+import { SERVICE_DOMAINS } from './services/domains';
 /// <reference path="./environment.d.ts" />
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -5,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import SocialDefault, { SocialModule } from '@hq/social';
 import WorkDefault, { WorkModule } from '@hq/work';
 import { App } from './App';
-import { MODULES } from './modules';
-import { designDomain } from '../../../modules/design/app/index.ts';
+import { MODULES, designDomain } from './modules';
+import { designDomain as defaultDesignDomain } from '../../../modules/design/app/index.ts';
 import { APPEARANCE_KEY } from './state';
 import { CALL_CLASSES, FIXTURE_IDS, resetSocialSessions, type PortMethod, type SocialWorkspacePort } from '../../../modules/social/core';
 import { NAV_ITEMS as SOCIAL_NAV, setSocialWorkspacePort } from '../../../modules/social/nav';
-import { createWorkbenchFixture } from '../../../modules/social/workbench/fixtures/examples';
+const { createWorkbenchFixture } = await vi.importActual<typeof import('../../../modules/social/workbench/fixtures/examples')>('../../../modules/social/workbench/fixtures/examples');
 import { createFixturePlanner, EXAMPLE_SETTINGS, PLANNER_PORT_KEYS, type PlannerPort } from '../../../modules/work/core';
 import { NAV_ITEMS as WORK_NAV, resetWorkSessions, setWorkSessionPort, workSession } from '../../../modules/work/nav';
 import { resetViewMemory } from '../../../modules/work/views/env';
@@ -63,6 +64,11 @@ function expectNoExecution() {
 }
 
 beforeEach(() => {
+  Object.defineProperty(window, 'hqServices', { configurable: true, value: {
+    config: { status: async () => ({ configured: false, policy: 'ok', transport: null }) },
+    social: { call: async () => ({ ok: false, kind: 'unavailable' }) },
+    work: { call: async () => ({ ok: false, kind: 'unavailable' }) },
+  } });
   // Only Date is faked, so the Work example planning and Social calendar land on the fixtures' fixed day.
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(VIEW_NOW));
@@ -71,6 +77,7 @@ beforeEach(() => {
   resetSocialSessions();
   const socialPort = spyPort<SocialWorkspacePort, PortMethod>(createWorkbenchFixture().port, SOCIAL_METHODS);
   social = socialPort.spies;
+  fixtureRecorder.port = socialPort.port;
   setSocialWorkspacePort(socialPort.port);
 
   resetWorkSessions();
@@ -78,10 +85,12 @@ beforeEach(() => {
   const fixture = createFixturePlanner({ items: viewItems(VIEW_TODAY), settings: { ...EXAMPLE_SETTINGS } });
   const plannerPort = spyPort<PlannerPort, (typeof PLANNER_PORT_KEYS)[number]>(fixture.port, PLANNER_PORT_KEYS);
   planner = plannerPort.spies;
+  plannerRecorder.port = plannerPort.port;
   setWorkSessionPort(plannerPort.port);
 });
 
 afterEach(() => {
+  Reflect.deleteProperty(window, 'hqServices');
   cleanup();
   resetSocialSessions();
   setSocialWorkspacePort(null);
@@ -180,11 +189,12 @@ async function expectWorkRestored() {
 
 describe('Social and Work mounted in the T0 shell', () => {
   it('registers the accepted domain descriptors and Design’s production entry', () => {
-    expect(MODULES.social).toBe(SocialModule);
+    expect(MODULES.social).toBe(SERVICE_DOMAINS.Social);
     expect(SocialDefault).toBe(SocialModule);
-    expect(MODULES.work).toBe(WorkModule);
+    expect(MODULES.work).toBe(SERVICE_DOMAINS.Work);
     expect(WorkDefault).toBe(WorkModule);
     expect(MODULES.design).toBe(designDomain.Component);
+    expect(MODULES.design).not.toBe(defaultDesignDomain.Component);
   });
 
   it('opens on Design and mounts both domains with labelled fictional data and no execution', async () => {
@@ -200,7 +210,7 @@ describe('Social and Work mounted in the T0 shell', () => {
     expect(screen.getByText(/^Fictional example planning, kept in memory for this session only\./u)).toBeTruthy();
     expect(screen.getByText('Example data')).toBeTruthy();
     // The shell's own project context is shown and unchanged by either domain.
-    expect(screen.getByText('HQ workspace')).toBeTruthy();
+    expect(screen.getByText('Local projects')).toBeTruthy();
 
     expect(social.snapshot).toHaveBeenCalledTimes(1);
     expect(planner.snapshot).toHaveBeenCalledTimes(1);
@@ -424,24 +434,32 @@ describe('one keypress, one undo', () => {
   });
 });
 
+async function chooseAppearance(value: 'light' | 'dark' | 'system') {
+  const label = `Appearance: ${value[0]!.toUpperCase() + value.slice(1)}`;
+  for (let turn = 0; turn < 3 && !screen.queryByRole('button', { name: label }); turn += 1) {
+    await user().click(screen.getByRole('button', { name: /^Appearance:/ }));
+  }
+  expect(screen.getByRole('button', { name: label })).toBeTruthy();
+}
+
 describe('appearance', () => {
   it('an explicit theme survives a reload of the shell', async () => {
     const first = render(<App />);
-    await user().selectOptions(screen.getByLabelText('Appearance'), 'dark');
+    await chooseAppearance('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(window.localStorage.getItem(APPEARANCE_KEY)).toBe('dark');
     first.unmount();
     delete document.documentElement.dataset.theme;
 
     render(<App />);
-    expect((screen.getByLabelText('Appearance') as HTMLSelectElement).value).toBe('dark');
+    expect(screen.getByRole('button', { name: 'Appearance: Dark' })).toBeTruthy();
     expect(document.documentElement.dataset.theme).toBe('dark');
     await openWork();
     expect(document.documentElement.dataset.theme).toBe('dark');
-    await user().selectOptions(screen.getByLabelText('Appearance'), 'light');
+    await chooseAppearance('light');
     cleanup();
     render(<App />);
-    expect((screen.getByLabelText('Appearance') as HTMLSelectElement).value).toBe('light');
+    expect(screen.getByRole('button', { name: 'Appearance: Light' })).toBeTruthy();
     expect(document.documentElement.dataset.theme).toBe('light');
     expectNoExecution();
   });
@@ -458,7 +476,7 @@ describe('appearance', () => {
     }) as unknown as MediaQueryList);
 
     render(<App />);
-    expect((screen.getByLabelText('Appearance') as HTMLSelectElement).value).toBe('system');
+    expect(screen.getByRole('button', { name: 'Appearance: System' })).toBeTruthy();
     await openSocial();
     expect(document.documentElement.dataset.theme).toBe('light');
     act(() => { dark = true; for (const listener of listeners) listener(); });
@@ -468,7 +486,7 @@ describe('appearance', () => {
     act(() => { dark = false; for (const listener of listeners) listener(); });
     expect(document.documentElement.dataset.theme).toBe('light');
     // An explicit choice wins over the OS until System is chosen again.
-    await user().selectOptions(screen.getByLabelText('Appearance'), 'dark');
+    await chooseAppearance('dark');
     act(() => { for (const listener of listeners) listener(); });
     expect(document.documentElement.dataset.theme).toBe('dark');
     expectNoExecution();
@@ -481,11 +499,11 @@ describe('appearance', () => {
     const items = structuredClone(workSession('hq-local').store.getState().items);
     const callsBefore = allCalls();
 
-    await user().selectOptions(screen.getByLabelText('Appearance'), 'dark');
+    await chooseAppearance('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
     await expectWorkRestored();
     await switchDomain('Social');
-    await user().selectOptions(screen.getByLabelText('Appearance'), 'light');
+    await chooseAppearance('light');
     expect(document.documentElement.dataset.theme).toBe('light');
     await expectSocialRestored();
     await switchDomain('Work');
@@ -532,4 +550,36 @@ describe('Design shell presentation and leave persistence', () => {
     expect(screen.getByRole('button', { name: 'Sidebar' }).getAttribute('aria-pressed')).toBe(String(changedPressed));
     expectNoExecution();
   });
+});
+
+// The shell caches its example port; delegate each call to this test's current recorder.
+const fixtureRecorder = vi.hoisted(() => ({ port: null as import('../../../modules/social/core').SocialWorkspacePort | null }));
+vi.mock('../../../modules/social/workbench/fixtures/examples', async (importActual) => {
+  const actual = await importActual<typeof import('../../../modules/social/workbench/fixtures/examples')>();
+  const port = new Proxy({} as import('../../../modules/social/core').SocialWorkspacePort, {
+    get(_target, key) {
+      return (...args: unknown[]) => {
+        const current = fixtureRecorder.port;
+        if (!current) throw new Error('Social test recorder is not installed');
+        return Reflect.apply(current[key as keyof typeof current], current, args);
+      };
+    },
+  });
+  return { ...actual, createWorkbenchFixture: (...args: Parameters<typeof actual.createWorkbenchFixture>) => ({ ...actual.createWorkbenchFixture(...args), port }) };
+});
+
+// The first Work example must use the same recorder as subsequent test sessions.
+const plannerRecorder = vi.hoisted(() => ({ port: null as PlannerPort | null }));
+vi.mock('@hq/work', async (importActual) => {
+  const actual = await importActual<typeof import('@hq/work')>();
+  const port = new Proxy({} as PlannerPort, {
+    get(_target, key) {
+      return (...args: unknown[]) => {
+        const current = plannerRecorder.port;
+        if (!current) throw new Error('Work test recorder is not installed');
+        return Reflect.apply(current[key as keyof typeof current], current, args);
+      };
+    },
+  });
+  return { ...actual, examplePlanner: () => port };
 });

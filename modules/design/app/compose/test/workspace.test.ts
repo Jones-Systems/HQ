@@ -91,3 +91,47 @@ describe('composed workspace', () => {
     assert.notEqual(contentFor(project), contentFor({ id: 'project-beta', name: 'Beta' }));
   });
 });
+
+describe('native project discovery', () => {
+  it('starts empty, chooses through native UI, refreshes real catalog data, and forgets without source deletion', async () => {
+    const { createBridgedDiscovery } = await import('../bridged-discovery.ts');
+    const { fixtureSnapshot } = await import('../../../discovery/src/fakes.ts');
+    const { LOCAL_HOST_ID } = await import('../../../discovery/src/adapters/local-directory.ts');
+    const calls: { route: string; params: unknown }[] = [];
+    let chosen = false;
+    let generation = 0;
+    let value: unknown = null;
+    const transport = { async call(route: string, params: { value?: unknown }) {
+      calls.push({ route, params });
+      if (route === 'catalog.chooseRoot') chosen = true;
+      if (route === 'catalog.forget') chosen = false;
+      if (['catalog.roots', 'catalog.chooseRoot', 'catalog.forget'].includes(route)) {
+        return { ok: true, value: chosen ? [{ rootId: 'fictional-root', label: 'Example projects' }] : [] };
+      }
+      if (route === 'cache.put') { value = params.value; return { ok: true, value: {} }; }
+      if (route === 'cache.get') return { ok: true, value: value === null ? null : { value } };
+      if (route === 'catalog.snapshot') return { ok: true, value: await fixtureSnapshot(LOCAL_HOST_ID, ++generation, [{ path: 'example', name: 'Example repository', previews: [] }]) };
+      throw new Error(`Unexpected route: ${route}`);
+    } } as unknown as import('@hq/contracts/services').DesignServiceTransport;
+    const env = await createBridgedDiscovery(transport);
+    assert.equal(env.readPort.current().length, 0);
+    assert.equal(calls.some((call) => call.route === 'catalog.snapshot'), false);
+    assert.equal(env.tag.status, 'cached');
+    await env.chooseRoot();
+    assert.deepEqual(calls.find((call) => call.route === 'catalog.chooseRoot')?.params, {});
+    assert.deepEqual(env.readPort.current().map((entry) => entry.displayName), ['Example repository']);
+    await env.refresh();
+    assert.equal(generation, 2);
+    await env.forget();
+    assert.equal(env.readPort.current().length, 0);
+    assert.equal(env.roots().length, 0);
+    assert.equal(Object.keys(env.service.getState().catalog.records).length, 0);
+    assert.equal(calls.some((call) => call.route === 'catalog.preview' || call.route.startsWith('doc.')), false);
+  });
+
+  it('reports an unavailable desktop catalog without loading synthetic records', async () => {
+    const { createBridgedDiscovery } = await import('../bridged-discovery.ts');
+    const transport = { async call() { return { ok: false, kind: 'unavailable' }; } } as import('@hq/contracts/services').DesignServiceTransport;
+    await assert.rejects(createBridgedDiscovery(transport), /unavailable/u);
+  });
+});

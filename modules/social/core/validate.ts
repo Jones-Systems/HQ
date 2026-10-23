@@ -3,6 +3,7 @@ import {
   CHANNELS, FEATURE_HQ_REFERENCES, MAX_DRAFT_LINKS, TOOL_IDS,
   type Channel, type DraftFields, type PortError, type ToolId,
 } from './port';
+import { checkSlot } from './timebox';
 
 /**
  * Client validation mirroring the Social workspace service's save, brand and run rules,
@@ -120,7 +121,7 @@ export interface DraftCheckContext {
   readonly brandIds?: readonly string[];
 }
 
-/** Validates a save in the service's order: title, body, channel, date, archive, brand, ID, version. */
+/** Validates a save in the service's order: title, body, channel, date, archive, slot, brand, ID, version. */
 export function checkDraft(input: unknown, context: DraftCheckContext): Checked<CheckedDraft> {
   if (!isJsonObject(input)) return invalid(MESSAGES.jsonObject);
   const title = text(get(input, 'title'), 'Title', LIMITS.title);
@@ -137,6 +138,8 @@ export function checkDraft(input: unknown, context: DraftCheckContext): Checked<
   }
   const archived = get(input, 'archived', false);
   if (!(typeof archived === 'boolean' || archived === 0 || archived === 1)) return invalid(MESSAGES.archived);
+  const slot = checkSlot(get(input, 'planning_slot'), planned as string, context.features);
+  if (!slot.ok) return slot;
   const brand = get(input, 'brand_id', 'default');
   if (typeof brand !== 'string' || (context.brandIds && !context.brandIds.includes(brand))) {
     return invalid(MESSAGES.unknownBrand);
@@ -157,6 +160,7 @@ export function checkDraft(input: unknown, context: DraftCheckContext): Checked<
       fields: {
         title: title.value, body: body.value, brand_id: brand, channel,
         planned_date: planned as string, archived: archived === true || archived === 1 ? 1 : 0,
+        ...(slot.value !== undefined ? { planning_slot: slot.value } : {}),
       },
       ...(target ? { target } : {}),
       ...(links.value ? { links: links.value } : {}),

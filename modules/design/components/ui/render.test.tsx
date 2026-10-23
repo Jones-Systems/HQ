@@ -89,6 +89,7 @@ describe('MotionPlayer', () => {
     expect(html).toContain('0 / 600 ms');
     const keyframes = study.tracks.reduce((count, track) => count + track.keyframes.length, 0);
     expect(html.match(/class="hqc-key"/gu)).toHaveLength(keyframes);
-    expect(attributes(html, 'iframe').sandbox).toBe('allow-scripts');
+    expect(html).not.toContain('<iframe');
+    expect(html).toContain('HELD');
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from 'react';
-import { Toast, ToastRegion } from '@hq/ui';
+import { Toast, ToastRegion, TOAST_AUTO_DISMISS_MS } from '@hq/ui';
 import type { WorkState, WorkStore } from '../core';
 import { isTyping, undoFromToast, undoLatest } from './actions';
 import { useFeedback, type Feedback } from './feedback';
@@ -19,7 +19,8 @@ export function WorkToasts({ store, state, feedback }: { store: WorkStore; state
           className={`work-toast work-toast--${toast.tone}`}
           message={toast.message}
           meta={toast.meta}
-          action={toast.undoId && live.has(toast.undoId) ? { label: 'Undo', onAction: () => void undoFromToast(store, feedback, toast) } : undefined}
+          autoDismissMs={toast.tone === 'info' ? TOAST_AUTO_DISMISS_MS : undefined}
+          action={toast.undoId && live.has(toast.undoId) ? { label: 'Undo', keyshortcuts: 'Control+Z Meta+Z', onAction: () => void undoFromToast(store, feedback, toast) } : undefined}
           onDismiss={() => feedback.dismiss(toast.id)}
         />
       ))}

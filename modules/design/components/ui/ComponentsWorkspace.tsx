@@ -1,3 +1,4 @@
+import { SecondaryPanel } from '../../ui/src/secondary-panels.tsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type {
@@ -8,10 +9,12 @@ import { resolveTokens } from '../src/model/tokens.ts';
 import type { ComponentLibrary } from '../src/workspace/library.ts';
 import { MotionPlayer } from './MotionPlayer.tsx';
 import { PropsPanel } from './PropsPanel.tsx';
-import { SandboxFrame } from './SandboxFrame.tsx';
+import { ComponentSurface } from './ComponentSurface.tsx';
+import type { ComponentRunnerPort } from '../src/runner.ts';
 import { TokenBoard } from './TokenBoard.tsx';
 
 export interface ComponentsWorkspaceProps {
+  readonly runner?: ComponentRunnerPort;
   readonly library: ComponentLibrary;
   readonly clock: ClockPort;
   /** Resolved HQ chrome appearance; previews keep their own color scheme. */
@@ -47,7 +50,7 @@ function onTabKey(event: KeyboardEvent<HTMLButtonElement>, current: Tab, choose:
   choose((TABS[next] as { id: Tab }).id);
 }
 
-export function ComponentsWorkspace({ library, clock, appearance }: ComponentsWorkspaceProps) {
+export function ComponentsWorkspace({ library, clock, appearance, runner }: ComponentsWorkspaceProps) {
   const [tab, setTab] = useState<Tab>('components');
   const [componentIds, setComponentIds] = useState<readonly ComponentId[]>([]);
   const [systems, setSystems] = useState<readonly DesignSystem[]>([]);
@@ -142,18 +145,18 @@ export function ComponentsWorkspace({ library, clock, appearance }: ComponentsWo
     {notice === null ? null : <p className="hqc-notice" role="status">{notice}</p>}
 
     {tab === 'components' ? <div role="tabpanel" id="hqc-panel-components" aria-labelledby="hqc-tab-components" className="hqc-split">
-      <nav className="hqc-list" aria-label="Components">
+      <SecondaryPanel name="component-catalog" label="Component catalog" initial={192} side="start"><nav className="hqc-list" aria-label="Components">
         <ul>
           {componentIds.map((id) => <li key={id}>
             <button type="button" aria-current={selection?.source.componentId === id ? 'true' : undefined} onClick={() => void open(id)}>{id}</button>
           </li>)}
         </ul>
-      </nav>
+      </nav></SecondaryPanel>
       {selection === null || input === null ? <p className="hqc-note">No components yet.</p> : <>
         <div className="hqc-stage">
-          <SandboxFrame source={selection.source} input={input} />
+          <ComponentSurface source={selection.source} input={input} runner={runner} />
         </div>
-        <PropsPanel
+        <SecondaryPanel name="component-props" label="Component properties" initial={320}><PropsPanel
           source={selection.source}
           variants={selection.variants}
           variantId={selection.variantId}
@@ -161,7 +164,7 @@ export function ComponentsWorkspace({ library, clock, appearance }: ComponentsWo
           resolved={input.props}
           onSelectVariant={(variantId) => update({ ...selection, variantId })}
           onOverrides={(overrides) => update({ ...selection, overrides })}
-        />
+        /></SecondaryPanel>
       </>}
     </div> : null}
 
@@ -179,6 +182,7 @@ export function ComponentsWorkspace({ library, clock, appearance }: ComponentsWo
         study={study}
         target={motionTarget === null || motionInput === null ? null : { source: motionTarget, input: motionInput }}
         clock={clock}
+        runner={runner}
         onSaveDraft={async (draft) => {
           const saved = await library.saveMotionStudy(draft);
           setStudies((current) => current.map((item, index) => (index === studyIndex ? saved : item)));

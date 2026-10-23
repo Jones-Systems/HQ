@@ -22,13 +22,13 @@ describe('contrast helper', () => {
   });
 });
 
-describe('T2 contrast pairs, recomputed', () => {
+describe('visual-system contrast pairs, recomputed', () => {
   const rows = contrastRows(tokens);
 
-  it('recomputes all 104 pairs and every one meets its T2 threshold', () => {
-    expect(rows).toHaveLength(104);
+  it('recomputes all 112 pairs and every one meets its text or control threshold', () => {
+    expect(rows).toHaveLength(112);
     expect(rows.filter((row) => !row.pass)).toEqual([]);
-    expect(rows.filter((row) => row.mode === 'light')).toHaveLength(52);
+    expect(rows.filter((row) => row.mode === 'light')).toHaveLength(56);
   });
 
   it('holds text to 4.5:1 and focus rings, indicators and control edges to 3:1', () => {
@@ -37,14 +37,14 @@ describe('T2 contrast pairs, recomputed', () => {
     expect(rows.filter((row) => row.fg === 'focus')).toHaveLength(10);
   });
 
-  it("agrees with T2's own generated report, pair by pair", () => {
-    expect(reported).toHaveLength(104);
+  it("agrees with the generated report, pair by pair", () => {
+    expect(reported).toHaveLength(112);
     rows.forEach((row, index) => {
       const theirs = reported[index]!;
       expect({ fg: row.fg, on: row.on, mode: row.mode, min: row.min }).toEqual({ fg: theirs.fg, on: theirs.on, mode: theirs.mode, min: theirs.min });
       expect(Math.abs(row.ratio - theirs.ratio)).toBeLessThanOrEqual(0.005 + 1e-9);
       expect(theirs.result).toBe('pass');
     });
-    expect(report).toContain('104 pairs checked, 0 below minimum.');
+    expect(report).toContain('112 pairs checked, 0 below minimum.');
   });
 });

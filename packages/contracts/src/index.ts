@@ -1,4 +1,4 @@
-export const DOMAIN_IDS = ['design', 'social', 'work'] as const;
+export const DOMAIN_IDS = ['design', 'social', 'work', 'wiki'] as const;
 export type DomainId = (typeof DOMAIN_IDS)[number];
 export const APPEARANCES = ['light', 'dark', 'system'] as const;
 export type Appearance = (typeof APPEARANCES)[number];
@@ -29,6 +29,25 @@ export interface ReferenceEnvelope {
   readonly workspaceId?: string;
 }
 
+export const REFERENCE_STATUSES = ['available', 'changed', 'archived', 'missing', 'moved', 'forbidden', 'unavailable', 'unknown'] as const;
+export type ReferenceStatus = (typeof REFERENCE_STATUSES)[number];
+export interface ReferenceResolution {
+  readonly status: ReferenceStatus; readonly observedAt: string;
+  readonly latestTitle?: string; readonly latestRevision?: string; readonly targetProjectId?: string;
+  readonly destination?: string;
+}
+export interface ReferenceProvider {
+  readonly domain: DomainId; readonly kinds: readonly string[];
+  find(query: string, scope: { projectId: string; kinds?: readonly string[]; limit: number }): Promise<readonly ReferenceEnvelope[]>;
+  resolve(envelope: ReferenceEnvelope): Promise<ReferenceResolution>;
+}
+export interface ReturnContext { readonly label: string; readonly to: DomainDestination }
+export interface ReferencePort {
+  find(query: string, scope: { projectId: string; domains?: readonly DomainId[]; kinds?: readonly string[]; limit: number }): Promise<readonly ReferenceEnvelope[]>;
+  resolve(envelope: ReferenceEnvelope): Promise<ReferenceResolution>;
+  open(envelope: ReferenceEnvelope, returnTo: ReturnContext): void;
+}
+
 /** No generic IPC, files, commands or job dispatch are exposed to modules. */
 export interface DesktopPort {
   readonly platform: 'desktop' | 'browser';
@@ -37,6 +56,8 @@ export interface DesktopPort {
 
 /** React-free boundary; the desktop registry supplies ComponentType<ModulePort>. */
 export interface ModulePort {
+  readonly references?: ReferencePort;
+  readonly returnContext?: ReturnContext;
   readonly context: ProjectContext;
   readonly destination: string;
   readonly appearance: ResolvedAppearance;
@@ -91,3 +112,7 @@ export function parseReference(value: unknown): ReferenceEnvelope | null {
     ...(typeof value.workspaceId === 'string' ? { workspaceId: value.workspaceId } : {}),
   };
 }
+
+export type { PreviewTransport, PreviewParams, PreviewValues, PreviewSession, CaptureRecord } from './preview.ts';
+export type { JonesTransport, JonesStatus, JonesIdentity, JonesReceipt } from './jones-code.ts';
+export type { SourceTransport, SourceStatus, SourceCatalogItem } from './catalog.ts';

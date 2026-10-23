@@ -1,13 +1,22 @@
-/* Social domain chrome and pages. Class-scoped (`.sd-*`), token-only colours, no inline styles (the app CSP blocks them). */
+/* Social chrome uses shared roles; sidebar width is assigned through CSSOM under the shell CSP. */
 .sd-domain {
-  display: grid; grid-template-columns: var(--hq-size-secnav-width) minmax(0, 1fr); gap: var(--hq-space-lg); align-items: start;
+  --sd-side-width: 216px;
+  display: grid; grid-template-columns: min(var(--sd-side-width), 40%) 8px minmax(0, 1fr);
+  height: 100%; min-height: 0; min-width: 0; overflow: hidden;
   color: var(--hq-text); font: var(--hq-type-body);
 }
 .sd-side {
-  position: sticky; top: 0; display: grid; gap: var(--hq-space-md); padding: var(--hq-space-md);
-  background: var(--hq-nav); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg);
+  display: flex; flex-direction: column; gap: var(--hq-space-lg); padding: var(--hq-space-md);
+  min-width: 0; min-height: 0; overflow: auto; background: var(--hq-nav);
 }
-.sd-main { display: grid; gap: var(--hq-space-md); min-width: 0; }
+.sd-side[hidden] { display: none; }
+.sd-divider { grid-column: 2; grid-row: 1; display: flex; min-height: 0; }
+.sd-divider > .hq-splitter { flex: 1; }
+.sd-main {
+  grid-column: 3; grid-row: 1; display: grid; align-content: start; gap: var(--hq-space-md);
+  min-width: 0; min-height: 0; overflow: auto; padding: var(--hq-space-lg);
+}
+.sd-domain .hq-meta, .sd-domain .hq-status { font: var(--hq-type-small); }
 
 .sd-brand { display: grid; gap: var(--hq-space-2xs); font: var(--hq-type-label); color: var(--hq-text-muted); }
 .sd-brand select {
@@ -33,19 +42,22 @@
 .sd-nav-item:focus-visible, .sd-row-main:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
 .sd-group {
   margin: var(--hq-space-md) 0 var(--hq-space-2xs); padding: 0 var(--hq-space-sm);
-  font: var(--hq-type-eyebrow); letter-spacing: var(--hq-type-eyebrow-tracking); text-transform: uppercase; color: var(--hq-text-subtle);
+  font: var(--hq-type-small); font-weight: var(--hq-font-weight-medium); color: var(--hq-text-subtle);
 }
 
 .sd-tag {
-  display: inline-block; padding: 0 var(--hq-space-xs); border: 1px dashed var(--hq-border-strong); border-radius: var(--hq-radius-pill);
+  display: inline-block; padding: 0 var(--hq-space-xs); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-pill);
   font: var(--hq-type-small); font-weight: var(--hq-font-weight-semibold); color: var(--hq-text-muted); white-space: nowrap;
 }
 .sd-example, .sd-note, .sd-limits {
   margin: 0; padding: var(--hq-space-sm) var(--hq-space-md); border-radius: var(--hq-radius-md); font: var(--hq-type-small); color: var(--hq-text);
 }
-.sd-example { background: var(--hq-surface-sunken); border: 1px dashed var(--hq-border-strong); }
+.sd-example { justify-self: start; padding: var(--hq-space-xs) var(--hq-space-sm); background: var(--hq-surface-sunken); border: 1px solid var(--hq-border); color: var(--hq-text-muted); }
+.sd-example summary { cursor: pointer; font: var(--hq-type-small); }
+.sd-example p { margin: var(--hq-space-xs) 0 0; max-width: 60ch; }
+.sd-example summary:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 2px; }
 .sd-note { background: var(--hq-info-soft); }
-.sd-limits { background: var(--hq-info-soft); border: 1px solid var(--hq-border); border-left: 3px solid var(--hq-info); }
+.sd-limits { background: var(--hq-surface-sunken); border: 1px solid var(--hq-border); color: var(--hq-text-muted); }
 .sd-limits b { margin-right: var(--hq-space-2xs); font-weight: var(--hq-font-weight-semibold); }
 .sd-status:empty { display: none; }
 .sd-status { margin: 0; font: var(--hq-type-small); color: var(--hq-text); }
@@ -73,7 +85,7 @@
 
 .sd-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--hq-space-md); align-items: start; }
 .sd-card {
-  display: grid; gap: var(--hq-space-sm); padding: var(--hq-space-lg); min-width: 0;
+  display: grid; gap: var(--hq-space-sm); padding: var(--hq-space-md); min-width: 0;
   background: var(--hq-surface-raised); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg);
 }
 .sd-card p { margin: 0; }
@@ -100,15 +112,16 @@ button.sd-row-main:hover { background: var(--hq-surface-hover); }
 .sd-capability-list dd { margin: 0; }
 .sd-list { margin: 0; padding-left: var(--hq-space-lg); display: grid; gap: var(--hq-space-2xs); }
 
-/* Narrow windows (900 px and below): navigation runs across the top and cards stack. */
+/* Keep the resize handle available at narrow widths; content cards stack independently. */
 @media (max-width: 1000px) {
-  .sd-domain { grid-template-columns: minmax(0, 1fr); }
-  .sd-side { position: static; }
-  .sd-brand { max-width: 22rem; }
-  .sd-nav ul, .sd-nav [role="group"] { display: flex; flex-wrap: wrap; gap: var(--hq-space-3xs); }
-  .sd-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-3xs); }
-  .sd-nav-item { width: auto; }
-  .sd-group { margin: 0 0 0 var(--hq-space-sm); }
   .sd-cards, .sd-capabilities ul { grid-template-columns: minmax(0, 1fr); }
   .sd-channels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .sd-side { padding: var(--hq-space-xs); }
+  .sd-main { padding: var(--hq-space-sm); }
+  .sd-nav-item { white-space: normal; overflow-wrap: anywhere; }
+  .sd-tag { white-space: normal; }
+  .sd-channels { grid-template-columns: minmax(0, 1fr); }
+  .sd-row-main { min-width: 0; }
 }

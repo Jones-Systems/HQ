@@ -73,3 +73,42 @@ describe('calendar model', () => {
     expect([...plan.byDate.values()].flat().some((draft) => draft.archived === 1)).toBe(false);
   });
 });
+
+import { calendarRange, draftGridEvent, gridPlanning } from '../calendar-time';
+import { sameStoredFields } from '../actions';
+import { FEATURE_HQ_EDITORIAL_TIMEBOX, draftFields } from '../../core';
+
+describe('editorial calendar time conversion', () => {
+  const draft = drafts.find((item) => item.planned_date && !item.archived)!;
+  it('assigns 30 minutes, clamps a new 23:45 block to 15 and preserves an existing duration', () => {
+    expect(gridPlanning(draft, '2026-10-22', 9 * 60, false, 'UTC')).toEqual({ ok: true, value: { planned_date: '2026-10-22', planning_slot: { start: '09:00', duration_minutes: 30, timezone: 'UTC' } } });
+    expect(gridPlanning(draft, '2026-10-22', 1425, false, 'UTC')).toMatchObject({ ok: true, value: { planning_slot: { duration_minutes: 15 } } });
+    const timed = { ...draft, planned_date: '2026-10-22', planning_slot: { start: '09:00', duration_minutes: 90, timezone: 'UTC' } };
+    expect(gridPlanning(timed, '2026-10-23', 600, false, 'UTC')).toMatchObject({ ok: true, value: { planned_date: '2026-10-23', planning_slot: { start: '10:00', duration_minutes: 90 } } });
+    expect(gridPlanning(timed, '2026-10-23', 1425, false, 'UTC').ok).toBe(false);
+  });
+  it('displays a source-zone slot across display midnight and saves grid movement back to its source zone', () => {
+    const timed = { ...draft, planned_date: '2026-10-22', planning_slot: { start: '23:30', duration_minutes: 30, timezone: 'America/New_York' } };
+    expect(draftGridEvent(timed, 'UTC')).toMatchObject({ day: '2026-10-23', start: 210, endDay: '2026-10-23', end: 240 });
+    expect(gridPlanning(timed, '2026-10-23', 180, false, 'UTC')).toMatchObject({ ok: true, value: { planned_date: '2026-10-22', planning_slot: { start: '23:00', duration_minutes: 30, timezone: 'America/New_York' } } });
+    expect(gridPlanning(timed, '2026-10-23', 240, true, 'UTC')).toMatchObject({ ok: true, value: { planning_slot: { start: '23:30', duration_minutes: 30 } } });
+  });
+  it('rejects ambiguous/skipped display drops and source-midnight overflow', () => {
+    expect(gridPlanning(draft, '2026-03-08', 150, false, 'America/New_York').ok).toBe(false);
+    expect(gridPlanning(draft, '2026-11-01', 90, false, 'America/New_York').ok).toBe(false);
+    const timed = { ...draft, planned_date: '2026-10-22', planning_slot: { start: '23:30', duration_minutes: 30, timezone: 'UTC' } };
+    expect(gridPlanning(timed, '2026-10-22', 1440, true, 'UTC').ok).toBe(true);
+    expect(gridPlanning(timed, '2026-10-23', 15, true, 'UTC').ok).toBe(false);
+    expect(draftGridEvent({ ...timed, archived: 1 }, 'UTC')).toBeNull();
+  });
+  it('compares canonical slots when reconciling unknown saves', () => {
+    const timed = { ...draft, planning_slot: { start: '09:00', duration_minutes: 30, timezone: 'UTC' } };
+    expect(draftFields(timed).planning_slot).toEqual(timed.planning_slot);
+    expect(sameStoredFields(timed, draftFields(timed), [FEATURE_HQ_EDITORIAL_TIMEBOX])).toBe(true);
+    expect(sameStoredFields(timed, { ...draftFields(timed), planning_slot: { ...timed.planning_slot, duration_minutes: 60 } }, [FEATURE_HQ_EDITORIAL_TIMEBOX])).toBe(false);
+  });
+  it('navigates Monday-first weeks and single days across month boundaries', () => {
+    expect(calendarRange('2026-11-01', 'week')).toEqual(['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01']);
+    expect(calendarRange('2026-11-01', 'day')).toEqual(['2026-11-01']);
+  });
+});

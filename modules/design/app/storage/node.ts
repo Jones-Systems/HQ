@@ -11,7 +11,15 @@ import { createRequestsExport, type RequestsExportPort } from './export.ts';
 import { createOutboxAdapter, type OutboxAdapter, type OutboxRecordShape } from './outbox.ts';
 import { createRequestsStoragePort, type RequestsStoragePort } from './requests.ts';
 
+import { createTransactionRuntime, type DesignTransactions } from './transactions.ts';
+import { createDesignExport, type DesignExportPort } from './design-export.ts';
+export { TRANSACTION_STATUS, IMPORT_TRANSACTION_SCHEMA, IMPORT_LIMITS, createImportsStorage } from './transactions.ts';
+export type { DesignTransactions, EngineResult, RecoveryReport, RepairReport, StorageDiagnostics } from './transactions.ts';
+export type { DesignExportPort, DesignExportReport, DesignOmission } from './design-export.ts';
+
 export interface DesignStorage {
+  readonly transactions: DesignTransactions;
+  readonly exportBundle: DesignExportPort;
   readonly workspace: WorkspaceBacking;
   readonly cache: CacheBacking;
   readonly requests: RequestsStoragePort;
@@ -36,7 +44,11 @@ export async function openDesignStorage(options: OpenDesignStorageOptions): Prom
 export async function bindDesignStorage(store: StoragePort): Promise<DesignStorage> {
   const workspace = await bindWorkspace(store);
   const cache = await bindCache(store);
+  const runtime = await createTransactionRuntime(store);
+  await runtime.initialize();
   return Object.freeze({
+    transactions: runtime.port,
+    exportBundle: createDesignExport(runtime),
     workspace,
     cache,
     requests: createRequestsStoragePort({ workspace, cache }),

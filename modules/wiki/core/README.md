@@ -78,7 +78,9 @@ Interpretations made where the plan was silent:
   corrupt or stale snapshot triggers a rebuild. `stats` are aggregate counters only.
 - **Hostile input.** Block containers nest at most 24 deep (overflow degrades the page to raw
   `markdown-unsupported`); inline scanning has step, destination, delimiter-run and emphasis-depth
-  budgets, so pathological inputs stay linear and bounded. Non-UTF-8 or NUL content is raw `not-text`.
+  budgets, reference lookups skip bracket text longer than any definition label (1998 code units),
+  trailing line spaces are held back instead of rescanned, and ATX closing hashes are stripped by a
+  right-to-left scan, so pathological inputs stay linear and bounded. Non-UTF-8 or NUL content is raw `not-text`.
 - **Barrel.** `src/index.ts` includes the Node adapter; the renderer must not import core.
 
 ## Git adapter
@@ -92,7 +94,8 @@ optional locks, no replace objects, no lazy fetch). Every call is prefixed
 - `rev-parse --is-bare-repository`
 - `config --get remote.origin.url`
 - `rev-parse --verify --end-of-options refs/heads/<ref>^{commit}`
-- `show -s --format=%ct --end-of-options <commit>`
+- `show -s --no-show-signature --format=%ct --end-of-options <commit>` (so a repository's
+  `log.showSignature` cannot start its `gpg.program`)
 - `ls-tree -r -z -l --full-tree <commit>`
 - `cat-file blob <oid>`
 
@@ -124,5 +127,9 @@ are outside this slice and unverified here. All tests use synthetic repositories
 
 - **P2, root seam:** shell destinations cap at 512 characters while Wiki can represent 16,384-character
   destinations. A seam owner decision; nothing is repaired here.
+- **P3, snapshot re-validation:** `parseSnapshot` checks `commitTime`/`indexedAt` with a loose
+  pattern and `ref` only as a label, so a corrupt stored snapshot (for example `2024-02-30`) passes,
+  then fails descriptor validation on every `indexStatus`/`listSources` and is never rebuilt while the
+  commit is unchanged. Only reachable through a corrupted `IndexStore`; unrepaired here.
 - **P3, contract:** omitting null front-matter fields loses key presence. A lossless contract revision is
   deferred; core follows the accepted omit-not-coerce decision.

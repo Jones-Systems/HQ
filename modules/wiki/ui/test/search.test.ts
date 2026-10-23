@@ -173,3 +173,34 @@ test('a failing name lookup is reported without hiding search results', async ()
   assert.equal(all(quiet.container, '[role="alert"]').length, 0, 'not-found for a name is simply no match');
   await quiet.unmount();
 });
+
+
+test('search controls collapse without losing the draft or repository filter and restore after remount', async () => {
+  const key = 'hq.wiki.searchbar.v1';
+  const app = await launch();
+  const store = app.container.ownerDocument.defaultView!.localStorage;
+  try {
+    await typeInto(input(app.container), 'unfinished query');
+    await click(checkbox(app.container, 'appdev'));
+    const hide = one(app.container, '[aria-label="Hide Wiki search and filters"]');
+    hide.focus();
+    await click(hide);
+    assert.equal(one(app.container, '#wiki-secondary-search').hidden, true);
+    assert.equal(app.container.ownerDocument.activeElement, hide);
+    assert.ok(one(app.container, '[aria-label="Wiki navigation"]'));
+    await click(one(app.container, '[aria-label="Show Wiki search and filters"]'));
+    assert.equal(input(app.container).value, 'unfinished query');
+    assert.equal(checkbox(app.container, 'appdev').checked, false);
+    await click(one(app.container, '[aria-label="Hide Wiki search and filters"]'));
+    await app.unmount();
+    const again = await launch();
+    try {
+      assert.equal(one(again.container, '#wiki-secondary-search').hidden, true);
+      await click(one(again.container, '[aria-label="Show Wiki search and filters"]'));
+      assert.equal(one(again.container, '#wiki-secondary-search').hidden, false);
+    } finally { await again.unmount(); }
+  } finally {
+    store.removeItem(key);
+    if (app.container.isConnected) await app.unmount();
+  }
+});
