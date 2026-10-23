@@ -61,7 +61,7 @@ test('owner-reported return is separate, versionless and cannot claim native ver
   assert.ok(candidate);
   assert.equal(candidate.provenance?.origin, 'owner-reported');
   assert.equal(candidate.candidateVersionId, null);
-  assert.deepEqual(returnCounts(session.state.candidates), { simulated: 0, ownerReported: 1, realVerified: 0 });
+  assert.deepEqual(returnCounts(session.state.candidates), { simulated: 0, agentReported: 0, ownerReported: 1, realVerified: 0 });
   assert.throws(() => parseReturnedCandidate({
     ...candidate, claims: [{ ...candidate.claims[0], level: 'observed' }],
   }));

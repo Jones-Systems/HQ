@@ -1,3 +1,4 @@
+import { Button } from '@hq/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import type { AnnotationId, AnnotationRef } from '../contract.ts';
@@ -38,7 +39,6 @@ export interface AnnotationListProps {
 }
 
 const row: CSSProperties = { display: 'grid', gridTemplateColumns: '28px 1fr auto', gap: 8, padding: 10, borderBottom: '1px solid var(--line)' };
-const small: CSSProperties = { border: '1px solid var(--line)', borderRadius: 5, padding: '3px 8px', background: 'transparent', fontSize: 11 };
 
 /** Edits locally and commits once on blur, so one note edit is one undo step. */
 function NoteField({ letter, note, readOnly, onCommit }: { letter: string; note: string; readOnly: boolean; onCommit: (note: string) => void }) {
@@ -46,7 +46,7 @@ function NoteField({ letter, note, readOnly, onCommit }: { letter: string; note:
   useEffect(() => setDraft(note), [note]);
   return <textarea aria-label={`Note for ${letter}`} value={draft} readOnly={readOnly} rows={2} maxLength={4000}
     onChange={(event) => setDraft(event.target.value)} onBlur={() => { if (draft !== note) onCommit(draft); }}
-    style={{ width: '100%', marginTop: 6, font: 'inherit', color: 'inherit', background: 'transparent', border: '1px solid var(--line)', borderRadius: 5 }} />;
+    style={{ width: '100%', marginTop: 6, font: 'inherit', color: 'inherit', background: 'var(--hq-surface)', border: '1px solid var(--hq-border-control)', borderRadius: 7, padding: '7px 9px' }} />;
 }
 
 export function AnnotationList(props: AnnotationListProps) {
@@ -63,16 +63,15 @@ export function AnnotationList(props: AnnotationListProps) {
         const status = props.statuses.get(annotation.id);
         return <li key={annotation.id} data-letter={annotation.letter} aria-current={props.selectedId === annotation.id ? 'true' : undefined}
           style={{ ...row, background: props.selectedId === annotation.id ? 'var(--selected)' : undefined }}>
-          <button type="button" onClick={() => props.onSelect(annotation.id)} aria-label={`Select annotation ${annotation.letter}`}
-            style={{ ...small, fontWeight: 700, padding: '3px 0' }}>{annotation.letter}</button>
+          <Button size="sm" type="button" onClick={() => props.onSelect(annotation.id)} aria-label={`Select annotation ${annotation.letter}`}>{annotation.letter}</Button>
           <div style={{ minWidth: 0 }}>
             <div style={{ overflowWrap: 'anywhere' }}><strong>{annotation.kind}</strong> {summary(annotation)}</div>
             {status !== undefined && status !== 'exact' ? <div style={{ color: 'var(--muted)' }}>{STATUS_TEXT[status]}</div> : null}
             <NoteField letter={annotation.letter} note={annotation.note} readOnly={props.readOnly} onCommit={(note) => props.onNote(annotation.id, note)} />
           </div>
           <div style={{ display: 'grid', gap: 4, alignContent: 'start' }}>
-            <button type="button" style={small} aria-pressed={marked} disabled={props.readOnly} onClick={() => props.onToggleRevisit(annotation.id)}>Revisit</button>
-            <button type="button" style={small} disabled={props.readOnly} onClick={() => props.onDelete(annotation.id)}>Delete</button>
+            <Button size="sm" type="button" aria-pressed={marked} disabled={props.readOnly} onClick={() => props.onToggleRevisit(annotation.id)}>Revisit</Button>
+            <Button size="sm" type="button" disabled={props.readOnly} onClick={() => props.onDelete(annotation.id)}>Delete</Button>
           </div>
         </li>;
       })}

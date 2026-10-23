@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { SecondaryBar, SecondaryPanel } from '../../../ui/src/secondary-panels.tsx';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { canvasItemId, providerId } from '../../src/contract.ts';
 import { addPlacement } from '../../src/arrangement.ts';
@@ -71,5 +74,72 @@ describe('Inspector markup', () => {
     expect(html).toContain('Align left');
     expect(html).toContain('Distribute horizontally');
     expect(html).toMatch(/<fieldset disabled="" class="hq-inspector-actions">/u);
+  });
+});
+
+
+afterEach(() => {
+  cleanup();
+  localStorage.removeItem('hq.design.secondary.test-panel.v1');
+  localStorage.removeItem('hq.design.secondary.test-tools.v1');
+});
+
+describe('secondary panel controls', () => {
+  it('keeps draft input mounted, focus reachable and the resized width across collapse and remount', () => {
+    const panel = () => <SecondaryPanel name="test-panel" label="Test inspector" initial={280}><input aria-label="Inspector draft" defaultValue="kept" /></SecondaryPanel>;
+    const mounted = render(panel());
+    const grip = screen.getByRole('separator', { name: 'Resize Test inspector' });
+    fireEvent.keyDown(grip, { key: 'ArrowLeft' });
+    expect(grip.getAttribute('aria-valuenow')).toBe('288');
+    const field = screen.getByLabelText('Inspector draft') as HTMLInputElement;
+    fireEvent.change(field, { target: { value: 'unsaved' } });
+    grip.focus();
+    fireEvent.keyDown(grip, { key: 'Home' });
+    expect(grip.getAttribute('aria-valuenow')).toBe('0');
+    expect(document.activeElement).toBe(grip);
+    expect(screen.queryByRole('textbox', { name: 'Inspector draft' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show Test inspector' }));
+    expect(grip.getAttribute('aria-valuenow')).toBe('288');
+    expect((screen.getByRole('textbox', { name: 'Inspector draft' }) as HTMLInputElement).value).toBe('unsaved');
+    fireEvent.keyDown(grip, { key: 'Home' });
+    mounted.unmount();
+    render(panel());
+    const restoredGrip = screen.getByRole('separator', { name: 'Resize Test inspector' });
+    expect(restoredGrip.getAttribute('aria-valuenow')).toBe('0');
+    restoredGrip.focus();
+    fireEvent.keyDown(restoredGrip, { key: 'Enter' });
+    expect(restoredGrip.getAttribute('aria-valuenow')).toBe('288');
+    expect(document.activeElement).toBe(restoredGrip);
+  });
+
+  it('drags an end panel to zero using pointer capture and restores its previous width', () => {
+    render(<SecondaryPanel name="test-panel" label="Test inspector" initial={280}><input aria-label="Inspector draft" /></SecondaryPanel>);
+    const grip = screen.getByRole('separator', { name: 'Resize Test inspector' });
+    const capture = vi.fn();
+    const release = vi.fn();
+    Object.assign(grip, { setPointerCapture: capture, hasPointerCapture: () => true, releasePointerCapture: release });
+    fireEvent.pointerDown(grip, { button: 0, pointerId: 1, clientX: 0 });
+    fireEvent.pointerMove(grip, { pointerId: 1, clientX: 200 });
+    fireEvent.pointerMove(grip, { pointerId: 1, clientX: 300 });
+    fireEvent.pointerUp(grip, { pointerId: 1, clientX: 300 });
+    expect(capture).toHaveBeenCalledWith(1);
+    expect(release).toHaveBeenCalledWith(1);
+    expect(grip.getAttribute('aria-valuenow')).toBe('0');
+    fireEvent.keyDown(grip, { key: 'Enter' });
+    expect(grip.getAttribute('aria-valuenow')).toBe('280');
+  });
+
+  it('remembers a closed tool row and leaves its reopen button available', () => {
+    const tools = () => <SecondaryBar name="test-tools" label="Test tools"><button>Action</button></SecondaryBar>;
+    const mounted = render(tools());
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Test tools' }));
+    expect(screen.queryByRole('button', { name: 'Action' })).toBeNull();
+    mounted.unmount();
+    render(tools());
+    const show = screen.getByRole('button', { name: 'Show Test tools' });
+    show.focus();
+    fireEvent.click(show);
+    expect(screen.getByRole('button', { name: 'Action' })).toBeTruthy();
+    expect(document.activeElement).toBe(show);
   });
 });

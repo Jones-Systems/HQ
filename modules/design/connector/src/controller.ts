@@ -1,9 +1,12 @@
 /**
  * Framework-free connector controller: the composition entry the React panel
  * (and root) drive. Selecting a destination or opening the confirmation never
- * sends; only `confirm()` calls the outbox, and only once at a time.
+ * sends; only `confirm()` submits. Only `confirmResolveUnknown()` fences an
+ * unknown attempt. Both explicit effects run only once at a time.
  */
 
+import type { ResolveUnknownResult } from './resolve-unknown.ts';
+import { createResolveUnknownConfirmation, resolveUnknownReason } from './resolve-unknown.ts';
 import type { Clock, EvidenceFeedPort, EvidenceStorePort, TransportRegistry } from './contract.ts';
 import type { DispatchRecord } from './dispatch.ts';
 import type { EvidenceEntry } from './evidence.ts';
@@ -30,6 +33,7 @@ export interface RouteHistoryView {
 }
 
 export interface ConnectorView {
+  readonly resolveUnknown: { readonly available: boolean; readonly reason: string | null; readonly confirming: boolean };
   readonly packetLabel: string | null;
   readonly rows: readonly DestinationRow[];
   readonly selectedId: DestinationId | null;
@@ -51,6 +55,8 @@ export interface ConnectorView {
 }
 
 export interface ConnectorController {
+  requestResolveUnknown(): void;
+  confirmResolveUnknown(): Promise<ResolveUnknownResult | null>;
   /** Stable snapshot; a new object only after a change is emitted. */
   view(): ConnectorView;
   /** Re-read the catalog and dispatch state after an external change (for example a catalog refresh). */
@@ -88,6 +94,7 @@ export function createConnectorController(options: ConnectorControllerOptions): 
   let selectedId: DestinationId | null = null;
   let pending: Destination | null = null;
   let busy = false;
+  let pendingResolution: DispatchRecord | null = null;
   let record: DispatchRecord | null = null;
   let evidence: readonly EvidenceEntry[] = [];
   let message: string | null = null;
@@ -174,7 +181,8 @@ export function createConnectorController(options: ConnectorControllerOptions): 
       packetLabel: packet ? `${packet.packetId} · ${shortDigest(packet.packetDigest)}` : null,
       rows,
       selectedId,
-      newThread: newThreadControl(),
+      newThread: newThreadControl(rows),
+      resolveUnknown: { available: resolveUnknownReason(record, options.transports, busy) === null, reason: resolveUnknownReason(record, options.transports, busy), confirming: pendingResolution !== null },
       confirmation: pending && packet
         ? confirmationView(createConfirmation({ packet, destination: pending, clock: options.clock, newId: () => 'preview' }), pending)
         : null,
@@ -198,6 +206,32 @@ export function createConnectorController(options: ConnectorControllerOptions): 
   }
 
   return {
+    requestResolveUnknown() {
+      if (resolveUnknownReason(record, options.transports, busy) !== null) return;
+      pending = null;
+      pendingResolution = record;
+      message = null;
+      emit();
+    },
+    async confirmResolveUnknown() {
+      if (busy || !pendingResolution) return null;
+      const shown = pendingResolution;
+      pendingResolution = null;
+      busy = true;
+      emit();
+      try {
+        const result = await options.outbox.resolveUnknown({
+          dispatchId: shown.dispatchId,
+          confirmation: createResolveUnknownConfirmation(shown, options.clock),
+        });
+        message = result.outcome === 'resolved' ? result.detail : result.reason;
+        return result;
+      } finally {
+        busy = false;
+        await load();
+        emit();
+      }
+    },
     view() {
       cached ??= computeView();
       return cached;
@@ -230,6 +264,7 @@ export function createConnectorController(options: ConnectorControllerOptions): 
     async setPacket(next) {
       packet = next;
       pending = null;
+      pendingResolution = null;
       message = null;
       await load();
       emit();
@@ -238,6 +273,7 @@ export function createConnectorController(options: ConnectorControllerOptions): 
       if (busy) return;
       selectedId = destinationId;
       pending = null;
+      pendingResolution = null;
       message = null;
       await load();
       emit();
@@ -245,11 +281,13 @@ export function createConnectorController(options: ConnectorControllerOptions): 
     requestSend() {
       const rows = destinationRows(options.getCatalog(), options.transports);
       if (sendGate(rows) !== null) return;
+      pendingResolution = null;
       pending = selected();
       emit();
     },
     cancel() {
       pending = null;
+      pendingResolution = null;
       acknowledgedKeys = null;
       emit();
     },
@@ -258,6 +296,7 @@ export function createConnectorController(options: ConnectorControllerOptions): 
       busy = true;
       const shown = pending;
       pending = null;
+      pendingResolution = null;
       emit();
       try {
         // The confirmation binds the identity the owner saw; the outbox compares it with the catalog now.

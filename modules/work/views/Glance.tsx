@@ -117,7 +117,7 @@ export function GlanceView() {
           <div className="wv-mini-agenda">
             {buckets.overdue.length > 0 && (
               <div className="wv-agenda-group is-overdue">
-                <div className="wv-agenda-dayname">Overdue</div>
+                <h4 className="wv-agenda-dayname">Overdue · {buckets.overdue.length}</h4>
                 {buckets.overdue.map(({ item, entry }) => <ItemRow key={`${item.id}:${entry.id}`} item={item} trailing={<DateChip entry={entry} state="overdue" />} />)}
               </div>
             )}
@@ -125,17 +125,17 @@ export function GlanceView() {
               const near = g.day === today || g.day === addDays(today, 1);
               return (
                 <div key={g.day} className={cx('wv-agenda-group', g.day === today && 'is-today')}>
-                  <div className="wv-agenda-dayname">
-                    {g.day === today ? 'Today' : g.day === addDays(today, 1) ? 'Tomorrow' : formatDay(g.day, { today })}
-                    {!near && <span className="wv-muted"> · {relativeDays(today, g.day)}</span>}
+                  <div className="wv-agenda-group-head">
+                    <h4 className="wv-agenda-dayname">{g.day === today ? 'Today' : g.day === addDays(today, 1) ? 'Tomorrow' : formatDay(g.day, { today })}</h4>
+                    {!near && <span className="wv-agenda-relative">{relativeDays(today, g.day)}</span>}
                   </div>
-                  {g.list.map(({ item, entry }) => <ItemRow key={`${item.id}:${entry.id}`} item={item} trailing={<DateChip entry={entry} state={dateState(entry, today, true)} />} />)}
+                  {g.list.map(({ item, entry }) => <ItemRow key={`${item.id}:${entry.id}`} item={item} trailing={<DateChip entry={entry} state={dateState(entry, today, true)} inDayGroup />} />)}
                 </div>
               );
             })}
             {periods.length > 0 && (
               <div className="wv-agenda-group is-period">
-                <div className="wv-agenda-dayname">{MONTHS[Number(today.slice(5, 7)) - 1]} &amp; this quarter — no set day</div>
+                <h4 className="wv-agenda-dayname">{MONTHS[Number(today.slice(5, 7)) - 1]} &amp; this quarter — no set day</h4>
                 {periods.map(({ item, entry }) => <ItemRow key={`${item.id}:${entry.id}`} item={item} trailing={<DateChip entry={entry} state="current" />} />)}
               </div>
             )}

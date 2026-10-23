@@ -40,7 +40,7 @@ export function ProjectSwitcher({ controller, snapshot }: { controller: Projects
     h('span', {
       className: `hqp-badge ${registry.provenance.kind === 'provisional-local' ? 'hqp-badge-warning' : ''}`,
       title: registry.provenance.label, 'data-registry': registry.provenance.kind,
-    }, registry.provenance.kind === 'provisional-local' ? 'Provisional registry' : 'HQ registry'),
+    }, registry.provenance.kind === 'provisional-local' ? 'On this device' : 'HQ registry'),
     registry.status === 'error' ? h('span', { className: 'hqp-badge hqp-badge-warning', role: 'status' }, 'Registry refresh failed; showing last list') : null);
 }
 

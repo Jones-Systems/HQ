@@ -104,6 +104,14 @@ function WikiRoot(props: WikiViewProps & { readonly service: WikiService }): Rea
   const [nav, dispatch] = useReducer(navReducer, destination, initialNav);
   const [repos, setRepos] = useState<readonly WikiNamespace[]>(NAMESPACES);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(() => {
+    try { return window.localStorage.getItem('hq.wiki.searchbar.v1') !== 'closed'; } catch { return true; }
+  });
+  const toggleSearch = (): void => setSearchOpen(current => {
+    try { window.localStorage.setItem('hq.wiki.searchbar.v1', current ? 'closed' : 'open'); }
+    catch { /* Search remains usable when preference storage is unavailable. */ }
+    return !current;
+  });
   const [notice, setNotice] = useState<{ readonly message: string; readonly index: number } | null>(null);
   const main = useRef<HTMLElement | null>(null);
 
@@ -192,13 +200,14 @@ function WikiRoot(props: WikiViewProps & { readonly service: WikiService }): Rea
           h('button', { type: 'button', className: 'wiki-button', 'aria-expanded': historyOpen, onClick: () => setHistoryOpen(!historyOpen) }, `History (${nav.entries.length})`),
         ),
       ),
-      h(SearchBar, {
+      h('button', { type: 'button', className: 'wiki-button wiki-search-toggle', 'aria-label': searchOpen ? 'Hide Wiki search and filters' : 'Show Wiki search and filters', title: searchOpen ? 'Hide search and filters' : 'Show search and filters', 'aria-expanded': searchOpen, 'aria-controls': 'wiki-secondary-search', onClick: toggleSearch }, searchOpen ? '⌃' : '⌄'),
+      h('div', { id: 'wiki-secondary-search', hidden: !searchOpen }, h(SearchBar, {
         key: `${nav.index}:${entry.destination}`,
         initialQuery: resolved.view === 'search' && entry.ambiguity === undefined ? resolved.query : '',
         repos,
         toggleRepo,
         onSubmit: ctx.openSearch,
-      }),
+      })),
     ),
     historyOpen
       ? h(

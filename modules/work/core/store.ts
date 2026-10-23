@@ -443,8 +443,11 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
         updateEntry(entry.requestId, (u) => ({ ...u, state: 'awaiting_decision', recovery: { kind: 'indeterminate', reason: error.reason, checkedAt: stamp() } }));
         return 'indeterminate';
       case 'unavailable':
+        // The failed Check or Apply consumed the adapter's Apply authorization, so a `not_applied` answer no longer
+        // stands: Apply needs a fresh Check.
         offline = true;
-        set({});
+        if (entry.recovery?.kind === 'not_applied') updateEntry(entry.requestId, ({ recovery: _previous, ...u }) => ({ ...u, state: 'unconfirmed' }));
+        else set({});
         return 'stopped';
       case 'unknown': {
         // An apply whose answer was lost may have landed just now: back to unconfirmed, and Apply needs a new Check.

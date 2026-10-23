@@ -1,6 +1,6 @@
 import { parseReference, type ReferenceEnvelope } from '@hq/contracts';
 import {
-  RUN_STATUSES, TOOL_CATEGORIES, isChannel, isJsonObject, isToolId,
+  RUN_STATUSES, TOOL_CATEGORIES, isChannel, isJsonObject, isToolId, checkSlot, FEATURE_HQ_EDITORIAL_TIMEBOX,
   type Brand, type Draft, type RunRecord, type RunStatus, type Tool, type ToolCategory,
 } from '../core';
 
@@ -31,12 +31,18 @@ function guardLinks(value: unknown): ReferenceEnvelope[] | null {
   return links.every((link): link is ReferenceEnvelope => link !== null) ? links : null;
 }
 
-export function guardDraft(value: unknown): Draft | null {
+export function guardDraft(value: unknown, features?: readonly string[]): Draft | null {
   if (!isJsonObject(value)) return null;
   const { id, title, body, brand_id, channel, planned_date, archived, version, updated_at } = value;
   if (!str(id) || !str(title) || !str(body) || !str(brand_id) || !isChannel(channel) || !str(planned_date)
     || !flag(archived) || !int(version) || !str(updated_at)) return null;
   const draft: Draft = { id, title, body, brand_id, channel, planned_date, archived, version, updated_at };
+  if ('planning_slot' in value) {
+    if (value.planning_slot === undefined) return null;
+    const slot = checkSlot(value.planning_slot, planned_date, [FEATURE_HQ_EDITORIAL_TIMEBOX]);
+    if (!slot.ok) return null;
+    if (!features || features.includes(FEATURE_HQ_EDITORIAL_TIMEBOX)) draft.planning_slot = slot.value ?? null;
+  }
   if ('links' in value) {
     const links = guardLinks(value.links);
     if (!links) return null;
@@ -80,11 +86,13 @@ export interface GuardedWorkspace {
 export function guardWorkspace(value: unknown): GuardedWorkspace | null {
   if (!isJsonObject(value)) return null;
   const brands = guardList(value.brands, guardBrand);
-  const content = guardList(value.content, guardDraft);
+
   const runs = guardList(value.runs, guardRun);
   const tools = guardList(value.tools, guardTool);
   const features = value.features === undefined ? [] : guardList(value.features, (item) => (str(item) ? item : null));
-  if (!brands || !content || !runs || !tools || !features) return null;
+  if (!features) return null;
+  const content = guardList(value.content, (item) => guardDraft(item, features));
+  if (!brands || !content || !runs || !tools) return null;
   return { brands, content, runs, tools, features };
 }
 
