@@ -139,6 +139,33 @@ describe('card detail conflicts', () => {
     expect(env.byId('it-zine').motivation).toBe('want');
     expect(patches(env)).toHaveLength(1);
   });
+
+  it('setting an area on a card with none saves it, with no false conflict', async () => {
+    const env = await setup();
+    const panel = openCard(env, 'it-shed');
+    expect(env.byId('it-shed').area).toBeNull();
+    const area = within(panel).getByRole('textbox', { name: 'Area' });
+    fireEvent.change(area, { target: { value: 'Garden' } });
+    await act(async () => { fireEvent.blur(area); });
+    expect(patches(env).map((c) => c.args.slice(0, 3))).toEqual([['it-shed', 1, { area: 'Garden' }]]);
+    expect(env.byId('it-shed').area).toBe('Garden');
+    expect(within(panel).queryByRole('alert')).toBeNull();
+  });
+
+  it('an area set from none meets a different field changed elsewhere: re-applied without asking', async () => {
+    const env = await setup();
+    const panel = openCard(env, 'it-shed');
+    await env.device.patch('it-shed', 1, { title: 'Repaint the shed green' }, env.otherRid());
+    const area = within(panel).getByRole('textbox', { name: 'Area' });
+    fireEvent.change(area, { target: { value: 'Garden' } });
+    await act(async () => { fireEvent.blur(area); });
+    expect(patches(env).map((c) => c.args.slice(0, 3))).toEqual([
+      ['it-shed', 1, { area: 'Garden' }],
+      ['it-shed', 2, { area: 'Garden' }],
+    ]);
+    expect(env.byId('it-shed')).toMatchObject({ title: 'Repaint the shed green', area: 'Garden', revision: 3 });
+    expect(within(panel).queryByRole('alert')).toBeNull();
+  });
 });
 
 describe('card detail status and Undo', () => {
