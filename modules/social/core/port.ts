@@ -27,7 +27,8 @@ export const ACTIVE_RUN_STATUSES: readonly RunStatus[] = ['queued', 'running'];
 /** The service's built-in brand. It is shown as present, never created. */
 export const DEFAULT_BRAND_ID = 'default';
 
-/** Capability names advertised in `WorkspaceSnapshot.features`. Today's service advertises none. */
+/** Capability names advertised in `WorkspaceSnapshot.features`; absent capabilities stay disabled. */
+export const FEATURE_HQ_EDITORIAL_TIMEBOX = 'hq-editorial-timebox-v1';
 export const FEATURE_HQ_REFERENCES = 'hq-references-v1';
 export const FEATURE_HQ_BRAND_PROJECT = 'hq-brand-project-v1';
 
@@ -50,6 +51,12 @@ export interface Brand {
   project_id?: string | null;
 }
 
+export interface PlanningSlot {
+  start: string;
+  duration_minutes: number;
+  timezone: string;
+}
+
 export interface Draft {
   id: string;
   title: string;
@@ -58,6 +65,8 @@ export interface Draft {
   channel: Channel;
   /** '' or YYYY-MM-DD. A planning label, never a schedule. */
   planned_date: string;
+  /** Service-backed editorial time; present only with `hq-editorial-timebox-v1`. */
+  planning_slot?: PlanningSlot | null;
   archived: 0 | 1;
   version: number;
   updated_at: string;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button, Dialog, StateView, StatusChip, Tabs } from '@hq/ui';
 import { checkRunSubmission, isJsonObject, portErrorOf, workspaceSnapshot, type PortError, type ToolId } from '../core';
 import { TOOL_GUIDES } from './catalog';
@@ -57,6 +57,15 @@ export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
   const name = serviceTool?.name ?? tool;
   const serviceDown = state.workspace.status === 'error';
   const summaryRef = useRef<HTMLDivElement>(null);
+  const resultsId = useId();
+  const [resultsOpen, setResultsOpen] = useState(() => {
+    try { return localStorage.getItem('hq.social.workbench-results.v1') !== 'closed'; } catch { return true; }
+  });
+  const toggleResults = () => setResultsOpen(current => {
+    try { localStorage.setItem('hq.social.workbench-results.v1', current ? 'closed' : 'open'); }
+    catch { /* Result visibility stays usable without preference storage. */ }
+    return !current;
+  });
   const [blocked, setBlocked] = useState<readonly Problem[]>([]);
   const [exampleState, setExampleState] = useState<{ loading: boolean; error: string | null }>({ loading: false, error: null });
   const [confirming, setConfirming] = useState<{ input: Record<string, unknown>; isExample: boolean } | null>(null);
@@ -221,8 +230,11 @@ export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
           </div>
         </section>
         <section className="sw-panel" aria-labelledby="sw-results-title">
-          <h2 id="sw-results-title">Results</h2>
-          <AttemptView tool={tool} toolName={name} attempt={attempt} onClear={() => setAttempt(session, tool, undefined)} />
+          <div className="sw-panel-head"><h2 id="sw-results-title">Results</h2>
+            <Button size="sm" variant="ghost" aria-label={resultsOpen ? 'Hide result details' : 'Show result details'} title={resultsOpen ? 'Hide result details' : 'Show result details'}
+              aria-expanded={resultsOpen} aria-controls={resultsId} onClick={toggleResults}>{resultsOpen ? '⌃' : '⌄'}</Button>
+          </div>
+          <div id={resultsId} hidden={!resultsOpen}><AttemptView tool={tool} toolName={name} attempt={attempt} onClear={() => setAttempt(session, tool, undefined)} /></div>
         </section>
       </div>
       <Dialog

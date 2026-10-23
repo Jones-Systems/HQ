@@ -6,8 +6,8 @@ export default defineConfig({
   test: {
     projects: [
       // `.test.ts` runs in Node; a file may opt into the DOM with `// @vitest-environment happy-dom`.
-      { extends: true, test: { name: 'node', environment: 'node', include: roots.map((root) => `${root}/**/*.test.ts`) } },
-      { extends: true, test: { name: 'dom', environment: 'happy-dom', include: roots.map((root) => `${root}/**/*.test.tsx`) } },
+      { extends: true, test: { name: 'node', environment: 'node', exclude: ['modules/wiki/**'], include: roots.map((root) => `${root}/**/*.test.ts`) } },
+      { extends: true, test: { name: 'dom', environment: 'happy-dom', exclude: ['modules/wiki/**'], include: roots.map((root) => `${root}/**/*.test.tsx`) } },
     ],
   },
 });

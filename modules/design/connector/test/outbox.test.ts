@@ -75,8 +75,22 @@ describe('exactly one handoff', () => {
 
   it('concurrent submits from two processes on one store still produce one handoff', async () => {
     const h = await createHarness();
+    const firstStore = h.store;
     const first = h.outbox;
     const second = h.restart();
+    // Deterministic schedule: each process waits at its store read until both have read, so both reach the CAS write.
+    let reads = 0;
+    let release!: () => void;
+    const bothRead = new Promise<void>((resolve) => { release = resolve; });
+    for (const store of [firstStore, h.store]) {
+      const list = store.list.bind(store);
+      store.list = async () => {
+        const value = await list();
+        if ((reads += 1) === 2) release();
+        await bothRead;
+        return value;
+      };
+    }
     const [a, b] = await Promise.all([first.submit(h.request()), second.submit(h.request())]);
     const outcomes = [a, b].map((r) => r.outcome === 'attempted' ? 'attempted' : (r as Extract<SubmitResult, { outcome: 'refused' }>).code);
     assert.deepEqual(outcomes.sort(), ['attempted', 'in-flight']);

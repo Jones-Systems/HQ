@@ -10,6 +10,7 @@ import { usePrefetch, useSize, useThumbnail } from './hooks.ts';
 export interface GalleryViewOptions {
   /** Viewport used before the scroll container is measured (and for server rendering). */
   readonly initialViewport?: { readonly width: number; readonly height: number };
+  readonly onOpenSource?: (item: Extract<GalleryItem, { kind: 'source' }>, trigger: HTMLButtonElement) => void;
   readonly prefetchRows?: number;
   readonly maxPrefetch?: number;
 }
@@ -32,10 +33,11 @@ function Thumbnail({ controller, item, priority, live }: { controller: ProjectsC
     state.status === 'error' ? 'Preview unavailable' : '');
 }
 
-function Tile({ controller, item, position, total, priority, live }: {
+function Tile({ controller, item, position, total, priority, live, onOpenSource }: {
   controller: ProjectsController; item: GalleryItem; position: number; total: number; priority: Priority;
   /** False until the grid is measured, so a provisional first layout requests nothing. */
   live: boolean;
+  onOpenSource?: GalleryViewOptions['onOpenSource'];
 }) {
   const projectId = item.kind === 'workspace' ? item.projectId : null;
   const hasSummary = item.kind === 'workspace' && item.summary !== undefined;
@@ -50,7 +52,8 @@ function Tile({ controller, item, position, total, priority, live }: {
     h('span', { className: 'hqp-tile-meta' }, meta),
     h('span', { className: 'hqp-badges' }, h('span', { className: 'hqp-badge hqp-badge-workspace' }, 'Workspace')));
   }
-  return h('article', {
+  return h(onOpenSource ? 'button' : 'article', {
+    ...(onOpenSource ? { type: 'button', onClick: (event: { currentTarget: HTMLButtonElement }) => onOpenSource(item, event.currentTarget) } : {}),
     className: 'hqp-tile hqp-tile-source', 'data-key': item.key, 'aria-posinset': position, 'aria-setsize': total,
     'aria-label': `${item.title} on ${item.hostLabel}, read-only source entry`,
   }, thumb, h('span', { className: 'hqp-tile-title' }, item.title),
@@ -147,6 +150,6 @@ export function GalleryView({ controller, snapshot, options = {} }: { controller
           : { transform: `translate(0px, ${block.y}px)`, height: `${block.height}px` },
       }, block.type === 'tile'
         ? h(Tile, { controller, item: block.item, position: tileIndex.get(block.key) ?? 0, total,
-          priority: visibleKeys.has(block.key) ? 'visible' : 'prefetch', live: measured })
+          priority: visibleKeys.has(block.key) ? 'visible' : 'prefetch', live: measured, onOpenSource: options.onOpenSource })
         : h(Header, { controller, block }))))));
 }

@@ -7,3 +7,5 @@ export { createFixtureWorkspace, serviceTimestamp, RUN_QUEUE_CAPACITY } from './
 export type { FixtureControls, FixtureOptions, FixtureWorkspace, RunOutcome } from './fixture';
 export { FIXTURE_IDS, FIXTURE_PROJECT_ID, FIXTURE_OTHER_PROJECT_ID, fictionalSeed } from './fixtures/workspace';
 export type { FixtureRun, FixtureSeed } from './fixtures/workspace';
+
+export * from './timebox';

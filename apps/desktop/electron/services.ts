@@ -21,7 +21,7 @@ export function jsonValue(v: unknown, seen = new Set<object>()): boolean {
   seen.delete(v); return valid;
 }
 interface Encoded { method: 'GET' | 'POST' | 'PATCH' | 'PUT'; path: string; body?: string; requestId?: string; loss: 'unavailable' | 'unknown' }
-export const WORK_METHODS = { state: 'GET', version: 'GET', item: 'GET', history: 'GET', create: 'POST', patch: 'PATCH', move: 'POST', archive: 'POST', restore: 'POST', reviewed: 'POST', settings: 'PUT', replay: 'POST' } as const satisfies Record<WorkServiceRoute, string>;
+export const WORK_METHODS = { state: 'GET', version: 'GET', item: 'GET', history: 'GET', create: 'POST', patch: 'PATCH', move: 'POST', archive: 'POST', restore: 'POST', reviewed: 'POST', settings: 'PUT', replay: 'POST', export: 'GET' } as const satisfies Record<WorkServiceRoute, string>;
 export const SOCIAL_PATHS = { workspace: '/api/workspace', sample: '/api/sample/', run: '/api/runs/', saveContent: '/api/content', addBrand: '/api/brands', submitRun: '/api/runs' } as const satisfies Record<SocialServiceRoute, string>;
 /** Fixed ordering recursively makes persisted originals independent of object insertion order. */
 function canonical(v: unknown): string {
@@ -35,6 +35,7 @@ export function encodeWork(route: unknown, params: unknown): Encoded | null {
   const method = WORK_METHODS[route as WorkServiceRoute];
   if (route === 'state' || route === 'version') return keys(p, []) ? { method: 'GET', path: `/api/${route}`, loss: 'unavailable' } : null;
   if (route === 'item' || route === 'history') return keys(p, ['id']) && id(p.id) ? { method: 'GET', path: `/api/items/${p.id}${route === 'history' ? '/history' : ''}`, loss: 'unavailable' } : null;
+  if (route === 'export') return null; // The byte-preserving export uses its own bounded reader.
   if (!requestId(p.requestId)) return null;
   if (route === 'replay') {
     if (!keys(p, ['mode', 'requestId', 'original'], ['sentAfterVersion']) || !['lookup', 'resend'].includes(String(p.mode)) || (Object.hasOwn(p, 'sentAfterVersion') && !integer(p.sentAfterVersion)) || !record(p.original) || !keys(p.original, ['route', 'params']) || !record(p.original.params) || p.original.params.requestId !== p.requestId || !['create', 'patch', 'move', 'archive', 'restore', 'reviewed', 'settings'].includes(String(p.original.route))) return null;
@@ -77,7 +78,8 @@ export function encodeSocial(route: unknown, p: unknown): Encoded | null {
   if (route === 'addBrand' && (!keys(p, ['name']) || typeof p.name !== 'string')) return null;
   if (route === 'submitRun' && (!keys(p, ['tool', 'input', 'is_example']) || typeof p.tool !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(p.tool) || !record(p.input) || typeof p.is_example !== 'boolean')) return null;
   if (route === 'saveContent') {
-    if (!keys(p, ['title', 'body', 'brand_id', 'channel', 'planned_date', 'archived'], ['id', 'version']) || !['title', 'body', 'brand_id', 'channel', 'planned_date'].every(k => typeof p[k] === 'string') || !/^$|^\d{4}-\d{2}-\d{2}$/.test(p.planned_date as string) || (p.archived !== 0 && p.archived !== 1) || (('id' in p || 'version' in p) && (!id(p.id) || !integer(p.version)))) return null;
+    if (!keys(p, ['title', 'body', 'brand_id', 'channel', 'planned_date', 'archived'], ['id', 'version', 'planning_slot']) || !['title', 'body', 'brand_id', 'channel', 'planned_date'].every(k => typeof p[k] === 'string') || !/^$|^\d{4}-\d{2}-\d{2}$/.test(p.planned_date as string) || (p.archived !== 0 && p.archived !== 1) || (('id' in p || 'version' in p) && (!id(p.id) || !integer(p.version)))) return null;
+    if ('planning_slot' in p && p.planning_slot !== null && (!record(p.planning_slot) || !keys(p.planning_slot, ['start', 'duration_minutes', 'timezone']) || typeof p.planning_slot.start !== 'string' || !integer(p.planning_slot.duration_minutes) || typeof p.planning_slot.timezone !== 'string')) return null;
   }
   const body = canonical(p);
   return Buffer.byteLength(body) <= LIMITS.social ? { method: 'POST', path, body, loss: 'unknown' } : null;

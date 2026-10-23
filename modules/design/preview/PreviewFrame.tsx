@@ -13,10 +13,10 @@ export interface PreviewFrameProps {
 }
 
 /** Labelled wrapper around a real section view. Every section in the preview is shown through it. */
-export function PreviewFrame({ lane, entry, notes = [], fill = false, children }: PreviewFrameProps) {
+export function PreviewFrame({ lane, notes = [], fill = false, children }: PreviewFrameProps) {
   return <div className="hqd-preview-frame" data-preview-lane={lane}>
     <p className="hqd-preview-strip" role="note">
-      <strong>Preview</strong> {lane} · real entry <code>{entry}</code> · labelled fakes, synthetic data
+      <strong>Example preview</strong> · synthetic data
       {notes.map((note) => <span key={note}> · {note}</span>)}
     </p>
     <div className={fill ? 'hqd-preview-body is-fill' : 'hqd-preview-body'}>{children}</div>

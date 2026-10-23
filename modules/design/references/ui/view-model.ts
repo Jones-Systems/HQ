@@ -28,9 +28,24 @@ export interface ReferenceCard {
   readonly rights: { readonly status: RightsStatus; readonly label: string; readonly publishable: boolean };
   readonly tags: readonly string[];
   readonly capturedAt: string;
-  readonly thumbnail: { readonly digest: BlobDigest; readonly w: number | null; readonly h: number | null } | null;
+  readonly thumbnail: { readonly digest: BlobDigest; readonly w: number | null; readonly h: number | null; readonly presentation: ThumbnailPresentation } | null;
   readonly usedInCurrentProject: boolean;
   readonly selected: boolean;
+}
+
+/**
+ * How a reference image sits in its card: `banner` fills a landscape website frame from the top;
+ * `contained` and `phone` show the whole image at its own aspect ratio on a neutral matte, `phone`
+ * inside a simple device outline. Presentation only: nothing implies the image is interactive.
+ */
+export type ThumbnailPresentation = 'banner' | 'contained' | 'phone';
+const PHONE_PLATFORMS: ReadonlySet<string> = new Set(['ios', 'android', 'watchos']);
+
+export function thumbnailPresentation(source: ReferenceRecord['source'], w: number | null, h: number | null): ThumbnailPresentation {
+  const known = w !== null && h !== null && w > 0 && h > 0;
+  const landscape = known && w >= h * 1.05;
+  if (source.kind === 'app') return PHONE_PLATFORMS.has(source.platform) && !landscape ? 'phone' : 'contained';
+  return !known || landscape ? 'banner' : 'contained';
 }
 
 export interface ReferenceDetail {
@@ -112,7 +127,7 @@ export function buildLibraryView(
       rights: { status: record.rights.status, label: RIGHTS_LABELS[record.rights.status], publishable: isPublishPermitted(record) },
       tags: record.tags,
       capturedAt: record.capturedAt,
-      thumbnail: image ? { digest: record.asset!.digest, w: record.asset!.w, h: record.asset!.h } : null,
+      thumbnail: image ? { digest: record.asset!.digest, w: record.asset!.w, h: record.asset!.h, presentation: thumbnailPresentation(record.source, record.asset!.w, record.asset!.h) } : null,
       usedInCurrentProject: currentProject !== null && uses.some((use) => use.projectId === currentProject.id),
       selected: record.id === selection.selectedId,
     };

@@ -3,6 +3,8 @@ import { spawn } from 'node:child_process';
 import { access, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { connect } from 'node:net';
+import { once } from 'node:events';
 import { test } from 'node:test';
 
 const directory = dirname(fileURLToPath(import.meta.url));
@@ -14,6 +16,8 @@ test('owned profiles and child processes disappear on success, failure and signa
   async function fixture(mode) {
     const child = spawn(process.execPath, [join(directory, 'cleanup-fixture.mjs'), root, mode], { stdio: ['ignore', 'pipe', 'pipe'] });
     active.add(child);
+    let stderr = '';
+    child.stderr.on('data', data => { stderr += data; });
     const done = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', code => resolve(code)); });
     let output = '';
     const identity = await new Promise((resolve, reject) => {
@@ -23,13 +27,14 @@ test('owned profiles and child processes disappear on success, failure and signa
         if (output.includes('\n')) { clearTimeout(timer); resolve(JSON.parse(output.split('\n')[0])); }
       });
     });
-    return { child, done, ...identity };
+    return { child, done, stderr: () => stderr, ...identity };
   }
   async function gone(instance, code) {
     assert.equal(await instance.done, code);
     active.delete(instance.child);
     await assert.rejects(access(instance.root), { code: 'ENOENT' });
     assert.throws(() => process.kill(instance.pid, 0), { code: 'ESRCH' });
+    await assert.rejects(fetch(instance.origin, { signal: AbortSignal.timeout(1000) }));
   }
   try {
     const peer = await fixture('signal');
@@ -37,9 +42,20 @@ test('owned profiles and child processes disappear on success, failure and signa
     await access(peer.root);
     process.kill(peer.pid, 0);
     await gone(await fixture('failure'), 7);
+    await gone(await fixture('partial'), 7);
+    await gone(await fixture('cleanup-only'), 8);
+    const failedCleanup = await fixture('cleanup-failure');
+    await gone(failedCleanup, 7);
+    assert.match(failedCleanup.stderr(), /deliberate fixture failure/);
+    assert.match(failedCleanup.stderr(), /Owned resource cleanup failed/);
     const interrupted = await fixture('signal');
+    const socket = connect({ host: '127.0.0.1', port: Number(new URL(interrupted.origin).port) });
+    await once(socket, 'connect');
+    const socketClosed = once(socket, 'close');
     interrupted.child.kill('SIGINT');
     await gone(interrupted, 0);
+    await socketClosed;
+    assert.equal(socket.destroyed, true);
     peer.child.kill('SIGTERM');
     await gone(peer, 0);
   } finally {

@@ -290,7 +290,16 @@ export function StatusBoard({
       {live === 0 && (
         <StateView state="empty" title="No planning items yet" description="Capture something to Inbox to start. Nothing is dated unless you add a date." action={{ label: 'Capture to Inbox', onAction: () => onCapture('inbox') }} />
       )}
-      <div className="work-columns">
+      <div className="work-columns" role="region" aria-label="Status columns" tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) return;
+          const element = event.currentTarget;
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault(); element.scrollLeft += event.key === 'ArrowRight' ? 120 : -120;
+          } else if (event.key === 'Home' || event.key === 'End') {
+            event.preventDefault(); element.scrollLeft = event.key === 'Home' ? 0 : element.scrollWidth;
+          }
+        }}>
         {STATUSES.map(({ id: status, label, hint }) => {
           const cards = columns[status];
           const isCollapsed = collapsed.includes(status);

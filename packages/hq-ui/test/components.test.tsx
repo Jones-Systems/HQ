@@ -1,9 +1,9 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  Button, Dialog, IconButton, Menu, SAVE_STATES, SaveIndicator, STATUS_TONES, StateView, StatusChip, Tabs, Toast, ToastRegion, VIEW_STATES,
+  Button, Dialog, IconButton, Menu, Splitter, SAVE_STATES, SaveIndicator, STATUS_TONES, StateView, StatusChip, Tabs, Toast, ToastRegion, TOAST_AUTO_DISMISS_MS, VIEW_STATES,
 } from '../src';
 
 // Happy-dom has no layout or colour engine: these prove roles, names and keyboard paths in each chrome scheme.
@@ -125,6 +125,79 @@ describe.each(['light', 'dark'] as const)('primitives in %s chrome', (theme) => 
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
+  it('Escape inside a Menu in a Dialog closes only the menu', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<Dialog open onClose={onClose} title="Card">
+      <Menu trigger="Card actions" items={[{ id: 'rename', label: 'Rename', onSelect: vi.fn() }]} />
+    </Dialog>);
+    const trigger = screen.getByRole('button', { name: 'Card actions' });
+    expect(document.activeElement).toBe(trigger);
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menu')).toBeTruthy();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(trigger);
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('Dialog keeps focus inside when the scrim is clicked and dismissOnScrim is off', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<Dialog open onClose={onClose} title="Unsaved" dismissOnScrim={false} actions={<Button onClick={vi.fn()}>Keep editing</Button>} />);
+    const keep = screen.getByRole('button', { name: 'Keep editing' });
+    expect(document.activeElement).toBe(keep);
+    await user.click(document.querySelector('.hq-dialog-scrim')!);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(keep);
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('Dialog Tab wrap skips tabindex="-1" elements and elements in hidden ancestors', async () => {
+    const user = userEvent.setup();
+    const actions = (hiddenPanel: boolean) => <>
+      <Button>Apply</Button>
+      <Button>Cancel</Button>
+      <Button tabIndex={-1}>Roving</Button>
+      {hiddenPanel && <div hidden><Button>Hidden panel action</Button></div>}
+    </>;
+    for (const hiddenPanel of [false, true]) {
+      const { unmount } = render(<Dialog open onClose={vi.fn()} title="Filters" actions={actions(hiddenPanel)} />);
+      const apply = screen.getByRole('button', { name: 'Apply' });
+      const cancel = screen.getByRole('button', { name: 'Cancel' });
+      expect(document.activeElement).toBe(apply);
+      await user.tab({ shift: true });
+      expect(document.activeElement).toBe(cancel);
+      await user.tab();
+      expect(document.activeElement).toBe(apply);
+      unmount();
+    }
+  });
+
+  it('Dialog restores focus to the opener when a child uses autoFocus', async () => {
+    const user = userEvent.setup();
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return <>
+        <Button onClick={() => setOpen(true)}>Rename</Button>
+        <Dialog open={open} onClose={() => setOpen(false)} title="Rename card">
+          <input aria-label="Card name" autoFocus />
+        </Dialog>
+      </>;
+    }
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Rename' });
+    await user.tab();
+    await user.keyboard('{Enter}');
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Card name' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
   it('Toast announces politely, offers Undo by keyboard and dismisses with Escape', async () => {
     const user = userEvent.setup();
     const undo = vi.fn();
@@ -136,6 +209,8 @@ describe.each(['light', 'dark'] as const)('primitives in %s chrome', (theme) => 
     expect(screen.getByRole('region', { name: 'Notifications' })).toBeTruthy();
     const live = screen.getByRole('status');
     expect(live.getAttribute('aria-live')).toBe('polite');
+    // role="status" implies aria-atomic="true"; each new toast must be read alone, not the whole stack again.
+    expect(live.getAttribute('aria-atomic')).toBe('false');
     expect(live.textContent).toContain('Planning change only · no run started');
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo' }));
@@ -227,5 +302,233 @@ describe.each(['light', 'dark'] as const)('primitives in %s chrome', (theme) => 
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Act empty' }));
     await user.keyboard('{Enter}');
     expect(action).toHaveBeenCalledOnce();
+  });
+});
+
+
+describe('resizable panel separator', () => {
+  afterEach(cleanup);
+  it.each(['start', 'end'] as const)('resizes a %s-side panel with arrows and supports full collapse, restore and bounds', async side => {
+    const toggle = vi.fn();
+    function Panel() {
+      const [size, setSize] = useState(120);
+      return <Splitter label="Panel width" side={side} value={size} min={0} max={280} onResize={setSize} onToggle={toggle} />;
+    }
+    render(<Panel />);
+    const separator = screen.getByRole('separator', { name: 'Panel width' });
+    expect(separator.getAttribute('aria-orientation')).toBe('vertical');
+    separator.focus();
+    fireEvent.keyDown(separator, { key: 'ArrowRight' });
+    expect(separator.getAttribute('aria-valuenow')).toBe(side === 'start' ? '128' : '112');
+    fireEvent.keyDown(separator, { key: 'ArrowLeft' });
+    expect(separator.getAttribute('aria-valuenow')).toBe('120');
+    fireEvent.keyDown(separator, { key: 'Home' });
+    expect(separator.getAttribute('aria-valuenow')).toBe('0');
+    expect(document.activeElement).toBe(separator);
+    fireEvent.keyDown(separator, { key: side === 'start' ? 'ArrowLeft' : 'ArrowRight' });
+    expect(separator.getAttribute('aria-valuenow')).toBe('0');
+    fireEvent.keyDown(separator, { key: 'End' });
+    expect(separator.getAttribute('aria-valuenow')).toBe('280');
+    fireEvent.keyDown(separator, { key: 'Enter' });
+    fireEvent.doubleClick(separator);
+    expect(toggle).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['start', 'end'] as const)('captures a pointer for %s-side drag, ignores other pointers and releases on cancel/unmount', side => {
+    const resize = vi.fn();
+    const view = render(<Splitter label="Drag panel" side={side} value={0} min={0} max={280} onResize={resize} />);
+    const separator = screen.getByRole('separator', { name: 'Drag panel' });
+    let captured: number | null = null;
+    separator.setPointerCapture = vi.fn(id => { captured = id; });
+    separator.hasPointerCapture = vi.fn(id => captured === id);
+    separator.releasePointerCapture = vi.fn(() => { captured = null; });
+    fireEvent.pointerDown(separator, { pointerId: 1, button: 0, clientX: 200 });
+    expect(separator.setPointerCapture).toHaveBeenCalledWith(1);
+    expect(document.activeElement).toBe(separator);
+    fireEvent.pointerMove(separator, { pointerId: 2, clientX: 240 });
+    expect(resize).not.toHaveBeenCalled();
+    fireEvent.pointerMove(separator, { pointerId: 1, clientX: side === 'start' ? 240 : 160 });
+    expect(resize).toHaveBeenLastCalledWith(40);
+    fireEvent.pointerCancel(separator, { pointerId: 1 });
+    expect(separator.releasePointerCapture).toHaveBeenCalledWith(1);
+    resize.mockClear();
+    fireEvent.pointerMove(separator, { pointerId: 1, clientX: 280 });
+    expect(resize).not.toHaveBeenCalled();
+    fireEvent.pointerDown(separator, { pointerId: 3, button: 0, clientX: 200 });
+    view.unmount();
+    expect(separator.releasePointerCapture).toHaveBeenLastCalledWith(3);
+  });
+});
+
+
+describe('selectable menu items', () => {
+  afterEach(cleanup);
+
+  it('exposes checked choices and retains mixed-role keyboard navigation and activation', async () => {
+    const user = userEvent.setup();
+    const choose = vi.fn();
+    const disabled = vi.fn();
+    render(<Menu trigger="Sort" items={[
+      { id: 'title', label: 'Title', checked: true, onSelect: vi.fn() },
+      { id: 'date', label: 'Date', checked: false, onSelect: choose },
+      { id: 'unavailable', label: 'Unavailable', checked: false, disabled: true, onSelect: disabled },
+      { id: 'reset', label: 'Reset', onSelect: vi.fn() },
+    ]} />);
+    const trigger = screen.getByRole('button', { name: 'Sort' });
+    await user.click(trigger);
+    const [title, date, unavailable] = screen.getAllByRole('menuitemradio');
+    expect(title!.getAttribute('aria-checked')).toBe('true');
+    expect(date!.getAttribute('aria-checked')).toBe('false');
+    expect(title!.querySelector('[aria-hidden="true"]')?.textContent).toBe('✓');
+    expect(date!.querySelector('[aria-hidden="true"]')?.textContent).toBe('');
+    await user.keyboard('{End}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Reset' }));
+    await user.keyboard('{ArrowUp}{Enter}');
+    expect(document.activeElement).toBe(unavailable);
+    expect(disabled).not.toHaveBeenCalled();
+    await user.keyboard('{Home}d');
+    expect(document.activeElement).toBe(date);
+    await user.keyboard(' ');
+    expect(choose).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    await user.keyboard('{ArrowUp}{ArrowDown}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'Title' }));
+    await user.keyboard('{Escape}');
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
+describe('opt-in toast expiry', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+  });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
+  const advance = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
+
+  it('dismisses at 8000ms, not 7999ms, and does not restart for a new callback identity', () => {
+    const original = vi.fn();
+    const current = vi.fn();
+    const { rerender } = render(<Toast message="Saved" autoDismissMs={TOAST_AUTO_DISMISS_MS} onDismiss={original} />);
+    advance(4000);
+    rerender(<Toast message="Saved" autoDismissMs={TOAST_AUTO_DISMISS_MS} onDismiss={current} />);
+    advance(3999);
+    expect(current).not.toHaveBeenCalled();
+    advance(1);
+    expect(original).not.toHaveBeenCalled();
+    expect(current).toHaveBeenCalledOnce();
+    advance(8000);
+    expect(current).toHaveBeenCalledOnce();
+  });
+
+  it.each(['hover', 'focus'] as const)('keeps independent overlapping pauses when %s ends first', first => {
+    const dismiss = vi.fn();
+    render(<Toast message="Saved" action={{ label: 'Undo', onAction: vi.fn() }} autoDismissMs={8000} onDismiss={dismiss} />);
+    const toast = screen.getByText('Saved').closest('.hq-toast')!;
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    const close = screen.getByRole('button', { name: 'Dismiss' });
+    advance(3000);
+    fireEvent.mouseEnter(toast);
+    fireEvent.focusIn(undo);
+    advance(10000);
+    fireEvent.focusOut(undo, { relatedTarget: close });
+    fireEvent.focusIn(close, { relatedTarget: undo });
+    if (first === 'hover') fireEvent.mouseLeave(toast);
+    else fireEvent.focusOut(close, { relatedTarget: document.body });
+    advance(10000);
+    expect(dismiss).not.toHaveBeenCalled();
+    if (first === 'hover') fireEvent.focusOut(close, { relatedTarget: document.body });
+    else fireEvent.mouseLeave(toast);
+    advance(4999);
+    expect(dismiss).not.toHaveBeenCalled();
+    advance(1);
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('pauses while the document is hidden and resumes only after hover also ends', () => {
+    const dismiss = vi.fn();
+    const hidden = vi.spyOn(document, 'hidden', 'get');
+    render(<Toast message="Saved" autoDismissMs={8000} onDismiss={dismiss} />);
+    const toast = screen.getByText('Saved').closest('.hq-toast')!;
+    advance(2000);
+    hidden.mockReturnValue(true);
+    fireEvent(document, new Event('visibilitychange'));
+    fireEvent.mouseEnter(toast);
+    advance(20000);
+    hidden.mockReturnValue(false);
+    fireEvent(document, new Event('visibilitychange'));
+    advance(20000);
+    expect(dismiss).not.toHaveBeenCalled();
+    fireEvent.mouseLeave(toast);
+    advance(5999);
+    expect(dismiss).not.toHaveBeenCalled();
+    advance(1);
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('waits for visibility when initially hidden', () => {
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    const dismiss = vi.fn();
+    render(<Toast message="Saved" autoDismissMs={8000} onDismiss={dismiss} />);
+    advance(10000);
+    expect(dismiss).not.toHaveBeenCalled();
+    hidden.mockReturnValue(false);
+    fireEvent(document, new Event('visibilitychange'));
+    advance(7999);
+    expect(dismiss).not.toHaveBeenCalled();
+    advance(1);
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('starts a full duration for a replacement message and removes timers and visibility listeners on unmount', () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const dismiss = vi.fn();
+    const { rerender, unmount } = render(<Toast message="First" autoDismissMs={8000} onDismiss={dismiss} />);
+    advance(6000);
+    rerender(<Toast message="Second" autoDismissMs={8000} onDismiss={dismiss} />);
+    advance(7999);
+    expect(dismiss).not.toHaveBeenCalled();
+    advance(1);
+    expect(dismiss).toHaveBeenCalledOnce();
+    rerender(<Toast message="Third" autoDismissMs={8000} onDismiss={dismiss} />);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    for (const [type, listener] of add.mock.calls.filter(([type]) => type === 'visibilitychange')) {
+      expect(remove).toHaveBeenCalledWith(type, listener);
+    }
+    advance(10000);
+    fireEvent(document, new Event('visibilitychange'));
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a replacement paused until the existing hover ends', () => {
+    const dismiss = vi.fn();
+    const { rerender } = render(<Toast message="First" autoDismissMs={8000} onDismiss={dismiss} />);
+    const toast = screen.getByText('First').closest('.hq-toast')!;
+    fireEvent.mouseEnter(toast);
+    rerender(<Toast message="Second" autoDismissMs={8000} onDismiss={dismiss} />);
+    advance(10000);
+    expect(dismiss).not.toHaveBeenCalled();
+    fireEvent.mouseLeave(toast);
+    advance(7999);
+    expect(dismiss).not.toHaveBeenCalled();
+    advance(1);
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('persists by default and exposes action shortcuts without changing action or Escape behavior', () => {
+    const undo = vi.fn();
+    const dismiss = vi.fn();
+    render(<Toast message="Saved" action={{ label: 'Undo', onAction: undo, keyshortcuts: 'Control+Z Meta+Z' }} onDismiss={dismiss} />);
+    advance(80000);
+    expect(dismiss).not.toHaveBeenCalled();
+    const action = screen.getByRole('button', { name: 'Undo' });
+    expect(action.getAttribute('aria-keyshortcuts')).toBe('Control+Z Meta+Z');
+    fireEvent.click(action);
+    expect(undo).toHaveBeenCalledOnce();
+    fireEvent.keyDown(action, { key: 'Escape' });
+    expect(dismiss).toHaveBeenCalledOnce();
   });
 });

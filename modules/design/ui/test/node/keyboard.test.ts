@@ -82,7 +82,7 @@ test('every navigation target is reachable with Tab and Enter alone', () => {
 
 test('every navigation target stays reachable with both panels hidden', () => {
   const view = chromeView({ visible: { sidebar: false, inspector: false } });
-  assert.ok(!tabStops(view).some((stop) => stop.region === 'sidebar'));
+  assert.deepEqual(tabStops(view).filter((stop) => stop.region === 'sidebar').map((stop) => stop.id), ['splitter:sidebar']);
   const locations = reachable({ view, focus: 'nav:projects', palette: null }, ['Tab', 'Enter']);
   for (const target of allTargets) assert.ok(locations.has(target), `unreachable: ${target}`);
 });
@@ -108,9 +108,9 @@ test('a nav area returns to its last section', () => {
   assert.deepEqual(stale.find((s) => s.id === 'nav:review')?.action, { type: 'navigate', location: { nav: 'review', section: 'canvas' } });
 });
 
-test('F6 cycles populated regions in both directions and skips hidden ones', () => {
+test('F6 cycles populated regions including the collapsed panel restoration grips', () => {
   const stops = tabStops(chromeView({ visible: { sidebar: false, inspector: true } }));
-  assert.equal(regionStop(stops, 'nav:runs', false)?.id, 'workspace');
+  assert.equal(regionStop(stops, 'nav:runs', false)?.id, 'splitter:sidebar');
   assert.equal(regionStop(stops, 'workspace', false)?.id, 'splitter:inspector');
   assert.equal(regionStop(stops, 'inspector', false)?.id, 'nav:projects');
   assert.equal(regionStop(stops, 'nav:projects', true)?.id, 'splitter:inspector');
@@ -165,4 +165,14 @@ test('palette filtering ranks prefix matches and highlighting never executes', (
   assert.equal(state.active, 0);
   assert.equal(paletteReduce(state, { type: 'close' }).open, false);
   assert.equal(state.returnFocus, 'nav:review');
+});
+
+test('responsive squeeze omits unavailable edges but manually collapsed panels retain keyboard grips', () => {
+  const collapsed = chromeView({ visible: { sidebar: false, inspector: false } });
+  const stops = tabStops(collapsed);
+  assert.ok(stops.some((stop) => stop.id === 'splitter:sidebar'));
+  assert.ok(stops.some((stop) => stop.id === 'splitter:inspector'));
+  const squeezed = tabStops({ ...collapsed, squeezed: ['sidebar', 'inspector'] });
+  assert.ok(!squeezed.some((stop) => stop.id.startsWith('splitter:')));
+  assert.equal(regionStop(squeezed, 'nav:runs', false)?.id, 'workspace');
 });

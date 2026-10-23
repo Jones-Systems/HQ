@@ -9,6 +9,7 @@
     "@hq/social": "0.1.0",
     "@hq/work": "0.1.0",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "@hq/wiki": "0.1.0"
   }
 }

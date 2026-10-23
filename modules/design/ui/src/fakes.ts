@@ -53,7 +53,7 @@ export function createFakeShell(context: ProjectContext, appearance: ResolvedApp
   const notify = () => { for (const listener of [...listeners]) listener(); };
   const shell: FakeShell = {
     fake: true, projectRequests: [], domain: 'design',
-    destinations: { design: 'home', social: 'home', work: 'home' },
+    destinations: { design: 'home', social: 'home', work: 'home', wiki: 'home' },
     getSnapshot: () => snapshot,
     subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     requestProjectContext: (projectId) => { shell.projectRequests.push(projectId); },

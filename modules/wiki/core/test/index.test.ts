@@ -255,6 +255,17 @@ describe('topics', () => {
     must(await none.host.refresh());
     assert.deepEqual(must(await none.host.service.listTopics({ namespace: 'bl' })).topics, []);
   });
+
+  test('directory names that clean to nothing still give valid, bounded labels', async () => {
+    const long = 'a'.repeat(255);
+    const files = { [`${long}/\u3000/page.md`]: '# P', '\u3000/top.md': '# T' };
+    const dir = memoryHost({ bl: files }, { bl: { topicMode: 'directory' } });
+    must(await dir.host.refresh());
+    const list = must(await dir.host.service.listTopics({ namespace: 'bl' }));
+    assert.equal(validateTopicList(list).ok, true);
+    const labels = list.topics.map((topic) => topic.label).sort();
+    assert.deepEqual(labels, ['(unnamed folder)', `${long}/`, long].sort());
+  });
 });
 
 describe('snapshots', () => {

@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModulePort } from '@hq/contracts';
 import SocialDefault, { SocialModule } from '@hq/social';
-import { FIXTURE_PROJECT_ID, resetSocialSessions } from '../../core';
+import { FEATURE_HQ_EDITORIAL_TIMEBOX, FIXTURE_PROJECT_ID, resetSocialSessions } from '../../core';
 import type { ServiceResponse, SocialServiceTransport } from '../../live';
 import { createWireStub, type WireStub } from '../../live/test/wire-stub';
 import { createWorkbenchFixture } from '../../workbench/fixtures/examples';
@@ -68,6 +68,13 @@ function liveStub(): WireStub {
 const overview = () => screen.findByRole('heading', { level: 1, name: 'Overview' });
 
 describe('Social workspace source selection', () => {
+  it('enables timed planning in the production example workspace without changing fixture defaults', async () => {
+    const selected = selectSocialWorkspace({});
+    expect(selected.source).toBe('fixture');
+    expect((await selected.port.snapshot()).features).toContain(FEATURE_HQ_EDITORIAL_TIMEBOX);
+    expect((await createWorkbenchFixture().port.snapshot()).features).not.toContain(FEATURE_HQ_EDITORIAL_TIMEBOX);
+  });
+
   it('uses the labelled fixture when no bridge is present', async () => {
     expect(selectSocialWorkspace({}).source).toBe('fixture');
     expect(SocialDefault).toBe(SocialModule);

@@ -1,14 +1,15 @@
 /**
- * Names of the T2 visual-system tokens copied into `tokens/hq-tokens.css` (spec `iface.ui-kit.001`).
+ * Names of the visual-system tokens generated into `tokens/hq-tokens.css` (spec `iface.ui-kit.001`).
  * Values live only in that CSS; `test/tokens.test.ts` proves this list equals its declarations.
  */
 
-/** 39 colour roles, each a `light-dark()` pair resolved by the `[data-theme]` / OS colour scheme. */
+/** 45 colour roles, each a `light-dark()` pair resolved by the `[data-theme]` / OS colour scheme. */
 export const HQ_COLOR_ROLES = [
   '--hq-canvas', '--hq-nav', '--hq-surface', '--hq-surface-raised', '--hq-surface-overlay', '--hq-surface-sunken',
   '--hq-surface-hover', '--hq-surface-pressed', '--hq-surface-selected',
-  '--hq-border', '--hq-border-strong', '--hq-border-control',
-  '--hq-text', '--hq-text-muted', '--hq-text-subtle', '--hq-text-disabled',
+  '--hq-border', '--hq-border-strong', '--hq-border-control', '--hq-border-control-hover',
+  '--hq-control', '--hq-control-hover', '--hq-control-pressed', '--hq-control-disabled',
+  '--hq-text', '--hq-text-muted', '--hq-text-subtle', '--hq-text-disabled', '--hq-text-selected',
   '--hq-accent', '--hq-accent-hover', '--hq-accent-pressed', '--hq-accent-edge', '--hq-on-accent', '--hq-accent-text',
   '--hq-accent-strong', '--hq-accent-soft', '--hq-focus', '--hq-selection',
   '--hq-success', '--hq-success-soft', '--hq-warning', '--hq-warning-soft',
@@ -37,7 +38,7 @@ export const HQ_SPACE_TOKENS = [
 ] as const;
 
 export const HQ_RADIUS_TOKENS = [
-  '--hq-radius-xs', '--hq-radius-sm', '--hq-radius-md', '--hq-radius-lg', '--hq-radius-sheet', '--hq-radius-pill',
+  '--hq-radius-xs', '--hq-radius-sm', '--hq-radius-md', '--hq-radius-lg', '--hq-radius-sheet', '--hq-radius-pill', '--hq-radius-control',
 ] as const;
 
 export const HQ_SIZE_TOKENS = [
@@ -65,8 +66,11 @@ export const HQ_COMPONENT_TOKENS = [
   '--hq-rail-item-bg-selected', '--hq-rail-item-indicator', '--hq-rail-item-fg-unavailable',
   '--hq-nav-item-fg', '--hq-nav-item-fg-selected', '--hq-nav-item-bg-selected', '--hq-nav-item-indicator',
   '--hq-button-primary-bg', '--hq-button-primary-bg-hover', '--hq-button-primary-bg-pressed', '--hq-button-primary-fg',
-  '--hq-button-primary-edge', '--hq-button-secondary-bg', '--hq-button-secondary-fg', '--hq-button-secondary-edge',
-  '--hq-button-ghost-fg', '--hq-button-danger-bg', '--hq-button-danger-fg',
+  '--hq-button-primary-edge', '--hq-button-secondary-bg', '--hq-button-secondary-bg-hover', '--hq-button-secondary-bg-pressed',
+  '--hq-button-secondary-fg', '--hq-button-secondary-edge', '--hq-button-secondary-edge-hover',
+  '--hq-button-ghost-fg', '--hq-button-ghost-bg-hover', '--hq-button-ghost-bg-pressed',
+  '--hq-button-disabled-bg', '--hq-button-disabled-fg', '--hq-button-disabled-edge',
+  '--hq-button-danger-bg', '--hq-button-danger-fg', '--hq-selected-bg', '--hq-selected-fg',
   '--hq-input-bg', '--hq-input-edge', '--hq-input-edge-invalid',
   '--hq-card-bg', '--hq-card-edge', '--hq-card-edge-selected', '--hq-toast-bg',
 ] as const;

@@ -17,6 +17,9 @@ STORE=packages/design-store
 APP=modules/design/app
 # Node-only reference producer, nested in the references cone with its own tsconfig.
 PRODUCER=modules/design/references/producer
+# Production section views and the read-only reference provider, each nested in the app with its own tsconfig.
+APP_SECTIONS=$APP/sections
+APP_REFS=$APP/references-provider
 VITEST_CONES=(annotations canvas compare components references requests taste ui)
 
 failures=0
@@ -33,7 +36,7 @@ for cone in "${CONES[@]}"; do
   [ -f "modules/design/$cone/tsconfig.json" ] || { echo "MISSING cone modules/design/$cone"; failures=$((failures + 1)); }
 done
 [ -f "$STORE/tsconfig.json" ] || { echo "MISSING cone $STORE"; failures=$((failures + 1)); }
-for config in "$APP/tsconfig.json" "$APP/storage/tsconfig.json" "$PRODUCER/tsconfig.json"; do
+for config in "$APP/tsconfig.json" "$APP/storage/tsconfig.json" "$APP_SECTIONS/tsconfig.json" "$APP_REFS/tsconfig.json" "$PRODUCER/tsconfig.json"; do
   [ -f "$config" ] || { echo "MISSING $config"; failures=$((failures + 1)); }
 done
 
@@ -43,6 +46,8 @@ done
 run "design-store typecheck" "$TSC" -p "$STORE/tsconfig.json"
 run "app typecheck" "$TSC" -p "$APP/tsconfig.json"
 run "app storage typecheck" "$TSC" -p "$APP/storage/tsconfig.json"
+run "app sections typecheck" "$TSC" -p "$APP_SECTIONS/tsconfig.json"
+run "app references provider typecheck" "$TSC" -p "$APP_REFS/tsconfig.json"
 run "references producer typecheck" "$TSC" -p "$PRODUCER/tsconfig.json"
 run "preview typecheck" "$TSC" -p modules/design/preview/tsconfig.json
 
@@ -68,12 +73,17 @@ run "app compose node:test" node --test --test-concurrency=1 $APP/compose/test/*
 # shellcheck disable=SC2086
 run "app storage node:test" node --test --test-concurrency=1 $APP/storage/test/*.test.ts
 # shellcheck disable=SC2086
+run "app sections node:test" node --test --test-concurrency=1 $APP_SECTIONS/test/*.test.ts
+# shellcheck disable=SC2086
+run "app references provider node:test" node --test --test-concurrency=1 $APP_REFS/test/*.test.ts
+# shellcheck disable=SC2086
 run "references producer node:test" node --test --test-concurrency=1 $PRODUCER/test/*.test.ts
 run "preview node:test" node --test --test-concurrency=1 modules/design/preview/test/*.test.ts
 
 for cone in "${VITEST_CONES[@]}"; do
   run "$cone vitest" "$VITEST" run --config "modules/design/$cone/vitest.config.ts"
 done
+run "app sections vitest" "$VITEST" run --config "$APP_SECTIONS/vitest.config.ts"
 
 printf '\nSECTION CHECKS: %d failing command(s)\n' "$failures"
 [ "$failures" -eq 0 ]

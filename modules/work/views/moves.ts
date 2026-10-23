@@ -1,5 +1,5 @@
 import {
-  addDays, dateState, datedEntries, dayNum, HORIZONS, isOpen, periodBounds, plannerToday, stripDerived,
+  addDays, dateState, datedEntries, dayNum, HORIZONS, isOpen, periodBounds, plannerToday, stripDerived, normalizeFields,
   type DateInput, type DateKind, type Horizon, type Item, type ItemPatch, type PlanningDate, type Settings,
 } from '../core';
 
@@ -45,6 +45,46 @@ export function addDatePatch(item: Item, kind: DateKind, day: string): ItemPatch
   return datesPatch(item, null, { kind, precision: 'day', value: day, note: '' });
 }
 
+export const DEFAULT_TIMEBOX_MINUTES = 30;
+export const GRID_SNAP_MINUTES = 15;
+
+export const clockMinutes = (time: string): number => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+export const minuteClock = (minutes: number): string => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+function validDatePatch(item: Item, dateId: string | null, next: DateInput): ItemPatch | null {
+  const patch = datesPatch(item, dateId, next);
+  return normalizeFields(patch, { creating: false }).ok ? patch : null;
+}
+
+/** Wall-clock moves retain the stored zone and optional end; validation rejects DST gaps and crossing midnight. */
+export function retimeDatePatch(item: Item, dateId: string, day: string, start: number): ItemPatch | null {
+  const entry = item.dates.find((date) => date.id === dateId);
+  if (!entry || entry.precision !== 'day' || !entry.time || !entry.tz || !Number.isInteger(start)) return null;
+  const duration = entry.end_time ? clockMinutes(entry.end_time) - clockMinutes(entry.time) : DEFAULT_TIMEBOX_MINUTES;
+  if (start < 0 || start + duration >= 1440 || (entry.value === day && clockMinutes(entry.time) === start)) return null;
+  return validDatePatch(item, dateId, {
+    ...stripDerived(entry), value: day, time: minuteClock(start), end_time: entry.end_time ? minuteClock(start + duration) : null,
+  });
+}
+
+/** New timeboxes default to 30 minutes; resize supplies a duration. Existing dates retain kind, note and zone. */
+export function timeboxPatch(item: Item, dateId: string | null, day: string, start: number, zone: string, kind: DateKind = 'target', duration = DEFAULT_TIMEBOX_MINUTES): ItemPatch | null {
+  const entry = dateId ? item.dates.find((date) => date.id === dateId) : undefined;
+  if ((dateId && !entry) || (entry && entry.precision !== 'day') || !Number.isInteger(start) || !Number.isInteger(duration)
+    || start < 0 || duration < GRID_SNAP_MINUTES || start + duration >= 1440) return null;
+  const next = { ...(entry ? stripDerived(entry) : { kind, precision: 'day' as const, note: '' }), value: day,
+    time: minuteClock(start), end_time: minuteClock(start + duration), tz: entry?.tz || zone };
+  if (entry && entry.value === day && entry.time === next.time && entry.end_time === next.end_time) return null;
+  return validDatePatch(item, dateId, next);
+}
+
+/** Moving into the all-day lane clears all time fields together, without deleting the date. */
+export function clearTimePatch(item: Item, dateId: string, day: string): ItemPatch | null {
+  const entry = item.dates.find((date) => date.id === dateId);
+  if (!entry || entry.precision !== 'day' || (entry.value === day && !entry.time && !entry.end_time && !entry.tz)) return null;
+  return validDatePatch(item, dateId, { ...stripDerived(entry), value: day, time: null, end_time: null, tz: null });
+}
+
 /** The day the tray's Schedule uses: today when the shown month contains it, else the 1st of that month. */
 export function scheduleDay(year: number, month: number, today: string): string {
   const first = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -71,9 +111,9 @@ export function stepHorizon(current: Horizon | null, delta: -1 | 1): Horizon | n
 
 export const TIMELINE_QUARTERS = 8;
 
-/** Eight quarters starting with today's, with their inclusive day bounds. */
-export function timelineQuarters(today: string): { value: string; bounds: [string, string] }[] {
-  const start = Number(today.slice(0, 4)) * 4 + Math.floor((Number(today.slice(5, 7)) - 1) / 3);
+/** Eight quarters starting at today's quarter plus an optional whole-quarter offset, with inclusive day bounds. */
+export function timelineQuarters(today: string, offset = 0): { value: string; bounds: [string, string] }[] {
+  const start = Number(today.slice(0, 4)) * 4 + Math.floor((Number(today.slice(5, 7)) - 1) / 3) + offset;
   return Array.from({ length: TIMELINE_QUARTERS }, (_, i) => {
     const value = `${Math.floor((start + i) / 4)}-Q${((start + i) % 4) + 1}`;
     return { value, bounds: periodBounds('quarter', value)! };
@@ -89,8 +129,8 @@ export interface TimelineMark {
   width: number;
 }
 
-function timelineRange(today: string) {
-  const quarters = timelineQuarters(today);
+function timelineRange(today: string, offset = 0) {
+  const quarters = timelineQuarters(today, offset);
   const rangeStart = dayNum(quarters[0]!.bounds[0]);
   const rangeEnd = dayNum(quarters[quarters.length - 1]!.bounds[1]) + 1;
   const pct = (iso: string, end = false) => ((dayNum(iso) + (end ? 1 : 0) - rangeStart) / (rangeEnd - rangeStart)) * 100;
@@ -98,8 +138,8 @@ function timelineRange(today: string) {
 }
 
 /** The scale row: each quarter's left and width, and today's line, in percent of the eight quarters. */
-export function timelineScale(today: string) {
-  const { quarters, pct } = timelineRange(today);
+export function timelineScale(today: string, offset = 0) {
+  const { quarters, pct } = timelineRange(today, offset);
   return {
     quarters: quarters.map((q) => ({ ...q, left: pct(q.bounds[0]), width: pct(q.bounds[1], true) - pct(q.bounds[0]) })),
     today: pct(today),
@@ -110,8 +150,8 @@ export function timelineScale(today: string) {
  * A row's geometry, in percent of the eight-quarter range. A bar joins a start date to the next later
  * non-start date only when the owner set both ends; nothing gets an invented duration.
  */
-export function timelineGeometry(item: Pick<Item, 'dates'>, today: string) {
-  const { rangeStart, rangeEnd, pct } = timelineRange(today);
+export function timelineGeometry(item: Pick<Item, 'dates'>, today: string, offset = 0) {
+  const { rangeStart, rangeEnd, pct } = timelineRange(today, offset);
   const clamp = (v: number) => Math.max(0, Math.min(100, v));
   const entries = item.dates.map((entry) => ({ entry, bounds: periodBounds(entry.precision, entry.value) }))
     .filter((x): x is { entry: PlanningDate; bounds: [string, string] } => x.bounds !== null);

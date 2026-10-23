@@ -301,3 +301,44 @@ describe('socialServiceBridge', () => {
     expect(socialServiceBridge(undefined)).toBeNull();
   });
 });
+
+import { FEATURE_HQ_EDITORIAL_TIMEBOX, SLOT_MESSAGES } from '../../core';
+import { guardDraft, guardWorkspace } from '../guards';
+
+describe('live editorial timebox contract', () => {
+  const slot = { start: '09:15', duration_minutes: 30, timezone: 'America/New_York' };
+  it('sends one canonical slot save and no execution, learning capability once if needed', async () => {
+    const stub = createWireStub({ features: [FEATURE_HQ_EDITORIAL_TIMEBOX] });
+    const port = createLiveSocialPort(stub.transport);
+    const draft = (await stub.service.port.snapshot()).content.find((item) => item.planned_date && !item.archived)!;
+    const saved = await port.saveDraft({ ...draft, planning_slot: slot });
+    expect(saved.planning_slot).toEqual(slot);
+    expect(stub.calls.map((call) => call.route)).toEqual(['workspace', 'saveContent']);
+    expect(stub.callsTo('saveContent')[0]!.params).toMatchObject({ planning_slot: slot, version: draft.version });
+    await port.saveDraft({ ...saved, planning_slot: undefined });
+    expect(stub.callsTo('saveContent')[1]!.params).toMatchObject({ planning_slot: null });
+  });
+  it('rejects a timed save without capability and leaves date-only saves compatible', async () => {
+    const stub = createWireStub({ features: [] });
+    const port = createLiveSocialPort(stub.transport);
+    const draft = (await port.snapshot()).content.find((item) => item.planned_date && !item.archived)!;
+    await expect(port.saveDraft({ ...draft, planning_slot: slot })).rejects.toMatchObject({ error: { kind: 'invalid', message: SLOT_MESSAGES.unsupported } });
+    expect(stub.callsTo('saveContent')).toHaveLength(0);
+    await port.saveDraft({ ...draft, planning_slot: null });
+    expect(stub.callsTo('saveContent')[0]!.params).not.toHaveProperty('planning_slot');
+  });
+  it('rejects malformed known slots and strips unsupported valid slots', () => {
+    const draft = NATIVE.workspace.content[0]!;
+    expect(guardDraft({ ...draft, planning_slot: { ...slot, extra: true } })).toBeNull();
+    expect(guardDraft({ ...draft, planning_slot: slot }, [])).not.toHaveProperty('planning_slot');
+    expect(guardWorkspace({ ...NATIVE.workspace, features: [FEATURE_HQ_EDITORIAL_TIMEBOX], content: [{ ...draft, planning_slot: [] }] })).toBeNull();
+  });
+  it('keeps the authoritative service validation message and never retries', async () => {
+    const workspace = { ...NATIVE.workspace, features: [FEATURE_HQ_EDITORIAL_TIMEBOX] };
+    const scripted = scriptedTransport([ok(workspace), err(400, SLOT_MESSAGES.dst)]);
+    const port = createLiveSocialPort(scripted.transport);
+    const draft = (await port.snapshot()).content[0]!;
+    await expect(port.saveDraft({ ...draft, planning_slot: slot })).rejects.toMatchObject({ error: { kind: 'invalid', message: SLOT_MESSAGES.dst } });
+    expect(scripted.calls.map((call) => call.route)).toEqual(['workspace', 'saveContent']);
+  });
+});

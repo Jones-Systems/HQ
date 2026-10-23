@@ -1,15 +1,23 @@
+// @vitest-environment happy-dom
 // Rendered markup checks through React's server renderer. They prove markup/state wiring only,
 // not browser layout, interaction or the Electron runtime.
 import { renderToStaticMarkup } from 'react-dom/server';
+import { getByRole } from '@testing-library/dom';
 import { describe, expect, test } from 'vitest';
 import type { CompareSlotProps, NavigationIntent } from '../src/contract.ts';
 import { CompareSlotFake, RequestsView } from '../ui/RequestsView.tsx';
 import { RunsView } from '../ui/RunsView.tsx';
-import { connectorReturn, frozenWithDestination, versionless } from './fixtures.ts';
+import { connectorReturn, env, frozenWithDestination, readyDraft, versionless } from './fixtures.ts';
 
 const NOW = '2026-01-01T01:00:30.000Z';
 let counter = 0;
 const newId = (kind: string) => `ui-${kind}-${++counter}`;
+
+function markup(html: string): HTMLDivElement {
+  const root = document.createElement('div');
+  root.innerHTML = html;
+  return root;
+}
 
 function ProbeCompare({ baselineVersionId, candidateVersionId }: CompareSlotProps) {
   return <div data-probe-baseline={baselineVersionId} data-probe-candidate={candidateVersionId} />;
@@ -65,9 +73,18 @@ describe('lifecycle markup', () => {
   test('send is enabled only with a destination and shows why otherwise; rendering sends nothing', async () => {
     const { e, session } = await frozenWithDestination();
     const html = renderToStaticMarkup(<RequestsView session={session} CompareSlot={CompareSlotFake} dispatch={e.connector.dispatch} now={NOW} newId={newId} />);
-    expect(html).toMatch(/<button type="button">Send packet #1…<\/button>/u);
+    const send = getByRole(markup(html), 'button', { name: 'Send packet #1…' }) as HTMLButtonElement;
+    expect(send.type).toBe('button');
+    expect(send.disabled).toBe(false);
     expect(html).not.toContain('Why sending is unavailable');
     expect(e.connector.sends).toHaveLength(0);
+    const noDestination = env();
+    const draft = await readyDraft(noDestination);
+    await draft.session.freeze();
+    const blocked = markup(renderToStaticMarkup(<RequestsView session={draft.session} CompareSlot={CompareSlotFake} dispatch={noDestination.connector.dispatch} now={NOW} newId={newId} />));
+    expect((getByRole(blocked, 'button', { name: 'Send packet #1…' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(getByRole(blocked, 'list', { name: 'Why sending is unavailable' }).textContent).toMatch(/destination/i);
+    expect(noDestination.connector.sends).toHaveLength(0);
   });
 
   test('after an unknown handoff the send button is disabled and says not to resend', async () => {
@@ -75,7 +92,9 @@ describe('lifecycle markup', () => {
     e.connector.failTransport = 'link dropped';
     await session.send(e.connector.dispatch, packet.packetId, 'dest-1');
     const html = renderToStaticMarkup(<RequestsView session={session} CompareSlot={CompareSlotFake} dispatch={e.connector.dispatch} now={NOW} newId={newId} />);
-    expect(html).toMatch(/<button type="button" disabled="">Send packet #1…<\/button>/u);
+    const send = getByRole(markup(html), 'button', { name: 'Send packet #1…' }) as HTMLButtonElement;
+    expect(send.type).toBe('button');
+    expect(send.disabled).toBe(true);
     expect(html).toContain('Delivery is unknown. Reconcile with the connector; do not resend.');
     expect(html).toContain('data-handoff="unknown"');
     expect(e.connector.sends).toHaveLength(1);

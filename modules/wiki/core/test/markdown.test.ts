@@ -213,6 +213,28 @@ describe('structural bounds and hostile input', () => {
     assert.ok(Date.now() - started < 20_000, `took ${Date.now() - started} ms`);
   });
 
+  test('balanced brackets, line breaks and long heading space runs stay linear', () => {
+    const inputs = [
+      '[ '.repeat(40_000) + '] '.repeat(40_000),
+      '[d]: d.md\n\n' + '[ '.repeat(40_000) + '] '.repeat(40_000),
+      'a\n'.repeat(1_000_000),
+      'a \t\n'.repeat(500_000),
+      '# a' + ' '.repeat(1_000_000) + '#b',
+    ];
+    for (const input of inputs) {
+      const started = Date.now();
+      const result = parseMarkdown(input);
+      assert.equal(typeof result.ok, 'boolean');
+      assert.ok(Date.now() - started < 5_000, `${JSON.stringify(input.slice(0, 12))}… took ${Date.now() - started} ms`);
+    }
+  });
+
+  test('closing hash sequences and trailing line spaces are stripped as before', () => {
+    assert.equal(show('# x  ##  \n\n# y \t#\t\n\n# a #b\n\n# foo#\n\n# c \\#'), 'h1["x"] h1["y"] h1["a #b"] h1["foo#"] h1["c #"]');
+    assert.equal(show('a  \nb\t \n  c  '), 'p["a\\nb\\nc"]');
+    assert.equal(show('[A]: a.md\n\nsee [ a ]'), 'p["see " link<ref:a.md>(" a ")]', 'reference labels still normalise');
+  });
+
   test('scanLinks skips fences and code and strips quote and list prefixes', () => {
     const text = ['> - see [a](a.md)', '', '```', '[x](x.md)', '```', '', '    [c](c.md)', '', '1. [b](b.md) and [[Wiki]]', '[ref]: r.md', 'use [ref]'].join('\n');
     assert.deepEqual(
