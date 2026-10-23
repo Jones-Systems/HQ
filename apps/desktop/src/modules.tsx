@@ -1,20 +1,33 @@
 import type { ComponentType } from 'react';
 import type { DomainId, ModulePort } from '@hq/contracts';
+import { SERVICE_DOMAINS } from './services/domains';
+import { createWikiDomain, type WikiHostPort, type WikiModulePort } from '@hq/wiki';
+import type { WikiServiceTransport } from '@hq/contracts/wiki';
+import type { WikiService } from '../../../modules/wiki/contract/src/index.ts';
 
-export const DOMAIN_LABELS: Record<DomainId, string> = { design: 'Design', social: 'Social', work: 'Work' };
+type Assert<T extends true> = T;
+export type WikiCompatibility = [Assert<WikiServiceTransport extends WikiHostPort ? true : false>, Assert<WikiService extends WikiServiceTransport ? true : false>, Assert<ModulePort extends WikiModulePort ? true : false>];
+const wiki = createWikiDomain({ getPort: () => window.hqServices?.wiki ?? null });
 
-function ModuleSlot({ domain, destination }: ModulePort & { domain: DomainId }) {
-  return <section className="module-slot" aria-labelledby="module-title">
-    <span className="eyebrow">{DOMAIN_LABELS[domain]} module</span>
-    <h1 id="module-title">{domain === 'design' ? 'A place for Design.' : `${DOMAIN_LABELS[domain]} is not available yet.`}</h1>
-    <p>{domain === 'design' ? 'The shared workspace is ready. Design will appear here when its module is integrated.' : 'This module has its own home in HQ. Its features will arrive independently.'}</p>
-    <dl><dt>Destination</dt><dd>{destination}</dd><dt>Status</dt><dd>Awaiting module integration</dd></dl>
-  </section>;
-}
+import { createDesignComposition } from '../../../modules/design/app/index.ts';
+import { desktopPreview, createJonesConnection, selectDesktopProject } from './interactive-runtime';
+const jonesConnection = createJonesConnection(window.hqServices?.jonesCode);
+void jonesConnection.refresh();
+window.addEventListener('hq-sources-changed', () => { void jonesConnection.refresh(); });
+export const { designDomain, designReferenceReads } = createDesignComposition({
+  preview: desktopPreview, runsConnection: jonesConnection.connection, onSelectProject: selectDesktopProject,
+  sources: { async list() { const result = await window.hqServices?.sources?.call('list', {}); if (!result?.ok) throw Error('Project sources unavailable'); return result.value; } },
+});
 
-/** Integration owner replaces a slot with the independently owned module entry. */
+export const DOMAIN_LABELS: Record<DomainId, string> = { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' };
+
+/** Each domain's independently owned module entry. Design's is built once at module scope (keep-alive chrome state). */
 export const MODULES: Readonly<Record<DomainId, ComponentType<ModulePort>>> = {
-  design: (props) => <ModuleSlot {...props} domain="design" />,
-  social: (props) => <ModuleSlot {...props} domain="social" />,
-  work: (props) => <ModuleSlot {...props} domain="work" />,
+  design: designDomain.Component,
+  social: SERVICE_DOMAINS.Social,
+  work: SERVICE_DOMAINS.Work,
+  wiki: wiki.Component,
 };
+
+/** Module-area presentation per domain. 'fill' modules own their internal scrolling; all module mounts are unpadded. */
+export const MODULE_PRESENTATION: Readonly<Partial<Record<DomainId, 'fill'>>> = { design: designDomain.presentation, wiki: wiki.presentation };

@@ -1,0 +1,4 @@
+/* Evidence page only: stands in for the shell's canvas and type. */
+html, body { margin: 0; background: var(--hq-canvas); color: var(--hq-text); font-family: var(--hq-font-family-sans); }
+.preview { padding: var(--hq-space-lg); display: grid; gap: var(--hq-space-md); }
+.preview-caption { margin: 0; font: var(--hq-type-meta); color: var(--hq-text-subtle); }
