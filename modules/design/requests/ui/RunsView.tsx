@@ -1,3 +1,4 @@
+import { Button } from '@hq/ui';
 import { useSyncExternalStore } from 'react';
 import type { HandoffStatusPort, NavigationPort } from '../src/contract.ts';
 import { navigate } from '../src/intents.ts';
@@ -62,9 +63,9 @@ export function RunsView({ session, statusPort = null, navigation = null, now }:
     {state.readbackNotes.length > 0 && <ul className="hqr-blockers" aria-label="Readback notes">{state.readbackNotes.map((note) => <li key={note}>{note}</li>)}</ul>}
     <div className="hqr-inline">
       {statusPort
-        ? <button type="button" onClick={() => { void session.refreshHandoff(statusPort); }}>Refresh status</button>
+        ? <Button type="button" onClick={() => { void session.refreshHandoff(statusPort); }}>Refresh status</Button>
         : <p className="hqr-hint" role="note">Status readback is not connected. Showing the last stored status.</p>}
-      {navigation && <button type="button" onClick={() => { navigate(navigation, { type: 'open-request', requestId: state.requestId }); }}>Back to request</button>}
+      {navigation && <Button type="button" onClick={() => { navigate(navigation, { type: 'open-request', requestId: state.requestId }); }}>Back to request</Button>}
     </div>
   </section>;
 }

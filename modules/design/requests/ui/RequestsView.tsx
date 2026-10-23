@@ -1,3 +1,4 @@
+import { Button } from '@hq/ui';
 import { useState, useSyncExternalStore, type ComponentType } from 'react';
 import type {
   CandidateId, CompareSlotProps, DispatchSlot, HandoffStatusPort, NavigationPort, ReturnedCandidate, ReturnsPort,
@@ -45,7 +46,7 @@ export function RequestsView({
     {state.readOnly && <p className="hqr-alert" role="alert">Opened read-only. {state.readOnly} Nothing will be changed.</p>}
     {state.unknown && <div className="hqr-alert" role="alert">
       <p>{state.error}</p>
-      <button type="button" onClick={() => { void session.reconcile(); }}>Reconcile</button>
+      <Button type="button" onClick={() => { void session.reconcile(); }}>Reconcile</Button>
     </div>}
     {!state.unknown && state.error && <p className="hqr-alert" role="alert">{state.error}</p>}
     {state.recovered.length > 0 && <p className="hqr-hint" role="status">{state.recovered.join(' ')}</p>}

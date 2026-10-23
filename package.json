@@ -3,25 +3,39 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/desktop", "packages/contracts"],
-  "engines": { "node": ">=22.12.0" },
+  "workspaces": [
+    "apps/desktop",
+    "packages/contracts",
+    "packages/hq-ui",
+    "modules/social",
+    "modules/work",
+    "modules/wiki"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "dev": "npm run build:electron && concurrently --kill-others --success first \"npm run dev:web\" \"wait-on tcp:127.0.0.1:5173 && cross-env HQ_DEV_SERVER_URL=http://127.0.0.1:5173 electron apps/desktop/dist-electron/main.js\"",
     "dev:web": "vite --config apps/desktop/vite.config.ts",
-    "typecheck": "tsc --noEmit && tsc -p apps/desktop/tsconfig.electron.json --noEmit",
-    "test": "vitest run",
-    "build:electron": "tsc -p apps/desktop/tsconfig.electron.json",
+    "typecheck": "tsc --noEmit && tsc -p apps/desktop/tsconfig.electron.json --noEmit && tsc -p apps/desktop/tsconfig.design-host.json --noEmit && tsc -p apps/desktop/tsconfig.wiki-host.json --noEmit && npm run typecheck --workspace @hq/wiki",
+    "test": "npm run build:electron && vitest run",
+    "build:electron": "tsc -p apps/desktop/tsconfig.electron.json && tsc -p apps/desktop/tsconfig.design-host.json && tsc -p apps/desktop/tsconfig.wiki-host.json && npm run build:preview-agent",
     "build": "npm run typecheck && vite build --config apps/desktop/vite.config.ts && npm run build:electron",
     "start": "electron apps/desktop/dist-electron/main.js",
-    "preview": "vite preview --config apps/desktop/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort"
+    "preview": "vite preview --config apps/desktop/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort",
+    "build:preview-agent": "vite build --config apps/desktop/vite.preview-agent.config.ts"
   },
   "devDependencies": {
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
     "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "concurrently": "10.0.6",
     "cross-env": "10.1.0",
     "electron": "44.9.0",
+    "happy-dom": "21.0.3",
     "typescript": "7.0.2",
     "vite": "8.3.4",
     "vitest": "5.0.5",
