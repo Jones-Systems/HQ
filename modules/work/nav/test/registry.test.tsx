@@ -1,3 +1,4 @@
+import { SERVICE_DOMAINS } from '../../../../apps/desktop/src/services/domains';
 /// <reference path="../../../../apps/desktop/src/environment.d.ts" />
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -18,11 +19,17 @@ let recorded: RecordedPlanner;
 let device: ReturnType<typeof installPlanner>['device'];
 
 beforeEach(() => {
+  Object.defineProperty(window, 'hqServices', { configurable: true, value: {
+    config: { status: async () => ({ configured: false, policy: 'ok', transport: null }) },
+    social: { call: async () => ({ ok: false, kind: 'unavailable' }) },
+    work: { call: async () => ({ ok: false, kind: 'unavailable' }) },
+  } });
   window.localStorage.clear();
   ({ recorded, device } = installPlanner());
 });
 
 afterEach(() => {
+  Reflect.deleteProperty(window, 'hqServices');
   cleanup();
   uninstallPlanner();
   delete document.documentElement.dataset.theme;
@@ -52,7 +59,7 @@ async function switchDomain(name: 'Design' | 'Social' | 'Work') {
 async function roundTrip(check: () => Promise<void> | void) {
   const before = main().firstElementChild;
   await switchDomain('Design');
-  expect(screen.getByRole('heading', { level: 1, name: 'A place for Design.' })).toBeTruthy();
+  expect(await screen.findByRole('navigation', { name: 'Design' })).toBeTruthy();
   await switchDomain('Social');
   expect(screen.queryByRole('navigation', { name: 'Work' })).toBeNull();
   await switchDomain('Work');
@@ -66,7 +73,7 @@ async function roundTrip(check: () => Promise<void> | void) {
 
 describe('Work descriptor in the T0 registry', () => {
   it('is the registry entry for the work domain, as a named and a default export', () => {
-    expect(MODULES.work).toBe(WorkModule);
+    expect(MODULES.work).toBe(SERVICE_DOMAINS.Work);
     expect(WorkDefault).toBe(WorkModule);
   });
 
@@ -79,7 +86,7 @@ describe('Work descriptor in the T0 registry', () => {
     expect(screen.getByText('Example data')).toBeTruthy();
     expect(screen.getByText('Planner items aren’t project-scoped · showing all planning')).toBeTruthy();
     // The shell's project context is unchanged; Work never switches it.
-    expect(screen.getByText('HQ workspace')).toBeTruthy();
+    expect(screen.getByText('Local projects')).toBeTruthy();
     expect(recorded.writes()).toHaveLength(0);
     expect(recorded.execution()).toHaveLength(0);
   });
@@ -118,6 +125,27 @@ describe('Work descriptor in the T0 registry', () => {
     expect(recorded.calls.filter((call) => call.method === 'snapshot')).toHaveLength(1);
     expect(recorded.writes()).toHaveLength(0);
     expect(recorded.execution()).toHaveLength(0);
+  });
+
+  it('opens a page not visited before at the top, then restores each page its own scroll', async () => {
+    render(<App />);
+    await switchDomain('Work');
+    await screen.findByRole('heading', { level: 2, name: 'Status board' });
+    act(() => {
+      scroller().scrollTop = 500;
+      scroller().scrollLeft = 40;
+      fireEvent.scroll(scroller());
+    });
+
+    await user().click(workNav().getByRole('button', { name: 'List' }));
+    expect(main().querySelector('.wv')?.getAttribute('data-view')).toBe('list');
+    expect(scroller().scrollTop).toBe(0);
+    expect(scroller().scrollLeft).toBe(0);
+
+    await user().click(workNav().getByRole('button', { name: 'Status board' }));
+    await screen.findByRole('heading', { level: 2, name: 'Status board' });
+    expect(scroller().scrollTop).toBe(500);
+    expect(scroller().scrollLeft).toBe(40);
   });
 
   it('restores detail text the Planner could not take (changed elsewhere) with no writes', async () => {

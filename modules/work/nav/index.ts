@@ -12,3 +12,5 @@ export {
 } from './session';
 export { TOOLBAR_CAPTURE_NOTE, ToolbarCapture, type ToolbarCaptureProps } from './ToolbarCapture';
 export { isTypingControl, isUndoKey, shouldUndo, workUndoHandler } from './undo';
+
+export type { WorkExportPort } from '../export';

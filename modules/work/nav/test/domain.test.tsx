@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { isDestination, parseProjectContext, type ModulePort } from '@hq/contracts';
@@ -283,5 +283,45 @@ describe('quick capture', () => {
     await waitFor(() => expect(input.value).toBe(''));
     expect(recorded.writes()).toHaveLength(1);
     expect(session().store.getState().items.filter((item) => item.title === 'Oil the hinges')).toHaveLength(1);
+  });
+});
+
+
+describe('collapsible Work panels', () => {
+  it('collapses navigation to zero and restores the remembered width without planning writes', async () => {
+    const { unmount } = render(<WorkDomain {...port('home')} now={fixedNow} />);
+    await screen.findByRole('heading', { level: 2, name: 'Status board' });
+    fireEvent.keyDown(screen.getByRole('separator', { name: 'Work navigation width' }), { key: 'ArrowRight', shiftKey: true });
+    expect(screen.getByRole('separator', { name: 'Work navigation width' }).getAttribute('aria-valuenow')).toBe('216');
+    fireEvent.keyDown(screen.getByRole('separator', { name: 'Work navigation width' }), { key: 'Home' });
+    expect(screen.queryByRole('navigation', { name: 'Work' })).toBeNull();
+    unmount();
+    render(<WorkDomain {...port('home')} now={fixedNow} />);
+    await user().click(screen.getByRole('button', { name: 'Show Work navigation' }));
+    expect(screen.getByRole('separator', { name: 'Work navigation width' }).getAttribute('aria-valuenow')).toBe('216');
+    expect(recorded.writes()).toHaveLength(0);
+  });
+
+  it('keeps the detail editor mounted while collapsed and restores the same notes buffer', async () => {
+    render(<WorkDomain {...port('item/ex-library')} now={fixedNow} />);
+    const notes = await screen.findByRole('textbox', { name: 'Notes' });
+    fireEvent.change(notes, { target: { value: 'Keep this draft visible after restore' } });
+    fireEvent.keyDown(screen.getByRole('separator', { name: 'Work detail width' }), { key: 'Home' });
+    expect(screen.queryByRole('textbox', { name: 'Notes' })).toBeNull();
+    expect(notes.isConnected).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Show item details' }));
+    expect(screen.getByRole('textbox', { name: 'Notes' })).toBe(notes);
+    expect((notes as HTMLTextAreaElement).value).toBe('Keep this draft visible after restore');
+  });
+
+  it('hides capture and filters behind one restore control and preserves an active filter', async () => {
+    render(<WorkDomain {...port('home')} now={fixedNow} />);
+    await screen.findByRole('heading', { level: 2, name: 'Status board' });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search' }), { target: { value: 'library' } });
+    fireEvent.click(screen.getByRole('button', { name: /Hide capture & filters/ }));
+    expect(screen.queryByRole('searchbox', { name: 'Search' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Show capture & filters · 1 filters/ }));
+    expect((screen.getByRole('searchbox', { name: 'Search' }) as HTMLInputElement).value).toBe('library');
+    expect(recorded.writes()).toHaveLength(0);
   });
 });

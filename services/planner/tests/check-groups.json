@@ -1,0 +1,14 @@
+{
+  "schema": "hq.planner.check-groups/v1",
+  "groups": {
+    "planner-service": {
+      "cwd": "services/planner",
+      "commands": [
+        "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -t tests",
+        "node --test --test-concurrency=1 'tests/*.test.mjs'"
+      ],
+      "includes": ["tests/test_*.py", "tests/*.test.mjs"],
+      "contract_drift": "tests/test_contract.py"
+    }
+  }
+}

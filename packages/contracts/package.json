@@ -3,5 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" }
+  "exports": {
+    ".": "./src/index.ts",
+    "./services": "./src/services.ts",
+    "./wiki": "./src/wiki.ts",
+    "./wiki-admin": "./src/wiki-admin.ts",
+    "./references": "./src/references.ts",
+    "./design-records": "./src/design-records.ts",
+    "./catalog": "./src/catalog.ts",
+    "./preview": "./src/preview.ts",
+    "./jones-code": "./src/jones-code.ts"
+  }
 }

@@ -1,7 +1,7 @@
 """Drive the real wave compiler over the committed spec, round by round, with labeled fixture results.
 
 Usage: PYTHONPATH=<Codex V3 checkout>/src python3 rounds.py <HQ checkout> <commit> held|activated [actual]
-With "actual", round 1 consumes the root-accepted lane results (ACTUAL below; changed_paths from git,
+With "actual", round 1 consumes the root- and T1-accepted lane results (ACTUAL below; changed_paths from git,
 filtered to each write_scope) and later rounds are fixture projections.
 """
 import hashlib, json, subprocess, sys
@@ -50,6 +50,8 @@ ACTUAL = {
     'work-core': ('a8c791a877bd28974894e1d48913d0ff460b6f00', R1, 'work/hq-work-planner', 26, 'candidateAcceptanceEvents[2]'),
     'work-views': ('8a3261dbd0d98dac3553ffc594cd8a88cc4dcb04', R1, 'work/hq-work-planner', 26, 'candidateAcceptanceEvents[4]'),
     'work-board': ('3ca74d7479283d8ac7acf7c363bd262f34578ed4', R1, 'work/hq-work-board', 28, 'candidateAcceptanceEvents[7]'),
+    'work-domain': ('3426da769ca6a5cf1ba561859039b14fc745457a', '3ca74d7479283d8ac7acf7c363bd262f34578ed4', 't3/work-domain-integration', 31, 't1-fan-in:work-domain'),
+    'domain-integration': ('562986d1852d7b4ef101ff6d4c9340c3751c727a', '55b751ba96936631e6302811eed9cf81ea904db3', 't3/social-work-domain-assembly', 36, 'root-acceptance:S'),
 }
 def actual_result(task):
     key = task.task_ref.split('#task.')[1].removesuffix('.001')
@@ -63,7 +65,8 @@ def actual_result(task):
             'produced_refs': c(list(task.produces)), 'candidate_binding': c({'commit': commit, 'branch': branch, 'pr': pr}),
             'deferred_findings': c(['worknote.hq-social-work#ctx.deferred-findings.001'])}
     fields = tuple(NormalizedResultField(ResultField(f), vals[f]) for f in (x.value for x in task.result_fields))
-    return NormalizedTaskResult(rev, blob, task.task_ref, f'root-acceptance:{key}@{commit[:12]}', ResultCompletion.COMPLETE, True, fields), len(paths)
+    who = 't1' if record.startswith('t1-') else 'root'
+    return NormalizedTaskResult(rev, blob, task.task_ref, f'{who}-acceptance:{key}@{commit[:12]}', ResultCompletion.COMPLETE, True, fields), len(paths)
 evidence = tuple(ExplicitActivationEvidence(rev, blob, t.task_ref, t.activation.predicate_ref, f'projection-fixture:{t.task_ref}:assumed-satisfied',
            ActivationState.SATISFIED) for t in plan.tasks if t.activation.predicate_ref) if activate else ()
 by = {t.task_ref: t for t in plan.tasks}; done = []; n = 0; rnd = 0

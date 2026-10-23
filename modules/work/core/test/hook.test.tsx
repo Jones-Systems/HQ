@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { createFixturePlanner } from '../fixtures/adapter';
+import { withFaults } from '../fixtures/faults';
 import { exampleItems } from '../fixtures/examples';
 import { useWorkState } from '../hook';
 import { createWorkStore, sharedWorkStore, type WorkStore } from '../store';
@@ -34,6 +35,27 @@ describe('useWorkState', () => {
     });
     expect(outcome).toEqual({ status: 'undone' });
     expect(screen.getByTestId('probe').textContent).toBe('ready|7|0');
+  });
+
+  it('polling while mounted, and remounting, never re-send an unconfirmed write', async () => {
+    const { port } = createFixturePlanner({ items: exampleItems('2026-10-21') });
+    const faulty = withFaults(port);
+    const writes: string[] = [];
+    const recorded = { ...faulty.port, patch: (...args: Parameters<typeof port.patch>) => { writes.push(args[3]); return faulty.port.patch(...args); } };
+    const store = createWorkStore(recorded);
+    const first = render(<Probe store={store} pollMs={10} />);
+    await waitFor(() => expect(screen.getByTestId('probe').textContent).toBe('ready|7|0'));
+    faulty.faults.next('lose-response');
+    await act(async () => {
+      await store.patch('ex-bread', { notes: 'Try a rye loaf' });
+    });
+    expect(store.getState().unconfirmed).toHaveLength(1);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    first.unmount();
+    render(<Probe store={store} pollMs={10} />);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(writes).toHaveLength(1);
+    expect(store.getState().unconfirmed).toHaveLength(1);
   });
 
   it('polls the version only while mounted and visible', async () => {

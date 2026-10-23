@@ -16,10 +16,12 @@ export function cx(...names: readonly (string | false | null | undefined)[]): st
 
 const STATE_WORD: Partial<Record<DateState, string>> = { overdue: 'Overdue · ', passed: 'Target passed · ' };
 
-/** A compact date chip: kind word, short value, and a textual state where it matters (Planner `dateChip`). */
-export function DateChip({ entry, state, long = false }: { entry: PlanningDate; state: DateState; long?: boolean }) {
+/** Day groups supply the date heading; coarse periods and overdue dates retain their full date context. */
+export function DateChip({ entry, state, long = false, inDayGroup = false }: { entry: PlanningDate; state: DateState; long?: boolean; inDayGroup?: boolean }) {
   const { today } = useEnv();
-  const label = long ? formatValue(entry, today) : formatShort(entry, today);
+  const compact = inDayGroup && entry.precision === 'day' && state !== 'overdue';
+  const clock = entry.time ? `${Number(entry.time.slice(0, 2)) % 12 || 12}:${entry.time.slice(3)} ${Number(entry.time.slice(0, 2)) < 12 ? 'AM' : 'PM'}` : '';
+  const label = compact ? `${DATE_KIND_LABEL[entry.kind]}${clock ? ` · ${clock}` : ''}` : long ? formatValue(entry, today) : formatShort(entry, today);
   const prefix = state === 'overdue' ? STATE_WORD.overdue : state === 'passed' && entry.kind === 'target' ? STATE_WORD.passed : '';
   return (
     <span
@@ -27,7 +29,7 @@ export function DateChip({ entry, state, long = false }: { entry: PlanningDate; 
       title={`${DATE_KIND_LABEL[entry.kind]} · ${formatValue(entry, today)}${entry.note ? ` — ${entry.note}` : ''}`}
     >
       <span className="wv-dk-shape" aria-hidden="true" />
-      <span className="wv-sr">{DATE_KIND_LABEL[entry.kind]} </span>
+      {!compact && <span className="wv-sr">{DATE_KIND_LABEL[entry.kind]} </span>}
       {prefix && (state === 'overdue' ? <strong>{prefix}</strong> : <span>{prefix}</span>)}
       {label}
     </span>
@@ -76,19 +78,19 @@ export function ExampleBadge({ item }: { item: Item }) {
   return item.is_example ? <span className="wv-example">Example</span> : null;
 }
 
-/** A one-line row; its title opens the item when the detail lane is connected. */
+/** The title opens the item; an optional next step stays separate from trailing metadata. */
 export function ItemRow({ item, sub, trailing }: { item: Item; sub?: ReactNode; trailing?: ReactNode }) {
   const { openItem, state } = useEnv();
-  const title = <span className="wv-row-title">{item.title}</span>;
+  const title = <span className="wv-row-title" title={item.title}>{item.title}</span>;
+  const pending = pendingWord(state, item.id);
   return (
     <div className={cx('wv-row', isPending(state, item.id) && 'is-pending', item.is_example && 'is-example')}>
       <KindMark kind={item.kind} />
       {openItem
-        ? <button type="button" className="wv-link" onClick={() => openItem(item.id)}>{title}</button>
+        ? <button type="button" className="wv-link" title={item.title} onClick={() => openItem(item.id)}>{title}</button>
         : title}
       {sub && <span className="wv-row-sub">{sub}</span>}
-      {trailing && <span className="wv-row-trailing">{trailing}</span>}
-      {pendingWord(state, item.id) && <span className="wv-pending">{pendingWord(state, item.id)}</span>}
+      {(trailing || pending) && <span className="wv-row-trailing">{trailing}{pending && <span className="wv-pending">{pending}</span>}</span>}
     </div>
   );
 }

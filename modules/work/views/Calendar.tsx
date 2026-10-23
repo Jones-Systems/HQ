@@ -1,21 +1,24 @@
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { Button, Dialog, Menu, type MenuItem } from '@hq/ui';
+import { Button, Dialog, Menu, Splitter, type MenuItem } from '@hq/ui';
 import {
-  DATE_KIND_IDS, DATE_KIND_LABEL, dateState, datedEntries, dayNum, formatDay, formatValue, isLive, isOpen,
+  addDays, DATE_KIND_IDS, DATE_KIND_LABEL, dateState, datedEntries, dayNum, formatDay, formatValue, isLive, isOpen,
   matchesFilters, periodBounds, plannerMonthGrid, relativeDays, sortByPosition, viewerLocalTime,
   type DateKind, type Item, type ItemPatch, type PlanningDate,
 } from '../core';
-import { isPending, isTyping, useEnv, useRemembered } from './env';
+import { isPending, isTyping, useCssVars, useEnv, useRemembered } from './env';
 import {
-  addDatePatch, CHIP_KEY_DAYS, outsideEntries, removeDatePatch, rescheduleDatePatch, scheduleDay, shiftDatePatch,
+  addDatePatch, clearTimePatch, timeboxPatch, CHIP_KEY_DAYS, outsideEntries, removeDatePatch, rescheduleDatePatch, scheduleDay, shiftDatePatch,
 } from './moves';
+import { TimeGrid } from './TimeGrid';
+import { calendarDays, gridDatePatch } from './time-grid';
 import { cx, DateChip, MotivationPill, KindMark, SectionHead, ViewHint } from './parts';
 
-// Calendar (RV-4): a month grid or agenda, a band for coarse dates, the
+// Calendar: month, timed week/day or agenda, a band for coarse dates, the
 // Unscheduled tray and an Outside-this-month list. A day date moves by its
 // menu (one day earlier, one day later, one week later), by Alt+arrow keys, or
 // by dragging it to another day; kind, time, zone and note are kept. Dropping
 // a date on the tray removes it; scheduling an undated item asks for the kind.
+// Timed grid drops convert through the display zone; all-day drops clear time, end and zone.
 // Every move is one dates patch with Undo. A month-precision date never
 // appears on a single day.
 
@@ -25,7 +28,7 @@ const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 type Entry = { item: Item; entry: PlanningDate; bounds: [string, string] };
 type Drag = { type: 'date'; itemId: string; dateId: string } | { type: 'undated'; itemId: string };
-type Mode = 'month' | 'agenda';
+type Mode = 'month' | 'week' | 'day' | 'agenda';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const overlaps = (a: readonly [string, string], b: readonly [string, string]) => dayNum(a[0]) <= dayNum(b[1]) && dayNum(b[0]) <= dayNum(a[1]);
@@ -40,15 +43,32 @@ export function CalendarView() {
   const { today, state, settings } = env;
   const [cursor, setCursor] = useRemembered('calendar.cursor', () => ({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) }));
   const [mode, setMode] = useRemembered<Mode>('calendar.mode', () => (narrow() ? 'agenda' : 'month'));
+  const [lastGridMode, setLastGridMode] = useState<Exclude<Mode, 'agenda'>>(() => mode === 'agenda' ? 'month' : mode);
+  const gridMode = mode === 'agenda' ? lastGridMode : mode;
+  const nextGridMode = gridMode === 'month' ? 'week' : gridMode === 'week' ? 'day' : 'month';
+  const labelMode = (value: string) => value[0]!.toUpperCase() + value.slice(1);
+  const [dayCursor, setDayCursor] = useRemembered('calendar.day', today);
   const [kinds, setKinds] = useRemembered<readonly DateKind[]>('calendar.kinds', DATE_KIND_IDS);
   const [showFinished, setShowFinished] = useRemembered('calendar.finished', false);
+  const [sidebarWidth, setSidebarWidth] = useRemembered('calendar.sidebar.width', () => narrow() ? 0 : 280);
+  const [sidebarRestore, setSidebarRestore] = useRemembered('calendar.sidebar.restore', 280);
+  const resizeSidebar = (size: number) => {
+    const next = size < 112 ? 0 : Math.min(420, size);
+    if (next > 0) setSidebarRestore(next);
+    setSidebarWidth(next);
+  };
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [dropChoice, setDropChoice] = useState<{ itemId: string; day: string } | null>(null);
+  const [dropChoice, setDropChoice] = useState<{ itemId: string; day: string; minute?: number } | null>(null);
   const drag = useRef<Drag | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
+  const focusTitle = useRef(false);
+  useCssVars(root, { '--wv-cal-sidebar-width': `${sidebarWidth}px` });
 
   const { year, month } = cursor;
+  const timed = mode === 'week' || mode === 'day';
+  const days = calendarDays(dayCursor, mode === 'day' ? 'day' : 'week', settings.week_start);
   const items = state.items.filter((it) => isLive(it) && matchesFilters(it, env.filters) && (showFinished || isOpen(it)));
   const monthRange: [string, string] = [`${year}-${pad(month)}-01`, periodBounds('month', `${year}-${pad(month)}`)![1]];
   const entries: Entry[] = datedEntries(items).filter(({ entry }) => kinds.includes(entry.kind));
@@ -61,6 +81,10 @@ export function CalendarView() {
     const target = holder?.querySelector('button');
     if (target && document.activeElement !== target) target.focus();
   }, [focusKey, state.items, cursor]);
+
+  useEffect(() => {
+    if (focusTitle.current) { title.current?.focus(); focusTitle.current = false; }
+  }, [mode, dayCursor]);
 
   const latest = (id: string) => state.items.find((it) => it.id === id);
   const send = (item: Item, patch: ItemPatch | null, message: string): Promise<unknown> => (
@@ -84,9 +108,13 @@ export function CalendarView() {
     const item = latest(itemId);
     if (item) void send(item, removeDatePatch(item, dateId), `Removed date from “${item.title}”.`);
   };
-  const add = (itemId: string, kind: DateKind, day: string) => {
+  const add = (itemId: string, kind: DateKind, day: string, minute?: number) => {
     const item = latest(itemId);
-    if (item) void send(item, addDatePatch(item, kind, day), `${DATE_KIND_LABEL[kind]} set for “${item.title}” on ${dayText(day)}.`);
+    if (item) {
+      const patch = minute === undefined ? addDatePatch(item, kind, day) : timeboxPatch(item, null, day, minute, settings.default_tz, kind);
+      if (!patch) { env.announce('Choose a valid timebox that ends before midnight. Clock-change gaps cannot be scheduled.'); return; }
+      void send(item, patch, `${DATE_KIND_LABEL[kind]} set for “${item.title}” on ${dayText(day)}.`);
+    }
   };
 
   const onChipKey = (event: KeyboardEvent, item: Item, entry: PlanningDate) => {
@@ -117,6 +145,29 @@ export function CalendarView() {
     const entry = item.dates.find((d) => d.id === payload.dateId);
     if (entry) reschedule(item, entry, day);
   };
+  const commitTime = (item: Item, entry: PlanningDate, day: string, minute: number, resize: boolean) => {
+    if (isPending(state, item.id)) return;
+    const patch = gridDatePatch(item, entry, day, minute, settings.default_tz, resize);
+    if (!patch) { env.announce('No change saved. Choose a valid time on the same day; clock-change gaps and midnight crossings are unavailable.'); return; }
+    if (!days.includes(day)) goTo(day);
+    void send(item, patch, `${resize ? 'Resized' : 'Moved'} “${item.title}”.`);
+  };
+  const allDay = (item: Item, entry: PlanningDate, day: string) => {
+    if (!isPending(state, item.id)) void send(item, clearTimePatch(item, entry.id, day), `Moved “${item.title}” to all day.`);
+  };
+  const onGridDrop = (event: DragEvent, day: string, minute?: number) => {
+    const payload = drag.current;
+    drag.current = null;
+    if (!payload) return;
+    event.preventDefault();
+    const item = latest(payload.itemId);
+    if (!item || isPending(state, item.id)) return;
+    if (payload.type === 'undated') { setDropChoice({ itemId: item.id, day, ...(minute === undefined ? {} : { minute }) }); return; }
+    const entry = item.dates.find((date) => date.id === payload.dateId);
+    if (!entry) return;
+    if (minute === undefined) allDay(item, entry, day);
+    else commitTime(item, entry, day, minute, false);
+  };
   const onTrayDrop = (event: DragEvent) => {
     const payload = drag.current;
     drag.current = null;
@@ -145,20 +196,37 @@ export function CalendarView() {
     />
   );
 
-  const goTo = (iso: string) => setCursor({ year: Number(iso.slice(0, 4)), month: Number(iso.slice(5, 7)) });
-  const step = (delta: number) => { const [y, m] = shiftMonth(year, month, delta); setCursor({ year: y, month: m }); };
-  const coarse = entries.filter(({ entry, bounds }) => ['month', 'quarter', 'year'].includes(entry.precision) && overlaps(bounds, monthRange));
+  const goTo = (iso: string) => { setDayCursor(iso); setCursor({ year: Number(iso.slice(0, 4)), month: Number(iso.slice(5, 7)) }); };
+  const selectMode = (next: Mode) => {
+    if (next === 'week' || next === 'day') {
+      if (!timed) {
+        const shownMonth = `${year}-${pad(month)}`;
+        goTo(dayCursor.startsWith(shownMonth) ? dayCursor : today.startsWith(shownMonth) ? today : `${shownMonth}-01`);
+      }
+    } else if (timed) goTo(dayCursor);
+    if (next !== 'agenda') setLastGridMode(next);
+    setMode(next);
+  };
+  const openDay = (iso: string, next: 'week' | 'day') => {
+    focusTitle.current = true; goTo(iso); setLastGridMode(next); setMode(next);
+  };
+  const step = (delta: number) => {
+    if (timed) { goTo(addDays(dayCursor, delta * (mode === 'week' ? 7 : 1))); return; }
+    const [y, m] = shiftMonth(year, month, delta); setCursor({ year: y, month: m });
+  };
+  const shownRange: [string, string] = timed ? [days[0]!, days[days.length - 1]!] : monthRange;
+  const coarse = entries.filter(({ entry, bounds }) => (timed ? ['week', 'month', 'quarter', 'year'] : ['month', 'quarter', 'year']).includes(entry.precision) && overlaps(bounds, shownRange));
   const undated = sortByPosition(items.filter((it) => !it.dates.length));
-  const outside = outsideEntries(entries, monthRange, today);
-  const target = scheduleDay(year, month, today);
+  const outside = outsideEntries(entries, shownRange, today);
+  const target = timed ? dayCursor : scheduleDay(year, month, today);
 
   return (
     <div
       ref={root}
       className="wv-cal"
-      // A drag that ends anywhere, dropped or cancelled, disarms; a later unrelated drop must not move the item.
       onDragEnd={() => { drag.current = null; }}
       onKeyDown={(event) => {
+        if (event.key === 'Escape') drag.current = null;
         if ((event.key === 'PageUp' || event.key === 'PageDown') && !event.altKey && !isTyping(event.target)) {
           event.preventDefault();
           step(event.key === 'PageUp' ? -1 : 1);
@@ -167,18 +235,17 @@ export function CalendarView() {
     >
       <div className="wv-cal-toolbar">
         <div className="wv-cal-nav">
-          <Button size="sm" variant="ghost" aria-label="Previous month" onClick={() => step(-1)}>‹</Button>
+          <Button size="sm" variant="ghost" aria-label={`Previous ${timed ? mode : 'month'}`} onClick={() => step(-1)}>‹</Button>
           <Button size="sm" onClick={() => goTo(today)}>Today</Button>
-          <Button size="sm" variant="ghost" aria-label="Next month" onClick={() => step(1)}>›</Button>
-          <h2 className="wv-cal-title" aria-live="polite">{MONTHS[month - 1]} <span className="wv-muted">{year}</span></h2>
+          <Button size="sm" variant="ghost" aria-label={`Next ${timed ? mode : 'month'}`} onClick={() => step(1)}>›</Button>
+          <h2 ref={title} tabIndex={-1} className="wv-cal-title" aria-live="polite">{timed ? `${dayText(days[0]!)}${mode === 'week' ? ` – ${dayText(days[6]!)}` : ''}` : <>{MONTHS[month - 1]} <span className="wv-muted">{year}</span></>}</h2>
         </div>
         <div className="wv-cal-controls">
-          <div className="wv-seg" role="group" aria-label="Calendar layout">
-            {(['month', 'agenda'] as const).map((id) => (
-              <button key={id} type="button" className="wv-seg-btn" aria-pressed={mode === id} onClick={() => setMode(id)}>
-                {id === 'month' ? 'Month' : 'Agenda'}
-              </button>
-            ))}
+          <div className="wv-cal-view-controls" role="group" aria-label="Calendar layout">
+            <Button size="sm" aria-pressed={mode === 'agenda'} onClick={() => selectMode(mode === 'agenda' ? gridMode : 'agenda')}>Agenda</Button>
+            <Button size="sm" aria-pressed={mode !== 'agenda'}
+              aria-label={`Calendar view: ${labelMode(gridMode)}. ${mode === 'agenda' ? 'Return to' : 'Switch to'} ${labelMode(mode === 'agenda' ? gridMode : nextGridMode)}`}
+              onClick={() => selectMode(mode === 'agenda' ? gridMode : nextGridMode)}>{labelMode(gridMode)}</Button>
           </div>
           <div className="wv-seg" role="group" aria-label="Show date kinds">
             {DATE_KIND_IDS.map((k) => {
@@ -203,15 +270,20 @@ export function CalendarView() {
         </div>
       </div>
 
+      {sidebarWidth === 0 && <section className="wv-cal-closed-tray" data-calendar-remove aria-label="Remove date"
+        onDragOver={acceptDrop(['date'])} onDrop={onTrayDrop}>
+        <Button size="sm" variant="ghost" onClick={() => resizeSidebar(sidebarRestore)}>Show calendar sidebar</Button>
+        <span>Drop a date here to remove it</span>
+      </section>}
       <div className="wv-cal-layout">
         <div className="wv-cal-main">
           <section className="wv-period-band" aria-label="Dates without a set day">
-            <div className="wv-band-label">This month, no set day</div>
+            <div className="wv-band-label">{timed ? `This ${mode}, no set day` : 'This month, no set day'}</div>
             <div className="wv-band-list">
               {coarse.length ? coarse.map((x) => chip(x, false, true)) : <span className="wv-muted">Month, quarter and year dates appear here.</span>}
             </div>
           </section>
-          {mode === 'month'
+          {timed ? <TimeGrid days={days} onOpenDay={mode === 'week' ? (day) => openDay(day, 'day') : undefined} entries={entries} chip={chip} onCommit={commitTime} onAllDay={allDay} onRemove={remove} onDrop={onGridDrop} acceptDrop={acceptDrop(['date', 'undated'])} /> : mode === 'month'
             ? (
               <div className="wv-month" role="group" aria-label={`${MONTHS[month - 1]} ${year}`}>
                 <div className="wv-month-head" aria-hidden="true">
@@ -238,14 +310,19 @@ export function CalendarView() {
                               onDragOver={acceptDrop(['date', 'undated'])}
                               onDrop={(event) => onDayDrop(event, iso)}
                             >
-                              <div className="wv-day-head">
-                                <span className="wv-day-num">{Number(iso.slice(8))}</span>
+                              <div className="wv-day-head" title="Double-click to open this week" onDoubleClick={() => openDay(iso, 'week')}>
+                                <button type="button" className="wv-day-num" aria-label={`Open week of ${formatDay(iso, { year: true })}`}
+                                  onClick={(event) => { if (event.detail === 0) openDay(iso, 'week'); }}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDay(iso, 'week'); }
+                                  }}>{Number(iso.slice(8))}</button>
                                 {env.capture && (
                                   <button
                                     type="button"
                                     className="wv-day-add"
                                     aria-label={`New item on ${formatDay(iso, { year: true })}`}
                                     title="New item on this day"
+                                    onDoubleClick={(event) => event.stopPropagation()}
                                     onClick={() => env.capture!({ date: { kind: 'target', precision: 'day', value: iso } })}
                                   >+</button>
                                 )}
@@ -270,8 +347,13 @@ export function CalendarView() {
             : <Agenda entries={entries} monthRange={monthRange} monthLabel={MONTHS[month - 1]!} chip={chip} onDayDrop={onDayDrop} acceptDrop={acceptDrop(['date', 'undated'])} />}
         </div>
 
-        <aside className="wv-cal-side">
-          <section className="wv-tray" aria-label="Unscheduled items" onDragOver={acceptDrop(['date'])} onDrop={onTrayDrop}>
+        <div className="wv-cal-divider">
+          <Splitter label="Calendar sidebar width" value={sidebarWidth} min={0} max={420} side="end" onResize={resizeSidebar}
+            onToggle={() => resizeSidebar(sidebarWidth === 0 ? sidebarRestore : 0)} />
+          {sidebarWidth === 0 && <button type="button" className="wv-cal-restore" aria-label="Restore calendar sidebar" title="Restore calendar sidebar" onClick={() => resizeSidebar(sidebarRestore)}>‹</button>}
+        </div>
+        <aside className="wv-cal-side" aria-label="Calendar sidebar" hidden={sidebarWidth === 0}>
+          <section className="wv-tray" data-calendar-remove aria-label="Unscheduled items" onDragOver={acceptDrop(['date'])} onDrop={onTrayDrop}>
             <SectionHead title="Unscheduled" count={undated.length} />
             <ViewHint>Drag onto a day to add a date, or use Schedule. Schedule adds a date on {dayText(target)}.</ViewHint>
             <div className="wv-tray-list">
@@ -307,8 +389,8 @@ export function CalendarView() {
             <div className="wv-tray-drop" aria-hidden="true">Drop a date here to remove it</div>
           </section>
 
-          <section className="wv-outside" aria-label="Outside this month">
-            <SectionHead title="Outside this month" count={outside.earlier.length + outside.later.length} />
+          <section className="wv-outside" aria-label={`Outside this ${timed ? mode : 'month'}`}>
+            <SectionHead title={`Outside this ${timed ? mode : 'month'}`} count={outside.earlier.length + outside.later.length} />
             {outside.earlier.length > 0 && <div className="wv-outside-label">Earlier, still open</div>}
             {outside.earlier.slice(0, 6).map((x) => <OutsideRow key={`${x.item.id}:${x.entry.id}`} x={x} goTo={goTo} />)}
             {outside.later.length > 0 && <div className="wv-outside-label">Later</div>}
@@ -330,7 +412,7 @@ export function CalendarView() {
             <Button
               key={k}
               variant={k === 'target' ? 'primary' : 'secondary'}
-              onClick={() => { const choice = dropChoice!; setDropChoice(null); add(choice.itemId, k, choice.day); }}
+              onClick={() => { const choice = dropChoice!; setDropChoice(null); add(choice.itemId, k, choice.day, choice.minute); }}
             >
               {DATE_KIND_LABEL[k]}{k === 'target' ? ' (default)' : ''}
             </Button>

@@ -1,11 +1,24 @@
 import type { ModulePort } from '@hq/contracts';
+import type { ReferencePort, ReturnContext } from '@hq/ui';
+import { SocialDomain } from './nav';
+import { socialWorkspace } from './nav/workspace';
 
-/** R1 skeleton entry. SOC-C replaces it with the Social domain (task.social-domain.001). */
-export function SocialModule({ context, destination }: ModulePort) {
-  return <section className="module-slot" aria-labelledby="social-module-title">
-    <span className="eyebrow">Social module</span>
-    <h1 id="social-module-title">Social is available.</h1>
-    <p>No Social workspace is connected yet. Drafts, the editorial calendar and research tools arrive as the Social lanes land.</p>
-    <dl><dt>Project</dt><dd>{context.name}</dd><dt>Destination</dt><dd>{destination}</dd><dt>Status</dt><dd>Available · no data</dd></dl>
-  </section>;
+export { createSocialReferenceProvider, type ReferenceProvider } from './references';
+
+export interface SocialModuleProps extends ModulePort {
+  readonly references?: ReferencePort;
+  readonly returnContext?: ReturnContext;
 }
+
+/**
+ * The Social domain entry for the HQ module registry (task.social-domain.001). It structurally extends T0's
+ * `ModulePort` with optional reference plumbing; its state lives in the module-level Social session for `context.id`, so the shell
+ * remounting it on a domain switch restores page, filters, selection, brand and unsaved text.
+ * The workspace source is chosen once per window; only the fictional example workspace is labelled as such.
+ */
+export function SocialModule(props: SocialModuleProps) {
+  const { port, source } = socialWorkspace();
+  return <SocialDomain {...props} port={port} example={source === 'fixture'} />;
+}
+
+export default SocialModule;

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createPlannerLive } from '../../live';
+import { fixtureTransport } from '../../live/test/support';
 import { createFixturePlanner, MAX_REMEMBERED_REQUESTS } from '../fixtures/adapter';
 import { withFaults } from '../fixtures/faults';
-import { PLANNER_PORT_KEYS, type PlannerPort } from '../port';
+import { PLANNER_PORT_KEYS, REPLAY_FEATURE, type PlannerPort } from '../port';
 import { createWorkStore, saveLabel, sharedWorkStore, UNDO_LIMIT, type WorkStore } from '../store';
 
 function clock(start = '2026-10-21T16:00:00.000Z') {
@@ -102,52 +104,173 @@ describe('save states and projection', () => {
   });
 });
 
-describe('unknown writes reconcile only by the same request ID and body (RW-9)', () => {
-  it('keeps a lost response unconfirmed, then confirms it by replay', async () => {
-    const { store, byTitle, faults, calls, stored } = await setup();
-    faults.next('lose-response');
-    const outcome = await store.patch(byTitle('A').id, { notes: 'kept' });
-    expect(outcome.status).toBe('unconfirmed');
-    const requestId = outcome.status === 'unconfirmed' ? outcome.requestId : '';
+describe('unknown writes: no automatic retry; Check looks up, Apply is explicit (RW-9)', () => {
+  /** The store over the live adapter over the fixture Planner, with the replay-aware recovery. */
+  async function liveSetup(options: { replay?: boolean } = {}) {
+    const now = clock();
+    const fixture = createFixturePlanner({ now, newId: counter('item'), features: options.replay === false ? [] : [REPLAY_FEATURE] });
+    const device = fixture.port;
+    const otherRid = counter('other-', 8);
+    for (const title of ['C', 'B', 'A']) await device.create({ title, status: 'next' }, otherRid());
+    const wire = fixtureTransport(fixture);
+    const planner = createPlannerLive(wire.transport);
+    const store = createWorkStore(planner.port, { now, newRequestId: counter('req-', 8), recovery: planner.recovery });
+    await store.load();
+    const byTitle = (title: string) => store.getState().confirmed!.items.find((i) => i.title === title)!;
+    /** Everything sent for one request ID, in order: its write route, then `replay:<mode>` for each recovery call. */
+    const sent = (requestId: string) => wire.calls
+      .filter((c) => (c.params as { requestId?: string }).requestId === requestId)
+      .map((c) => (c.route === 'replay' ? `replay:${(c.params as { mode: string }).mode}` : c.route));
+    const idOf = (outcome: { status: string; requestId?: string }) => (outcome.status === 'unconfirmed' ? outcome.requestId! : '');
+    return { fixture, device, otherRid, wire, planner, store, byTitle, sent, idOf, stored: fixture.control.stored };
+  }
+
+  it('keeps a lost response unconfirmed; polling never sends it again; Check confirms it by lookup alone', async () => {
+    const { store, byTitle, wire, sent, idOf, stored } = await liveSetup();
+    wire.next('patch', 'lose-response');
+    const requestId = idOf(await store.patch(byTitle('A').id, { notes: 'kept' }));
     expect(saveLabel(store.getState().save, null)).toBe('1 unconfirmed');
     expect(store.getState().items.find((i) => i.title === 'A')!.notes).toBe('kept');
     await store.poll();
-    const sends = writesFor(calls, requestId);
-    expect(sends).toHaveLength(2);
-    expect(sends[1]).toEqual(sends[0]);
+    await store.poll();
+    expect(sent(requestId)).toEqual(['patch']);
+    await store.reconcile();
+    expect(sent(requestId)).toEqual(['patch', 'replay:lookup']);
     expect(store.getState().unconfirmed).toEqual([]);
     expect(store.getState().notices.at(-1)!.text).toMatch(/already saved; confirmed/u);
     expect(stored().find((i) => i.title === 'A')!.revision).toBe(2);
   });
 
-  it('never infers non-existence from an unchanged snapshot; a dropped create is re-sent, not discarded', async () => {
-    const { store, faults, calls, stored, control } = await setup();
-    faults.next('drop');
-    const outcome = await store.create({ title: 'Seed order' });
-    const requestId = outcome.status === 'unconfirmed' ? outcome.requestId : '';
-    const version = control.stateVersion();
-    faults.readsUnavailable(true);
-    await store.poll();
-    faults.readsUnavailable(false);
-    await store.load();
-    expect(store.getState().confirmed!.stateVersion).toBe(version);
-    expect(store.getState().unconfirmed.map((u) => [u.requestId, u.state])).toEqual([[requestId, 'unconfirmed']]);
+  it('a dropped create: Check proves it not applied; only the explicit Apply saves it, once', async () => {
+    const { store, sent, idOf, stored, wire } = await liveSetup();
+    wire.next('create', 'drop');
+    const requestId = idOf(await store.create({ title: 'Seed order' }));
+    expect(await store.retryUnconfirmed(requestId)).toBe('refused');
+    expect(store.canApply(requestId)).toBe(false);
+    expect(sent(requestId)).toEqual(['create']);
     await store.reconcile();
-    const sends = writesFor(calls, requestId);
-    expect(sends).toHaveLength(2);
-    expect(sends[1]).toEqual(sends[0]);
+    expect(store.getState().unconfirmed[0]).toMatchObject({ requestId, state: 'awaiting_decision', recovery: { kind: 'not_applied' } });
+    expect(store.canApply(requestId)).toBe(true);
+    expect(stored().filter((i) => i.title === 'Seed order')).toHaveLength(0);
+    expect(await store.retryUnconfirmed(requestId)).toBe('confirmed');
+    expect(sent(requestId)).toEqual(['create', 'replay:lookup', 'replay:resend']);
     expect(stored().filter((i) => i.title === 'Seed order')).toHaveLength(1);
-    expect(store.getState().unconfirmed).toEqual([]);
+    expect(store.getState().notices.at(-1)!.text).toBe('An unconfirmed change is now saved.');
   });
 
-  it('a late original after reconciliation replays instead of duplicating', async () => {
-    const { store, faults, stored } = await setup();
-    faults.next('defer');
-    await store.create({ title: 'Late' });
+  it('after the record may be evicted, Check is indeterminate: nothing is applied, guessed or stored', async () => {
+    const { store, device, otherRid, sent, idOf, stored, wire } = await liveSetup();
+    wire.next('create', 'drop');
+    const requestId = idOf(await store.create({ title: 'Book the hall' }));
+    let item = stored().find((i) => i.title === 'C')!;
+    for (let i = 0; i < MAX_REMEMBERED_REQUESTS + 1; i += 1) item = (await device.markReviewed(item.id, item.revision, otherRid())).item!;
+    await device.create({ title: 'Book the hall' }, otherRid()); // a look-alike, never proof
+    await store.load();
     await store.reconcile();
-    const [late] = await faults.deliverDeferred();
-    expect(late).toMatchObject({ status: 'fulfilled', value: { replayed: true } });
-    expect(stored().filter((i) => i.title === 'Late')).toHaveLength(1);
+    const [entry] = store.getState().unconfirmed;
+    expect(entry).toMatchObject({ requestId, state: 'awaiting_decision', recovery: { kind: 'indeterminate', reason: 'evicted' } });
+    expect(entry!.possiblySavedIds).toHaveLength(1);
+    expect(store.canApply(requestId)).toBe(false);
+    expect(await store.retryUnconfirmed(requestId)).toBe('refused');
+    await store.reconcile();
+    expect(sent(requestId)).toEqual(['create', 'replay:lookup']);
+    expect(stored().filter((i) => i.title === 'Book the hall')).toHaveLength(1);
+  });
+
+  it('without a recovery, Check sends nothing and asks for a read-back', async () => {
+    const { store, faults, calls } = await setup();
+    faults.next('lose-response');
+    const outcome = await store.create({ title: 'Oil the gate' });
+    const requestId = outcome.status === 'unconfirmed' ? outcome.requestId : '';
+    await store.reconcile();
+    expect(store.getState().unconfirmed[0]).toMatchObject({ requestId, state: 'awaiting_decision', recovery: { kind: 'indeterminate', reason: 'unsupported' } });
+    expect(store.canApply(requestId)).toBe(false);
+    expect(await store.retryUnconfirmed(requestId)).toBe('refused');
+    expect(writesFor(calls, requestId)).toHaveLength(1);
+  });
+
+  it('on a Planner without requests.replay, Check sends nothing', async () => {
+    const { store, wire, sent, idOf } = await liveSetup({ replay: false });
+    wire.next('create', 'lose-response');
+    const requestId = idOf(await store.create({ title: 'Old service' }));
+    await store.reconcile();
+    expect(store.getState().unconfirmed[0]!.recovery).toMatchObject({ kind: 'indeterminate', reason: 'unsupported' });
+    expect(sent(requestId)).toEqual(['create']);
+  });
+
+  it('holds the queue on request_id_reused and checks nothing after it', async () => {
+    const { store, byTitle, device, wire, sent, idOf } = await liveSetup();
+    wire.next('patch', 'drop');
+    const heldId = idOf(await store.patch(byTitle('A').id, { notes: 'one' }));
+    wire.next('patch', 'drop');
+    const laterId = idOf(await store.patch(byTitle('B').id, { notes: 'two' }));
+    const c = byTitle('C');
+    await device.markReviewed(c.id, c.revision, heldId); // a defective client reused the ID
+    await store.reconcile();
+    expect(store.getState().held).toMatchObject({ requestId: heldId });
+    expect(store.getState().unconfirmed.map((u) => u.state)).toEqual(['held', 'unconfirmed']);
+    await store.reconcile();
+    expect(sent(laterId)).toEqual(['patch']);
+    store.dismissUnconfirmed(heldId);
+    expect(store.getState().held).toBeNull();
+    await store.reconcile();
+    expect(sent(laterId)).toEqual(['patch', 'replay:lookup']);
+  });
+
+  it('shows an Apply the Planner refuses truthfully, as not applied', async () => {
+    const { store, byTitle, device, otherRid, wire, idOf } = await liveSetup();
+    wire.next('patch', 'drop');
+    const requestId = idOf(await store.patch(byTitle('A').id, { notes: 'mine' }));
+    await store.reconcile();
+    const a = byTitle('A');
+    await device.patch(a.id, a.revision, { notes: 'theirs' }, otherRid());
+    expect(await store.retryUnconfirmed(requestId)).toBe('resolved');
+    expect(store.getState().unconfirmed).toEqual([]);
+    expect(store.getState().conflicts[0]!.current.notes).toBe('theirs');
+    expect(store.getState().notices.at(-1)!.text).toMatch(/was not applied: the item changed since/u);
+  });
+
+  it('an Apply whose answer is lost is unconfirmed again, and Apply needs a fresh Check', async () => {
+    const { store, wire, sent, idOf, stored } = await liveSetup();
+    wire.next('create', 'drop');
+    const requestId = idOf(await store.create({ title: 'Lost twice' }));
+    await store.reconcile();
+    wire.next('replay', 'lose-response');
+    expect(await store.retryUnconfirmed(requestId)).toBe('still_unknown');
+    const [entry] = store.getState().unconfirmed;
+    expect(entry!.state).toBe('unconfirmed');
+    expect(entry!.recovery).toBeUndefined();
+    expect(store.canApply(requestId)).toBe(false);
+    await store.reconcile();
+    expect(store.getState().unconfirmed).toEqual([]);
+    expect(sent(requestId)).toEqual(['create', 'replay:lookup', 'replay:resend', 'replay:lookup']);
+    expect(stored().filter((i) => i.title === 'Lost twice')).toHaveLength(1);
+  });
+
+  it('a Check or Apply that cannot reach the Planner withdraws Apply: nothing is offered that the adapter would refuse', async () => {
+    const { store, wire, sent, idOf, stored } = await liveSetup();
+    wire.next('create', 'drop');
+    const requestId = idOf(await store.create({ title: 'Recheck offline' }));
+    await store.reconcile();
+    expect(store.canApply(requestId)).toBe(true);
+    // A second Check that cannot reach the Planner consumes the adapter's Apply authorization.
+    wire.next('replay', 'unavailable');
+    expect(await store.checkUnconfirmed(requestId)).toBe('stopped');
+    expect(store.getState().unconfirmed[0]).toMatchObject({ requestId, state: 'unconfirmed' });
+    expect(store.getState().unconfirmed[0]!.recovery).toBeUndefined();
+    expect(store.canApply(requestId)).toBe(false);
+    expect(await store.retryUnconfirmed(requestId)).toBe('refused');
+    // An Apply that cannot reach the Planner also needs a fresh Check.
+    await store.reconcile();
+    expect(store.canApply(requestId)).toBe(true);
+    wire.next('replay', 'unavailable');
+    expect(await store.retryUnconfirmed(requestId)).toBe('stopped');
+    expect(store.canApply(requestId)).toBe(false);
+    expect(store.getState().unconfirmed[0]!.recovery).toBeUndefined();
+    await store.reconcile();
+    expect(await store.retryUnconfirmed(requestId)).toBe('confirmed');
+    expect(sent(requestId)).toEqual(['create', 'replay:lookup', 'replay:lookup', 'replay:lookup', 'replay:resend', 'replay:lookup', 'replay:resend']);
+    expect(stored().filter((i) => i.title === 'Recheck offline')).toHaveLength(1);
   });
 
   it('flags a same-title item as possibly saved, never as proof', async () => {
@@ -164,59 +287,32 @@ describe('unknown writes reconcile only by the same request ID and body (RW-9)',
     expect(entry!.state).toBe('unconfirmed');
     expect(store.getState().save).toEqual({ kind: 'unconfirmed', count: 1 });
   });
+});
 
-  it('after a possible replay-record expiry, never auto-resends a create; the user decides', async () => {
-    const { store, faults, calls, device, otherRid, stored } = await setup();
-    faults.next('lose-response');
-    const outcome = await store.create({ title: 'Book the hall' });
-    const requestId = outcome.status === 'unconfirmed' ? outcome.requestId : '';
-    let item = stored().find((i) => i.title === 'C')!;
-    for (let i = 0; i < MAX_REMEMBERED_REQUESTS; i += 1) item = (await device.markReviewed(item.id, item.revision, otherRid())).item!;
-    await store.poll();
-    const [entry] = store.getState().unconfirmed;
-    expect(entry).toMatchObject({ requestId, state: 'awaiting_decision' });
-    expect(entry!.possiblySavedIds).toHaveLength(1);
-    expect(writesFor(calls, requestId)).toHaveLength(1);
-    await store.reconcile();
-    expect(writesFor(calls, requestId)).toHaveLength(1);
-    // The user explicitly re-sends: the expired record no longer protects it.
-    expect(await store.retryUnconfirmed(requestId)).toBe('confirmed');
-    expect(writesFor(calls, requestId)).toHaveLength(2);
-    expect(stored().filter((i) => i.title === 'Book the hall')).toHaveLength(2);
-  });
-
-  it('holds the queue on request_id_reused and resends nothing after it', async () => {
-    const { store, byTitle, faults, calls, device } = await setup();
-    faults.next('drop');
-    const first = await store.patch(byTitle('A').id, { notes: 'one' });
-    faults.next('drop');
-    const second = await store.patch(byTitle('B').id, { notes: 'two' });
-    const heldId = first.status === 'unconfirmed' ? first.requestId : '';
-    const laterId = second.status === 'unconfirmed' ? second.requestId : '';
-    const c = byTitle('C');
-    await device.markReviewed(c.id, c.revision, heldId); // a defective client reused the ID
-    await store.reconcile();
-    expect(store.getState().held).toMatchObject({ requestId: heldId });
-    expect(store.getState().unconfirmed.map((u) => u.state)).toEqual(['held', 'unconfirmed']);
-    expect(writesFor(calls, laterId)).toHaveLength(1);
-    await store.reconcile();
-    expect(writesFor(calls, laterId)).toHaveLength(1);
-    store.dismissUnconfirmed(heldId);
-    expect(store.getState().held).toBeNull();
-    await store.reconcile();
-    expect(writesFor(calls, laterId)).toHaveLength(2);
-  });
-
-  it('shows a conflict on reconciliation truthfully, without claiming the outcome', async () => {
-    const { store, byTitle, faults, device, otherRid } = await setup();
-    faults.next('drop');
-    await store.patch(byTitle('A').id, { notes: 'mine' });
-    const a = byTitle('A');
-    await device.patch(a.id, a.revision, { notes: 'theirs' }, otherRid());
-    await store.reconcile();
+describe('a confirmed write whose read-back fails', () => {
+  it('stays saved, is never re-sent, and the next poll refreshes even at the same version', async () => {
+    const now = clock();
+    const fixture = createFixturePlanner({ now, newId: counter('item'), features: [REPLAY_FEATURE] });
+    const seedRid = counter('seed-', 8);
+    for (const title of ['C', 'B', 'A']) await fixture.port.create({ title, status: 'next' }, seedRid());
+    const wire = fixtureTransport(fixture);
+    const planner = createPlannerLive(wire.transport);
+    const store = createWorkStore(planner.port, { now, newRequestId: counter('req-', 8), recovery: planner.recovery });
+    await store.load();
+    const c = store.getState().confirmed!.items.find((i) => i.title === 'C')!;
+    wire.next('state', 'unavailable'); // the adapter's read-back
+    wire.next('state', 'unavailable'); // the store's own refresh straight after
+    const outcome = await store.move(c.id, 'next', { place: 'top' });
+    expect(outcome.status).toBe('saved');
+    await Promise.resolve();
     expect(store.getState().unconfirmed).toEqual([]);
-    expect(store.getState().conflicts[0]!.current.notes).toBe('theirs');
-    expect(store.getState().notices.at(-1)!.text).toMatch(/may or may not include your change/u);
+    expect(store.getState().refreshDue).toBe(true);
+    expect(wire.calls.filter((call) => call.route === 'move')).toHaveLength(1);
+    await store.poll();
+    expect(store.getState().refreshDue).toBe(false);
+    const positions = new Map(fixture.control.stored().map((i) => [i.id, i.position]));
+    for (const item of store.getState().confirmed!.items) expect(item.position).toBe(positions.get(item.id));
+    expect(order(store, 'next')).toEqual(['C', 'A', 'B']);
   });
 });
 

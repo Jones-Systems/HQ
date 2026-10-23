@@ -1,0 +1,5 @@
+.work-export { margin: 20px; padding: 20px; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-md, 8px); background: var(--hq-surface); color: var(--hq-text); }
+.work-export h2 { margin: 0 0 8px; font-size: 18px; }
+.work-export p { line-height: 1.5; }
+.work-export-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.work-export-hint { color: var(--hq-text-muted); font-size: 13px; }

@@ -60,6 +60,15 @@ export function createEditor(store: WorkStore, feedback: Feedback, detail: Detai
     const item = confirmed();
     const fields = Object.keys(patch) as PatchField[];
     const base = options.base ?? Object.fromEntries(fields.map((field) => [field, item ? writableValue(field, item[field]) : undefined]));
+    // A picker or asynchronous read may outlive a refresh. Compare its rendered base before writing.
+    if (item && options.base) {
+      const changed = changedSince(item, base);
+      if (changed.length) {
+        detail.setConflict(itemId, { fields: changed, mine: patch,
+          theirs: Object.fromEntries(changed.map((field) => [field, item[field]])) });
+        return { status: 'failed', error: { kind: 'revision_conflict', current: item } };
+      }
+    }
     const outcome = await store.patch(itemId, patch);
     if (outcome.status === 'failed' && outcome.error.kind === 'revision_conflict') {
       const changed = changedSince(outcome.error.current, base);
@@ -100,9 +109,8 @@ export function createEditor(store: WorkStore, feedback: Feedback, detail: Detai
     }
     const sent = buffer.text;
     const value = field === 'area' ? (sent.trim() ? sent : null) : sent;
-    // The buffer holds an empty area as ''; the Planner holds it as null, so the base is compared in the Planner's form.
-    const base = field === 'area' && buffer.base === '' ? null : buffer.base;
-    const outcome = await save({ [field]: value }, { base: { [field]: base }, toast: field === 'notes' ? undefined : `Saved ${FIELD_WORD[field]}` });
+    // The buffer base is display text (null shown as ''); compare against the Planner's raw value, just checked equal.
+    const outcome = await save({ [field]: value }, { base: { [field]: item[field] }, toast: field === 'notes' ? undefined : `Saved ${FIELD_WORD[field]}` });
     if (outcome.status === 'saved') {
       const now = detail.buffer(itemId, field);
       if (now?.text === sent) detail.clearBuffer(itemId, field);

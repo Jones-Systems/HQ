@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, type KeyboardEvent } from 'react';
-import { Button, IconButton, SaveIndicator, StateView, StatusChip } from '@hq/ui';
+import { Button, IconButton, SaveIndicator, StateView, StatusChip, type ReferencePort } from '@hq/ui';
 import {
   DEFAULT_SETTINGS, formatClock, HORIZONS, KINDS, MOTIVATIONS, plannerToday, PRIORITIES, STATUS_LABEL, STATUSES, LIMITS,
   type DateInput, type Horizon, type Item, type ItemKind, type ItemPatch, type Motivation, type Priority, type ReferenceInput,
@@ -13,10 +13,13 @@ import { DateEditor } from './DateEditor';
 import { sharedDetailState, useDetailState, type DetailState, type TextField } from './detail-state';
 import { createEditor, fieldWords, NOTES_DEBOUNCE_MS } from './edits';
 import { References } from './References';
+import { HqLinks } from './HqLinks';
 import '../board/board.css';
 import './detail.css';
 
 export interface CardDetailProps {
+  projectId?: string;
+  references?: ReferencePort;
   store: WorkStore;
   state: WorkState;
   feedback: Feedback;
@@ -46,7 +49,7 @@ function textValue(item: Item, field: TextField, buffer?: { text: string }): str
  * notes with a 1,200 ms autosave, checklist, typed dates and links. Status pills are moves, so Undo restores the
  * card's exact place (RW-7). Conflicts offer Keep mine or Use theirs. Nothing here can start work.
  */
-export function CardDetail({ store, state, feedback, itemId, onClose, now, detail: provided }: CardDetailProps) {
+export function CardDetail({ store, state, feedback, itemId, onClose, now, detail: provided, projectId, references }: CardDetailProps) {
   const id = useId();
   const detail = provided ?? sharedDetailState('work-detail');
   const snapshot = useDetailState(detail);
@@ -266,7 +269,10 @@ export function CardDetail({ store, state, feedback, itemId, onClose, now, detai
 
       <section className="work-detail-section" aria-labelledby={`${id}-links`}>
         <h3 id={`${id}-links`} className="work-detail-label">Links</h3>
-        <References references={item.references} onSave={section('references', 'links')} />
+        <References references={item.references} hideHq={!!projectId} onSave={section('references', 'links')} disabled={pending || unconfirmed} />
+        {projectId && <HqLinks key={item.id} item={item} projectId={projectId} {...(references ? { port: references } : {})}
+          returnTo={{ label: item.title, to: { domain: 'work', destination: `item/${item.id}` } }}
+          state={state} store={store} editor={editor} {...(now ? { now } : {})} />}
       </section>
 
       <footer className="work-detail-foot">

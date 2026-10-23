@@ -155,7 +155,143 @@ Draft counts matched the ready sets in every round. With predicates unbound, `ca
 
 Fan-in: completion is not acceptance. T1 inspects scope, ancestry, evidence, checks and cleanliness. Its acceptance is bounded fixture/source acceptance, not independent review or green CI. A material blocker goes once to the root; T1 makes no P2–P4 fixes.
 
-**T1 (now):** publish revision 4, launch A, fan in A, then launch B, fan in B, keep PR #3 current, and hold after B's published candidate.
+**Execution log.**
+
+- Revision 4 was published at plan head `72854ab6a7c78306dbf078d9b5db7412e4a13ab9`; its spec blob `aabcf8a1` is the validated one.
+- Thread registration request `hq-t1-social-work-plan-20261020-r4` returned `registration_unavailable` (`endpoint_unavailable`), with `effect: none`. It was not retried.
+- **A launched** on 2026-10-20 at 04:23Z.
+  - Route: `delegate_task` (implementation, async, worktree), request `hq-work-domain-impl-20261020-r1`, target `claudeAgent` / `claude-opus-5-5` / `high` / `fastMode: false`.
+  - Admission telemetry: CPU 19.50%, 44.23 GiB available.
+  - Before any write, the child read back its binding: a separate native HQ worktree on its own branch at `72854ab`, clean. Its capsule is the compiled `071dbea0…`.
+  - Native identities went to the root by native message only.
+- **A completed and was accepted by T1's fan-in** (2026-10-20) for bounded fixture/source use. This is not independent review or green CI.
+  - Candidate: PR #31, native branch `t3/work-domain-integration`, head `3426da769ca6a5cf1ba561859039b14fc745457a`, base `work/hq-work-board` at `3ca74d7`. Open, non-draft and mergeable; merge held.
+  - Inspection: the remote head equals local, and the worktree is clean. Its ancestors include `72854ab`, `3ca74d7`, `8a3261d` and `935dedf`, with normal merge `8c2f841`. All 22 authored paths since that merge are in scope.
+  - Identity: the core, views, board, detail, capture, UI, contracts, apps and root trees are byte-identical to `3ca74d7`. The only other differences are T1 plan documents byte-identical to `72854ab`, the immutable PR #3 dependency.
+  - Evidence: a README and six light/dark/remount screenshots under the app CSP.
+  - Author-reported checks: `npm ci` with the lockfile unchanged; typecheck; Work 391 tests in 23 files; full 465 in 33; build.
+  - Deferred, not fixed: WD-1/WD-2 (P3) and WD-3 to WD-10 (P4). WD-1/2 were checked: a domain switch commits only an already pending explicit detail edit, and with none pending a switch writes nothing (asserted by `domain.test.tsx`).
+- **WK-C launched** (2026-10-20), under a separate bounded root release that extends the allowance to A+B+WK-C.
+  - Route: `delegate_task`, request `hq-wiki-contract-impl-20261020-r1`, target `claude-sonnet-5-5` / high, at `c67c23cd`.
+  - Cone: exactly `modules/wiki/contract/**`, read from the immutable PR #30 plan without merging it. Its PR goes against this branch.
+  - Acceptance belongs to the Wiki continuity owner.
+- **WK-C completed** (2026-10-20). This is not acceptance: the result was relayed to the root for the Wiki owner.
+  - PR #34: head branch `t3/50386c27` (remote), head `76a1dbc6dd8ed1eb56400fbb9e18bc4e621038a9`, base this branch at `a385a6f` (merge base `c67c23cd`). Open, non-draft and mergeable, with no checks; merge held.
+  - Branch identities (read back by the root and T1): the physical checkout `HQ/t3-50386c27` is on local `t3/wiki-contract-implementation` at `76a1dbc`, clean, and matches the native label. The remote and PR head branch is `t3/50386c27` at the same `76a1dbc`. There is no local `t3/50386c27` and no remote `t3/wiki-contract-implementation`. So the author's statement that the physical branch is `t3/50386c27` is stale. The content is identical. Both refs are kept, and no rename, reset or retarget is made.
+  - T1's read-only check: the remote head equals the reported one, and all 22 authored paths are under `modules/wiki/contract/**`. Each of its three commits has a trailer.
+  - Author-reported checks: `node --test` gave 73 of 73 passing, and `tsc -p modules/wiki/contract` exited 0. T1 did not rerun them. Root `typecheck` and `test` do not include `modules/wiki`.
+  - Deferred, not fixed: the AST vocabulary and the chosen structural bounds (P3); 2 MiB for "2 MB" and the single-quote URL rejection (P4).
+- **Wiki Core and UI launched** (2026-10-20). Under a root release, the Wiki owner accepted PR #34 at `76a1dbc` as their dependency. WK-C became a launch-only parent through its post-completion follow-up and launched exactly two Sonnet 5.5 / high builders from PR #30 plan `61fbcdb` (spec blob `c3525d0d`). The allowance is now A, B and WK-C (complete) plus `lane-wiki-core` and `lane-wiki-ui`.
+  - Follow-up taskId: `node:delegated-task:command%3Amcp%3Afaf8c6d3-d325-40fe-aef1-84ea725dffd2%3Athread-send%3Ahq-wiki-contract-launch-only-followup-20261020-r1`, run ordinal 2 of WK-C's child thread. WK-C's own report mislabelled this identity with the original request ID.
+  - Core:
+    - taskId `node:delegated-task:command%3Amcp%3Ac26ffaa0-0c91-43c7-89a4-f1c229aae49d%3Adelegate-task%3Ahq-wiki-core-impl-20261020-r1`
+    - childThreadId `thread:delegated-task:command%3Amcp%3Ac26ffaa0-0c91-43c7-89a4-f1c229aae49d%3Adelegate-task%3Ahq-wiki-core-impl-20261020-r1`
+    - worktree `HQ/t3-1c3e216d`, branch `t3/wiki-core-implementation`, start `76a1dbc`
+  - UI:
+    - taskId and childThreadId use the same two prefixes, with `hq-wiki-ui-impl-20261020-r1`
+    - worktree `HQ/t3-4e8c30c1`, branch `t3/implement-wiki-ui`, start `76a1dbc`
+  - Both report to WK-C's thread. The root confirmed both running, with their own pre-write binding checks passed.
+  - **Receipt correction 1:** the taskId and childThreadId are distinct (`node:` versus `thread:` prefix). An earlier T1 relay conflated them as "task and thread".
+  - **Receipt correction 2:** WK-C's claim of no Git effect is too broad. During the reconcile it ran `git fetch -q origin refs/heads/work/hq-expansion-plan` without `--no-write-fetch-head`. That is a bounded, incidental effect on shared Git metadata and `FETCH_HEAD`, and T1's follow-up brief had asked for that fetch. The root verified that the parent's branch, HEAD, index and tracked tree are still clean at `76a1dbc`, and that the published contract ref is unchanged. `FETCH_HEAD` is not restored, and nothing is reset, cleaned or repeated. Future launch-only parents read pinned objects that are already present, without fetching.
+  - Custody: T1 keeps lifecycle and fan-in. A completed launcher turn is not completed source work, so T1 checks each child's `workState` and pending runs.
+- **Wiki Core and UI delivered** (2026-10-20). These are candidates only: not feature acceptance, CI, the mounted shell, a private corpus or native proof. Both are open, non-draft, mergeable and merge-held, based on `t3/50386c27` at `76a1dbc`, with zero checks. T1 read them back read-only:
+  - **Core: PR #39**, `t3/wiki-core-implementation` at `b57bcd234d11270df4d045d8d24136b150456c3d`.
+    - Diff: the full PR diff is 32 files, all inside the core cone, and the contract tree is unchanged.
+    - Author checks: 214 Node tests in 9 files, plus `tsc`.
+    - Disclosures: it did not read the Codex-V3 AGENTS in that session; one `tsc` run came before admission; and an accidental test run was timed out and its `/tmp` output deleted. So T1 does not claim clean preflight compliance.
+  - **UI: PR #38**, `t3/implement-wiki-ui` at `014593b033b4eaa523c4dc5f35159639d2081d04`.
+    - Diff: the full PR diff is 56 files, all inside `modules/wiki/ui/`, and the contract tree is unchanged.
+    - Author checks: 105 Node tests in 10 files, plus `tsc`.
+    - Browser evidence: 19 synthetic loopback captures in T3 Browser at `cbd71af`. From `cbd71af` to `014593b`, only the README and evidence files change.
+    - Packaging obligations for the held integration owner: the CSS file under CSP, Node tests kept out of Vitest, Node ≥ 22.18, and no implicit shared seam.
+  - Deferred, not repaired: the original P2 (destination length) and P3 (null-key presence). UI adds new P3s and P4s.
+  - **Wiki continuity owner disposition: ACCEPTED SOURCE ONLY**, for exactly `task.wiki-core.001` (PR #39 at `b57bcd234d11270df4d045d8d24136b150456c3d`) and `task.wiki-ui.001` (PR #38 at `014593b033b4eaa523c4dc5f35159639d2081d04`).
+    - Basis (the owner's read-only review):
+      - the PR #30 plan at `61fbcdb`: requirements, interface, tasks, tests and capsules;
+      - both finals and READMEs, plus a bounded source inspection;
+      - the exact `76a1dbc` base, open non-draft state, the 32- and 56-file cones, ancestry and contract identity;
+      - for UI, the served `cbd71af` source, fixture, test and harness trees equal `014593b`, and the evidence README plus representative light and dark captures were inspected.
+    - Checks are author-reported: 214 Node tests in 9 files plus `tsc` (Core); 105 Node tests in 10 files plus `tsc`, mutation probes and 19 synthetic captures (UI). The owner ran no tests or Browser, and zero CI is not green CI.
+    - Not covered: independent review, and full Wiki, app or private acceptance.
+    - Core departures, kept as reported: it omitted the mandated Codex-V3 AGENTS read; it ran an exploratory `tsc` before admission; and an accidental `/tmp/dummy` run timed out, with removal reported by the author. No clean-preflight claim, rollback or repair.
+    - Findings, deferred and unrepaired at original severity:
+      - original P2 (destination 512 vs 16,384) and P3 (null-presence loss);
+      - UI at `014593b`, P3: topic cycles; filter and disambiguation cannot be restored;
+      - UI at `014593b`, P4: path-only labels, the echo heuristic, the empty-destination notice, unmeasured large render cost, and no screen-reader or narrow-viewport evidence.
+    - Packaging obligations kept:
+      - the CSS file under CSP;
+      - workspace, package and tsconfig wiring;
+      - Node tests excluded from Vitest, with Node ≥ 22.18;
+      - possible contract-import promotion;
+      - a closed seven-method preload/IPC with host-only refresh and the `home` migration.
+    - Still held: no further work is released. C, the shared seam, private validation, corpus, config, repairs, merge, live and install all stay held; PR #41's publication does not release C. The common accepted Design+Social/Work base and the named shared-writer prerequisites remain.
+  - Lifecycle gap: both children report to WK-C's thread. T1's `task_status` returns `task_not_found` for these grandchildren, so T1 read their results through WK-C's follow-up runs and the children's native threads.
+- **Owner supersession: working-app assignment** (2026-10-20, relayed by the root from the portfolio root's owner message).
+  - The earlier project-level holds on joint work, merge and install are superseded.
+  - The portfolio root alone owns every PR merge, plus base and stack metadata.
+  - Design owns C's seven root files and the specifically bounded App, styles and deactivate work.
+  - Social/Work owns module and runtime repairs only, with no shared-file edits.
+  - S (`562986d`) and all earlier candidates are preserved.
+- **Social runtime builder released** (one child, the third new descendant under the cap of 12). It continues `task.social-live-adapter.001` as module source readiness over an injected closed transport.
+  - Route: B's post-completion follow-up makes B a launch-only coordinator. B makes no source, Git, test or fetch effects. The child starts at S through native worktree isolation.
+  - Target: Opus 5.5 / high / `fastMode: false`. No further descendants.
+  - Writer cone:
+    - `modules/social/live/**`;
+    - `modules/social/nav/workspace.ts`;
+    - `modules/social/index.tsx`;
+    - module-owned selection tests in `modules/social/nav/test/**`;
+    - `docs/evidence/hq-social-work/social-runtime/**`.
+  - Widening into Social core or session needs a proposed exact delta first.
+  - Design:
+    - `createLiveSocialPort(transport)` over a local structural mirror of `iface.service-bridge.001`. HTTP failures keep their body.
+    - No renderer endpoint or token. `submitRun` is never retried, and malformed results or exceptions yield `unknown`.
+    - The source is chosen once per window, with no silent fallback from live to fixture, and no endpoint-settings or status method.
+  - Research reads Git objects only, from `growth-intel` at `3f647dac` (`apps/social_dashboard/` and `docs/social-growth-dashboard.md`). No `data/`, no private records and no copied code.
+  - PR: one open, non-draft, cone-only PR based on `t3/social-work-domain-assembly` at S.
+  - Unverified: Electron, the real bridge or service, and persistence.
+  - Still not released: another Work child, whose exact capsule is to follow. The root keeps the shared-bridge agreement and the portfolio fan-in.
+- **B released** after A's acceptance. Its compiled capsule is `3d935de4…` at plan head `00afa36e`, with the actual ready set exactly `{domain-integration}`.
+- **B completed; the root accepted it as S** (2026-10-20) for bounded fixture/source use. This is not independent review, native proof or green CI.
+  - Candidate: PR #36, branch `t3/social-work-domain-assembly` (local, remote and PR head all agree), head `562986d1852d7b4ef101ff6d4c9340c3751c727a`. Its base is this branch, which was at `cec5d07` when it opened; B started at `a385a6f`. Open, non-draft and mergeable, with zero configured checks; merge held.
+  - Merges: `dc6402c` ← Social `9735b74`, then `55b751b` ← Work `3426da7`, with no conflicts.
+  - T1 inspection: ancestry includes `a385a6f`, `9735b74`, `3426da7`, `935dedf`, `3ca74d7`, `8a3261d` and `35f9a3e`. The 19 authored paths since `55b751b` are the new `apps/desktop/src/social-work.integration.test.tsx`, which did not exist before, plus 18 files under `docs/evidence/hq-social-work/integration/social-work/`. `modules/social`, `modules/work` and `packages/hq-ui` are byte-identical to their sources. The root files, contracts, `apps/desktop` (apart from the new test) and T1's plan docs are byte-identical to `a385a6f`. `modules.tsx` is unchanged.
+  - Checks: the author reported `npm ci` with the lockfile unchanged, typecheck, 748 tests in 47 files, and a build. Before the root's acceptance arrived, T1 had already rerun `npm test` once on the exact head, at 20.44% CPU: 748 passed in 47 files.
+  - Evidence: the browser production renderer under the app's CSP, in light and dark at two sizes, with round-trip restoration and theme persistence. Electron is **unverified**: the doctor probe rejected the worktree.
+  - Accuracy boundary kept: zero-write navigation is proven for clean paths only. Under WD-1/WD-2, leaving a dirty card-detail field flushes exactly one pending explicit edit.
+  - Deferred, not fixed: SWA-1 to SWA-4 (P3) and SWA-5 (P4).
+
+**Owner direction delta (relayed by the root, 2026-10-20).** The Social/Work stack is to sit on top of the Local Design Hub stack, with all our content made compatible on the Design shared base, not merely handed off in documentation.
+
+- **A and B continue unchanged** under their exact scopes, so the usable source candidate is still produced. Child A keeps its model and worktree.
+- **Read-only scout.** The root is launching one read-only Design-parent scout.
+- **Before any Design-parent integration or PR retarget,** T1 consumes the scout's exact Design assembly branch, head and ownership evidence, and extends this same progressive spec. There is no second plan.
+- **Preferred shape:** one additive joint continuation based on the verified Design assembly parent, containing our accepted assembly.
+  - Published branch chains are recorded separately from native GitHub stack membership.
+  - Existing PR refs and history stay intact, and merges stay held.
+  - No mass rebase, force push or retarget.
+  - No overlapping Design, App, styles, config, contracts or catalog writes.
+- **Limits.** A future source child C needs an exact plan, base and ownership release from the root; the current allowance stays A+B. No Wiki work now.
+
+**Prerequisite observed by T1 (read-only, 2026-10-20).**
+
+- No published Design assembly parent exists yet. Origin has `work/hq-design-plan` at `fa244847` but no `work/hq-design-integration*` branch, and no open PR has such a head.
+- A local Design integration checkout exists. It is unpublished, so it is not a usable parent.
+
+**Revision 5 (2026-10-20): the Design-first scout is consumed.** The root's read-only scout result (SHA-256 `2bd169a8…`) is encoded at `7ab7f2e5517dcfee2334548e0a27d78f1921d5e7`, spec blob `d38be0f9`, and validated with the real helpers (`docs/evidence/hq-social-work/integration/integration-plan-validation.md`).
+
+- **Joint continuation.** It is one additive branch on the supported native child route. C's checkout and branch are generated at the committed plan head P, because `delegate_task` cannot select D. In its own branch, C normally merges exact D and then exact S, and proves both are ancestors. Its PR is based on the Design branch that contains D. All prior PR refs are preserved, with no rebase, force push or mass retarget.
+- **Root corrections at `7ab7f2e` (closed before C):**
+  - the joint read scopes now include Design, Social/Work and UI sources, the lane and Design evidence, and the root configs;
+  - `joint-root-checks` may make bounded npm dependency or lockfile updates inside the named custody, and holds outside it;
+  - the start-at-D wording is replaced by the native merge route above.
+- **Unbound activation bindings:** D, S, Design wiring, root-file custody (with a `vite.config.ts` decision) and C's release. No Design assembly parent is published; the local head is not a parent.
+- **No native GitHub stacks exist.** `PullRequest.stack` is null on all 24 open PRs, so every chain is a base-branch chain.
+- **Ownership.** Future C is the proposed sole writer of the six R0 root paths, plus `apps/desktop/src/joint.integration.test.tsx` and the joint evidence. `vite.config.ts` is unassigned. App, styles, contracts and IPC stay held. No workflow custody is implied: Design owns its workflows and the check catalog. B's new test stays an immutable dependency.
+- **Root interpretations.** The hold is on PR merge, not on publishing an authorized, scoped PR. Design's predecessor PRs need not merge before stacked work. The Design coordinator is not contacted, and cross-owner proposals go to issue #1 only.
+- **Unchanged:** A→B, and the child allowance of A+B. No C checkout and no C source edit.
+- **Cross-owner proposal.** Posted on issue #1, comment 6283473057, as a proposal only: joint-phase root-file writer, `vite.config.ts` owner, wiring patch revision, and discovery approach. No custody is claimed.
+
+**T1 (now):** A, B and WK-C are complete and S is bound. Holding after B's published candidate; nothing is launchable without a new root release.
 
 **Root coordinator:** decide the remaining shared gates:
   - the catalog delta merge, with Design;
