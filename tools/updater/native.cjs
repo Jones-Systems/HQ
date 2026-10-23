@@ -7,6 +7,8 @@ const cp = require('node:child_process');
 const { promisify } = require('node:util');
 const { ensure, UpdateError, object, integer, text, inside, readJson, readBuildReceipt, canonical, validateProcess, sameProcess, assertNoSymlink, syncDirectory, MAX_EXPANDED_BYTES, MAX_FILE_COUNT, SYNTHETIC_ID } = require('./contract.cjs');
 
+const { requirement, verifySignatureDetails, verifyDesignatedRequirement } = require('./signing.cjs');
+
 const INVENTORY_PATH = path.join(__dirname, 'process-inventory');
 const MAX_INVENTORY_BYTES = 4 * 1024 * 1024;
 const MAX_INVENTORY_PROCESSES = 32768;
@@ -96,8 +98,19 @@ function createNativeAdapter({ fs: io = fs, execFile = promisify(cp.execFile), s
     await execute('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundlePath]);
     const signature = await execute('/usr/bin/codesign', ['--display', '--verbose=4', bundlePath]);
     const details = String(signature.stderr || signature.stdout);
-    ensure(/(?:^|\n)Signature=adhoc(?:\n|$)/.test(details), 'Unexpected signing class.', 'integrity');
-    ensure(new RegExp(`(?:^|\\n)Identifier=${receipt.bundleId.replaceAll('.', '\\.')}\\n`).test(details), 'Code signature identity differs.', 'integrity');
+    try {
+      verifySignatureDetails(details, receipt.bundleId, Boolean(receipt.signingPolicy));
+      if (receipt.signingPolicy) {
+        await execute('/usr/bin/codesign', ['--verify', '--deep', '--strict', '-R', requirement(receipt.bundleId), bundlePath]);
+        const designated = await execute('/usr/bin/codesign', ['--display', '-r-', bundlePath]);
+        verifyDesignatedRequirement(String(designated.stderr || designated.stdout), receipt.bundleId);
+        await execute('/usr/bin/xcrun', ['stapler', 'validate', bundlePath]);
+        await execute('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=2', bundlePath]);
+      }
+    } catch (cause) {
+      if (cause.killed || cause.signal || (cause.code && typeof cause.code !== 'number')) throw cause;
+      throw new UpdateError('integrity', 'Code signing admission failed.', { cause });
+    }
     return receipt;
   }
   async function legacyIdentity(bundlePath) {

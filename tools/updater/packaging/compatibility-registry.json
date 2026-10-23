@@ -131,7 +131,7 @@
         "packages/contracts/src/updates.ts"
       ],
       "reason": "Updater-owned external records and profile binding types; persisted profile layout is registered separately.",
-      "sha256": "6a39663ed9bb1e426110f3dab2cb1bfab1a0490503b2d1e674911dec81c15a8e"
+      "sha256": "113d31e5143bedeed7c2935f27a75052632484d1bcc642cfed5f731b2910cb39"
     },
     {
       "id": "updater-external-state",
@@ -139,7 +139,7 @@
         "apps/desktop/electron/updates"
       ],
       "reason": "Downloads, extraction and updater records live outside userData/sessionData; no profile migration authority.",
-      "sha256": "532f01492a1d4424f5241dc330d57bf8dc6bc95e9ec61e50b3689522f00b525d"
+      "sha256": "19f1a9d21d1893671da55b5ed2d4e90881cccb6c06268a8961b4293461653ff8"
     }
   ]
 }

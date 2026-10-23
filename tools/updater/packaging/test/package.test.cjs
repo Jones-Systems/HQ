@@ -163,3 +163,87 @@ test('cleanup failure does not replace the original failure and removes signal h
 });
 
 module.exports = { receipt, put, tinyZip };
+
+test('production context admits only the exact canonical default branch dispatch and one expected identity', () => {
+  const { assertSigningContext, selectIdentity, cleanEnvironment } = require('../developer-id.cjs');
+  const event = { repository: { default_branch: 'integrated', id: REPOSITORY.id, owner: { id: REPOSITORY.ownerId } } };
+  const env = { GITHUB_REPOSITORY: REPOSITORY.name, GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/heads/integrated', GITHUB_WORKFLOW_REF: `${REPOSITORY.name}/${WORKFLOW}@refs/heads/integrated`, GITHUB_WORKFLOW_SHA: 'a'.repeat(40), GITHUB_SHA: 'a'.repeat(40), HQ_SIGNING_MODE: 'developer-id' };
+  assert.doesNotThrow(() => assertSigningContext(env, event));
+  for (const change of [{ GITHUB_EVENT_NAME: 'pull_request' }, { GITHUB_EVENT_NAME: 'push' }, { GITHUB_REF: 'refs/tags/hq-desktop-test' }, { GITHUB_REF: 'refs/heads/untrusted' }, { GITHUB_WORKFLOW_SHA: 'b'.repeat(40) }, { GITHUB_REPOSITORY: 'another/HQ' }, { HQ_SIGNING_MODE: 'adhoc-development' }]) assert.throws(() => assertSigningContext({ ...env, ...change }, event));
+  const identity = `1) ${'A'.repeat(40)} "Developer ID Application: Fixture (2CUPSQS986)"`;
+  assert.equal(selectIdentity(identity), 'A'.repeat(40));
+  for (const value of ['', identity.replace('2CUPSQS986', 'WRONGTEAM00'), `${identity}\n${identity}`]) assert.throws(() => selectIdentity(value));
+  assert.deepEqual(cleanEnvironment({ KEEP: 'value', MACOS_SIGNING_CERTIFICATE_PASSWORD: 'synthetic', APPLE_NOTARY_API_KEY_P8_BASE64: 'synthetic' }), { KEEP: 'value' });
+});
+
+test('Developer ID signs nested code inside out with stable IDs, timestamp and hardened runtime and refuses fallback', async () => {
+  const { signAndVerify, signingTargets } = require('../package.cjs');
+  const { requirement, PRODUCT_ID } = require('../../signing.cjs');
+  await withOwnedDirectory(scratch, 'signing-', async root => {
+    const bundle = path.join(root, 'HQ.app');
+    put(bundle, 'Contents/MacOS/HQ', 'fixture');
+    put(bundle, 'Contents/Resources/app/tools/updater/process-inventory', 'fixture');
+    put(bundle, 'Contents/Frameworks/HQ Helper.app/Contents/MacOS/HQ Helper', 'fixture');
+    const native = path.join(bundle, 'Contents/Resources/app/native.node');
+    fs.writeFileSync(native, Buffer.from('cffaedfe00000000', 'hex'));
+    const calls = [], ids = new Map();
+    const run = (file, args) => {
+      calls.push([file, args]);
+      if (file === '/usr/bin/lipo') return 'arm64';
+      if (file === '/usr/bin/plutil') return args.includes('CFBundleIdentifier') ? (args.at(-1).includes('HQ Helper.app') ? `${PRODUCT_ID}.helper` : PRODUCT_ID) : 'HQ';
+      if (args.includes('--sign')) ids.set(args.at(-1), args[args.indexOf('--identifier') + 1]);
+      if (args.includes('-r-')) return `designated => ${requirement()}`;
+      if (args.includes('--display')) return `Identifier=${ids.get(args.at(-1))}\nAuthority=Developer ID Application: Fixture (2CUPSQS986)\nTeamIdentifier=2CUPSQS986\nTimestamp=fixture\nCodeDirectory flags=0x10000(runtime)\n`;
+      return '';
+    };
+    const targets = signingTargets(bundle, run);
+    assert.equal(targets.at(-1).filename, bundle);
+    assert.ok(targets.some(target => target.filename === native));
+    signAndVerify(bundle, 'arm64', run, { mode: 'developer-id', identity: 'A'.repeat(40), keychain: '/fixture/isolated.keychain' });
+    const signs = calls.filter(([, args]) => args.includes('--sign'));
+    assert.equal(signs.length, targets.length);
+    assert.equal(signs.at(-1)[1].at(-1), bundle);
+    assert.ok(signs.every(([, args]) => args.includes('--timestamp') && args.includes('runtime') && !args.includes('--deep') && !args.includes('-')));
+    assert.ok(calls.some(([, args]) => args.includes('-R') && args.includes(requirement())));
+    assert.throws(() => signAndVerify(bundle, 'arm64', run, { mode: 'developer-id' }), /identity and isolated keychain/);
+    assert.throws(() => signAndVerify(bundle, 'arm64', run, { mode: 'automatic' }), /explicit signing mode/);
+  });
+});
+
+test('notarization must be accepted and stapled before distribution; failed submissions remove their exact temporary archive', async () => {
+  const { notarizeAndStaple } = require('../package.cjs');
+  await withOwnedDirectory(scratch, 'notary-', async root => {
+    const bundle = path.join(root, 'HQ.app');
+    put(bundle, 'Contents/file', 'fixture');
+    const signing = { notaryKey: '/synthetic/key.p8', notaryKeyId: 'ABCDEFGHIJ', notaryIssuerId: '11111111-2222-3333-4444-555555555555' };
+    const exercise = status => {
+      const calls = [];
+      const run = (file, args) => {
+        calls.push([file, args]);
+        if (file === '/usr/bin/ditto') fs.writeFileSync(args.at(-1), 'temporary');
+        if (args[0] === 'notarytool') return JSON.stringify({ status });
+        return '';
+      };
+      if (status === 'Accepted') notarizeAndStaple(bundle, root, signing, run);
+      else assert.throws(() => notarizeAndStaple(bundle, root, signing, run), /did not accept/);
+      assert.equal(fs.existsSync(path.join(root, 'notary-submission.zip')), false);
+      return calls;
+    };
+    const accepted = exercise('Accepted');
+    assert.ok(accepted.some(([, args]) => args[0] === 'stapler' && args[1] === 'validate'));
+    assert.ok(accepted.some(([file]) => file === '/usr/sbin/spctl'));
+    assert.ok(!exercise('Invalid').some(([, args]) => args[0] === 'stapler'));
+  });
+});
+
+test('workflow keeps credentials exclusively in the protected default-branch production job', () => {
+  const workflow = fs.readFileSync(path.resolve(__dirname, '../../../../.github/workflows/hq-desktop-package.yml'), 'utf8');
+  const production = workflow.slice(workflow.indexOf('  developer-id:'), workflow.indexOf('  attest:'));
+  assert.match(production, /environment: macos-signing/);
+  assert.match(production, /github.event_name == 'workflow_dispatch'/);
+  assert.match(production, /github.ref == format\('refs\/heads\/\{0\}', github.event.repository.default_branch\)/);
+  assert.match(production, /ref: \$\{\{ github.sha \}\}/);
+  assert.doesNotMatch(workflow.replace(production, ''), /secrets\./);
+  assert.doesNotMatch(workflow, /pull_request_target/);
+  assert.match(workflow, /HQ_SIGNING_MODE: adhoc-development/);
+});

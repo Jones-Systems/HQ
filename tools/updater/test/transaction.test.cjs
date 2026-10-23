@@ -294,3 +294,20 @@ test('a live historical retained executable and its child prevent replacement', 
   await atomicWrite(path.join(f.record.stateRoot, 'history', `${historical.operationId}.json`), corrupt);
   await assert.rejects(f.engine.state.excludeWriters(f.record, null, [f.self]), { code: 'recovery-required' });
 });
+
+test('production admission cannot downgrade to ad-hoc while the exact pre-migration rollback remains retained', async t => {
+  const { DEVELOPER_ID } = require('../signing.cjs');
+  const { createTransaction } = require('../transaction.cjs');
+  const f = await fixture(t);
+  const prior = { ...f.prior, appName: 'HQ', bundleId: 'org.jones-systems.hq.local', signingPolicy: { ...DEVELOPER_ID } };
+  const record = { ...f.record, synthetic: false, appName: 'HQ', bundleId: prior.bundleId, installed: prior };
+  const candidateManifest = { ...f.candidate.manifest, appName: 'HQ', bundleId: prior.bundleId };
+  const { candidateId } = require('../contract.cjs');
+  const candidate = { ...f.candidate, manifest: candidateManifest, candidateId: candidateId(candidateManifest) };
+  const engine = createTransaction({ native: f.native });
+  assert.throws(() => engine.admit(record, candidate), /ad-hoc downgrade/);
+  const signed = { ...candidateManifest, signing: 'developer-id', signingPolicy: { ...DEVELOPER_ID } };
+  assert.doesNotThrow(() => engine.admit(record, { ...candidate, manifest: signed, candidateId: candidateId(signed) }));
+  const developmentPrior = { ...prior }; delete developmentPrior.signingPolicy;
+  assert.doesNotThrow(() => engine.admit({ ...record, installed: developmentPrior }, { ...candidate, manifest: signed, candidateId: candidateId(signed) }));
+});

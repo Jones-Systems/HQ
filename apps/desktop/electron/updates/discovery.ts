@@ -45,11 +45,12 @@ function uniqueAsset(assets: unknown[], name: string, tag: string, limit: number
 
 export function checkCompatibility(manifest: UpdateManifest, installed: BuildReceipt, record: InstallationRecord, architecture: UpdateArchitecture): void {
   checkReleaseIdentity(manifest, architecture, record.channel);
+  if (installed.signingPolicy && !manifest.signingPolicy) throw new UpdateFailure('incompatible');
   if (manifest.compatibilityEpoch !== record.compatibilityEpoch || manifest.compatibilityEpoch !== installed.compatibilityEpoch || manifest.appName !== installed.appName || manifest.bundleId !== installed.bundleId || manifest.architecture !== installed.architecture) throw new UpdateFailure('incompatible');
 }
 
 function checkReleaseIdentity(manifest: UpdateManifest, architecture: UpdateArchitecture, channel: UpdateChannel): void {
-  if (manifest.repository.name !== REPOSITORY.name || manifest.repository.id !== REPOSITORY.id || manifest.repository.ownerId !== REPOSITORY.ownerId || manifest.platform !== 'darwin' || manifest.workflow !== WORKFLOW || manifest.event !== 'push' || manifest.signing !== 'adhoc' || manifest.bundleId !== 'org.jones-systems.hq.local' || manifest.appName !== 'HQ' || !/^hq-desktop-[A-Za-z0-9._-]+$/.test(manifest.releaseTag)) throw new UpdateFailure('provenance');
+  if (manifest.repository.name !== REPOSITORY.name || manifest.repository.id !== REPOSITORY.id || manifest.repository.ownerId !== REPOSITORY.ownerId || manifest.platform !== 'darwin' || manifest.workflow !== WORKFLOW || manifest.event !== 'push' || manifest.signing !== (manifest.signingPolicy ? 'developer-id' : 'adhoc') || manifest.bundleId !== 'org.jones-systems.hq.local' || manifest.appName !== 'HQ' || !/^hq-desktop-[A-Za-z0-9._-]+$/.test(manifest.releaseTag)) throw new UpdateFailure('provenance');
   if (manifest.architecture !== architecture || manifest.channel !== channel) throw new UpdateFailure('incompatible');
 }
 

@@ -3,6 +3,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { validateSigning } = require('./signing.cjs');
 
 const MAX_ARCHIVE_BYTES = 1024 ** 3;
 const MAX_EXPANDED_BYTES = 3 * 1024 ** 3;
@@ -57,7 +58,11 @@ function immutable(value) {
   return value;
 }
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
+function signingKeys(value, keys) { return Object.hasOwn(value ?? {}, 'signingPolicy') ? [...keys, 'signingPolicy'] : keys; }
 function validateBuildFields(value, { synthetic = false } = {}) {
+  if (Object.hasOwn(value, 'signingPolicy')) {
+    try { validateSigning(value.signingPolicy, value.bundleId); } catch { ensure(false, 'Invalid production signing policy.'); }
+  }
   ensure(value.schemaVersion === 1 && value.product === 'hq', 'Unsupported product or schema.');
   text(value.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/, 'version');
   integer(value.buildSequence, 1, Number.MAX_SAFE_INTEGER, 'build sequence');
@@ -72,18 +77,18 @@ function validateBuildFields(value, { synthetic = false } = {}) {
   ensure(value.architecture === 'arm64' || value.architecture === 'x64', 'Unsupported architecture.');
 }
 function validateBuildReceipt(value, options) {
-  object(value, BUILD_KEYS, 'build receipt');
+  object(value, signingKeys(value, BUILD_KEYS), 'build receipt');
   validateBuildFields(value, options);
   return immutable(clone(value));
 }
 function validateManifest(value, options) {
-  object(value, MANIFEST_KEYS, 'manifest');
+  object(value, signingKeys(value, MANIFEST_KEYS), 'manifest');
   validateBuildFields(value, options);
   object(value.repository, ['name', 'id', 'ownerId'], 'repository');
   ensure(value.repository.name === 'Jones-Systems/HQ', 'Unexpected repository.');
   integer(value.repository.id, 1, Number.MAX_SAFE_INTEGER, 'repository ID');
   integer(value.repository.ownerId, 1, Number.MAX_SAFE_INTEGER, 'repository owner ID');
-  ensure(value.platform === 'darwin' && value.event === 'push' && value.signing === 'adhoc', 'Unsupported package.');
+  ensure(value.platform === 'darwin' && value.event === 'push' && value.signing === (value.signingPolicy ? 'developer-id' : 'adhoc'), 'Unsupported package.');
   ensure(value.workflow === '.github/workflows/hq-desktop-package.yml', 'Unexpected workflow.');
   text(value.releaseTag, /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/, 'release tag');
   text(value.runId, /^[1-9][0-9]{0,19}$/, 'workflow run');
@@ -99,7 +104,7 @@ function validateManifest(value, options) {
   text(value.attestation, /^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/, 'attestation asset');
   return immutable(clone(value));
 }
-function receiptOf(manifest) { return Object.fromEntries(BUILD_KEYS.map(key => [key, manifest[key]])); }
+function receiptOf(manifest) { return Object.fromEntries(signingKeys(manifest, BUILD_KEYS).map(key => [key, manifest[key]])); }
 function candidateId(manifest, options) { return digest(validateManifest(manifest, options)); }
 function validateLegacy(value) {
   object(value, ['kind', 'bootstrapSha256', 'packageSha256', 'mainSha256'], 'legacy identity');

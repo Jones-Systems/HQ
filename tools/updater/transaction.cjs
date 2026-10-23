@@ -76,6 +76,7 @@ function createTransaction({ native = createNativeAdapter(), clock = Date.now, c
     ensure(inside(record.stateRoot, candidate.bundlePath), 'Candidate must stay in installation-owned storage.');
     ensure(candidate.manifest.channel === record.channel && candidate.manifest.appName === record.appName && candidate.manifest.bundleId === record.bundleId, 'Candidate installation identity differs.', 'incompatible');
     if (record.installed.kind !== 'legacy') {
+      ensure(!record.installed.signingPolicy || Boolean(candidate.manifest.signingPolicy), 'A production installation cannot accept an ad-hoc downgrade.', 'incompatible');
       ensure(candidate.manifest.architecture === record.installed.architecture, 'Candidate architecture differs.', 'incompatible');
       ensure(candidate.manifest.compatibilityEpoch === record.compatibilityEpoch, 'Candidate profile epoch differs.', 'incompatible');
       ensure(kind === 'fresh' || candidate.manifest.buildSequence > record.installed.buildSequence, 'Candidate is not a newer build.', 'stale-candidate');

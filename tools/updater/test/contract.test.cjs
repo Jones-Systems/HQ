@@ -67,3 +67,18 @@ test('record reads and path checks refuse symlinks', async t => {
   await assert.rejects(contract.assertNoSymlink(link), { code: 'recovery-required' });
   assert.deepEqual(await contract.readBuildReceipt(f.candidate.bundlePath, { synthetic: true }), contract.receiptOf(f.candidate.manifest));
 });
+
+test('production manifests bind the signing policy into every retained receipt without weakening legacy decoding', () => {
+  const { DEVELOPER_ID } = require('../signing.cjs');
+  const development = manifest({}, false);
+  const production = { ...development, signing: 'developer-id', signingPolicy: { ...DEVELOPER_ID } };
+  assert.deepEqual(contract.validateManifest(production), production);
+  assert.deepEqual(contract.validateBuildReceipt(contract.receiptOf(production)).signingPolicy, DEVELOPER_ID);
+  assert.equal(Object.hasOwn(contract.receiptOf(development), 'signingPolicy'), false);
+  assert.notEqual(contract.candidateId(production), contract.candidateId(development));
+  for (const update of [
+    { signing: 'adhoc' }, { signingPolicy: undefined },
+    ...[{ teamId: 'WRONGTEAM00' }, { identifier: 'other.app' }, { secureTimestamp: false }, { hardenedRuntime: false }, { notarized: false }, { stapled: false }, { extra: true }].map(change => ({ signingPolicy: { ...DEVELOPER_ID, ...change } })),
+  ]) assert.throws(() => contract.validateManifest({ ...production, ...update }));
+  assert.throws(() => contract.validateManifest({ ...development, signing: 'developer-id' }));
+});

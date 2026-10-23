@@ -543,3 +543,42 @@ test('HQ-REV-005 the created stage identity is rechecked immediately before inst
   await assert.rejects(fs.stat(journal.failedPath), { code: 'ENOENT' });
   assert.equal(f.calls.some(call => call[0] === 'launch'), false);
 });
+
+test('production verification rejects wrong team, wrong ID, ad-hoc fallback and missing stable requirement or ticket', async t => {
+  const { DEVELOPER_ID, requirement } = require('../signing.cjs');
+  const f = await fixture(t, { synthetic: false });
+  const receipt = { ...receiptOf(f.candidate.manifest), appName: 'HQ', bundleId: 'org.jones-systems.hq.local', signingPolicy: { ...DEVELOPER_ID } };
+  await writeBundle(f.candidate.bundlePath, receipt);
+  const record = { ...f.record, appName: 'HQ', bundleId: receipt.bundleId };
+  const details = `Identifier=${receipt.bundleId}\nAuthority=Developer ID Application: Fixture (2CUPSQS986)\nTeamIdentifier=2CUPSQS986\nTimestamp=Oct 22, 2026 at 12:00:00\nCodeDirectory v=20500 flags=0x10000(runtime)\n`;
+  const designated = `designated => ${requirement()}\n`;
+  const verify = async (change = {}) => {
+    const calls = [];
+    const base = commands(record);
+    const native = createNativeAdapter({ platform: 'darwin', execFile: async (file, args, options) => {
+      calls.push([file, args]);
+      if (file === '/usr/bin/codesign' && args[0] === '--display') return { stderr: args.includes('-r-') ? change.designated ?? designated : change.details ?? details };
+      if (file === '/usr/bin/codesign' && args.includes('-R') && change.requirementFailed) throw Object.assign(new Error('wrong certificate'), { code: 1 });
+      if (file === '/usr/bin/xcrun' || file === '/usr/sbin/spctl') {
+        if (change.ticketFailed) throw Object.assign(new Error('ticket rejected'), { code: 65 });
+        return { stdout: 'accepted' };
+      }
+      return base.execFile(file, args, options);
+    } });
+    await native.verifyBundle(f.candidate.bundlePath, receipt);
+    return calls;
+  };
+  const calls = await verify();
+  assert.ok(calls.some(([file, args]) => file === '/usr/bin/codesign' && args.includes(requirement())));
+  assert.ok(calls.some(([file]) => file === '/usr/bin/xcrun'));
+  for (const change of [
+    { details: details.replaceAll('2CUPSQS986', 'WRONGTEAM00') },
+    { details: details.replace(receipt.bundleId, 'other.app') },
+    { details: `Identifier=${receipt.bundleId}\nSignature=adhoc\n` },
+    { details: details.replace('Timestamp=', 'Signed Time=') },
+    { details: details.replace('flags=0x10000(runtime)', 'flags=0x0(none)') },
+    { designated: 'designated => cdhash H"abcdef"' },
+    { designated: `${designated} or true` },
+    { requirementFailed: true }, { ticketFailed: true },
+  ]) await assert.rejects(verify(change), { code: 'integrity' });
+});

@@ -5,9 +5,18 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { PRODUCT, SYNTHETIC, WORKFLOW, REPOSITORY, ELECTRON_VERSION, LIMITS, buildReceipt, positiveInteger } = require('./identity.cjs');
+const { DEVELOPER_ID, requirement, verifySignatureDetails, verifyDesignatedRequirement } = require('../signing.cjs');
 const { inspectRegistry, readRegistry } = require('./compatibility.cjs');
 
-function command(executable, args, options = {}) { return execFileSync(executable, args, { encoding: 'utf8', maxBuffer: 4 * 1024 ** 2, ...options }); }
+function command(executable, args, options = {}) {
+  if (options.captureStderr) {
+    const { captureStderr, ...rest } = options;
+    const result = require('node:child_process').spawnSync(executable, args, { encoding: 'utf8', maxBuffer: 4 * 1024 ** 2, ...rest });
+    if (result.error || result.status !== 0) throw new Error(`Command failed: ${path.basename(executable)}`);
+    return `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  }
+  return execFileSync(executable, args, { encoding: 'utf8', maxBuffer: 4 * 1024 ** 2, ...options });
+}
 function json(file) { return JSON.parse(fs.readFileSync(file, 'utf8')); }
 function writeJson(file, value) { fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx', mode: 0o644 }); }
 function contained(parent, child) { const relative = path.relative(parent, child); return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative)); }
@@ -115,20 +124,74 @@ function stampBundle(bundle, receipt, run = command) {
   }
 }
 
-function signAndVerify(bundle, architecture, run = command) {
+function signingTargets(bundle, run = command) {
+  const targets = [];
+  const visit = directory => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const filename = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        visit(filename);
+        if (/\.(?:app|framework|xpc|bundle)$/.test(entry.name)) targets.push(filename);
+      } else if (entry.isFile()) {
+        const fd = fs.openSync(filename, 'r');
+        const magic = Buffer.alloc(4);
+        try { fs.readSync(fd, magic, 0, 4, 0); } finally { fs.closeSync(fd); }
+        if (['feedface', 'cefaedfe', 'feedfacf', 'cffaedfe', 'cafebabe', 'bebafeca', 'cafebabf', 'bfbafeca'].includes(magic.toString('hex'))) targets.push(filename);
+      }
+    }
+  };
+  visit(bundle);
+  return [...targets, bundle].map(filename => {
+    const identifier = filename.endsWith('.app')
+      ? run('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', path.join(filename, 'Contents/Info.plist')]).trim()
+      : `${PRODUCT.bundleId}.code.${createHash('sha256').update(path.relative(bundle, filename).split(path.sep).join('/')).digest('hex').slice(0, 24)}`;
+    if (!(identifier === PRODUCT.bundleId || identifier.startsWith(`${PRODUCT.bundleId}.`))) throw new Error('Unexpected nested code identity');
+    return { filename, identifier };
+  });
+}
+
+function signAndVerify(bundle, architecture, run = command, signing = { mode: 'adhoc-development' }) {
+  if (!['adhoc-development', 'developer-id'].includes(signing.mode)) throw new Error('An explicit signing mode is required');
+  const production = signing.mode === 'developer-id';
+  if (production && (!/^[A-Fa-f0-9]{40}$/.test(signing.identity ?? '') || !path.isAbsolute(signing.keychain ?? ''))) throw new Error('Developer ID identity and isolated keychain required');
   const plist = path.join(bundle, 'Contents/Info.plist');
   const executable = run('/usr/bin/plutil', ['-extract', 'CFBundleExecutable', 'raw', '-o', '-', plist]).trim();
   const arches = run('/usr/bin/lipo', ['-archs', path.join(bundle, 'Contents/MacOS', executable)]).trim();
   if (arches !== (architecture === 'x64' ? 'x86_64' : architecture)) throw new Error('Electron architecture mismatch');
   const inventory = path.join(bundle, 'Contents/Resources/app/tools/updater/process-inventory');
   if (run('/usr/bin/lipo', ['-archs', inventory]).trim() !== (architecture === 'x64' ? 'x86_64' : architecture)) throw new Error('Native process inventory architecture mismatch');
-  run('/usr/bin/codesign', ['--force', '--sign', '-', '--timestamp=none', inventory]);
-  run('/usr/bin/codesign', ['--verify', '--strict', '--verbose=2', inventory]);
-  run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', '--timestamp=none', '--preserve-metadata=entitlements', bundle]);
+  if (production) {
+    for (const { filename, identifier } of signingTargets(bundle, run)) {
+      const entitlements = filename.endsWith('.app') ? ['--entitlements', path.join(__dirname, 'entitlements.plist')] : [];
+      run('/usr/bin/codesign', ['--force', '--sign', signing.identity, '--keychain', signing.keychain, '--timestamp', '--options', 'runtime', '--identifier', identifier, ...entitlements, filename]);
+      run('/usr/bin/codesign', ['--verify', '--strict', '-R', requirement(identifier), filename]);
+      verifySignatureDetails(run('/usr/bin/codesign', ['--display', '--verbose=4', filename], { captureStderr: true }), identifier, true);
+    }
+    verifyDesignatedRequirement(run('/usr/bin/codesign', ['--display', '-r-', bundle], { captureStderr: true }), PRODUCT.bundleId);
+  } else {
+    run('/usr/bin/codesign', ['--force', '--sign', '-', '--timestamp=none', inventory]);
+    run('/usr/bin/codesign', ['--verify', '--strict', '--verbose=2', inventory]);
+    run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', '--timestamp=none', '--preserve-metadata=entitlements', bundle]);
+    const identifier = run('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', plist]).trim();
+    verifySignatureDetails(run('/usr/bin/codesign', ['--display', '--verbose=4', bundle], { captureStderr: true }), identifier, false);
+  }
   run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', bundle]);
-  const result = require('node:child_process').spawnSync('/usr/bin/codesign', ['--display', '--verbose=4', bundle], { encoding: 'utf8' });
-  if (result.error || result.status !== 0) throw new Error('Cannot read strict code signature');
-  if (!/^Signature=adhoc$/m.test(result.stderr)) throw new Error('Expected ad-hoc code signature');
+}
+
+function notarizeAndStaple(bundle, output, signing, run = command) {
+  if (!path.isAbsolute(signing.notaryKey ?? '') || !/^[A-Z0-9]{10}$/.test(signing.notaryKeyId ?? '') || !/^[a-f0-9-]{36}$/i.test(signing.notaryIssuerId ?? '')) throw new Error('Notarization credentials required for production');
+  require('./native-storage.cjs').admitNativeStorage({ sourceBundle: bundle, outputDirectory: output, bundleCopies: 2 });
+  const submission = path.join(output, 'notary-submission.zip');
+  try {
+    run('/usr/bin/ditto', ['-c', '-k', '--keepParent', bundle, submission]);
+    const result = JSON.parse(run('/usr/bin/xcrun', ['notarytool', 'submit', submission, '--key', signing.notaryKey, '--key-id', signing.notaryKeyId, '--issuer', signing.notaryIssuerId, '--wait', '--timeout', '20m', '--output-format', 'json']));
+    if (result.status !== 'Accepted') throw new Error('Notarization did not accept the production package');
+    run('/usr/bin/xcrun', ['stapler', 'staple', bundle]);
+    run('/usr/bin/xcrun', ['stapler', 'validate', bundle]);
+    run('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=2', bundle]);
+    run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '-R', requirement(), bundle]);
+  } finally { fs.rmSync(submission, { force: true }); }
 }
 
 function archiveMetrics(archive) {
@@ -157,10 +220,12 @@ function manifestFor(receipt, archive, metadata) {
   if (!/^hq-desktop-[A-Za-z0-9._-]+$/.test(metadata.releaseTag) || metadata.event !== 'push') throw new Error('Invalid release event');
   if (String(receipt.buildSequence) !== metadata.runId) throw new Error('Build sequence must equal the workflow run ID');
   if (!Number.isFinite(Date.parse(metadata.publishedAt))) throw new Error('Invalid manifest metadata');
-  return { ...receipt, repository: REPOSITORY, platform: 'darwin', releaseTag: metadata.releaseTag, workflow: WORKFLOW, runId: metadata.runId, runAttempt: positiveInteger(metadata.runAttempt, 'run attempt'), event: 'push', publishedAt: metadata.publishedAt, signing: 'adhoc', archive: { name: `hq-darwin-${receipt.architecture}.zip`, ...archive }, attestation: `hq-darwin-${receipt.architecture}.sigstore.json` };
+  return { ...receipt, repository: REPOSITORY, platform: 'darwin', releaseTag: metadata.releaseTag, workflow: WORKFLOW, runId: metadata.runId, runAttempt: positiveInteger(metadata.runAttempt, 'run attempt'), event: 'push', publishedAt: metadata.publishedAt, signing: receipt.signingPolicy ? 'developer-id' : 'adhoc', archive: { name: `hq-darwin-${receipt.architecture}.zip`, ...archive }, attestation: `hq-darwin-${receipt.architecture}.sigstore.json` };
 }
 
-function packageApplication({ root, output, sourceSha, architecture, buildSequence, channel = 'preview', releaseTag, runAttempt = 1, publishedAt = new Date().toISOString() }) {
+function packageApplication({ root, output, sourceSha, architecture, buildSequence, channel = 'preview', releaseTag, runAttempt = 1, publishedAt = new Date().toISOString(), signing }) {
+  if (!signing || !['adhoc-development', 'developer-id'].includes(signing.mode)) throw new Error('An explicit signing mode is required');
+  if (channel === 'stable' && signing.mode !== 'developer-id') throw new Error('Stable production cannot use ad-hoc signing');
   if (process.platform !== 'darwin' || process.arch !== architecture) throw new Error('Native matching macOS runner required');
   root = fs.realpathSync(root); output = path.resolve(output);
   if (fs.existsSync(output)) throw new Error('Package output must be absent');
@@ -169,6 +234,7 @@ function packageApplication({ root, output, sourceSha, architecture, buildSequen
   const sourceTree = command('git', ['rev-parse', 'HEAD^{tree}'], { cwd: root }).trim();
   const { compatibilityEpoch } = inspectRegistry(root, readRegistry(root));
   const receipt = buildReceipt({ sourceSha, sourceTree, version: json(path.join(root, 'package.json')).version, buildSequence, channel, compatibilityEpoch, architecture });
+  if (signing.mode === 'developer-id') receipt.signingPolicy = { ...DEVELOPER_ID };
   const electronRoot = path.join(root, 'node_modules/electron');
   if (json(path.join(electronRoot, 'package.json')).version !== ELECTRON_VERSION) throw new Error('Unexpected installed Electron version');
   fs.mkdirSync(output, { recursive: true });
@@ -189,11 +255,12 @@ function packageApplication({ root, output, sourceSha, architecture, buildSequen
     fs.chmodSync(path.join(output, 'install-hq.command'), 0o755);
     fs.chmodSync(path.join(bundle, 'Contents/Resources/install-hq.command'), 0o755);
     stampBundle(bundle, receipt);
-    signAndVerify(bundle, architecture);
+    signAndVerify(bundle, architecture, command, signing);
+    if (signing.mode === 'developer-id') notarizeAndStaple(bundle, output, signing);
     const archive = path.join(output, `hq-darwin-${architecture}.zip`);
     command('/usr/bin/zip', ['-qry', archive, 'HQ.app'], { cwd: output });
     const metrics = archiveMetrics(archive);
-    writeJson(path.join(output, 'package-evidence.json'), { receipt, archive: metrics, verification: 'codesign --verify --deep --strict', signing: 'adhoc' });
+    writeJson(path.join(output, 'package-evidence.json'), { receipt, archive: metrics, verification: 'codesign --verify --deep --strict', signing: signing.mode, distribution: signing.mode === 'developer-id' ? 'notarized-production' : 'ad-hoc-development' });
     if (releaseTag) writeJson(path.join(output, `hq-darwin-${architecture}.json`), manifestFor(receipt, metrics, { releaseTag, runId: String(buildSequence), runAttempt, event: 'push', publishedAt }));
     return { bundle, archive, receipt, metrics };
   } catch (error) {
@@ -205,8 +272,9 @@ function packageApplication({ root, output, sourceSha, architecture, buildSequen
 if (require.main === module) {
   const root = path.resolve(__dirname, '../../..');
   if (!process.env.HQ_PACKAGE_OUTPUT) throw new Error('HQ_PACKAGE_OUTPUT must name a new task-owned directory');
-  const result = packageApplication({ root, output: process.env.HQ_PACKAGE_OUTPUT, sourceSha: process.env.GITHUB_SHA, architecture: process.env.HQ_PACKAGE_ARCH, buildSequence: Number(process.env.GITHUB_RUN_ID), channel: 'preview', releaseTag: process.env.HQ_RELEASE_TAG || undefined, runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT || 1) });
+  if (process.env.HQ_SIGNING_MODE !== 'adhoc-development') throw new Error('Use the trusted Developer ID entry point for production packaging');
+  const result = packageApplication({ signing: { mode: 'adhoc-development' }, root, output: process.env.HQ_PACKAGE_OUTPUT, sourceSha: process.env.GITHUB_SHA, architecture: process.env.HQ_PACKAGE_ARCH, buildSequence: Number(process.env.GITHUB_RUN_ID), channel: 'preview', releaseTag: process.env.HQ_RELEASE_TAG || undefined, runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT || 1) });
   process.stdout.write(`${JSON.stringify({ receipt: result.receipt, archive: result.metrics })}\n`);
 }
 
-module.exports = { copySource, copyRuntimeDependencies, populateApplication, stampBundle, signAndVerify, archiveMetrics, manifestFor, packageApplication, command, contained };
+module.exports = { signingTargets, notarizeAndStaple, copySource, copyRuntimeDependencies, populateApplication, stampBundle, signAndVerify, archiveMetrics, manifestFor, packageApplication, command, contained };

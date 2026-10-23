@@ -1,7 +1,19 @@
 export type UpdateChannel = 'preview' | 'stable';
 export type UpdateArchitecture = 'arm64' | 'x64';
 
+export interface DeveloperIdSigningPolicy {
+  readonly schemaVersion: 1;
+  readonly mode: 'developer-id';
+  readonly teamId: '2CUPSQS986';
+  readonly identifier: 'org.jones-systems.hq.local';
+  readonly hardenedRuntime: true;
+  readonly secureTimestamp: true;
+  readonly notarized: true;
+  readonly stapled: true;
+}
+
 export interface BuildReceipt {
+  readonly signingPolicy?: DeveloperIdSigningPolicy;
   readonly schemaVersion: 1;
   readonly product: 'hq';
   readonly version: string;
@@ -26,7 +38,7 @@ export interface UpdateManifest extends BuildReceipt {
   readonly runAttempt: number;
   readonly event: 'push';
   readonly publishedAt: string;
-  readonly signing: 'adhoc';
+  readonly signing: 'adhoc' | 'developer-id';
   readonly archive: {
     readonly name: string;
     readonly size: number;
