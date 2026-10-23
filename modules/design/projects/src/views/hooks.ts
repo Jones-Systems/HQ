@@ -28,13 +28,25 @@ export function useThumbnail(loader: ThumbnailLoader, ref: PreviewRef | undefine
   return ref ? state : PENDING;
 }
 
+/**
+ * Replaces one prefetch subscription set with another; returns the new releases.
+ * Subscribes the new set before releasing the old one so a digest present in
+ * both windows is not aborted and re-queued.
+ */
+export function swapPrefetch(loader: ThumbnailLoader, refs: readonly PreviewRef[], previous: readonly (() => void)[]): (() => void)[] {
+  const next = refs.map((ref) => loader.subscribe(ref, 'prefetch', () => {}));
+  for (const release of previous) release();
+  return next;
+}
+
 /** Keeps bounded prefetch subscriptions alive without rendering them. */
 export function usePrefetch(loader: ThumbnailLoader, refs: readonly PreviewRef[]): void {
+  const releases = useRef<readonly (() => void)[]>([]);
   const key = refs.map((ref) => ref.digest).join('|');
   useEffect(() => {
-    const releases = refs.map((ref) => loader.subscribe(ref, 'prefetch', () => {}));
-    return () => { for (const release of releases) release(); };
+    releases.current = swapPrefetch(loader, refs, releases.current);
   }, [loader, key]);
+  useEffect(() => () => { for (const release of releases.current) release(); releases.current = []; }, []);
 }
 
 /**
