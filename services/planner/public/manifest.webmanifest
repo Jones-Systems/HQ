@@ -1,0 +1,9 @@
+{
+  "name": "Planning",
+  "short_name": "Planning",
+  "start_url": "/#/glance",
+  "display": "standalone",
+  "background_color": "#f6f5f1",
+  "theme_color": "#3a50c9",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

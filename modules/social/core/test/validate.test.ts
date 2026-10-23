@@ -96,3 +96,34 @@ describe('Social run helpers', () => {
     expect(checkDraft({ title: 'T', brand_id: 5 }, { features: [] })).toMatchObject({ ok: false, error: { message: MESSAGES.unknownBrand } });
   });
 });
+
+// Shared source-data cases also run in the owning service; no private implementation is imported.
+import { readFileSync } from 'node:fs';
+const slotCases = JSON.parse(readFileSync(new URL('./fixtures/planning-slot-cases.json', import.meta.url), 'utf8')) as { name: string; planned_date: string; planning_slot: unknown; error: string | null }[];
+import { FEATURE_HQ_EDITORIAL_TIMEBOX } from '../port';
+import { checkSlot, SLOT_MESSAGES } from '../timebox';
+
+describe('service-backed editorial time validation', () => {
+  it.each(slotCases.filter((item) => item.name !== 'duration-float'))('$name', (item) => {
+    const result = checkSlot(item.planning_slot, item.planned_date, [FEATURE_HQ_EDITORIAL_TIMEBOX]);
+    expect(result.ok ? null : result.error.message).toBe(item.error);
+    if (result.ok) expect(result.value).toEqual(item.planning_slot);
+  });
+  it('classifies the service-only float lexeme: JavaScript canonicalizes 30.0 to integer 30', () => {
+    const item = slotCases.find((entry) => entry.name === 'duration-float')!;
+    expect(item.error).toBe(SLOT_MESSAGES.duration);
+    expect(JSON.parse('{"duration_minutes":30.0}')).toEqual({ duration_minutes: 30 });
+    expect(JSON.stringify(item.planning_slot)).toContain('"duration_minutes":30,');
+    expect(checkSlot(item.planning_slot, item.planned_date, [FEATURE_HQ_EDITORIAL_TIMEBOX]).ok).toBe(true);
+  });
+  it('gates unsupported times, omits legacy null and canonicalizes enabled omission to null', () => {
+    expect(checkSlot({ start: '09:00', duration_minutes: 30, timezone: 'UTC' }, '2026-10-22', [])).toMatchObject({ ok: false, error: { message: SLOT_MESSAGES.unsupported } });
+    expect(checkSlot(null, '', [])).toEqual({ ok: true, value: undefined });
+    expect(checkSlot(undefined, '', [FEATURE_HQ_EDITORIAL_TIMEBOX])).toEqual({ ok: true, value: null });
+  });
+  it('validates slot after archive and before brand and version', () => {
+    const fields = { title: 'Test', planned_date: '2026-10-22', planning_slot: {}, brand_id: 3, id: 'id' };
+    expect(checkDraft({ ...fields, archived: 'bad' }, { features: [FEATURE_HQ_EDITORIAL_TIMEBOX] })).toMatchObject({ ok: false, error: { message: MESSAGES.archived } });
+    expect(checkDraft(fields, { features: [FEATURE_HQ_EDITORIAL_TIMEBOX] })).toMatchObject({ ok: false, error: { message: SLOT_MESSAGES.shape } });
+  });
+});

@@ -31,6 +31,8 @@ Every lane, including reviewers and the root integration tasks, does all of the 
 6. **Record** the guidance source identity and any material conflict in your lane-local continuity: the PR body or `docs/evidence/hq-social-work/<lane>/README.md`.
 
 Model routing for this campaign is the explicit owner override: every lane runs `claude-opus-5-5` at `high` effort. Workstream mode is Claude Frontier. Lanes launch **no descendants** and do not switch models.
+
+Mutating children launch only as native HQ worktree children, never via prompt path guards (`ctx.child-launch-containment.001`).
 <!-- codex-section:end id="spec.hq-social-work#ctx.launch-preflight.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ctx.project-summary.001" -->
@@ -48,7 +50,7 @@ Both domains run against synthetic fixture adapters first. Each later connects t
 
 | Capability | Delivered status | This plan |
 | --- | --- | --- |
-| HQ Electron shell, rail, appearance, contracts | Assigned to T0; source not yet published or accepted | Consumed, never re-implemented |
+| HQ Electron shell, rail, appearance, contracts | T0 source `33dfe44`, accepted at guidance-only head `35f9a3e` for bounded development; native Electron unverified | Consumed, never re-implemented |
 | Design domain | Separate Design coordinator and lanes | Out of scope except shared visual integration |
 | Social workspace (Fieldnotes): drafts, brands, planning date, run receipts | Delivered in a private repository (Python 3.13 stdlib HTTP + SQLite) | HQ client UI and port; service unchanged |
 | Eight offline Social tools | Delivered; JSON-first browser recipes, three with simple fields | Form/file-import workbenches over the same native inputs |
@@ -75,9 +77,9 @@ A Social tool run is the only execution-class call in this plan. It happens only
 
 Shared presentation lives in `packages/hq-ui/`. Live service access goes through the main process via a root-owned, typed desktop capability (`iface.service-bridge.001`). The T0 candidate's CSP sets `connect-src 'none'`, so the renderer cannot fetch directly. The renderer never receives a service address or token and cannot name arbitrary URLs.
 
-**Non-goals:** a Design feature; a replacement of Fieldnotes or the Planner service; data migration; service/schema changes in either private repository; posting, collection or account connection; a task scheduler or execution from cards; Trello import; CI workflows; signing, installation or deployment.
+**Non-goals:** a Design feature; a replacement of Fieldnotes or the Planner service; data migration; service/schema changes in either private repository; posting, collection or account connection; a task scheduler or execution from cards; Trello import; CI workflows except the gated `task.joint-ci.001`; signing, installation or deployment.
 
-**Finish line for this campaign.** Every lane publishes its candidate PR with checks and visual evidence. Root integrates, but merge is held for integration-owner agreement. Installed-app acceptance is a separate later stage.
+**Finish line for this campaign.** Every lane publishes its candidate PR with checks and visual evidence. Integration runs in isolated assembly branches (`ctx.integration-stages.001`). Merge is held for integration-owner agreement. Installed-app acceptance is a separate later stage.
 <!-- codex-section:end id="spec.hq-social-work#ctx.project-summary.001" -->
 
 ## Requirements
@@ -101,7 +103,7 @@ Shared presentation lives in `packages/hq-ui/`. Live service access goes through
   - **Why the pin is required.** T2's Chromium 155 probe found that an embedded iframe's `prefers-color-scheme`, and an SVG used as `<img>`, follow the owner element's used `color-scheme`. Without the pin, switching HQ's appearance would silently re-theme a preview.
   - **No alteration.** No filter, blend mode, opacity or recolour is ever applied to preserved content. Global appearance changes chrome only.
 - **RS-3.** `packages/hq-ui` provides accessible primitives: Button, IconButton, Menu with roving focus, Dialog with focus trap and Escape, Toast with an action (Undo), Tabs, StatusChip with a text label (never color alone), SaveIndicator (saved / saving / unsaved / failed with retry / offline, kept on this device / unknown result with check; local persistence only, never execution) and StateView (empty / loading / error / offline / unavailable / unknown). All are keyboard operable with a visible focus ring in both themes and respect reduced motion.
-- **RS-4.** After a named UI owner is explicitly assigned, the shell chrome (`apps/desktop/src/App.tsx`, `apps/desktop/src/styles.css`, released by T0 but **unassigned**) adopts T2's tokens. It loads `hq-tokens.css` and then T2's `t0-bridge.css`, and retires T0's palette blocks. It covers: the 40px titlebar with project context and the Light/Dark/System radio group (a menu button below 960px), the 64px rail Design → Social → Work with T0's unavailable slots as `aria-disabled`, and the compact secondary-nav drawer below 960px. Rail order, per-domain destination restoration and appearance persistence keep T0's behavior.
+- **RS-4.** After a named UI owner is explicitly assigned, the shell chrome (`apps/desktop/src/App.tsx`, `apps/desktop/src/styles.css`, released by T0 but **unassigned**) adopts T2's tokens. It loads `hq-tokens.css` and then T2's `t0-bridge.css`, and retires T0's palette blocks. It covers: the 40px titlebar with project context and the Light/Dark/System radio group (a menu button below 960px), the 64px rail Design → Social → Work with T0's unavailable slots as `aria-disabled`, and the compact secondary-nav drawer below 960px. Rail order, per-domain destination restoration and appearance persistence keep T0's behavior. Current shell ownership, cycling appearance and footer context supersede this proposal under `spec.hq-ui-modernization#req.interface.001`; the modernization coordinator owns App/state/styles.
 <!-- codex-section:end id="spec.hq-social-work#req.shell.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#req.social-content.001" -->
@@ -395,11 +397,34 @@ Glance, List, Calendar, Timeline, Review, Archive and By date render the synthet
 <!-- codex-section:end id="spec.hq-social-work#ac.work-views.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.work-domain.001" -->
-The Work descriptor mounts in the T0 registry. View, filters, scroll and selection restore across a domain round trip. Quick capture is scoped to Work focus. The Work module imports only `@hq/contracts` and `@hq/ui` across package boundaries.
+**Descriptor.**
+
+- `@hq/work` exports `WorkModule` both named and as the default.
+- One Work session/store is shared by board, detail, capture and views. A module remount reuses it; it is not recreated.
+- `home` opens the Board. Week grouping uses Planner settings `week_start`.
+- The label *"Planner items aren't project-scoped · showing all planning"* is visible, and nothing filters by `area` as a project.
+
+**Navigation and undo.**
+
+- Destinations follow `iface.domain-module.001` and pass `isDestination`. Quick capture is scoped to Work focus.
+- The outer Ctrl/⌘+Z handler ignores events that are `defaultPrevented` or come from typing controls. A test proves that one nested keypress consumes exactly one undo entry.
+
+**Real registry round trip.** A test drives the T0 `App` with `MODULES` through Design → Social → Work → Work. It proves the following:
+
+- `MODULES.work` is `WorkModule`.
+- Work comes back with its view, filters, selection, scroll and unsaved text restored.
+- Domain switches add no port calls, writes or execution.
+
+**Boundaries.**
+
+- Across HQ workspace boundaries, the Work module imports only `@hq/contracts` and `@hq/ui`. React and runtime imports stay allowed, as in the existing modules.
+- The transferred `modules/work/skeleton.test.ts` asserts the descriptor mount, dependency resolution and no navigation on mount.
+- Board, detail, capture, views, core and UI kit trees are byte-identical to their accepted commits.
+- Light and dark evidence is attached.
 <!-- codex-section:end id="spec.hq-social-work#ac.work-domain.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.integration.001" -->
-On the integrated candidate:
+On the integrated candidate. That is the Social+Work assembly with T0's Design placeholder, or the joint assembly with Design's real module once it exists.
 
 - Design → Social → Work → Design restores each domain, with Design's own tests unchanged.
 - An explicit theme survives reload, and System follows OS changes.
@@ -408,6 +433,129 @@ On the integrated candidate:
 - The deduplicated union of affected checks passes on the exact head.
 - A cumulative light and dark evidence set is attached.
 <!-- codex-section:end id="spec.hq-social-work#ac.integration.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#ac.sw-assembly.001" -->
+**The Social+Work assembly** is one branch owned by the assembly owner, in its own native isolated checkout. It starts at the published plan head and adds ordinary `--no-ff` dependency merges of exactly:
+
+- the accepted Social domain head `9735b741e94baad83d9f7dc5f3bb8ce9c3778b2d`, which contains core, content and workbench;
+- the accepted Work-domain head, which contains board, views and core.
+
+The UI kit `935dedf` arrives identically through both. Authored paths are:
+
+- `apps/desktop/src/social-work.integration.test.tsx`, a new file assigned by the root as exact test-file custody (not a general source mandate). The `dom` project and root typecheck already discover it. If another owner or branch is observed on this path, only this file holds;
+- `docs/evidence/hq-social-work/integration/social-work/**`;
+- `apps/desktop/src/modules.tsx`, only if genuinely required.
+
+Existing Social and Work tests stay read-only. The assembly reads `modules/social`, `modules/work`, `packages/hq-ui` and their accepted evidence for their public mount and export contracts.
+
+**What must hold.**
+
+- Every merge is conflict-free, and incoming accepted trees are byte-identical in the result.
+- No lane branch moves and no lane PR is merged.
+- T0's Design placeholder is unchanged.
+- `apps/desktop/src/modules.tsx` changes only if the named exports require it.
+
+**On the exact assembly head, once:** fresh `npm ci`, `npm run typecheck`, `npm test` and `npm run build`. The run must show:
+
+- the unique inherited test files from each accepted candidate;
+- the new integration tests;
+- the full set of five Social/Work groups.
+
+This is the first combined run of all the lanes. It is **combined verification, not independent review**. Totals are reported by test file and section identity, not as sums of the lanes' reported counts.
+
+**Usable** means Social and Work are actually mounted in the real shell with labelled fictional data. The evidence proves:
+
+- integration tests in `apps/desktop/src/social-work.integration.test.tsx` for `ac.integration.001` with Design as the placeholder, including cross-domain round trips that restore both domains' state;
+- one keypress consumes one undo entry;
+- navigation, domain and page switches make zero writes and zero execution calls. Explicit card, date or horizon moves make only their single intended planning mutation (and explicit Undo), with zero execution;
+- an early reviewable walkthrough, on fixture data only with no endpoints, covering Social and Work in light and dark at usable widths, with no console errors under the exact app CSP;
+- Electron, only through an approved route on this host. Otherwise it is reported as **unverified**; no install or sudo.
+
+**Publication.** One merge-held, non-draft PR from the native branch (logical name `work/hq-sw-assembly`) against `work/hq-social-work-plan`. Its body separates authored paths from inherited lane layers. "No CI configured" is not green CI.
+<!-- codex-section:end id="spec.hq-social-work#ac.sw-assembly.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#ac.joint-integration-gate.001" -->
+Explicit activation predicate for the future joint child C. Every binding below is recorded as an exact value. None is inferred from a handoff, proposal, silence, a moving branch or a local-only head.
+
+| Binding | Required value | State at T1's read (2026-10-20) |
+| --- | --- | --- |
+| **D**, the Design parent | The exact commit SHA that the Design owner names as its **accepted**, published assembly head, including Design-owned adapters, storage and section checks, plus the published Design branch that contains it | **Unbound.** No Design assembly branch is published. The local `work/hq-design-integration` head is not a parent. |
+| **S**, the Social+Work head | The exact published head of `task.domain-integration.001`, accepted by its fan-in | **Bound:** `562986d1852d7b4ef101ff6d4c9340c3751c727a`, PR #36 (root-accepted fixture/source assembly). |
+| **Design wiring** | Design's shared-wiring patch at an exact revision (Design slot of `modules.tsx`, root TypeScript/Vite resolution, mount), or an explicit Design decision to keep T0's placeholder | **Unbound** |
+| **Root-file custody** | A written single-writer record, confirmed by Design for the joint phase, naming C as sole writer of the six R0 root paths: `package.json`, `package-lock.json`, `tsconfig.json`, `vitest.config.ts`, `apps/desktop/package.json`, `apps/desktop/src/modules.tsx`. It must also record a decision on `apps/desktop/vite.config.ts`, which is outside T0's release and unassigned. | **Unbound.** T0's release covered R0/R1 only. |
+| **C release** | The root's exact plan revision, base (D), branch and ownership release for C | **Unbound.** The current child allowance is A+B+WK-C only. |
+
+Design's own predecessor PRs need not merge before this stacked continuation; the gate needs D accepted and published, not merged.
+<!-- codex-section:end id="spec.hq-social-work#ac.joint-integration-gate.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#ac.joint-root-checks.001" -->
+On the joint branch (route in `ac.joint-assembly.001`), C extends root discovery as sole writer of the six R0 root paths. Design's section files and configs are read and called unchanged.
+
+- `npm run typecheck` covers each Design section's TypeScript project named by Design's accepted plan.
+- `npm test` runs each section's tests through its declared commands: Node `.test.mjs` tests, `tsx` cases, and Vitest where a section has its own config. Some Design sections (connector, discovery, flows, imports, projects) and `packages/design-store` have no `vitest.config.ts`. Their actual commands are used, and no config is invented for them.
+
+**Discovery evidence** is an inventory, not a total:
+
+- every unique Node, DOM and section test file;
+- the actual config or command that discovers each one;
+- every Social/Work test file from S, still discovered.
+
+Summed counts are never closure.
+
+**Dependencies.** Inside the named root-file custody, C may make bounded dependency or lockfile updates through `npm`, followed by a fresh `npm ci` and the full check set. A change outside that custody, or of unknown provenance, holds. A needed `apps/desktop/vite.config.ts` change stops until its owner is assigned.
+<!-- codex-section:end id="spec.hq-social-work#ac.joint-root-checks.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#ac.joint-assembly.001" -->
+The joint continuation is **one additive branch**, on the supported native child route:
+
+- C's native worktree child checkout and branch are generated at T1's committed local plan head P. The installed `delegate_task` worktree isolation cannot select D. No base override exists, and a prompt-level `cd` or branch switch would not bind it.
+- In that own branch, C normally merges (`--no-ff`) exactly D, then exactly S, and proves both are ancestors of the head.
+- C's compatibility commits sit on top.
+- It is published as one non-draft, merge-held PR whose base is the published Design branch that contains D, so the diff shows only Social/Work content plus compatibility.
+
+The history is stated truthfully: D is an ancestor reached by merge, not the literal first-parent origin. The owner's stack-on-Design requirement is met through that ancestry and the PR base. Starting at D directly would need an explicitly bound ordinary `t3_thread_launch` workspace strategy from the HQ project. That is neither needed nor preferred while the native child route works.
+
+All prior PR refs and history are preserved. There is no rebase, no force push and no mass retarget of PR #3 or #24–#29, and Design is never merged into PR #3.
+
+- Design's descriptor goes in the Design slot of `MODULES` exactly as Design's wiring patch specifies. The Social and Work registrations are unchanged.
+- C's new test, `apps/desktop/src/joint.integration.test.tsx`, proves `ac.integration.001` with the real Design module. Design's own tests are unchanged.
+- B's `apps/desktop/src/social-work.integration.test.tsx` is an immutable dependency unless it is separately transferred.
+- The deduplicated union of Design's and Social/Work's affected checks, as inventoried by `ac.joint-root-checks.001`, passes on the exact head.
+- Design adapters, storage, sandbox and component policy are Design-owned inputs, never edited.
+- `App.tsx`, `styles.css`, contracts and IPC stay held. A Design padding or mount need stops that effect only.
+- A clean textual merge was inferred from disjoint committed paths (scout, 2026-10-20). Runtime compatibility is proven only by C's checks and browser evidence on the exact head.
+<!-- codex-section:end id="spec.hq-social-work#ac.joint-assembly.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#ac.joint-electron-smoke.001" -->
+The joint head runs as the Electron dev app on this host, with fixture adapters only and no endpoints. The run must show:
+
+- The app launches.
+- The rail switches Design, Social and Work, with each destination restored.
+- Light, Dark and System all work, and an explicit theme survives reload.
+- Every execution spy reads zero.
+- Readback confirms the CSP and that the preload exposes only the allowed members.
+- Design component execution stays disabled pending Design's sandbox decision.
+
+Native gaps, such as macOS, signing, screen readers and 2×, are recorded as gaps, not passes.
+<!-- codex-section:end id="spec.hq-social-work#ac.joint-electron-smoke.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#ac.ci-adoption.001" -->
+Explicit activation predicate:
+
+- The root has read the Jones shared GitHub Actions guidance.
+- The owner of the existing foundation workflow (PR #7, Design-owned) agrees to the added workflow and its triggers.
+- M Jones has not withheld CI adoption.
+<!-- codex-section:end id="spec.hq-social-work#ac.ci-adoption.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#ac.joint-ci.001" -->
+A pull-request workflow does the following:
+
+- runs `npm ci`, `npm run typecheck`, the discovered affected checks and `npm run build`;
+- uses no secrets, environments, deployment, release or self-hosted runners;
+- leaves the Design-owned foundation workflow unchanged unless its owner agreed.
+
+The first run on a real PR head is read back and recorded. Required-check and branch-protection settings are not part of this task.
+<!-- codex-section:end id="spec.hq-social-work#ac.joint-ci.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ac.reference-contract-custody.001" -->
 Explicit activation predicate: the root has actually accepted single-writer custody of `packages/contracts/src/` and `apps/desktop/src/App.tsx` for the reference additions, and the Design coordinator has confirmed the additive optional `ModulePort` members are source-compatible with Design's consumers.
@@ -694,6 +842,140 @@ The 13 captures and zero-execution checks are **mockup evidence** against an in-
 **Material contract conflicts: none found.** P-10 option B matches `iface.service-reference-extensions.001`. T4's "Linked across HQ" rows (a Design annotation with a revision, a Jones request with an observed status that never changes the card, and an unavailable target with a snapshot) match RL-4 through RL-6 and RL-10. Jones requests are a target kind for a provider owned outside this plan; until one exists they resolve as `unknown`.
 <!-- codex-section:end id="spec.hq-social-work#ctx.work-design-binding.001" -->
 
+<!-- codex-section:begin id="spec.hq-social-work#ctx.integration-bindings.001" -->
+## Integration bindings (plan revision 4, 2026-10-20)
+
+**Accepted lane candidates.** These are root-accepted for **fixture/source use only**. Check results are author-reported. The root did not rerun them, and no CI exists on these bases. Nothing here is native, live or integrated acceptance.
+
+| Task | Lane | Accepted commit | Branch, PR → base |
+| --- | --- | --- | --- |
+| `workspace-skeleton` | T1 | `cfdab378e28940662ddb6e731264afca164a1957` | `work/hq-social-work-plan`, PR #3 → `work/hq-foundation` (`35f9a3e`) |
+| `ui-kit` | UI | `935dedf78e04a2697bdc02d85864546948ffcb8c` | `work/hq-ui-kit`, PR #24 → plan branch |
+| `social-core` | SOC-C | `83dafc50ef9e4e1b296baf2f1f9ad2d6b3115f04` | inside `work/hq-social-content` |
+| `social-content` | SOC-C | `5f5df2a7c3881091a6d038be32fdee5ab23ef5e2` | `work/hq-social-content`, PR #25 → plan branch |
+| `social-workbench` | SOC-W | `bffd43343e83173f6814db7771ca6f5b70536494` | `work/hq-social-workbench`, PR #27 → `work/hq-social-content` |
+| `social-domain` | SOC-C | `9735b741e94baad83d9f7dc5f3bb8ce9c3778b2d` | `work/hq-social-domain`, PR #29 → `work/hq-social-workbench` |
+| `work-core` | WRK-P | `a8c791a877bd28974894e1d48913d0ff460b6f00` | inside `work/hq-work-planner` |
+| `work-views` | WRK-P | `8a3261dbd0d98dac3553ffc594cd8a88cc4dcb04` | `work/hq-work-planner`, PR #26 → plan branch |
+| `work-board` | WRK-B | `3ca74d7479283d8ac7acf7c363bd262f34578ed4` | `work/hq-work-board`, PR #28 → `work/hq-work-planner` |
+| `work-domain` | Work-domain child | `3426da769ca6a5cf1ba561859039b14fc745457a` | `t3/work-domain-integration`, PR #31 → `work/hq-work-board` |
+| `domain-integration` | B | `562986d1852d7b4ef101ff6d4c9340c3751c727a` | `t3/social-work-domain-assembly`, PR #36 → plan branch |
+
+**Notes on individual candidates.**
+
+- **Work domain.** It was accepted by T1's fan-in (2026-10-20) for fixture/source use. It contains `72854ab` and `3ca74d7` via merge `8c2f841`, with authored paths in scope and dependency trees byte-identical. Author-reported checks: Work 391 tests in 23 files, full 465 in 33. WD-1/2 (P3): a switch commits only an already pending explicit detail edit; with none pending, it writes nothing.
+
+- **Social domain.** Its native branch label is stale; physical branch guards are recorded by the root.
+- **Work board.** It includes the normal dependency merge `3654a5a862b6896811cb265c3196b1fdd54b7e2d`, whose parents are exactly `8cdb95e` and `8a3261d`. That merge cleared PR #28's earlier conflict, which had two merge bases.
+  - The root checked 58 authored paths and found that the core, views, UI and root config/lock trees are byte-identical to `8a3261d`.
+  - The board lane reports 356 Work tests in 18 files and 430 full tests in 28 files, plus typecheck and build.
+  - PR #28 now reads MERGEABLE/CLEAN; the advisory planner's earlier "unaccepted, conflicting" wording is superseded.
+- **All seven PRs** (#24–#29 and #3) read OPEN, non-draft, MERGEABLE/CLEAN at T1's read on 2026-10-20. That is GitHub mergeability, not merge approval.
+
+**Source and dependency topology** (read by T1 at the commits above).
+
+- Every candidate descends from R1 `cfdab378`. None changes a root manifest, the lockfile, `tsconfig.json`, `vitest.config.ts`, `apps/desktop/**` or `packages/contracts/**` relative to R1.
+- `9735b74` contains `83dafc5`, `5f5df2a` and `bffd433`. `3ca74d7` contains `a8c791a` and `8a3261d`. Both contain the UI kit `935dedf`.
+- Social (`modules/social/**`) and Work (`modules/work/**`) write disjoint paths. `git merge-tree` of `9735b74` with `3ca74d7` is conflict-free, and so is the plan head with `9735b74`.
+- R1's `modules.tsx` already imports named `SocialModule` and `WorkModule`. Social exports both named and default. Work needs the same from `task.work-domain.001`.
+- Design branches start from `33dfe44`. Relative to it, the only shared file a Design lane changes is `tests/check-groups.toml` (PR #4).
+
+**Owner decisions, unchanged:**
+
+- D-1: three checked files only;
+- D-2: the source bridge is selected; live endpoints and access stay held;
+- D-3: deferred;
+- D-4: references are planned; schema effects are separately gated.
+<!-- codex-section:end id="spec.hq-social-work#ctx.integration-bindings.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#ctx.child-launch-containment.001" -->
+## Child launch containment
+
+**Native binding.** A mutating child, such as the Work-domain executor, launches only through `delegate_task` with `isolation: "worktree"` **from a parent natively bound to an HQ checkout**.
+
+- The child natively starts at the parent's local commit.
+- The parent verifies the child's native checkout path, branch, HEAD ancestry and model (`claudeAgent` / `claude-opus-5-5` / `high` / `fastMode: false`) before the child's first mutation.
+
+**Rejected.** The advisory option of a shared-isolation child, steered by prompt-level HQ paths or `git -C` guards, is rejected. The root is natively bound to the Codex V3 repository, so a worktree child launched from it would be a Codex V3 checkout.
+
+**Eligible parent.** This plan's T1 coordinator thread is HQ-bound on `work/hq-social-work-plan`. It may act as the mechanical launch parent only under an exact root launch direction. The root's 2026-10-20 direction, carrying the owner's authorization, names exactly two children (recorded in the Work Note):
+
+- `task.work-domain.001`, request ID `hq-work-domain-impl-20261020-r1`;
+- `task.domain-integration.001`, request ID `hq-sw-assembly-impl-20261020-r1`, released only after T1 has inspected and accepted the Work-domain candidate.
+
+Both use `claudeAgent` / `claude-opus-5-5` / `high` / `fastMode: false` and start at T1's committed, published plan head. No other child, reviewer or top-level thread is launched.
+
+**Dependency inside the child.** The child supplies its dependency by a normal merge of exactly the accepted board `3ca74d7` (which contains views, core and UI kit) inside its own native checkout. That never advances the plan branch, a lane branch or another thread's checkout. Incoming trees stay byte-identical. A conflict holds.
+
+**Proposed publication** (a working default; the root may choose another base).
+
+- Work domain: the child's native branch, with a PR against `work/hq-work-board`. The child's authored-path diff (`git diff 3ca74d7...HEAD -- <write_scope>`) is the scope evidence.
+- Social+Work assembly: the child's native branch, with a PR against `work/hq-social-work-plan`. Its inherited layers are the two accepted lane heads.
+- The full Work-domain PR diff also shows plan-branch documentation commits that the child inherited from its parent's start commit. These are T1-owned documents, the immutable PR #3 dependency, not child-authored paths.
+
+**Recording.** The child is a task-lifecycle child with its own `taskId` and `clientRequestId`, never a new top-level thread. It launches no descendants.
+<!-- codex-section:end id="spec.hq-social-work#ctx.child-launch-containment.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#ctx.integration-stages.001" -->
+## Integration stages
+
+Integration happens in **isolated assembly branches** owned by the assembly owner, using ordinary local merges of exact accepted heads. Lane branches stay frozen, and lane PRs are not merged into one another. Local assembly merges are not PR merges.
+
+**Owner direction (2026-10-20).** The Social/Work stack sits on top of the Local Design Hub stack, and its content is made compatible on the Design shared base through the joint continuation (`ac.joint-assembly.001`). That continuation is a native child branch from plan head P with normal merges of exact D and S, and a PR based on the Design branch containing D.
+
+**Branch chains and native stacks are recorded separately.** Every chain here is a published base-branch chain. GitHub's `PullRequest.stack` is null on all 24 open PRs (scout read, 2026-10-20), so no native stack exists. Any grouping of our PRs is derived, not native.
+
+**Holds and interpretations (root, 2026-10-20).**
+
+- The hold is on **PR merge**. Publishing an authorized, scoped, non-draft PR needs no new approval.
+- Design's predecessor PRs need not merge before stacked work. The continuation uses the actual accepted, published parent once it exists, and keeps the real custody and runtime acceptance gates.
+- Design's owner controls Design source, publication and plan. This plan does not contact or redirect the Design coordinator. Any cross-owner proposal goes on shared issue #1 as a proposal only, and custody acceptance is never manufactured.
+
+| Stage | Task | Starts when | Output |
+| --- | --- | --- | --- |
+| Work domain | `task.work-domain.001` | Now: board `3ca74d7` is accepted | A Work-domain candidate (`ctx.child-launch-containment.001`) |
+| Social+Work assembly | `task.domain-integration.001` | `ui-kit`, `social-domain` and `work-domain` are accepted | A merge-held assembly PR with the Design placeholder, combined checks and an early walkthrough (`ac.sw-assembly.001`) |
+| Joint root checks (future C) | `task.joint-root-checks.001` (explicit) | Every binding in `ac.joint-integration-gate.001` | Native joint branch from P with exact D then S merged; root discovery inventory |
+| Joint assembly (future C) | `task.joint-assembly.001` (explicit) | The same gate, plus the root checks | One additive merge-held PR based on the Design branch containing D |
+| Electron smoke | `task.joint-electron-smoke.001` | Joint assembly accepted | Fixture-only Electron evidence |
+| CI adoption | `task.joint-ci.001` (explicit) | `ac.ci-adoption.001`, plus the root checks | A PR workflow |
+| Campaign verification | `task.campaign-verification.001` | `domain-integration` and `reference-integration`, unchanged | The final campaign record |
+
+**Design-owned inputs, never Social/Work tasks.** These come from Design's accepted plan: Design's integration plan, its assembly head, its grouped adapters (DesignDomain/ShellContextPort descriptors, catalog, providers, compare, annotations, requests, imports, connector), storage, the sandbox decision, its section check commands and its Electron recovery/isolation proof. The Design coordinator's handoff (observed 2026-10-20, read-only) confirms an isolated integration worktree, an early Design app view, grouped adapters and Electron recovery/isolation proof. It also states that root manifests, config and the registry were handed to the Social/Work T1. Its fresh planner result was still pending when last observed. **No agreement is inferred, no message is sent, and Design's 14-lane integration is not duplicated.**
+
+**Shared boundaries and custody:**
+
+- **Root files.** The six R0 root paths have one coordinating owner. T0 released them to T1 for R0/R1 only. The Social+Work assembly needs none of them unless a registry edit proves necessary. The future C is the *proposed* sole writer in the joint branch, but only once `ac.joint-integration-gate.001` binds custody. This plan creates no C checkout and makes no C source edit.
+- **`App.tsx` and `styles.css`** are unassigned.
+- **Contracts, IPC and the reference shell** are held: `ac.service-bridge-approval.001` and `ac.reference-contract-custody.001`.
+- **`tests/check-groups.toml`** is Design-owned. The Social/Work delta (issue #1, comment 6280106200) remains a projection until it is adopted.
+- **Workflows and catalog.** Design owns `.github/workflows/foundation.yml` (PR #7), its planned `design-sections.yml` and `tests/check-groups.toml`. Neither T1 nor C holds workflow custody. Only the one new file `.github/workflows/hq-social-work.yml` may be added, and only if `ac.ci-adoption.001` is satisfied.
+- **`apps/desktop/vite.config.ts`** is outside T0's release and unassigned.
+
+**Verification semantics.**
+
+- An aggregate rerun on an assembly head is combined verification. It is not independent review.
+- Discovery is proven by unique inherited test files and sections plus the new integration tests. Sums of lane-reported counts, or a claim that every total is unchanged, are not evidence.
+- Lockfile changes belong to the single root-file writer, with coherent install and checks. No generic approval gate is invented for them.
+
+**Merge order.** None is adopted. Each PR merge remains held. It needs the exact qualified candidate, Design agreement, and an accepted merge policy fixing repository, base, method, checks, reviews, thread resolution, scope and readback.
+
+**Material shared-boundary unknowns:**
+
+- the exact D, and the Design branch that will contain it (no Design assembly branch is published yet);
+- whether D includes `35f9a3e` or PR #7 (path-disjoint either way);
+- runtime compatibility on the joint head (no trial merge has been run);
+- who holds root-file custody after R1, its joint confirmation, and the `vite.config.ts` owner;
+- the owner of `App.tsx` and `styles.css`;
+- Design's sandbox decision;
+- whether joint discovery needs a `tsx` devDependency, and with it a lockfile change;
+- whether Electron runs cleanly on this Linux host;
+- the PR #7 owner's CI agreement;
+- whether any registry edit is needed, and Design's wiring patch revision;
+- that no root has yet rerun lane tests;
+- the stale native branch label on the Social domain.
+<!-- codex-section:end id="spec.hq-social-work#ctx.integration-stages.001" -->
+
 <!-- codex-section:begin id="spec.hq-social-work#ctx.change-surface.001" -->
 ## Exact Change Surface And Ownership
 
@@ -701,14 +983,18 @@ The 13 captures and zero-execution checks are **mockup evidence** against an in-
 
 | Lane / owner | Literal write scope | Never writes |
 | --- | --- | --- |
-| **HQ root (integration owner)** | `package.json`, `package-lock.json`, root configs, `modules/social/package.json`, `modules/social/tsconfig.json`, `modules/work/package.json`, `modules/work/tsconfig.json`, `packages/hq-ui/package.json`, `tsconfig.json`, `vitest.config.ts`, `apps/desktop/package.json`, `apps/desktop/src/modules.tsx`, `apps/desktop/src/environment.d.ts`, `packages/contracts/src/index.ts`, `packages/contracts/src/services.ts`, `apps/desktop/electron/services.ts`, `apps/desktop/electron/services.test.ts`, `apps/desktop/electron/main.ts`, `apps/desktop/electron/preload.cts`, `docs/evidence/hq-social-work/foundation/`, `docs/evidence/hq-social-work/integration/`, `docs/evidence/hq-social-work/verification/` | Module feature code |
+| **HQ root (integration owner)** | `package.json`, `package-lock.json`, `tsconfig.json`, `vitest.config.ts`, `modules/{social,work}/{package,tsconfig}.json`, `packages/hq-ui/package.json`, `apps/desktop/package.json`, `apps/desktop/src/{modules.tsx,environment.d.ts}`, `packages/contracts/src/{index,services}.ts`, `apps/desktop/electron/{services,services.test,main}.ts`, `apps/desktop/electron/preload.cts`, `docs/evidence/hq-social-work/{foundation,integration,verification}/` | Module feature code |
 | **UI** (HQ-UI lane) | `packages/hq-ui/src/`, `packages/hq-ui/test/`, `packages/hq-ui/README.md`, `docs/evidence/hq-social-work/ui/`; after custody transfer: `apps/desktop/src/App.tsx`, `apps/desktop/src/styles.css` | Contracts, root files, `modules/**` |
 | **SOC-C** (Social content lane) | `modules/social/core/`, `modules/social/content/`, `modules/social/index.tsx`, `modules/social/nav/`, `modules/social/live/` (when activated), `docs/evidence/hq-social-work/social-content/` | `modules/social/workbench/` |
 | **SOC-W** (Social workbench lane) | `modules/social/workbench/`, `docs/evidence/hq-social-work/social-workbench/` | `modules/social/core/` (proposes changes to SOC-C) |
 | **WRK-P** (Work planner lane) | `modules/work/core/`, `modules/work/views/`, `modules/work/live/` (when activated), `docs/evidence/hq-social-work/work-planner/` | `modules/work/board/` |
-| **WRK-B** (Work board lane) | `modules/work/board/`, `modules/work/detail/`, `modules/work/capture/`, `modules/work/index.tsx`, `modules/work/nav/`, `docs/evidence/hq-social-work/work-board/` | `modules/work/core/` (proposes changes to WRK-P) |
-| **T1 planner** | this spec, `docs/work-notes/hq-social-work.md`, `docs/design/hq-shared-foundation.md` | Everything else |
-| **Design lanes / T0 / T2–T4** | their own published scopes | — |
+| **WRK-B** (Work board lane) | `modules/work/board/`, `modules/work/detail/`, `modules/work/capture/`, `docs/evidence/hq-social-work/work-board/`; later `modules/work/references/` | `modules/work/core/` (proposes changes to WRK-P) |
+| **Work-domain child** | `modules/work/index.tsx`, `modules/work/nav/`, `modules/work/skeleton.test.ts`, `docs/evidence/hq-social-work/work-domain/` | Other Work trees, UI kit, roots |
+| **Assembly owner** | B: `…/integration/social-work/`, `apps/desktop/src/social-work.integration.test.tsx`, `modules.tsx` if needed. Future C (gated): the six R0 root paths, `apps/desktop/src/joint.integration.test.tsx`, `…/integration/joint/`, `…/joint-smoke/` | Lane/Design source, catalog, workflows |
+| **T1 planner** | this spec, `docs/work-notes/hq-social-work.md`, `docs/work-notes/hq-social-work-tools/`, `docs/design/hq-shared-foundation.md`, `…/integration/integration-plan-validation.md` | Everything else |
+| **Unassigned / held** | `App.tsx`, `styles.css`, `apps/desktop/vite.config.ts`; contracts, IPC, reference shell | — |
+| **Design-owned** | `modules/design/**`, `packages/design-store/**`, `tests/check-groups.toml`, `.github/workflows/{foundation,design-sections}.yml` | — |
+| **Others** (Design, T0, T2–T4) | own | — |
 
 ### Serialization rules
 
@@ -717,11 +1003,12 @@ The 13 captures and zero-execution checks are **mockup evidence** against an in-
 - **Fixtures.** Synthetic fixtures live in `core/fixtures/` and have one writer. Consumers add view-specific fixtures inside their own directory.
 - **Generated output.** No generated output is committed. Builds go to ignored directories defined by T0.
 
-### Consumers
+<!-- codex-section:end id="spec.hq-social-work#ctx.change-surface.001" -->
+
+### Consumers (informational; not part of any capsule)
 
 - **Direct:** T0 registry and contracts; the `hq-ui` consumers (Social, Work, and optionally Design); the service bridge consumers (the two live adapters).
 - **Indirect:** the existing Fieldnotes and Planner web UIs, which share data and therefore concurrency. Neither service is changed.
-<!-- codex-section:end id="spec.hq-social-work#ctx.change-surface.001" -->
 
 ## Interface Contracts
 
@@ -965,6 +1252,8 @@ tests = ["modules/work/**/*.test.ts", "modules/work/**/*.test.tsx"]
 
 **Whole-repository commands, not catalog groups.** Every candidate also runs `npm run typecheck` and `npm run build`. UI-bearing candidates attach **manual** light and dark visual evidence with fictional data. Manual evidence is explicit and never counted as a passing group.
 
+**Joint discovery.** When `task.joint-root-checks.001` activates, Design's own `design-*` groups join the deduplicated union as Design-owned inputs. Discovery is proven by test file and section identity, not by summed counts.
+
 **Inactive until its files exist.** Bridge tests (`apps/desktop/electron/services.test.ts`) join `shell-integration` automatically through its glob once `task.service-bridge.001` creates them.
 
 **Note for the catalog owner.** Groups here use globs, where the Codex V3 contract expects exact test-module paths. The catalog owner may expand them to exact modules at integration.
@@ -991,6 +1280,8 @@ Unavailable browser or Electron capture is reported as a platform gap, not a pas
 
 **Required state matrix per surface:** empty, loading, error, offline or unavailable, saving, conflict where applicable, and unknown where applicable. Each state is checked in light and dark, by keyboard only, and with reduced motion.
 
+**Combined runs.** A rerun on an assembly head is combined verification, not independent review. It counts unique inherited test files plus new integration tests, identified by path.
+
 Machine Test Intents follow as `test.*` blocks.
 <!-- codex-section:end id="spec.hq-social-work#ctx.test-plan.001" -->
 
@@ -1005,7 +1296,11 @@ Machine Test Intents follow as `test.*` blocks.
 | **SOC-C** (Social content) | Social core port, fixture and hook; library, editor, brands, calendar; domain descriptor | Owns the Social seam and the content flows |
 | **SOC-W** (Social workbench) | Eight tool workbenches, runs, receipts, unknown handling, save-to-library | Distinct UX surface with substantial per-tool forms and results; independent after core |
 | **WRK-P** (Work planner) | Work core (model, validation, logic, fixture, hook) and the read/plan views Glance, List, Calendar, Timeline, Review, Archive, Lists | Owns the Work seam; the views share the core's date logic |
-| **WRK-B** (Work board) | Board, card, drag/keyboard/menu moves, capture, detail panel, domain descriptor, Work links | The Trello-like interaction core; independent after core |
+| **WRK-B** (Work board) | Board, card, drag/keyboard/menu moves, capture, detail panel, Work links | The Trello-like interaction core; independent after core |
+
+Revision 4 assigns `task.work-domain.001` to a fresh Opus child, not to the completed WRK-B thread (`ctx.child-launch-containment.001`). It adds root-owned integration tasks: `joint-root-checks`, `joint-assembly`, `joint-electron-smoke` and `joint-ci` (`ctx.integration-stages.001`).
+
+Revision 5 (2026-10-20) consumes the read-only Design-first stack scout. The joint tasks become a future child C's **one additive continuation**: a native child branch generated at plan head P, with normal merges of the exact accepted, published Design head D and then the accepted Social+Work head S, and a PR based on the Design branch that contains D. D, S, Design wiring, root-file custody and C's release are explicit unbound activation bindings (`ac.joint-integration-gate.001`). `vite.config.ts` is named as unassigned, and no workflow custody is implied. The A→B chain is unchanged.
 
 The D-4 references add work to existing lanes, not new lanes:
 
@@ -1069,13 +1364,24 @@ domain-integration + reference-shell + social-references + work-references → r
 
 Lanes do not publish code that assumes unbound T0 names.
 
+Integration chain (revision 4):
+
+```text
+work-views + work-board                     → work-domain (Opus child)
+ui-kit + social-domain + work-domain        → domain-integration (Social+Work assembly)
+domain-integration                          → joint-root-checks (explicit: joint gate)
+domain-integration + joint-root-checks      → joint-assembly (explicit: joint gate) → joint-electron-smoke
+joint-root-checks                           → joint-ci (explicit: CI adoption)
+domain-integration + reference-integration  → campaign-verification (unchanged)
+```
+
 ### Fan-in
 
-1. Each lane publishes one PR against the accepted T0 base. A lane that consumes a sibling core stacks on that core's exact commit.
-2. The root integrates in this order: R1 → UI ui-kit → SOC-C core → WRK-P core → content / workbench / views / board → domains → R-INT.
-3. The root runs the union checks on the integrated head and attaches cumulative evidence.
+1. Each lane publishes one PR against its verified base. A lane that consumes a sibling stacks on that sibling's exact commit.
+2. Integration uses isolated assembly branches (`ctx.integration-stages.001`). Lane branches and PRs stay frozen.
+3. The assembly owner runs the combined checks on each exact assembly head and attaches cumulative evidence.
 
-Merge is held.
+No merge order is adopted. Merge is held.
 <!-- codex-section:end id="spec.hq-social-work#ctx.task-plan.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#plan.implementation.001" -->
@@ -2194,12 +2500,15 @@ Merge is held.
   "schema_version": 1,
   "kind": "implementation",
   "profile_role": "builder",
-  "accountable_owner": "lane-work-board",
-  "objective": "Compose the Work domain descriptor and secondary navigation with view, filter, scroll and selection restoration, Work-scoped quick-capture shortcut, board presets and package-boundary import checks.",
+  "accountable_owner": "lane-work-domain",
+  "objective": "In a fresh native Opus child checkout (ctx.child-launch-containment.001), normally merge exactly the accepted board 3ca74d7 into the child's own branch, then compose the Work domain: named and default WorkModule; one module-level example fixture session/store shared by board, views, detail and capture; Board home; Planner settings week_start; honest example, session-only and not-project-scoped labels; destination parsing and secondary navigation; restoration of view, filters, selection, scroll and unsaved capture/detail text across T0 remounts; an outer Ctrl/Meta+Z handler that skips defaultPrevented events and typing controls, with a nested PlanningViews plus domain keypress test consuming exactly one undo entry; a real App/MODULES registry round-trip test; zero writes or execution on domain and page switches.",
   "context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
-    "spec.hq-social-work#ctx.stop-recovery-delivery.001"
+    "spec.hq-social-work#ctx.stop-recovery-delivery.001",
+    "spec.hq-social-work#ctx.integration-bindings.001",
+    "spec.hq-social-work#ctx.child-launch-containment.001",
+    "spec.hq-social-work#ctx.work-design-binding.001"
   ],
   "read_scope": [
     "AGENTS.md",
@@ -2208,11 +2517,18 @@ Merge is held.
     "docs/engineering-specs/hq-bootstrap.md",
     "packages/contracts",
     "apps/desktop",
-    "modules/work/views"
+    "modules/work/core",
+    "modules/work/views",
+    "modules/work/board",
+    "modules/work/detail",
+    "modules/work/capture",
+    "packages/hq-ui"
   ],
   "write_scope": [
     "modules/work/index.tsx",
-    "modules/work/nav"
+    "modules/work/nav",
+    "modules/work/skeleton.test.ts",
+    "docs/evidence/hq-social-work/work-domain"
   ],
   "requires": [
     "spec.hq-social-work#req.work-views.001",
@@ -2269,7 +2585,10 @@ Merge is held.
   "stop_conditions": [
     "accepted T0 baseline or required rebind is missing",
     "a change outside write_scope or a dependency/lockfile change is required",
-    "an unknown prior Git, GitHub or service effect is unreconciled"
+    "an unknown prior Git, GitHub or service effect is unreconciled",
+    "the native child checkout, branch, HEAD ancestry or model differs from the launch binding",
+    "a core, views, board, detail, capture, UI kit, App, registry or root-file change is needed; stop only that effect and propose it",
+    "references, the service bridge or G-3 storage would be required"
   ]
 }
 ```
@@ -2371,11 +2690,12 @@ Merge is held.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "hq-root",
-  "objective": "Register the Social and Work domain descriptors in the module registry, integrate lane candidates in the documented order, and prove cross-domain restoration, appearance persistence, captured-content invariance and zero execution calls on the integrated head.",
+  "objective": "In a fresh native isolated assembly checkout started from the published plan head, normally merge exactly the accepted Social domain 9735b74 and the accepted Work-domain head (both carry the identical UI kit 935dedf), keep lane branches and PRs unchanged, keep T0's Design placeholder, adjust the registry only if the named exports require it, and prove a usable mounted Social+Work shell with labelled fictional data in the root-assigned new test apps/desktop/src/social-work.integration.test.tsx (existing Social/Work tests stay read-only): cross-domain round trips restoring both domains, one keypress one undo, zero writes and execution from navigation, domain and page switches, explicit planning moves making only their single intended mutation with zero execution, exact combined test discovery with typecheck, full suite and build once on the exact head, representative light and dark previews at usable widths without console errors under the app CSP, and Electron only if qualified. Publish one merge-held non-draft assembly PR against the plan branch.",
   "context_refs": [
     "spec.hq-social-work#ctx.launch-preflight.001",
     "spec.hq-social-work#ctx.change-surface.001",
-    "spec.hq-social-work#ctx.stop-recovery-delivery.001"
+    "spec.hq-social-work#ctx.stop-recovery-delivery.001",
+    "spec.hq-social-work#ctx.integration-bindings.001"
   ],
   "read_scope": [
     "AGENTS.md",
@@ -2383,11 +2703,16 @@ Merge is held.
     "docs/design/hq-shared-foundation.md",
     "docs/engineering-specs/hq-bootstrap.md",
     "packages/contracts",
-    "apps/desktop"
+    "apps/desktop",
+    "modules/social",
+    "modules/work",
+    "packages/hq-ui",
+    "docs/evidence/hq-social-work"
   ],
   "write_scope": [
+    "apps/desktop/src/social-work.integration.test.tsx",
     "apps/desktop/src/modules.tsx",
-    "docs/evidence/hq-social-work/integration"
+    "docs/evidence/hq-social-work/integration/social-work"
   ],
   "requires": [
     "spec.hq-social-work#req.foundation-binding.001",
@@ -2427,6 +2752,7 @@ Merge is held.
     "mode": "automatic"
   },
   "acceptance_refs": [
+    "spec.hq-social-work#ac.sw-assembly.001",
     "spec.hq-social-work#ac.integration.001"
   ],
   "test_refs": [
@@ -2457,11 +2783,383 @@ Merge is held.
   "stop_conditions": [
     "accepted T0 baseline or required rebind is missing",
     "a change outside write_scope or a dependency/lockfile change is required",
-    "an unknown prior Git, GitHub or service effect is unreconciled"
+    "an unknown prior Git, GitHub or service effect is unreconciled",
+    "a dependency merge conflicts or changes an incoming accepted tree",
+    "a root package, config, lockfile, App, styles, contracts, IPC, Design or catalog change would be needed",
+    "live endpoints, installs, services or sudo would be needed to produce evidence"
   ]
 }
 ```
 <!-- codex-section:end id="spec.hq-social-work#task.domain-integration.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#task.joint-root-checks.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "hq-root",
+  "objective": "Future child C only, after every ac.joint-integration-gate.001 binding is exact: in its own native child checkout and branch generated at T1's committed plan head P (no base override, prompt cd or branch switch), normally merge with --no-ff exactly the accepted published Design head D and then exactly the accepted published Social+Work head S, and prove both D and S are ancestors of the branch head; then, as sole writer of the six R0 root paths extend root discovery so npm run typecheck and npm test also cover each Design section's TypeScript project and declared test commands (Node .test.mjs, tsx, section Vitest configs where they exist), calling Design configs unchanged; dependency or lockfile changes only through npm with a fresh npm ci and the full check set; prove discovery by an inventory of unique Node, DOM and section test files and their actual configs, never summed counts. Inside that named custody, bounded npm dependency or lockfile updates proceed; anything outside it or of unknown provenance holds.",
+  "context_refs": [
+    "spec.hq-social-work#ctx.launch-preflight.001",
+    "spec.hq-social-work#ctx.change-surface.001",
+    "spec.hq-social-work#ctx.stop-recovery-delivery.001",
+    "spec.hq-social-work#ctx.integration-stages.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/engineering-specs/hq-social-work.md",
+    "docs/design/hq-shared-foundation.md",
+    "docs/engineering-specs/hq-bootstrap.md",
+    "packages/contracts",
+    "apps/desktop",
+    "modules/design",
+    "packages/design-store",
+    "modules/social",
+    "modules/work",
+    "packages/hq-ui",
+    "docs/evidence/hq-social-work",
+    "docs/engineering-specs/design.md",
+    "docs/prds/design.md",
+    "docs/design-lanes.json",
+    "docs/planning-evidence",
+    "tests/check-groups.toml",
+    ".github/workflows"
+  ],
+  "write_scope": [
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    "vitest.config.ts",
+    "apps/desktop/package.json"
+  ],
+  "requires": [
+    "spec.hq-social-work#req.foundation-binding.001",
+    "spec.hq-social-work#req.safety.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-social-work#task.domain-integration.001"
+  ],
+  "dependency_inputs": [
+    {
+      "task_ref": "spec.hq-social-work#task.domain-integration.001",
+      "fields": [
+        "produced_refs",
+        "candidate_binding"
+      ]
+    }
+  ],
+  "activation": {
+    "mode": "explicit",
+    "predicate_ref": "spec.hq-social-work#ac.joint-integration-gate.001"
+  },
+  "acceptance_refs": [
+    "spec.hq-social-work#ac.joint-root-checks.001"
+  ],
+  "test_refs": [
+    "spec.hq-social-work#test.joint-root-checks.001"
+  ],
+  "affected_check_groups": [
+    "hq-foundation",
+    "shell-integration"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "candidate_binding",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "write only the literal write_scope; propose shared changes to the root",
+    "no root manifest, lockfile, contracts, apps/desktop or Design edits without explicit custody",
+    "fictional fixtures only; no private data, addresses or credentials",
+    "zero execution calls from navigation, mode switch or card movement",
+    "publish candidate PR; merge held for integration owner"
+  ],
+  "stop_conditions": [
+    "accepted T0 baseline or required rebind is missing",
+    "a change outside write_scope is required, or a dependency/lockfile change outside the named root-file custody or of unknown provenance",
+    "an unknown prior Git, GitHub or service effect is unreconciled",
+    "any ac.joint-integration-gate.001 binding (D, S, Design wiring, root-file custody, C release) is missing, moving or local-only",
+    "a Design section's own files or configs would need editing",
+    "apps/desktop/vite.config.ts would need a change before its owner is assigned"
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-social-work#task.joint-root-checks.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#task.joint-assembly.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "hq-root",
+  "objective": "Future child C only, on the same native joint branch from task.joint-root-checks.001 (generated at plan head P, with exact D then exact S normally merged and both proven ancestors): apply Design's wiring patch at its exact revision to the Design slot of MODULES only (or keep T0's placeholder by explicit Design decision), add the new apps/desktop/src/joint.integration.test.tsx proving Design, Social and Work restoration with Design's tests unchanged and B's test untouched, run the inventoried combined checks on the exact head, and publish one additive non-draft merge-held PR whose base is the published Design branch containing D, preserving every prior PR ref and history with no rebase, force push or retarget.",
+  "context_refs": [
+    "spec.hq-social-work#ctx.launch-preflight.001",
+    "spec.hq-social-work#ctx.change-surface.001",
+    "spec.hq-social-work#ctx.stop-recovery-delivery.001",
+    "spec.hq-social-work#ctx.integration-stages.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/engineering-specs/hq-social-work.md",
+    "docs/design/hq-shared-foundation.md",
+    "docs/engineering-specs/hq-bootstrap.md",
+    "packages/contracts",
+    "apps/desktop",
+    "modules/design",
+    "packages/design-store",
+    "modules/social",
+    "modules/work",
+    "packages/hq-ui",
+    "docs/evidence/hq-social-work",
+    "docs/engineering-specs/design.md",
+    "docs/prds/design.md",
+    "docs/design-lanes.json",
+    "docs/planning-evidence",
+    "tests/check-groups.toml",
+    ".github/workflows",
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    "vitest.config.ts"
+  ],
+  "write_scope": [
+    "apps/desktop/src/modules.tsx",
+    "apps/desktop/src/joint.integration.test.tsx",
+    "docs/evidence/hq-social-work/integration/joint"
+  ],
+  "requires": [
+    "spec.hq-social-work#req.foundation-binding.001",
+    "spec.hq-social-work#req.shell.001",
+    "spec.hq-social-work#req.safety.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-social-work#task.domain-integration.001",
+    "spec.hq-social-work#task.joint-root-checks.001"
+  ],
+  "dependency_inputs": [
+    {
+      "task_ref": "spec.hq-social-work#task.domain-integration.001",
+      "fields": [
+        "produced_refs",
+        "candidate_binding"
+      ]
+    },
+    {
+      "task_ref": "spec.hq-social-work#task.joint-root-checks.001",
+      "fields": [
+        "produced_refs",
+        "candidate_binding"
+      ]
+    }
+  ],
+  "activation": {
+    "mode": "explicit",
+    "predicate_ref": "spec.hq-social-work#ac.joint-integration-gate.001"
+  },
+  "acceptance_refs": [
+    "spec.hq-social-work#ac.joint-assembly.001",
+    "spec.hq-social-work#ac.integration.001"
+  ],
+  "test_refs": [
+    "spec.hq-social-work#test.joint-assembly.001"
+  ],
+  "affected_check_groups": [
+    "shell-integration",
+    "hq-foundation",
+    "hq-ui",
+    "social-module",
+    "work-module"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "candidate_binding",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "write only the literal write_scope; propose shared changes to the root",
+    "no root manifest, lockfile, contracts, apps/desktop or Design edits without explicit custody",
+    "fictional fixtures only; no private data, addresses or credentials",
+    "zero execution calls from navigation, mode switch or card movement",
+    "publish candidate PR; merge held for integration owner"
+  ],
+  "stop_conditions": [
+    "accepted T0 baseline or required rebind is missing",
+    "a change outside write_scope or a dependency/lockfile change is required",
+    "an unknown prior Git, GitHub or service effect is unreconciled",
+    "Design adapters, storage, sandbox or component policy would need changing",
+    "App.tsx, styles.css, vite.config.ts, contracts or IPC would be needed",
+    "B's social-work.integration.test.tsx would need editing without a separate transfer"
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-social-work#task.joint-assembly.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#task.joint-electron-smoke.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "verification",
+  "profile_role": "verifier",
+  "accountable_owner": "hq-root",
+  "objective": "Run the joint assembly head as the Electron dev app with fixture adapters only and no endpoints: launch, Design/Social/Work switching with restoration, Light/Dark/System with reload, zero execution spies, CSP and preload readback, Design component execution left disabled; record native gaps as gaps.",
+  "context_refs": [
+    "spec.hq-social-work#ctx.launch-preflight.001",
+    "spec.hq-social-work#ctx.change-surface.001",
+    "spec.hq-social-work#ctx.stop-recovery-delivery.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/engineering-specs/hq-social-work.md",
+    "docs/design/hq-shared-foundation.md",
+    "docs/engineering-specs/hq-bootstrap.md",
+    "packages/contracts",
+    "apps/desktop"
+  ],
+  "write_scope": [
+    "docs/evidence/hq-social-work/joint-smoke"
+  ],
+  "requires": [
+    "spec.hq-social-work#req.shell.001",
+    "spec.hq-social-work#req.safety.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-social-work#task.joint-assembly.001"
+  ],
+  "dependency_inputs": [
+    {
+      "task_ref": "spec.hq-social-work#task.joint-assembly.001",
+      "fields": [
+        "candidate_binding",
+        "evidence_refs"
+      ]
+    }
+  ],
+  "activation": {
+    "mode": "automatic"
+  },
+  "acceptance_refs": [
+    "spec.hq-social-work#ac.joint-electron-smoke.001"
+  ],
+  "test_refs": [
+    "spec.hq-social-work#test.joint-electron-smoke.001"
+  ],
+  "affected_check_groups": [
+    "shell-integration"
+  ],
+  "result_fields": [
+    "summary",
+    "evidence_refs",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "write only the literal write_scope; propose shared changes to the root",
+    "no root manifest, lockfile, contracts, apps/desktop or Design edits without explicit custody",
+    "fictional fixtures only; no private data, addresses or credentials",
+    "zero execution calls from navigation, mode switch or card movement",
+    "publish candidate PR; merge held for integration owner"
+  ],
+  "stop_conditions": [
+    "accepted T0 baseline or required rebind is missing",
+    "a change outside write_scope or a dependency/lockfile change is required",
+    "an unknown prior Git, GitHub or service effect is unreconciled",
+    "an install, service, sudo or endpoint would be needed to make Electron run"
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-social-work#task.joint-electron-smoke.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#task.joint-ci.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "implementation",
+  "profile_role": "builder",
+  "accountable_owner": "hq-root",
+  "objective": "Only if ac.ci-adoption.001 is satisfied, add the one new pull-request workflow file .github/workflows/hq-social-work.yml that runs npm ci, typecheck, the discovered affected checks and build without secrets, environments, deployment or self-hosted runners; Design-owned foundation.yml, design-sections.yml and the check catalog stay unchanged; read back the first run on a real PR head.",
+  "context_refs": [
+    "spec.hq-social-work#ctx.launch-preflight.001",
+    "spec.hq-social-work#ctx.change-surface.001",
+    "spec.hq-social-work#ctx.stop-recovery-delivery.001",
+    "spec.hq-social-work#ctx.integration-stages.001"
+  ],
+  "read_scope": [
+    "AGENTS.md",
+    "docs/engineering-specs/hq-social-work.md",
+    "docs/design/hq-shared-foundation.md",
+    "docs/engineering-specs/hq-bootstrap.md",
+    "packages/contracts",
+    "apps/desktop"
+  ],
+  "write_scope": [
+    ".github/workflows/hq-social-work.yml"
+  ],
+  "requires": [
+    "spec.hq-social-work#req.safety.001"
+  ],
+  "produces": [],
+  "dependencies": [
+    "spec.hq-social-work#task.joint-root-checks.001"
+  ],
+  "dependency_inputs": [
+    {
+      "task_ref": "spec.hq-social-work#task.joint-root-checks.001",
+      "fields": [
+        "produced_refs",
+        "candidate_binding"
+      ]
+    }
+  ],
+  "activation": {
+    "mode": "explicit",
+    "predicate_ref": "spec.hq-social-work#ac.ci-adoption.001"
+  },
+  "acceptance_refs": [
+    "spec.hq-social-work#ac.joint-ci.001"
+  ],
+  "test_refs": [
+    "spec.hq-social-work#test.joint-ci.001"
+  ],
+  "affected_check_groups": [
+    "hq-foundation",
+    "shell-integration"
+  ],
+  "result_fields": [
+    "summary",
+    "changed_paths",
+    "evidence_refs",
+    "produced_refs",
+    "candidate_binding",
+    "deferred_findings"
+  ],
+  "preserved_boundaries": [
+    "write only the literal write_scope; propose shared changes to the root",
+    "no root manifest, lockfile, contracts, apps/desktop or Design edits without explicit custody",
+    "fictional fixtures only; no private data, addresses or credentials",
+    "zero execution calls from navigation, mode switch or card movement",
+    "publish candidate PR; merge held for integration owner"
+  ],
+  "stop_conditions": [
+    "accepted T0 baseline or required rebind is missing",
+    "a change outside write_scope or a dependency/lockfile change is required",
+    "an unknown prior Git, GitHub or service effect is unreconciled",
+    "editing the Design-owned foundation workflow would be needed without its owner's agreement",
+    "a secret, environment, protected runner or branch-protection change would be needed"
+  ]
+}
+```
+<!-- codex-section:end id="spec.hq-social-work#task.joint-ci.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#task.reference-contract.001" -->
 ```json
@@ -3580,18 +4278,19 @@ Merge is held.
     "spec.hq-social-work#req.work-views.001",
     "spec.hq-social-work#req.foundation-binding.001"
   ],
-  "scenario": "The Work descriptor mounts in the T0 registry harness and restores view, filters, scroll and selection across a domain round trip; quick capture is scoped to Work focus.",
+  "scenario": "The real T0 App with MODULES drives Design, Social, Work, Work: Work returns with view, filters, selection, scroll and unsaved capture/detail text restored; a nested PlanningViews plus domain Ctrl/Meta+Z consumes exactly one undo entry; typing controls and defaultPrevented events are skipped; the skeleton test asserts mount, dependency resolution and no navigation; light and dark previews are captured under the app CSP.",
   "evidence": {
-    "predicate": "Restoration assertions pass and cross-package imports are limited to contracts and ui.",
-    "invalid": "The test bypasses the T0 registry.",
-    "unknown": "The registry harness is unavailable."
+    "predicate": "Restoration, undo, HQ workspace import boundary and zero navigation write/execution assertions pass; board, views, core, detail, capture and UI trees are byte-identical to their accepted commits.",
+    "invalid": "The test uses a fake descriptor wrapper instead of the real App and MODULES, or edits accepted dependency trees.",
+    "unknown": "The registry harness or browser capture is unavailable on this host."
   },
   "environment": [
-    "T0 or skeleton-provided DOM test environment"
+    "T0 or skeleton-provided DOM test environment",
+    "Electron dev app or Vite renderer with fixture adapters, light and dark"
   ],
   "obligation_owner_task": "spec.hq-social-work#task.work-domain.001",
   "evidence_executor_task": "spec.hq-social-work#task.work-domain.001",
-  "acceptance_owner": "lane-work-board",
+  "acceptance_owner": "hq-root",
   "activation": {
     "after_accepted": [
       "spec.hq-social-work#task.work-views.001",
@@ -3599,7 +4298,8 @@ Merge is held.
     ]
   },
   "target_hints": [
-    "modules/work/index.tsx"
+    "modules/work/index.tsx",
+    "modules/work/nav/"
   ],
   "affected_check_groups": [
     "work-module"
@@ -3659,11 +4359,11 @@ Merge is held.
     "spec.hq-social-work#req.safety.001",
     "spec.hq-social-work#req.foundation-binding.001"
   ],
-  "scenario": "On the integrated head, Design, Social, Work, Design round trips restore each domain; explicit theme survives reload; System follows OS; captured content is unchanged; switches, card moves and reference follows make zero execution calls.",
+  "scenario": "On the exact Social+Work assembly head with the Design placeholder, apps/desktop/src/social-work.integration.test.tsx drives the real App: round trips restore Social and Work state; explicit theme survives reload; one keypress consumes one undo entry; navigation, domain and page switches make zero writes and zero execution; explicit card, date or horizon moves make only their single intended planning mutation (and explicit Undo), with zero execution; the run lists unique inherited test files plus new integration tests; light and dark previews at usable widths show no console errors under the app CSP.",
   "evidence": {
-    "predicate": "Integration tests pass on the exact integrated head with Design's own tests unchanged.",
-    "invalid": "Design tests were edited or execution spies were removed.",
-    "unknown": "The Electron app cannot run on this host."
+    "predicate": "Typecheck, full suite and build pass once on the exact assembly head; incoming accepted trees are byte-identical; discovery is listed by file identity.",
+    "invalid": "Lane branches were advanced, counts were summed instead of discovered, or execution spies were removed.",
+    "unknown": "Electron cannot run on this host without installs or services; recorded as unverified."
   },
   "environment": [
     "T0 or skeleton-provided DOM test environment",
@@ -3680,7 +4380,8 @@ Merge is held.
     ]
   },
   "target_hints": [
-    "docs/evidence/hq-social-work/integration/"
+    "apps/desktop/src/social-work.integration.test.tsx",
+    "docs/evidence/hq-social-work/integration/social-work/"
   ],
   "affected_check_groups": [
     "shell-integration",
@@ -3928,6 +4629,162 @@ Merge is held.
 ```
 <!-- codex-section:end id="spec.hq-social-work#test.reference-integration.001" -->
 
+<!-- codex-section:begin id="spec.hq-social-work#test.joint-root-checks.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "integration",
+  "validates": [
+    "spec.hq-social-work#req.foundation-binding.001"
+  ],
+  "scenario": "On the native joint branch (generated at plan head P, with exact D then exact S normally merged and both proven ancestors), npm run typecheck and npm test discover every Design section and test file named by Design's accepted plan through its actual config or command (including sections without a vitest.config.ts), plus every Social/Work test file from S.",
+  "evidence": {
+    "predicate": "An inventory of unique Node, DOM and section test files with their discovering configs matches by identity; a fresh npm ci, typecheck, full suite and build pass.",
+    "invalid": "Discovery is claimed from summed counts or a Design section file was edited.",
+    "unknown": "Design's accepted plan or assembly head is absent."
+  },
+  "environment": [
+    "Node with the accepted T0 test runner"
+  ],
+  "obligation_owner_task": "spec.hq-social-work#task.joint-root-checks.001",
+  "evidence_executor_task": "spec.hq-social-work#task.joint-root-checks.001",
+  "acceptance_owner": "hq-root",
+  "activation": {
+    "after_accepted": [
+      "spec.hq-social-work#task.domain-integration.001"
+    ]
+  },
+  "target_hints": [
+    "vitest.config.ts",
+    "tsconfig.json"
+  ],
+  "affected_check_groups": [
+    "hq-foundation",
+    "shell-integration"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-social-work#test.joint-root-checks.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#test.joint-assembly.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "integration",
+  "validates": [
+    "spec.hq-social-work#req.shell.001",
+    "spec.hq-social-work#req.safety.001"
+  ],
+  "scenario": "On the joint head (plan head P plus normal merges of exact D and exact S, plus C's compatibility commits), apps/desktop/src/joint.integration.test.tsx drives the real App mounting Design, Social and Work; round trips restore each domain; Design's tests and B's integration test run unchanged alongside Social/Work tests; the PR base is the published Design branch containing D.",
+  "evidence": {
+    "predicate": "ac.integration.001 holds with real Design and the deduplicated discovered union passes on the exact head.",
+    "invalid": "Design-owned adapters, storage or tests were edited.",
+    "unknown": "Design's accepted assembly head is unavailable."
+  },
+  "environment": [
+    "T0 or skeleton-provided DOM test environment",
+    "Electron dev app or Vite renderer with fixture adapters, light and dark"
+  ],
+  "obligation_owner_task": "spec.hq-social-work#task.joint-assembly.001",
+  "evidence_executor_task": "spec.hq-social-work#task.joint-assembly.001",
+  "acceptance_owner": "hq-root",
+  "activation": {
+    "after_accepted": [
+      "spec.hq-social-work#task.domain-integration.001",
+      "spec.hq-social-work#task.joint-root-checks.001"
+    ]
+  },
+  "target_hints": [
+    "apps/desktop/src/joint.integration.test.tsx",
+    "docs/evidence/hq-social-work/integration/joint/"
+  ],
+  "affected_check_groups": [
+    "shell-integration",
+    "hq-foundation",
+    "hq-ui",
+    "social-module",
+    "work-module"
+  ],
+  "required_at": "integration-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-social-work#test.joint-assembly.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#test.joint-electron-smoke.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "manual",
+  "validates": [
+    "spec.hq-social-work#req.shell.001",
+    "spec.hq-social-work#req.safety.001"
+  ],
+  "scenario": "The Electron dev app on the joint head launches with fixtures, switches domains, changes appearance and reloads, with execution spies, CSP and preload read back.",
+  "evidence": {
+    "predicate": "Every listed behavior is observed and recorded; native gaps are listed.",
+    "invalid": "An endpoint, install or service was used, or a gap is reported as a pass.",
+    "unknown": "Electron cannot start on this host."
+  },
+  "environment": [
+    "Electron dev app with fixture adapters"
+  ],
+  "obligation_owner_task": "spec.hq-social-work#task.joint-electron-smoke.001",
+  "evidence_executor_task": "spec.hq-social-work#task.joint-electron-smoke.001",
+  "acceptance_owner": "hq-root",
+  "activation": {
+    "after_accepted": [
+      "spec.hq-social-work#task.joint-assembly.001"
+    ]
+  },
+  "target_hints": [
+    "docs/evidence/hq-social-work/joint-smoke/"
+  ],
+  "affected_check_groups": [
+    "shell-integration"
+  ],
+  "required_at": "candidate-review-and-verification"
+}
+```
+<!-- codex-section:end id="spec.hq-social-work#test.joint-electron-smoke.001" -->
+
+<!-- codex-section:begin id="spec.hq-social-work#test.joint-ci.001" -->
+```json
+{
+  "schema_version": 1,
+  "kind": "integration",
+  "validates": [
+    "spec.hq-social-work#req.safety.001"
+  ],
+  "scenario": "The workflow runs on a real pull-request head and its first run is read back.",
+  "evidence": {
+    "predicate": "The run executes install, typecheck, affected checks and build without secrets or deployment.",
+    "invalid": "The workflow uses secrets, environments or self-hosted runners, or edits the Design-owned workflow without agreement.",
+    "unknown": "Actions is unavailable for the repository."
+  },
+  "environment": [
+    "GitHub Actions"
+  ],
+  "obligation_owner_task": "spec.hq-social-work#task.joint-ci.001",
+  "evidence_executor_task": "spec.hq-social-work#task.joint-ci.001",
+  "acceptance_owner": "hq-root",
+  "activation": {
+    "after_accepted": [
+      "spec.hq-social-work#task.joint-root-checks.001"
+    ]
+  },
+  "target_hints": [
+    ".github/workflows/hq-social-work.yml"
+  ],
+  "affected_check_groups": [
+    "hq-foundation",
+    "shell-integration"
+  ],
+  "required_at": "checkpoint-and-candidate"
+}
+```
+<!-- codex-section:end id="spec.hq-social-work#test.joint-ci.001" -->
+
 <!-- codex-section:begin id="spec.hq-social-work#test.campaign-verification.001" -->
 ```json
 {
@@ -3979,7 +4836,7 @@ Merge is held.
 
 - the T0 baseline is unaccepted or its names differ without a rebind;
 - a needed change falls outside the writer cone;
-- a dependency or lockfile change would be required (propose it to the root);
+- a dependency or lockfile change would be required. Lanes propose it; only the single root-file writer makes it;
 - live data, credentials or a private address would be read or committed;
 - an action could start execution from a card, navigation or mode switch;
 - an unknown prior effect exists, such as a lost PR, push or commit response;
@@ -4005,10 +4862,10 @@ Continue all unaffected work.
 - Publish lane branches and PRs, non-draft once checks pass, and link them to the lane's native thread.
 - Record exact commits and check results in the PR.
 - Merge is held for integration-owner agreement.
-- No CI workflows until the Jones shared Actions guidance is read by the root.
+- No CI change outside the gated `task.joint-ci.001`. No PR merge order is adopted.
 - No signing, installation, deployment, service change or data migration.
 
-**Operator Interaction Inventory:** see `ctx.operator-interaction-inventory.001`. HQ source work introduces no protected operation. The service extensions and live access do.
+**Operator Interaction Inventory:** see `ctx.operator-interaction-inventory.001`. HQ source work needs no owner command, TTY or sudo; service extensions, live access, CI adoption and merges have gates there.
 <!-- codex-section:end id="spec.hq-social-work#ctx.stop-recovery-delivery.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ctx.operator-interaction-inventory.001" -->
@@ -4028,6 +4885,10 @@ HQ source tasks in this plan run with **no owner command, TTY, password or sudo*
 | Credential enrollment and rotation | None. The services use network-level access, and HQ stores no credentials. Social's per-session workspace token stays in the main process. | — | none | — | — |
 | Destructive or forced effects | None planned. Unlink is a user edit of one record, never deletion of a target. | — | none | — | — |
 | Rare exceptional fallback | A failed migration or unknown deploy effect | Red | M Jones decides after readback | Authoritative readback of service state | Hold all writes, restore the backup |
+| Integration (revision 4) | The Work-domain child, the Social+Work and joint assembly branches, combined checks | Green, in isolated HQ worktrees | None. The root issues launch directions. | Exact merge-parent, tree-identity and check readback on each head | Hold on conflict or unknown effect. No lane branch moves. |
+| Integration (revision 4) | Local fixture walkthrough and Electron smoke | Green, under the standing owner-built local app testing permission | None | Fixture data only. No endpoints. Component execution stays disabled. | Record platform gaps |
+| Integration (revision 4) | Adopting a CI workflow | Amber (shared Actions surface) | M Jones may withhold; the PR #7 owner agrees | `ac.ci-adoption.001`; first-run readback | Revert the workflow commit by normal PR |
+| Integration (revision 4) | Any PR merge, including assembly, lane, plan or foundation | Amber, with accepted merge policy; held | Integration-owner agreement and Design agreement | Accepted policy: base, method, checks, reviews, threads, scope, readback | No bypass, force push or protected-ref update |
 <!-- codex-section:end id="spec.hq-social-work#ctx.operator-interaction-inventory.001" -->
 
 <!-- codex-section:begin id="spec.hq-social-work#ctx.lane-capsules.001" -->
@@ -4040,7 +4901,7 @@ Common to all capsules:
 - Plan: `Jones-Systems/HQ`, branch `work/hq-social-work-plan`, the immutable plan commit recorded in the root's launch message, this file `docs/engineering-specs/hq-social-work.md`.
 - Base: the accepted T0 commit.
 - Coordination channel: the plan PR and the lane PRs.
-- Model: `claude-opus-5-5`/high, no descendants.
+- Model: `claude-opus-5-5`/high, no descendants. A child task uses the native route in `ctx.child-launch-containment.001`.
 - Authority: implement and publish the assigned scope only; no merge.
 
 | Lane | Tasks | Read first | Ready now | First real gate | Finish line |
@@ -4049,5 +4910,7 @@ Common to all capsules:
 | SOC-C | `task.social-core.001` → `task.social-content.001` → `task.social-domain.001` → `task.social-references.001`; `task.social-live-adapter.001` when activated | `iface.social-port.001`, `req.social-content.001`, `req.references.001`, `ctx.social-design-reconciliation.001`, T3 commit `8f91f6b2` | Port, fixture, conformance suite | R1; publish core early for SOC-W | `ac.social-core.001`, `ac.social-content.001`, `ac.social-domain.001` |
 | SOC-W | `task.social-workbench.001` | `req.social-research.001`, `iface.social-port.001`, T3 branch | Per-tool input builders and result summarizers as pure functions | SOC-C core commit; UI kit | `ac.social-workbench.001` |
 | WRK-P | `task.work-core.001` → `task.work-views.001`; `task.work-live-adapter.001` when activated | `iface.work-port.001`, `req.work-core.001`, `req.work-views.001`, `ctx.d1-import.001`, `ctx.work-design-binding.001`, T4 commit `1bb550de` | Verbatim D-1 import with provenance and an integrity test; validation; fixture | R1; publish core early for WRK-B | `ac.work-core.001`, `ac.work-views.001` |
-| WRK-B | `task.work-board.001` → `task.work-domain.001` → `task.work-references.001` | `req.work-views.001` RV-1–3 and RV-6, `iface.work-port.001`, T4 branch | Pointer-drag engine and keyboard move model against port types | WRK-P core commit; UI kit | `ac.work-board.001`, `ac.work-domain.001` |
+| WRK-B | `task.work-board.001` (accepted `3ca74d7`) → later `task.work-references.001` | `req.work-views.001` RV-1–3 and RV-6, `iface.work-port.001`, T4 branch | Done; holds | `ac.reference-contract-custody.001` for references | `ac.work-board.001` |
+| Work-domain child | `task.work-domain.001` | `ctx.integration-bindings.001`, `ctx.child-launch-containment.001`, `ac.work-domain.001`, `ctx.work-design-binding.001` | Normal merge of exactly `3ca74d7` inside its own native checkout, then the descriptor | A native HQ-parent launch under exact root direction | `ac.work-domain.001` |
+| Assembly owner | B: `task.domain-integration.001`. Future C: the explicit joint tasks | `ctx.integration-bindings.001`, `ac.sw-assembly.001`; joint tasks add `ctx.integration-stages.001` | — | Accepted Work-domain candidate | `ac.sw-assembly.001`, then the joint acceptances |
 <!-- codex-section:end id="spec.hq-social-work#ctx.lane-capsules.001" -->

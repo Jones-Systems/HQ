@@ -50,3 +50,34 @@ describe('component stylesheet', () => {
     for (const m of css.matchAll(/transition:([^;]+);/g)) expect(m[1]).toMatch(/var\(--hq-duration-/);
   });
 });
+
+describe('shared Warm Graphite control styling', () => {
+  const parsed = rules(css);
+  const body = (selector: string) => parsed.filter(({ selectors }) => selectors.includes(selector)).map((rule) => rule.body).join(';');
+  const tokens = readFileSync(new URL('../src/tokens/hq-tokens.css', import.meta.url), 'utf8');
+
+  it('draws selection as a fill with no side or underline stripe', () => {
+    expect(css).not.toMatch(/inset\s+-?[1-9]\d*px\s+0/);
+    expect(css).not.toMatch(/aria-selected="true"\]::after/);
+    expect(body('.hq-tab[aria-selected="true"]')).toMatch(/background: var\(--hq-selected-bg\)/);
+    expect(body('.hq-btn--secondary[aria-pressed="true"]')).toMatch(/background: var\(--hq-selected-bg\)/);
+    // Module nav items still draw an indicator inset; the token now equals their fill, so no stripe shows.
+    expect(tokens).toContain('--hq-nav-item-indicator: var(--hq-surface-selected);');
+    expect(tokens).toContain('--hq-rail-item-indicator: var(--hq-surface-selected);');
+  });
+
+  it('gives every button size one control radius and coherent secondary, ghost and disabled states', () => {
+    expect(body('.hq-btn')).toMatch(/border-radius: var\(--hq-radius-control\)/);
+    expect(body('.hq-btn--sm')).not.toMatch(/border-radius/);
+    expect(body('.hq-btn--secondary')).toMatch(/background: var\(--hq-button-secondary-bg\)/);
+    expect(body('.hq-btn--secondary:hover')).toMatch(/var\(--hq-button-secondary-bg-hover\)/);
+    expect(body('.hq-btn--secondary:active')).toMatch(/var\(--hq-button-secondary-bg-pressed\)/);
+    expect(body('.hq-btn--ghost:hover')).toMatch(/var\(--hq-button-ghost-bg-hover\)/);
+    expect(body('.hq-btn:disabled')).toMatch(/var\(--hq-button-disabled-bg\)/);
+    expect(tokens).toContain('--hq-radius-control: 8px;');
+  });
+
+  it('re-resolves component roles inside a palette preview scope', () => {
+    expect(tokens).toMatch(/\[data-hq-token-scope\] \{[^}]*--hq-button-secondary-bg: var\(--hq-control\);[^}]*\}/);
+  });
+});

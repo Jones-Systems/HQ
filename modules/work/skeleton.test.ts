@@ -1,12 +1,16 @@
 // @vitest-environment happy-dom
 import { createElement } from 'react';
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
-import { parseProjectContext, type ModulePort } from '@hq/contracts';
+import { act, cleanup, render, screen } from '@testing-library/react';
+import { isDestination, parseProjectContext, type ModulePort } from '@hq/contracts';
 import { PRESERVED_CONTENT_KINDS } from '@hq/ui';
-import { WorkModule } from '@hq/work';
+import WorkDefault, { WorkModule } from '@hq/work';
+import { resetWorkSessions } from './nav';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  resetWorkSessions();
+});
 
 function port(destination: string): ModulePort & { navigate: Mock<(destination: string) => void> } {
   return {
@@ -17,18 +21,20 @@ function port(destination: string): ModulePort & { navigate: Mock<(destination: 
   };
 }
 
-describe('Work workspace skeleton', () => {
+describe('Work workspace descriptor', () => {
   it('resolves its workspace dependencies by package name', () => {
     expect(PRESERVED_CONTENT_KINDS).toContain('export');
+    expect(isDestination('home')).toBe(true);
+    expect(WorkDefault).toBe(WorkModule);
   });
 
-  it('renders an available, no-data stub with the shell context and destination', () => {
+  it('mounts the Work domain at home on the Board without navigating', async () => {
     const props = port('home');
     render(createElement(WorkModule, props));
-    expect(screen.getByRole('heading', { level: 1, name: 'Work is available.' })).toBeTruthy();
-    expect(screen.getByText('Atlas Weekend Market')).toBeTruthy();
-    expect(screen.getByText('home')).toBeTruthy();
-    expect(screen.getByText('Available · no data')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'Work · Status board' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 2, name: 'Status board' })).toBeTruthy();
+    expect(screen.getByText('Example data')).toBeTruthy();
+    await act(async () => {});
     expect(props.navigate).not.toHaveBeenCalled();
   });
 });

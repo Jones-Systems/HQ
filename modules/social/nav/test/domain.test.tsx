@@ -16,6 +16,7 @@ const CONTEXT = { id: FIXTURE_PROJECT_ID, name: 'Larkspur project' };
 afterEach(() => {
   cleanup();
   resetSocialSessions();
+  localStorage.removeItem('hq.social.sidebar.v1');
 });
 
 interface Setup {
@@ -74,6 +75,39 @@ describe('destinations', () => {
 });
 
 describe('secondary navigation', () => {
+  it('collapses fully, restores its last size, and retains the preference across remounts without content effects', async () => {
+    const s = setup();
+    await overview();
+    const splitter = screen.getByRole('separator', { name: 'Social sidebar' });
+    splitter.focus();
+    await s.user.keyboard('{End}{Home}');
+    expect(splitter.getAttribute('aria-valuenow')).toBe('0');
+    expect(screen.queryByRole('complementary', { name: 'Social workspace' })).toBeNull();
+    expect(screen.getByRole('separator', { name: 'Social sidebar' })).toBeTruthy();
+    s.remount();
+    const restoredSplitter = screen.getByRole('separator', { name: 'Social sidebar' });
+    expect(restoredSplitter.getAttribute('aria-valuenow')).toBe('0');
+    restoredSplitter.focus();
+    await s.user.keyboard('{Enter}');
+    expect(restoredSplitter.getAttribute('aria-valuenow')).toBe('320');
+    expect(side().getByRole('button', { name: 'Overview' })).toBeTruthy();
+    expect(s.navigate).not.toHaveBeenCalled();
+    expect(effects(s)).toHaveLength(0);
+  });
+
+  it('opens the collapsed sidebar with an arrow key and ignores invalid stored widths', async () => {
+    localStorage.setItem('hq.social.sidebar.v1', '{"width":-1,"restored":9999}');
+    const s = setup();
+    await overview();
+    const splitter = screen.getByRole('separator', { name: 'Social sidebar' });
+    expect(splitter.getAttribute('aria-valuenow')).toBe('216');
+    splitter.focus();
+    await s.user.keyboard('{Home}{ArrowRight}');
+    expect(Number(splitter.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
+    expect(side().getByRole('button', { name: 'Overview' })).toBeTruthy();
+    expect(effects(s)).toHaveLength(0);
+  });
+
   it('lists the T3 pages in order, with Sources proposed and Channels & accounts under Later', async () => {
     setup();
     await overview();

@@ -1,6 +1,6 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ModulePort } from '@hq/contracts';
-import { Button, Dialog, StateView } from '@hq/ui';
+import { Button, Dialog, Splitter, StateView, type ReferencePort, type ReturnContext } from '@hq/ui';
 import { BrandManager, SocialContent } from '../content';
 import { useSocialSession, workspaceSnapshot, type SocialWorkspacePort } from '../core';
 import { WorkbenchSection, type Visibility } from '../workbench';
@@ -15,6 +15,8 @@ import { EXAMPLE_WORKSPACE_NOTE } from './workspace';
 import './nav.css';
 
 export interface SocialDomainProps extends ModulePort {
+  readonly references?: ReferencePort;
+  readonly returnContext?: ReturnContext;
   readonly port: SocialWorkspacePort;
   /** Label the workspace as the fictional example workspace. */
   readonly example?: boolean;
@@ -23,16 +25,48 @@ export interface SocialDomainProps extends ModulePort {
   readonly pollIntervalMs?: number;
 }
 
+const SIDEBAR_KEY = 'hq.social.sidebar.v1';
+const DEFAULT_SIDEBAR = { width: 216, restored: 216 };
+
+function readSidebar(): typeof DEFAULT_SIDEBAR {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(SIDEBAR_KEY) ?? 'null');
+    if (saved && typeof saved === 'object' && 'width' in saved && 'restored' in saved
+      && typeof saved.width === 'number' && Number.isFinite(saved.width)
+      && (saved.width === 0 || saved.width >= 80) && saved.width <= 320
+      && typeof saved.restored === 'number' && Number.isFinite(saved.restored)
+      && saved.restored >= 80 && saved.restored <= 320) {
+      return { width: saved.width, restored: saved.restored };
+    }
+  } catch { /* Storage can be unavailable; layout remains usable for this mount. */ }
+  return DEFAULT_SIDEBAR;
+}
+
 const PAUSED = 'The Social service is unreachable. Changes are paused; your text is kept.';
 
 /**
  * The Social domain (task.social-domain.001): secondary navigation, brand switcher, project check and
- * the section for the current destination. Everything it keeps lives in the module-level Social session
- * for `context.id`, so a shell remount restores it. Rendering and navigating make no execution call.
+ * the section for the current destination. Content state lives in the Social session for `context.id`;
+ * sidebar size is a local display preference. Rendering and navigating make no execution call.
  */
-export function SocialDomain({ context, destination, navigate, port, example = false, now, visibility, pollIntervalMs }: SocialDomainProps) {
+export function SocialDomain({ context, destination, navigate, port, example = false, now, visibility, pollIntervalMs, references, returnContext }: SocialDomainProps) {
   const { state, session } = useSocialSession(context.id);
   const id = useId();
+  const domain = useRef<HTMLDivElement>(null);
+  const [sidebar, setSidebar] = useState(readSidebar);
+  useEffect(() => {
+    // CSSOM property assignment supports the shell CSP without injecting a style element.
+    domain.current?.style.setProperty('--sd-side-width', `${sidebar.width}px`);
+    try { localStorage.setItem(SIDEBAR_KEY, JSON.stringify(sidebar)); }
+    catch { /* A blocked preference store must not prevent resizing. */ }
+  }, [sidebar]);
+  const resizeSidebar = (size: number) => setSidebar((current) => {
+    const width = size < 80 ? 0 : Math.min(320, size);
+    return { width, restored: width > 0 ? width : current.restored };
+  });
+  const toggleSidebar = () => setSidebar((current) => ({
+    ...current, width: current.width === 0 ? current.restored : 0,
+  }));
   const [managing, setManaging] = useState(false);
   const route = parseSocialDestination(destination);
   const view = domainView(state.view);
@@ -67,8 +101,8 @@ export function SocialDomain({ context, destination, navigate, port, example = f
   );
 
   return (
-    <div className="sd-domain">
-      <aside className="sd-side" aria-label="Social workspace">
+    <div className="sd-domain" ref={domain}>
+      <aside className="sd-side" aria-label="Social workspace" hidden={sidebar.width === 0}>
         <BrandSwitcher
           snapshot={snapshot} value={brand ? brand.id : 'all'} link={link}
           onChoose={(value) => chooseBrand(session, value)} onManage={() => setManaging(true)}
@@ -79,10 +113,21 @@ export function SocialDomain({ context, destination, navigate, port, example = f
           <div role="group" aria-labelledby={`${id}-later`}>{navList('later')}</div>
         </nav>
       </aside>
+      <div className="sd-divider" onKeyDownCapture={(event) => {
+        if (sidebar.width === 0 && event.key === 'ArrowRight') {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleSidebar();
+        }
+      }}>
+        <Splitter label="Social sidebar" value={sidebar.width} min={0} max={320}
+          onResize={resizeSidebar} onToggle={toggleSidebar} />
+      </div>
 
       <div className="sd-main">
+        {returnContext && <p role="note">Reference opened from {returnContext.label}.</p>}
         {example && (
-          <p className="sd-example" role="note"><span className="sd-tag">Example data</span> {EXAMPLE_WORKSPACE_NOTE}</p>
+          <details className="sd-example"><summary>Example data</summary><p role="note">{EXAMPLE_WORKSPACE_NOTE}</p></details>
         )}
         {link && <ProjectMismatchBanner link={link} projectName={context.name} />}
         {!route ? (
@@ -111,7 +156,7 @@ export function SocialDomain({ context, destination, navigate, port, example = f
             ) : (
               <>
                 <h1 className="hq-sr-only">{SECTION_LABELS[route.section]}</h1>
-                <SocialContent port={port} projectId={context.id} destination={destination} navigate={navigate} {...(now ? { now } : {})} />
+                <SocialContent references={references} port={port} projectId={context.id} destination={destination} navigate={navigate} {...(now ? { now } : {})} />
               </>
             )}
       </div>
