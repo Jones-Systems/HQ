@@ -63,7 +63,28 @@ jobs:
       - name: Typecheck and compile desktop, renderer and nested hosts
         run: node tools/updater/packaging/ci-run.cjs npm run build
       - name: Run desktop tests serially
+        id: desktop-tests
         run: node tools/updater/packaging/ci-run.cjs node node_modules/vitest/vitest.mjs run --maxWorkers=1 --no-file-parallelism
+      - name: Diagnose loopback name lookup after a desktop test failure
+        timeout-minutes: 1
+        if: failure() && steps.desktop-tests.outcome == 'failure'
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          node tools/updater/packaging/ci-run.cjs python3 - <<'PYTHON'
+          import faulthandler
+          import json
+          import socket
+          import sys
+          import time
+
+          print(json.dumps({"probe": "planner-loopback-name-lookup", "python": sys.version.split()[0], "phase": "starting"}), flush=True)
+          faulthandler.dump_traceback_later(8, exit=True)
+          started = time.monotonic()
+          socket.getfqdn("127.0.0.1")
+          faulthandler.cancel_dump_traceback_later()
+          print(json.dumps({"probe": "planner-loopback-name-lookup", "phase": "complete", "elapsedSeconds": time.monotonic() - started}), flush=True)
+          PYTHON
       - name: Assemble and strictly verify the ad-hoc package
         id: assemble
         env:
