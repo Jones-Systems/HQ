@@ -1,0 +1,26 @@
+{
+  "comparison_commit": "f31ec739a0a270a2fa2ac711e6c0272828c23ba3",
+  "source_files": {
+    "modules/work/detail/CardDetail.tsx": "1d170578778cc15d6091726e1a7db2d275edc18ae0cdbeeac992028a3888fc67",
+    "modules/work/detail/HqLinks.tsx": "13d3741cb8943ed16d6e59b073108c48beea48432bbe494a2ae2575629cebc37",
+    "modules/work/detail/References.tsx": "b333cc3f6949291e6f3a1b70a64af70aaa3bc149a074831bc9a569ced1a73de7",
+    "modules/work/detail/edits.ts": "d376b04f72eba923347473389ff5542e4185069a73adf7fda627309625bcf9d3",
+    "modules/work/index.tsx": "0572d00bf6e1e5ebc2d32f9088e74905ba9c036c182478fdd293ee24bdbcd51d",
+    "modules/work/nav/WorkDomain.tsx": "775edc6b6322b1efe1a6eabea04c69aed72900b637a182eec1a17f1632d67db2",
+    "modules/work/references/index.ts": "fd0f35a7fb8c2f68229e51e5be37c9bc2c1fa7ec439ee972277ed94266b7784b",
+    "modules/work/references/preview/index.html": "94e61e352c57405f6613131f0615e8f7d9adceb378260e929aa0b28285910da8",
+    "modules/work/references/preview/main.tsx": "33bcab78f32715f6772dd54c9ad0554059236809798f26b6189c1166b5940c00",
+    "modules/work/references/preview/preview.css": "9febabad623a1941af88af0126aaa01d2b8822a54aa9dda72c193b5b70d8a5f7",
+    "modules/work/references/preview/vite.config.ts": "a2d05ee0bc3d6b518e2117039c5d669e5ba2fb805ecb5b60543ac5710ceeaf9e",
+    "modules/work/references/provider.ts": "af46505217f62dd27ed111274ce89744c00a37c287370b22b8bca2346ae090b1",
+    "modules/work/references/test/fixtures.ts": "c69402b599a4854ebf8da9301af17743237fc8798c1aa68dd863e548b36f2d3d",
+    "modules/work/references/test/links.test.tsx": "eaf02e98ad59ffb9dd72b4cc347fdabbd73d1d54a07234894f987b140444132e",
+    "modules/work/references/test/provider.test.ts": "bb1d9e48e1ede46f6298566476b34f2b814623077dca578016d0c2016d4786b9",
+    "modules/work/references/test/roundtrip.test.ts": "8a31a429997c02cbba8855218cc7ae29bbb161086c203b2f41a1cd3ef8da11f9"
+  },
+  "preview_build": {
+    "modules/work/references/preview/dist/assets/index-BFWy90NI.css": "fc191eb7bce3202ea32d0b690c9820cad3fc3c1b0dd3f8e5b795872a8ea80cc6",
+    "modules/work/references/preview/dist/assets/index-Doug3gI4.js": "015b0cf700024b81503b9cb62a623eecaae5d4a17eebad82af7d6d6c4bb62e9c",
+    "modules/work/references/preview/dist/index.html": "1608e6c1a7995b147a1833e1d9f1b19f502ba5bb2ecc9613d37d4ba82e403f57"
+  }
+}

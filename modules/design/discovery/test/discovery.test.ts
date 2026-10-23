@@ -59,8 +59,23 @@ test('cold refresh times out per host and returns useful partial results', async
   await service.open();
   assert.equal(service.getState().cacheStatus, 'cold');
   const running = service.refresh();
-  await settle();
+  await new Promise<void>((resolve, reject) => {
+    const unsubscribe = service.subscribe(check);
+    const timer = setTimeout(() => {
+      unsubscribe();
+      clearTimeout(timer);
+      reject(new Error('Fast host snapshot was not visible within 2000 ms'));
+    }, 2_000);
+    function check(): void {
+      if (Object.keys(service.getState().catalog.records).length !== 1) return;
+      unsubscribe();
+      clearTimeout(timer);
+      resolve();
+    }
+    check();
+  });
   assert.equal(Object.keys(service.getState().catalog.records).length, 1, 'fast host data is visible before the slow host settles');
+  assert.ok(service.getState().refreshing.includes(B), 'slow host is still unresolved before its timeout');
   clock.advance(5_000);
   const report = await running;
   const outcome = Object.fromEntries(report.results.map((item) => [item.hostId, item.outcome]));

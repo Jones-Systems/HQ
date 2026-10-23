@@ -1,0 +1,27 @@
+{
+  "source_revision": "98c1827d86f7dc6e0a30051f1cc2c42fbc99337c",
+  "spec_blob_oid": "8331acad0facd910fc47cf9dc33e78695f990d66",
+  "tasks": 14,
+  "test_intents": 14,
+  "ready_task_refs": [
+    "spec.hq-design#task.annotations.001",
+    "spec.hq-design#task.canvas.001",
+    "spec.hq-design#task.compare.001",
+    "spec.hq-design#task.components.001",
+    "spec.hq-design#task.connector.001",
+    "spec.hq-design#task.discovery.001",
+    "spec.hq-design#task.flows.001",
+    "spec.hq-design#task.imports.001",
+    "spec.hq-design#task.projects.001",
+    "spec.hq-design#task.references.001",
+    "spec.hq-design#task.requests.001",
+    "spec.hq-design#task.store.001",
+    "spec.hq-design#task.taste.001",
+    "spec.hq-design#task.ui.001"
+  ],
+  "capsule_drafts": 14,
+  "assignment_drafts": 14,
+  "rendered_bytes": 295931,
+  "scope": "independent local section deliverables; not installed integration or external dispatch",
+  "authority_effect": "none"
+}

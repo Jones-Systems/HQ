@@ -5,3 +5,6 @@ dist-electron/
 *.tsbuildinfo
 *.log
 .DS_Store
+.agents/shared-guidance.md
+.codex/agents/codex-v3-*.toml
+.claude/agents/codex-v3-*.md
