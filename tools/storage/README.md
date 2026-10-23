@@ -93,6 +93,18 @@ removed. A normal finalization removes only the exact owned scratch trees and
 matching owned locks. SIGKILL or host loss can leave locks/scratch for explicit
 recovery; no stale eviction runs later.
 
+If `preserveEvidence` throws, that invocation's exact owned scratch trees are
+retained and their paths reported in diagnostics. Ancestor cleanup also retains
+any owned scratch tree containing that held nested scratch; unrelated owned
+scratch still cleans normally. A later successful preservation callback does
+not clear this hold. The original child failure or signal remains primary;
+otherwise the preservation failure makes the result nonzero. Matching locks
+are released once owned producers have stopped: retained evidence is inert,
+and later invocations own different scratch trees, so retention alone does not
+require blocking the worktree with a stale lock. Unknown or live descendants
+still preserve locks as described below. Retained scratch requires explicit
+owner disposition; later invocations never sweep or retry its removal.
+
 The launcher forwards SIGINT, SIGTERM and SIGHUP and AbortSignal cancellation
 to its owned POSIX process group. A producer ignoring cancellation receives
 SIGKILL after one second; its actual exit/signal is returned with diagnostics.

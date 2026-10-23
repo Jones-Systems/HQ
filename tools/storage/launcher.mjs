@@ -281,13 +281,23 @@ async function execute(state, callback, preserveEvidence, release = async () => 
   }
   diagnostics.push(...(state.failures ?? []));
   state.active = false;
+  const top = state.top ?? state;
   try { await preserveEvidence?.(result, state.scratch.map(record => record.path)); }
-  catch (error) { diagnostics.push(`Evidence preservation failed: ${error.message}`); }
+  catch (error) {
+    diagnostics.push(`Evidence preservation failed: ${error.message}`);
+    // Ancestors must not recursively remove a nested invocation's held evidence.
+    (top.heldScratch ??= []).push(...state.scratch.map(record => record.path));
+  }
   try { await recheck(state); } catch (error) { diagnostics.push(error.message); }
-  if (!(state.top ?? state).cleanupUnsafe) {
+  if (!top.cleanupUnsafe) {
     for (const record of [...state.scratch].reverse()) {
+      if (top.heldScratch?.some(held => contains(record.path, held))) {
+        diagnostics.push(`Scratch preserved because evidence preservation failed: ${record.path}`);
+        continue;
+      }
       try { await removeScratch(record); } catch (error) { diagnostics.push(`Cleanup failed: ${error.message}`); }
     }
+    // Held evidence is inert once producers stop; only descendant uncertainty holds locks.
     for (const error of await release()) diagnostics.push(error.message);
   } else {
     for (const error of await release({ preserve: true })) diagnostics.push(error.message);

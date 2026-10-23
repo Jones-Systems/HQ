@@ -172,16 +172,74 @@ test('success and failure preserve evidence before exact owned scratch cleanup',
   }
 });
 
-test('callback and evidence failures still clean scratch; original child failure stays primary', async t => {
+test('failed evidence preservation retains exact scratch and original child outcomes', async t => {
+  for (const [script, code, signal] of [
+    ['process.exit(9)', 9, null],
+    ["process.kill(process.pid, 'SIGTERM')", null, 'SIGTERM'],
+    ['process.exit(0)', 1, null],
+  ]) {
+    const { plan, scratch, worktree, evidence } = await fixture(t);
+    plan.roots.push({ kind: 'evidence', path: evidence });
+    let owned;
+    const bytes = Buffer.from('unique required evidence\0\xff', 'latin1');
+    const result = await withStorageInvocation(plan, async context => {
+      owned = await context.scratch(scratch);
+      await fs.writeFile(path.join(owned, 'required'), bytes);
+      return context.launch(producer(script));
+    }, { testContext, preserveEvidence: async (_result, paths) => {
+      assert.deepEqual(paths, [owned]);
+      assert.deepEqual(await fs.readFile(path.join(owned, 'required')), bytes);
+      throw new Error('evidence fault');
+    } });
+    assert.equal(result.code, code);
+    assert.equal(result.signal, signal);
+    assert.match(result.diagnostics.join(), /Evidence preservation failed: evidence fault/);
+    assert.deepEqual(await fs.readFile(path.join(owned, 'required')), bytes);
+    assert.ok(result.diagnostics.some(message => message.includes(owned)));
+    for (const root of [worktree, evidence]) {
+      await assert.rejects(fs.stat(path.join(root, LOCK_NAME)), { code: 'ENOENT' });
+    }
+    let next;
+    const subsequent = await withStorageInvocation(plan, async context => {
+      next = await context.scratch(scratch);
+      return ok();
+    }, { testContext, preserveEvidence: () => {} });
+    assert.equal(subsequent.code, 0);
+    await assert.rejects(fs.stat(next), { code: 'ENOENT' });
+    assert.deepEqual(await fs.readFile(path.join(owned, 'required')), bytes);
+  }
+});
+
+test('nested preservation failure holds containing scratch but cleans unrelated scratch', async t => {
+  const { plan, scratch, worktree } = await fixture(t);
+  let outer, nested, unrelated, sibling;
+  const result = await withStorageInvocation(plan, async parent => {
+    outer = await parent.scratch(scratch);
+    unrelated = await parent.scratch(scratch);
+    const childPlan = { worktree, roots: [{ kind: 'scratch', path: outer }] };
+    await withStorageInvocation(childPlan, async child => {
+      nested = await child.scratch(outer);
+      await fs.writeFile(path.join(nested, 'required'), 'nested evidence');
+      return { code: 7, signal: null, diagnostics: [] };
+    }, { parent, allowanceBytes: MiB, preserveEvidence: () => { throw new Error('nested evidence fault'); } });
+    await withStorageInvocation(childPlan, async child => {
+      sibling = await child.scratch(outer);
+      return ok();
+    }, { parent, allowanceBytes: MiB, preserveEvidence: () => {} });
+    return ok();
+  }, { testContext, preserveEvidence: () => {} });
+  assert.equal(result.code, 7);
+  assert.match(result.diagnostics.join(), /nested evidence fault/);
+  assert.deepEqual(await fs.readdir(outer), [path.basename(nested)]);
+  assert.equal(await fs.readFile(path.join(nested, 'required'), 'utf8'), 'nested evidence');
+  for (const removed of [unrelated, sibling, path.join(worktree, LOCK_NAME)]) {
+    await assert.rejects(fs.stat(removed), { code: 'ENOENT' });
+  }
+});
+
+test('callback failures without preservation failure still clean scratch', async t => {
   const { plan, scratch } = await fixture(t);
   let owned;
-  const result = await withStorageInvocation(plan, async context => {
-    owned = await context.scratch(scratch);
-    return context.launch(producer('process.exit(9)'));
-  }, { testContext, preserveEvidence: () => { throw new Error('evidence fault'); } });
-  assert.equal(result.code, 9);
-  assert.match(result.diagnostics.join(), /evidence fault/);
-  await assert.rejects(fs.stat(owned), { code: 'ENOENT' });
   const failed = await withStorageInvocation(plan, async context => {
     owned = await context.scratch(scratch);
     throw new Error('callback fault');
