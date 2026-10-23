@@ -184,6 +184,10 @@ tests serially, then packaging and `native-smoke.cjs`. Each expensive command
 gets a fresh CPU/core/free-memory-lower-bound sample through `ci-run.cjs`.
 CPU at or above 85% or missing evidence holds a new start. Compiler concurrency
 is at most six and never exceeds the observed logical CPU count.
+With valid evidence of a busy host, admission takes at most ten one-second
+samples separated by five-second waits (55 seconds of scheduled waiting).
+Missing evidence fails immediately. Only admission is resampled; a command
+that has started is never retried by this wrapper.
 
 Native smoke uses two independent installations of the synthetic package/app/
 bundle identity, with separate owned profiles under one fresh scratch root.

@@ -16,6 +16,62 @@ const receipt = overrides => buildReceipt({ sourceSha: 'a'.repeat(40), sourceTre
 const put = (root, name, value) => { const file = path.join(root, name); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
 const load = (root, name) => JSON.parse(fs.readFileSync(path.join(root, name), 'utf8'));
 
+function ciRunnerFixture(cpuPercentages, { memory = 1024, exitCode = 0 } = {}) {
+  const { runInNewContext } = require('node:vm');
+  const events = new EventEmitter();
+  const samples = [], delays = [], launches = [];
+  let ticks = 0, idle = 0, reads = 0;
+  const fakeOs = {
+    cpus() {
+      if (reads++ % 2) { ticks += 100; idle += 100 - cpuPercentages[Math.min((reads - 2) / 2, cpuPercentages.length - 1)]; }
+      return [{ times: { idle, user: ticks - idle } }];
+    },
+    freemem: () => memory, totalmem: () => 4096,
+  };
+  const module = { exports: {} };
+  const fakeProcess = Object.assign(events, { env: {}, stdout: { write: text => samples.push(JSON.parse(text)) } });
+  const fakeRequire = name => name === 'node:os' ? fakeOs : name === 'node:child_process' ? {
+    spawn(command, args, options) {
+      launches.push({ command, args, options });
+      const child = new EventEmitter();
+      queueMicrotask(() => { child.exitCode = exitCode; child.emit('exit', exitCode, null); });
+      return child;
+    },
+  } : require(name);
+  runInNewContext(fs.readFileSync(path.join(__dirname, '../ci-run.cjs'), 'utf8'), {
+    require: fakeRequire, module, process: fakeProcess,
+    setTimeout: (resolve, ms) => { delays.push(ms); queueMicrotask(resolve); },
+  });
+  return { run: module.exports.run, samples, delays, launches };
+}
+
+test('CI admission resamples a busy host before exactly one command start', async () => {
+  const fixture = ciRunnerFixture([90, 85, 20]);
+  assert.equal(await fixture.run(['fixture-command', 'literal-arg']), 0);
+  assert.deepEqual(fixture.samples.map(sample => sample.starts), [0, 0, 1]);
+  assert.equal(fixture.launches.length, 1);
+  assert.equal(fixture.launches[0].command, 'fixture-command');
+  assert.deepEqual(fixture.launches[0].args, ['literal-arg']);
+  assert.equal(fixture.launches[0].options.env.CMAKE_BUILD_PARALLEL_LEVEL, '1');
+  assert.ok(fixture.delays.reduce((sum, delay) => sum + delay, 0) <= 55_000);
+});
+
+test('CI admission bounds busy waits, fails closed on missing memory and never retries a started command', async () => {
+  const busy = ciRunnerFixture([85]);
+  await assert.rejects(busy.run(['fixture-command']), /CI command held/);
+  assert.equal(busy.launches.length, 0);
+  assert.equal(busy.samples.length, 10);
+  assert.ok(busy.delays.reduce((sum, delay) => sum + delay, 0) <= 55_000);
+  const missing = ciRunnerFixture([20], { memory: 0 });
+  await assert.rejects(missing.run(['fixture-command']), /CI command held/);
+  assert.equal(missing.launches.length, 0);
+  assert.equal(missing.samples.length, 1);
+  const failed = ciRunnerFixture([20], { exitCode: 17 });
+  assert.equal(await failed.run(['fixture-command']), 17);
+  assert.equal(failed.launches.length, 1);
+  assert.equal(failed.samples.length, 1);
+});
+
 test('packaged layout carries exact receipt, nested hosts, bootstrap and transitive runtime dependencies', async () => {
   await withOwnedDirectory(scratch, 'layout-', async root => {
     const source = path.join(root, 'source'), target = path.join(root, 'app');
