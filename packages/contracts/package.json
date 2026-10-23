@@ -12,6 +12,7 @@
     "./design-records": "./src/design-records.ts",
     "./catalog": "./src/catalog.ts",
     "./preview": "./src/preview.ts",
-    "./jones-code": "./src/jones-code.ts"
+    "./jones-code": "./src/jones-code.ts",
+    "./updates": "./src/updates.ts"
   }
 }

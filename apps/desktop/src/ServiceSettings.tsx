@@ -1,4 +1,5 @@
 import { ProjectSources } from './settings/ProjectSources';
+import { Updates } from './settings/Updates';
 import { useEffect, useRef, useState } from 'react';
 import { Button, IconButton } from '@hq/ui';
 import type { Appearance } from '@hq/contracts';
@@ -101,8 +102,8 @@ function WikiSettings({ admin }: { admin?: WikiAdminTransport }) {
     </>}
   </section>;
 }
-type SettingsCategory = 'sources' | 'appearance';
-const CATEGORIES: readonly { id: SettingsCategory; label: string }[] = [{ id: 'sources', label: 'Data sources' }, { id: 'appearance', label: 'Appearance' }];
+type SettingsCategory = 'sources' | 'appearance' | 'updates';
+const CATEGORIES: readonly { id: SettingsCategory; label: string }[] = [{ id: 'sources', label: 'Data sources' }, { id: 'appearance', label: 'Appearance' }, { id: 'updates', label: 'Updates' }];
 /** Existing endpoint values stay in native configuration and are never read into this page. */
 export function ServiceSettings({ config, onClose, returnLabel = 'Design', target = null, appearance = 'system', onAppearanceChange, palette, dark = false }: {
   config?: ServiceConfigTransport; onClose: () => void; returnLabel?: string; target?: DataSource | 'appearance' | null;
@@ -134,7 +135,7 @@ export function ServiceSettings({ config, onClose, returnLabel = 'Design', targe
           <div className="settings-group"><DomainSettings domain="social" config={config} selected={target === 'social'} /><DomainSettings domain="work" config={config} selected={target === 'work'} /></div>
           <div className="settings-group"><ProjectSources /></div>
           <div id="settings-wiki" className={`settings-group${target === 'wiki' ? ' is-target' : ''}`}><WikiSettings admin={window.hqServices?.wikiAdmin} /></div>
-        </> : <>
+        </> : category === 'updates' ? <Updates /> : <>
           <div className="settings-section-heading"><h2>Appearance</h2><p>Choose a light or dark workspace, or follow your device, and pick the colors HQ uses when it is dark. Captured designs, previews and artwork keep their own appearance.</p></div>
           <div className="settings-group"><div className="settings-row"><div className="settings-row-copy"><h3>Color theme</h3><p>System follows changes to your device’s appearance.</p></div><div className="settings-row-control"><div className="settings-theme-options" role="group" aria-label="Color theme">{(['light', 'dark', 'system'] as const).map(mode => <Button key={mode} size="sm" aria-pressed={appearance === mode} onClick={() => onAppearanceChange?.(mode)}>{mode[0]!.toUpperCase() + mode.slice(1)}</Button>)}</div></div></div></div>
           {palette && <PaletteSettings palette={palette} dark={dark} />}

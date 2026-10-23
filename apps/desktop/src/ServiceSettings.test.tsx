@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { ServiceSettings } from './ServiceSettings';
 import { DataSourcesProvider } from './settings/DataSources';
 import type { ServiceConfigTransport } from '@hq/contracts/services';
+import type { UpdateStatus, UpdatesPort } from '@hq/contracts/updates';
 afterEach(cleanup);
 it('shows sanitized status; saves explicit input and clears it without URL readback', async () => {
   let configured = false;
@@ -52,4 +53,45 @@ it('requires confirmation before removing a Wiki source', async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm remove source' }));
     await waitFor(() => expect(call).toHaveBeenCalledWith('removeSource', { namespace: 'bl', expectedRevision: status.revision, confirmed: true }));
   } finally { cleanup(); Object.defineProperty(window, 'hqServices', { configurable: true, value: original }); }
+});
+
+it('opens Updates from Settings and releases its subscription when another category is selected', async () => {
+  const original = Object.getOwnPropertyDescriptor(window, 'hqUpdates');
+  const status: UpdateStatus = {
+    schemaVersion: 1, phase: 'idle', supported: true,
+    installed: { version: '1.0.0', sourceSha: 'a'.repeat(40), channel: 'preview' },
+    preferences: { automaticChecks: false, backgroundDownload: false },
+    lastCheckedAt: null, nextCheckAt: null, candidate: null, progress: null, error: null, recovery: null,
+  };
+  const result = { ok: true as const, status };
+  const unsubscribe = vi.fn();
+  const updates = {
+    status: vi.fn(async () => status), subscribe: vi.fn(() => unsubscribe),
+    check: vi.fn(async () => result), download: vi.fn(async () => result),
+    cancelDownload: vi.fn(async () => result), setPreferences: vi.fn(async () => result),
+    schedule: vi.fn(async () => result), cancelScheduled: vi.fn(async () => result),
+    shellReady: vi.fn(async () => {}),
+  } satisfies UpdatesPort;
+  Object.defineProperty(window, 'hqUpdates', { configurable: true, value: updates });
+  try {
+    const onClose = vi.fn();
+    render(<DataSourcesProvider><ServiceSettings onClose={onClose} returnLabel="Work" /></DataSourcesProvider>);
+    expect(updates.status).not.toHaveBeenCalled();
+    const category = screen.getByRole('button', { name: 'Updates' });
+    fireEvent.click(category);
+    await screen.findByText('Version 1.0.0');
+    expect(category.getAttribute('aria-current')).toBe('page');
+    expect(updates.subscribe).toHaveBeenCalledOnce();
+    expect(updates.check).not.toHaveBeenCalled();
+    expect(updates.shellReady).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
+    expect(screen.getByRole('heading', { name: 'Appearance' })).toBeTruthy();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: '← Back to Work' }));
+    expect(onClose).toHaveBeenCalledOnce();
+  } finally {
+    cleanup();
+    if (original) Object.defineProperty(window, 'hqUpdates', original);
+    else Reflect.deleteProperty(window, 'hqUpdates');
+  }
 });

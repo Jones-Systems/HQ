@@ -1,0 +1,545 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { EventEmitter } = require('node:events');
+const { createNativeAdapter } = require('../native.cjs');
+const { fixture, identity, fakeApp, writeBundle } = require('./fixtures.cjs');
+const { run, getContext } = require('../bootstrap.cjs');
+const { runHelper } = require('../helper.cjs');
+const { receiptOf, atomicWrite, readJson, digest } = require('../contract.cjs');
+
+const inventoryPath = path.resolve(__dirname, '../process-inventory');
+const observerPid = 0x7ffffffe;
+function inventory(record) {
+  const boot = '1792612800:000002';
+  return { schemaVersion: 1, complete: true, boot, processes: [
+    { pid: 101, ppid: 1, start: '1792663200:000001', boot, executable: path.join(record.targetPath, 'Contents/MacOS', record.appName) },
+    { pid: observerPid, ppid: process.pid, start: '1792663201:000002', boot, executable: inventoryPath },
+  ] };
+}
+function commands(record, overrides = {}) {
+  const calls = [];
+  const execFile = (file, args, options) => {
+    calls.push({ file, args, options });
+    const pending = (async () => {
+      if (file === '/usr/libexec/PlistBuddy') {
+        const key = args[1].slice('Print :'.length);
+        return { stdout: `${({ CFBundleIdentifier: record.bundleId, CFBundleExecutable: record.appName, CFBundleName: record.appName, ...overrides.plist })[key]}\n` };
+      }
+      if (file === '/usr/bin/lipo') return { stdout: `${overrides.architecture ?? 'arm64'}\n` };
+      if (file === '/usr/bin/codesign') {
+        if (args[0] === '--verify' && overrides.failSeal) throw overrides.failSeal instanceof Error ? overrides.failSeal : new Error('unsealed bundle');
+        return { stderr: `Identifier=${record.bundleId}\nSignature=adhoc\n` };
+      }
+      if (file === inventoryPath) {
+        if (overrides.failInventory) throw new Error('native process inventory denied');
+        return { stdout: overrides.rawInventory ?? JSON.stringify(overrides.inventory ?? inventory(record)) };
+      }
+      throw new Error('Unexpected native command');
+    })();
+    if (file === inventoryPath && !overrides.missingObserver) pending.child = { pid: observerPid };
+    return pending;
+  };
+  return { calls, execFile };
+}
+
+test('native candidate verification binds receipt, package identity, architecture and strict seal', async t => {
+  const f = await fixture(t);
+  const command = commands(f.record);
+  const native = createNativeAdapter({ platform: 'darwin', architecture: 'arm64', execFile: command.execFile });
+  assert.deepEqual(await native.verifyBundle(f.candidate.bundlePath, receiptOf(f.candidate.manifest)), receiptOf(f.candidate.manifest));
+  assert.ok(command.calls.some(call => call.file === '/usr/bin/codesign' && call.args.slice(0, 3).join(' ') === '--verify --deep --strict'));
+  assert.ok(command.calls.every(call => !('shell' in call.options)));
+  for (const overrides of [{ architecture: 'x86_64' }, { plist: { CFBundleIdentifier: 'another.app' } }, { failSeal: true }]) {
+    const other = createNativeAdapter({ platform: 'darwin', architecture: 'arm64', execFile: commands(f.record, overrides).execFile });
+    await assert.rejects(other.verifyBundle(f.candidate.bundlePath, receiptOf(f.candidate.manifest)));
+  }
+});
+
+test('native metadata mismatch cannot be hidden behind matching source hashes', async t => {
+  const f = await fixture(t, { kind: 'adopt' });
+  const native = createNativeAdapter({ platform: 'darwin', execFile: commands(f.record).execFile });
+  const filename = path.join(f.record.targetPath, 'Contents/Resources/app/package.json');
+  await atomicWrite(filename, { name: 'wrong-name', productName: f.record.appName });
+  const expected = await native.legacyIdentity(f.record.targetPath);
+  await assert.rejects(native.verifyLegacy(f.record.targetPath, expected, f.record), { code: 'incompatible' });
+});
+
+test('process evidence distinguishes dead PID, reused start, reboot and unavailable inventory', async t => {
+  const f = await fixture(t);
+  const native = createNativeAdapter({ platform: 'darwin', execFile: commands(f.record).execFile });
+  const current = await native.identity(101);
+  assert.equal(await native.observe(current), 'live');
+  assert.equal(await native.observe({ ...current, pid: 999 }), 'dead');
+  assert.equal(await native.observe({ ...current, start: 'old start' }), 'stale');
+  assert.equal(await native.observe({ ...current, boot: 'previous boot' }), 'stale');
+  const uncertain = createNativeAdapter({ platform: 'darwin', execFile: commands(f.record, { rawInventory: 'incomplete output\n' }).execFile });
+  assert.equal(await uncertain.observe(current), 'unknown');
+  const denied = createNativeAdapter({ platform: 'darwin', execFile: commands(f.record, { failInventory: true }).execFile });
+  assert.equal(await denied.observe(current), 'unknown');
+});
+
+test('bundle copy refuses escaped symlinks and preserves internal relative framework links', async t => {
+  const f = await fixture(t);
+  const native = createNativeAdapter({ platform: 'darwin', execFile: commands(f.record).execFile });
+  const contents = path.join(f.candidate.bundlePath, 'Contents');
+  await fs.mkdir(path.join(contents, 'internal'));
+  await fs.writeFile(path.join(contents, 'internal/asset'), 'synthetic resource');
+  await fs.symlink('internal', path.join(contents, 'relative-link'));
+  const destination = path.join(path.dirname(f.record.targetPath), 'Stage.app');
+  await fs.mkdir(destination);
+  const stat = await fs.stat(destination, { bigint: true });
+  await native.copyBundle(f.candidate.bundlePath, destination, Object.fromEntries(['dev', 'ino', 'uid'].map(key => [key, String(stat[key])])));
+  assert.equal(await fs.readlink(path.join(destination, 'Contents/relative-link')), 'internal');
+  await fs.writeFile(path.join(f.root, 'external'), 'outside');
+  await fs.symlink(path.join(f.root, 'external'), path.join(contents, 'escaped'));
+  await assert.rejects(native.inspectTree(f.candidate.bundlePath), { code: 'integrity' });
+});
+
+test('helper launch uses retained Electron and argv, never system Node or a shell', async t => {
+  const f = await fixture(t);
+  const launches = [];
+  const spawn = (file, args, options) => {
+    const child = new EventEmitter();
+    child.pid = 10001;
+    child.unref = () => {};
+    launches.push({ file, args, options });
+    queueMicrotask(() => child.emit('spawn'));
+    return child;
+  };
+  const native = createNativeAdapter({ platform: 'darwin', spawn });
+  await native.spawnHelper(f.record, f.candidate, 'a'.repeat(32));
+  assert.equal(launches[0].file, native.runtimePath(f.candidate.bundlePath, f.candidate.manifest));
+  assert.equal(launches[0].options.env.ELECTRON_RUN_AS_NODE, '1');
+  assert.equal(launches[0].options.detached, true);
+  assert.equal(launches[0].args[0], path.join(f.candidate.bundlePath, 'Contents/Resources/app/tools/updater/helper.cjs'));
+  assert.equal('shell' in launches[0].options, false);
+});
+
+test('native activation stays unavailable on unqualified platforms', () => {
+  const native = createNativeAdapter({ platform: 'linux' });
+  assert.throws(() => native.supported(), { code: 'unavailable' });
+});
+
+test('process inventory preserves executable-vnode paths and excludes only the exact completed observer', async t => {
+  const f = await fixture(t);
+  const value = inventory(f.record);
+  value.processes.push({ pid: 100, ppid: 1, start: '1792663100:000001', boot: value.boot, executable: '/bin/zsh' });
+  value.processes.push({ pid: 102, ppid: 1, start: '1792663101:000001', boot: value.boot, executable: inventoryPath });
+  const command = commands(f.record, { inventory: value });
+  const native = createNativeAdapter({ platform: 'darwin', execFile: command.execFile });
+  const table = await native.processTable();
+  assert.deepEqual(table.processes.map(row => row.pid), [101, 100, 102]);
+  assert.equal(table.processes[1].executable, '/bin/zsh');
+  assert.deepEqual(command.calls.map(call => [call.file, call.args]), [[inventoryPath, []]]);
+  assert.equal(command.calls[0].options.maxBuffer, 4 * 1024 * 1024);
+});
+
+test('closed inventory rejects incomplete, ambiguous, reused and forged observer evidence', async t => {
+  const f = await fixture(t);
+  const mutations = [
+    value => { value.complete = false; },
+    value => { value.unknown = true; },
+    value => { value.processes.push({ ...value.processes[0] }); },
+    value => { value.processes[0].ppid = -1; },
+    value => { value.processes[0].start = '0:000000'; },
+    value => { value.processes[0].boot = '1792612801:000002'; },
+    value => { value.processes[0].executable = '-zsh'; },
+    value => { value.processes[0].executable = 'kernel_task'; },
+    value => { value.processes[0].pid = 0; },
+    value => { value.processes[0].argv = 'not collected'; },
+    value => { value.processes.pop(); },
+    value => { value.processes[1].executable = '/usr/bin/other'; },
+    value => { value.processes[1].ppid = 0; },
+  ];
+  for (const mutate of mutations) {
+    const value = inventory(f.record);
+    mutate(value);
+    const native = createNativeAdapter({ platform: 'darwin', execFile: commands(f.record, { inventory: value }).execFile });
+    await assert.rejects(native.processTable(), { code: 'recovery-required' });
+  }
+  for (const overrides of [{ missingObserver: true }, { rawInventory: '{"schemaVersion":1' }, { rawInventory: ' '.repeat(4 * 1024 * 1024 + 1) }, { failInventory: true }]) {
+    const native = createNativeAdapter({ platform: 'darwin', execFile: commands(f.record, overrides).execFile });
+    await assert.rejects(native.processTable(), { code: 'recovery-required' });
+  }
+});
+
+function interruptStageCopy(f, { repeat = false } = {}) {
+  const copy = f.native.copyBundle;
+  let attempts = 0;
+  f.native.copyBundle = async (source, destination) => {
+    attempts++;
+    assert.equal(f.calls.at(-1)[0], 'checkTarget');
+    assert.equal(f.calls.at(-1)[2], f.candidate.manifest.archive.expandedSize * 2 + 64 * 1024 * 1024);
+    if (attempts === 1 || repeat) {
+      assert.equal((await fs.lstat(destination)).isDirectory(), true);
+      await fs.writeFile(path.join(destination, 'partial.data'), `partial attempt ${attempts}`);
+      throw new Error('interrupted stage copy');
+    }
+    return copy(source, destination);
+  };
+  return () => attempts;
+}
+async function preparedPartial(f) {
+  await f.prepare();
+  await assert.rejects(f.activate(), /interrupted stage copy/);
+  return f.engine.read(f.record);
+}
+async function recoverCurrent(f) {
+  const journal = await f.engine.read(f.record);
+  return f.locked(() => f.engine.recover(f.record, f.self, { operationId: journal.operationId, expectedSequence: journal.sequence }));
+}
+
+test('HQ-REV-004 fresh partial copy retries the exact candidate once and retains quarantine through failed health', async t => {
+  const f = await fixture(t, { kind: 'fresh' });
+  const attempts = interruptStageCopy(f);
+  const partial = await preparedPartial(f);
+  const ready = await recoverCurrent(f);
+  assert.equal(ready.operationId, partial.operationId);
+  assert.equal(ready.candidate.candidateId, partial.candidate.candidateId);
+  assert.equal(ready.state, 'awaiting-health');
+  assert.equal(attempts(), 2);
+  assert.equal(await fs.readFile(path.join(ready.failedPath, 'partial.data'), 'utf8'), 'partial attempt 1');
+  assert.deepEqual(await f.native.verifyBundle(f.record.targetPath, receiptOf(f.candidate.manifest)), receiptOf(f.candidate.manifest));
+  const launching = await f.locked(() => f.engine.requestLaunch(f.record, ready, f.self));
+  const row = f.processes.get(303);
+  const child = { pid: row.pid, start: row.start, boot: row.boot, executable: row.executable };
+  await f.locked(() => f.engine.registerLaunch(f.record, child, launching.operationId, launching.sequence));
+  f.processes.delete(child.pid);
+  const held = await recoverCurrent(f);
+  assert.equal(held.state, 'held');
+  assert.equal(await fs.readFile(path.join(held.failedPath, 'partial.data'), 'utf8'), 'partial attempt 1');
+  await assert.rejects(fs.stat(f.record.userData), { code: 'ENOENT' });
+});
+
+test('HQ-REV-004 repeated fresh partial copy holds both bounded slots without another copy', async t => {
+  const f = await fixture(t, { kind: 'fresh' });
+  const attempts = interruptStageCopy(f, { repeat: true });
+  const partial = await preparedPartial(f);
+  await assert.rejects(recoverCurrent(f), /interrupted stage copy/);
+  const held = await recoverCurrent(f);
+  assert.equal(held.state, 'held');
+  assert.equal(held.operationId, partial.operationId);
+  assert.equal(attempts(), 2);
+  assert.equal(await fs.readFile(path.join(held.failedPath, 'partial.data'), 'utf8'), 'partial attempt 1');
+  assert.equal(await fs.readFile(path.join(held.stagePath, 'partial.data'), 'utf8'), 'partial attempt 2');
+  await assert.rejects(fs.stat(f.record.targetPath), { code: 'ENOENT' });
+});
+
+for (const kind of ['update', 'fresh']) for (const boundary of ['stage-quarantine-recorded', 'before-quarantine-stage', 'after-quarantine-stage', ...(kind === 'fresh' ? ['stage-retry-ready'] : [])]) {
+  test(`HQ-REV-004 ${kind} reconciles ${boundary} by exact quarantine identity`, async t => {
+    let armed = false;
+    const f = await fixture(t, { kind, checkpoint: async name => { if (armed && name === boundary) { armed = false; throw new Error('quarantine interruption'); } } });
+    const attempts = interruptStageCopy(f);
+    const partial = await preparedPartial(f);
+    armed = true;
+    await assert.rejects(recoverCurrent(f), /quarantine interruption/);
+    const recovered = await recoverCurrent(f);
+    assert.equal(recovered.operationId, partial.operationId);
+    assert.equal(recovered.state, kind === 'fresh' ? 'awaiting-health' : 'restored');
+    assert.equal(attempts(), kind === 'fresh' ? 2 : 1);
+    assert.equal(await fs.readFile(path.join(recovered.failedPath, 'partial.data'), 'utf8'), 'partial attempt 1');
+    assert.deepEqual(await f.native.verifyBundle(f.record.targetPath, kind === 'fresh' ? receiptOf(f.candidate.manifest) : f.prior), kind === 'fresh' ? receiptOf(f.candidate.manifest) : f.prior);
+  });
+}
+
+test('HQ-REV-004 recovery does not require replacement space merely to return to the unchanged prior app', async t => {
+  const f = await fixture(t);
+  interruptStageCopy(f);
+  await preparedPartial(f);
+  f.native.checkTarget = async (_record, bytes) => { if (bytes !== 0) throw Object.assign(new Error('insufficient copy space'), { code: 'space' }); };
+  assert.equal((await recoverCurrent(f)).state, 'restored');
+  assert.deepEqual(await f.native.verifyBundle(f.record.targetPath, f.prior), f.prior);
+});
+
+for (const uncertainty of ['missing-claim', 'occupied-quarantine', 'verification-io']) test(`HQ-REV-004 ${uncertainty} preserves the stage and target`, async t => {
+  const f = await fixture(t);
+  interruptStageCopy(f);
+  const partial = await preparedPartial(f);
+  if (uncertainty === 'missing-claim') await fs.unlink(path.join(f.record.stateRoot, `stage-${partial.operationId}.json`));
+  if (uncertainty === 'occupied-quarantine') {
+    await fs.mkdir(partial.failedPath);
+    await fs.writeFile(path.join(partial.failedPath, 'unrelated.data'), 'preserve occupied destination');
+  }
+  if (uncertainty === 'verification-io') {
+    const verify = f.native.verifyBundle;
+    f.native.verifyBundle = async (filename, expected) => {
+      if (filename === partial.stagePath) throw Object.assign(new Error('unavailable read'), { code: 'EIO' });
+      return verify(filename, expected);
+    };
+  }
+  await assert.rejects(recoverCurrent(f));
+  assert.equal(await fs.readFile(path.join(partial.stagePath, 'partial.data'), 'utf8'), 'partial attempt 1');
+  assert.deepEqual(await f.native.verifyBundle(f.record.targetPath, f.prior), f.prior);
+  if (uncertainty === 'occupied-quarantine') assert.equal(await fs.readFile(path.join(partial.failedPath, 'unrelated.data'), 'utf8'), 'preserve occupied destination');
+  else await assert.rejects(fs.stat(partial.failedPath), { code: 'ENOENT' });
+});
+
+test('HQ-REV-004 a substituted stage inode after quarantine intent cannot be moved', async t => {
+  let armed = false;
+  const f = await fixture(t, { checkpoint: async name => { if (armed && name === 'stage-quarantine-recorded') { armed = false; throw new Error('quarantine interruption'); } } });
+  interruptStageCopy(f);
+  const partial = await preparedPartial(f);
+  armed = true;
+  await assert.rejects(recoverCurrent(f), /quarantine interruption/);
+  const original = path.join(f.root, 'retained-original-stage');
+  await fs.rename(partial.stagePath, original);
+  await fs.mkdir(partial.stagePath);
+  await fs.writeFile(path.join(partial.stagePath, 'other.data'), 'unknown replacement');
+  await assert.rejects(recoverCurrent(f), { code: 'recovery-required' });
+  assert.equal(await fs.readFile(path.join(original, 'partial.data'), 'utf8'), 'partial attempt 1');
+  assert.equal(await fs.readFile(path.join(partial.stagePath, 'other.data'), 'utf8'), 'unknown replacement');
+  await assert.rejects(fs.stat(partial.failedPath), { code: 'ENOENT' });
+});
+
+test('HQ-REV-004 original-target identity is rechecked immediately before quarantine rename', async t => {
+  let armed = false;
+  let f;
+  f = await fixture(t, { checkpoint: async name => { if (armed && name === 'before-quarantine-stage') { armed = false; await writeBundle(f.record.targetPath, { ...f.prior, sourceSha: 'e'.repeat(40) }); } } });
+  interruptStageCopy(f);
+  const partial = await preparedPartial(f);
+  armed = true;
+  await assert.rejects(recoverCurrent(f), { code: 'integrity' });
+  assert.equal(await fs.readFile(path.join(partial.stagePath, 'partial.data'), 'utf8'), 'partial attempt 1');
+  await assert.rejects(fs.stat(partial.failedPath), { code: 'ENOENT' });
+});
+
+test('HQ-REV-004 native seal rejection is distinguishable from denied or interrupted verification', async t => {
+  const f = await fixture(t);
+  const rejection = Object.assign(new Error('seal rejected'), { code: 1 });
+  const native = createNativeAdapter({ platform: 'darwin', execFile: commands(f.record, { failSeal: rejection }).execFile });
+  await assert.rejects(native.verifyBundle(f.candidate.bundlePath, receiptOf(f.candidate.manifest)), { code: 'integrity' });
+  for (const failure of [Object.assign(new Error('denied'), { code: 'EACCES' }), Object.assign(new Error('interrupted'), { code: 1, killed: true })]) {
+    const uncertain = createNativeAdapter({ platform: 'darwin', execFile: commands(f.record, { failSeal: failure }).execFile });
+    await assert.rejects(uncertain.verifyBundle(f.candidate.bundlePath, receiptOf(f.candidate.manifest)), error => error === failure);
+  }
+});
+
+test('HQ-REV-001 a new exact acceptance after restoration is not consumed as old consent', async t => {
+  const f = await fixture(t);
+  await f.writeRecord();
+  const { launched } = await f.start();
+  f.processes.delete(launched.pid);
+  const restored = await recoverCurrent(f);
+  assert.equal(restored.state, 'restored');
+  f.processes.clear();
+  f.setSelf(identity(path.join(f.record.targetPath, 'Contents/MacOS', f.record.appName), 401));
+  const options = () => ({ app: fakeApp(f.record.appName), bundlePath: f.record.targetPath, adapters: { ...f.adapters, argv: [], environment: {} }, importMain: async () => {} });
+  await run(options());
+  await getContext().schedule(f.candidate);
+  const accepted = await readJson(path.join(f.record.stateRoot, 'scheduled.json'));
+  assert.match(accepted.consentId, /^[a-f0-9]{32}$/);
+  await getContext().dispose();
+  f.processes.clear();
+  f.setSelf(identity(path.join(f.record.targetPath, 'Contents/MacOS', f.record.appName), 402));
+  assert.equal((await run(options())).state, 'handoff');
+  const next = await f.engine.read(f.record);
+  assert.notEqual(next.operationId, restored.operationId);
+  assert.equal(next.consentId, accepted.consentId);
+});
+
+test('HQ-REV-001 existing nonce-less consent is consumed only by its exact prepared transaction', async t => {
+  const f = await fixture(t);
+  await f.writeRecord();
+  const journal = await f.prepare();
+  const filename = path.join(f.record.stateRoot, 'scheduled.json');
+  await atomicWrite(filename, { schemaVersion: 1, installationId: f.record.installationId, installedId: digest(f.record.installed), candidate: f.candidate });
+  f.processes.clear();
+  f.setSelf(identity(path.join(f.record.targetPath, 'Contents/MacOS', f.record.appName), 401));
+  assert.equal((await run({ app: fakeApp(f.record.appName), bundlePath: f.record.targetPath, adapters: { ...f.adapters, argv: [], environment: {} }, importMain: async () => assert.fail('resumed bootstrap imported main') })).state, 'handoff');
+  assert.equal((await f.engine.read(f.record)).operationId, journal.operationId);
+  await assert.rejects(fs.stat(filename), { code: 'ENOENT' });
+});
+
+async function resumePartialThroughBootstrap(f, partial) {
+  await f.writeRecord();
+  f.processes.clear();
+  f.setSelf(identity(path.join(f.record.targetPath, 'Contents/MacOS', f.record.appName), 401));
+  const handoff = await run({ app: fakeApp(f.record.appName), bundlePath: f.record.targetPath, adapters: { ...f.adapters, argv: [], environment: {} }, importMain: async () => assert.fail('partial preparation imported main') });
+  assert.equal(handoff.state, 'handoff');
+  assert.equal(handoff.operationId, partial.operationId);
+  f.processes.clear();
+  f.setSelf(f.helperIdentity);
+  return runHelper({ record: f.record, operationId: partial.operationId, adapters: f.adapters });
+}
+
+for (const metadata of ['build-receipt.json', 'package.json']) test(`HQ-REV-004 truncated ${metadata} recovers through ordinary bootstrap`, async t => {
+  const f = await fixture(t);
+  const native = createNativeAdapter({ platform: 'darwin', architecture: 'arm64', execFile: commands(f.record).execFile });
+  f.native.verifyBundle = native.verifyBundle;
+  const copy = f.native.copyBundle;
+  f.native.copyBundle = async (source, destination) => {
+    await copy(source, destination);
+    await fs.writeFile(path.join(destination, 'Contents/Resources/app', metadata), '{"interrupted":');
+    throw new Error('interrupted metadata copy');
+  };
+  await f.prepare();
+  await assert.rejects(f.activate(), /interrupted metadata copy/);
+  const partial = await f.engine.read(f.record);
+  const recovered = await resumePartialThroughBootstrap(f, partial);
+  assert.equal(recovered.state, 'restored');
+  assert.equal(recovered.operationId, partial.operationId);
+  assert.equal(await fs.readFile(path.join(recovered.failedPath, 'Contents/Resources/app', metadata), 'utf8'), '{"interrupted":');
+  assert.deepEqual(await native.verifyBundle(f.record.targetPath, f.prior), f.prior);
+  f.processes.clear();
+  f.setSelf(identity(path.join(f.record.targetPath, 'Contents/MacOS', f.record.appName), 402));
+  let imported = false;
+  assert.equal((await run({ app: fakeApp(f.record.appName), bundlePath: f.record.targetPath, adapters: { ...f.adapters, argv: [], environment: {} }, importMain: async () => { imported = true; } })).state, 'running');
+  assert.equal(imported, true);
+  await getContext().dispose();
+  assert.equal(await fs.readFile(path.join(f.record.userData, 'untouched.data'), 'utf8'), 'synthetic profile bytes');
+});
+
+test('HQ-REV-004 uncertain metadata I/O remains held through ordinary bootstrap', async t => {
+  const f = await fixture(t);
+  let unavailable = null;
+  const failure = Object.assign(new Error('metadata read unavailable'), { code: 'EIO' });
+  const io = { ...fs, open: async (filename, ...args) => {
+    if (filename === unavailable) throw failure;
+    return fs.open(filename, ...args);
+  } };
+  const native = createNativeAdapter({ fs: io, platform: 'darwin', architecture: 'arm64', execFile: commands(f.record).execFile });
+  f.native.verifyBundle = native.verifyBundle;
+  const copy = f.native.copyBundle;
+  f.native.copyBundle = async (source, destination) => {
+    await copy(source, destination);
+    throw new Error('interrupted metadata copy');
+  };
+  await f.prepare();
+  await assert.rejects(f.activate(), /interrupted metadata copy/);
+  const partial = await f.engine.read(f.record);
+  unavailable = path.join(partial.stagePath, 'Contents/Resources/app/build-receipt.json');
+  const stage = await fs.stat(partial.stagePath, { bigint: true });
+  await assert.rejects(resumePartialThroughBootstrap(f, partial), error => error === failure);
+  assert.equal((await fs.stat(partial.stagePath, { bigint: true })).ino, stage.ino);
+  assert.equal((await f.engine.read(f.record)).state, 'prepared');
+  await assert.rejects(fs.stat(partial.failedPath), { code: 'ENOENT' });
+  assert.deepEqual(await native.verifyBundle(f.record.targetPath, f.prior), f.prior);
+});
+
+for (const replacement of ['partial', 'complete']) test(`HQ-REV-005 ${replacement} stage substitution before first quarantine intent is preserved without mutation`, async t => {
+  const f = await fixture(t);
+  f.native.copyBundle = async (_source, destination) => {
+    await fs.mkdir(destination, { recursive: true });
+    await fs.writeFile(path.join(destination, 'partial.data'), 'owned interrupted stage');
+    throw new Error('interrupted stage copy');
+  };
+  const partial = await preparedPartial(f);
+  const claimFile = path.join(f.record.stateRoot, `stage-${partial.operationId}.json`);
+  const claim = await fs.readFile(claimFile, 'utf8');
+  const original = path.join(f.root, 'retained-original-stage');
+  await fs.rename(partial.stagePath, original);
+  if (replacement === 'complete') await writeBundle(partial.stagePath, receiptOf(f.candidate.manifest));
+  else await fs.mkdir(partial.stagePath);
+  await fs.writeFile(path.join(partial.stagePath, 'foreign.data'), 'unowned replacement');
+  const foreign = await fs.stat(partial.stagePath, { bigint: true });
+  await assert.rejects(recoverCurrent(f), { code: 'recovery-required' });
+  assert.equal((await fs.stat(partial.stagePath, { bigint: true })).ino, foreign.ino);
+  assert.equal(await fs.readFile(path.join(partial.stagePath, 'foreign.data'), 'utf8'), 'unowned replacement');
+  assert.equal(await fs.readFile(path.join(original, 'partial.data'), 'utf8'), 'owned interrupted stage');
+  assert.equal(await fs.readFile(claimFile, 'utf8'), claim);
+  assert.deepEqual(await f.engine.read(f.record), partial);
+  await assert.rejects(fs.stat(partial.failedPath), { code: 'ENOENT' });
+  await assert.rejects(fs.stat(partial.priorPath), { code: 'ENOENT' });
+  assert.deepEqual(await f.native.verifyBundle(f.record.targetPath, f.prior), f.prior);
+});
+
+for (const boundary of ['stage-created', 'atomic-file-synced']) test(`HQ-REV-005 ${boundary} interruption before durable creation ownership holds the directory`, async t => {
+  let armed = true;
+  const f = await fixture(t, { checkpoint: async (name, value) => {
+    if (armed && name === boundary && (name !== 'atomic-file-synced' || /\/stage-[a-f0-9]{32}\.json$/.test(value))) {
+      armed = false;
+      throw new Error('creation claim interruption');
+    }
+  } });
+  await f.prepare();
+  await assert.rejects(f.activate(), /creation claim interruption/);
+  const partial = await f.engine.read(f.record);
+  const created = await fs.stat(partial.stagePath, { bigint: true });
+  await assert.rejects(fs.stat(path.join(f.record.stateRoot, `stage-${partial.operationId}.json`)), { code: 'ENOENT' });
+  await assert.rejects(recoverCurrent(f), { code: 'recovery-required' });
+  assert.equal((await fs.stat(partial.stagePath, { bigint: true })).ino, created.ino);
+  assert.deepEqual(await fs.readdir(partial.stagePath), []);
+  await assert.rejects(fs.stat(partial.failedPath), { code: 'ENOENT' });
+  assert.deepEqual(await f.native.verifyBundle(f.record.targetPath, f.prior), f.prior);
+  assert.equal(f.calls.some(call => call[0] === 'copyBundle'), false);
+});
+
+test('HQ-REV-005 durable creation ownership permits exact recovery before copying starts', async t => {
+  let armed = true;
+  const f = await fixture(t, { checkpoint: async name => {
+    if (armed && name === 'stage-creation-recorded') { armed = false; throw new Error('claimed creation interruption'); }
+  } });
+  await f.prepare();
+  await assert.rejects(f.activate(), /claimed creation interruption/);
+  const partial = await f.engine.read(f.record);
+  const created = await fs.stat(partial.stagePath, { bigint: true });
+  const claim = await readJson(path.join(f.record.stateRoot, `stage-${partial.operationId}.json`));
+  assert.deepEqual(claim.stage, Object.fromEntries(['dev', 'ino', 'uid'].map(key => [key, String(created[key])])));
+  assert.equal((await recoverCurrent(f)).state, 'restored');
+  assert.equal((await fs.stat(partial.failedPath, { bigint: true })).ino, created.ino);
+  assert.deepEqual(await fs.readdir(partial.failedPath), []);
+  assert.equal(f.calls.some(call => call[0] === 'copyBundle'), false);
+});
+
+test('HQ-REV-005 fresh retry interrupted before its durable creation claim preserves both slots', async t => {
+  let armed = false;
+  const f = await fixture(t, { kind: 'fresh', checkpoint: async name => {
+    if (armed && name === 'stage-created') { armed = false; throw new Error('retry creation interruption'); }
+  } });
+  const attempts = interruptStageCopy(f);
+  const partial = await preparedPartial(f);
+  armed = true;
+  await assert.rejects(recoverCurrent(f), /retry creation interruption/);
+  const second = await fs.stat(partial.stagePath, { bigint: true });
+  await assert.rejects(recoverCurrent(f), { code: 'recovery-required' });
+  assert.equal((await fs.stat(partial.stagePath, { bigint: true })).ino, second.ino);
+  assert.deepEqual(await fs.readdir(partial.stagePath), []);
+  assert.equal(await fs.readFile(path.join(partial.failedPath, 'partial.data'), 'utf8'), 'partial attempt 1');
+  assert.equal(attempts(), 1);
+  await assert.rejects(fs.stat(f.record.targetPath), { code: 'ENOENT' });
+});
+
+for (const timing of ['before', 'during']) test(`HQ-REV-005 native copy refuses a destination replaced ${timing} copying`, async t => {
+  const f = await fixture(t);
+  const destination = path.join(path.dirname(f.record.targetPath), 'NativeStage.app');
+  const retained = path.join(f.root, 'native-created-stage');
+  await fs.mkdir(destination);
+  const created = await fs.stat(destination, { bigint: true });
+  const expected = Object.fromEntries(['dev', 'ino', 'uid'].map(key => [key, String(created[key])]));
+  async function replace() {
+    await fs.rename(destination, retained);
+    await fs.mkdir(destination);
+    await fs.writeFile(path.join(destination, 'foreign.data'), 'preserve unknown copy destination');
+  }
+  const io = { ...fs, cp: async (source, target, options) => { await replace(); return fs.cp(source, target, options); } };
+  const native = createNativeAdapter({ fs: timing === 'during' ? io : fs, platform: 'darwin' });
+  if (timing === 'before') await replace();
+  await assert.rejects(native.copyBundle(f.candidate.bundlePath, destination, expected), { code: 'recovery-required' });
+  assert.deepEqual(await fs.readdir(destination), ['foreign.data']);
+  assert.equal(await fs.readFile(path.join(destination, 'foreign.data'), 'utf8'), 'preserve unknown copy destination');
+  assert.deepEqual(await fs.readdir(retained), []);
+});
+
+test('HQ-REV-005 the created stage identity is rechecked immediately before installation rename', async t => {
+  let f;
+  f = await fixture(t, { checkpoint: async (name, journal) => {
+    if (name === 'before-install-replacement') {
+      await fs.rename(journal.stagePath, path.join(f.root, 'retained-complete-stage'));
+      await writeBundle(journal.stagePath, receiptOf(f.candidate.manifest));
+      await fs.writeFile(path.join(journal.stagePath, 'foreign.data'), 'preserve unowned ready stage');
+    }
+  } });
+  await f.prepare();
+  await assert.rejects(f.activate(), { code: 'recovery-required' });
+  const journal = await f.engine.read(f.record);
+  assert.equal(journal.state, 'prior-retained');
+  assert.equal(await fs.readFile(path.join(journal.stagePath, 'foreign.data'), 'utf8'), 'preserve unowned ready stage');
+  assert.deepEqual(await f.native.verifyBundle(journal.priorPath, f.prior), f.prior);
+  await assert.rejects(fs.stat(f.record.targetPath), { code: 'ENOENT' });
+  await assert.rejects(fs.stat(journal.failedPath), { code: 'ENOENT' });
+  assert.equal(f.calls.some(call => call[0] === 'launch'), false);
+});

@@ -1,0 +1,184 @@
+name: HQ desktop package
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    tags: ['hq-desktop-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hq-desktop-package-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  package:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    env:
+      HQ_PACKAGE_ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Bind invocation output roots on the allocated runner
+        run: |
+          printf 'HQ_PACKAGE_OUTPUT=%s/hq-package-%s-%s-%s\n' "$RUNNER_TEMP" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$HQ_PACKAGE_ARCH" >> "$GITHUB_ENV"
+          printf 'HQ_NATIVE_SCRATCH=%s/hq-native-smoke\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Use pinned Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+      - name: Require an exact integrated source for a release tag
+        if: github.event_name == 'push'
+        run: node tools/updater/packaging/release-guard.cjs
+      - name: Install locked dependencies without lifecycle scripts
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: node tools/updater/packaging/ci-run.cjs npm ci --ignore-scripts --no-audit --no-fund
+      - name: Download the locked native Electron runtime
+        run: node tools/updater/packaging/ci-run.cjs node node_modules/electron/install.js
+      - name: Compile the native process inventory for this architecture
+        env:
+          HQ_COMPILER_ARCH: ${{ matrix.arch == 'x64' && 'x86_64' || matrix.arch }}
+        run: node tools/updater/packaging/ci-run.cjs /usr/bin/xcrun --sdk macosx clang -std=c11 -Wall -Wextra -Werror -arch "$HQ_COMPILER_ARCH" tools/updater/process-inventory.c -o tools/updater/process-inventory
+      - name: Check registered compatibility sources
+        run: node tools/updater/packaging/compatibility.cjs
+      - name: Test package layout, epoch, transaction and installer
+        run: node tools/updater/packaging/ci-run.cjs node --test --test-concurrency=1 tools/updater/test/*.test.cjs tools/updater/packaging/test/*.test.cjs
+      - name: Typecheck and compile desktop, renderer and nested hosts
+        run: node tools/updater/packaging/ci-run.cjs npm run build
+      - name: Run desktop tests serially
+        id: desktop-tests
+        run: node tools/updater/packaging/ci-run.cjs node node_modules/vitest/vitest.mjs run --maxWorkers=1 --no-file-parallelism
+      - name: Diagnose loopback name lookup after a desktop test failure
+        timeout-minutes: 1
+        if: failure() && steps.desktop-tests.outcome == 'failure'
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          node tools/updater/packaging/ci-run.cjs python3 - <<'PYTHON'
+          import faulthandler
+          import json
+          import socket
+          import sys
+          import time
+
+          print(json.dumps({"probe": "planner-loopback-name-lookup", "python": sys.version.split()[0], "phase": "starting"}), flush=True)
+          faulthandler.dump_traceback_later(8, exit=True)
+          started = time.monotonic()
+          socket.getfqdn("127.0.0.1")
+          faulthandler.cancel_dump_traceback_later()
+          print(json.dumps({"probe": "planner-loopback-name-lookup", "phase": "complete", "elapsedSeconds": time.monotonic() - started}), flush=True)
+          PYTHON
+      - name: Assemble and strictly verify the ad-hoc package
+        id: assemble
+        env:
+          HQ_RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+        run: node tools/updater/packaging/ci-run.cjs node tools/updater/packaging/package.cjs
+      - name: Qualify synthetic native launch, next launch and recovery
+        run: node tools/updater/packaging/ci-run.cjs node tools/updater/packaging/native-smoke.cjs
+      - name: Preserve package and native evidence
+        if: always() && steps.assemble.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hq-package-${{ matrix.arch }}
+          path: |
+            ${{ env.HQ_PACKAGE_OUTPUT }}/*.zip
+            ${{ env.HQ_PACKAGE_OUTPUT }}/*.json
+            ${{ env.HQ_PACKAGE_OUTPUT }}/*.txt
+            ${{ env.HQ_PACKAGE_OUTPUT }}/*.command
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: Remove only this invocation's package output
+        if: always()
+        run: node tools/updater/packaging/cleanup-output.cjs
+
+  attest:
+    if: github.event_name == 'push'
+    needs: package
+    strategy:
+      matrix:
+        arch: [arm64, x64]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out release identity
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Recheck exact integrated tag
+        run: node tools/updater/packaging/release-guard.cjs
+      - name: Retrieve the exact run's package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: hq-package-${{ matrix.arch }}
+          path: release-input
+      - name: Bind archive and manifest bytes to workflow provenance
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            release-input/**/hq-darwin-${{ matrix.arch }}.zip
+            release-input/**/hq-darwin-${{ matrix.arch }}.json
+      - name: Preserve the JSON Sigstore bundle with fixed asset names
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          HQ_PACKAGE_ARCH: ${{ matrix.arch }}
+        run: node tools/updater/packaging/stage-release.cjs
+      - name: Preserve attested release assets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hq-attested-${{ matrix.arch }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  publish:
+    if: github.event_name == 'push'
+    needs: attest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release identity
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Recheck exact integrated tag before publication
+        run: node tools/updater/packaging/release-guard.cjs
+      - name: Retrieve both architectures from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: hq-attested-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish one preview release without replacing any existing asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --target "$GITHUB_SHA" --prerelease --title "$GITHUB_REF_NAME" --notes-file tools/updater/packaging/RELEASE.txt release-assets/hq-darwin-arm64.zip release-assets/hq-darwin-arm64.json release-assets/hq-darwin-arm64.sigstore.json release-assets/hq-darwin-x64.zip release-assets/hq-darwin-x64.json release-assets/hq-darwin-x64.sigstore.json tools/updater/packaging/INSTALL.txt tools/updater/packaging/install-hq.command
