@@ -1,3 +1,4 @@
+import { Button, StatusChip } from '@hq/ui';
 import { use, useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import type { DesignSectionProps } from '../../ui/contract.ts';
 import type { RequestsSectionProps } from '../sections/requests/View.tsx';
@@ -46,22 +47,33 @@ function RequestPicker({ props, create, children }: {
     } catch { setError('Request creation failed or its outcome is unknown. Reopen to reconcile before trying again.'); }
     finally { setBusy(false); }
   };
-  return <>
+  return <div className="hqd-request-page">
+    <header className="hqd-page-heading">
+      <div><h1>{create ? 'Requests' : 'Runs'}</h1>
+        <p>{create ? 'Shape a request from a saved project version.' : 'Review frozen requests and their returned work.'}</p></div>
+      <StatusChip tone="neutral" label="On this device" />
+    </header>
+    <div className="hqd-request-picker">
     {error && <p role="alert">{error}</p>}
-    <label>Request <select value={selected?.state.requestId ?? ''} disabled={busy} onChange={(event) => choose(sessions.find((session) => session.state.requestId === event.target.value) ?? null)}>
+    <label className="hqd-field">Request <select value={selected?.state.requestId ?? ''} disabled={busy} onChange={(event) => choose(sessions.find((session) => session.state.requestId === event.target.value) ?? null)}>
       <option value="">Choose a request</option>
       {sessions.map((session) => <option key={session.state.requestId} value={session.state.requestId}>{session.state.draft?.title || session.state.requestId}</option>)}
     </select></label>
-    {create && <div>
-      <label>Source version <select value={versionId} onChange={(event) => setVersionId(event.target.value)}>
+    {create && <div className="hqd-request-create">
+      <label className="hqd-field">Source version <select value={versionId} onChange={(event) => setVersionId(event.target.value)}>
         <option value="">Choose a saved source version</option>
         {content.versions.filter((version) => version.capture.sourceRevision).map((version) => <option key={version.id} value={version.id}>{version.label}</option>)}
       </select></label>
-      <button type="button" disabled={busy || error !== null || !versionId} onClick={() => { void add(); }}>Create request</button>
+      <Button variant="primary" busy={busy} busyLabel="Creating request" disabled={busy || error !== null || !versionId} onClick={() => { void add(); }}>Create request</Button>
       {content.versions.every((version) => !version.capture.sourceRevision) && <p>Save a project version with a source revision before creating a request.</p>}
     </div>}
-    {selected ? children(selected) : <p>Choose a request to continue. Navigation sends nothing.</p>}
-  </>;
+    </div>
+    {selected ? children(selected) : <div className="hqd-empty-state">
+      <h2>{sessions.length === 0 ? 'No requests yet' : 'Choose a request'}</h2>
+      <p>{sessions.length === 0 ? (create ? 'Choose a source version above to start your first request.' : 'Create and freeze a request in Requests to see it here.') : 'Choose a request to continue.'}</p>
+      <p className="hqd-safety-note">Navigation sends nothing.</p>
+    </div>}
+  </div>;
 }
 
 async function projectRequests(env: RequestsEnvironment, projectId: string) {
@@ -95,11 +107,11 @@ export function mountRuns(Section: ComponentType<RunsSectionProps>): ComponentTy
 }
 
 export function mountReferences(Section: typeof ReferencesSection): ComponentType<DesignSectionProps> {
-  return withSectionErrorBoundary(function ReferencesMount({ context }) {
+  return withSectionErrorBoundary(function ReferencesMount({ context, navigate }) {
     const workspace = useDesignWorkspace();
     const env = use(workspace.closure.references());
     return <SectionFrame lane="References" entry="app/sections/references/View.tsx" tags={[workspace.storageTag]}>
-      <Section env={env} currentProject={context} />
+      <Section env={env} currentProject={context} onShowProjects={() => navigate({ nav: 'projects', section: 'projects' })} />
     </SectionFrame>;
   });
 }

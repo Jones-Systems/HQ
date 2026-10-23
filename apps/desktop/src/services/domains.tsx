@@ -1,11 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { ModulePort } from '@hq/contracts';
 import type { HqServices, ServiceDomain } from '@hq/contracts/services';
+import { createWorkExportClient } from './work-export';
 import { WorkModule, setWorkSessionPort, examplePlanner } from '@hq/work';
 import { SocialDomain } from '../../../../modules/social/nav';
 import { createLiveSocialPort } from '../../../../modules/social/live';
 import { createWorkbenchFixture } from '../../../../modules/social/workbench/fixtures/examples';
+import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES } from '../../../../modules/social/core';
 import { bridgeTransport, createPlannerLive } from '../../../../modules/work/live';
+import { serviceStatus } from './data-source-status';
 
 type Selection = 'live' | 'example' | 'unavailable';
 export const RELOAD_NOTE = 'Endpoint changes apply after HQ reloads.';
@@ -20,9 +23,9 @@ export async function selectService(services: HqServices | undefined, domain: Se
   } catch { return 'unavailable'; }
 }
 function Surface({ domain, selection, children }: { domain: string; selection: Selection; children?: ReactNode }) {
-  return <section aria-label={`${domain} service`}>
-    <p role="status">{domain}: {selection === 'live' ? 'Live service' : selection === 'example' ? 'Synthetic example' : 'Unavailable — service is not configured correctly'}.</p>
-    <p>{RELOAD_NOTE}</p>
+  const status = serviceStatus(selection === 'example' ? { configured: false, policy: 'ok', transport: null } : selection === 'live' ? { configured: true, policy: 'ok', transport: 'https' } : undefined);
+  return <section className="service-domain" aria-label={`${domain} service`}>
+    <div className="service-status" role="status" title={RELOAD_NOTE}><span>{domain}: {status.text}.</span><button className="service-setup-link" onClick={() => window.dispatchEvent(new CustomEvent('hq-open-settings', { detail: { source: domain.toLowerCase() } }))}>{selection === 'example' ? 'Set up' : 'Settings'}</button></div>
     {children}
   </section>;
 }
@@ -30,11 +33,12 @@ function Surface({ domain, selection, children }: { domain: string; selection: S
 export function createServiceDomains(getServices: () => HqServices | undefined) {
   let socialChoice: ReturnType<typeof chooseSocial> | undefined;
   let workChoice: Promise<Selection> | undefined;
+  let workExport: ReturnType<typeof createWorkExportClient> | undefined;
   async function chooseSocial() {
     const services = getServices();
     const selection = await selectService(services, 'social');
     const port = selection === 'live' ? createLiveSocialPort(services!.social)
-      : selection === 'example' ? createWorkbenchFixture().port : null;
+      : selection === 'example' ? createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port : null;
     return { selection, port };
   }
   function Social(props: ModulePort) {
@@ -47,6 +51,7 @@ export function createServiceDomains(getServices: () => HqServices | undefined) 
     const selection = await selectService(services, 'work');
     if (selection === 'live') {
       const planner = createPlannerLive(bridgeTransport(services!.work));
+      workExport = createWorkExportClient(services!.work);
       setWorkSessionPort(planner.port, { example: false, recovery: planner.recovery });
     } else if (selection === 'example') setWorkSessionPort(examplePlanner(), { example: true });
     return selection;
@@ -54,7 +59,7 @@ export function createServiceDomains(getServices: () => HqServices | undefined) 
   function Work(props: ModulePort) {
     const [selection, setSelection] = useState<Selection | null>(null);
     useEffect(() => { let mounted = true; workChoice ??= chooseWork(); void workChoice.then(value => { if (mounted) setSelection(value); }); return () => { mounted = false; }; }, []);
-    return selection ? <Surface domain="Work" selection={selection}>{selection !== 'unavailable' && <WorkModule {...props} />}</Surface> : <p role="status">Checking Work configuration…</p>;
+    return selection ? <Surface domain="Work" selection={selection}>{selection !== 'unavailable' && <WorkModule {...props} workExport={workExport} />}</Surface> : <p role="status">Checking Work configuration…</p>;
   }
   return { Social, Work };
 }

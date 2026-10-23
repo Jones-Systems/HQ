@@ -1,15 +1,15 @@
 import { use } from 'react';
 import type { DesignSectionProps } from '../../../ui/contract.ts';
 import { DiscoveryCatalog } from '../../../discovery/src/CatalogView.ts';
-import { SYNTHETIC_TAG } from '../labels.ts';
-import { discoveryEnv } from '../workspace.ts';
+import { useDesignWorkspace } from '../workspace-context.tsx';
 import { SectionFrame } from './SectionFrame.tsx';
 
-/** Warm cached snapshot only: no source adapter is registered and refresh-on-open is off. */
+/** Opening discovery reads the existing snapshot; it never refreshes a source. */
 export function DiscoveryView(_props: DesignSectionProps) {
-  const { service, clock, adapterLabels } = use(discoveryEnv());
-  return <SectionFrame lane="T15 discovery" entry="discovery/src/CatalogView.ts › DiscoveryCatalog" tags={[SYNTHETIC_TAG]}
-    notes={['warm cached snapshot', 'no source adapter registered', 'refresh-on-open off']}>
+  const workspace = useDesignWorkspace();
+  const { service, clock, adapterLabels, tag } = use<Awaited<ReturnType<typeof workspace.discoveryEnv>>>(workspace.discoveryEnv());
+  return <SectionFrame lane="T15 discovery" entry="discovery/src/CatalogView.ts › DiscoveryCatalog" tags={[tag]}
+    notes={['Saved catalog snapshot; opening this page does not refresh sources.']}>
     <DiscoveryCatalog service={service} now={() => clock.now()} adapterLabels={adapterLabels} onRequestLink={() => undefined} />
   </SectionFrame>;
 }

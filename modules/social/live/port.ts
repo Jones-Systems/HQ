@@ -50,7 +50,7 @@ function isEnvelope(value: unknown): value is ServiceResponse {
 export function createLiveSocialPort(transport: SocialServiceTransport, options: LiveSocialPortOptions = {}): SocialWorkspacePort {
   const clock = options.now ?? (() => new Date());
   const stamp = () => clock().toISOString();
-  // Capabilities from the last snapshot gate proposed fields. Null until a snapshot is read.
+  // Capabilities from the last snapshot gate optional fields. Null until a snapshot is read.
   let features: readonly string[] | null = null;
 
   /** Exactly one transport call. Resolves the 2xx body; rejects every other outcome as a PortError. */
@@ -89,9 +89,9 @@ export function createLiveSocialPort(transport: SocialServiceTransport, options:
     async saveDraft(draft): Promise<Draft> {
       // A JSON round trip models the wire: undefined keys vanish as they would in a request.
       const wire: unknown = JSON.parse(JSON.stringify(draft));
-      // Links are gated by a capability; learn it with one read only when a draft carries links.
+      // Capability-bearing fields need one workspace read before the first mutation.
       const carriesLinks = isJsonObject(wire) && Array.isArray(wire.links) && wire.links.length > 0;
-      if (features === null && carriesLinks) {
+      if (features === null && (carriesLinks || (isJsonObject(wire) && wire.planning_slot != null))) {
         // A failed pre-read makes no mutation.
         try {
           await readWorkspace();
@@ -103,7 +103,7 @@ export function createLiveSocialPort(transport: SocialServiceTransport, options:
       if (!checked.ok) fail(checked.error);
       const { fields, target, links } = checked.value;
       const body = { ...fields, ...(target ? { id: target.id, version: target.version } : {}), ...(links ? { links } : {}) };
-      return guarded(await call('saveContent', body), guardDraft);
+      return guarded(await call('saveContent', body), (value) => guardDraft(value, features ?? []));
     },
 
     async addBrand(name): Promise<Brand> {

@@ -151,6 +151,13 @@ def css(data: dict) -> str:
         out.append(f"  --{p}-{name}: var(--{p}-{REF.match(ref).group(1)});")
     out.append("}")
     out.append("")
+    out.append("/* Component roles resolve where they are declared. A [data-hq-token-scope] subtree that sets its own colour roles,")
+    out.append("   such as a palette preview, re-declares them so its buttons and selection use the local colours. */")
+    out.append("[data-hq-token-scope] {")
+    for name, ref in data["component"].items():
+        out.append(f"  --{p}-{name}: var(--{p}-{REF.match(ref).group(1)});")
+    out.append("}")
+    out.append("")
     out.append("/* Shadows cannot use light-dark(); they follow the same scheme selection explicitly. */")
 
     def shadows(mode: str) -> list[str]:

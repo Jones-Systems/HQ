@@ -19,10 +19,11 @@
     "dev:web": "vite --config apps/desktop/vite.config.ts",
     "typecheck": "tsc --noEmit && tsc -p apps/desktop/tsconfig.electron.json --noEmit && tsc -p apps/desktop/tsconfig.design-host.json --noEmit && tsc -p apps/desktop/tsconfig.wiki-host.json --noEmit && npm run typecheck --workspace @hq/wiki",
     "test": "npm run build:electron && vitest run",
-    "build:electron": "tsc -p apps/desktop/tsconfig.electron.json && tsc -p apps/desktop/tsconfig.design-host.json && tsc -p apps/desktop/tsconfig.wiki-host.json",
+    "build:electron": "tsc -p apps/desktop/tsconfig.electron.json && tsc -p apps/desktop/tsconfig.design-host.json && tsc -p apps/desktop/tsconfig.wiki-host.json && npm run build:preview-agent",
     "build": "npm run typecheck && vite build --config apps/desktop/vite.config.ts && npm run build:electron",
     "start": "electron apps/desktop/dist-electron/main.js",
-    "preview": "vite preview --config apps/desktop/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort"
+    "preview": "vite preview --config apps/desktop/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort",
+    "build:preview-agent": "vite build --config apps/desktop/vite.preview-agent.config.ts"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.2",

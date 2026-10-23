@@ -94,7 +94,11 @@ try {
   report.checks.push(`domain round trip: ${labels.join(', ')}`);
   passed(report.checks.at(-1));
   begin('shell-restart');
-  await cdp.evaluate(`(() => { const s = document.querySelector('#appearance'); s.value = 'dark'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  for (let step = 0; step < 3; step++) {
+    if (await cdp.evaluate(`localStorage.getItem('hq.appearance.v1') === 'dark'`)) break;
+    assert.equal(await cdp.evaluate(`(() => { const button = document.querySelector('button[aria-label^="Appearance:"]'); if (!button) return false; button.click(); return true; })()`), true, 'appearance cycle button exists');
+    await until(() => cdp.evaluate(`localStorage.getItem('hq.appearance.v1') === document.querySelector('button[aria-label^="Appearance:"]')?.getAttribute('aria-label')?.split(': ')[1]?.toLowerCase()`), 'appearance cycle persisted');
+  }
   await domain('Work');
   await until(() => cdp.evaluate(`localStorage.getItem('hq.appearance.v1') === 'dark' && JSON.parse(localStorage.getItem('hq.navigation.v1:hq-local')).domain === 'work'`), 'preferences persisted');
   const before = await cdp.evaluate(`({ appearance: localStorage.getItem('hq.appearance.v1'), navigation: localStorage.getItem('hq.navigation.v1:hq-local') })`);

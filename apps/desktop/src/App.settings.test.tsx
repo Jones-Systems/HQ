@@ -1,14 +1,153 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { HqServices } from '@hq/contracts/services';
-vi.mock('./modules', () => ({ DOMAIN_LABELS: { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' }, MODULES: { design: () => <div>Design stub</div>, wiki: () => <div>Wiki home stub</div> }, MODULE_PRESENTATION: {} }));
+vi.mock('./modules', () => ({ designReferenceReads: { list: vi.fn(async () => { throw Error('Design unavailable in settings fixture'); }), read: vi.fn(async () => ({ status: 'unavailable' as const })) }, DOMAIN_LABELS: { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' }, MODULES: { design: ({ destination }: { destination: string }) => <div>Design stub<span data-testid="design-destination">{destination}</span><input aria-label="Design draft" defaultValue="" /></div>, wiki: () => <div>Wiki home stub</div> }, MODULE_PRESENTATION: { design: 'fill' } }));
 import { App } from './App';
+import { selectDesktopProject } from './interactive-runtime';
+import { DEFAULT_STATE, navigationKey } from './state';
 afterEach(() => { cleanup(); delete (window as { hqServices?: HqServices }).hqServices; });
-it('settings rail action is absent in browser preview; explicit opening is required on desktop', async () => {
+it('keeps settings accessible without a bridge and reads only sanitized configuration before explicit recheck', async () => {
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} }); window.localStorage.clear();
-  const first = render(<App />); expect(screen.queryByText('Service settings')).toBeNull(); first.unmount();
-  const status = vi.fn(async () => ({ configured: false, policy: 'ok' as const, transport: null }));
-  Object.defineProperty(window, 'hqServices', { configurable: true, value: { config: { status, set: vi.fn() } } });
-  render(<App />); expect(status).not.toHaveBeenCalled(); fireEvent.click(screen.getByText('Service settings'));
-  await screen.findAllByText('Not connected.'); expect(status).toHaveBeenCalledTimes(2); expect(screen.getByRole('dialog')).toBeTruthy();
+  const first = render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+  expect(screen.getByRole('region', { name: 'Settings page' })).toBeTruthy();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(within(screen.getByRole('region', { name: 'Settings page' })).getAllByText(/unavailable/i).length).toBeGreaterThan(0);
+  first.unmount();
+  const status = vi.fn(async () => ({ configured: true, policy: 'ok' as const, transport: 'https' as const }));
+  const set = vi.fn(); const socialCall = vi.fn(); const workCall = vi.fn();
+  Object.defineProperty(window, 'hqServices', { configurable: true, value: { config: { status, set }, social: { call: socialCall }, work: { call: workCall } } });
+  render(<App />);
+  await screen.findAllByText('Set up · not checked');
+  expect(status).toHaveBeenCalledWith('social'); expect(status).toHaveBeenCalledWith('work');
+  expect(socialCall).not.toHaveBeenCalled(); expect(workCall).not.toHaveBeenCalled(); expect(set).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+  const settings = screen.getByRole('region', { name: 'Settings page' });
+  expect(await within(settings).findAllByText('Set up · not checked')).toHaveLength(2);
+  expect(within(settings).queryAllByRole('textbox').every(input => (input as HTMLInputElement).value === '')).toBe(true);
+  expect(socialCall).not.toHaveBeenCalled(); expect(workCall).not.toHaveBeenCalled(); expect(set).not.toHaveBeenCalled();
+});
+
+
+it('cycles appearance through all modes and restores the selected preference on remount', () => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: true, addEventListener() {}, removeEventListener() {} });
+  window.localStorage.clear();
+  const first = render(<App />);
+  expect(document.documentElement.dataset.theme).toBe('dark');
+  fireEvent.click(screen.getByRole('button', { name: 'Appearance: System' }));
+  expect(document.documentElement.dataset.theme).toBe('light');
+  fireEvent.click(screen.getByRole('button', { name: 'Appearance: Light' }));
+  expect(document.documentElement.dataset.theme).toBe('dark');
+  expect(window.localStorage.getItem('hq.appearance.v1')).toBe('dark');
+  first.unmount();
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'Appearance: Dark' }));
+  expect(screen.getByRole('button', { name: 'Appearance: System' })).toBeTruthy();
+  expect(document.documentElement.dataset.theme).toBe('dark');
+});
+
+it('collapses the rail with Home, retains named navigation and footer controls, and restores its saved width', () => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} });
+  window.localStorage.clear();
+  const first = render(<App />);
+  const splitter = screen.getByRole('separator', { name: 'Primary navigation width' });
+  splitter.focus();
+  fireEvent.keyDown(splitter, { key: 'End' });
+  expect(splitter.getAttribute('aria-valuenow')).toBe('280');
+  fireEvent.keyDown(splitter, { key: 'Home' });
+  expect(splitter.getAttribute('aria-valuenow')).toBe('64');
+  expect(screen.getByRole('button', { name: 'Design' }).getAttribute('title')).toBe('Design');
+  expect(screen.getByRole('button', { name: 'Settings' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Appearance: System' })).toBeTruthy();
+  expect(document.activeElement).toBe(splitter);
+  first.unmount();
+  render(<App />);
+  const restored = screen.getByRole('separator', { name: 'Primary navigation width' });
+  expect(restored.getAttribute('aria-valuenow')).toBe('64');
+  fireEvent.keyDown(restored, { key: 'Enter' });
+  expect(restored.getAttribute('aria-valuenow')).toBe('280');
+  fireEvent.doubleClick(restored);
+  expect(restored.getAttribute('aria-valuenow')).toBe('64');
+});
+
+it('opens a full workspace Settings page while retaining the mounted domain draft and restoring focus', () => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} }); window.localStorage.clear();
+  render(<App />);
+  const draft = screen.getByRole('textbox', { name: 'Design draft' });
+  fireEvent.change(draft, { target: { value: 'Unsaved design title' } });
+  const opener = screen.getByRole('button', { name: 'Settings' });
+  fireEvent.click(opener);
+  const page = screen.getByRole('region', { name: 'Settings page' });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(draft.isConnected).toBe(true); expect(draft.closest('main')?.hidden).toBe(true);
+  expect(document.activeElement).toBe(within(page).getByRole('heading', { name: 'Settings' }));
+  fireEvent.click(within(page).getByRole('button', { name: '← Back to Design' }));
+  expect(screen.getByRole('textbox', { name: 'Design draft' })).toBe(draft);
+  expect(draft).toHaveProperty('value', 'Unsaved design title');
+  expect(document.activeElement).toBe(opener);
+});
+it('shares the existing appearance preference between Settings and the rail', () => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} }); window.localStorage.clear();
+  render(<App />); fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
+  const options = screen.getByRole('group', { name: 'Color theme' });
+  fireEvent.click(within(options).getByRole('button', { name: 'Dark' }));
+  expect(window.localStorage.getItem('hq.appearance.v1')).toBe('dark');
+  expect(document.documentElement.dataset.theme).toBe('dark');
+  expect(screen.getByRole('button', { name: 'Appearance: Dark' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Appearance: Dark' }));
+  expect(within(options).getByRole('button', { name: 'System' }).getAttribute('aria-pressed')).toBe('true');
+  expect(document.documentElement.dataset.theme).toBe('light');
+});
+it('opens a specific source, keeps Escape within an address edit, and closes on ordinary Escape or domain navigation', async () => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} }); window.localStorage.clear();
+  const status = vi.fn(async () => ({ configured: true, policy: 'ok' as const, transport: 'https' as const }));
+  const socialCall = vi.fn(); const workCall = vi.fn();
+  Object.defineProperty(window, 'hqServices', { configurable: true, value: { config: { status, set: vi.fn() }, social: { call: socialCall }, work: { call: workCall } } });
+  render(<App />);
+  const source = await screen.findByRole('button', { name: 'Social: Set up · not checked' });
+  fireEvent.click(source);
+  const page = screen.getByRole('region', { name: 'Settings page' });
+  expect(within(page).getByRole('region', { name: 'Social data source' }).className).toContain('is-target');
+  expect(socialCall).not.toHaveBeenCalled(); expect(workCall).not.toHaveBeenCalled();
+  fireEvent.click(within(page).getByRole('button', { name: 'Change Social address' }));
+  const input = within(page).getByRole('textbox', { name: 'New social base URL' }); input.focus();
+  fireEvent.keyDown(input, { key: 'Escape' }); expect(page.isConnected).toBe(true);
+  fireEvent.keyDown(within(page).getByRole('heading', { name: 'Settings' }), { key: 'Escape' });
+  expect(screen.queryByRole('region', { name: 'Settings page' })).toBeNull(); expect(document.activeElement).toBe(source);
+  fireEvent.click(source); fireEvent.click(screen.getByRole('button', { name: 'Wiki' }));
+  expect(screen.queryByRole('region', { name: 'Settings page' })).toBeNull(); expect(screen.getByText('Wiki home stub')).toBeTruthy();
+});
+
+
+it.each(['projects', 'flows'])('preserves the mounted Design %s destination on explicit source selection without a competing preview close', (destination) => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} });
+  window.localStorage.clear();
+  window.localStorage.setItem(navigationKey('hq-local'), JSON.stringify({ ...DEFAULT_STATE, destinations: { ...DEFAULT_STATE.destinations, design: destination } }));
+  window.localStorage.setItem(navigationKey('synthetic-source'), JSON.stringify({ ...DEFAULT_STATE, domain: 'wiki' }));
+  const call = vi.fn(async (_route: string) => ({ ok: true, value: null }));
+  Object.defineProperty(window, 'hqServices', { configurable: true, value: { preview: { call } } });
+  render(<App />);
+  const draft = screen.getByRole('textbox', { name: 'Design draft' });
+  fireEvent.change(draft, { target: { value: 'Unsaved draft' } });
+  call.mockClear();
+  const selected = { id: 'synthetic-source', label: 'Synthetic source', navigation: 'preserve-design' as const };
+  act(() => selectDesktopProject(selected));
+  expect(screen.getByTestId('design-destination').textContent).toBe(destination);
+  expect(screen.getByRole('textbox', { name: 'Design draft' })).toBe(draft);
+  expect(draft).toHaveProperty('value', 'Unsaved draft');
+  expect(within(screen.getByRole('contentinfo', { name: 'Workspace context' })).getByText('Synthetic source')).toBeTruthy();
+  expect(call).not.toHaveBeenCalled();
+  act(() => selectDesktopProject({ id: 'synthetic-regular', label: 'Regular project' }));
+  expect(screen.getByTestId('design-destination').textContent).toBe('home');
+  expect(call.mock.calls.map(([route]) => route)).toEqual(['deactivate']);
+});
+
+it('restores an ordinary project saved domain and destination', () => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} });
+  window.localStorage.clear();
+  window.localStorage.setItem(navigationKey('synthetic-regular'), JSON.stringify({ ...DEFAULT_STATE, domain: 'wiki' }));
+  render(<App />);
+  act(() => selectDesktopProject({ id: 'synthetic-regular', label: 'Regular project' }));
+  expect(screen.getByText('Wiki home stub')).toBeTruthy();
 });

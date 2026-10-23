@@ -1,3 +1,5 @@
+import { SecondaryBar } from '../../../ui/src/secondary-panels.tsx';
+import { Button } from '@hq/ui';
 import { withSectionErrorBoundary } from './SectionErrorBoundary.tsx';
 import { use, useState } from 'react';
 import type { DesignSectionProps } from '../../../ui/contract.ts';
@@ -17,9 +19,9 @@ function CompareViewContent({ context }: DesignSectionProps) {
   const controller = workspace.bridged ? use(workspace.compareFor(context)) : workspace.compareFor(context);
   return <SectionFrame lane="T4 compare + T5 annotations" entry="compare/src/view › CompareWorkspace (renderOverlay → annotations overlay)" tags={workspace.bridged ? [workspace.storageTag] : [FAKE_TAG, SYNTHETIC_TAG]}
     notes={workspace.bridged ? ['Capture and live preview capabilities are unavailable'] : ['synthetic captures and labelled fake previews (no host surface)', 'marks need a static capture; live previews cannot be annotated']}>
-    <div className="hqd-compose-tools" role="toolbar" aria-label="Annotation tool for compare panels">
-      {TOOLS.map(([id, label]) => <button key={label} type="button" aria-pressed={tool === id} onClick={() => setTool(id)}>{label}</button>)}
-    </div>
+    <SecondaryBar name="compare-annotations" label="Annotation tools"><div className="hqd-compose-tools" role="toolbar" aria-label="Annotation tool for compare panels">
+      {TOOLS.map(([id, label]) => <Button size="sm" key={label} type="button" aria-pressed={tool === id} onClick={() => setTool(id)}>{label}</Button>)}
+    </div></SecondaryBar>
     <CompareWorkspace controller={controller} renderOverlay={(frame) => <AnnotationSlot frame={frame} tool={tool} />} />
   </SectionFrame>;
 }

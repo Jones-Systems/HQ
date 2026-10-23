@@ -1,0 +1,192 @@
+{
+  "authority_effect": "none",
+  "projection_only": true,
+  "source_revision": "a14b49f3c463ab7c95e7154f3fd5c54592942134",
+  "spec_blob_oid": "f3e36a17325b041d147fa714dc401cd7f056d412",
+  "tasks": 91,
+  "tests": 51,
+  "rounds": [
+    {
+      "round": 0,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.acceptance-harness.001",
+        "spec.hq-integration-parallel-execution#task.component-runner-port.001",
+        "spec.hq-integration-parallel-execution#task.connector-resolve-unknown.001",
+        "spec.hq-integration-parallel-execution#task.design-app-sections.001",
+        "spec.hq-integration-parallel-execution#task.design-local-catalog.001",
+        "spec.hq-integration-parallel-execution#task.design-storage-engine.001",
+        "spec.hq-integration-parallel-execution#task.install-route.001",
+        "spec.hq-integration-parallel-execution#task.joint-shell.001",
+        "spec.hq-integration-parallel-execution#task.main-sync.001",
+        "spec.hq-integration-parallel-execution#task.preview-agent.001",
+        "spec.hq-integration-parallel-execution#task.preview-compare.001",
+        "spec.hq-integration-parallel-execution#task.social-live.001",
+        "spec.hq-integration-parallel-execution#task.wiki-assembly.001",
+        "spec.hq-integration-parallel-execution#task.work-runtime.001"
+      ],
+      "drafts": 14
+    },
+    {
+      "round": 1,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.component-port-landing.001",
+        "spec.hq-integration-parallel-execution#task.connector-resolve-landing.001",
+        "spec.hq-integration-parallel-execution#task.harness-landing.001",
+        "spec.hq-integration-parallel-execution#task.preview-agent-landing.001",
+        "spec.hq-integration-parallel-execution#task.preview-compare-landing.001",
+        "spec.hq-integration-parallel-execution#task.shared-bridge.001",
+        "spec.hq-integration-parallel-execution#task.shell-landing.001",
+        "spec.hq-integration-parallel-execution#task.social-landing.001",
+        "spec.hq-integration-parallel-execution#task.wiki-landing.001",
+        "spec.hq-integration-parallel-execution#task.work-landing.001"
+      ],
+      "drafts": 10
+    },
+    {
+      "round": 2,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.bridge-landing.001",
+        "spec.hq-integration-parallel-execution#task.work-session-injection.001"
+      ],
+      "drafts": 2
+    },
+    {
+      "round": 3,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.design-catalog-landing.001",
+        "spec.hq-integration-parallel-execution#task.design-sections-landing.001",
+        "spec.hq-integration-parallel-execution#task.design-storage-landing.001",
+        "spec.hq-integration-parallel-execution#task.work-injection-landing.001"
+      ],
+      "drafts": 4
+    },
+    {
+      "round": 4,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.cli-planner-ci.001",
+        "spec.hq-integration-parallel-execution#task.live-wiring.001",
+        "spec.hq-integration-parallel-execution#task.registry-adapters.001",
+        "spec.hq-integration-parallel-execution#task.runs-live-dispatch.001"
+      ],
+      "drafts": 4
+    },
+    {
+      "round": 5,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.cli-ci-landing.001",
+        "spec.hq-integration-parallel-execution#task.registry-adapters-landing.001",
+        "spec.hq-integration-parallel-execution#task.runs-live-dispatch-landing.001",
+        "spec.hq-integration-parallel-execution#task.wiki-mount.001",
+        "spec.hq-integration-parallel-execution#task.wiring-landing.001"
+      ],
+      "drafts": 5
+    },
+    {
+      "round": 6,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.wiki-mount-landing.001"
+      ],
+      "drafts": 1
+    },
+    {
+      "round": 7,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.acceptance-infrastructure.001",
+        "spec.hq-integration-parallel-execution#task.shared-r3.001"
+      ],
+      "drafts": 2
+    },
+    {
+      "round": 8,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.infrastructure-landing.001",
+        "spec.hq-integration-parallel-execution#task.r3-landing.001"
+      ],
+      "drafts": 2
+    },
+    {
+      "round": 9,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.design-reference-provider.001"
+      ],
+      "drafts": 1
+    },
+    {
+      "round": 10,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.design-provider-landing.001"
+      ],
+      "drafts": 1
+    },
+    {
+      "round": 11,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.design-compose-mount.001"
+      ],
+      "drafts": 1
+    },
+    {
+      "round": 12,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.design-compose-landing.001"
+      ],
+      "drafts": 1
+    },
+    {
+      "round": 13,
+      "ready": [
+        "spec.hq-integration-parallel-execution#task.import-export-qualification.001",
+        "spec.hq-integration-parallel-execution#task.preview-compose.001"
+      ],
+      "drafts": 2
+    },
+    {
+      "round": 14,
+      "ready": [],
+      "drafts": 0
+    }
+  ],
+  "unprojected_tasks": [
+    "spec.hq-integration-parallel-execution#task.acceptance-scenarios.001",
+    "spec.hq-integration-parallel-execution#task.closure-qualification.001",
+    "spec.hq-integration-parallel-execution#task.component-containment-gate.001",
+    "spec.hq-integration-parallel-execution#task.component-scripted-enablement.001",
+    "spec.hq-integration-parallel-execution#task.component-scripted-landing.001",
+    "spec.hq-integration-parallel-execution#task.component-static-enablement.001",
+    "spec.hq-integration-parallel-execution#task.component-static-landing.001",
+    "spec.hq-integration-parallel-execution#task.enablement-landing.001",
+    "spec.hq-integration-parallel-execution#task.final-acceptance.001",
+    "spec.hq-integration-parallel-execution#task.import-export-enablement.001",
+    "spec.hq-integration-parallel-execution#task.laptop-route-binding.001",
+    "spec.hq-integration-parallel-execution#task.main-delivery.001",
+    "spec.hq-integration-parallel-execution#task.new-thread-landing.001",
+    "spec.hq-integration-parallel-execution#task.new-thread-transport.001",
+    "spec.hq-integration-parallel-execution#task.new-thread-u1-qualification.001",
+    "spec.hq-integration-parallel-execution#task.preview-compose-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-enablement-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-enablement.001",
+    "spec.hq-integration-parallel-execution#task.preview-host-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-host.001",
+    "spec.hq-integration-parallel-execution#task.preview-s2-qualification.001",
+    "spec.hq-integration-parallel-execution#task.preview-scenarios-landing.001",
+    "spec.hq-integration-parallel-execution#task.preview-scenarios.001",
+    "spec.hq-integration-parallel-execution#task.receiver-adapter.001",
+    "spec.hq-integration-parallel-execution#task.receiver-landing.001",
+    "spec.hq-integration-parallel-execution#task.receiver-s1-qualification.001",
+    "spec.hq-integration-parallel-execution#task.reference-round-trip.001",
+    "spec.hq-integration-parallel-execution#task.reference-ui-landing.001",
+    "spec.hq-integration-parallel-execution#task.reference-ui.001",
+    "spec.hq-integration-parallel-execution#task.round-trip-landing.001",
+    "spec.hq-integration-parallel-execution#task.scenarios-landing.001",
+    "spec.hq-integration-parallel-execution#task.service-enablement-qualification.001",
+    "spec.hq-integration-parallel-execution#task.social-references-landing.001",
+    "spec.hq-integration-parallel-execution#task.social-references.001",
+    "spec.hq-integration-parallel-execution#task.source-registry-host-landing.001",
+    "spec.hq-integration-parallel-execution#task.source-registry-host.001",
+    "spec.hq-integration-parallel-execution#task.wiki-private-validation-gate.001",
+    "spec.hq-integration-parallel-execution#task.work-export-landing.001",
+    "spec.hq-integration-parallel-execution#task.work-export-ui.001",
+    "spec.hq-integration-parallel-execution#task.work-references-landing.001",
+    "spec.hq-integration-parallel-execution#task.work-references.001"
+  ]
+}

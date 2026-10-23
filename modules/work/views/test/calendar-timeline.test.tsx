@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VIEW_NOW } from '../fixtures';
 import { PlanningViews } from '../PlanningViews';
 import { lastWrite, setup } from './harness';
@@ -21,6 +21,14 @@ function chip(title: string) {
 async function pick(user: ReturnType<typeof userEvent.setup>, trigger: HTMLElement, item: string) {
   await user.click(trigger);
   await user.click(screen.getByRole('menuitem', { name: item }));
+}
+
+async function showCalendarView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day' | 'Agenda') {
+  if (name === 'Agenda') { await user.click(screen.getByRole('button', { name: 'Agenda' })); return; }
+  if (screen.queryByRole('button', { name: 'Agenda', pressed: true })) await user.click(screen.getByRole('button', { name: 'Agenda' }));
+  for (let i = 0; i < 3 && !screen.getByRole('button', { name: /^Calendar view:/ }).textContent?.includes(name); i++) {
+    await user.click(screen.getByRole('button', { name: /^Calendar view:/ }));
+  }
 }
 
 describe('Calendar moves', () => {
@@ -165,8 +173,8 @@ describe('Calendar moves', () => {
     const user = userEvent.setup();
     const { container } = await setup({ view: 'calendar', settings: { default_tz: 'America/New_York', week_start: 'mon', stale_days: 21 } });
     expect(container.querySelector('.wv-month-head')!.textContent).toBe('MonTueWedThuFriSatSun');
-    await user.click(screen.getByRole('button', { name: 'Agenda' }));
-    expect(screen.getByRole('button', { name: 'Agenda' }).getAttribute('aria-pressed')).toBe('true');
+    await showCalendarView(user, 'Agenda');
+    expect(screen.getByRole('button', { name: 'Agenda', pressed: true })).toBeTruthy();
     expect(container.querySelector('.wv-agenda')!.textContent).toContain('Sat, Oct 24 · in 3 days');
     expect(container.querySelector('.wv-month')).toBeNull();
   });
@@ -229,7 +237,7 @@ describe('Timeline moves', () => {
   it('draws a bar only between a start date and a later end, and shows eight quarters', async () => {
     const { container } = await setup({ view: 'timeline' });
     expect([...container.querySelectorAll('.wv-tl-tick')].map((t) => t.textContent)).toEqual([
-      '2026 Q4', '2027 Q1', '2027 Q2', '2027 Q3', '2027 Q4', '2028 Q1', '2028 Q2', '2028 Q3',
+      '2026 · Q4', '2027 · Q1', 'Q2', 'Q3', 'Q4', '2028 · Q1', 'Q2', 'Q3',
     ]);
     const spans = container.querySelectorAll<HTMLElement>('.wv-tl-span');
     expect(spans).toHaveLength(1);
@@ -237,5 +245,148 @@ describe('Timeline moves', () => {
     // Positions are CSSOM custom properties, never inline style attributes from markup.
     expect(spans[0]!.style.getPropertyValue('--wv-left')).toMatch(/%$/);
     expect(row('Tune up the old bicycle').closest('.wv-tl-row')!.textContent).toContain('Unscheduled');
+  });
+});
+
+describe('timed calendar interaction', () => {
+  it('switches range modes, navigates week/day and returns to Today without writes', async () => {
+    const user = userEvent.setup();
+    const { rec, container } = await setup({ view: 'calendar' });
+    await showCalendarView(user, 'Week');
+    expect(container.querySelectorAll('[data-time-day]')).toHaveLength(7);
+    await user.click(screen.getByRole('button', { name: 'Next week' }));
+    expect(container.querySelector('[data-time-day="2026-10-28"]')).toBeTruthy();
+    await showCalendarView(user, 'Day');
+    expect(container.querySelectorAll('[data-time-day]')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Today' }));
+    expect(container.querySelector('[data-time-day="2026-10-21"]')).toBeTruthy();
+    const layout = screen.getByRole('group', { name: 'Calendar layout' });
+    expect(within(layout).getAllByRole('button')).toHaveLength(2);
+    await showCalendarView(user, 'Month');
+    expect(within(layout).getByRole('button', { name: /^Calendar view: Month\./ })).toBeTruthy();
+    expect(container.querySelectorAll('[data-time-day]')).toHaveLength(0);
+    await showCalendarView(user, 'Agenda');
+    expect(container.querySelector('.wv-agenda')).toBeTruthy();
+    await showCalendarView(user, 'Month');
+    expect(container.querySelector('.wv-month')).toBeTruthy();
+    expect(rec.writes()).toHaveLength(0);
+  });
+
+  it('moves 15 minutes by keyboard, resizes explicitly, and offers Undo for each single patch', async () => {
+    const user = userEvent.setup();
+    const { rec } = await setup({ view: 'calendar' });
+    await showCalendarView(user, 'Day');
+    const event = () => screen.getByRole('button', { name: /^Renew the library card, 10:/ });
+    fireEvent.keyDown(event(), { key: 'ArrowDown', altKey: true });
+    await waitFor(() => expect(rec.writes()).toHaveLength(1));
+    expect((lastWrite(rec)!.args[2] as { dates: unknown[] }).dates[0]).toMatchObject({ time: '10:45', end_time: null });
+    fireEvent.keyDown(event(), { key: 'ArrowDown', altKey: true, shiftKey: true });
+    await waitFor(() => expect(rec.writes()).toHaveLength(2));
+    expect((lastWrite(rec)!.args[2] as { dates: unknown[] }).dates[0]).toMatchObject({ time: '10:45', end_time: '11:30' });
+    await user.click(screen.getAllByRole('button', { name: 'Undo' }).at(-1)!);
+    await waitFor(() => expect(rec.writes()).toHaveLength(3));
+    expect((lastWrite(rec)!.args[2] as { dates: unknown[] }).dates[0]).toMatchObject({ time: '10:45', end_time: null });
+  });
+
+  it('requires date kind before scheduling a grid drop and rejects a stale drag after dragend', async () => {
+    const user = userEvent.setup();
+    const { rec, container } = await setup({ view: 'calendar' });
+    await showCalendarView(user, 'Day');
+    const tray = screen.getByRole('region', { name: 'Unscheduled items' });
+    const undated = within(tray).getByText('Tune up the old bicycle').closest<HTMLElement>('[draggable="true"]')!;
+    fireEvent.dragStart(undated);
+    // Happy DOM has no DragEvent constructor; a MouseEvent preserves the drop's client coordinates.
+    fireEvent(container.querySelector('[data-time-day="2026-10-21"]')!, new MouseEvent('drop', { bubbles: true, cancelable: true, clientY: 432 }));
+    expect(rec.writes()).toHaveLength(0);
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Event' }));
+    await waitFor(() => expect(rec.writes()).toHaveLength(1));
+    expect((lastWrite(rec)!.args[2] as { dates: unknown[] }).dates[0]).toMatchObject({ kind: 'event', time: '09:00', end_time: '09:30' });
+    const other = within(tray).getByText('Sort the old postcards').closest<HTMLElement>('[draggable="true"]')!;
+    fireEvent.dragStart(other);
+    fireEvent.dragEnd(other);
+    fireEvent(container.querySelector('[data-time-day="2026-10-21"]')!, new MouseEvent('drop', { bubbles: true, cancelable: true, clientY: 432 }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(rec.writes()).toHaveLength(1);
+  });
+});
+
+
+describe('calendar pointer commits', () => {
+  const geometry = () => vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0, y: 0, left: 0, top: 0, right: 700, bottom: 1152, width: 700, height: 1152, toJSON: () => ({}),
+  });
+
+  it('previews without writes, commits once on drop, and a click or Escape never patches', async () => {
+    const user = userEvent.setup();
+    const { rec, container } = await setup({ view: 'calendar' });
+    await showCalendarView(user, 'Day');
+    const rect = geometry();
+    try {
+      const event = screen.getByRole('button', { name: /^Renew the library card, 10:30 a\.m\./ });
+      fireEvent.pointerDown(event, { pointerId: 1, button: 0, clientX: 100, clientY: 510 });
+      fireEvent.pointerUp(window, { pointerId: 1, clientX: 100, clientY: 510 });
+      expect(rec.writes()).toHaveLength(0);
+      fireEvent.pointerDown(event, { pointerId: 2, button: 0, clientX: 100, clientY: 510 });
+      fireEvent.pointerMove(window, { pointerId: 2, clientX: 100, clientY: 534 });
+      expect(container.querySelector('.hq-calendar-time-preview')).toBeTruthy();
+      expect(rec.writes()).toHaveLength(0);
+      fireEvent.keyDown(window, { key: 'Escape' });
+      fireEvent.pointerUp(window, { pointerId: 2, clientX: 100, clientY: 534 });
+      expect(rec.writes()).toHaveLength(0);
+      expect(container.querySelector('.hq-calendar-time-preview')).toBeNull();
+      fireEvent.pointerDown(event, { pointerId: 3, button: 0, clientX: 100, clientY: 510 });
+      fireEvent.pointerMove(window, { pointerId: 3, clientX: 100, clientY: 534 });
+      fireEvent.pointerUp(window, { pointerId: 3, clientX: 100, clientY: 534 });
+      await waitFor(() => expect(rec.writes()).toHaveLength(1));
+      expect((lastWrite(rec)!.args[2] as { dates: unknown[] }).dates[0]).toMatchObject({ time: '11:00', end_time: null });
+    } finally { rect.mockRestore(); }
+  });
+
+  it('resizes from the lower edge and clears all time fields when moved to all day', async () => {
+    const user = userEvent.setup();
+    const { rec, container } = await setup({ view: 'calendar' });
+    await showCalendarView(user, 'Day');
+    const rect = geometry();
+    try {
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Resize Renew the library card' }), { pointerId: 5, button: 0, clientX: 100, clientY: 527 });
+      fireEvent.pointerMove(window, { pointerId: 5, clientX: 100, clientY: 552 });
+      expect(rec.writes()).toHaveLength(0);
+      fireEvent.pointerUp(window, { pointerId: 5, clientX: 100, clientY: 552 });
+      await waitFor(() => expect(rec.writes()).toHaveLength(1));
+      expect((lastWrite(rec)!.args[2] as { dates: unknown[] }).dates[0]).toMatchObject({ time: '10:30', end_time: '11:30' });
+      const hit = vi.spyOn(document, 'elementFromPoint').mockReturnValue(container.querySelector('[data-grid-all-day="2026-10-21"]'));
+      try {
+        fireEvent.pointerDown(screen.getByRole('button', { name: /^Renew the library card, 10:30 a\.m\./ }), { pointerId: 6, button: 0, clientX: 100, clientY: 510 });
+        fireEvent.pointerMove(window, { pointerId: 6, clientX: 100, clientY: 10 });
+        fireEvent.pointerUp(window, { pointerId: 6, clientX: 100, clientY: 10 });
+        await waitFor(() => expect(rec.writes()).toHaveLength(2));
+        expect((lastWrite(rec)!.args[2] as { dates: unknown[] }).dates[0]).toMatchObject({ value: '2026-10-21', time: null, end_time: null, tz: null });
+      } finally { hit.mockRestore(); }
+    } finally { rect.mockRestore(); }
+  });
+});
+
+
+describe('calendar sidebar', () => {
+  it('remembers its resized width, keeps content mounted when collapsed, and still accepts a remove-date drop', async () => {
+    const { rec } = await setup({ view: 'calendar' });
+    const sidebar = screen.getByRole('complementary', { name: 'Calendar sidebar' });
+    const splitter = screen.getByRole('separator', { name: 'Calendar sidebar width' });
+    fireEvent.keyDown(splitter, { key: 'ArrowLeft', shiftKey: true });
+    expect(splitter.getAttribute('aria-valuenow')).toBe('312');
+    fireEvent.keyDown(splitter, { key: 'Home' });
+    expect(splitter.getAttribute('aria-valuenow')).toBe('0');
+    expect(screen.queryByRole('complementary', { name: 'Calendar sidebar' })).toBeNull();
+    expect(sidebar.isConnected).toBe(true);
+    expect(rec.writes()).toHaveLength(0);
+    fireEvent.dragStart(chip('Repaint the garden shed').closest<HTMLElement>('[data-focus-key]')!);
+    fireEvent.drop(screen.getByRole('region', { name: 'Remove date' }));
+    await waitFor(() => expect(rec.writes()).toHaveLength(1));
+    expect(lastWrite(rec)!.args.slice(0, 3)).toEqual(['ex-shed-paint', 1, { dates: [] }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Show calendar sidebar' }));
+    expect(screen.getByRole('complementary', { name: 'Calendar sidebar' })).toBe(sidebar);
+    expect(splitter.getAttribute('aria-valuenow')).toBe('312');
+    expect(rec.writes()).toHaveLength(1);
   });
 });

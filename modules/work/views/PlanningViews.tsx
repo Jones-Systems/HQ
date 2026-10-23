@@ -1,5 +1,5 @@
 import { Component, useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Button, SaveIndicator, StateView, StatusChip, Toast, ToastRegion } from '@hq/ui';
+import { Button, SaveIndicator, StateView, StatusChip, Toast, ToastRegion, TOAST_AUTO_DISMISS_MS } from '@hq/ui';
 import {
   DEFAULT_SETTINGS, EMPTY_FILTERS, formatClock, plannerToday, UNCONFIRMED_SCOPE_NOTE, useWorkState,
   type Filters, type PlannerError, type SettingsResult, type UndoOutcome, type WorkState, type WorkStore, type WriteOutcome,
@@ -40,7 +40,7 @@ const VIEWS: Record<PlanningViewId, () => ReactNode> = {
   'by-date': () => <ByDateView />,
 };
 
-interface ToastState { key: number; message: string; undoId?: string }
+interface ToastState { key: number; message: string; undoId?: string; persistent: boolean }
 
 /** Words for a failed write. Unavailable and order conflicts are reported by the store's own notices. */
 export function failureText(error: PlannerError): string | null {
@@ -76,14 +76,14 @@ export function PlanningViews({ store, view, filters = EMPTY_FILTERS, now = defa
   const settings = state.confirmed?.settings ?? DEFAULT_SETTINGS;
   const today = plannerToday(settings, now());
 
-  const show = useCallback((message: string | null, undoId?: string) => {
-    if (message) setToast({ key: (toastKey.current += 1), message, undoId });
+  const show = useCallback((message: string | null, undoId?: string, persistent = false) => {
+    if (message) setToast({ key: (toastKey.current += 1), message, undoId, persistent });
   }, []);
 
   const run = useCallback(async (write: Promise<WriteOutcome> | Promise<WriteOutcome<SettingsResult>>, success: string) => {
     const outcome = await write;
     if (outcome.status === 'saved') { show(success, outcome.undoId); return true; }
-    show(outcome.status === 'unconfirmed' ? UNKNOWN_TEXT : failureText(outcome.error));
+    show(outcome.status === 'unconfirmed' ? UNKNOWN_TEXT : failureText(outcome.error), undefined, true);
     return false;
   }, [show]);
 
@@ -95,7 +95,7 @@ export function PlanningViews({ store, view, filters = EMPTY_FILTERS, now = defa
 
   const undo = async (entryId?: string) => {
     const outcome = entryId ? await store.undoEntry(entryId) : await store.undo();
-    show(undoText(outcome));
+    show(undoText(outcome), undefined, outcome.status !== 'undone' && outcome.status !== 'empty');
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -135,7 +135,8 @@ export function PlanningViews({ store, view, filters = EMPTY_FILTERS, now = defa
             key={toast.key}
             message={toast.message}
             meta={NO_RUN_NOTE}
-            action={canUndo ? { label: 'Undo', onAction: () => { const id = toast.undoId!; setToast(null); void undo(id); } } : undefined}
+            autoDismissMs={toast.persistent ? undefined : TOAST_AUTO_DISMISS_MS}
+            action={canUndo ? { label: 'Undo', keyshortcuts: 'Control+Z Meta+Z', onAction: () => { const id = toast.undoId!; setToast(null); void undo(id); } } : undefined}
             onDismiss={() => setToast(null)}
           />
         )}

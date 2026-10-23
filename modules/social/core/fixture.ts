@@ -1,5 +1,5 @@
 import {
-  FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_REFERENCES, PortFailure,
+  FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX, PortFailure,
   type Brand, type Draft, type PortError, type PortMethod, type RunRecord,
   type SocialWorkspacePort, type ToolId, type WorkspaceSnapshot,
 } from './port';
@@ -33,7 +33,7 @@ export interface FixtureOptions {
 
 export interface FixtureControls {
   /** Another window (for example the service's own web UI) saves this draft, bumping its version. */
-  editElsewhere(draftId: string, patch?: Partial<Pick<Draft, 'title' | 'body' | 'planned_date'>>): Draft;
+  editElsewhere(draftId: string, patch?: Partial<Pick<Draft, 'title' | 'body' | 'planned_date' | 'planning_slot'>>): Draft;
   /** The next `submitRun` response is lost. With `accepted` (default) the run was created anyway. */
   loseNextSubmitResponse(options?: { readonly accepted?: boolean }): void;
   /** The next call to `method` rejects with `error` and has no effect. */
@@ -67,13 +67,16 @@ function fail(error: PortError): never {
 export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWorkspace {
   const features = [...(options.features ?? [FEATURE_HQ_REFERENCES])];
   const references = features.includes(FEATURE_HQ_REFERENCES);
+  const timeboxes = features.includes(FEATURE_HQ_EDITORIAL_TIMEBOX);
   const brandProjects = features.includes(FEATURE_HQ_BRAND_PROJECT);
   const clock = options.clock ?? (() => new Date());
   const now = () => serviceTimestamp(clock());
   const seed = structuredClone(options.seed ?? fictionalSeed());
 
   const brands: Brand[] = seed.brands.map(({ project_id, ...brand }) => (brandProjects ? { ...brand, project_id: project_id ?? null } : brand));
-  const content: Draft[] = seed.content.map(({ links, ...draft }) => (references ? { ...draft, links: links ?? [] } : draft));
+  const content: Draft[] = seed.content.map(({ links, planning_slot, ...draft }) => ({ ...draft,
+    ...(references ? { links: links ?? [] } : {}), ...(timeboxes ? { planning_slot: planning_slot ?? null } : {}),
+  }));
   const runs: FixtureRun[] = [...seed.runs];
   let counter = 0x1000;
   const failures = new Map<PortMethod, PortError>();
@@ -119,7 +122,12 @@ export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWor
     async saveDraft(draft): Promise<Draft> {
       await enter('saveDraft');
       // A JSON round trip models the wire: undefined keys vanish as they would in a request.
-      const checked = checkDraft(JSON.parse(JSON.stringify(draft)), { features, brandIds: brands.map((brand) => brand.id) });
+      const wire = JSON.parse(JSON.stringify(draft));
+      // Older clients omit the slot: preserve it on dated edits, but clearing the date clears both.
+      if (timeboxes && wire.planning_slot === undefined) {
+        wire.planning_slot = wire.planned_date ? content.find((item) => item.id === wire.id)?.planning_slot ?? null : null;
+      }
+      const checked = checkDraft(wire, { features, brandIds: brands.map((brand) => brand.id) });
       if (!checked.ok) fail(checked.error);
       const { fields, target, links } = checked.value;
       const updatedAt = now();

@@ -1,6 +1,8 @@
+// @vitest-environment happy-dom
 // Rendered markup checks through React's real server renderer. They prove
 // markup/state wiring only, not browser layout, interaction or Electron runtime.
 import { renderToStaticMarkup } from 'react-dom/server';
+import { getByRole } from '@testing-library/dom';
 import { describe, expect, test } from 'vitest';
 import type { CompareSlotProps } from '../src/contract.ts';
 import { linkOf } from '../src/draft.ts';
@@ -9,6 +11,12 @@ import { candidate, env, imageBytes, readyDraft } from './fixtures.ts';
 
 let counter = 0;
 const newId = (kind: string) => `ui-${kind}-${++counter}`;
+
+function markup(html: string): HTMLDivElement {
+  const root = document.createElement('div');
+  root.innerHTML = html;
+  return root;
+}
 
 function ProbeCompare({ baselineVersionId, candidateVersionId }: CompareSlotProps) {
   return <div data-probe-baseline={baselineVersionId} data-probe-candidate={candidateVersionId} />;
@@ -24,7 +32,13 @@ describe('RequestsView rendered markup', () => {
     expect(html).toContain('data-privacy="local-unsent"');
     expect(html).toContain('Not sent · stays on this device');
     expect(html).toMatch(/<li aria-current="step">Draft<\/li>/u);
-    expect(html).toMatch(/<button type="button" class="hqr-primary" disabled="" aria-describedby="[^"]+">Freeze request<\/button>/u);
+    const root = markup(html);
+    const freeze = getByRole(root, 'button', { name: 'Freeze request' }) as HTMLButtonElement;
+    expect(freeze.type).toBe('button');
+    expect(freeze.disabled).toBe(true);
+    const description = freeze.getAttribute('aria-describedby');
+    expect(description).toBeTruthy();
+    expect([...root.querySelectorAll('[id]')].find((element) => element.id === description)?.textContent).toContain('Add at least one source version.');
     expect(html).toContain('Add at least one source version.');
     expect(html).not.toContain('Frozen packets');
     expect(html).not.toContain('Send packet');

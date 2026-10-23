@@ -117,6 +117,8 @@ export interface FlowStoragePort {
 export interface ScreenPreviewPort {
   readonly label: string;
   previewUrl(screen: Screen): string | null;
+  /** Why `previewUrl` is null for this screen (loading, not saved, unreadable); absent ports say nothing more. */
+  unavailableReason?(screen: Screen): string;
 }
 
 /**

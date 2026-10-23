@@ -317,3 +317,17 @@ describe('cards', () => {
     expect(within(card('it-bread')).getByText(/Overdue · Oct 19/)).toBeTruthy();
   });
 });
+
+
+it('scrolls the focusable column region without consuming card navigation or writing', async () => {
+  const { store, calls, feedback } = await setup();
+  render(<Host store={store} feedback={feedback} />);
+  const region = await screen.findByRole('region', { name: 'Status columns' });
+  fireEvent.keyDown(region, { key: 'ArrowRight' });
+  expect(region.scrollLeft).toBe(120);
+  fireEvent.keyDown(region, { key: 'ArrowLeft' });
+  expect(region.scrollLeft).toBe(0);
+  fireEvent.keyDown(region, { key: 'ArrowDown' });
+  expect(region.scrollLeft).toBe(0);
+  expect(writes(calls)).toEqual([]);
+});

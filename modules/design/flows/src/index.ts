@@ -9,4 +9,5 @@ export { addHotspot, addScreen, declareRoute, removeScreen, retargetHotspot, set
 export { createFlowRepository, flowKey, type FlowLoad, type FlowRepository } from './repository.ts';
 export { createFlowCanvasProvider, flowItemKey, parseFlowItemKey, FLOWS_PROVIDER_ID, FLOW_ITEM_KINDS, type FlowItemKind } from './canvas.ts';
 export { createFakeFlowStorage, FAKE_PREVIEWS, type FakeFlowStorage } from './fakes.ts';
+export { routeName, screenName, screenNames, screenSequence, stateLabel } from './presentation.ts';
 export { FlowCanvasItemView, FlowMapView, FlowsWorkspace, IssueList, PrototypePlayerView, edgeTargetAttribute, usePrototypePlayer } from './views.ts';

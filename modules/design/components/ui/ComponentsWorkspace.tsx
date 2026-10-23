@@ -1,3 +1,4 @@
+import { SecondaryPanel } from '../../ui/src/secondary-panels.tsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type {
@@ -144,18 +145,18 @@ export function ComponentsWorkspace({ library, clock, appearance, runner }: Comp
     {notice === null ? null : <p className="hqc-notice" role="status">{notice}</p>}
 
     {tab === 'components' ? <div role="tabpanel" id="hqc-panel-components" aria-labelledby="hqc-tab-components" className="hqc-split">
-      <nav className="hqc-list" aria-label="Components">
+      <SecondaryPanel name="component-catalog" label="Component catalog" initial={192} side="start"><nav className="hqc-list" aria-label="Components">
         <ul>
           {componentIds.map((id) => <li key={id}>
             <button type="button" aria-current={selection?.source.componentId === id ? 'true' : undefined} onClick={() => void open(id)}>{id}</button>
           </li>)}
         </ul>
-      </nav>
+      </nav></SecondaryPanel>
       {selection === null || input === null ? <p className="hqc-note">No components yet.</p> : <>
         <div className="hqc-stage">
           <ComponentSurface source={selection.source} input={input} runner={runner} />
         </div>
-        <PropsPanel
+        <SecondaryPanel name="component-props" label="Component properties" initial={320}><PropsPanel
           source={selection.source}
           variants={selection.variants}
           variantId={selection.variantId}
@@ -163,7 +164,7 @@ export function ComponentsWorkspace({ library, clock, appearance, runner }: Comp
           resolved={input.props}
           onSelectVariant={(variantId) => update({ ...selection, variantId })}
           onOverrides={(overrides) => update({ ...selection, overrides })}
-        />
+        /></SecondaryPanel>
       </>}
     </div> : null}
 

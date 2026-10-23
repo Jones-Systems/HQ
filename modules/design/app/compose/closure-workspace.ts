@@ -9,7 +9,7 @@ import { createMemoryOutboxStore, createMemoryEvidenceStore } from '../../connec
 import { MemoryReferenceStorage } from '../../references/src/fakes.ts';
 import { createRequestsEnvironment } from '../sections/requests/env.ts';
 import type { RequestsEnvironment, CompareSlot, SectionIds } from '../sections/requests/env.ts';
-import { createRunsEnvironment } from '../sections/runs/env.ts';
+import { createRunsEnvironment, type RunsConnection } from '../sections/runs/env.ts';
 import { createReferencesEnvironment } from '../sections/references/env.ts';
 import { FAKE_TAG } from './labels.ts';
 
@@ -31,8 +31,8 @@ function scheduler(): SchedulerPort {
   };
 }
 
-/** The bridge and the explicit unbridged fake each own one shared closure environment. */
-export function createClosureWorkspace(records: WorkspaceRecords | null) {
+/** Each composition owns its closure environment. A qualified connection is used only with durable workspace records. */
+export function createClosureWorkspace(records: WorkspaceRecords | null, connection?: RunsConnection) {
   const label = records === null ? FAKE_TAG.text : DEVICE_STORAGE_LABEL;
   const clock = { label: 'Device clock', now: () => new Date().toISOString() };
   const ids: SectionIds = { label: 'Device random IDs', next: (kind) => `${kind}_${globalThis.crypto.randomUUID()}` };
@@ -59,7 +59,10 @@ export function createClosureWorkspace(records: WorkspaceRecords | null) {
   let references: ReturnType<typeof createReferencesEnvironment> | undefined;
   return {
     label, requests, outboxStore, evidenceStore, referenceStorage,
-    runs: () => runs ??= createRunsEnvironment({ requests, outboxStore, evidenceStore, clock, ids, compareSlot }),
-    references: () => references ??= createReferencesEnvironment({ storage: referenceStorage, clock, ids, compareSlot, previewUrl: () => null }),
+    runs: () => runs ??= createRunsEnvironment({ requests, outboxStore, evidenceStore, clock, ids, compareSlot, connection: records === null ? undefined : connection }),
+    references: () => references ??= createReferencesEnvironment({ storage: referenceStorage, clock, ids, compareSlot, previewUrl: () => null,
+      readBlob: records === null
+        ? async (digest) => (referenceStorage as MemoryReferenceStorage).blobs.get(digest)?.bytes.slice() ?? null
+        : (digest) => records.getBlob(digest) }),
   };
 }

@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import SocialDefault, { SocialModule } from '@hq/social';
 import WorkDefault, { WorkModule } from '@hq/work';
 import { App } from './App';
-import { MODULES } from './modules';
-import { designDomain } from '../../../modules/design/app/index.ts';
+import { MODULES, designDomain } from './modules';
+import { designDomain as defaultDesignDomain } from '../../../modules/design/app/index.ts';
 import { APPEARANCE_KEY } from './state';
 import { CALL_CLASSES, FIXTURE_IDS, resetSocialSessions, type PortMethod, type SocialWorkspacePort } from '../../../modules/social/core';
 import { NAV_ITEMS as SOCIAL_NAV, setSocialWorkspacePort } from '../../../modules/social/nav';
@@ -194,6 +194,7 @@ describe('Social and Work mounted in the T0 shell', () => {
     expect(MODULES.work).toBe(SERVICE_DOMAINS.Work);
     expect(WorkDefault).toBe(WorkModule);
     expect(MODULES.design).toBe(designDomain.Component);
+    expect(MODULES.design).not.toBe(defaultDesignDomain.Component);
   });
 
   it('opens on Design and mounts both domains with labelled fictional data and no execution', async () => {
@@ -209,7 +210,7 @@ describe('Social and Work mounted in the T0 shell', () => {
     expect(screen.getByText(/^Fictional example planning, kept in memory for this session only\./u)).toBeTruthy();
     expect(screen.getByText('Example data')).toBeTruthy();
     // The shell's own project context is shown and unchanged by either domain.
-    expect(screen.getByText('HQ workspace')).toBeTruthy();
+    expect(screen.getByText('Local projects')).toBeTruthy();
 
     expect(social.snapshot).toHaveBeenCalledTimes(1);
     expect(planner.snapshot).toHaveBeenCalledTimes(1);
@@ -433,24 +434,32 @@ describe('one keypress, one undo', () => {
   });
 });
 
+async function chooseAppearance(value: 'light' | 'dark' | 'system') {
+  const label = `Appearance: ${value[0]!.toUpperCase() + value.slice(1)}`;
+  for (let turn = 0; turn < 3 && !screen.queryByRole('button', { name: label }); turn += 1) {
+    await user().click(screen.getByRole('button', { name: /^Appearance:/ }));
+  }
+  expect(screen.getByRole('button', { name: label })).toBeTruthy();
+}
+
 describe('appearance', () => {
   it('an explicit theme survives a reload of the shell', async () => {
     const first = render(<App />);
-    await user().selectOptions(screen.getByLabelText('Appearance'), 'dark');
+    await chooseAppearance('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(window.localStorage.getItem(APPEARANCE_KEY)).toBe('dark');
     first.unmount();
     delete document.documentElement.dataset.theme;
 
     render(<App />);
-    expect((screen.getByLabelText('Appearance') as HTMLSelectElement).value).toBe('dark');
+    expect(screen.getByRole('button', { name: 'Appearance: Dark' })).toBeTruthy();
     expect(document.documentElement.dataset.theme).toBe('dark');
     await openWork();
     expect(document.documentElement.dataset.theme).toBe('dark');
-    await user().selectOptions(screen.getByLabelText('Appearance'), 'light');
+    await chooseAppearance('light');
     cleanup();
     render(<App />);
-    expect((screen.getByLabelText('Appearance') as HTMLSelectElement).value).toBe('light');
+    expect(screen.getByRole('button', { name: 'Appearance: Light' })).toBeTruthy();
     expect(document.documentElement.dataset.theme).toBe('light');
     expectNoExecution();
   });
@@ -467,7 +476,7 @@ describe('appearance', () => {
     }) as unknown as MediaQueryList);
 
     render(<App />);
-    expect((screen.getByLabelText('Appearance') as HTMLSelectElement).value).toBe('system');
+    expect(screen.getByRole('button', { name: 'Appearance: System' })).toBeTruthy();
     await openSocial();
     expect(document.documentElement.dataset.theme).toBe('light');
     act(() => { dark = true; for (const listener of listeners) listener(); });
@@ -477,7 +486,7 @@ describe('appearance', () => {
     act(() => { dark = false; for (const listener of listeners) listener(); });
     expect(document.documentElement.dataset.theme).toBe('light');
     // An explicit choice wins over the OS until System is chosen again.
-    await user().selectOptions(screen.getByLabelText('Appearance'), 'dark');
+    await chooseAppearance('dark');
     act(() => { for (const listener of listeners) listener(); });
     expect(document.documentElement.dataset.theme).toBe('dark');
     expectNoExecution();
@@ -490,11 +499,11 @@ describe('appearance', () => {
     const items = structuredClone(workSession('hq-local').store.getState().items);
     const callsBefore = allCalls();
 
-    await user().selectOptions(screen.getByLabelText('Appearance'), 'dark');
+    await chooseAppearance('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
     await expectWorkRestored();
     await switchDomain('Social');
-    await user().selectOptions(screen.getByLabelText('Appearance'), 'light');
+    await chooseAppearance('light');
     expect(document.documentElement.dataset.theme).toBe('light');
     await expectSocialRestored();
     await switchDomain('Work');

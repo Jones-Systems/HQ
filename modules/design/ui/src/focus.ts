@@ -33,6 +33,7 @@ export interface ChromeView {
   readonly sectionsByNav: Readonly<Record<DesignNavId, readonly SectionSummary[]>>;
   /** Panels currently shown (stored preference and window width both applied). */
   readonly visible: Readonly<Record<PanelId, boolean>>;
+  readonly squeezed?: readonly PanelId[];
   /** Most recent section per nav area, restored when returning to that area. */
   readonly lastSection: Readonly<Partial<Record<DesignNavId, string>>>;
 }
@@ -60,11 +61,15 @@ export function tabStops(view: ChromeView): readonly TabStop[] {
     for (const section of view.sectionsByNav[view.location.nav]) {
       stops.push({ id: `section:${section.id}`, region: 'sidebar', label: section.title, action: { type: 'navigate', location: { nav: section.nav, section: section.id } } });
     }
+  }
+  if (!view.squeezed?.includes('sidebar')) {
     stops.push({ id: 'splitter:sidebar', region: 'sidebar', label: 'Resize sidebar', action: { type: 'resize', panel: 'sidebar' } });
   }
   stops.push({ id: 'workspace', region: 'main', label: 'Workspace', action: { type: 'none' } });
-  if (view.visible.inspector) {
+  if (!view.squeezed?.includes('inspector')) {
     stops.push({ id: 'splitter:inspector', region: 'inspector', label: 'Resize inspector', action: { type: 'resize', panel: 'inspector' } });
+  }
+  if (view.visible.inspector) {
     stops.push({ id: 'inspector', region: 'inspector', label: 'Inspector', action: { type: 'none' } });
   }
   return stops;
