@@ -33,6 +33,7 @@ export interface UpdateManifest extends BuildReceipt {
   readonly repository: { readonly name: 'Jones-Systems/HQ'; readonly id: number; readonly ownerId: number };
   readonly platform: 'darwin';
   readonly releaseTag: string;
+  readonly sourceRef?: 'refs/heads/main';
   readonly workflow: '.github/workflows/hq-desktop-package.yml';
   readonly runId: string;
   readonly runAttempt: number;

@@ -1,6 +1,11 @@
 'use strict';
 
 const TEAM_ID = '2CUPSQS986';
+const PRODUCTION_REF = 'refs/heads/main';
+function productionReleaseTag(runId) {
+  if (!/^[1-9][0-9]{0,19}$/.test(String(runId))) throw new Error('Invalid production run ID');
+  return `hq-desktop-signed-${runId}`;
+}
 const PRODUCT_ID = 'org.jones-systems.hq.local';
 const DEVELOPER_ID = Object.freeze({ schemaVersion: 1, mode: 'developer-id', teamId: TEAM_ID, identifier: PRODUCT_ID, hardenedRuntime: true, secureTimestamp: true, notarized: true, stapled: true });
 
@@ -24,4 +29,4 @@ function verifySignatureDetails(details, identifier, production) {
 function verifyDesignatedRequirement(value, identifier) {
   if (/\bcdhash\b|\bor\b/.test(value) || !value.includes(`identifier "${identifier}"`) || !value.includes('anchor apple generic') || !value.includes('certificate leaf[subject.OU] = "2CUPSQS986"') || !value.includes('certificate leaf[field.1.2.840.113635.100.6.1.13]')) throw new Error('Unstable or unexpected designated requirement');
 }
-module.exports = { TEAM_ID, PRODUCT_ID, DEVELOPER_ID, validateSigning, requirement, verifySignatureDetails, verifyDesignatedRequirement };
+module.exports = { PRODUCTION_REF, productionReleaseTag, TEAM_ID, PRODUCT_ID, DEVELOPER_ID, validateSigning, requirement, verifySignatureDetails, verifyDesignatedRequirement };

@@ -71,7 +71,7 @@ test('record reads and path checks refuse symlinks', async t => {
 test('production manifests bind the signing policy into every retained receipt without weakening legacy decoding', () => {
   const { DEVELOPER_ID } = require('../signing.cjs');
   const development = manifest({}, false);
-  const production = { ...development, signing: 'developer-id', signingPolicy: { ...DEVELOPER_ID } };
+  const production = { ...development, signing: 'developer-id', sourceRef: 'refs/heads/main', releaseTag: `hq-desktop-signed-${development.runId}`, signingPolicy: { ...DEVELOPER_ID } };
   assert.deepEqual(contract.validateManifest(production), production);
   assert.deepEqual(contract.validateBuildReceipt(contract.receiptOf(production)).signingPolicy, DEVELOPER_ID);
   assert.equal(Object.hasOwn(contract.receiptOf(development), 'signingPolicy'), false);

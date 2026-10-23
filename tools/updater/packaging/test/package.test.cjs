@@ -164,12 +164,14 @@ test('cleanup failure does not replace the original failure and removes signal h
 
 module.exports = { receipt, put, tinyZip };
 
-test('production context admits only the exact canonical default branch dispatch and one expected identity', () => {
+test('production context requires explicit activation and exact canonical main push or artifact-only dispatch', () => {
   const { assertSigningContext, selectIdentity, cleanEnvironment } = require('../developer-id.cjs');
-  const event = { repository: { default_branch: 'integrated', id: REPOSITORY.id, owner: { id: REPOSITORY.ownerId } } };
-  const env = { GITHUB_REPOSITORY: REPOSITORY.name, GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/heads/integrated', GITHUB_WORKFLOW_REF: `${REPOSITORY.name}/${WORKFLOW}@refs/heads/integrated`, GITHUB_WORKFLOW_SHA: 'a'.repeat(40), GITHUB_SHA: 'a'.repeat(40), HQ_SIGNING_MODE: 'developer-id' };
+  const event = { repository: { default_branch: 'main', id: REPOSITORY.id, owner: { id: REPOSITORY.ownerId } } };
+  const env = { GITHUB_REPOSITORY: REPOSITORY.name, GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/heads/main', GITHUB_WORKFLOW_REF: `${REPOSITORY.name}/${WORKFLOW}@refs/heads/main`, GITHUB_WORKFLOW_SHA: 'a'.repeat(40), GITHUB_SHA: 'a'.repeat(40), HQ_SIGNING_MODE: 'developer-id', HQ_SIGNED_RELEASES_ENABLED: 'true' };
   assert.doesNotThrow(() => assertSigningContext(env, event));
-  for (const change of [{ GITHUB_EVENT_NAME: 'pull_request' }, { GITHUB_EVENT_NAME: 'push' }, { GITHUB_REF: 'refs/tags/hq-desktop-test' }, { GITHUB_REF: 'refs/heads/untrusted' }, { GITHUB_WORKFLOW_SHA: 'b'.repeat(40) }, { GITHUB_REPOSITORY: 'another/HQ' }, { HQ_SIGNING_MODE: 'adhoc-development' }]) assert.throws(() => assertSigningContext({ ...env, ...change }, event));
+  for (const change of [{ GITHUB_EVENT_NAME: 'pull_request' }, { HQ_SIGNED_RELEASES_ENABLED: undefined }, { HQ_SIGNED_RELEASES_ENABLED: 'false' }, { GITHUB_REF: 'refs/tags/hq-desktop-test' }, { GITHUB_REF: 'refs/heads/untrusted' }, { GITHUB_WORKFLOW_SHA: 'b'.repeat(40) }, { GITHUB_REPOSITORY: 'another/HQ' }, { HQ_SIGNING_MODE: 'adhoc-development' }]) assert.throws(() => assertSigningContext({ ...env, ...change }, event));
+  assert.doesNotThrow(() => assertSigningContext({ ...env, GITHUB_EVENT_NAME: 'push' }, event));
+  assert.throws(() => assertSigningContext(env, { repository: { ...event.repository, default_branch: 'other' } }));
   const identity = `1) ${'A'.repeat(40)} "Developer ID Application: Fixture (2CUPSQS986)"`;
   assert.equal(selectIdentity(identity), 'A'.repeat(40));
   for (const value of ['', identity.replace('2CUPSQS986', 'WRONGTEAM00'), `${identity}\n${identity}`]) assert.throws(() => selectIdentity(value));
@@ -241,9 +243,73 @@ test('workflow keeps credentials exclusively in the protected default-branch pro
   const production = workflow.slice(workflow.indexOf('  developer-id:'), workflow.indexOf('  attest:'));
   assert.match(production, /environment: macos-signing/);
   assert.match(production, /github.event_name == 'workflow_dispatch'/);
-  assert.match(production, /github.ref == format\('refs\/heads\/\{0\}', github.event.repository.default_branch\)/);
+  assert.match(production, /github.ref == 'refs\/heads\/main'/);
+  assert.match(production, /vars.HQ_SIGNED_RELEASES_ENABLED == 'true'/);
+  assert.match(workflow, /!startsWith\(github.ref, 'refs\/tags\/hq-desktop-signed-'\)/);
   assert.match(production, /ref: \$\{\{ github.sha \}\}/);
   assert.doesNotMatch(workflow.replace(production, ''), /secrets\./);
   assert.doesNotMatch(workflow, /pull_request_target/);
   assert.match(workflow, /HQ_SIGNING_MODE: adhoc-development/);
+});
+
+function productionContext(overrides = {}) {
+  return { repository: REPOSITORY.name, repositoryId: REPOSITORY.id, ownerId: REPOSITORY.ownerId, event: 'push', ref: 'refs/heads/main', sourceSha: 'a'.repeat(40), mainSha: 'a'.repeat(40), workflowSha: 'a'.repeat(40), workflowRef: `${REPOSITORY.name}/${WORKFLOW}@refs/heads/main`, runId: '17', runAttempt: '1', enabled: 'true', defaultBranch: 'main', ...overrides };
+}
+
+test('production release guard preserves disabled defaults and rejects other events, refs, commits and reserved ad-hoc tags', () => {
+  assert.equal(assertReleaseContext(productionContext()), 'hq-desktop-signed-17');
+  for (const change of [{ enabled: undefined }, { enabled: 'false' }, { event: 'workflow_dispatch' }, { event: 'pull_request' }, { defaultBranch: 'other' }, { ref: 'refs/heads/feature' }, { ref: 'refs/tags/hq-desktop-signed-17' }, { mainSha: 'b'.repeat(40) }, { sourceSha: 'b'.repeat(40) }, { workflowSha: 'b'.repeat(40) }, { repositoryId: 1 }, { ownerId: 1 }]) assert.throws(() => assertReleaseContext(productionContext(change)));
+});
+
+test('production publication binds both signed archives and manifests, creates one exact tag and reads back every asset digest', async () => {
+  const { DEVELOPER_ID } = require('../../signing.cjs');
+  const { verifyReleaseFiles, publishProduction } = require('../stage-release.cjs');
+  await withOwnedDirectory(scratch, 'publish-', async root => {
+    for (const architecture of ['arm64', 'x64']) {
+      const archive = tinyZip([['HQ.app/file', 'fixture']]);
+      const archivePath = path.join(root, `hq-darwin-${architecture}.zip`);
+      fs.writeFileSync(archivePath, archive);
+      const build = { ...receipt({ architecture }), signingPolicy: { ...DEVELOPER_ID } };
+      const manifest = manifestFor(build, archiveMetrics(archivePath), { releaseTag: 'hq-desktop-signed-17', sourceRef: 'refs/heads/main', runId: '17', runAttempt: 1, event: 'push', publishedAt: '2026-10-22T00:00:00.000Z' });
+      put(root, `hq-darwin-${architecture}.json`, manifest);
+      put(root, `hq-darwin-${architecture}.sigstore.json`, { dsseEnvelope: {}, verificationMaterial: {} });
+    }
+    assert.equal(verifyReleaseFiles(root, 'arm64', productionContext()).manifest.sourceRef, 'refs/heads/main');
+    const run = (mode = 'success') => {
+      let created = false, released = false, releases = 0, posts = 0, assets = [];
+      const request = (endpoint, method = 'GET', body) => {
+        if (method === 'POST') { posts++; assert.deepEqual(body, { ref: 'refs/tags/hq-desktop-signed-17', sha: 'a'.repeat(40) }); created = true; return { status: 201 }; }
+        if (endpoint.includes('/git/ref/')) {
+          if (mode === 'existing') return { status: 200, body: {} };
+          if (!created) return { status: mode === 'unknown' ? 503 : 404 };
+          return { status: 200, body: { ref: 'refs/tags/hq-desktop-signed-17', object: { type: 'commit', sha: (mode === 'wrong-tag' ? 'b' : 'a').repeat(40) } } };
+        }
+        return released ? { status: 200, body: { tag_name: 'hq-desktop-signed-17', draft: false, prerelease: true, assets: mode === 'partial' ? assets.slice(1) : assets } } : { status: 404 };
+      };
+      const create = (tag, files) => {
+        releases++; released = true;
+        assert.equal(tag, 'hq-desktop-signed-17');
+        assets = files.map(file => ({ name: path.basename(file), size: fs.statSync(file).size, digest: `sha256:${createHash('sha256').update(fs.readFileSync(file)).digest('hex')}` }));
+        return { status: mode === 'lost-response' ? 1 : 0 };
+      };
+      if (['success', 'lost-response'].includes(mode)) {
+        const result = publishProduction(productionContext(), root, request, create);
+        assert.equal(result.verified, true); assert.equal(result.responseLost, mode === 'lost-response');
+        assert.equal(posts, 1); assert.equal(releases, 1);
+      } else {
+        assert.throws(() => publishProduction(productionContext(), root, request, create));
+        assert.equal(posts, ['existing', 'unknown'].includes(mode) ? 0 : 1);
+        assert.equal(releases, mode === 'partial' ? 1 : 0);
+      }
+    };
+    for (const mode of ['success', 'lost-response', 'existing', 'unknown', 'wrong-tag', 'partial']) run(mode);
+    const filename = path.join(root, 'hq-darwin-arm64.json'), original = fs.readFileSync(filename);
+    for (const mutation of [{ sourceSha: 'b'.repeat(40) }, { runAttempt: 2 }, { sourceRef: 'refs/heads/feature' }, { signing: 'adhoc' }, { repository: { ...REPOSITORY, id: 1 } }]) {
+      put(root, 'hq-darwin-arm64.json', { ...JSON.parse(original), ...mutation });
+      assert.throws(() => verifyReleaseFiles(root, 'arm64', productionContext()));
+    }
+    fs.writeFileSync(filename, original);
+    fs.appendFileSync(path.join(root, 'hq-darwin-arm64.zip'), 'tampered');
+    assert.throws(() => verifyReleaseFiles(root, 'arm64', productionContext()), /artifact identity/);
+  });
 });

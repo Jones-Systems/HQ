@@ -43,7 +43,7 @@ it('ignores installed or older releases and requires the explicit trusted fresh-
 
 it('admits the production signature contract and rejects an ad-hoc downgrade from production', () => {
   const signingPolicy = { schemaVersion: 1, mode: 'developer-id', teamId: '2CUPSQS986', identifier: 'org.jones-systems.hq.local', hardenedRuntime: true, secureTimestamp: true, notarized: true, stapled: true } as const;
-  const production = { ...manifest(), signing: 'developer-id' as const, signingPolicy };
+  const production = { ...manifest(), signing: 'developer-id' as const, sourceRef: 'refs/heads/main' as const, releaseTag: 'hq-desktop-signed-2', signingPolicy };
   const record = installation('/unread');
   expect(() => checkCompatibility(production, installed(), record, 'arm64')).not.toThrow();
   expect(() => checkCompatibility(production, { ...installed(), signingPolicy }, record, 'arm64')).not.toThrow();

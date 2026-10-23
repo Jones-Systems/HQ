@@ -4,6 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
+    branches: [main]
     tags: ['hq-desktop-*']
   workflow_dispatch:
     inputs:
@@ -14,6 +15,9 @@ on:
         default: adhoc-development
         required: true
 
+env:
+  HQ_SIGNED_RELEASES_ENABLED: ${{ vars.HQ_SIGNED_RELEASES_ENABLED }}
+
 permissions:
   contents: read
 
@@ -23,7 +27,7 @@ concurrency:
 
 jobs:
   package:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    if: (github.event_name == 'pull_request' && !github.event.pull_request.draft) || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && ((startsWith(github.ref, 'refs/tags/hq-desktop-') && !startsWith(github.ref, 'refs/tags/hq-desktop-signed-')) || (github.ref == 'refs/heads/main' && vars.HQ_SIGNED_RELEASES_ENABLED == 'true')))
     strategy:
       fail-fast: false
       matrix:
@@ -98,7 +102,7 @@ jobs:
       - name: Assemble and strictly verify the ad-hoc package
         id: assemble
         env:
-          HQ_RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          HQ_RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
         run: node tools/updater/packaging/ci-run.cjs node tools/updater/packaging/package.cjs
       - name: Qualify synthetic native launch, next launch and recovery
         run: node tools/updater/packaging/ci-run.cjs node tools/updater/packaging/native-smoke.cjs
@@ -120,7 +124,7 @@ jobs:
         run: node tools/updater/packaging/cleanup-output.cjs
 
   developer-id:
-    if: github.event_name == 'workflow_dispatch' && inputs.signing == 'developer-id' && github.repository == 'Jones-Systems/HQ' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: vars.HQ_SIGNED_RELEASES_ENABLED == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.signing == 'developer-id')) && github.repository == 'Jones-Systems/HQ' && github.event.repository.default_branch == 'main' && github.ref == 'refs/heads/main'
     needs: package
     environment: macos-signing
     strategy:
@@ -145,6 +149,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Use pinned Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -160,6 +165,9 @@ jobs:
         env:
           HQ_COMPILER_ARCH: ${{ matrix.arch == 'x64' && 'x86_64' || matrix.arch }}
         run: node tools/updater/packaging/ci-run.cjs /usr/bin/xcrun --sdk macosx clang -std=c11 -Wall -Wextra -Werror -arch "$HQ_COMPILER_ARCH" tools/updater/process-inventory.c -o tools/updater/process-inventory
+      - name: Recheck production release source before introducing credentials
+        if: github.event_name == 'push'
+        run: node tools/updater/packaging/release-guard.cjs
       - name: Build trusted production source before introducing credentials
         run: node tools/updater/packaging/ci-run.cjs npm run build
       - name: Sign, notarize, staple and verify production package
@@ -189,8 +197,8 @@ jobs:
         run: node tools/updater/packaging/cleanup-output.cjs
 
   attest:
-    if: github.event_name == 'push'
-    needs: package
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.package.result == 'success' && ((startsWith(github.ref, 'refs/tags/hq-desktop-') && !startsWith(github.ref, 'refs/tags/hq-desktop-signed-')) || (github.ref == 'refs/heads/main' && vars.HQ_SIGNED_RELEASES_ENABLED == 'true' && needs['developer-id'].result == 'success')) }}
+    needs: [package, developer-id]
     strategy:
       matrix:
         arch: [arm64, x64]
@@ -211,7 +219,7 @@ jobs:
       - name: Retrieve the exact run's package
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: hq-package-${{ matrix.arch }}
+          name: ${{ github.ref == 'refs/heads/main' && 'hq-developer-id' || 'hq-package' }}-${{ matrix.arch }}
           path: release-input
       - name: Bind archive and manifest bytes to workflow provenance
         id: provenance
@@ -235,7 +243,7 @@ jobs:
           compression-level: 0
 
   publish:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && ((startsWith(github.ref, 'refs/tags/hq-desktop-') && !startsWith(github.ref, 'refs/tags/hq-desktop-signed-')) || (github.ref == 'refs/heads/main' && vars.HQ_SIGNED_RELEASES_ENABLED == 'true'))
     needs: attest
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -255,9 +263,15 @@ jobs:
           pattern: hq-attested-*
           path: release-assets
           merge-multiple: true
-      - name: Publish one preview release without replacing any existing asset
+      - name: Publish one ad-hoc development preview without replacing any existing asset
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --target "$GITHUB_SHA" --prerelease --title "$GITHUB_REF_NAME" --notes-file tools/updater/packaging/RELEASE.txt release-assets/hq-darwin-arm64.zip release-assets/hq-darwin-arm64.json release-assets/hq-darwin-arm64.sigstore.json release-assets/hq-darwin-x64.zip release-assets/hq-darwin-x64.json release-assets/hq-darwin-x64.sigstore.json tools/updater/packaging/INSTALL.txt tools/updater/packaging/install-hq.command
+      - name: Publish signed production preview and verify exact tag and asset digests
+        if: github.ref == 'refs/heads/main' && vars.HQ_SIGNED_RELEASES_ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/updater/packaging/stage-release.cjs publish-production

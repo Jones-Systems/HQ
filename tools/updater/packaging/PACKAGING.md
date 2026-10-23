@@ -36,14 +36,21 @@ timestamp, hardened runtime, expected Team ID or stapled ticket fails the job;
 it never switches to ad-hoc signing. Stable-channel packaging also refuses
 ad-hoc mode.
 
-The protected `developer-id` job runs only for an explicit `workflow_dispatch`
-with `signing=developer-id`, in the canonical repository, on its default branch.
-It checks out that exact workflow commit and builds before introducing secrets.
-PRs and tags cannot enter this job. Keep the `macos-signing` environment limited
-to the default branch with required reviewers; environment creation and secret
-enrollment are separate owner operations. Do not temporarily allow a feature
-branch to exercise signing. Until this source is integrated into the default
-branch, production signing remains unavailable.
+The whole production path is disabled unless the nonsecret repository variable
+`HQ_SIGNED_RELEASES_ENABLED` is exactly `true`. An authorized operator enables
+it only after source integration, protected-environment enrollment and native
+qualification. Source publication does not set this variable. When it is absent
+or false, ordinary PR checks and development tag releases retain their behavior.
+
+After activation, a canonical `refs/heads/main` push runs unsigned qualification,
+then the protected `developer-id` job. The repository's default branch must also
+be `main`; a different default branch is a policy mismatch that stops signing.
+The job checks out the exact workflow commit and builds before introducing
+secrets. PRs, arbitrary branches and tags cannot enter it. Keep the
+`macos-signing` environment limited to `main`; any required approval remains an
+independent gate. Manual `workflow_dispatch` with `signing=developer-id` also
+requires activation and the same trusted branch, but produces artifacts only.
+Never temporarily trust a feature branch to exercise signing.
 
 An authorized operator enrolls these **environment** secrets through a trusted
 secret manager or GitHub's protected secret input, never through PR text:
@@ -82,12 +89,31 @@ notary archive, storage admission budgets two bundle copies plus 1 GiB metadata
 and a 2 GiB free-space reserve on the output filesystem.
 
 The production job uploads a 14-day `hq-developer-id-<arch>` artifact containing
-the app archive and package evidence. It does not publish a release, mint a
-release manifest or replace tag provenance. The existing tag workflow still
-publishes explicitly ad-hoc development previews. Connecting default-branch
-production artifacts to an authenticated release is a separate integration gate;
-these manual artifacts are not an updater feed. Do not trigger a release tag as
-a signing test.
+the final stapled app archive and package evidence. On a main push it also
+creates `hq-darwin-<arch>.json`, binding `sourceRef: refs/heads/main`, the exact
+source commit, workflow run/attempt and ZIP digest. The same run attests both
+ZIP and manifest through the existing Sigstore action and assembles both
+architectures for publication. Manual dispatch has no release manifest and
+cannot enter attestation or publication.
+
+A successful main push publishes one preview release named
+`hq-desktop-signed-<runId>`. The publisher rechecks both manifests and archive
+hashes, requires the tag and release to be absent, creates a lightweight tag at
+the exact attested commit, then publishes without replacing assets. Direct
+readback requires that tag commit and every uploaded asset's SHA-256/size to
+match. A lost command response counts as success only when those full native
+postconditions are observed. Existing tags/releases, partial publication,
+mismatched tags or unknown responses stop without retries, replacement or
+cleanup; an operator must reconcile that exact run. Re-running an already
+published run cannot overwrite its assets.
+
+The `hq-desktop-signed-` namespace is reserved. Tag-push jobs refuse it, preventing
+a production tag from entering ad-hoc publication. Other tag pushes retain the
+existing integrated-foundation guard and explicitly ad-hoc development output.
+Updater verification selects fixed main-push provenance for Developer ID and
+existing tag-push provenance for legacy development; a manifest cannot choose
+another trusted branch, workflow or repository. Signed discovery also resolves
+the release tag to the attested commit before preparation.
 
 Production receipts add the closed optional `signingPolicy` object (version 1,
 `developer-id`, Team `2CUPSQS986`, unchanged identifier, and required runtime,
@@ -211,12 +237,13 @@ Package-output cleanup requires its exact invocation marker.
 ## Release workflow
 
 Pull requests against any base and manual runs create build artifacts only.
+Activated canonical main pushes use the signed release path described above.
 This includes a PR based on an unmerged source dependency; passing that run
 does not satisfy the release source guard. A future explicitly
 authorized `hq-desktop-*` tag push is the release trigger. The tag and workflow
 commit must equal the observed `work/hq-foundation` head, with fixed repository
-and owner numeric IDs. There is no branch-push publication or PR credential
-path. The build has read-only repository permission. A separate tag-only job
+and owner numeric IDs. That development path has no branch-push publication or PR credential
+access. The build has read-only repository permission. A separate tag-only job
 uses OIDC to attest the archive and manifest together, copies the action's
 JSON `bundle-path` as `hq-darwin-<arch>.sigstore.json`, and the final job creates
 one preview release. Existing assets are never replaced or force-updated.

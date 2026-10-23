@@ -306,8 +306,28 @@ test('production admission cannot downgrade to ad-hoc while the exact pre-migrat
   const candidate = { ...f.candidate, manifest: candidateManifest, candidateId: candidateId(candidateManifest) };
   const engine = createTransaction({ native: f.native });
   assert.throws(() => engine.admit(record, candidate), /ad-hoc downgrade/);
-  const signed = { ...candidateManifest, signing: 'developer-id', signingPolicy: { ...DEVELOPER_ID } };
+  const signed = { ...candidateManifest, signing: 'developer-id', sourceRef: 'refs/heads/main', releaseTag: `hq-desktop-signed-${candidateManifest.runId}`, signingPolicy: { ...DEVELOPER_ID } };
   assert.doesNotThrow(() => engine.admit(record, { ...candidate, manifest: signed, candidateId: candidateId(signed) }));
   const developmentPrior = { ...prior }; delete developmentPrior.signingPolicy;
   assert.doesNotThrow(() => engine.admit({ ...record, installed: developmentPrior }, { ...candidate, manifest: signed, candidateId: candidateId(signed) }));
+});
+
+test('compatible signed rollback preserves both signed receipts and the untouched profile', async t => {
+  const { DEVELOPER_ID } = require('../signing.cjs');
+  const { writeBundle } = require('./fixtures.cjs');
+  const { candidateId, receiptOf } = require('../contract.cjs');
+  const f = await fixture(t, { synthetic: false });
+  Object.assign(f.prior, { signingPolicy: { ...DEVELOPER_ID } });
+  f.record.installed = f.prior;
+  Object.assign(f.candidate.manifest, { signing: 'developer-id', signingPolicy: { ...DEVELOPER_ID }, sourceRef: 'refs/heads/main', releaseTag: `hq-desktop-signed-${f.candidate.manifest.runId}` });
+  f.candidate.candidateId = candidateId(f.candidate.manifest);
+  await writeBundle(f.record.targetPath, f.prior);
+  await writeBundle(f.candidate.bundlePath, receiptOf(f.candidate.manifest));
+  const { journal, launched } = await f.start();
+  f.processes.delete(launched.pid);
+  const restored = await f.locked(() => f.engine.recover(f.record, f.self, { operationId: journal.operationId, expectedSequence: journal.sequence }));
+  assert.equal(restored.state, 'restored');
+  assert.deepEqual((await f.native.verifyBundle(f.record.targetPath, f.prior)).signingPolicy, DEVELOPER_ID);
+  assert.deepEqual(restored.candidate.manifest.signingPolicy, DEVELOPER_ID);
+  assert.equal(await fs.readFile(path.join(f.record.userData, 'untouched.data'), 'utf8'), 'synthetic profile bytes');
 });

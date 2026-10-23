@@ -5,7 +5,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { PRODUCT, SYNTHETIC, WORKFLOW, REPOSITORY, ELECTRON_VERSION, LIMITS, buildReceipt, positiveInteger } = require('./identity.cjs');
-const { DEVELOPER_ID, requirement, verifySignatureDetails, verifyDesignatedRequirement } = require('../signing.cjs');
+const { PRODUCTION_REF, productionReleaseTag, DEVELOPER_ID, requirement, verifySignatureDetails, verifyDesignatedRequirement } = require('../signing.cjs');
 const { inspectRegistry, readRegistry } = require('./compatibility.cjs');
 
 function command(executable, args, options = {}) {
@@ -220,10 +220,12 @@ function manifestFor(receipt, archive, metadata) {
   if (!/^hq-desktop-[A-Za-z0-9._-]+$/.test(metadata.releaseTag) || metadata.event !== 'push') throw new Error('Invalid release event');
   if (String(receipt.buildSequence) !== metadata.runId) throw new Error('Build sequence must equal the workflow run ID');
   if (!Number.isFinite(Date.parse(metadata.publishedAt))) throw new Error('Invalid manifest metadata');
-  return { ...receipt, repository: REPOSITORY, platform: 'darwin', releaseTag: metadata.releaseTag, workflow: WORKFLOW, runId: metadata.runId, runAttempt: positiveInteger(metadata.runAttempt, 'run attempt'), event: 'push', publishedAt: metadata.publishedAt, signing: receipt.signingPolicy ? 'developer-id' : 'adhoc', archive: { name: `hq-darwin-${receipt.architecture}.zip`, ...archive }, attestation: `hq-darwin-${receipt.architecture}.sigstore.json` };
+  if (receipt.signingPolicy && (metadata.sourceRef !== PRODUCTION_REF || metadata.releaseTag !== productionReleaseTag(metadata.runId))) throw new Error('Production release must bind the trusted main push');
+  if (!receipt.signingPolicy && metadata.releaseTag.startsWith('hq-desktop-signed-')) throw new Error('Production release cannot use ad-hoc signing');
+  return { ...receipt, ...(receipt.signingPolicy ? { sourceRef: PRODUCTION_REF } : {}), repository: REPOSITORY, platform: 'darwin', releaseTag: metadata.releaseTag, workflow: WORKFLOW, runId: metadata.runId, runAttempt: positiveInteger(metadata.runAttempt, 'run attempt'), event: 'push', publishedAt: metadata.publishedAt, signing: receipt.signingPolicy ? 'developer-id' : 'adhoc', archive: { name: `hq-darwin-${receipt.architecture}.zip`, ...archive }, attestation: `hq-darwin-${receipt.architecture}.sigstore.json` };
 }
 
-function packageApplication({ root, output, sourceSha, architecture, buildSequence, channel = 'preview', releaseTag, runAttempt = 1, publishedAt = new Date().toISOString(), signing }) {
+function packageApplication({ root, output, sourceSha, architecture, buildSequence, channel = 'preview', releaseTag, sourceRef, runAttempt = 1, publishedAt = new Date().toISOString(), signing }) {
   if (!signing || !['adhoc-development', 'developer-id'].includes(signing.mode)) throw new Error('An explicit signing mode is required');
   if (channel === 'stable' && signing.mode !== 'developer-id') throw new Error('Stable production cannot use ad-hoc signing');
   if (process.platform !== 'darwin' || process.arch !== architecture) throw new Error('Native matching macOS runner required');
@@ -261,7 +263,7 @@ function packageApplication({ root, output, sourceSha, architecture, buildSequen
     command('/usr/bin/zip', ['-qry', archive, 'HQ.app'], { cwd: output });
     const metrics = archiveMetrics(archive);
     writeJson(path.join(output, 'package-evidence.json'), { receipt, archive: metrics, verification: 'codesign --verify --deep --strict', signing: signing.mode, distribution: signing.mode === 'developer-id' ? 'notarized-production' : 'ad-hoc-development' });
-    if (releaseTag) writeJson(path.join(output, `hq-darwin-${architecture}.json`), manifestFor(receipt, metrics, { releaseTag, runId: String(buildSequence), runAttempt, event: 'push', publishedAt }));
+    if (releaseTag) writeJson(path.join(output, `hq-darwin-${architecture}.json`), manifestFor(receipt, metrics, { releaseTag, sourceRef, runId: String(buildSequence), runAttempt, event: 'push', publishedAt }));
     return { bundle, archive, receipt, metrics };
   } catch (error) {
     try { cleanup(); } catch (cleanupError) { process.stderr.write(`Package cleanup failed after original error: ${cleanupError.message}\n`); }

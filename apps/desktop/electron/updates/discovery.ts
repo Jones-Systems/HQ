@@ -51,10 +51,12 @@ export function checkCompatibility(manifest: UpdateManifest, installed: BuildRec
 
 function checkReleaseIdentity(manifest: UpdateManifest, architecture: UpdateArchitecture, channel: UpdateChannel): void {
   if (manifest.repository.name !== REPOSITORY.name || manifest.repository.id !== REPOSITORY.id || manifest.repository.ownerId !== REPOSITORY.ownerId || manifest.platform !== 'darwin' || manifest.workflow !== WORKFLOW || manifest.event !== 'push' || manifest.signing !== (manifest.signingPolicy ? 'developer-id' : 'adhoc') || manifest.bundleId !== 'org.jones-systems.hq.local' || manifest.appName !== 'HQ' || !/^hq-desktop-[A-Za-z0-9._-]+$/.test(manifest.releaseTag)) throw new UpdateFailure('provenance');
+  if (manifest.signing === 'developer-id' ? manifest.sourceRef !== 'refs/heads/main' || manifest.releaseTag !== `hq-desktop-signed-${manifest.runId}` : manifest.sourceRef !== undefined || manifest.releaseTag.startsWith('hq-desktop-signed-')) throw new UpdateFailure('provenance');
   if (manifest.architecture !== architecture || manifest.channel !== channel) throw new UpdateFailure('incompatible');
 }
 
 export function verifyWorkflowRun(value: unknown, manifest: UpdateManifest): void {
+  if (manifest.signing === 'developer-id' && (!object(value) || value.head_branch !== 'main')) throw new UpdateFailure('provenance');
   if (!object(value) || !object(value.repository) || !object(value.repository.owner) || !object(value.head_repository) || value.repository.id !== REPOSITORY.id || value.repository.full_name !== REPOSITORY.name || value.repository.owner.id !== REPOSITORY.ownerId || value.head_repository.id !== REPOSITORY.id || String(value.id) !== manifest.runId || value.run_attempt !== manifest.runAttempt || value.head_sha !== manifest.sourceSha || value.path !== WORKFLOW || value.event !== 'push' || value.status !== 'completed' || value.conclusion !== 'success') throw new UpdateFailure('provenance');
 }
 
@@ -91,6 +93,10 @@ export async function discover(options: DiscoveryOptions): Promise<DiscoveredCan
   choices.sort((a, b) => b.manifest.buildSequence - a.manifest.buildSequence);
   const choice = choices[0];
   if (!choice) return null;
+  if (choice.manifest.signing === 'developer-id') {
+    const tag = await json(`/git/ref/tags/${choice.manifest.releaseTag}`);
+    if (!object(tag) || tag.ref !== `refs/tags/${choice.manifest.releaseTag}` || !object(tag.object) || tag.object.type !== 'commit' || tag.object.sha !== choice.manifest.sourceSha) throw new UpdateFailure('provenance');
+  }
   if (options.installed && options.record) checkCompatibility(choice.manifest, options.installed, options.record, options.architecture);
   if (choices[1]?.manifest.buildSequence === choice.manifest.buildSequence && contract.candidateId(choices[1].manifest) !== contract.candidateId(choice.manifest)) throw new UpdateFailure('provenance');
   verifyWorkflowRun(await json(`/actions/runs/${choice.manifest.runId}/attempts/${choice.manifest.runAttempt}`), choice.manifest);

@@ -6,12 +6,12 @@ const { spawnSync } = require('node:child_process');
 const { withOwnedDirectory } = require('./owned-directory.cjs');
 const { packageApplication } = require('./package.cjs');
 const { REPOSITORY, WORKFLOW } = require('./identity.cjs');
-const { TEAM_ID } = require('../signing.cjs');
+const { TEAM_ID, PRODUCTION_REF, productionReleaseTag } = require('../signing.cjs');
 
 const SECRET_NAMES = ['MACOS_SIGNING_CERTIFICATE_P12_BASE64', 'MACOS_SIGNING_CERTIFICATE_PASSWORD', 'APPLE_NOTARY_API_KEY_P8_BASE64', 'APPLE_NOTARY_KEY_ID', 'APPLE_NOTARY_ISSUER_ID'];
 function assertSigningContext(env, event) {
   const branch = event.repository?.default_branch;
-  if (env.GITHUB_REPOSITORY !== REPOSITORY.name || String(event.repository?.id) !== String(REPOSITORY.id) || String(event.repository?.owner?.id) !== String(REPOSITORY.ownerId) || env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || !branch || env.GITHUB_REF !== `refs/heads/${branch}` || env.GITHUB_WORKFLOW_REF !== `${REPOSITORY.name}/${WORKFLOW}@refs/heads/${branch}` || env.GITHUB_WORKFLOW_SHA !== env.GITHUB_SHA || env.HQ_SIGNING_MODE !== 'developer-id') throw new Error('Production signing requires the exact trusted default-branch workflow');
+  if (env.GITHUB_REPOSITORY !== REPOSITORY.name || String(event.repository?.id) !== String(REPOSITORY.id) || String(event.repository?.owner?.id) !== String(REPOSITORY.ownerId) || !['push', 'workflow_dispatch'].includes(env.GITHUB_EVENT_NAME) || env.HQ_SIGNED_RELEASES_ENABLED !== 'true' || branch !== 'main' || env.GITHUB_REF !== PRODUCTION_REF || env.GITHUB_WORKFLOW_REF !== `${REPOSITORY.name}/${WORKFLOW}@refs/heads/${branch}` || env.GITHUB_WORKFLOW_SHA !== env.GITHUB_SHA || env.HQ_SIGNING_MODE !== 'developer-id') throw new Error('Production signing requires the exact trusted default-branch workflow');
 }
 function cleanEnvironment(env) { return Object.fromEntries(Object.entries(env).filter(([key]) => !SECRET_NAMES.includes(key))); }
 function selectIdentity(output) {
@@ -46,7 +46,7 @@ async function main(env = process.env) {
       // The isolated keychain has an intentionally empty, non-secret password.
       run('/usr/bin/security', ['set-key-partition-list', '-S', 'apple-tool:,apple:', '-s', '-k', '', keychain], sanitized);
       const identity = selectIdentity(run('/usr/bin/security', ['find-identity', '-v', '-p', 'codesigning', keychain], sanitized));
-      return packageApplication({ root: path.resolve(__dirname, '../../..'), output: env.HQ_PACKAGE_OUTPUT, sourceSha: env.GITHUB_SHA, architecture: env.HQ_PACKAGE_ARCH, buildSequence: Number(env.GITHUB_RUN_ID), channel: 'preview', signing: { mode: 'developer-id', identity, keychain, notaryKey, notaryKeyId: secrets.APPLE_NOTARY_KEY_ID, notaryIssuerId: secrets.APPLE_NOTARY_ISSUER_ID } });
+      return packageApplication({ root: path.resolve(__dirname, '../../..'), output: env.HQ_PACKAGE_OUTPUT, sourceSha: env.GITHUB_SHA, architecture: env.HQ_PACKAGE_ARCH, buildSequence: Number(env.GITHUB_RUN_ID), channel: 'preview', releaseTag: env.GITHUB_EVENT_NAME === 'push' ? productionReleaseTag(env.GITHUB_RUN_ID) : undefined, sourceRef: PRODUCTION_REF, runAttempt: Number(env.GITHUB_RUN_ATTEMPT), signing: { mode: 'developer-id', identity, keychain, notaryKey, notaryKeyId: secrets.APPLE_NOTARY_KEY_ID, notaryIssuerId: secrets.APPLE_NOTARY_ISSUER_ID } });
     } catch (error) { failure = error; throw error; }
     finally {
       try { if (fs.existsSync(keychain)) run('/usr/bin/security', ['delete-keychain', keychain], sanitized); }

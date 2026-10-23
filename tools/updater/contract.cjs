@@ -3,7 +3,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { validateSigning } = require('./signing.cjs');
+const { validateSigning, PRODUCTION_REF, productionReleaseTag } = require('./signing.cjs');
 
 const MAX_ARCHIVE_BYTES = 1024 ** 3;
 const MAX_EXPANDED_BYTES = 3 * 1024 ** 3;
@@ -82,7 +82,7 @@ function validateBuildReceipt(value, options) {
   return immutable(clone(value));
 }
 function validateManifest(value, options) {
-  object(value, signingKeys(value, MANIFEST_KEYS), 'manifest');
+  object(value, signingKeys(value, value?.signingPolicy ? [...MANIFEST_KEYS, 'sourceRef'] : MANIFEST_KEYS), 'manifest');
   validateBuildFields(value, options);
   object(value.repository, ['name', 'id', 'ownerId'], 'repository');
   ensure(value.repository.name === 'Jones-Systems/HQ', 'Unexpected repository.');
@@ -93,6 +93,8 @@ function validateManifest(value, options) {
   text(value.releaseTag, /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/, 'release tag');
   text(value.runId, /^[1-9][0-9]{0,19}$/, 'workflow run');
   integer(value.runAttempt, 1, 1000, 'run attempt');
+  if (value.signingPolicy) ensure(value.sourceRef === PRODUCTION_REF && value.releaseTag === productionReleaseTag(value.runId), 'Unexpected production source or release identity.');
+  else ensure(!value.releaseTag.startsWith('hq-desktop-signed-'), 'Production release tags cannot carry ad-hoc packages.');
   text(value.publishedAt, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/, 'publication time');
   ensure(Number.isFinite(Date.parse(value.publishedAt)), 'Invalid publication time.');
   object(value.archive, ['name', 'size', 'sha256', 'expandedSize', 'fileCount'], 'archive');
