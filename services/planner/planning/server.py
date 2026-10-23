@@ -22,6 +22,7 @@ import re
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from socketserver import TCPServer
 from urllib.parse import urlsplit
 
 from .store import Store, StoreError
@@ -329,4 +330,12 @@ def make_handler(app: PlanningApp):
             self._serve("DELETE")
 
     return Handler
+
+
+class ThreadingHTTPServer(ThreadingHTTPServer):
+    """Avoid reverse DNS at startup; request trust uses PlanningApp.allowed_hosts."""
+
+    def server_bind(self):
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
