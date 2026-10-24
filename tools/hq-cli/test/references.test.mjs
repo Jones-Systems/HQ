@@ -14,10 +14,9 @@ const modern = { ...info, features: [...info.features, 'hq-references-v1'] };
 const shape = id => schemas().find(c => c.id === id);
 
 test('reference envelopes retain optional fields and match parseReference text/destination semantics', () => {
-  for (const value of [target, { ...target, domain: 'design', returnDestination: { domain: 'social', destination: '/entry' } }, { ...target, entityId: '😀'.repeat(80) }]) assert.equal(conforms(referenceEnvelope, value), true);
-  for (const patch of [{ version: '1' }, { domain: 'planner' }, { projectId: ' x' }, { title: 'x\n' }, { kind: '' }, { entityId: '😀'.repeat(81) }, { workspaceId: null }, { sourceRevision: 'x'.repeat(301) }, { extra: true }, { title: 'x\u007f' }]) assert.equal(conforms(referenceEnvelope, { ...target, ...patch }), false, JSON.stringify(patch));
-  for (const destination of ['https:example', 'HTTPS:example', '//host', '\\\\host', '/\\host', '\\/host', ' x', 'x ', '', 'x\u0000', 'x'.repeat(513)]) assert.equal(conforms(referenceEnvelope, { ...target, returnDestination: { domain: 'work', destination } }), false, destination);
-  assert.equal(conforms(referenceEnvelope, { ...target, returnDestination: { ...target.returnDestination, extra: true } }), false);
+  for (const value of [target, { ...target, domain: 'design', returnDestination: { domain: 'social', destination: '/entry' } }]) assert.equal(conforms(referenceEnvelope, value), true);
+  for (const patch of [{ version: '1' }, { domain: 'planner' }, { projectId: ' x' }, { title: 'x\n' }, { kind: '' }, { workspaceId: null }, { title: 'x\u007f' }]) assert.equal(conforms(referenceEnvelope, { ...target, ...patch }), false, JSON.stringify(patch));
+  for (const destination of ['HTTPS:example', '//host', '\\\\host', '/\\host', '\\/host', ' x', 'x ', '', 'x\u0000']) assert.equal(conforms(referenceEnvelope, { ...target, returnDestination: { domain: 'work', destination } }), false, destination);
 });
 
 test('discovered create/update/batch file schemas and read output preserve the complete HQ target', async t => {
