@@ -14,6 +14,8 @@ closed keys, JavaScript trim and UTF-16 text limits, preserved optional
 provenance, and slash-joined domain/kind/entity deduplication. Planner labels
 keep the existing Python whitespace normalization and code-point limits.
 Cross-language consumers should run the same vectors against their validator.
+`tools/hq-cli/test/references.test.mjs` pins this file's SHA-256, so any
+vector change must update that pin in the same integration.
 
 `exchanges/*.json` have schema `hq.planner.exchange/v1`. They are ordered
 captures of actual requests and responses from a disposable HTTP service.
@@ -29,9 +31,10 @@ controlled application values. No response status, error, revision, state
 version, position, target, body or replay result is rewritten. Field validation
 is native HTTP 400; invalid imports and request-ID reuse are HTTP 422.
 The captures cover reads, all item mutations, settings, atomic batch and dry
-run, exact-byte repeat, revision/order conflicts, rejected reference targets,
-retained replay, safe resend, and an indeterminate replay with no baseline.
-Retention eviction and rollback are additionally covered by store tests.
+run, exact-byte repeat, revision/order conflicts, a malformed HQ reference,
+an invalid import, retained replay, safe resend, and an indeterminate replay
+with no baseline. Retention eviction and rollback are additionally covered by
+store tests.
 
 From `services/planner`, after admission to one serial test process:
 
@@ -39,11 +42,19 @@ From `services/planner`, after admission to one serial test process:
 PYTHONDONTWRITEBYTECODE=1 python3 contract/generate.py --check
 ```
 
-To deliberately update fixtures after reviewing a contract change, run
-`python3 -B contract/build_vectors.py` and
-`python3 -B contract/generate.py`, inspect the diff, and refresh `SHA256SUMS`.
-The `planner-service` group in `tests/check-groups.json` checks both regeneration
-drift and hashes. It retains every existing Python and Node regression test.
+`--check` names any drifted, missing or unexpected exchange files and fails
+on them or on a `SHA256SUMS` mismatch.
+
+Byte copies of these files are pinned outside this directory: the CLI's
+vector hash above, and the Work live-adapter copy in
+`modules/work/live/test/contract/` on the foundation line. Any byte change
+here, including an added capture, needs those owners to re-pin it. To
+deliberately update fixtures after reviewing a contract change, run `python3 -B contract/build_vectors.py` and then
+`python3 -B contract/generate.py`. The second step rewrites the exchanges,
+removes stale exchange files and refreshes `SHA256SUMS`. Inspect the diff.
+The `planner-service` group in `tests/check-groups.json` checks byte-exact
+regeneration drift and hashes through `tests/test_contract.py`. It retains
+every existing Python and Node regression test.
 
 The generator owns `tests/.scratch/wire-*`, its disposable SQLite database,
 and its server subprocess. Context cleanup closes connections, terminates and
