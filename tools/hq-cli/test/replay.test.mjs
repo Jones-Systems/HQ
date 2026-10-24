@@ -27,6 +27,29 @@ test('check uses lookup once, reports not_applied, and never follows with normal
   assert.equal(r.exitCode, 0); assert.equal(r.result.effect, 'none'); assert.deepEqual(r.result.data, { outcome: 'not_applied' }); assert.equal(h.writes().length, 1);
 });
 
+for (const mode of ['resend', 'lookup']) test(`contradictory ${mode} outcome remains unknown and preserves recovery without retry`, async t => {
+  const f = await scratch(t);
+  const doc = replay();
+  const path = await f.write('request.json', doc);
+  const h = server(call => {
+    assert.equal(call.path, '/api/requests/replay');
+    assert.equal(call.parsed.mode, mode);
+    return json(mode === 'resend' ? { outcome: 'not_applied' } : { outcome: 'applied_now', status: 201, response: { item: item(), state_version: 9 } });
+  });
+  const r = await run(['planner', 'replay', '--request-file', path, ...(mode === 'lookup' ? ['--check'] : [])], h.deps);
+  assert.equal(r.exitCode, 7);
+  assert.equal(r.result.ok, false);
+  assert.equal(r.result.effect, 'unknown');
+  assert.equal(r.result.error.code, 'bad_response');
+  assert.match(r.result.error.details.hint, /Never blindly retry/);
+  assert.equal(r.result.request_id, doc.request_id);
+  assert.deepEqual(r.result.replay, doc);
+  assert.equal(h.writes().length, 1);
+  assert.deepEqual(h.calls.map(call => [call.method, call.path]), [['GET', '/api/version'], ['POST', '/api/requests/replay']]);
+  assert.deepEqual(h.writes()[0].parsed, { mode, request_id: doc.request_id, method: doc.method, path: doc.path, body_b64: doc.body_b64, sent_after_version: doc.sent_after_version });
+  assert.equal(h.writes()[0].headers['X-Request-Id'], undefined);
+});
+
 test('resend applied_now returns applied; mismatch and retention indeterminate preserve distinct outcomes', async t => {
   const f = await scratch(t); const path = await f.write('request.json', replay());
   const applied = server(() => json({ outcome: 'applied_now', status: 201, response: { item: item(), state_version: 9 } }));
