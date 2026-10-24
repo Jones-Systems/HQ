@@ -16,6 +16,8 @@ on:
       - 'tsconfig*.json'
       - 'vitest.config.ts'
   push:
+    # Preserve the separately gated signed-release route; ordinary main pushes skip packaging.
+    branches: [main]
     tags: ['hq-desktop-*']
   schedule:
     - cron: '23 7 * * *'
@@ -40,7 +42,7 @@ concurrency:
 
 jobs:
   package:
-    if: (github.event_name == 'pull_request' && !github.event.pull_request.draft && contains(github.event.pull_request.labels.*.name, 'ci/package')) || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hq-desktop-') && !startsWith(github.ref, 'refs/tags/hq-desktop-signed-'))
+    if: (github.event_name == 'pull_request' && !github.event.pull_request.draft && contains(github.event.pull_request.labels.*.name, 'ci/package')) || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && ((startsWith(github.ref, 'refs/tags/hq-desktop-') && !startsWith(github.ref, 'refs/tags/hq-desktop-signed-')) || (github.ref == 'refs/heads/main' && vars.HQ_SIGNED_RELEASES_ENABLED == 'true')))
     strategy:
       fail-fast: false
       matrix:
