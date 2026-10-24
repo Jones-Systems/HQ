@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { run } from '../src/cli.ts';
 import { server, json, item, replay, scratch, info } from './write-fixtures.mjs';
 
@@ -24,6 +25,29 @@ test('check uses lookup once, reports not_applied, and never follows with normal
   const h = server(call => { assert.equal(call.parsed.mode, 'lookup'); return json({ outcome: 'not_applied' }); });
   const r = await run(['planner', 'replay', '--request-file', path, '--check'], h.deps);
   assert.equal(r.exitCode, 0); assert.equal(r.result.effect, 'none'); assert.deepEqual(r.result.data, { outcome: 'not_applied' }); assert.equal(h.writes().length, 1);
+});
+
+for (const mode of ['resend', 'lookup']) test(`contradictory ${mode} outcome remains unknown and preserves recovery without retry`, async t => {
+  const f = await scratch(t);
+  const doc = replay();
+  const path = await f.write('request.json', doc);
+  const h = server(call => {
+    assert.equal(call.path, '/api/requests/replay');
+    assert.equal(call.parsed.mode, mode);
+    return json(mode === 'resend' ? { outcome: 'not_applied' } : { outcome: 'applied_now', status: 201, response: { item: item(), state_version: 9 } });
+  });
+  const r = await run(['planner', 'replay', '--request-file', path, ...(mode === 'lookup' ? ['--check'] : [])], h.deps);
+  assert.equal(r.exitCode, 7);
+  assert.equal(r.result.ok, false);
+  assert.equal(r.result.effect, 'unknown');
+  assert.equal(r.result.error.code, 'bad_response');
+  assert.match(r.result.error.details.hint, /Never blindly retry/);
+  assert.equal(r.result.request_id, doc.request_id);
+  assert.deepEqual(r.result.replay, doc);
+  assert.equal(h.writes().length, 1);
+  assert.deepEqual(h.calls.map(call => [call.method, call.path]), [['GET', '/api/version'], ['POST', '/api/requests/replay']]);
+  assert.deepEqual(h.writes()[0].parsed, { mode, request_id: doc.request_id, method: doc.method, path: doc.path, body_b64: doc.body_b64, sent_after_version: doc.sent_after_version });
+  assert.equal(h.writes()[0].headers['X-Request-Id'], undefined);
 });
 
 test('resend applied_now returns applied; mismatch and retention indeterminate preserve distinct outcomes', async t => {
@@ -86,4 +110,31 @@ test('legacy move/archive/restore/reviewed use guarded route; replay rejects unr
   const path = await f.write('request.json', replay({ body_b64: Buffer.from(JSON.stringify({ fields: { title: 'X', dates: [{ kind: 'target', value: 'today' }] } })).toString('base64') }));
   const h = server(() => assert.fail('Must not send'));
   assert.equal((await run(['planner', 'replay', '--request-file', path], h.deps)).exitCode, 2); assert.equal(h.calls.length, 0);
+});
+
+test('captured contract replay exchanges map to stable outcomes and the CLI sends their exact bytes', async t => {
+  const f = await scratch(t);
+  const exchange = name => JSON.parse(readFileSync(new URL(`../../../services/planner/contract/exchanges/${name}.json`, import.meta.url), 'utf8'));
+  const respond = captured => { const headers = { ...captured.response.headers }; delete headers['Content-Length']; return new Response(JSON.stringify(captured.response.body), { status: captured.response.status, headers }); };
+  const version = exchange('26-version').response.body;
+  for (const [name, check, exitCode, effect, outcome, exact] of [
+    ['19-replay-retained', true, 0, 'replayed', 'replayed', true],
+    ['20-replay-not-applied', true, 0, 'none', 'not_applied', true],
+    ['21-replay-apply', false, 0, 'applied', 'applied_now', true],
+    ['22-replay-apply-repeated', false, 0, 'replayed', 'replayed', true],
+    ['23-replay-indeterminate', true, 7, 'unknown', undefined, false],
+  ]) {
+    const captured = exchange(name);
+    const { mode, sent_after_version, ...inner } = JSON.parse(captured.request.body_utf8);
+    assert.equal(mode, check ? 'lookup' : 'resend', name);
+    const path = await f.write('request.json', replay({ ...inner, sent_after_version: sent_after_version ?? 0 }));
+    const h = server(() => respond(captured), version);
+    const r = await run(['planner', 'replay', '--request-file', path, ...(check ? ['--check'] : [])], h.deps);
+    assert.equal(r.exitCode, exitCode, `${name} ${JSON.stringify(r.result)}`);
+    assert.equal(r.result.effect, effect, name);
+    assert.equal(h.writes().length, 1, name);
+    if (exact) assert.equal(h.writes()[0].body, captured.request.body_utf8, name);
+    if (outcome) assert.equal(r.result.data.outcome, outcome, name);
+    else { assert.equal(r.result.error.code, 'replay_indeterminate'); assert.equal(r.result.error.details.evicted_through_version, 0); assert.equal(Object.hasOwn(r.result.error.details, 'sent_after_version'), false); }
+  }
 });
