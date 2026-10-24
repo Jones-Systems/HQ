@@ -127,7 +127,7 @@ node tests/acceptance/run.mjs --routine
 ```
 
 It has exactly four journeys, reusing implemented scenarios without reducing
-their assertions:
+their assertions. Work must have zero mutation attempts before intentional capture, and Social must have zero mutation attempts throughout teardown. Rejected writes still fail qualification; raw ledgers remain evidence:
 
 | Journey | Direct oracle |
 | --- | --- |

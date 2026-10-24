@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRuntime, isolatedEnvironment } from '../runtime.mjs';
-import { startReadFixture } from './http.mjs';
+import { assertNoServiceMutations, startReadFixture } from './http.mjs';
 import { setupFixtures } from './setup.mjs';
 import { row, scenarioGaps, fullOutcome } from './results.mjs';
 
@@ -42,6 +42,25 @@ test('shell fixture serves only explicit reads; mutations and unknown paths fail
     ['GET', '/api/workspace', 200, 1], ['POST', '/api/workspace', 404, 2],
     ['POST', '/api/brands', 404, 3], ['GET', '/api/private', 404, 4],
   ]);
+}));
+test('zero-mutation oracle fails unsolicited rejected writes and retains raw evidence', () => owned(async runtime => {
+  for (const [service, path] of [['Work before intentional capture', '/api/state'], ['Social throughout native invocation', '/api/workspace']]) {
+    const fixture = await startReadFixture(runtime, { [path]: { status: 200, body: {} } });
+    const read = await fetch(fixture.origin + path);
+    await read.arrayBuffer();
+    assertNoServiceMutations(fixture.ledger, service);
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      const boundary = fixture.ledger.length;
+      const denied = await fetch(fixture.origin + path, { method });
+      assert.equal(denied.status, 404);
+      assert.deepEqual(await denied.json(), { error: 'fixture_closed_route' });
+      const evidence = structuredClone(fixture.ledger);
+      assert.throws(() => assertNoServiceMutations(fixture.ledger.slice(boundary), service), error =>
+        error.code === 'ERR_ASSERTION' && error.message.includes(`${service}: expected zero mutation attempts`));
+      assert.deepEqual(fixture.ledger, evidence);
+      assert.deepEqual(fixture.ledger.at(-1), { method, path, status: 404, count: fixture.ledger.length });
+    }
+  }
 }));
 test('owned config binds loopback services and committed synthetic Wiki provenance', () => owned(async runtime => {
   const profile = join(runtime.root, 'profile');

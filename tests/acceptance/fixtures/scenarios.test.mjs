@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRuntime } from '../runtime.mjs';
 import { startPlanner } from './planner.mjs';
+import { assertNoServiceMutations } from './http.mjs';
 import { galleryBytes, sha256, startGallery, writeGalleryCorpus } from './remote-gallery.mjs';
 import { createLocalFolder, PREVIEW_PNG } from './local-folder.mjs';
 import { row, replaceRow, scenarioGaps, selectedOutcome, fullOutcome, routineOutcome, ROUTINE_SCENARIOS, SELECTED_SCENARIOS } from './results.mjs';
@@ -53,7 +54,7 @@ test('four routine journeys require every result; release holds stay visible and
   assert.equal(selectedOutcome(rows), 'platform-or-integration-gap');
   assert.equal(fullOutcome(rows), 'platform-or-integration-gap');
   assert.equal(routineOutcome([...rows, rows[0]]), 'failed');
-  for (const id of ['native-prerequisites', 'remote-gallery-source', 'local-folder-source']) {
+  for (const id of ['native-prerequisites', 'remote-gallery-source', 'local-folder-source', 'unsolicited-service-mutations']) {
     const failed = structuredClone(rows);
     replaceRow(failed, row(id, 'fail', prerequisite, ['first failure']));
     assert.equal(routineOutcome(failed), 'failed');
@@ -64,6 +65,7 @@ test('four routine journeys require every result; release holds stay visible and
 test('real Planner commits once before response loss; lookup and retained DB restart preserve one item/version', () => owned(async runtime => {
   const planner = await startPlanner(runtime, repo);
   const before = await planner.state();
+  assertNoServiceMutations(planner.ledger, 'Work before intentional capture');
   const requestId = 'acceptance-fixture-create';
   const body = JSON.stringify({ fields: { title: 'Synthetic fixture capture', status: 'inbox' } });
   planner.loseNextCreateResponse();
@@ -89,11 +91,16 @@ test('real Planner commits once before response loss; lookup and retained DB res
   assert.equal((await read.json()).items[0].id, applied.items[0].id);
   assert.deepEqual(planner.ledger.map(entry => [entry.method, entry.path]), [['POST', '/api/items'], ['POST', '/api/requests/replay'], ['GET', '/api/state']]);
   assert.equal(planner.processes.length, 2);
+  const deniedBoundary = planner.ledger.length;
   for (const [method, path] of [['GET', '/api/private'], ['PUT', '/api/settings'], ['POST', '/api/items/ignored/archive']]) {
     const denied = await fetch(planner.origin + path, { method, signal: AbortSignal.timeout(1000) });
     assert.equal(denied.status, 404);
     await denied.arrayBuffer();
   }
+  const rejected = planner.ledger.slice(deniedBoundary);
+  assert.deepEqual(rejected.map(entry => entry.status), [404, 404, 404]);
+  assert.throws(() => assertNoServiceMutations(rejected, 'Work before intentional capture'), /expected zero mutation attempts/);
+  assert.deepEqual(planner.ledger.slice(deniedBoundary), rejected);
   const afterDenied = await planner.state();
   for (const key of ['items', 'settings', 'state_version']) assert.deepEqual(afterDenied[key], retained[key], `denied routes preserve ${key}`);
 }));

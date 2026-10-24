@@ -1,4 +1,11 @@
+import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+
+export function assertNoServiceMutations(ledger, service) {
+  assert.ok(Array.isArray(ledger), `${service}: request ledger required`);
+  assert.deepEqual(ledger.filter(entry => entry.method !== 'GET'), [],
+    `${service}: expected zero mutation attempts, including rejected writes and unclassified request errors`);
+}
 
 // Shell reads only. Stateful mutations belong to the real Planner, never a script.
 export async function startReadFixture(runtime, reads) {

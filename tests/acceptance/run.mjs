@@ -9,6 +9,7 @@ import { createRuntime, connect, until as poll, isolatedEnvironment } from './ru
 import { BUILD_SCHEMA, collectBuildInventory, inventoryDigest } from './build-inventory.mjs';
 import { bindHostGallery } from './fixtures/host-gallery.mjs';
 import { setupFixtures } from './fixtures/setup.mjs';
+import { assertNoServiceMutations } from './fixtures/http.mjs';
 import { row, scenarioGaps, fullOutcome, selectedOutcome, routineOutcome, replaceRow } from './fixtures/results.mjs';
 import { workScenarios } from './scenarios/work.mjs';
 import { localFolderScenario, galleryScenario } from './scenarios/sources.mjs';
@@ -38,6 +39,7 @@ const report = { schema: 'hq-electron-acceptance/v1', head: execFileSync('git', 
 const runtime = await createRuntime(join(repo, '.t3/acceptance-scratch'));
 let cdp;
 let fixtures;
+let workCaptureBoundary;
 let activeRow;
 let buildInventory;
 const prerequisite = [{ id: 'built-native-app', status: 'pass' }];
@@ -48,6 +50,10 @@ function finish(status, detail) {
   replaceRow(report.rows, row(activeRow, status, prerequisite, [detail])); activeRow = undefined;
 }
 function passed(detail) { finish('pass', detail); }
+function assertShellReadOnly() {
+  assertNoServiceMutations(fixtures.work.ledger, 'Work before intentional capture');
+  assertNoServiceMutations(fixtures.social.ledger, 'Social throughout native invocation');
+}
 let log = '';
 const until = (probe, label, timeout) => poll(() => { if (cancelled) throw new Error('Harness cancelled'); return probe(); }, label, timeout);
 try {
@@ -60,7 +66,7 @@ try {
   await access(main);
   await access(join(repo, 'apps/desktop/dist/index.html'));
   report.harness = {};
-  for (const path of ['run.mjs', 'runtime.mjs', 'build-inventory.mjs', 'fixtures/setup.mjs', 'fixtures/remote-gallery.mjs', 'fixtures/host-gallery.mjs', 'scenarios/sources.mjs', 'scenarios/ui.mjs', 'scenarios/work.mjs']) report.harness[path] = createHash('sha256').update(await readFile(join(repo, 'tests/acceptance', path))).digest('hex');
+  for (const path of ['run.mjs', 'runtime.mjs', 'build-inventory.mjs', 'fixtures/setup.mjs', 'fixtures/http.mjs', 'fixtures/remote-gallery.mjs', 'fixtures/host-gallery.mjs', 'scenarios/sources.mjs', 'scenarios/ui.mjs', 'scenarios/work.mjs']) report.harness[path] = createHash('sha256').update(await readFile(join(repo, 'tests/acceptance', path))).digest('hex');
   buildInventory = await collectBuildInventory(repo);
   await writeFile(join(evidence, 'build-inventory.json'), JSON.stringify(buildInventory, null, 2) + '\n');
   report.build = {};
@@ -73,6 +79,15 @@ try {
   }
   const fixtureStarted = performance.now();
   fixtures = await setupFixtures(runtime, repo, env.HQ_USER_DATA_DIR, { scenarios: !checkpoint && !galleryOnly, localFolders: !checkpoint && !galleryOnly && !routine, observe: partial => { fixtures = partial; } });
+  if (fixtures.work.loseNextCreateResponse) {
+    const armCapture = fixtures.work.loseNextCreateResponse.bind(fixtures.work);
+    fixtures.work.loseNextCreateResponse = () => {
+      assertShellReadOnly();
+      armCapture();
+      workCaptureBoundary = fixtures.work.ledger.length;
+      report.workCaptureBoundary = workCaptureBoundary;
+    };
+  }
   if (hostBinding) fixtures.hostGallery = await bindHostGallery(hostBinding);
   report.timings.fixtureSetupMs = Math.round(performance.now() - fixtureStarted);
   report.fixturePrerequisites = { work: checkpoint || galleryOnly ? 'read-only-loopback' : 'real-owned-Planner-and-recording-proxy', social: 'read-only-loopback', wiki: fixtures.wiki.commits, durableClientIntent: 'not-provided-session-only-RW9-G3' };
@@ -142,7 +157,8 @@ try {
     await domain(label);
   }
   await domain('Design');
-  report.checks.push(`domain round trip: ${labels.join(', ')}`);
+  assertShellReadOnly();
+  report.checks.push(`domain round trip: ${labels.join(', ')}; zero Work/Social mutation attempts`);
   passed(report.checks.at(-1));
   begin('shell-restart');
   for (let step = 0; step < 3; step++) {
@@ -158,7 +174,8 @@ try {
   assert.deepEqual(await cdp.evaluate(`({ appearance: localStorage.getItem('hq.appearance.v1'), navigation: localStorage.getItem('hq.navigation.v1:hq-local') })`), before);
   assert.equal(await cdp.evaluate(`document.querySelector('[aria-current="page"]')?.textContent.trim()`), 'Work');
   assert.equal(await cdp.evaluate(`document.documentElement.dataset.theme`), 'dark');
-  report.checks.push('actual process restart restores appearance and selected domain');
+  assertShellReadOnly();
+  report.checks.push('actual process restart restores appearance and selected domain; zero Work/Social mutation attempts');
   passed(report.checks.at(-1));
   await capture('after-restart');
   if (!checkpoint) {
@@ -197,6 +214,15 @@ try {
   await writeFile(join(evidence, 'runtime.log'), log).catch(error => { report.evidenceError = error.message; report.outcome = 'failed'; });
   cdp?.close();
   try { report.cleanupReadback = await runtime.close(); report.cleanup = 'passed'; } catch (error) { report.cleanup = 'failed'; report.cleanupError = error.message; report.outcome = 'failed'; }
+  if (fixtures) {
+    try {
+      if (fixtures.work) assertNoServiceMutations(fixtures.work.ledger.slice(0, workCaptureBoundary), 'Work before intentional capture');
+      if (fixtures.social) assertNoServiceMutations(fixtures.social.ledger, 'Social throughout native invocation');
+    } catch (error) {
+      report.outcome = 'failed';
+      replaceRow(report.rows, row('unsolicited-service-mutations', 'fail', [{ id: 'read-only-service-ledgers', status: 'fail' }], [error.message]));
+    }
+  }
   if (buildInventory) {
     try {
       assert.equal(inventoryDigest(await collectBuildInventory(repo)), inventoryDigest(buildInventory), 'Build changed during acceptance');
