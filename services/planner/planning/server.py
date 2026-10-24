@@ -7,6 +7,9 @@ Security boundary (keep in sync with README "Security"):
 - Mutations require ``Content-Type: application/json``, the custom
   ``X-Planning-Request: 1`` header (forces a CORS preflight that is never
   granted), a same-origin ``Origin`` when present, and a bounded body.
+- Framing is strict: one ``Host``, at most one all-digit ``Content-Length``, no
+  chunked bodies, and the whole declared body must arrive. Protocol errors are
+  answered as JSON with the same security headers.
 - Static files are served only from ``public/`` with an extension allow-list;
   the SQLite file and backups live outside it and are never served.
 """
@@ -19,6 +22,7 @@ import hashlib
 import ipaddress
 import json
 import re
+import traceback
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -53,6 +57,7 @@ SECURITY_HEADERS = {
 }
 _ITEM_RE = re.compile(r"^/api/items/([A-Za-z0-9_-]{6,40})(/[a-z]+)?$")
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+_CONTENT_LENGTH_RE = re.compile(r"[0-9]{1,16}")
 
 
 class Response:
@@ -71,6 +76,15 @@ def json_response(status: int, payload, headers: dict | None = None) -> Response
 
 def error(status: int, code: str, message: str, **extra) -> Response:
     return json_response(status, {"error": code, "message": message, **extra})
+
+
+def body_limit(path: str) -> int:
+    """Largest request body accepted for a parsed request path."""
+    if path == "/api/requests/replay":
+        return REPLAY_MAX_BODY
+    if path in ("/api/import", "/api/import/preview"):
+        return MAX_IMPORT_BODY
+    return MAX_BODY
 
 
 def is_loopback_host(host: str) -> bool:
@@ -115,18 +129,22 @@ class PlanningApp:
         parts = [p for p in path.split("/") if p]
         if not parts or any(p.startswith(".") or "\\" in p or "\x00" in p for p in parts):
             return error(404, "not_found", "Not found.")
-        target = PUBLIC_DIR.joinpath(*parts).resolve()
-        if PUBLIC_DIR not in target.parents or not target.is_file():
+        try:
+            target = PUBLIC_DIR.joinpath(*parts).resolve()
+            if PUBLIC_DIR not in target.parents or not target.is_file():
+                return error(404, "not_found", "Not found.")
+            content_type = STATIC_TYPES.get(target.suffix)
+            if content_type is None:
+                return error(404, "not_found", "Not found.")
+            data = target.read_bytes()
+        except OSError:  # for example a name too long for the filesystem
             return error(404, "not_found", "Not found.")
-        content_type = STATIC_TYPES.get(target.suffix)
-        if content_type is None:
-            return error(404, "not_found", "Not found.")
-        return Response(200, target.read_bytes(), content_type, {"Cache-Control": "no-cache"})
+        return Response(200, data, content_type, {"Cache-Control": "no-cache"})
 
     # --------------------------------------------------------------------- api
 
     def _api(self, method: str, path: str, headers: dict, body: bytes) -> Response:
-        if method == "GET":
+        if method in ("GET", "HEAD"):  # the handler drops the body for HEAD
             return self._api_get(path)
         if method not in ("POST", "PATCH", "PUT"):
             return error(405, "method_not_allowed", "Method not allowed.")
@@ -135,14 +153,14 @@ class PlanningApp:
             return refusal
         try:
             payload = json.loads(body.decode("utf-8")) if body else {}
-        except (UnicodeDecodeError, ValueError):
+        except (UnicodeDecodeError, ValueError, RecursionError):
             return error(400, "bad_json", "Body must be valid JSON.")
         if not isinstance(payload, dict):
             return error(400, "bad_json", "Body must be a JSON object.")
         if path == "/api/requests/replay" and "x-request-id" in headers:
             return error(400, "bad_request_id", "Put the original request ID in the replay body.")
         request_id = headers.get("x-request-id") or None
-        if request_id is not None and not _REQUEST_ID_RE.match(request_id):
+        if request_id is not None and not _REQUEST_ID_RE.fullmatch(request_id):
             return error(400, "bad_request_id", "Malformed X-Request-Id.")
         fingerprint = hashlib.sha256(f"{method} {path}\n".encode() + body).hexdigest()
         ctx = {"request_id": request_id, "fingerprint": fingerprint}
@@ -160,7 +178,7 @@ class PlanningApp:
             return s.create_item(p.get("fields"), **ctx)
         if method == "POST" and path == "/api/items/batch":
             return s.create_batch(p, **ctx)
-        match = _ITEM_RE.match(path)
+        match = _ITEM_RE.fullmatch(path)
         if match:
             item_id, action = match.group(1), match.group(2)
             if method == "PATCH" and action is None:
@@ -214,7 +232,7 @@ class PlanningApp:
             raise StoreError(413, "too_large", "Original request body is too large.")
         try:
             payload = json.loads(body.decode("utf-8"))
-        except (ValueError, UnicodeDecodeError):
+        except (ValueError, UnicodeDecodeError, RecursionError):
             raise StoreError(400, "bad_json", "Original body must be valid JSON.") from None
         if not isinstance(payload, dict):
             raise StoreError(400, "bad_json", "Original body must be a JSON object.")
@@ -239,7 +257,7 @@ class PlanningApp:
             return Response(200, s.export_markdown().encode("utf-8"), "text/markdown; charset=utf-8", {
                 "Cache-Control": "no-store",
                 "Content-Disposition": 'attachment; filename="planning-export.md"'})
-        match = _ITEM_RE.match(path)
+        match = _ITEM_RE.fullmatch(path)
         if match and match.group(2) == "/history":
             s.get_item(match.group(1))
             return json_response(200, {"history": s.history(match.group(1))})
@@ -261,10 +279,7 @@ class PlanningApp:
         fetch_site = headers.get("sec-fetch-site")
         if fetch_site is not None and fetch_site not in ("same-origin", "none"):
             return error(403, "forbidden", "Cross-site changes are not accepted.")
-        limit = MAX_IMPORT_BODY if path in ("/api/import", "/api/import/preview") else MAX_BODY
-        if path == "/api/requests/replay":
-            limit = REPLAY_MAX_BODY
-        if len(body) > limit:
+        if len(body) > body_limit(path):
             return error(413, "too_large", "Request body is too large.")
         return None
 
@@ -274,27 +289,42 @@ def make_handler(app: PlanningApp):
         server_version = "Planning"
         sys_version = ""
         protocol_version = "HTTP/1.1"
+        timeout = 30  # seconds per socket read or write, so idle or stalled clients release their thread
 
         def _serve(self, method: str) -> None:
             headers = {k.lower(): v for k, v in self.headers.items()}
             if "transfer-encoding" in headers:
                 self._send(error(411, "length_required", "Chunked bodies are not accepted."), method, close=True)
                 return
-            try:
-                length = int(headers.get("content-length", "0") or "0")
-            except ValueError:
-                length = -1
-            limit = MAX_IMPORT_BODY if self.path.startswith("/api/import") else MAX_BODY
-            if urlsplit(self.path).path == "/api/requests/replay":
-                limit = REPLAY_MAX_BODY
-            if length < 0 or length > limit:
+            # Strict framing: one Host and at most one all-digit Content-Length.
+            lengths = self.headers.get_all("content-length") or []
+            if (len(self.headers.get_all("host") or []) > 1 or len(lengths) > 1 or
+                    (lengths and not _CONTENT_LENGTH_RE.fullmatch(lengths[0].strip(" \t")))):
+                self._send(error(400, "bad_request", "Malformed request headers."), method, close=True)
+                return
+            length = int(lengths[0]) if lengths else 0
+            if length > body_limit(urlsplit(self.path).path):
                 self._send(error(413, "too_large", "Request body is too large."), method, close=True)
                 return
-            body = self.rfile.read(length) if length else b""
+            try:
+                body = self.rfile.read(length) if length else b""
+            except TimeoutError:
+                # Like a stalled request line in BaseHTTPRequestHandler: log and close, no response.
+                self.log_error("Request body timed out for %s %s", method, urlsplit(self.path).path)
+                self.close_connection = True
+                return
+            if len(body) != length:
+                self._send(error(400, "bad_request", "Request body ended early."), method, close=True)
+                return
             try:
                 response = app.handle(method, self.path, headers, body)
             except Exception:  # noqa: BLE001 - never leak internals to the client
+                # The traceback goes to the operator's stderr only, so a read-path
+                # failure (for example a date that no longer derives) can be traced.
+                # One line per call: log_message escapes embedded newlines.
                 self.log_error("Unhandled error for %s %s", method, urlsplit(self.path).path)
+                for line in traceback.format_exc().rstrip().splitlines():
+                    self.log_error("  %s", line)
                 response = error(500, "server_error", "The server hit an unexpected error.")
             self._send(response, method)
 
@@ -309,6 +339,19 @@ def make_handler(app: PlanningApp):
             self.end_headers()
             if method != "HEAD":
                 self.wfile.write(response.body)
+
+        def send_error(self, code, message=None, explain=None):
+            # Protocol errors raised by BaseHTTPRequestHandler itself (bad request
+            # line, oversized headers, unsupported method such as an OPTIONS
+            # preflight) get the same JSON shape and security headers, and do
+            # not echo the request back.
+            self.log_error("code %d, message %s", code, message)
+            try:
+                phrase = HTTPStatus(code).phrase
+            except ValueError:
+                phrase = "Error"
+            code_name = "not_implemented" if code == HTTPStatus.NOT_IMPLEMENTED else "bad_request"
+            self._send(error(code, code_name, f"{phrase}."), self.command or "", close=True)
 
         def do_GET(self):  # noqa: N802
             self._serve("GET")

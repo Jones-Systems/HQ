@@ -53,6 +53,11 @@ class StaticFiles(AppTestCase):
                 resp, _ = self.call("GET", path)
                 self.assertEqual(resp.status, 404)
 
+    def test_unservable_names_are_not_found_not_server_errors(self):
+        # An over-long component makes the filesystem raise ENAMETOOLONG.
+        resp, _ = self.call("GET", "/" + "a" * 300 + ".js")
+        self.assertEqual(resp.status, 404)
+
     def test_unknown_host_refused(self):
         resp, _ = self.call("GET", "/", headers={"host": "evil.example:8765"})
         self.assertEqual(resp.status, 421)
@@ -130,6 +135,17 @@ class MutationGuards(AppTestCase):
         resp, _ = self.call("POST", "/api/items", raw=b"[1]")
         self.assertEqual(resp.status, 400)
 
+    def test_deeply_nested_json_is_bad_json_not_server_error(self):
+        nested = b"[" * 100_000 + b"]" * 100_000
+        self.assertLessEqual(len(nested), MAX_BODY)
+        resp, data = self.call("POST", "/api/items", raw=nested)
+        self.assertEqual((resp.status, data["error"]), (400, "bad_json"))
+        envelope = {"mode": "lookup", "request_id": "request-0001", "method": "POST", "path": "/api/items",
+                    "body_b64": base64.b64encode(nested).decode(), "sent_after_version": 0}
+        resp, data = self.call("POST", "/api/requests/replay", envelope)
+        self.assertEqual((resp.status, data["error"]), (400, "bad_json"))
+        self.assertEqual(self.store.version(), 0)
+
     def test_unsupported_methods(self):
         resp, _ = self.call("DELETE", "/api/items")
         self.assertEqual(resp.status, 405)
@@ -188,6 +204,21 @@ class ApiFlow(AppTestCase):
         resp, _ = self.call("GET", "/api/items/abcdef123456")
         self.assertEqual(resp.status, 404)
         resp, _ = self.call("GET", "/api/nothing")
+        self.assertEqual(resp.status, 404)
+
+    def test_request_id_pattern_matches_the_whole_value(self):
+        # "$" alone also matches before a trailing newline.
+        resp, data = self.call("POST", "/api/items", {"fields": {"title": "Again"}},
+                               headers={"x-request-id": "request-0001\n"})
+        self.assertEqual((resp.status, data["error"]), (400, "bad_request_id"))
+
+    def test_head_on_api_reads_mirrors_get(self):
+        for path in ("/api/state", "/api/version", "/api/export"):
+            with self.subTest(path=path):
+                get, _ = self.call("GET", path)
+                head, _ = self.call("HEAD", path)
+                self.assertEqual((head.status, head.headers), (get.status, get.headers))
+        resp, _ = self.call("HEAD", "/api/nothing")
         self.assertEqual(resp.status, 404)
 
 
@@ -285,6 +316,9 @@ class _FakeConnection:
     def makefile(self, mode, *args, **kwargs):
         return self.rfile if "r" in mode else self.wfile
 
+    def settimeout(self, value):
+        self.timeout = value
+
     def sendall(self, data):
         self.wfile.write(data)
 
@@ -321,6 +355,46 @@ class HandlerTransport(AppTestCase):
         self.assertIn("200", status)
         self.assertEqual(body, b"")
 
+    def test_unhandled_read_error_stays_opaque_and_is_logged_with_traceback(self):
+        from planning.dates import DateError
+
+        def broken_snapshot():
+            raise DateError("time", "Synthetic derivation failure.")
+
+        self.store.snapshot = broken_snapshot
+        logged = []
+        handler_cls = make_handler(self.app)
+        handler_cls.log_message = lambda _self, fmt, *args: logged.append(fmt % args)
+        conn = _FakeConnection(f"GET /api/state HTTP/1.1\r\nHost: {HOST}\r\nConnection: close\r\n\r\n".encode())
+        handler_cls(conn, ("127.0.0.1", 50000), _FakeServer())
+        head, _, body = conn.wfile.getvalue().partition(b"\r\n\r\n")
+        self.assertIn(b" 500 ", head.split(b"\r\n")[0])
+        self.assertEqual(json.loads(body), {"error": "server_error", "message": "The server hit an unexpected error."})
+        self.assertNotIn(b"Synthetic", body)
+        log = "\n".join(logged)
+        self.assertIn("GET /api/state", log)
+        self.assertIn("DateError", log)
+        self.assertIn("broken_snapshot", log)
+
+    def test_idle_or_stalled_connections_time_out(self):
+        handler_cls = make_handler(self.app)
+        self.assertEqual(handler_cls.timeout, 30)
+
+        class StalledBody(io.BytesIO):
+            def read(self, size=-1):
+                raise TimeoutError("timed out")
+
+        payload = b'{"fields": {"title": "Never arrives"}}'
+        conn = _FakeConnection(b"")
+        conn.rfile = StalledBody(
+            (f"POST /api/items HTTP/1.1\r\nHost: {HOST}\r\nContent-Type: application/json\r\n"
+             f"X-Planning-Request: 1\r\nContent-Length: {len(payload)}\r\n\r\n").encode())
+        handler_cls.log_message = lambda *a, **k: None
+        handler = handler_cls(conn, ("127.0.0.1", 50000), _FakeServer())
+        self.assertTrue(handler.close_connection)
+        self.assertEqual(conn.wfile.getvalue(), b"")
+        self.assertEqual(self.store.snapshot()["items"], [])
+
     def test_replay_handler_outer_limit(self):
         body = json.dumps({"mode": "lookup", "request_id": "request-0001", "method": "POST", "path": "/api/items",
                            "body_b64": base64.b64encode(b" " * (MAX_BODY - 2) + b"{}").decode(),
@@ -354,6 +428,61 @@ class HandlerTransport(AppTestCase):
         self.assertIn("411", status)
         self.assertEqual(len(self.store.snapshot()["items"]), 1)
 
+    def post(self, payload: bytes, *header_lines: str, target: str = "/api/items") -> tuple[str, dict, bytes]:
+        head = "".join(f"{line}\r\n" for line in header_lines)
+        return self.raw((f"POST {target} HTTP/1.1\r\nHost: {HOST}\r\nContent-Type: application/json\r\n"
+                         f"X-Planning-Request: 1\r\n{head}Connection: close\r\n\r\n").encode() + payload)
+
+    def test_body_shorter_than_content_length_is_not_applied(self):
+        # The client stopped early; the bytes that did arrive happen to parse.
+        payload = b'{"fields": {"title": "Cut short"}}  '
+        status, headers, body = self.post(payload, f"Content-Length: {len(payload) + 20}")
+        self.assertIn("400", status)
+        self.assertEqual(headers["connection"], "close")
+        self.assertEqual(json.loads(body)["error"], "bad_request")
+        self.assertEqual(self.store.snapshot()["items"], [])
+
+    def test_malformed_or_repeated_framing_headers_are_refused(self):
+        payload = b'{"fields": {"title": "Framed"}}'
+        n = len(payload)
+        cases = {"abc": [f"Content-Length: {n}x"], "sign": [f"Content-Length: +{n}"],
+                 "negative": ["Content-Length: -1"], "underscore": [f"Content-Length: {n // 10}_{n % 10}"],
+                 "repeated": [f"Content-Length: {n}", "Content-Length: 0"],
+                 "repeated host": [f"Host: {HOST}"]}
+        for name, lines in cases.items():
+            with self.subTest(name):
+                status, headers, body = self.post(payload, *lines)
+                self.assertIn("400", status)
+                self.assertEqual(headers["connection"], "close")
+                self.assertEqual(json.loads(body)["error"], "bad_request")
+        self.assertEqual(self.store.snapshot()["items"], [])
+        status, _, _ = self.post(payload, f"Content-Length:  {n} ")
+        self.assertIn("201", status)
+
+    def test_absolute_form_target_gets_the_route_body_limit(self):
+        padded = json.dumps({"data": self.store.export()}).encode() + b" " * MAX_BODY
+        status, _, body = self.post(padded, f"Content-Length: {len(padded)}",
+                                    target=f"http://{HOST}/api/import/preview")
+        self.assertIn("200", status, body[:200])
+
+    def test_protocol_errors_are_json_with_security_headers(self):
+        status, headers, body = self.raw(f"OPTIONS /api/items HTTP/1.1\r\nHost: {HOST}\r\n"
+                                         f"Origin: http://evil.example\r\n"
+                                         f"Access-Control-Request-Method: POST\r\n\r\n".encode())
+        self.assertIn("501", status)
+        self.assertTrue(headers["content-type"].startswith("application/json"))
+        self.assertEqual(headers["x-content-type-options"], "nosniff")
+        self.assertIn("default-src 'self'", headers["content-security-policy"])
+        self.assertEqual(headers["connection"], "close")
+        self.assertFalse(any(k.startswith("access-control-") for k in headers))
+        self.assertEqual(json.loads(body)["error"], "not_implemented")
+        self.assertNotIn(b"OPTIONS", body)
+        status, headers, body = self.raw(f"GET / HTTP/1.1\r\nHost: {HOST}\r\n"
+                                         f"X-Filler: {'x' * 70_000}\r\n\r\n".encode())
+        self.assertIn("431", status)
+        self.assertEqual(headers["x-content-type-options"], "nosniff")
+        self.assertEqual(json.loads(body)["error"], "bad_request")
+
 
 class CliGuards(StoreTestCase):
     """Refusals happen before any socket is bound."""
@@ -370,6 +499,52 @@ class CliGuards(StoreTestCase):
             self.assertEqual(main(["--data", str(self.db_path), "--host", "0.0.0.0"]), 2)
             self.assertEqual(main(["--data", str(self.db_path.parent / "missing" / "x.sqlite3")]), 2)
         self.assertFalse((PUBLIC_DIR / "planning.sqlite3").exists())
+
+    def test_bound_loopback_host_is_an_allowed_host(self):
+        import contextlib
+        from unittest import mock
+
+        import planning.__main__ as entry
+
+        apps, statuses, real_app = [], [], entry.PlanningApp
+
+        class FakeServer:
+            def __init__(self, address, handler):
+                self.server_address = (address[0], 43210)
+
+            def serve_forever(self):
+                statuses.append([apps[-1].handle("GET", "/api/version", {"host": host}, b"").status
+                                 for host in (host_header, "127.0.0.3:43210")])
+                raise KeyboardInterrupt
+
+            def server_close(self):
+                pass
+
+        def capture(*args, **kwargs):
+            apps.append(real_app(*args, **kwargs))
+            return apps[-1]
+
+        cases = (("127.0.0.2", "127.0.0.2:43210"), ("0:0:0:0:0:0:0:1", "[::1]:43210"),
+                 ("localhost", "localhost:43210"))
+        for bound, host_header in cases:
+            with self.subTest(bound=bound), mock.patch.object(entry, "ThreadingHTTPServer", FakeServer), \
+                    mock.patch.object(entry, "PlanningApp", capture), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(entry.main(["--data", str(self.db_path.parent / "bound.sqlite3"),
+                                             "--host", bound, "--port", "0"]), 0)
+                self.assertEqual(statuses[-1], [200, 421])
+
+    def test_out_of_range_port_is_a_usage_error_before_the_store_opens(self):
+        import contextlib
+
+        from planning.__main__ import main
+
+        data = self.db_path.parent / "unopened.sqlite3"
+        for port in ("70000", "-1", "http"):
+            with self.subTest(port=port), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as raised:
+                    main(["--data", str(data), "--port", port])
+                self.assertEqual(raised.exception.code, 2)
+        self.assertFalse(data.exists())
 
 
 if __name__ == "__main__":
