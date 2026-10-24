@@ -32,15 +32,17 @@ export function response(bytes: Buffer, headers: Transfer['headers'] = {}, statu
 }
 export function transport(bytes: Buffer, headers: Transfer['headers'] = {}): Transport { return async () => response(bytes, headers); }
 
-export function publication(value = manifest(), archive = Buffer.from('zip')) {
-  const manifestBytes = Buffer.from(JSON.stringify(value)), bundle = Buffer.from(JSON.stringify({ mediaType: 'fixture' }));
+export function publication(value = manifest(), archive = Buffer.from('zip'), proof: unknown = { mediaType: 'fixture' }) {
+  const manifestBytes = Buffer.from(JSON.stringify(value)), bundle = Buffer.from(JSON.stringify(proof));
   const base = `${REPOSITORY_URL}/releases/download/${value.releaseTag}/`;
   const asset = (name: string, bytes: Buffer) => ({ name, size: bytes.length, digest: `sha256:${createHash('sha256').update(bytes).digest('hex')}`, browser_download_url: `${base}${name}` });
   const releases = [{ draft: false, prerelease: value.channel === 'preview', tag_name: value.releaseTag, assets: [asset(`hq-darwin-${value.architecture}.json`, manifestBytes), asset(value.archive.name, archive), asset(value.attestation, bundle)] }];
   const repository = { id: REPOSITORY.id, full_name: REPOSITORY.name, owner: { id: REPOSITORY.ownerId }, private: false };
-  const run = { repository, head_repository: repository, id: Number(value.runId), run_attempt: value.runAttempt, head_sha: value.sourceSha, path: WORKFLOW, event: 'push', status: 'completed', conclusion: 'success' };
+  const run = { repository, head_repository: repository, id: Number(value.runId), run_attempt: value.runAttempt, head_sha: value.sourceSha, path: WORKFLOW, event: 'push', head_branch: value.signing === 'developer-id' ? 'main' : value.releaseTag, status: 'completed', conclusion: 'success' };
+  const tag = { ref: `refs/tags/${value.releaseTag}`, object: { type: 'commit', sha: value.sourceSha } };
   const get: Transport = async url => {
     const bytes = url.href === API_ROOT ? Buffer.from(JSON.stringify(repository))
+      : url.href === `${API_ROOT}/git/ref/tags/${value.releaseTag}` ? Buffer.from(JSON.stringify(tag))
       : url.href === `${API_ROOT}/releases?per_page=20` ? Buffer.from(JSON.stringify(releases))
         : url.href === `${API_ROOT}/actions/runs/${value.runId}/attempts/${value.runAttempt}` ? Buffer.from(JSON.stringify(run))
           : url.href === `${base}hq-darwin-${value.architecture}.json` ? manifestBytes
@@ -49,14 +51,14 @@ export function publication(value = manifest(), archive = Buffer.from('zip')) {
     if (!bytes) throw Error(`Unexpected fixture request: ${url.pathname}`);
     return response(bytes, { 'content-length': String(bytes.length) });
   };
-  return { get, releases, repository, run };
+  return { get, releases, repository, run, tag };
 }
 
-export function statement(value = manifest()) {
-  const ref = `refs/tags/${value.releaseTag}`;
+export function statement(value = manifest(), manifestHash = 'f'.repeat(64)) {
+  const ref = value.signing === 'developer-id' ? 'refs/heads/main' : `refs/tags/${value.releaseTag}`;
   return {
     _type: 'https://in-toto.io/Statement/v1', predicateType: 'https://slsa.dev/provenance/v1',
-    subject: [{ name: value.archive.name, digest: { sha256: value.archive.sha256 } }, { name: 'hq-darwin-arm64.json', digest: { sha256: 'f'.repeat(64) } }],
+    subject: [{ name: value.archive.name, digest: { sha256: value.archive.sha256 } }, { name: `hq-darwin-${value.architecture}.json`, digest: { sha256: manifestHash } }],
     predicate: {
       buildDefinition: {
         buildType: 'https://actions.github.io/buildtypes/workflow/v1',

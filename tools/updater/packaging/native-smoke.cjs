@@ -73,6 +73,7 @@ async function smoke({ output = process.env.HQ_PACKAGE_OUTPUT, scratchParent = p
     await withOwnedDirectory(scratchParent, 'hq-native-', async scratch => {
       activeRoot = fs.realpathSync(scratch);
       const sampleDisk = () => { result.sampledPeakDiskBytes = Math.max(result.sampledPeakDiskBytes, Number(command('/usr/bin/du', ['-sk', activeRoot]).trim().split(/\s+/)[0]) * 1024); if (cancellation) throw new Error(`Native smoke cancelled: ${cancellation}`); };
+      let actionFailure;
       try {
         const plan = scenarioPlan(activeRoot, production, evidence.archive);
         const bundleCopies = plan.reduce((count, scenario) => count + 2 * scenario.steps.length, 0);
@@ -166,9 +167,15 @@ async function smoke({ output = process.env.HQ_PACKAGE_OUTPUT, scratchParent = p
           }
         }
         await drain(activeRoot);
+      } catch (error) {
+        actionFailure = error;
+        throw error;
       } finally {
         // These are newly created synthetic apps inside this invocation's root; real HQ/Jones paths never qualify.
-        await drain(activeRoot, true);
+        try { await drain(activeRoot, true); } catch (error) {
+          if (!actionFailure) throw error;
+          process.stderr.write(`Synthetic process cleanup failed; scratch remains subject to its inventory gate. ${JSON.stringify(error.inventoryFailure ?? null)}\n`);
+        }
       }
     }, { signals, async remove(root, options) {
       assert.equal(root, activeRoot);

@@ -7,7 +7,7 @@ are build evidence, not authenticated update releases.
 Before running any downloaded program, independently verify BOTH the archive
 and manifest against the release's .sigstore.json bundle. The verifier must
 check the signature, Fulcio certificate and transparency evidence, exact
-Jones-Systems/HQ repository and tag source commit, the workflow
+Jones-Systems/HQ repository and exact source commit, the workflow
 .github/workflows/hq-desktop-package.yml, run ID/attempt, and both SHA-256
 subjects. For example, a separately trusted GitHub CLI supports
 `gh attestation verify <asset> --repo Jones-Systems/HQ --bundle <bundle>`;
@@ -17,13 +17,25 @@ manifest does not authenticate bytes. Keep the independently verified archive
 SHA-256. The launcher extracts that exact archive into its own new directory;
 it never executes an app supplied separately from the authenticated archive.
 
-The package has an ad-hoc signature with strict deep code-seal verification.
-It has no Developer ID signature or Apple notarization claim. Gatekeeper may
-block first launch. An ad-hoc replacement may cause a Keychain prompt; this
-installer neither reads a Keychain item nor promises credential continuity.
-Use the normal macOS owner approval flow if needed. A prompt that cannot be
-handled interactively is a hold, not successful installation. Never remove
-quarantine or change signing/account settings as an automated workaround.
+Development previews have an ad-hoc signature with strict deep code-seal
+verification. They make no Developer ID or notarization claim. Production
+releases use hq-desktop-signed-<runId> and require a manifest with
+signing=developer-id, sourceRef=refs/heads/main and Team 2CUPSQS986. Their
+attestation must name a push from the fixed main branch in the same repository
+and workflow, with the exact source commit/run/attempt and BOTH asset digests.
+Independently resolve the release tag to that same commit. A tag reference in a
+production attestation, another branch, or a manifest-selected workflow is not
+an accepted substitute. Production native admission checks identifier
+org.jones-systems.hq.local, hardened runtime, secure timestamp, the Developer ID
+certificate requirement, stapled notarization and Gatekeeper assessment.
+
+Gatekeeper or Keychain prompts still require normal macOS owner interaction.
+This installer does not grant consent or promise measured permission continuity.
+A prompt that cannot be handled interactively is a hold, not successful
+installation. Never remove quarantine or change signing/account settings as
+an automated workaround. Production updates reject ad-hoc downgrade candidates;
+exact retained rollback bundles remain subject to their recorded signing policy
+and the existing profile compatibility gates.
 
 Fresh installation uses the authenticated bundle's Electron runtime, so no
 system Node or Python is required. From the release files, run:

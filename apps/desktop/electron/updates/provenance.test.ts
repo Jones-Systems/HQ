@@ -12,8 +12,8 @@ function extension(suffix: number, value: string, tag = 12): ASN1Obj {
   const oid = der(6, Buffer.from([0x2b, 6, 1, 4, 1, 0x83, 0xbf, 0x30, 1, suffix]));
   return ASN1Obj.parseBuffer(der(0x30, Buffer.concat([oid, der(4, der(tag, Buffer.from(value)))])));
 }
-function certificate() {
-  const value = manifest(), ref = `refs/tags/${value.releaseTag}`, workflow = `${REPOSITORY_URL}/${WORKFLOW}@${ref}`;
+function certificate(value = manifest()) {
+  const ref = value.signing === 'developer-id' ? 'refs/heads/main' : `refs/tags/${value.releaseTag}`, workflow = `${REPOSITORY_URL}/${WORKFLOW}@${ref}`;
   return { subjectAltName: workflow, extensions: Object.entries({ 9: workflow, 10: value.sourceSha, 11: 'github-hosted', 12: REPOSITORY_URL, 13: value.sourceSha, 14: ref, 15: String(REPOSITORY.id), 17: String(REPOSITORY.ownerId), 21: `${REPOSITORY_URL}/actions/runs/2/attempts/1` }).map(([suffix, text]) => extension(Number(suffix), text)) };
 }
 
@@ -55,4 +55,24 @@ it('decodes modern Fulcio OIDs as one primitive DER UTF8String and rejects dupli
 });
 it('rejects an unattested JSON statement without falling back to subject claims', async () => {
   await expect(verifyProvenance({ bundle: statement(), manifest: manifest(), archiveHash: manifest().archive.sha256, manifestHash: 'f'.repeat(64), cachePath: '/not-used', signal: new AbortController().signal })).rejects.toMatchObject({ code: 'provenance' });
+});
+
+it('production provenance requires fixed main policy and both subjects even if a manifest names a different ref', () => {
+  const signingPolicy = { schemaVersion: 1, mode: 'developer-id', teamId: '2CUPSQS986', identifier: 'org.jones-systems.hq.local', hardenedRuntime: true, secureTimestamp: true, notarized: true, stapled: true } as const;
+  const value = manifest({ signing: 'developer-id', signingPolicy, sourceRef: 'refs/heads/main', releaseTag: 'hq-desktop-signed-2' });
+  expect(() => verifyCertificateClaims(certificate(value), value)).not.toThrow();
+  expect(() => verifyStatement(statement(value), value, value.archive.sha256, 'f'.repeat(64))).not.toThrow();
+  for (const ref of ['refs/heads/feature', `refs/tags/${value.releaseTag}`]) {
+    const changed = statement(value);
+    changed.predicate.buildDefinition.externalParameters.workflow.ref = ref;
+    changed.predicate.runDetails.builder.id = `${REPOSITORY_URL}/${WORKFLOW}@${ref}`;
+    changed.predicate.buildDefinition.resolvedDependencies[0]!.uri = `git+${REPOSITORY_URL}@${ref}`;
+    expect(() => verifyStatement(changed, value, value.archive.sha256, 'f'.repeat(64))).toThrow('provenance');
+  }
+  for (const changed of [{ ...value, sourceRef: 'refs/heads/feature' }, { ...value, signing: 'adhoc' }, { ...value, sourceSha: '0'.repeat(40) }]) {
+    expect(() => verifyCertificateClaims(certificate(value), changed as typeof value)).toThrow('provenance');
+    expect(() => verifyStatement(statement(value), changed as typeof value, value.archive.sha256, 'f'.repeat(64))).toThrow('provenance');
+  }
+  expect(() => verifyStatement(statement(value), value, '0'.repeat(64), 'f'.repeat(64))).toThrow('provenance');
+  expect(() => verifyStatement(statement(value), value, value.archive.sha256, '0'.repeat(64))).toThrow('provenance');
 });

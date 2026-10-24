@@ -1,4 +1,4 @@
-HQ macOS preview packages for Apple silicon and Intel.
+HQ macOS ad-hoc development preview packages for Apple silicon and Intel.
 
 Each architecture has an archive, exact-source manifest and Sigstore JSON
 attestation binding both subjects to this workflow/tag/source/run. Read

@@ -20,7 +20,7 @@ import ipaddress
 import json
 import re
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer as BaseThreadingHTTPServer
 from pathlib import Path
 from socketserver import TCPServer
 from urllib.parse import urlsplit
@@ -54,6 +54,13 @@ SECURITY_HEADERS = {
 }
 _ITEM_RE = re.compile(r"^/api/items/([A-Za-z0-9_-]{6,40})(/[a-z]+)?$")
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+
+
+class ThreadingHTTPServer(BaseThreadingHTTPServer):
+    def server_bind(self):
+        # Reverse DNS can stall loopback startup; only bound address metadata is needed.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 class Response:

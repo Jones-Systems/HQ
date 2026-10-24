@@ -2,10 +2,36 @@ name: HQ desktop package
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [labeled, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/hq-desktop-package.yml'
+      - 'apps/desktop/**'
+      - 'packages/**'
+      - 'modules/**'
+      - 'services/planner/**'
+      - 'tools/updater/**'
+      - 'tools/storage/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'vitest.config.ts'
   push:
+    # Preserve the separately gated signed-release route; ordinary main pushes skip packaging.
+    branches: [main]
     tags: ['hq-desktop-*']
+  schedule:
+    - cron: '23 7 * * *'
   workflow_dispatch:
+    inputs:
+      signing:
+        description: Explicit package signing mode
+        type: choice
+        options: [adhoc-development, developer-id]
+        default: adhoc-development
+        required: true
+
+env:
+  HQ_SIGNED_RELEASES_ENABLED: ${{ vars.HQ_SIGNED_RELEASES_ENABLED }}
 
 permissions:
   contents: read
@@ -16,7 +42,7 @@ concurrency:
 
 jobs:
   package:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    if: (github.event_name == 'pull_request' && !github.event.pull_request.draft && contains(github.event.pull_request.labels.*.name, 'ci/package')) || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && ((startsWith(github.ref, 'refs/tags/hq-desktop-') && !startsWith(github.ref, 'refs/tags/hq-desktop-signed-')) || (github.ref == 'refs/heads/main' && vars.HQ_SIGNED_RELEASES_ENABLED == 'true')))
     strategy:
       fail-fast: false
       matrix:
@@ -28,6 +54,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     env:
+      HQ_SIGNING_MODE: adhoc-development
       HQ_PACKAGE_ARCH: ${{ matrix.arch }}
     steps:
       - name: Bind invocation output roots on the allocated runner
@@ -56,6 +83,8 @@ jobs:
         env:
           HQ_COMPILER_ARCH: ${{ matrix.arch == 'x64' && 'x86_64' || matrix.arch }}
         run: node tools/updater/packaging/ci-run.cjs /usr/bin/xcrun --sdk macosx clang -std=c11 -Wall -Wextra -Werror -arch "$HQ_COMPILER_ARCH" tools/updater/process-inventory.c -o tools/updater/process-inventory
+      - name: Typecheck the credential importer without accessing credentials
+        run: node tools/updater/packaging/ci-run.cjs /usr/bin/xcrun swiftc -typecheck tools/updater/packaging/import-signing-identity.swift
       - name: Check registered compatibility sources
         run: node tools/updater/packaging/compatibility.cjs
       - name: Test package layout, epoch, transaction and installer
@@ -88,7 +117,7 @@ jobs:
       - name: Assemble and strictly verify the ad-hoc package
         id: assemble
         env:
-          HQ_RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          HQ_RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
         run: node tools/updater/packaging/ci-run.cjs node tools/updater/packaging/package.cjs
       - name: Qualify synthetic native launch, next launch and recovery
         run: node tools/updater/packaging/ci-run.cjs node tools/updater/packaging/native-smoke.cjs
@@ -109,9 +138,82 @@ jobs:
         if: always()
         run: node tools/updater/packaging/cleanup-output.cjs
 
-  attest:
-    if: github.event_name == 'push'
+  developer-id:
+    if: vars.HQ_SIGNED_RELEASES_ENABLED == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.signing == 'developer-id')) && github.repository == 'Jones-Systems/HQ' && github.event.repository.default_branch == 'main' && github.ref == 'refs/heads/main'
     needs: package
+    environment: macos-signing
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      HQ_SIGNING_MODE: developer-id
+      HQ_PACKAGE_ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Bind production output on the allocated runner
+        run: printf 'HQ_PACKAGE_OUTPUT=%s/hq-developer-id-%s-%s-%s\n' "$RUNNER_TEMP" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$HQ_PACKAGE_ARCH" >> "$GITHUB_ENV"
+      - name: Check out the trusted workflow commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Use pinned Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+      - name: Install locked dependencies without lifecycle scripts
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: node tools/updater/packaging/ci-run.cjs npm ci --ignore-scripts --no-audit --no-fund
+      - name: Download the locked native Electron runtime
+        run: node tools/updater/packaging/ci-run.cjs node node_modules/electron/install.js
+      - name: Compile the native process inventory
+        env:
+          HQ_COMPILER_ARCH: ${{ matrix.arch == 'x64' && 'x86_64' || matrix.arch }}
+        run: node tools/updater/packaging/ci-run.cjs /usr/bin/xcrun --sdk macosx clang -std=c11 -Wall -Wextra -Werror -arch "$HQ_COMPILER_ARCH" tools/updater/process-inventory.c -o tools/updater/process-inventory
+      - name: Recheck production release source before introducing credentials
+        if: github.event_name == 'push'
+        run: node tools/updater/packaging/release-guard.cjs
+      - name: Build trusted production source before introducing credentials
+        run: node tools/updater/packaging/ci-run.cjs npm run build
+      - name: Sign, notarize, staple and verify production package
+        id: production
+        env:
+          MACOS_SIGNING_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_P12_BASE64 }}
+          MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+          APPLE_NOTARY_API_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_API_KEY_P8_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: node tools/updater/packaging/ci-run.cjs node tools/updater/packaging/developer-id.cjs
+      - name: Preserve only distributable production output
+        if: steps.production.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hq-developer-id-${{ matrix.arch }}
+          path: |
+            ${{ env.HQ_PACKAGE_OUTPUT }}/*.zip
+            ${{ env.HQ_PACKAGE_OUTPUT }}/*.json
+            ${{ env.HQ_PACKAGE_OUTPUT }}/*.txt
+            ${{ env.HQ_PACKAGE_OUTPUT }}/*.command
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: Remove this invocation's package output
+        if: always()
+        run: node tools/updater/packaging/cleanup-output.cjs
+
+  attest:
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.package.result == 'success' && ((startsWith(github.ref, 'refs/tags/hq-desktop-') && !startsWith(github.ref, 'refs/tags/hq-desktop-signed-')) || (github.ref == 'refs/heads/main' && vars.HQ_SIGNED_RELEASES_ENABLED == 'true' && needs['developer-id'].result == 'success')) }}
+    needs: [package, developer-id]
     strategy:
       matrix:
         arch: [arm64, x64]
@@ -132,7 +234,7 @@ jobs:
       - name: Retrieve the exact run's package
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: hq-package-${{ matrix.arch }}
+          name: ${{ github.ref == 'refs/heads/main' && 'hq-developer-id' || 'hq-package' }}-${{ matrix.arch }}
           path: release-input
       - name: Bind archive and manifest bytes to workflow provenance
         id: provenance
@@ -156,7 +258,7 @@ jobs:
           compression-level: 0
 
   publish:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && ((startsWith(github.ref, 'refs/tags/hq-desktop-') && !startsWith(github.ref, 'refs/tags/hq-desktop-signed-')) || (github.ref == 'refs/heads/main' && vars.HQ_SIGNED_RELEASES_ENABLED == 'true'))
     needs: attest
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -176,9 +278,15 @@ jobs:
           pattern: hq-attested-*
           path: release-assets
           merge-multiple: true
-      - name: Publish one preview release without replacing any existing asset
+      - name: Publish one ad-hoc development preview without replacing any existing asset
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --target "$GITHUB_SHA" --prerelease --title "$GITHUB_REF_NAME" --notes-file tools/updater/packaging/RELEASE.txt release-assets/hq-darwin-arm64.zip release-assets/hq-darwin-arm64.json release-assets/hq-darwin-arm64.sigstore.json release-assets/hq-darwin-x64.zip release-assets/hq-darwin-x64.json release-assets/hq-darwin-x64.sigstore.json tools/updater/packaging/INSTALL.txt tools/updater/packaging/install-hq.command
+      - name: Publish signed production preview and verify exact tag and asset digests
+        if: github.ref == 'refs/heads/main' && vars.HQ_SIGNED_RELEASES_ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/updater/packaging/stage-release.cjs publish-production
