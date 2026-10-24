@@ -7,7 +7,7 @@ import { createRuntime } from '../runtime.mjs';
 import { startPlanner } from './planner.mjs';
 import { galleryBytes, sha256, startGallery, writeGalleryCorpus } from './remote-gallery.mjs';
 import { createLocalFolder, PREVIEW_PNG } from './local-folder.mjs';
-import { row, replaceRow, scenarioGaps, selectedOutcome, fullOutcome, SELECTED_SCENARIOS } from './results.mjs';
+import { row, replaceRow, scenarioGaps, selectedOutcome, fullOutcome, routineOutcome, ROUTINE_SCENARIOS, SELECTED_SCENARIOS } from './results.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 async function owned(run) {
@@ -39,6 +39,28 @@ test('selected passes replace reserved gaps; held edges and duplicate IDs cannot
   assert.throws(() => replaceRow([...rows, rows[0]], rows[0]), /Duplicate result row/);
 });
 
+test('four routine journeys require every result; release holds stay visible and any observed failure fails', () => {
+  const rows = scenarioGaps(), prerequisite = [{ id: 'native', status: 'pass' }];
+  assert.equal(1 + ROUTINE_SCENARIOS.length, 4);
+  for (const id of ['native-prerequisites', 'renderer-isolation', 'domain-round-trip', 'shell-restart', ...ROUTINE_SCENARIOS]) {
+    assert.notEqual(routineOutcome(rows), 'routine-passed');
+    replaceRow(rows, row(id, 'pass', prerequisite, ['observed']));
+  }
+  assert.equal(routineOutcome(rows), 'routine-passed');
+  assert.equal(rows.find(r => r.id === 'local-folder-source').status, 'held');
+  assert.equal(rows.find(r => r.id === 'social-save-and-unknown').status, 'gap');
+  assert.equal(rows.find(r => r.id === 'wiki-committed-corpus').status, 'gap');
+  assert.equal(selectedOutcome(rows), 'platform-or-integration-gap');
+  assert.equal(fullOutcome(rows), 'platform-or-integration-gap');
+  assert.equal(routineOutcome([...rows, rows[0]]), 'failed');
+  for (const id of ['native-prerequisites', 'remote-gallery-source', 'local-folder-source']) {
+    const failed = structuredClone(rows);
+    replaceRow(failed, row(id, 'fail', prerequisite, ['first failure']));
+    assert.equal(routineOutcome(failed), 'failed');
+  }
+  assert.equal(routineOutcome([...rows, row('domain-Wiki', 'gap', [{ id: 'mounted', status: 'gap' }])]), 'platform-or-integration-gap');
+});
+
 test('real Planner commits once before response loss; lookup and retained DB restart preserve one item/version', () => owned(async runtime => {
   const planner = await startPlanner(runtime, repo);
   const before = await planner.state();
@@ -67,6 +89,13 @@ test('real Planner commits once before response loss; lookup and retained DB res
   assert.equal((await read.json()).items[0].id, applied.items[0].id);
   assert.deepEqual(planner.ledger.map(entry => [entry.method, entry.path]), [['POST', '/api/items'], ['POST', '/api/requests/replay'], ['GET', '/api/state']]);
   assert.equal(planner.processes.length, 2);
+  for (const [method, path] of [['GET', '/api/private'], ['PUT', '/api/settings'], ['POST', '/api/items/ignored/archive']]) {
+    const denied = await fetch(planner.origin + path, { method, signal: AbortSignal.timeout(1000) });
+    assert.equal(denied.status, 404);
+    await denied.arrayBuffer();
+  }
+  const afterDenied = await planner.state();
+  for (const key of ['items', 'settings', 'state_version']) assert.deepEqual(afterDenied[key], retained[key], `denied routes preserve ${key}`);
 }));
 
 test('Planner and gallery close after deliberate failure; a peer root/listener survives', async () => {
