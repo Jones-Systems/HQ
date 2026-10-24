@@ -12,8 +12,9 @@ import {
 import { withStorageInvocation } from '../launcher.mjs';
 
 const ok = () => ({ code: 0, signal: null, diagnostics: [] });
-const policy = { reserveBytes: 64 * MiB, peakBytes: 2 * MiB, lockTimeoutMs: 100 };
+const policy = { reserveBytes: 64 * MiB, peakBytes: 2 * MiB };
 const testContext = createTestContext({ policy });
+const deadlineContext = createTestContext({ policy: { ...policy, lockTimeoutMs: 100 } });
 const producer = (code = 'process.exit(0)') => ({ command: process.execPath, args: ['-e', code], bytes: MiB, stdio: 'ignore' });
 
 async function fixture(t) {
@@ -268,13 +269,56 @@ test('unsafe scratch and changed lock ownership are preserved without masking ch
   assert.equal((await fs.lstat(path.join(owned, 'foreign'))).isSymbolicLink(), true);
 });
 
+test('delayed lock sync respects explicit deadlines while shared lifecycle context acquires both locks', { concurrency: false }, async t => {
+  const { root, plan, worktree, scratch, evidence } = await fixture(t);
+  plan.roots.push({ kind: 'evidence', path: evidence });
+  const probe = await fs.open(path.join(root, 'sync-probe'), 'wx');
+  const fileHandlePrototype = Object.getPrototypeOf(probe);
+  await probe.close();
+  const realSync = fileHandlePrototype.sync;
+  const delayedSync = t.mock.method(fileHandlePrototype, 'sync', async function (...args) {
+    const result = await realSync.apply(this, args);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    return result;
+  });
+  try {
+    await assert.rejects(withStorageInvocation(plan, () => assert.fail('deadline must prevent callback'), { testContext: deadlineContext }), /Lock deadline exceeded/);
+    assert.equal(delayedSync.mock.callCount(), 1);
+    for (const directory of [worktree, evidence]) {
+      await assert.rejects(fs.stat(path.join(directory, LOCK_NAME)), { code: 'ENOENT' });
+    }
+    assert.deepEqual(await fs.readdir(scratch), []);
+
+    let entered = false;
+    let owned;
+    const result = await withStorageInvocation(plan, async context => {
+      entered = true;
+      for (const directory of [worktree, evidence]) {
+        assert.equal((await fs.stat(path.join(directory, LOCK_NAME))).isFile(), true);
+      }
+      owned = await context.scratch(scratch);
+      return ok();
+    }, { testContext });
+    assert.deepEqual(result, ok());
+    assert.equal(entered, true);
+    assert.equal(delayedSync.mock.callCount(), 3);
+    await assert.rejects(fs.stat(owned), { code: 'ENOENT' });
+    assert.deepEqual(await fs.readdir(scratch), []);
+    for (const directory of [worktree, evidence]) {
+      await assert.rejects(fs.stat(path.join(directory, LOCK_NAME)), { code: 'ENOENT' });
+    }
+  } finally {
+    delayedSync.mock.restore();
+  }
+});
+
 test('stale, malformed and live locks time out without eviction', async t => {
   for (const owner of ['unreadable metadata', JSON.stringify({ nonce: 'stale', pid: 2147483647 }), JSON.stringify({ nonce: 'live', pid: process.pid })]) {
     const { plan, worktree } = await fixture(t);
     const lock = path.join(worktree, LOCK_NAME);
     await fs.writeFile(lock, owner, { mode: 0o600 });
     const start = performance.now();
-    await assert.rejects(withStorageInvocation(plan, () => assert.fail('contended'), { testContext }), /Lock deadline/);
+    await assert.rejects(withStorageInvocation(plan, () => assert.fail('contended'), { testContext: deadlineContext }), /Lock deadline/);
     assert.ok(performance.now() - start < 2000);
     assert.equal(await fs.readFile(lock, 'utf8'), owner);
   }
@@ -293,7 +337,7 @@ test('shared evidence lock contention releases only the losing invocation worktr
   await ready;
   const metadata = await fs.readFile(path.join(one.evidence, LOCK_NAME), 'utf8');
   try {
-    await assert.rejects(withStorageInvocation(nextPlan, () => assert.fail('shared parent'), { testContext }), /Lock deadline/);
+    await assert.rejects(withStorageInvocation(nextPlan, () => assert.fail('shared parent'), { testContext: deadlineContext }), /Lock deadline/);
     assert.equal(await fs.readFile(path.join(one.evidence, LOCK_NAME), 'utf8'), metadata);
     await assert.rejects(fs.stat(path.join(two.worktree, LOCK_NAME)), { code: 'ENOENT' });
   } finally { finish(); }
@@ -392,14 +436,14 @@ test('one total deadline covers all locks and cancellation preserves another own
   const timer = setTimeout(() => fs.unlink(firstLock), 65);
   const start = performance.now();
   try {
-    await assert.rejects(withStorageInvocation({ ...plan, roots: [...plan.roots, { kind: 'evidence', path: evidence }] }, ok, { testContext }), /Lock deadline/);
+    await assert.rejects(withStorageInvocation({ ...plan, roots: [...plan.roots, { kind: 'evidence', path: evidence }] }, ok, { testContext: deadlineContext }), /Lock deadline/);
   } finally { clearTimeout(timer); }
   assert.ok(performance.now() - start < 155, 'the second lock must not get a fresh timeout');
   await assert.rejects(fs.stat(firstLock), { code: 'ENOENT' });
   assert.equal(await fs.readFile(finalLock, 'utf8'), 'other-owner');
   const controller = new AbortController();
   const cancel = setTimeout(() => controller.abort(), 20);
-  const result = await withStorageInvocation(plan, () => assert.fail('cancelled before producer'), { testContext, signal: controller.signal });
+  const result = await withStorageInvocation(plan, () => assert.fail('cancelled before producer'), { testContext: deadlineContext, signal: controller.signal });
   clearTimeout(cancel);
   assert.equal(result.signal, 'SIGTERM');
   assert.equal(await fs.readFile(finalLock, 'utf8'), 'other-owner');
