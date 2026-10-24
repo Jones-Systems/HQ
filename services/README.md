@@ -28,5 +28,7 @@ node --test --test-concurrency=1 'tests/*.test.mjs'
 ```
 
 The [service README](planner/README.md#tests) describes their synthetic fixtures
-and cleanup. These local commands do not claim root CI adoption or installed
-service verification.
+and cleanup. These local commands do not claim installed service verification. `main`
+has no hosted CI workflow, so record local check results with changes here.
+A `cli-planner.yml` workflow exists only on the unmerged foundation branch
+(`work/hq-foundation`).
