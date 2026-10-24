@@ -1,12 +1,12 @@
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, unlinkSync, mkdirSync } from 'node:fs';
 import { run } from '../src/cli.ts';
 import { schemas, commands } from '../src/commands.ts';
 import { conforms } from '../src/schema.ts';
 import { atomicJSON } from '../src/files.ts';
-import { server, json, item, scratch, itemReply, info, batchSpec } from './write-fixtures.mjs';
+import { server, json, item, scratch, itemReply, info, batchSpec, replay } from './write-fixtures.mjs';
 import { date } from './fixtures.mjs';
 
 test('every single mutation uses its canonical closed route/body and a version preread', async () => {
@@ -95,6 +95,44 @@ test('intent write failure prevents sending; rename failure cleans its exact tem
   assert.equal(r.exitCode, 2); assert.equal(h.writes().length, 0);
   assert.throws(() => atomicJSON(f.root, { example: true }));
   assert.deepEqual(readdirSync(f.root), []);
+});
+
+for (const outcome of ['applied', 'unknown']) test(`post-send intent persistence failure preserves ${outcome} outcome without retry`, async t => {
+  const f = await scratch(t);
+  const path = f.path('intent.json');
+  let persisted;
+  let replaced = false;
+  const h = server(call => {
+    persisted = JSON.parse(readFileSync(path, 'utf8'));
+    unlinkSync(path);
+    mkdirSync(path);
+    replaced = true;
+    if (outcome === 'unknown') throw Object.assign(new Error('Connection reset after send'), { code: 'ECONNRESET' });
+    return itemReply(call);
+  });
+  const r = await run(['planner', 'items', 'create', '--title', 'Synthetic', '--request-id', 'request-1234', '--intent-file', path], h.deps);
+  assert.deepEqual(persisted, replay());
+  assert.equal(replaced, true);
+  assert.deepEqual(h.calls.map(call => [call.method, call.path]), [['GET', '/api/version'], ['POST', '/api/items']]);
+  assert.equal(h.writes().length, 1);
+  assert.equal(h.writes()[0].body, Buffer.from(persisted.body_b64, 'base64').toString());
+  assert.equal(h.writes()[0].headers['X-Request-Id'], 'request-1234');
+  assert.equal(r.exitCode, outcome === 'applied' ? 0 : 7, JSON.stringify(r));
+  assert.equal(r.result.ok, outcome === 'applied');
+  assert.equal(r.result.effect, outcome);
+  assert.equal(r.result.request_id, 'request-1234');
+  assert.deepEqual(r.result.replay, persisted);
+  if (outcome === 'applied') {
+    assert.deepEqual(r.result.data.item, item({ title: 'Synthetic' }));
+    assert.equal(r.result.data.state_version, 9);
+    assert.match(r.result.data.intent_file_error, /updating the intent file failed/);
+  } else {
+    assert.equal(r.result.error.code, 'network_error');
+    assert.match(r.result.error.details.hint, /Never blindly retry/);
+    assert.match(r.result.error.details.intent_file_error, /updating the intent file failed/);
+  }
+  assert.deepEqual(readdirSync(f.root), ['intent.json']);
+  assert.deepEqual(readdirSync(path), []);
 });
 
 test('invalid local mutations fail without POST, and request IDs are bounded', async () => {
