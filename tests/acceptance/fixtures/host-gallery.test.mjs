@@ -23,6 +23,9 @@ for (const outcome of ['success', 'failure', 'SIGTERM']) {
         if (child.exitCode !== null || child.launchError) throw new Error(`Host fixture exited: ${errors}`);
         return output.includes('\n') && JSON.parse(output.split('\n')[0]);
       }, 'host ready');
+      assert.equal(ready.event, 'ready');
+      assert.equal(ready.pid, child.pid);
+      assert.equal(ready.pgid, child.pid, 'runtime.spawn owns a detached process group');
       const get = async route => (await fetch(new URL(route, ready.controlOrigin))).json();
       assert.equal((await fetch(ready.origin + 'registry-export-manifest.json')).status, 200);
       const before = await get('/snapshot');
@@ -46,6 +49,7 @@ for (const outcome of ['success', 'failure', 'SIGTERM']) {
       await child.done;
       assert.equal(child.exitCode, 0, errors);
       const report = JSON.parse(await readFile(evidence, 'utf8'));
+      for (const key of ['runId', 'host', 'pid', 'pgid']) assert.equal(report[key], ready[key], `report identity ${key}`);
       assert.equal(report.cleanup.rootAbsent, true);
       assert.equal(report.cleanup.remainingChildren, 0);
       assert.deepEqual(report.finalDigests, before.digests);

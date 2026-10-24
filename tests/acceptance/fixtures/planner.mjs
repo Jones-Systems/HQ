@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { createServer, request } from 'node:http';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { canonical, closedRoute } from './http.mjs';
 import { until } from '../runtime.mjs';
 
 // Only the response is faulted. All state and replay decisions belong to Planner.
@@ -46,9 +45,10 @@ export async function startPlanner(runtime, repo, observe = () => {}) {
       const bytes = Buffer.concat(chunks);
       const body = bytes.length ? JSON.parse(bytes.toString('utf8')) : null;
       const entry = { count: ledger.length + 1, method: req.method, path: req.url,
-        body: canonical(body), bodyUtf8: bytes.toString('utf8'), requestId: req.headers['x-request-id'] ?? body?.request_id ?? null };
+        body: JSON.stringify(body), bodyUtf8: bytes.toString('utf8'), requestId: req.headers['x-request-id'] ?? body?.request_id ?? null };
       ledger.push(entry);
-      if (!closedRoute('work', req.method, req.url)) { entry.status = 404; res.writeHead(404); res.end(); return; }
+      if (!(req.method === 'GET' && ['/api/state', '/api/version'].includes(req.url)) &&
+          !(req.method === 'POST' && ['/api/items', '/api/requests/replay'].includes(req.url))) { entry.status = 404; res.writeHead(404); res.end(); return; }
       const target = new URL(req.url, upstream);
       const headers = { ...req.headers, host: target.host, 'content-length': String(bytes.length) };
       delete headers['transfer-encoding'];

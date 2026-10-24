@@ -1,9 +1,10 @@
 # HQ native Electron acceptance
 
-This Linux runner drives the actual production Electron renderer through CDP and
+This Linux/macOS runner drives the actual production Electron renderer through CDP and
 Node's built-in WebSocket. It adds no npm dependency or root script. Node 22.18+
-(or the campaign's Node 24), the pinned Electron executable, Xvfb, bubblewrap,
-user namespaces and fonts are prerequisites. It never disables Chromium's sandbox.
+(or the campaign's Node 24) and the pinned Electron executable are prerequisites.
+Linux also requires Xvfb, bubblewrap, user namespaces and fonts; see the macOS
+section below for Darwin prerequisites. It never disables Chromium's sandbox.
 The app's preload, context isolation, security policy and production layout remain intact.
 
 After CPU admission, install/build in this isolated checkout:
@@ -41,7 +42,7 @@ binary/display/namespace capability also fails.
 Final acceptance requires T1's exact assembled candidate and a fresh build.
 
 Each invocation allocates a unique profile and temporary root under
-`.t3/acceptance-scratch/`. Bubblewrap maps its temporary directory to `/tmp` for
+`.t3/acceptance-scratch/`. On Linux, bubblewrap maps its temporary directory to `/tmp` for
 Xvfb and Electron and provides private PID/user namespaces and device nodes. The
 checkout is then bound back at its own path, so a checkout under `/tmp` still
 works. CDP
@@ -56,37 +57,131 @@ cannot execute cleanup; a surviving exact run directory requires explicit recove
 
 Reports, bounded runtime diagnostics and screenshots remain in a unique directory
 under `.t3/acceptance-evidence/`, outside disposable scratch. Reports include Git
-head, dirty-source status and hashes of the built entry points. They do not certify
+head, dirty-source status, the existing entry-point hashes and a complete
+compiled-build inventory. They do not certify
 that an independently produced build corresponds to source: build immediately
 before acceptance. Evidence is local and may contain paths; inspect and sanitize
 before publishing. Tests intentionally use synthetic/default app content only.
 
-## Infrastructure fixtures and row evidence
+## macOS (Darwin)
 
-Run the Node-only affected group before any native check:
+The same runner selects
+`node_modules/electron/dist/Electron.app/Contents/MacOS/Electron` on Darwin.
+Use an available native graphical session, Git for the synthetic Wiki corpus,
+and a fresh macOS build of the exact candidate. Routine/selected/full scenarios also
+require `python3` for the repository's stdlib-only Planner. The install/build and
+check commands above are unchanged. Run `--checkpoint` before `--selected`.
+Darwin source support alone does not establish native qualification.
+
+Electron launches directly through the existing runtime's owned process group.
+It retains the same environment filtering (inherited `HQ_*`, `NODE_OPTIONS` and
+`ELECTRON_RUN_AS_NODE` are removed), owned HOME/profile and synthetic fixtures.
+TMPDIR points to that invocation's `tmp` directory; DISPLAY is removed and no
+Xvfb or bubblewrap process is started. Darwin provides no Linux PID/user namespace
+or private `/tmp` mapping. Process-group cleanup covers children remaining in
+those owned groups; it is not namespace containment or protection against a
+descendant escaping its group. Chromium's sandbox remains enabled.
+
+`cleanup.test.mjs` runs unchanged on Darwin, including success/failure, partial
+startup, handled signals, socket closure, cleanup-error preservation and the
+negative peer-survival assertion. It has no namespace-specific assertions or
+platform skips and does not scan or terminate unrelated processes. Native
+Darwin cleanup and scenario results remain unverified until executed there.
+Reports retain the platform and the native-prerequisite containment limitation;
+HQ-07 remains held and makes selected mode nonzero as described below. CDP
+screenshots capture the renderer only, not native window chrome.
+
+## Portable fixtures (B) and native journeys (N)
+
+B is the portable fixture, report and cleanup group. It uses Node, Git and the
+real stdlib Python Planner, but no Electron or display. Run it serially before N:
 
 ```sh
-node --test --test-concurrency=1 tests/acceptance/fixtures/fixtures.test.mjs tests/acceptance/fixtures/scenarios.test.mjs tests/acceptance/fixtures/host-gallery.test.mjs tests/acceptance/cleanup.test.mjs
+node --test --test-concurrency=1 tests/acceptance/build-inventory.test.mjs tests/acceptance/fixtures/fixtures.test.mjs tests/acceptance/fixtures/scenarios.test.mjs tests/acceptance/fixtures/host-gallery.test.mjs tests/acceptance/cleanup.test.mjs
 ```
 
-`fixtures/http.mjs` supplies scripted Work/Social HTTP exchanges on ephemeral
-loopback listeners. Unscripted mutations fail explicitly; this is not a general
-Planner or Social implementation. Scripts use only the landed main-process closed
-routes and native response bodies. The self-test reads the checked-in Planner
-contract exchanges as data and calls the landed main-process encoders; it imports
-no module source or tests. Each request records method, path, canonical JSON body,
-request ID (null for routes without one), and sequential count. Lost responses,
-malformed JSON and unavailable reads exercise the real HTTP codec. HTTP 5xx remain
-received transport responses, with adapter interpretation still owned by the app.
+`fixtures/http.mjs` supplies only fixed Work/Social shell reads on ephemeral
+loopback listeners. Unknown routes and every mutation fail closed. It has no
+mutation scripts, replay engine, persistent records or simulated Social saves.
+The three tests of that removed protocol simulation were removed with it;
+production codec/failure behavior remains covered by
+`apps/desktop/electron/services.test.ts` and
+`modules/work/live/test/transcript.test.ts`. B retains direct fixture isolation,
+route denial, corpus identity, cleanup and peer-survival checks.
 
-The checkpoint's scripted Work records persist under the owned scratch root.
-Selected/full mode instead starts the repository's real Python Planner with a
-fresh SQLite database. Its recording loopback proxy forwards the app's original
-bytes, loses one applied create response, and records the explicit lookup. Oracle
+Routine, selected and full mode start the repository's real Python Planner with
+an owned SQLite database. Its recording loopback proxy admits only state/version
+reads, capture and explicit replay lookup routes. It forwards original request
+bytes, loses one applied create response and records the explicit lookup. Oracle
 reads go directly to Planner and do not inflate the app ledger. Planner and
-Electron restart against the retained database/profile. This provides no durable
-unresolved client intent: RW-9/G-3 remain session-only. Social scripts do not
-simulate a real execution provider.
+Electron restart against the retained database/profile. Work has no durable
+unresolved client intent here: RW-9/G-3 remain session-only. Checkpoint and
+host-gallery-only modes need only the fixed shell reads. Social has no real
+execution provider in any mode.
+
+N is real Electron plus its preload and native state owners. After building the
+exact candidate and taking fresh host admission, run the capped routine tier:
+
+```sh
+node tests/acceptance/run.mjs --routine
+```
+
+It has exactly four journeys, reusing implemented scenarios without reducing
+their assertions. Work must have zero mutation attempts before intentional capture, and Social must have zero mutation attempts throughout teardown. Rejected writes still fail qualification; raw ledgers remain evidence:
+
+| Journey | Direct oracle |
+| --- | --- |
+| HQ-01: launch, domain round trip, restart | Real renderer/preload isolation and CSP; appearance and selected domain survive graceful Electron restart |
+| HQ-02: capture, uncertain write, explicit lookup | Real Planner item/version and request ledger prove one create despite response loss; navigation/read never resends |
+| HQ-03: Work restart without replay | Real Planner database and renderer retain that item; no post-restart mutations |
+| HQ-09: gallery enrollment and last good | Main-process persisted snapshot, exact HTTP hashes, restart without fetch, digest/parse/disconnect failures, removal without deleting corpus |
+
+`routine-passed` means only those four journeys passed. Missing requested
+capabilities, missing required rows, duplicate rows, any observed failure,
+cleanup failure or changed build identity remain nonzero. There are no retries
+to green. Routine mode does not create the local-folder fixture or execute the
+held HQ-07 scenario. Its report still includes HQ-07 as held, HQ-09H as held
+without an authorized distinct-host binding, and the full acceptance debt.
+`--routine` rejects `--gallery-host`; use the existing explicit qualification
+modes for that separately owned topology.
+
+The five planning choices are not five implemented native journeys. Social
+save/reference and Wiki committed-corpus/reference journeys still lack native
+scenarios here. Mounting those domains or constructing a Wiki fixture does not
+qualify them. HQ-09 exercises enrollment and last-good state, not a live preview.
+HQ-07's displayed image and native chooser remain release obligations.
+
+The original twelve reserved rows remain explicit manual/release obligations:
+`work-service-replay`, `work-restart-without-intent`, `social-save-and-unknown`,
+`reference-round-trips`, `wiki-committed-corpus`, `unavailable-service-ui`,
+`import-export`, `capability-closure`, `preview-qualification`,
+`component-containment`, `new-thread-qualification`, and
+`integrated-scenario-catalog`. Full mode also requires the three source rows
+HQ-07/09/09H. Only observed passes can discharge rows; gaps and holds never pass
+full acceptance. `--selected` still executes HQ-07 and remains nonzero at its
+held image edge. Neither capped routine success nor B success releases those
+obligations.
+
+The `HQ native journeys` workflow uses the existing Ubuntu/Node/build and
+Xvfb/bubblewrap recipe, a 15-minute job budget and a five-minute N budget. It runs
+nightly on the default branch **only after this workflow is promoted there**,
+or by explicit dispatch, or on a non-draft same-repository PR carrying the
+`hq-native-journeys` label. The PR checkout is the exact event merge SHA against
+that PR's declared base, including integration child bases; there is no `main`
+base filter or every-PR native job. A label retained on a PR requests a new run
+on synchronization. No macOS job, privileged setup or sandbox bypass is added.
+Missing Linux tools/user namespaces fail the requested run and need separate
+runner provisioning; they are never converted to skips.
+
+CI admits an estimated additional peak of 8 GiB plus a 2 GiB reserve on the
+workspace filesystem before dependency, Electron and build allocation. This is
+a conservative budget, not a measured performance claim. CI owns its unique
+workspace install/cache scratch and removes that exact root
+in an always-run cleanup step. The harness owns each runtime root and cleanup
+as described above. The hosted runner owns the checkout, dependency/build trees
+and residual state at job disposal. Native evidence is uploaded even on failure
+with seven-day retention. An open PR proves neither scheduled activation nor a
+qualified native run; report those separately.
 
 The runner writes its own `service-config.json` and `wiki/config.json` to the
 owned profile, then passes only harness-generated `HQ_USER_DATA_DIR` after
@@ -115,7 +210,7 @@ signals, an open HTTP socket, concurrent peers and injected cleanup failure.
 
 ## Selected T7 scenarios
 
-After a fresh build and serial execution admission on the bound Linux host:
+After a fresh build and serial execution admission on the bound Linux or macOS host:
 
 ```sh
 node tests/acceptance/run.mjs --selected
@@ -221,3 +316,46 @@ This is synthetic HTTP through SSH forwarding, not remote TLS, SSH filesystem,
 provider authentication, native folder chooser, live preview, installed-app or
 production-source qualification. It does not replace the campaign's larger cold/
 warm portfolio or root's independent integrated-candidate exercise.
+
+## Complete build identity for target evidence
+
+The portable B group above includes `build-inventory.test.mjs`.
+For the focused inner loop use:
+
+```sh
+node --test --test-concurrency=1 tests/acceptance/build-inventory.test.mjs
+```
+
+Each run retains `build-inventory.json`, a closed
+`hq-electron-build/v1` object with `schema`, `roots` and `files`.
+The fixed roots are `apps/desktop/dist` and `apps/desktop/dist-electron`.
+Every regular file beneath both trees is included, together with
+`apps/desktop/package.json` and `package.json`, so renderer assets and compiled
+Design/Wiki/preview helpers participate in the identity. Each closed file entry
+contains `path`, `bytes` and `sha256`. Entries are sorted by unique ASCII path;
+components match `[A-Za-z0-9_][A-Za-z0-9_.-]*`, with a 512-character path bound.
+Missing required index/main/preload/package files, symlinks (including
+ancestors), unsafe paths and nonregular files fail closed. The inventory allows
+at most 10,000 files and at most 512 MiB per file.
+
+Final reports add `buildIdentity:{schema:"hq-electron-build/v1",sha256:"<digest>"}`.
+The digest hashes canonical inventory JSON: recursively sorted object keys,
+compact comma/colon separators, UTF-8, no trailing newline. The runner checks
+the complete inventory and source HEAD again after cleanup before adding this
+binding. A changed build or HEAD fails the run; source dirt observed at either
+boundary stays recorded. Existing report schema, three-entry `build` hashes,
+rows and mode-specific outcome meanings remain available.
+
+The matching Frontend Development `target_evidence.py verify-t7` command takes
+the exact final `report.json`, inventory and quiescent build tree. The target
+record's artifact SHA is the canonical inventory digest; its harness report SHA
+is the SHA-256 of the exact report bytes, including the newline. Combined stdout
+logs and command receipts are not report files. Old reports without
+`buildIdentity` cannot satisfy that command.
+
+This identifies the complete compiled app payload and its package metadata.
+It does not hash Electron/OS binaries, dependency installations, services,
+fixtures or captures, nor prove source-to-build provenance. Build the exact
+clean candidate immediately before native acceptance, retain its compiled
+files, and keep them quiescent during both execution and verification.
+A matching subset of T7 rows never upgrades overall T7 acceptance or HQ-07.
