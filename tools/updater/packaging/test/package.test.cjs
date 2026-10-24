@@ -314,6 +314,36 @@ function productionContext(overrides = {}) {
   return { repository: REPOSITORY.name, repositoryId: REPOSITORY.id, ownerId: REPOSITORY.ownerId, event: 'push', ref: 'refs/heads/main', sourceSha: 'a'.repeat(40), mainSha: 'a'.repeat(40), workflowSha: 'a'.repeat(40), workflowRef: `${REPOSITORY.name}/${WORKFLOW}@refs/heads/main`, runId: '17', runAttempt: '1', enabled: 'true', defaultBranch: 'main', ...overrides };
 }
 
+test('enabled main push reaches the guarded signed publication graph; disabled and advisory events do not publish', () => {
+  const { runInNewContext } = require('node:vm');
+  const workflow = fs.readFileSync(path.resolve(__dirname, '../../../../.github/workflows/hq-desktop-package.yml'), 'utf8');
+  const push = workflow.match(/^  push:\n([\s\S]*?)(?=^  \S)/m)?.[1];
+  assert.ok(push, 'push trigger is required for production release');
+  const branches = push.match(/branches:\s*\[([^\]]+)\]/)?.[1].split(',').map(s => s.trim()) ?? [];
+  assert.ok(branches.includes('main'), 'the signed release graph must be reachable from a main push');
+  const conditions = Object.fromEntries(['package', 'developer-id', 'attest', 'publish'].map(job => {
+    const expression = workflow.match(new RegExp(`^  ${job}:\\n    if: (.+)$`, 'm'))?.[1];
+    assert.ok(expression, `missing ${job} condition`);
+    return [job, expression.replace(/^\$\{\{\s*|\s*\}\}$/g, '').replace(/\.labels\.\*\.name/g, '.labels.map(label => label.name)')];
+  }));
+  function graph(event, enabled, ref = 'refs/heads/main') {
+    const context = {
+      github: { event_name: event, ref, repository: REPOSITORY.name, event: { repository: { default_branch: 'main' }, pull_request: { draft: false, labels: [] } } },
+      vars: { HQ_SIGNED_RELEASES_ENABLED: enabled }, inputs: { signing: 'developer-id' },
+      needs: { package: { result: 'success' }, 'developer-id': { result: 'success' } },
+      startsWith: (value, prefix) => value.startsWith(prefix), contains: (values, value) => values.includes(value), cancelled: () => false,
+    };
+    return Object.fromEntries(Object.entries(conditions).map(([job, expression]) => [job, Boolean(runInNewContext(expression, context))]));
+  }
+  assert.deepEqual(graph('push', 'true'), { package: true, 'developer-id': true, attest: true, publish: true });
+  assert.equal(assertReleaseContext(productionContext()), 'hq-desktop-signed-17');
+  assert.deepEqual(graph('push', 'false'), { package: false, 'developer-id': false, attest: false, publish: false });
+  assert.deepEqual(graph('schedule', 'true'), { package: true, 'developer-id': false, attest: false, publish: false });
+  assert.deepEqual(graph('workflow_dispatch', 'true'), { package: true, 'developer-id': true, attest: false, publish: false });
+  assert.deepEqual(graph('push', 'true', 'refs/heads/feature'), { package: false, 'developer-id': false, attest: false, publish: false });
+  assert.deepEqual(graph('push', 'true', 'refs/tags/hq-desktop-signed-17'), { package: false, 'developer-id': false, attest: false, publish: false });
+});
+
 test('production release guard preserves disabled defaults and rejects other events, refs, commits and reserved ad-hoc tags', () => {
   assert.equal(assertReleaseContext(productionContext()), 'hq-desktop-signed-17');
   for (const change of [{ enabled: undefined }, { enabled: 'false' }, { event: 'workflow_dispatch' }, { event: 'pull_request' }, { defaultBranch: 'other' }, { ref: 'refs/heads/feature' }, { ref: 'refs/tags/hq-desktop-signed-17' }, { mainSha: 'b'.repeat(40) }, { sourceSha: 'b'.repeat(40) }, { workflowSha: 'b'.repeat(40) }, { repositoryId: 1 }, { ownerId: 1 }]) assert.throws(() => assertReleaseContext(productionContext(change)));
