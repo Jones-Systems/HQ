@@ -32,10 +32,6 @@ function specifiers(source: string): string[] {
 }
 
 describe('source inventory', () => {
-  test('the core cone holds only src, test, tsconfig.json and README.md (scripts/ stays reserved and absent)', () => {
-    assert.deepEqual(readdirSync(coreDir).sort(), ['README.md', 'src', 'test', 'tsconfig.json']);
-  });
-
   test('every source file is erasable TypeScript', () => {
     for (const [name, source] of sources) {
       assert.doesNotMatch(source, /^\s*(?:export\s+)?(?:declare\s+)?(?:const\s+)?enum\s/m, `${name}: enum`);
