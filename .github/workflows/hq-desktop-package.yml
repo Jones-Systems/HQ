@@ -2,10 +2,23 @@ name: HQ desktop package
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [labeled, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/hq-desktop-package.yml'
+      - 'apps/desktop/**'
+      - 'packages/**'
+      - 'modules/**'
+      - 'services/planner/**'
+      - 'tools/updater/**'
+      - 'tools/storage/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'vitest.config.ts'
   push:
-    branches: [main]
     tags: ['hq-desktop-*']
+  schedule:
+    - cron: '23 7 * * *'
   workflow_dispatch:
     inputs:
       signing:
@@ -27,7 +40,7 @@ concurrency:
 
 jobs:
   package:
-    if: (github.event_name == 'pull_request' && !github.event.pull_request.draft) || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && ((startsWith(github.ref, 'refs/tags/hq-desktop-') && !startsWith(github.ref, 'refs/tags/hq-desktop-signed-')) || (github.ref == 'refs/heads/main' && vars.HQ_SIGNED_RELEASES_ENABLED == 'true')))
+    if: (github.event_name == 'pull_request' && !github.event.pull_request.draft && contains(github.event.pull_request.labels.*.name, 'ci/package')) || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hq-desktop-') && !startsWith(github.ref, 'refs/tags/hq-desktop-signed-'))
     strategy:
       fail-fast: false
       matrix:
