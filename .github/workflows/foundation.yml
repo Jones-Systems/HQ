@@ -1,0 +1,42 @@
+name: HQ foundation
+
+on:
+  pull_request:
+    # Keep required signals and full discovery for every base and changed path.
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hq-foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foundation:
+    name: Foundation typecheck, tests and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      # Build once from this checkout; the full Vitest suite consumes its Electron output.
+      - name: Typecheck and build renderer and Electron source
+        run: npm run build
+      - name: Test foundation against the built source
+        run: node_modules/.bin/vitest run
+      - name: Test Wiki with the Node test runner
+        run: npm test --workspace @hq/wiki
+      - name: Test portable acceptance fixtures and storage lifecycle
+        run: node --test --test-concurrency=1 'tests/acceptance/**/*.test.mjs' 'tools/storage/test/**/*.test.mjs'
