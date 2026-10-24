@@ -89,3 +89,7 @@ qualification each need their own exact source/readback evidence.
 M Jones authorized scoped integration successors and their qualified merges on October 24. The delivery targets the relevant source bases for #2/#94/#82/#86/#135/#138/#141/#142; merging this workstream's PRs may advance those source branches. Existing PRs are preserved, with no direct push, merge or closure of them. Foundation-to-main, release, signing, deployment and installation holds remain. #145's Design batching source is not adopted or modified.
 
 This design and the [work note](../work-notes/test-right-sizing-and-ci-efficiency.md) describe separate source populations and measured outcomes. A qualified successor merge does not assemble or install the whole application.
+
+## Portable fixture regression follow-through
+
+The newly required portable tier exposed an incidental 100 ms shared lifecycle fixture budget on foundation `34d73a0`. PR #159 separates ordinary lifecycle setup, which inherits production's existing 5,000 ms budget, from explicit 100 ms deadline/contender contexts. Keep all original deadline, ownership, retention and cleanup assertions; no production or workflow change is required. A controlled delayed-sync regression must fail with the old shared context and pass in complete portable discovery with the repaired context. The work note records the exact failure and qualification separately from the earlier delivery sample. This repair does not advance foundation to main or lift any application/release/cleanup hold.
