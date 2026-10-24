@@ -33,8 +33,26 @@ is native HTTP 400; invalid imports and request-ID reuse are HTTP 422.
 The captures cover reads, all item mutations, settings, atomic batch and dry
 run, exact-byte repeat, revision/order conflicts, a malformed HQ reference,
 an invalid import, retained replay, safe resend, and an indeterminate replay
-with no baseline. Retention eviction and rollback are additionally covered by
-store tests.
+with no baseline. The dry run and the real batch share one request ID, as the
+CLI sends them: a dry run records no request.
+
+After the final state, version and export readback, `28`–`39` capture
+rejections that change no state:
+- item read and mutation `not_found` (404);
+- an invalid HQ target and invalid settings (400);
+- a missing `X-Planning-Request` header (403), a non-JSON content type (415)
+  and an unrecognized Host (421);
+- an oversize declared `Content-Length` (413). The service refuses it before
+  reading a body, so the capture sends none;
+- replay `not_replayable` and an unobserved `sent_after_version` (400), and
+  replay request-ID reuse (422);
+- an unconfirmed replace import (400).
+
+`40`–`42` then capture a merge import, which writes no backup, an examples
+load and its `examples_present` conflict (409). Example dates follow the real
+day, so only their counts are captured. Retention eviction, rollback and
+replace imports, whose backup names use the real clock, are covered by store
+tests.
 
 From `services/planner`, after admission to one serial test process:
 
