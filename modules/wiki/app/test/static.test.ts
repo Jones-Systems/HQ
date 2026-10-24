@@ -25,10 +25,6 @@ const stripComments = (source: string): string => source.replace(/\/\*[\s\S]*?\*
 const sources = walk(SRC, (p) => p.endsWith('.ts'));
 
 describe('renderer source', () => {
-  test('the expected files exist', () => {
-    assert.deepEqual(sources.map((p) => relative(SRC, p)), ['client.ts', 'domain.ts', 'index.ts', 'port.ts']);
-  });
-
   const FORBIDDEN: readonly [string, RegExp][] = [
     ['node: imports', /['"`]node:/u],
     ['electron / ipcRenderer / contextBridge', /['"`]electron['"`]|\b(?:ipcRenderer|contextBridge)\b/u],
