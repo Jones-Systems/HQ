@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { run } from '../src/cli.ts';
 import { periodBounds } from '../src/dates.ts';
 import { harness, state, item, date } from './fixtures.mjs';
+import { info } from './write-fixtures.mjs';
 
 test('now uses Planner timezone across UTC midnight and fall DST, maps full weekday names over 14 calendar days', async () => {
   const h = harness({ '/api/state': state() });
@@ -16,6 +17,27 @@ test('now uses Planner timezone across UTC midnight and fall DST, maps full week
   const small = await run(['planner', 'now', '--days', '3'], spring.deps);
   assert.equal(small.result.data.today, '2026-09-27');
   assert.deepEqual(small.result.data.days.map(d => d.date), ['2026-09-27', '2026-09-28', '2026-09-29']);
+});
+
+test('create resolves planned today using --tz over the Planner timezone across UTC midnight', async () => {
+  const h = harness({
+    '/api/version': info,
+    '/api/state': state(),
+    '/api/items': { item: item({ dates: [date({ value: '2026-11-01' })] }), state_version: 9 },
+  });
+  const { exitCode, result } = await run(['planner', 'items', 'create', '--title', 'Synthetic task', '--planned', 'today', '--tz', 'UTC'], h.deps);
+  assert.equal(exitCode, 0, JSON.stringify(result));
+  assert.equal(result.effect, 'applied');
+  const writes = h.calls.filter(call => call.options.method !== 'GET');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].options.method, 'POST');
+  assert.equal(new URL(writes[0].url).pathname, '/api/items');
+  assert.deepEqual(JSON.parse(writes[0].options.body).fields.dates, [
+    { kind: 'target', precision: 'day', value: '2026-11-01', time: null, end_time: null, tz: null, note: '' },
+  ]);
+  assert.deepEqual(result.data.dates, [
+    { input: 'today', resolved: '2026-11-01', tz: 'UTC', today: '2026-11-01' },
+  ]);
 });
 
 test('board is single, fixed order, with actual areas and active/archive counts', async () => {
