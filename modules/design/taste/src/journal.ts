@@ -58,6 +58,15 @@ function hashInput(record: Omit<JournalRecord, 'hash'>): Uint8Array {
   });
 }
 
+/** Shared record encoding for the file journal and the durable document adapter. */
+export async function createJournalRecord(
+  head: JournalHead, clientEventId: ClientEventId, payload: TasteEvent, recordedAt: string, sha256: Sha256Hex,
+): Promise<JournalRecord> {
+  const unsigned = { v: 1 as const, seq: head.seq + 1, prev: head.hash, clientEventId, recordedAt,
+    payloadDigest: await sha256(canonicalBytes(payload)), payload };
+  return { ...unsigned, hash: await sha256(hashInput(unsigned)) };
+}
+
 /** Verify every line in order and stop at the first fault. Never mutates the bytes. */
 export async function verifyJournalBytes(bytes: Uint8Array, sha256: Sha256Hex): Promise<Verified> {
   const records: JournalRecord[] = [];
@@ -205,8 +214,7 @@ export class TasteJournal {
     if (rejection) return { status: 'rejected', reason: rejection };
 
     const head = this.head;
-    const unsigned = { v: 1 as const, seq: head.seq + 1, prev: head.hash, clientEventId, recordedAt: clock.now(), payloadDigest, payload };
-    const record: JournalRecord = { ...unsigned, hash: await sha256(hashInput(unsigned)) };
+    const record = await createJournalRecord(head, clientEventId, payload, clock.now(), sha256);
     const line = encoder.encode(`${canonicalize(record)}\n`);
 
     let written: number;

@@ -6,3 +6,7 @@ export { TasteJournal, verifyJournalBytes, type OpenJournalOptions, type OpenJou
 export { TasteService, parseExportOptions, parseTasteCommand, type TasteServiceOptions } from './service.ts';
 export { createNodeTasteFileSystem, nodeSha256 } from './node-file-system.ts';
 export { canonicalize } from './jcs.ts';
+export {
+  createProjectTasteContribution, TasteProjectBindingError, TasteUnavailableError, TASTE_DOCUMENT_KEY,
+  type ProjectTasteContribution, type ProjectTasteOptions, type TasteDocumentPort, type TasteJournalDocument,
+} from './project-service.ts';
