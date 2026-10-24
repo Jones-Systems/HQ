@@ -2,7 +2,7 @@
 
 Artifact Type: engineering-spec
 Artifact ID: spec.hq-test-right-sizing-ci
-Purpose: Define the bounded test/CI changes and expose integration prerequisites.
+Purpose: Record the bounded test/CI design, delivered successors and remaining integration prerequisites.
 Decision owner: M Jones
 Consumers: HQ contributors and integration owner
 Authority effect: none
@@ -12,13 +12,13 @@ Authority effect: none
 Main at `bc8202a9731d51922c7cddde91f6ada0074adc1d` contains the dependency-free
 Planner and CLI. Foundation at `b7b8c29dbc0feb73787b98bf926a90c3edfb21ea`
 contains the application and shared CI. Native/package successors #135/#138 and
-#141/#142 remain independently owned. This proposal follows
+#141/#142 remain independently owned. This design follows
 [HQ#50](https://github.com/Jones-Systems/HQ/issues/50); it neither adopts their
 open changes nor releases foundation PR #2's integration hold.
 
-## Main check proposal
+## Fast check placement
 
-After the shared-path assignment is resolved, use the existing
+The owner resolved shared-path assignment through scoped successor authority on October 24. PR #151 updates the existing
 `.github/workflows/cli-planner.yml` identity and existing two check names:
 
 - `CLI Node tests and synthetic Planner E2E`: run the entire CLI discovery with
@@ -35,45 +35,35 @@ must include both source trees, contract fixtures, the workflow and governing
 instructions; global/unknown changes retain full discovery. A skipped path
 must not claim a passing execution.
 
-Declare those fast checks required in the repository's agent instructions once
-the workflow is actually present. Future foundation integration must retain its
-fast foundation and Design checks under the integration owner's existing
-contract. Every other native/nightly/label/package check is advisory for ordinary
+PR #151 declares these fast checks and the Foundation/Design families required in foundation's AGENTS.md. Full discovery across all PR paths/bases is the conservative placement; main-push duplicate runs are removed. Foundation builds once, runs Vitest against that same output, and includes existing portable acceptance/storage cases. Future foundation integration must retain the declared contract. Every other native/nightly/label/package check is advisory for ordinary
 source merges; package/release/install claims still require their corresponding
-qualification. No branch-protection or ruleset changes are proposed.
+qualification. No branch-protection or ruleset changes are made.
 
 Use #145's existing Design batching result. Do not create a second batching
 implementation or combine its unmerged source into this work implicitly.
 
-## Native tier proposal
+## Implemented native tier
 
-Use five routine journeys, with direct state-owner readback and persistence:
+PR #156 uses four existing implemented journeys with direct state-owner readback:
 
 | Journey | Distinct native protection |
 | --- | --- |
-| Launch, domain navigation, restart | Real preload/IPC, persisted preferences and no unsolicited work launch. |
-| Work capture and uncertain-write recovery | Actual synthetic Planner, durable receipt/readback and no duplicate or automatic replay. |
-| Social save and reference navigation | Truthful unavailable/unknown outcomes; navigation never dispatches work. |
-| Design project enrollment and preview | Source ownership, last-good state, containment and persistence. |
-| Wiki committed corpus and references | Synthetic Git corpus, provenance, owner readback and truthful unavailable state. |
+| Launch, domain navigation, restart | Real preload/IPC, isolation/CSP and persisted appearance/domain. |
+| Work capture and uncertain-write recovery | Real synthetic Planner commits once despite response loss; explicit lookup, no automatic replay. |
+| Work restart without replay | Confirmed item/version survives actual Planner/Electron restart; no post-restart mutations. |
+| Gallery enrollment and last good | Main-owned exact-byte/digest state, retained snapshot across restart/failure and removal without corpus deletion. |
 
-Run native qualification nightly or explicitly by label/dispatch from the
-integration-owned source base. Ordinary pull requests must not automatically
-consume macOS packaging runners. Keep detailed failure matrices in cheaper
-tests and distinct-host checks on the manual release checklist unless transport
-is the changed claim. A journey qualifies with one actual target-host passing
-run; record subsequent first-attempt failures without retrying to green.
+The initial five-journey proposal included Social saves/references, Wiki references and live preview. Those native scenarios are not implemented on the authorized source base, so they remain explicit release obligations. Mounting their domains does not certify them. No new product behavior is added to manufacture a pass.
 
-Foundation's acceptance aggregator has twelve reserved rows. A routine
-five-journey cap does not erase them or turn a partial checkpoint into final
-acceptance. Preserve unresolved product obligations and release holds explicitly.
-Shrink the raw CDP harness only after tracing which selected journeys require
-each helper; keep process ownership, failure evidence and cleanup guarantees.
+Run the four-journey tier nightly or by explicit label/dispatch on Linux. PR CI does not automatically consume macOS runners. Keep detailed failure matrices in cheaper tests and distinct-host checks on the manual release checklist unless transport is the changed claim. Missing prerequisites and any observed failure return nonzero; do not retry to green.
+
+The twelve original reserved rows and source-specific HQ-07/HQ-09/HQ-09H obligations remain visible. Routine success means exactly its named subset. Full acceptance cannot pass a missing, held or unimplemented row; selected mode still executes the held HQ-07 edge. All current process ownership, environment isolation, build identity, first-failure evidence, cleanup and peer-survival protection remain.
+
+The unused scripted mutation/replay simulator and its three helper tests are removed with that implementation. Read-only shell fixtures reject mutations/unknown routes; actual Work journeys use the real owned Planner. The complete acceptance JavaScript inventory shrinks by 70 lines after adding the final review's zero-passive-mutation oracle; production modules excluding tests shrink by 52 lines. No framework or dependency is added. The observed clean Linux candidate passed all four journeys in 4.970 seconds; see the work note for exact revision and build identity. Schedules activate only after eventual default-branch promotion.
 
 ## Package disposition
 
-Demote routine desktop packaging/native smoke to advisory, nightly or explicit
-label/dispatch, with justified path filters if any PR trigger remains. Keep
+PR #155 demotes routine desktop packaging to advisory nightly, relevant-path PRs with the ci/package label, explicit dispatch, or the existing release-tag route. Ordinary main pushes skip packaging. The existing explicitly enabled canonical-main push exception remains reachable for the separately gated signed-release graph; no activation or release authority is changed. Keep
 both architectures only where release support requires them. Preserve resource
 admission, process-inventory completeness, signing and release trust boundaries.
 Do not repair by loosening readiness, adding retries or suppressing cleanup
@@ -93,3 +83,9 @@ assertions, job execution minutes versus billed minutes, and true push-to-green
 versus workflow-created completion proxies. An unmerged or unexecuted proposal
 is not an after measurement. Required checks, merges, native runs and installed
 qualification each need their own exact source/readback evidence.
+
+## Scoped integration boundary
+
+M Jones authorized scoped integration successors and their qualified merges on October 24. The delivery targets the relevant source bases for #2/#94/#82/#86/#135/#138/#141/#142; merging this workstream's PRs may advance those source branches. Existing PRs are preserved, with no direct push, merge or closure of them. Foundation-to-main, release, signing, deployment and installation holds remain. #145's Design batching source is not adopted or modified.
+
+This design and the [work note](../work-notes/test-right-sizing-and-ci-efficiency.md) describe separate source populations and measured outcomes. A qualified successor merge does not assemble or install the whole application.
