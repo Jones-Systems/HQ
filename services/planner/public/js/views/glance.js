@@ -71,7 +71,7 @@ export function renderGlance(root, ctx) {
       if (item.status === 'active') trailing.append(h('span', { class: 'chip chip-status st-active', text: 'Active' }));
       trailing.append(motivationPill(item.motivation) || '');
       const step = item.next_steps.find((s) => !s.done);
-      list.append(itemRow(item, ctx, { trailing, sub: step ? `Next: ${step.text}` : null }));
+      list.append(itemRow(item, ctx, { trailing, sub: step ? `Next: ${step.text}` : null, scope: 'now' }));
     }
     nowPanel.append(list);
     if (now.length > 8) nowPanel.append(moreLink(`${now.length - 8} more on the board`, () => ctx.go('board')));
@@ -86,7 +86,7 @@ export function renderGlance(root, ctx) {
   if (buckets.overdue.length) {
     const group = h('div', { class: 'agenda-group is-overdue' }, h('div', { class: 'agenda-day', text: 'Overdue' }));
     for (const { item, entry } of buckets.overdue) {
-      group.append(itemRow(item, ctx, { trailing: dateChip(entry, 'overdue', today) }));
+      group.append(itemRow(item, ctx, { trailing: dateChip(entry, 'overdue', today), scope: `overdue:${entry.id}` }));
     }
     agenda.append(group);
   }
@@ -100,12 +100,12 @@ export function renderGlance(root, ctx) {
         h('div', { class: 'agenda-day' }, label, h('span', { class: 'agenda-rel', text: start === today || start === addDays(today, 1) ? '' : relativeDays(today, start) })));
       agenda.append(group);
     }
-    group.append(itemRow(item, ctx, { trailing: dateChip(entry, dateState(entry, today, true), today) }));
+    group.append(itemRow(item, ctx, { trailing: dateChip(entry, dateState(entry, today, true), today), scope: `day:${entry.id}` }));
   }
   const periods = currentPeriodEntries(open, today);
   if (periods.length) {
     const g = h('div', { class: 'agenda-group is-period' }, h('div', { class: 'agenda-day', text: `${monthName(month)} & this quarter — no set day` }));
-    for (const { item, entry } of periods) g.append(itemRow(item, ctx, { trailing: dateChip(entry, 'current', today) }));
+    for (const { item, entry } of periods) g.append(itemRow(item, ctx, { trailing: dateChip(entry, 'current', today), scope: `period:${entry.id}` }));
     agenda.append(g);
   }
   if (!agenda.childNodes.length) {
@@ -119,7 +119,7 @@ export function renderGlance(root, ctx) {
   const inboxPanel = panel('Inbox', { iconName: 'inbox', count: buckets.inbox.length, cls: 'panel-inbox' });
   if (buckets.inbox.length) {
     const list = h('div', { class: 'rows' });
-    for (const item of buckets.inbox.slice(0, 6)) list.append(itemRow(item, ctx, { trailing: motivationPill(item.motivation) }));
+    for (const item of buckets.inbox.slice(0, 6)) list.append(itemRow(item, ctx, { trailing: motivationPill(item.motivation), scope: 'inbox' }));
     inboxPanel.append(list);
     inboxPanel.append(moreLink('Sort in Review', () => ctx.go('review')));
   } else {
@@ -145,8 +145,8 @@ export function renderGlance(root, ctx) {
   const recent = [...items].sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1)).slice(0, 5);
   const recentPanel = panel('Recently changed', { iconName: 'history', cls: 'panel-recent' });
   const rl = h('div', { class: 'rows' });
-  for (const item of recent) rl.append(itemRow(item, ctx, { trailing: h('span', { class: 'muted', text: ago(item.updated_at) }) }));
-  recentPanel.append(rl);
+  for (const item of recent) rl.append(itemRow(item, ctx, { trailing: h('span', { class: 'muted', text: ago(item.updated_at) }), scope: 'recent' }));
+  recentPanel.append(recent.length ? rl : quiet('Nothing matches the filters.', 'Clear a filter to see recent changes.'));
   grid.append(recentPanel);
 
   root.append(grid);

@@ -32,6 +32,8 @@ let historyOpen = false;
 export function mountDetail(el, ctx) {
   panel = el;
   ctxRef = ctx;
+  // Focus target of last resort when a re-render removes the focused control.
+  panel.tabIndex = -1;
 }
 
 export function detailOpenId() {
@@ -78,6 +80,7 @@ export function renderDetail(id, ctx) {
   const wasOpen = currentId === id;
   currentId = id;
   signature = sig;
+  const focusInPanel = panel.contains(document.activeElement) && document.activeElement !== panel;
   const focus = captureFocus();
   const scroll = panel.querySelector('.detail-scroll')?.scrollTop || 0;
   build(item, ctx);
@@ -85,6 +88,7 @@ export function renderDetail(id, ctx) {
   document.body.classList.add('detail-open');
   if (focus) restoreFocus(focus);
   else if (!wasOpen) panel.querySelector('.detail-title')?.focus({ preventScroll: true });
+  else if (focusInPanel) panel.focus({ preventScroll: true });
   const sc = panel.querySelector('.detail-scroll');
   if (sc && wasOpen) sc.scrollTop = scroll;
 }
@@ -97,7 +101,10 @@ function captureFocus() {
 
 function restoreFocus({ key, start, end }) {
   const el = panel.querySelector(`[data-field="${CSS.escape(key)}"]`);
-  if (!el) return;
+  if (!el) {
+    panel.focus({ preventScroll: true });
+    return;
+  }
   el.focus({ preventScroll: true });
   if (typeof start === 'number' && el.setSelectionRange) {
     try { el.setSelectionRange(start, end); } catch { /* not a text control */ }
@@ -200,10 +207,10 @@ function build(item, ctx) {
 
   // Header
   const head = h('header', { class: 'detail-head' },
-    button('Close details', { icon: 'x', iconOnly: true, kind: 'ghost', onClick: () => ctx.closeItem(), attrs: { 'data-detail-close': '' } }),
+    button('Close details', { icon: 'x', iconOnly: true, kind: 'ghost', onClick: () => ctx.closeItem(), attrs: { 'data-detail-close': '', dataset: { field: 'close' } } }),
     h('span', { class: ['detail-save', isPending(item.id) && 'is-saving'], role: 'status', text: isPending(item.id) ? 'Saving…' : offline ? 'Offline — read only' : 'All changes saved' }),
     h('div', { class: 'detail-head-actions' },
-      button('More actions', { icon: 'more', iconOnly: true, kind: 'ghost', onClick: (e) => moreMenu(item, e.currentTarget) })));
+      button('More actions', { icon: 'more', iconOnly: true, kind: 'ghost', onClick: (e) => moreMenu(item, e.currentTarget), attrs: { dataset: { field: 'more' } } })));
   root.append(head);
 
   const scroll = h('div', { class: 'detail-scroll' });
@@ -245,11 +252,13 @@ function build(item, ctx) {
   scroll.append(h('div', { class: 'detail-title-row' }, h('span', { class: 'detail-kind' }, icon(KINDS.find((k) => k.id === item.kind)?.icon || 'idea', { size: 20 })), title));
 
   // Status chips
-  const statusRow = h('div', { class: 'status-picker', role: 'radiogroup', 'aria-label': 'Status' });
+  // Toggle buttons rather than radios: each is its own tab stop and there is
+  // no arrow-key roving, which the radio pattern would promise.
+  const statusRow = h('div', { class: 'status-picker', role: 'group', 'aria-label': 'Status' });
   for (const s of STATUSES) {
     const on = item.status === s.id;
     statusRow.append(h('button', {
-      type: 'button', role: 'radio', 'aria-checked': String(on), disabled: offline,
+      type: 'button', 'aria-pressed': String(on), disabled: offline, dataset: { field: `status:${s.id}` },
       class: ['status-option', `st-${s.id}`, on && 'is-selected'], title: s.hint,
       on: { click: () => { if (!on) moveItem(getItem(item.id), s.id, { place: 'top' }).catch(() => {}); } },
     }, h('span', { class: 'st-dot', 'aria-hidden': 'true' }), s.label));
@@ -276,6 +285,7 @@ function build(item, ctx) {
   const dates = h('section', { class: 'detail-section' });
   dates.append(sectionHead('Dates', 'calendar', button('Add date', {
     icon: 'plus', kind: 'subtle', disabled: offline, onClick: () => openDateEditor({ item: getItem(item.id) }),
+    attrs: { dataset: { field: 'add-date' } },
   })));
   if (!item.dates.length) {
     dates.append(h('p', { class: 'muted small', text: 'No dates. That is fine — unscheduled is a normal state.' }));
@@ -298,6 +308,7 @@ function build(item, ctx) {
       button('Edit date', {
         icon: 'edit', iconOnly: true, kind: 'ghost', disabled: offline,
         onClick: () => openDateEditor({ item: getItem(item.id), entry }),
+        attrs: { dataset: { field: `edit-date:${entry.id}` } },
       }));
     dates.append(row);
   }
@@ -331,7 +342,7 @@ function build(item, ctx) {
   // Meta & history
   const meta = h('section', { class: 'detail-section detail-meta' });
   meta.append(h('p', { class: 'muted small', text: `Created ${ago(item.created_at)} · updated ${ago(item.updated_at)} · revision ${item.revision}` }));
-  const histBtn = button(historyOpen ? 'Hide history' : 'Show history', { icon: 'history', kind: 'ghost', attrs: { 'aria-expanded': String(historyOpen) } });
+  const histBtn = button(historyOpen ? 'Hide history' : 'Show history', { icon: 'history', kind: 'ghost', attrs: { 'aria-expanded': String(historyOpen), dataset: { field: 'history' } } });
   const histHost = h('div', { class: 'history', hidden: !historyOpen });
   histBtn.addEventListener('click', () => {
     historyOpen = !historyOpen;
@@ -367,7 +378,10 @@ function choice(key, options, item, offline, { required = false } = {}) {
     value: item[key],
     onChange: (v) => saveField(item, key, v, { label: CHOICE_LABEL[key], undo: true }),
   });
-  if (offline) control.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  control.querySelectorAll('button').forEach((b) => {
+    b.dataset.field = `${key}:${b.dataset.value}`;
+    if (offline) b.disabled = true;
+  });
   return control;
 }
 
@@ -402,7 +416,7 @@ function stepsSection(item, offline) {
   item.next_steps.forEach((step, index) => {
     const key = `step:${step.id}`;
     const check = h('input', {
-      type: 'checkbox', checked: step.done, disabled: offline, 'aria-label': `Done: ${step.text}`,
+      type: 'checkbox', checked: step.done, disabled: offline, 'aria-label': `Done: ${step.text}`, dataset: { field: `step-done:${step.id}` },
       on: {
         change: () => {
           const steps = getItem(item.id).next_steps.map((s) => (s.id === step.id ? { ...s, done: check.checked } : s));
@@ -535,7 +549,7 @@ function referencesSection(item, offline) {
       : h('span', { class: 'ref-label', text: ref.label });
     list.append(h('li', { class: 'ref' },
       h('span', { class: 'ref-kind', text: REFERENCE_LABEL[ref.kind] || ref.kind }), label,
-      ref.url && ref.url !== ref.label ? h('span', { class: 'ref-url', text: new URL(ref.url).host }) : '',
+      ref.url && ref.url !== ref.label ? refHost(ref.url) : '',
       button('Remove reference', {
         icon: 'x', iconOnly: true, kind: 'ghost', disabled: offline,
         onClick: () => saveField(item, 'references', getItem(item.id).references.filter((r) => r.id !== ref.id), { label: 'Remove reference', undo: true, message: 'Reference removed.' }),
@@ -562,6 +576,16 @@ function referencesSection(item, offline) {
   return sec;
 }
 
+// Stored URLs passed the server's check but may still be unparseable here
+// (for example a non-numeric port); the host hint is optional.
+function refHost(url) {
+  try {
+    return h('span', { class: 'ref-url', text: new URL(url).host });
+  } catch {
+    return '';
+  }
+}
+
 // ---------------------------------------------------------------- history
 
 async function loadHistory(id, host) {
@@ -579,8 +603,8 @@ async function loadHistory(id, host) {
 }
 
 const STATUS_NAMES = Object.fromEntries(STATUSES.map((s) => [s.id, s.label]));
-function describeHistory(entry) {
-  const d = entry.detail || {};
+export function describeHistory(entry) {
+  const d = entry.detail && typeof entry.detail === 'object' ? entry.detail : {};
   switch (entry.action) {
     case 'created': return d.example ? 'Example item created' : 'Created';
     case 'moved': return `Moved ${STATUS_NAMES[d.changes?.status?.[0]] || ''} → ${STATUS_NAMES[d.changes?.status?.[1]] || ''}`;
@@ -591,12 +615,16 @@ function describeHistory(entry) {
     case 'imported': return 'Imported';
     default: {
       const parts = [];
-      for (const [field, [, to]] of Object.entries(d.changes || {})) {
+      const changes = d.changes && typeof d.changes === 'object' ? d.changes : {};
+      for (const [field, change] of Object.entries(changes)) {
+        // Imported history may carry any JSON here; only [from, to] pairs are described.
+        if (!Array.isArray(change)) continue;
+        const to = change[1];
         parts.push(`${field === 'motivation' ? 'why' : field} → ${field === 'status' ? STATUS_NAMES[to] : (to ?? 'none')}`);
       }
-      const others = (d.fields || []).filter((f) => !(f in (d.changes || {})) && f !== 'dates');
+      const others = (Array.isArray(d.fields) ? d.fields : []).map(String).filter((f) => !(f in changes) && f !== 'dates');
       if (others.length) parts.push(`edited ${others.map((f) => f.replace('_', ' ')).join(', ')}`);
-      if (d.dates?.length) parts.push(...d.dates);
+      if (Array.isArray(d.dates)) parts.push(...d.dates.map(String));
       return parts.join('; ') || 'Updated';
     }
   }
