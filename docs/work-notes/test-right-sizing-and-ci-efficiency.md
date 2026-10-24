@@ -152,7 +152,7 @@ whole-application case total or native pass is inferred. No skip/todo/only
 markers were found in test bodies. Imported Planner tests, Work's upstream
 Planner copies and copied wire fixtures remain excluded.
 
-| Proposed removal | Cases | Category and reason | Surviving coverage |
+| Removal | Cases | Category and reason | Surviving coverage |
 | --- | ---: | --- | --- |
 | `modules/work/skeleton.test.ts` | 2 | Superseded bootstrap exports/mount. | `nav/test/registry.test.tsx` exports and Board/home; `nav/test/domain.test.tsx` six passive destinations. |
 | `modules/social/skeleton.test.ts` | 2 | Trivial dependency and superseded mount. | `nav/test/registry.test.tsx` exports/Overview; `nav/test/domain.test.tsx` passive mount/remount. |
@@ -272,9 +272,9 @@ A local repeat of portable/storage checks exposed the VPS's inherited 0002 umask
 | #153 | Contradictory replay gap | review/hq-main-a7-cli-transport | Merged 330c0e85 |
 | #154 | Duplicate reference inputs | work/hqr-a9-harness-20261020 | Merged f9648bb2 |
 | #155 | Package placement | work/macos-signing-hq-20261022 | Merged 2057eb32 |
-| #156 | Native cap + harness/placement | work/ui-fidelity-t7-macos-20261022 | Bulk-review gap correction and current-head qualification pending |
+| #156 | Native cap + harness/placement | work/ui-fidelity-t7-macos-20261022 | Merged 1a268db3 |
 | #157 | Preserve gated signed-release graph | work/macos-signing-hq-20261022 | Merged 354e7aea |
 
-All performed merges used the exact head guard and kept branches. #152/#153/#154 source bases have no emitted hosted workflows; qualification is the full local real-Planner CLI evidence above, with the #94 TODO debt explicitly preserved. The application successors retain their emitted Foundation/Design checks. Existing PRs #2/#82/#86/#94/#135/#138/#141/#142 remain open and unmerged. No release, installation, signing, main foundation promotion or broader integration has occurred.
+All scoped implementation successors are merged. Every merge used the exact head guard and kept branches. The final native head had all 23 emitted Foundation/Design checks green; its unlabeled native job was advisory/skipped, with actual native execution qualified locally as recorded above. #152/#153/#154 source bases have no emitted hosted workflows; qualification is the full local real-Planner CLI evidence above, with the #94 TODO debt explicitly preserved. The application successors retain their emitted Foundation/Design checks. Existing PRs #2/#82/#86/#94/#135/#138/#141/#142 remain open and unmerged. No release, installation, signing, main foundation promotion or broader integration has occurred.
 
 Later work: integrate the preserved source PRs under HQ#50, activate default-branch schedules through that authorized promotion, land the existing Planner fixes before dropping their TODO markers, qualify packaging and all reserved native/release obligations, and gather a larger queue-inclusive CI sample. These are held application/release obligations rather than hidden passes in this scoped successor delivery.
