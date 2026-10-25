@@ -29,7 +29,8 @@ The compatibility target is the Python 3.13.5 / UCD 15.1.0 producer. This source
 change alone does not qualify parity with that producer, Node 24.19.0, or the actual
 Electron runtime, and makes no compatibility claim for all Python >=3.13 versions.
 Existing well-formed-string and path-limit handling, NFC **input** validation,
-category-C rejection, and route encoding are retained. `String.normalize('NFC')`
-and `/\p{C}/u` still use runtime Unicode data; no pinned normalization or category
-tables are introduced. Their runtime differences require separate qualification.
+and route encoding are retained. Category-C rejection now uses the independently
+pinned Unicode 15.1.0 ranges documented in `unicode-category-c.provenance.md`.
+`String.normalize('NFC')` still uses runtime Unicode data and requires separate
+qualification; no pinned normalization table is introduced.
 There is no new v1 wire field.

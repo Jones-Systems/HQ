@@ -1,4 +1,5 @@
 import { wellFormed } from './canonical-json.js';
+import { containsUnicodeCategoryC } from './unicode-category-c.js';
 import { UNICODE_FULL_FOLD } from './unicode-full-fold.js';
 import { requireGeneration } from './types.js';
 import type { GenerationIdentity } from './types.js';
@@ -14,7 +15,7 @@ export function counter(value: unknown): asserts value is string {
 }
 export function relativePath(value: unknown): asserts value is string {
   requireGeneration(typeof value === 'string' && value.length > 0 && wellFormed(value)
-    && Buffer.byteLength(value, 'utf8') <= 1024 && !value.includes('\\') && !/\p{C}/u.test(value), 'invalid_path');
+    && Buffer.byteLength(value, 'utf8') <= 1024 && !value.includes('\\') && !containsUnicodeCategoryC(value), 'invalid_path');
   const segments = value.split('/');
   requireGeneration(segments.every(part => part !== '' && part !== '.' && part !== '..'), 'invalid_path');
   requireGeneration(segments.length <= 32, 'depth_exceeded');
