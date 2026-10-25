@@ -115,10 +115,16 @@ function stampBundle(bundle, receipt, run = command) {
   for (const name of fs.readdirSync(frameworks).filter(name => /^(?:Electron|HQ|HQ Updater Test) Helper(?: \([A-Za-z]+\))?\.app$/.test(name))) {
     const helper = path.join(frameworks, name);
     const helperPlist = path.join(helper, 'Contents/Info.plist');
-    const oldName = run('/usr/bin/plutil', ['-extract', 'CFBundleExecutable', 'raw', '-o', '-', helperPlist]).trim();
+    const metadata = JSON.parse(run('/usr/bin/plutil', ['-convert', 'json', '-o', '-', helperPlist]));
+    // Electron 44.9.0 helpers omit CFBundleExecutable; their binary matches the bundle name.
+    const oldName = name.slice(0, -4);
+    if (!metadata || metadata.CFBundleName !== oldName || (Object.hasOwn(metadata, 'CFBundleExecutable') && metadata.CFBundleExecutable !== oldName)) throw new Error('Unexpected Electron helper identity');
+    const oldPath = path.join(helper, 'Contents/MacOS', oldName);
+    const executable = fs.lstatSync(oldPath);
+    if (!executable.isFile() || !(executable.mode & 0o100)) throw new Error('Electron helper must be a regular executable');
     const suffix = / Helper(.*)\.app$/.exec(name)[1];
     const nextName = `${identity.productName} Helper${suffix}`;
-    if (oldName !== nextName) fs.renameSync(path.join(helper, 'Contents/MacOS', oldName), path.join(helper, 'Contents/MacOS', nextName));
+    if (oldName !== nextName) fs.renameSync(oldPath, path.join(helper, 'Contents/MacOS', nextName));
     for (const [key, value] of Object.entries({ CFBundleName: nextName, CFBundleDisplayName: nextName, CFBundleExecutable: nextName, CFBundleIdentifier: `${identity.bundleId}.helper${suffix.replace(/[^a-z]/gi, '').toLowerCase()}` })) plistSet(helperPlist, key, value, run);
     if (name !== `${nextName}.app`) fs.renameSync(helper, path.join(frameworks, `${nextName}.app`));
   }
