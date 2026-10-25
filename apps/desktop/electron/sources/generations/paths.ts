@@ -1,4 +1,5 @@
 import { wellFormed } from './canonical-json.js';
+import { UNICODE_FULL_FOLD } from './unicode-full-fold.js';
 import { requireGeneration } from './types.js';
 import type { GenerationIdentity } from './types.js';
 
@@ -20,19 +21,10 @@ export function relativePath(value: unknown): asserts value is string {
   requireGeneration(value.normalize('NFC') === value, 'noncanonical_path');
 }
 
-// Repeated Unicode casing catches expansions such as capital sharp S. JavaScript
-// has no full-casefold API; parity with the publisher's Unicode tables is unqualified.
+// Unicode 15.1.0 default full folding: map each input scalar once, without
+// normalizing the output. See unicode-full-fold.provenance.md for qualification limits.
 export function collisionKey(value: string): string {
-  return Array.from(value, char => {
-    if (char === '\u0131') return char;
-    let folded = char;
-    for (let pass = 0; pass < 4; pass++) {
-      const next = folded.toUpperCase().toLowerCase();
-      if (next === folded) break;
-      folded = next;
-    }
-    return folded;
-  }).join('');
+  return Array.from(value, char => UNICODE_FULL_FOLD[char.codePointAt(0)!] ?? char).join('');
 }
 export function pathSet(values: readonly unknown[]): void {
   const seen = new Set<string>();
