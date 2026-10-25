@@ -8,6 +8,7 @@ import { addVersion, addView } from '../../../projects/src/content.ts';
 import { projectId, versionId, viewId } from '../../../projects/src/ids.ts';
 import { contentKey, ProjectContentRepository } from '../../../projects/src/repository.ts';
 import { createCompareStorage, createProjectsStorage } from '../../storage/index.ts';
+import { PROJECTS_KEY_ROOT } from '../../storage/section-documents.ts';
 import { createBridgeWorkspaceDocuments } from '../bridge-documents.ts';
 import { createBridgedWorkspace } from '../bridged-workspace.ts';
 import { createProjectCompareCatalog } from '../compare-catalog.ts';
@@ -21,6 +22,7 @@ const second = versionId('version-second');
 const digest = `sha256:${'a'.repeat(64)}`;
 const viewport = { w: 320, h: 640, dpr: 1 };
 const clock = { now: () => '2026-01-01T00:00:00Z' };
+const physicalContentKey = (id: ReturnType<typeof projectId>) => PROJECTS_KEY_ROOT + contentKey(id);
 
 async function fixture() {
   const double = createTransportDouble();
@@ -70,7 +72,7 @@ describe('project-bound Compare catalog', () => {
     const calls = double.calls.slice(start);
     assert.ok(calls.every((call) => call.route === 'doc.get'));
     assert.ok(calls.every((call) => call.params && 'key' in call.params
-      && [contentKey(projectId(alpha.id)), contentKey(projectId(beta.id))].includes(call.params.key)));
+      && [physicalContentKey(projectId(alpha.id)), physicalContentKey(projectId(beta.id))].includes(call.params.key)));
   });
 
   it('sees appended versions on later reads without rebinding an earlier exact version or accepting moving aliases', async () => {
@@ -94,13 +96,14 @@ describe('project-bound Compare catalog', () => {
     const empty = createProjectCompareCatalog(repository, projectId('project-empty'));
     assert.deepEqual(await empty.listViews(compareProjectId('project-empty')), []);
     assert.equal(await empty.getVersion(compareVersionId(first)), null);
-    const betaDocument = (await documents.getDocument(contentKey(projectId(beta.id))))!;
+    const betaDocument = await documents.getDocument(physicalContentKey(projectId(beta.id)));
+    assert.ok(betaDocument, 'the foreign-project fixture exists');
     for (const [value, reason] of [
       [{ schema: 'hq.design.project-content/v99' }, 'unsupported-schema'],
       [{ schema: 'hq.design.project-content/v1' }, 'invalid'],
       [betaDocument.value, 'invalid'],
     ] as const) {
-      await documents.putDocument(contentKey(projectId(alpha.id)), value);
+      await documents.putDocument(physicalContentKey(projectId(alpha.id)), value);
       const writes = double.calls.filter((call) => call.route === 'doc.put').length;
       await assert.rejects(catalog.getVersion(compareVersionId(first)), new RegExp(reason));
       await assert.rejects(catalog.listVersions(compareViewId(view)), new RegExp(reason));
@@ -110,7 +113,8 @@ describe('project-bound Compare catalog', () => {
 
   it('honors cancellation before I/O and after a noncancellable document read returns', async () => {
     const { documents } = await fixture();
-    const stored = await documents.getDocument(contentKey(projectId(alpha.id)));
+    const stored = await documents.getDocument(physicalContentKey(projectId(alpha.id)));
+    assert.ok(stored, 'the cancellation fixture exists');
     let reads = 0;
     let finish!: (value: typeof stored) => void;
     const repository = new ProjectContentRepository(createProjectsStorage({ ...documents, getDocument() {

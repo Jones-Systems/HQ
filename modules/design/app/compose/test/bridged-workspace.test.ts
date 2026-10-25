@@ -32,7 +32,7 @@ function fixture(payload: unknown = png) {
 describe('bridged workspace thumbnails', () => {
   it('reads saved version bytes through the production document bridge, verifies them, and survives recomposition', async () => {
     const { double, documents, workspace } = fixture();
-    assert.deepEqual(double.calls, [], 'construction performs no I/O');
+    assert.equal(double.calls.length, 0, 'construction performs no I/O');
     const env = await workspace.contentFor(project);
     assert.deepEqual(double.calls.map((call) => call.route), ['doc.get'], 'opening empty content never seeds it');
     await env.repository.update(env.content.projectId, (content, now) => addVersion(
