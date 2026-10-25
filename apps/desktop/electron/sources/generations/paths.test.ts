@@ -41,3 +41,10 @@ it('validates NFC input without normalizing the full-fold output', () => {
   for (const path of ['\ud800', '\udc00', 'a\0b', 'a\u200db', '\ue000', '\u0378'])
     expect(() => relativePath(path)).toThrow('invalid_path');
 });
+it('pins category-C admission to Unicode 15.1 even when the runtime assigns newer characters', () => {
+  // U+088F and U+1C89 are explicitly Cn in Unicode 15.1 DerivedGeneralCategory.txt.
+  for (const character of ['\u088f', '\u1c89', '\u0085', '\u200d', '\ue000', '\u{f0000}', '\u{10fffd}', '\u{10ffff}'])
+    expect(() => relativePath(`files/${character}.txt`)).toThrow('invalid_path');
+  for (const path of ['plain/readme.txt', '写真/一.png', 'résumé.txt', '\u088e', '\u1c88', '\u{1f600}'])
+    expect(() => relativePath(path)).not.toThrow();
+});
