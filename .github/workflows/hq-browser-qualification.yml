@@ -26,7 +26,6 @@ jobs:
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       PYTHONDONTWRITEBYTECODE: '1'
-      HQ_BROWSER_ROOT: ${{ runner.temp }}/hq-browser-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Check out actual candidate (PR merge SHA)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,7 +44,8 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          root="$HQ_BROWSER_ROOT"
+          root="$RUNNER_TEMP/hq-browser-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          printf 'HQ_BROWSER_ROOT=%s\n' "$root" >> "$GITHUB_ENV"
           helper=apps/desktop/scripts/browser-qualification/native.py
           test ! -e "$root"
           test ! -L "$root"
