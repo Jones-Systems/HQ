@@ -3,7 +3,7 @@ name: HQ Design sections
 # Lane-inclusive checks for the assembled Design cones, composition entry and storage seam. Root `npm test` and
 # `npm run typecheck` cover the foundation only, so the foundation check does not
 # evidence any Design cone. Every cone below runs its own typecheck, node:test and
-# Vitest commands, mirroring modules/design/preview/section-checks.sh.
+# Vitest commands from the authoritative inventory below.
 #
 # A consumer-owned workflow: no central reusable workflow fits (Jones-Systems/GitHub-Actions
 # provides Python/uv workflows only), and its commands are specific to this repository.
@@ -13,6 +13,12 @@ on:
   push:
     branches: [work/hq-design-integration, work/hq-design-plan, main]
   workflow_dispatch:
+    inputs:
+      batch_count:
+        description: Number of Design batches for same-source timing comparisons
+        type: choice
+        default: '1'
+        options: ['1', '2', '4', '20']
 
 permissions:
   contents: read
@@ -68,14 +74,22 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      sections: ${{ steps.inventory.outputs.sections }}
+      batches: ${{ steps.inventory.outputs.batches }}
     steps:
       - name: Check out candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Use Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+      - name: Check Design batch runner
+        run: node --test tools/ci/design-sections.test.mjs
       - name: Require every cone and assign each test file to exactly one runner
         id: inventory
+        env:
+          HQD_BATCH_COUNT: ${{ inputs.batch_count || '1' }}
         run: |
           set -euo pipefail
           shopt -s globstar nullglob
@@ -195,24 +209,21 @@ jobs:
 
           if [ "$fail" -ne 0 ]; then echo "::error::Design section inventory failed"; exit 1; fi
           joined=$(IFS=,; echo "${matrix[*]}")
-          echo "sections=[$joined]" >> "${GITHUB_OUTPUT:-/dev/stdout}"
+          HQD_SECTIONS="[$joined]" node tools/ci/design-sections.mjs plan
 
   section:
-    name: Design section (${{ matrix.id }})
+    name: Design batch (${{ matrix.id }})
     needs: inventory
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.inventory.outputs.sections) }}
+        include: ${{ fromJSON(needs.inventory.outputs.batches) }}
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      SECTION_DIR: ${{ matrix.dir }}
-      NODE_CWD: ${{ matrix.nodeCwd }}
-      NODE_GLOB: ${{ matrix.nodeGlob }}
-      VITEST_CONFIG: ${{ matrix.vitestConfig }}
-      VITE_BUILD_CONFIG: ${{ matrix.viteBuild }}
+      HQD_SECTIONS: ${{ toJSON(matrix.sections) }}
+      HQD_PREVIEW_CANDIDATE: ${{ github.sha }}
     steps:
       - name: Check out candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -236,26 +247,8 @@ jobs:
           version=$(node_modules/.bin/tsc --version)
           echo "$version"
           [[ "$version" == *7.0.2* ]]
-      - name: Typecheck with the section's own tsconfig
-        run: node_modules/.bin/tsc -p "$SECTION_DIR/tsconfig.json"
-      - name: Node tests
-        if: matrix.nodeGlob != ''
-        run: |
-          set -euo pipefail
-          shopt -s globstar nullglob
-          cd "$NODE_CWD"
-          # shellcheck disable=SC2206
-          files=( $NODE_GLOB )
-          if [ ${#files[@]} -eq 0 ]; then echo "::error::no files match $NODE_GLOB in $NODE_CWD"; exit 1; fi
-          node --test --test-concurrency=1 "${files[@]}"
-      - name: Vitest
-        if: matrix.vitestConfig != ''
-        run: node_modules/.bin/vitest run --config "$VITEST_CONFIG"
-      - name: Build
-        if: matrix.viteBuild != ''
-        env:
-          HQD_PREVIEW_CANDIDATE: ${{ github.sha }}
-        run: node_modules/.bin/vite build --config "$VITE_BUILD_CONFIG"
+      - name: Run every assigned section
+        run: node tools/ci/design-sections.mjs run
       - name: Remove job scratch
         if: always()
         run: |
