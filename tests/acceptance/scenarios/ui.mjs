@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 export function uiDriver(context) {
   const evaluate = expression => context.cdp().evaluate(expression);
   async function click(text, scope = 'body') {
-    const expression = `(() => { const root = document.querySelector(${JSON.stringify(scope)}); const buttons = [...(root?.querySelectorAll('button') ?? [])].filter(b => (b.getAttribute('aria-label') ?? b.textContent.trim()) === ${JSON.stringify(text)} && !b.disabled); if (buttons.length !== 1) return false; buttons[0].scrollIntoView({block:'center'}); buttons[0].click(); return true; })()`;
-    await context.until(() => evaluate(`(() => { const root = document.querySelector(${JSON.stringify(scope)}); return [...(root?.querySelectorAll('button') ?? [])].filter(b => (b.getAttribute('aria-label') ?? b.textContent.trim()) === ${JSON.stringify(text)} && !b.disabled).length === 1; })()`), `unique enabled ${text}`);
-    assert.equal(await evaluate(expression), true);
+    const candidates = `const root = document.querySelector(${JSON.stringify(scope)}); const buttons = [...(root?.querySelectorAll('button') ?? [])].filter(b => (b.getAttribute('aria-label') ?? b.textContent.trim()) === ${JSON.stringify(text)} && !b.disabled);`;
+    await context.until(() => evaluate(`(() => { ${candidates} return buttons.length === 1; })()`), `unique enabled ${text}`);
+    assert.equal(await evaluate(`(() => { ${candidates} if (buttons.length !== 1) return false; buttons[0].scrollIntoView({block:'center'}); buttons[0].click(); return true; })()`), true);
   }
   async function fill(label, value) {
     const found = await evaluate(`(() => { const labels = [...document.querySelectorAll('label')].filter(l => l.textContent.trim() === ${JSON.stringify(label)}); if (labels.length !== 1) return false; const input = labels[0].control ?? labels[0].querySelector('input'); if (!input || input.disabled) return false; input.scrollIntoView({block:'center'}); input.focus(); input.select(); return true; })()`);
