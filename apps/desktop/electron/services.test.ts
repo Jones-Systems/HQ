@@ -220,3 +220,102 @@ it('Social saveContent allows only a null or exact-shaped planning slot on the e
   }
   expect(JSON.parse(encodeSocial('saveContent', draft)!.body!)).not.toHaveProperty('planning_slot');
 });
+
+describe('Social draft reference transport', () => {
+  const draft = { title: 'Linked draft', body: '', brand_id: 'default', channel: 'X', planned_date: '', archived: 0 };
+  const reference = (entityId = 'view-alpha') => ({
+    version: 1, domain: 'design', projectId: 'project-alpha', kind: 'view', entityId, title: 'Saved view',
+    returnDestination: { domain: 'design', destination: 'projects/view-alpha' },
+    sourceRevision: 'revision-one', workspaceId: 'workspace-origin',
+  });
+
+  it('preserves legacy omission, explicit clearing, optimistic versions and planning slots', () => {
+    const legacy = encodeSocial('saveContent', draft)!;
+    expect(JSON.parse(legacy.body!)).toEqual(draft);
+    expect(legacy.body).not.toContain('"links"');
+    for (const links of [[], [reference()], Array.from({ length: 30 }, (_, n) => reference(`view-${n}`))]) {
+      const params = { ...draft, id: 'draft12', version: 0, planning_slot: null, links };
+      const encoded = encodeSocial('saveContent', params)!;
+      expect(encoded).toMatchObject({ method: 'POST', path: '/api/content', loss: 'unknown' });
+      expect(JSON.parse(encoded.body!)).toEqual(params);
+    }
+  });
+
+  it('uses the existing envelope contract for every domain and optional provenance', () => {
+    for (const domain of ['design', 'social', 'work', 'wiki']) {
+      const { sourceRevision: _revision, workspaceId: _workspace, ...minimal } = reference();
+      const link = { ...minimal, domain, returnDestination: { domain, destination: 'overview' } };
+      expect(JSON.parse(encodeSocial('saveContent', { ...draft, links: [link] })!.body!).links).toEqual([link]);
+    }
+  });
+
+  it('refuses invalid references and oversized lists before even fetching a CSRF token', async () => {
+    const transport = vi.fn<Transport>();
+    const svc = createServices(config, transport);
+    const ref = reference();
+    const invalid = [
+      null, undefined, {}, 'links', [null], Array(1), Array.from({ length: 31 }, (_, n) => reference(`view-${n}`)),
+      [{ ...ref, version: 2 }], [{ ...ref, domain: 'other' }], [{ ...ref, projectId: '' }],
+      [{ ...ref, entityId: '' }], [{ ...ref, kind: '' }], [{ ...ref, title: ' bad title ' }],
+      [{ ...ref, title: 'x'.repeat(301) }], [{ ...ref, workspaceId: '' }], [{ ...ref, sourceRevision: undefined }],
+      [{ ...ref, extra: true }], [{ ...ref, returnDestination: { domain: 'design', destination: 'https://example.test' } }],
+      [{ ...ref, returnDestination: { domain: 'design', destination: 'projects', token: 'forbidden' } }],
+    ];
+    for (const links of invalid) {
+      const params = { ...draft, links };
+      expect(encodeSocial('saveContent', params)).toBeNull();
+      expect(await svc.social('saveContent', params)).toEqual(unavailable);
+    }
+    expect(encodeSocial('saveContent', { ...draft, links: [], unexpected: true })).toBeNull();
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('keeps canonical nested bytes independent of property insertion order', () => {
+    const ref = reference();
+    const reversed = Object.fromEntries(Object.entries(ref).reverse());
+    reversed.returnDestination = Object.fromEntries(Object.entries(ref.returnDestination).reverse());
+    const params = { ...draft, links: [ref] };
+    const reordered = Object.fromEntries(Object.entries({ ...draft, links: [reversed] }).reverse());
+    expect(encodeSocial('saveContent', reordered)!.body).toBe(encodeSocial('saveContent', params)!.body);
+  });
+
+  it('applies the existing UTF-8 body cap including reference bytes', () => {
+    const params = { ...draft, links: [reference()] };
+    const overhead = Buffer.byteLength(encodeSocial('saveContent', params)!.body!);
+    const atLimit = { ...params, body: 'a'.repeat(LIMITS.social - overhead) };
+    expect(Buffer.byteLength(encodeSocial('saveContent', atLimit)!.body!)).toBe(LIMITS.social);
+    expect(encodeSocial('saveContent', { ...atLimit, body: atLimit.body + 'é' })).toBeNull();
+  });
+
+  it('sends identical link/version bytes through the existing one-time token refresh', async () => {
+    const params = { ...draft, id: 'draft12', version: 3, links: [reference()] };
+    const rejection = ok({ error: 'Reload the workspace before saving' }, 403);
+    const saved = ok({ id: 'draft12', version: 4, links: params.links });
+    const transport = vi.fn<Transport>().mockResolvedValueOnce(ok({ csrf: 'first' }))
+      .mockResolvedValueOnce(rejection).mockResolvedValueOnce(ok({ csrf: 'second' })).mockResolvedValueOnce(saved);
+    expect(await createServices(config, transport).social('saveContent', params)).toEqual(saved);
+    expect(transport.mock.calls.map(([, call]) => [call.method, call.path])).toEqual([
+      ['GET', '/api/workspace'], ['POST', '/api/content'], ['GET', '/api/workspace'], ['POST', '/api/content'],
+    ]);
+    const first = transport.mock.calls[1]![1], retry = transport.mock.calls[3]![1];
+    expect(first.body).toBe(encodeSocial('saveContent', params)!.body);
+    expect(retry.body).toBe(first.body);
+    expect(first.headers['X-Workspace-Token']).toBe('first');
+    expect(retry.headers['X-Workspace-Token']).toBe('second');
+    expect(JSON.parse(first.body!)).not.toHaveProperty('csrf');
+  });
+
+  it('never retries an uncertain save or an optimistic-version conflict carrying links', async () => {
+    const params = { ...draft, id: 'draft12', version: 2, links: [reference()] };
+    const conflict = ok({ error: 'Draft changed', version: 3 }, 409);
+    for (const lost of [true, false]) {
+      const transport = vi.fn<Transport>().mockResolvedValueOnce(ok({ csrf: 'token' }));
+      if (lost) transport.mockRejectedValueOnce(new Error('response lost after POST'));
+      else transport.mockResolvedValueOnce(conflict);
+      expect(await createServices(config, transport).social('saveContent', params))
+        .toEqual(lost ? { ok: false, kind: 'unknown' } : conflict);
+      expect(transport).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(transport.mock.calls[1]![1].body!)).toEqual(params);
+    }
+  });
+});

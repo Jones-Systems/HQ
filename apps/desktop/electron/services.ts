@@ -1,5 +1,6 @@
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { parseReference } from '@hq/contracts';
 import type { ServiceResponse, SocialServiceRoute, WorkServiceRoute, WorkMutationCall } from '@hq/contracts/services';
 import type { ServiceConfig } from './service-config.js';
 
@@ -78,7 +79,8 @@ export function encodeSocial(route: unknown, p: unknown): Encoded | null {
   if (route === 'addBrand' && (!keys(p, ['name']) || typeof p.name !== 'string')) return null;
   if (route === 'submitRun' && (!keys(p, ['tool', 'input', 'is_example']) || typeof p.tool !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(p.tool) || !record(p.input) || typeof p.is_example !== 'boolean')) return null;
   if (route === 'saveContent') {
-    if (!keys(p, ['title', 'body', 'brand_id', 'channel', 'planned_date', 'archived'], ['id', 'version', 'planning_slot']) || !['title', 'body', 'brand_id', 'channel', 'planned_date'].every(k => typeof p[k] === 'string') || !/^$|^\d{4}-\d{2}-\d{2}$/.test(p.planned_date as string) || (p.archived !== 0 && p.archived !== 1) || (('id' in p || 'version' in p) && (!id(p.id) || !integer(p.version)))) return null;
+    if (!keys(p, ['title', 'body', 'brand_id', 'channel', 'planned_date', 'archived'], ['id', 'version', 'planning_slot', 'links']) || !['title', 'body', 'brand_id', 'channel', 'planned_date'].every(k => typeof p[k] === 'string') || !/^$|^\d{4}-\d{2}-\d{2}$/.test(p.planned_date as string) || (p.archived !== 0 && p.archived !== 1) || (('id' in p || 'version' in p) && (!id(p.id) || !integer(p.version)))) return null;
+    if ('links' in p && (!Array.isArray(p.links) || p.links.length > 30 || p.links.some(link => parseReference(link) === null))) return null;
     if ('planning_slot' in p && p.planning_slot !== null && (!record(p.planning_slot) || !keys(p.planning_slot, ['start', 'duration_minutes', 'timezone']) || typeof p.planning_slot.start !== 'string' || !integer(p.planning_slot.duration_minutes) || typeof p.planning_slot.timezone !== 'string')) return null;
   }
   const body = canonical(p);
