@@ -1,3 +1,4 @@
+import { parseReference } from '@hq/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'node:http';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
@@ -268,6 +269,24 @@ describe('Social draft reference transport', () => {
     }
     expect(encodeSocial('saveContent', { ...draft, links: [], unexpected: true })).toBeNull();
     expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('keeps the isolated main-process guard aligned with the public reference parser', () => {
+    const ref = reference();
+    const candidates: unknown[] = [null, [], {}, ref, { ...ref, returnDestination: null }];
+    for (const key of Object.keys(ref)) {
+      const missing: Record<string, unknown> = { ...ref }; delete missing[key]; candidates.push(missing);
+      for (const value of [null, undefined, 0, 1, 2, false, '', ' ', 'x', ' x', 'x ', 'x\u0000', 'x\u007f', 'x'.repeat(160), 'x'.repeat(161), 'x'.repeat(300), 'x'.repeat(301)]) {
+        candidates.push({ ...ref, [key]: value });
+      }
+    }
+    for (const domain of ['design', 'social', 'work', 'wiki', 'other']) for (const destination of [
+      'overview', '/projects/view', '../view', 'x:y', '//remote', '\\\\remote', ' /view', 'view\u0001', 'x'.repeat(512), 'x'.repeat(513),
+    ]) candidates.push({ ...ref, returnDestination: { domain, destination } });
+    candidates.push({ ...ref, unexpected: true }, { ...ref, returnDestination: { ...ref.returnDestination, unexpected: true } });
+    for (const link of candidates) {
+      expect(encodeSocial('saveContent', { ...draft, links: [link] }) !== null).toBe(parseReference(link) !== null);
+    }
   });
 
   it('keeps canonical nested bytes independent of property insertion order', () => {

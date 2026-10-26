@@ -1,6 +1,5 @@
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { parseReference } from '@hq/contracts';
 import type { ServiceResponse, SocialServiceRoute, WorkServiceRoute, WorkMutationCall } from '@hq/contracts/services';
 import type { ServiceConfig } from './service-config.js';
 
@@ -20,6 +19,16 @@ export function jsonValue(v: unknown, seen = new Set<object>()): boolean {
   seen.add(v);
   const valid = (Array.isArray(v) ? Array.from(v) : Object.values(v)).every(x => jsonValue(x, seen));
   seen.delete(v); return valid;
+}
+// Keep the main-process emit self-contained; services.test.ts checks this guard against parseReference.
+function referenceEnvelope(value: unknown): boolean {
+  const text = (v: unknown, max = 160): v is string => typeof v === 'string' && v.length > 0 && v.length <= max && v.trim() === v && !/[\u0000-\u001f\u007f]/u.test(v);
+  const domain = (v: unknown) => typeof v === 'string' && ['design', 'social', 'work', 'wiki'].includes(v);
+  return record(value) && keys(value, ['version', 'domain', 'projectId', 'kind', 'entityId', 'title', 'returnDestination'], ['sourceRevision', 'workspaceId'])
+    && value.version === 1 && domain(value.domain) && text(value.projectId) && text(value.kind) && text(value.entityId) && text(value.title, 300)
+    && record(value.returnDestination) && keys(value.returnDestination, ['domain', 'destination'])
+    && domain(value.returnDestination.domain) && text(value.returnDestination.destination, 512) && !/^[a-z][a-z\d+.-]*:|^[/\\]{2}/iu.test(value.returnDestination.destination)
+    && (!('sourceRevision' in value) || text(value.sourceRevision, 300)) && (!('workspaceId' in value) || text(value.workspaceId));
 }
 interface Encoded { method: 'GET' | 'POST' | 'PATCH' | 'PUT'; path: string; body?: string; requestId?: string; loss: 'unavailable' | 'unknown' }
 export const WORK_METHODS = { state: 'GET', version: 'GET', item: 'GET', history: 'GET', create: 'POST', patch: 'PATCH', move: 'POST', archive: 'POST', restore: 'POST', reviewed: 'POST', settings: 'PUT', replay: 'POST', export: 'GET' } as const satisfies Record<WorkServiceRoute, string>;
@@ -80,7 +89,7 @@ export function encodeSocial(route: unknown, p: unknown): Encoded | null {
   if (route === 'submitRun' && (!keys(p, ['tool', 'input', 'is_example']) || typeof p.tool !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(p.tool) || !record(p.input) || typeof p.is_example !== 'boolean')) return null;
   if (route === 'saveContent') {
     if (!keys(p, ['title', 'body', 'brand_id', 'channel', 'planned_date', 'archived'], ['id', 'version', 'planning_slot', 'links']) || !['title', 'body', 'brand_id', 'channel', 'planned_date'].every(k => typeof p[k] === 'string') || !/^$|^\d{4}-\d{2}-\d{2}$/.test(p.planned_date as string) || (p.archived !== 0 && p.archived !== 1) || (('id' in p || 'version' in p) && (!id(p.id) || !integer(p.version)))) return null;
-    if ('links' in p && (!Array.isArray(p.links) || p.links.length > 30 || p.links.some(link => parseReference(link) === null))) return null;
+    if ('links' in p && (!Array.isArray(p.links) || p.links.length > 30 || p.links.some(link => !referenceEnvelope(link)))) return null;
     if ('planning_slot' in p && p.planning_slot !== null && (!record(p.planning_slot) || !keys(p.planning_slot, ['start', 'duration_minutes', 'timezone']) || typeof p.planning_slot.start !== 'string' || !integer(p.planning_slot.duration_minutes) || typeof p.planning_slot.timezone !== 'string')) return null;
   }
   const body = canonical(p);
