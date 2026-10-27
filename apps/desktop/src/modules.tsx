@@ -19,7 +19,7 @@ export const { designDomain, designReferenceReads } = createDesignComposition({
   sources: { async list() { const result = await window.hqServices?.sources?.call('list', {}); if (!result?.ok) throw Error('Project sources unavailable'); return result.value; } },
 });
 
-export const DOMAIN_LABELS: Record<DomainId, string> = { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' };
+export { DOMAIN_LABELS } from './domain-metadata';
 
 /** Each domain's independently owned module entry. Design's is built once at module scope (keep-alive chrome state). */
 export const MODULES: Readonly<Record<DomainId, ComponentType<ModulePort>>> = {
