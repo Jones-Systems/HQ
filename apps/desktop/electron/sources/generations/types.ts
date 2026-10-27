@@ -113,3 +113,10 @@ export interface GenerationConsumer {
   manifest(): Promise<GenerationManifest | null>;
   readFile(path: string): Promise<FileResult>;
 }
+
+export interface ServedBinding { bindingRevision: string; origin: string }
+export type ServingState =
+  | { status: 'empty' }
+  | { status: 'active' | 'rebind_pending'; generation: GenerationIdentity; served: ServedBinding }
+  | { status: 'held'; reason: HoldReason; lastGood: GenerationIdentity | null };
+export interface ServingGenerationConsumer extends GenerationConsumer { serving(): Promise<ServingState> }
