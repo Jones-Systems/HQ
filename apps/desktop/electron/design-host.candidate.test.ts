@@ -259,3 +259,49 @@ it('leaves every import route and export route disabled in the emitted productio
     expect(quarantines(f.root)).toEqual([]);
   });
 });
+
+it('defaults the actual emitted opener to disabled Imports and export, including explicit disabled', async () => {
+  const emitted: typeof import('./design-host') = await import(/* @vite-ignore */ pathToFileURL(join(process.cwd(), 'apps/desktop/dist-electron/design-host.js')).href);
+  for (const options of [undefined, { imports: 'disabled' as const }]) {
+    await synthetic(async f => {
+      const save = vi.fn();
+      const host = f.track(createDesignHost(() => emitted.openEmittedDesignStore(f.dir, options), save));
+      expect(await host.ready()).toBe(true);
+      for (const [route, params] of [
+        ['import.commit', { ops: operations() }], ['import.status', {}],
+        ['import.repair', { txnId: 'a'.repeat(64) }], ['storage.diagnostics', {}],
+        ['export.preview', { exportedAt }], ['export.save', { exportedAt }],
+      ] as const) expect(await host.call(route, params)).toEqual(disabled);
+      expect(save).not.toHaveBeenCalled();
+      expect(await host.call('doc.get', { key })).toEqual({ ok: true, value: null });
+      expect(await host.call('event.read', { stream })).toEqual({ ok: true, value: { events: [], status: { state: 'ok' } } });
+      expect(await host.call('blob.has', { digest })).toEqual({ ok: true, value: false });
+      expect(quarantines(join(f.dir, 'design-store'))).toEqual([]);
+    });
+  }
+});
+
+it('explicitly enables the actual emitted opener with T9 exclusion and commit/reopen visibility, keeping export OFF', async () => {
+  const emitted: typeof import('./design-host') = await import(/* @vite-ignore */ pathToFileURL(join(process.cwd(), 'apps/desktop/dist-electron/design-host.js')).href);
+  await synthetic(async f => {
+    const save = vi.fn();
+    const host = f.track(createDesignHost(() => emitted.openEmittedDesignStore(f.dir, { imports: 'enabled' }), save));
+    expect(await host.ready()).toBe(true);
+    expect(await host.call('import.status', {})).toEqual({ ok: true, value: { accepted: true, state: 'enabled' } });
+    await expect((async () => {
+      const unexpected = await emitted.openEmittedDesignStore(f.dir, { imports: 'enabled' });
+      await unexpected.close();
+    })()).rejects.toMatchObject({ code: 'locked' });
+    expect(await host.call('import.commit', { ops: operations() })).toEqual({ ok: true, value: { txnId: expect.stringMatching(/^[a-f0-9]{64}$/) } });
+    await committed(host);
+    expect(await host.call('storage.diagnostics', {})).toMatchObject({ ok: true, value: { pending: [], blocked: [] } });
+    for (const route of ['export.preview', 'export.save']) expect(await host.call(route, { exportedAt })).toEqual(disabled);
+    expect(save).not.toHaveBeenCalled();
+    await host.close();
+    const reopened = f.track(createDesignHost(() => emitted.openEmittedDesignStore(f.dir, { imports: 'enabled' }), save));
+    expect(await reopened.call('import.status', {})).toEqual({ ok: true, value: { accepted: true, state: 'enabled' } });
+    await committed(reopened);
+    for (const route of ['export.preview', 'export.save']) expect(await reopened.call(route, { exportedAt })).toEqual(disabled);
+    expect(save).not.toHaveBeenCalled();
+  });
+});
