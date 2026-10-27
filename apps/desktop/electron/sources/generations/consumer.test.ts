@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import type { FetchPort } from '../../jones-code/wire.js';
 import { canonicalJson, sha256 } from './canonical-json.js';
 import { createGenerationConsumer } from './consumer.js';
+import { createGenerationConsumerWithStore } from './consumer.js';
+import { GenerationStore } from './store.js';
 import { fileRoute, manifestRoute, rootRoute } from './paths.js';
 import type { GenerationBinding, GenerationHealth, GenerationManifest, GenerationRef } from './types.js';
 
@@ -204,4 +206,117 @@ it('rejects a late acquisition superseded by a second instance and preserves the
     expect(await readFile(f.pointer)).toEqual(before);
     expect(await slow.readFile('page.txt')).toEqual({ ok: true, bytes: newest.content, mediaType: 'text/plain' });
   } finally { release.resolve(new Response(null, { status: 503 })); await pending; }
+});
+
+function rebindVector(target: GenerationBinding, sequence: string) {
+  const v = vector(sequence, 'retained offline bytes', '1', manifest => { manifest.binding_revision = target.bindingRevision; });
+  v.ref.binding_revision = target.bindingRevision;
+  v.health.binding_revision = target.bindingRevision;
+  return v;
+}
+it('BQ-6/7 keeps default equality and opts into serving last-good while the publisher revision is pending', async () => {
+  const old = vector('9007199254740993'), f = await fixture(old); await f.consumer.refresh();
+  const nextBinding = { ...binding, bindingRevision: 'revision-two' };
+  const ordinary = createGenerationConsumer({ storeRoot: f.root, binding: nextBinding, fetch: f.fetcher });
+  expect(await ordinary.serving()).toEqual({ status: 'held', reason: 'binding_mismatch', lastGood: old.identity });
+  expect(await ordinary.current()).toBeNull();
+  const consumer = createGenerationConsumer({ storeRoot: f.root, binding: nextBinding, fetch: f.fetcher, rebind: 'same-scope-v1' });
+  expect(await consumer.serving()).toEqual({ status: 'rebind_pending', generation: old.identity,
+    served: { bindingRevision: binding.bindingRevision, origin: binding.origin } });
+  expect(await consumer.current()).toEqual(old.identity);
+  expect(await consumer.manifest()).toEqual(old.value);
+  expect(await consumer.readFile('page.txt')).toEqual({ ok: true, bytes: old.content, mediaType: 'text/plain' });
+  const before = await readFile(f.pointer);
+  expect(await consumer.refresh()).toEqual({ status: 'held', reason: 'binding_mismatch', lastGood: old.identity });
+  expect(await readFile(f.pointer)).toEqual(before);
+  const next = rebindVector(nextBinding, '9007199254740994'); f.remote.active = next;
+  expect(await consumer.refresh()).toMatchObject({ status: 'activated', previous: old.identity, generation: next.identity });
+  expect(await consumer.serving()).toEqual({ status: 'active', generation: next.identity,
+    served: { bindingRevision: nextBinding.bindingRevision, origin: nextBinding.origin } });
+  expect(await createGenerationConsumer({ storeRoot: f.root, binding: nextBinding, fetch: f.fetcher }).current()).toEqual(next.identity);
+  expect(JSON.parse(await readFile(f.pointer, 'utf8'))).toEqual({ schema: 'hq-generation-pointer/v1', binding: nextBinding, generation: next.identity });
+});
+it('BQ-7 collapses several accepted binding revisions into one activation', async () => {
+  const f = await fixture(); await f.consumer.refresh();
+  const nextBinding = { ...binding, bindingRevision: 'revision-three' };
+  const next = rebindVector(nextBinding, '3'); f.remote.active = next;
+  const consumer = createGenerationConsumer({ storeRoot: f.root, binding: nextBinding, fetch: f.fetcher, rebind: 'same-scope-v1' });
+  expect(await consumer.refresh()).toMatchObject({ status: 'activated', previous: vector().identity, generation: next.identity });
+  expect(await consumer.refresh()).toMatchObject({ status: 'current', generation: next.identity });
+  expect(await consumer.serving()).toMatchObject({ status: 'active', served: { bindingRevision: 'revision-three' } });
+});
+it('BQ-7 retains a pending rebind before pointer rename and recovers the committed binding after uncertainty', async () => {
+  for (const boundary of ['before', 'after'] as const) {
+    const old = vector(), f = await fixture(old); await f.consumer.refresh();
+    const target = { ...binding, bindingRevision: 'revision-two' }, next = rebindVector(target, '2'); f.remote.active = next;
+    const fail = async (kind: string) => { if (kind === 'pointer') throw Error('synthetic pointer durability failure'); };
+    const store = new GenerationStore(f.root, boundary === 'before' ? { beforeRename: fail } : { afterRename: fail });
+    const options = { storeRoot: f.root, binding: target, fetch: f.fetcher, rebind: 'same-scope-v1' as const };
+    const consumer = createGenerationConsumerWithStore(options, store), before = await readFile(f.pointer);
+    expect(await consumer.refresh()).toMatchObject({ status: 'held', reason: boundary === 'before' ? 'store_unavailable' : 'store_uncertain', lastGood: old.identity });
+    const restarted = createGenerationConsumer(options);
+    expect(await restarted.serving()).toMatchObject({ status: boundary === 'before' ? 'rebind_pending' : 'active',
+      generation: boundary === 'before' ? old.identity : next.identity });
+    if (boundary === 'before') expect(await readFile(f.pointer)).toEqual(before);
+    else {
+      expect(await consumer.serving()).toMatchObject({ status: 'held', reason: 'store_uncertain' });
+      expect(await consumer.readFile('page.txt')).toEqual({ ok: false, reason: 'store_uncertain' });
+    }
+    expect(await restarted.readFile('page.txt')).toEqual({ ok: true, bytes: old.content, mediaType: 'text/plain' });
+  }
+});
+it('BQ-8 revalidates and CAS-rewrites only the origin while returning current', async () => {
+  const old = vector(), f = await fixture(old); await f.consumer.refresh();
+  const target = { ...binding, origin: 'http://127.0.0.1:43211' };
+  const origins: string[] = [];
+  const fetcher: FetchPort = async (url, options) => { origins.push(String(url)); return f.fetcher(url, options); };
+  const options = { storeRoot: f.root, binding: target, fetch: fetcher, rebind: 'same-scope-v1' as const };
+  const consumer = createGenerationConsumer(options), before = await readFile(f.pointer);
+  expect(await consumer.serving()).toMatchObject({ status: 'rebind_pending', served: { origin: binding.origin } });
+  expect(origins).toEqual([]);
+  expect(await consumer.refresh()).toMatchObject({ status: 'current', generation: old.identity });
+  expect(origins.length).toBeGreaterThan(0); expect(origins.every(url => url.startsWith(target.origin + '/'))).toBe(true);
+  expect(await readFile(f.pointer)).not.toEqual(before);
+  expect(JSON.parse(await readFile(f.pointer, 'utf8'))).toEqual({ schema: 'hq-generation-pointer/v1', binding: target, generation: old.identity });
+  expect(await createGenerationConsumer(options).serving()).toEqual({ status: 'active', generation: old.identity,
+    served: { bindingRevision: binding.bindingRevision, origin: target.origin } });
+});
+it('BQ-8 rejects non-rebindable changes and invalid opt-in values without touching the pointer', async () => {
+  const f = await fixture(); await f.consumer.refresh(); const before = await readFile(f.pointer), calls = f.remote.calls.length;
+  for (const change of [{ scopeDigest: 'f'.repeat(64) }, { consistencyMode: 'producer-complete-v1' as const },
+    { hostId: 'different-host' }, { publisherId: 'different-publisher' }]) {
+    const consumer = createGenerationConsumer({ storeRoot: f.root, binding: { ...binding, ...change }, fetch: f.fetcher, rebind: 'same-scope-v1' });
+    expect(await consumer.serving()).toMatchObject({ status: 'held', reason: 'binding_mismatch' });
+    expect(await consumer.refresh()).toMatchObject({ status: 'held', reason: 'binding_mismatch' });
+    expect(await consumer.current()).toBeNull(); expect(await readFile(f.pointer)).toEqual(before);
+  }
+  expect(f.remote.calls).toHaveLength(calls);
+  for (const rebind of [null, true, '', 'all']) {
+    expect(() => createGenerationConsumer({ storeRoot: f.root, binding, rebind: rebind as 'same-scope-v1' })).toThrow(TypeError);
+  }
+});
+it('BQ-9 separates transport availability from pending rebind state and retained offline bytes', async () => {
+  const old = vector(), f = await fixture(old); await f.consumer.refresh();
+  const before = await readFile(f.pointer), target = { ...binding, origin: 'http://127.0.0.1:43211' };
+  for (const fault of ['404', 'timeout', 'refused']) {
+    const fetcher: FetchPort = async () => {
+      if (fault === '404') return new Response(null, { status: 404 });
+      throw fault === 'timeout' ? new DOMException('synthetic timeout', 'TimeoutError') : Error('synthetic refusal');
+    };
+    const consumer = createGenerationConsumer({ storeRoot: f.root, binding: target, fetch: fetcher, rebind: 'same-scope-v1' });
+    expect(await consumer.refresh()).toMatchObject({ status: 'held', reason: fault === '404' ? 'http_status' : 'transport_unavailable', lastGood: old.identity });
+    expect(await consumer.serving()).toMatchObject({ status: 'rebind_pending', generation: old.identity });
+    expect(await readFile(f.pointer)).toEqual(before);
+    expect(await consumer.readFile('page.txt')).toEqual({ ok: true, bytes: old.content, mediaType: 'text/plain' });
+  }
+});
+it('BQ-10 reports empty locally with no fetch and keeps the legacy consumer interface usable', async () => {
+  const f = await fixture();
+  expect(await f.consumer.serving()).toEqual({ status: 'empty' }); expect(f.remote.calls).toEqual([]);
+  const fake: import('./types.js').GenerationConsumer = {
+    async refresh() { return { status: 'held', reason: 'transport_unavailable', lastGood: null }; },
+    async current() { return null; }, async manifest() { return null; },
+    async readFile() { return { ok: false, reason: 'unavailable' }; }
+  };
+  expect(await fake.current()).toBeNull(); expect('serving' in fake).toBe(false);
 });

@@ -7,6 +7,7 @@ import { counter, digest, opaque } from './paths.js';
 import { GenerationError, requireGeneration } from './types.js';
 import type { GenerationBinding, GenerationFile, GenerationIdentity, GenerationManifest } from './types.js';
 import { GENERATION_LIMITS, refFor, validateBinding, validateManifest, validateRef } from './wire.js';
+import { rebindable } from './bindings.js';
 
 interface StoredPointer { schema: 'hq-generation-pointer/v1'; binding: GenerationBinding; generation: GenerationIdentity }
 export interface PointerSnapshot { bytes: Uint8Array | null; pointer: StoredPointer | null }
@@ -148,8 +149,9 @@ export class GenerationStore {
       return { bytes, pointer: { schema: 'hq-generation-pointer/v1', binding, generation: identity as unknown as GenerationIdentity } };
     } catch (error) { this.fail(error); }
   }
-  assertBinding(snapshot: PointerSnapshot, binding: GenerationBinding): void {
-    if (snapshot.pointer) requireGeneration(equalBytes(canonicalJson(snapshot.pointer.binding), canonicalJson(binding)), 'binding_mismatch');
+  assertBinding(snapshot: PointerSnapshot, binding: GenerationBinding, rebind?: 'same-scope-v1'): void {
+    if (snapshot.pointer) requireGeneration(equalBytes(canonicalJson(snapshot.pointer.binding), canonicalJson(binding))
+      || (rebind === 'same-scope-v1' && rebindable(snapshot.pointer.binding, binding)), 'binding_mismatch');
   }
   async manifest(identity: GenerationIdentity, binding: GenerationBinding): Promise<GenerationManifest> {
     try {
@@ -185,13 +187,13 @@ export class GenerationStore {
       await this.atomic(this.manifestPath(identity), bytes, identity.manifestSha256, 'manifest');
     } catch (error) { this.fail(error); }
   }
-  async activate(expected: PointerSnapshot, binding: GenerationBinding, identity: GenerationIdentity): Promise<void> {
+  async activate(expected: PointerSnapshot, binding: GenerationBinding, identity: GenerationIdentity, rebind?: 'same-scope-v1'): Promise<void> {
     try {
       await withPromotion(this.pointerPath(binding.rootId), async () => {
         this.check();
         const current = await this.snapshot(binding.rootId);
         requireGeneration(current.bytes === null ? expected.bytes === null : expected.bytes !== null && equalBytes(current.bytes, expected.bytes), 'superseded');
-        this.assertBinding(current, binding);
+        this.assertBinding(current, binding, rebind);
         validateRef(refFor(binding, identity), binding, current.pointer?.generation ?? null);
         const manifest = await this.manifest(identity, binding);
         const required = new Set(manifest.presentations.flatMap(item => item.required_paths));

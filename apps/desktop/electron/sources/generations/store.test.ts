@@ -117,3 +117,16 @@ it('rejects unsafe directories and symlinked blobs without following them', asyn
   await expect(store.readBlob({ path: 'item', size: 4, sha256: checksum, media_type: 'text/plain' })).rejects.toMatchObject({ reason: 'store_unavailable' });
   expect(await readFile(target)).toEqual(Buffer.from(bytes));
 });
+it('BQ-8 preserves full equality by default and CAS-fences two origin-only rebinds', async () => {
+  const { root, store } = await fixture(), v = await activate(store);
+  const expected = await store.snapshot(binding.rootId), target = { ...binding, origin: 'http://127.0.0.1:43211' };
+  expect(() => store.assertBinding(expected, target)).toThrow('binding_mismatch');
+  expect(() => store.assertBinding(expected, target, 'same-scope-v1')).not.toThrow();
+  const second = new GenerationStore(root), stale = await second.snapshot(binding.rootId);
+  await store.activate(expected, target, v.identity, 'same-scope-v1');
+  const before = await readFile(join(root, 'roots', binding.rootId + '.json'));
+  await expect(second.activate(stale, { ...binding, origin: 'http://127.0.0.1:43212' }, v.identity, 'same-scope-v1'))
+    .rejects.toMatchObject({ reason: 'superseded' });
+  expect(await readFile(join(root, 'roots', binding.rootId + '.json'))).toEqual(before);
+  expect((await second.snapshot(binding.rootId)).pointer?.binding).toEqual(target);
+});

@@ -1,20 +1,29 @@
 import type { FetchPort } from '../../jones-code/wire.js';
 import { sha256 } from './canonical-json.js';
+import { rebindable } from './bindings.js';
 import { createGenerationHttp } from './http.js';
 import { fileRoute, manifestRoute, relativePath, rootRoute } from './paths.js';
 import { GenerationStore } from './store.js';
 import type { PointerSnapshot } from './store.js';
 import { GenerationError, requireGeneration } from './types.js';
-import type { FileResult, GenerationBinding, GenerationConsumer, GenerationIdentity, GenerationManifest, RefreshResult } from './types.js';
+import type { FileResult, GenerationBinding, GenerationIdentity, GenerationManifest, RefreshResult, ServingGenerationConsumer, ServingState } from './types.js';
 import { GENERATION_LIMITS, identityOf, parseHealth, parseRef, requiredFiles, validateBinding, validateManifest } from './wire.js';
 
-export interface GenerationConsumerOptions { storeRoot: string; binding: GenerationBinding; fetch?: FetchPort; timeoutMs?: number }
+export interface GenerationConsumerOptions { storeRoot: string; binding: GenerationBinding; fetch?: FetchPort; timeoutMs?: number; rebind?: 'same-scope-v1' }
 
-export function createGenerationConsumer(options: GenerationConsumerOptions): GenerationConsumer {
+export function createGenerationConsumer(options: GenerationConsumerOptions): ServingGenerationConsumer {
+  return createGenerationConsumerWithStore(options, new GenerationStore(options.storeRoot));
+}
+
+// Internal construction seam for durability tests; the public factory accepts
+// neither a store implementation nor storage hooks.
+export function createGenerationConsumerWithStore(options: GenerationConsumerOptions, store: GenerationStore): ServingGenerationConsumer {
   const binding = validateBinding(options.binding);
+  if (options.rebind !== undefined && options.rebind !== 'same-scope-v1') throw new TypeError('Invalid rebind');
+  const rebind = options.rebind;
   const timeoutMs = options.timeoutMs ?? 20_000;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647) throw new TypeError('Invalid timeoutMs');
-  const store = new GenerationStore(options.storeRoot);
+  if (store.root !== options.storeRoot) throw new TypeError('Mismatched generation store');
   const http = createGenerationHttp(binding.origin, options.fetch ?? fetch, timeoutMs);
   const root = rootRoute(binding.rootId);
   let running: Promise<RefreshResult> | null = null;
@@ -24,8 +33,9 @@ export function createGenerationConsumer(options: GenerationConsumerOptions): Ge
   async function snapshot(): Promise<PointerSnapshot> {
     const value = await store.snapshot(binding.rootId);
     lastGood = value.pointer?.generation ?? null;
-    // A stored identity with a different binding is never served as this source.
-    store.assertBinding(value, binding);
+    // Only the explicit same-scope option permits serving the pointer binding
+    // while a newer configured binding waits for publisher adoption.
+    store.assertBinding(value, binding, rebind);
     return value;
   }
   async function refreshOnce(): Promise<RefreshResult> {
@@ -50,11 +60,13 @@ export function createGenerationConsumer(options: GenerationConsumerOptions): Ge
         && previous.manifestSha256 === generation.manifestSha256) {
         // Restore missing local metadata without manufacturing an activation.
         await store.putManifest(generation, bytes, binding);
-        await store.confirmCurrent(expected, binding.rootId);
+        if (rebind && expected.pointer && rebindable(expected.pointer.binding, binding))
+          await store.activate(expected, binding, generation, rebind);
+        else await store.confirmCurrent(expected, binding.rootId);
         return { status: 'current', generation, health };
       }
       await store.putManifest(generation, bytes, binding);
-      await store.activate(expected, binding, generation);
+      await store.activate(expected, binding, generation, rebind);
       lastGood = generation;
       return { status: 'activated', generation, previous, health };
     } catch (error) {
@@ -80,9 +92,20 @@ export function createGenerationConsumer(options: GenerationConsumerOptions): Ge
   }
   async function localManifest(): Promise<GenerationManifest | null> {
     const value = await snapshot();
-    return value.pointer ? store.manifest(value.pointer.generation, binding) : null;
+    return value.pointer ? store.manifest(value.pointer.generation, value.pointer.binding) : null;
   }
   return {
+    async serving(): Promise<ServingState> {
+      try {
+        const value = await snapshot(), pointer = value.pointer;
+        if (!pointer) return { status: 'empty' };
+        return { status: rebind && rebindable(pointer.binding, binding) ? 'rebind_pending' : 'active',
+          generation: pointer.generation, served: { bindingRevision: pointer.binding.bindingRevision, origin: pointer.binding.origin } };
+      } catch (error) {
+        return { status: 'held', reason: store.uncertain ? 'store_uncertain'
+          : error instanceof GenerationError && error.reason === 'binding_mismatch' ? 'binding_mismatch' : 'store_unavailable', lastGood };
+      }
+    },
     refresh() {
       if (!running) return start();
       if (!queued) {

@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { createGenerationConsumer } from './index.js';
 import type { GenerationBinding, RefreshResult } from './index.js';
+import * as publicApi from './index.js';
 
 it('rejects invalid public construction synchronously before any source or storage effects', () => {
   const binding: GenerationBinding = { origin: 'http://127.0.0.1:43210', publisherId: 'public-publisher', hostId: 'public-host', rootId: 'public-root',
@@ -15,4 +16,11 @@ it('rejects invalid public construction synchronously before any source or stora
   const consumer = createGenerationConsumer({ storeRoot: '/synthetic-unused-store', binding, fetch: fetcher });
   const refresh: () => Promise<RefreshResult> = consumer.refresh;
   expect(typeof refresh).toBe('function');
+});
+it('BQ-10 exposes only production binding operations and the two-argument fixed-home reader', () => {
+  expect(Object.keys(publicApi).sort()).toEqual(['bindingKey', 'createGenerationConsumer', 'diffBindingSets',
+    'parseConsumerBindingSet', 'readConsumerBindingSet', 'rebindable'].sort());
+  expect(publicApi.readConsumerBindingSet.length).toBe(2);
+  expect('createConsumerBindingReader' in publicApi).toBe(false);
+  expect('createGenerationConsumerWithStore' in publicApi).toBe(false);
 });
