@@ -128,7 +128,7 @@ describe('Social content: library and editor', () => {
     hold = true;
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findAllByText('Saving…')).not.toHaveLength(0);
-    expect((screen.getByLabelText('Body') as HTMLTextAreaElement).disabled).toBe(true);
+    expect((screen.getByLabelText('Body') as HTMLTextAreaElement).readOnly).toBe(true);
     hold = false;
     await act(async () => release());
     expect(await screen.findByText(/Saved · version 2/)).toBeTruthy();
@@ -168,6 +168,20 @@ describe('Social content: library and editor', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Load their version' }));
     await waitFor(() => expect((screen.getByLabelText('Body') as HTMLTextAreaElement).value).toBe('Theirs'));
     expect(screen.queryByText('Changed elsewhere.')).toBeNull();
+  });
+
+  it('keeps my text and says so when loading their version fails', async () => {
+    const { controls, user } = setup(`library/${FIXTURE_IDS.openDay}`);
+    await screen.findByRole('heading', { name: 'Edit draft' });
+    await user.type(screen.getByLabelText('Body'), ' mine');
+    controls.editElsewhere(FIXTURE_IDS.openDay, { body: 'Theirs' });
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(await screen.findByRole('button', { name: 'Load their version' }));
+    controls.setUnavailable(true);
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Load their version' }));
+    expect(await screen.findByText(/Could not load their version/u)).toBeTruthy();
+    expect((screen.getByLabelText('Body') as HTMLTextAreaElement).value).toMatch(/ mine$/u);
+    expect(screen.getByText('Changed elsewhere.')).toBeTruthy();
   });
 
   it('archives and restores with one versioned save each', async () => {
@@ -224,6 +238,43 @@ describe('Social content: library and editor', () => {
     expect(await screen.findByText(/the save did not happen/)).toBeTruthy();
     expect(methods(recorded)).toEqual(['saveDraft', 'snapshot']);
     expect((screen.getByLabelText('Body') as HTMLTextAreaElement).value).toMatch(/ extra$/u);
+  });
+
+  it('refuses Save and Ctrl+S after an unknown save until a check says the save did not happen', async () => {
+    const { controls, recorded, user } = setup(`library/${FIXTURE_IDS.openDay}`);
+    await screen.findByRole('heading', { name: 'Edit draft' });
+    await user.type(screen.getByLabelText('Body'), ' extra');
+    controls.failNext('saveDraft', { kind: 'unknown', attemptedAt: '2026-10-20T12:00:00Z' });
+    recorded.clear();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Save result unknown')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByLabelText('Body'));
+    await user.keyboard('{Control>}s{/Control}');
+    expect(methods(recorded)).toEqual(['saveDraft']);
+    await user.click(screen.getByRole('button', { name: 'Check' }));
+    expect(await screen.findByText(/the save did not happen/)).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(methods(recorded)).toEqual(['saveDraft', 'snapshot', 'saveDraft']));
+  });
+
+  it('keeps Close unavailable and the text fields focusable while a save is in flight', async () => {
+    let release: () => void = () => undefined;
+    let gate: Promise<void> = Promise.resolve();
+    const { controls, user } = setup(`library/${FIXTURE_IDS.openDay}`, { delay: () => gate });
+    await screen.findByRole('heading', { name: 'Edit draft' });
+    const body = screen.getByLabelText('Body') as HTMLTextAreaElement;
+    await user.type(body, ' extra');
+    gate = new Promise((resolve) => { release = resolve; });
+    await user.keyboard('{Control>}s{/Control}');
+    expect(await screen.findByText('Saving…', { selector: '[role="status"]' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Close' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(body.disabled).toBe(false);
+    expect(body.readOnly).toBe(true);
+    expect(document.activeElement).toBe(body);
+    act(() => release());
+    await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.openDay)?.version).toBe(2));
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Close' }) as HTMLButtonElement).disabled).toBe(false));
   });
 
   it('labels a citation as not saved when the service lacks hq-references-v1, and refuses to drop it', async () => {

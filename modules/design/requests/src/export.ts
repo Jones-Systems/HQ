@@ -12,7 +12,7 @@ export interface ExportedBlob {
 }
 
 export interface OmittedStore {
-  readonly store: 'drafts' | 'draft-history' | 'unselected-attachments' | 'cache' | 'missing-blobs';
+  readonly store: 'drafts' | 'draft-history' | 'unselected-attachments' | 'cache' | 'sends' | 'handoff-status' | 'missing-blobs';
   readonly count: number;
   readonly reason: string;
 }
@@ -62,11 +62,15 @@ export async function exportRequests(snapshots: readonly RequestSnapshot[], stor
   }
   const drafts = snapshots.filter((snapshot) => snapshot.draft).length;
   const history = snapshots.reduce((count, snapshot) => count + snapshot.history.length, 0);
+  const sends = snapshots.reduce((count, snapshot) => count + snapshot.sends.length, 0);
+  const handoff = snapshots.reduce((count, snapshot) => count + snapshot.handoff.length, 0);
   const omitted: OmittedStore[] = [
     { store: 'drafts', count: drafts, reason: 'Unsent drafts are private and stay on this device.' },
     { store: 'draft-history', count: history, reason: 'Consumed drafts are local recovery history; their frozen content is in the packets.' },
     { store: 'unselected-attachments', count: unselected.size, reason: 'Only attachments explicitly selected into a packet are exported.' },
     { store: 'cache', count: 0, reason: 'The cache namespace is never exported.' },
+    { store: 'sends', count: sends, reason: 'Send records are local fences against resending; the connector owns receipts.' },
+    { store: 'handoff-status', count: handoff, reason: 'Handoff statuses are a local copy of connector state; the connector owns the truth.' },
   ];
   if (missing > 0) omitted.push({ store: 'missing-blobs', count: missing, reason: 'Selected images whose bytes are not stored locally.' });
   const bundle: RequestsExport = {

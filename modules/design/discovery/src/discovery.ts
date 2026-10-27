@@ -104,7 +104,8 @@ export class DiscoveryService {
       limits: { ...options.previews, maxItemBytes },
     });
     this.#state = {
-      opened: false, cacheStatus: 'not-loaded', cacheWritable: true, cacheWriteFailed: false,
+      // Not writable until open() has read the stored cache: an unread cache may be warm or from a newer schema.
+      opened: false, cacheStatus: 'not-loaded', cacheWritable: false, cacheWriteFailed: false,
       context: options.context ?? { id: 'all', hostIds: enrollments.map((item) => item.hostId) },
       catalog: EMPTY_CATALOG, enrollments, refreshing: [],
     };

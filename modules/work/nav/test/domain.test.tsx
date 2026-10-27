@@ -2,9 +2,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { isDestination, parseProjectContext, type ModulePort } from '@hq/contracts';
-import { EXAMPLE_SETTINGS, PLANNER_PORT_KEYS, type Item } from '../../core';
+import { EXAMPLE_SETTINGS, PLANNER_PORT_KEYS, type Item, type PlannerPort } from '../../core';
 import { VIEW_TODAY, viewItems } from '../../views/fixtures';
-import { EXAMPLE_NOTE, examplePlanner, NAV_ITEMS, resetWorkSessions, WorkDomain, workSession } from '..';
+import { EXAMPLE_NOTE, examplePlanner, NAV_ITEMS, resetWorkSessions, setWorkSessionPort, WorkDomain, workSession } from '..';
 import { fixedNow, installPlanner, uninstallPlanner, type RecordedPlanner } from './support';
 
 /** ac.work-domain.001: one shared session, honest labels, Work destinations, scoped capture and zero writes on navigation. */
@@ -228,6 +228,61 @@ describe('quick capture', () => {
     await user().click(screen.getByRole('button', { name: 'Keep as HQ draft' }));
     expect(session().drafts.getState().drafts.map((draft) => draft.fields.title)).toStrictEqual(['Mend the gate latch']);
     expect(screen.getAllByText('HQ draft · not in the Planner').length).toBeGreaterThan(0);
+  });
+
+  it('once the Planner answers again, editing the capture offers Capture instead of an HQ draft', async () => {
+    cleanup();
+    const installed = installPlanner();
+    recorded = installed.recorded;
+    render(<WorkDomain {...port('home')} now={fixedNow} />);
+    await screen.findByRole('heading', { level: 2, name: 'Status board' });
+    installed.faults.next('unavailable');
+    const input = screen.getByRole('textbox', { name: 'Capture to Inbox' });
+    await user().type(input, 'Mend the gate latch{Enter}');
+    expect(await screen.findByText('Planner unreachable')).toBeTruthy();
+    // Still unreachable: editing keeps the HQ draft offer.
+    await user().type(input, ' again');
+    expect(screen.getByText('Planner unreachable')).toBeTruthy();
+
+    await act(async () => { await session().store.poll(); });
+    await user().type(input, '!');
+    expect(screen.queryByText('Planner unreachable')).toBeNull();
+    await user().keyboard('{Enter}');
+    await waitFor(() => expect(recorded.writes().filter((call) => call.method === 'create')).toHaveLength(2));
+    expect((recorded.writes().at(-1)!.args[0] as { title: string }).title).toBe('Mend the gate latch again!');
+    expect(session().drafts.getState().drafts).toHaveLength(0);
+  });
+
+  it('a capture still saving is not sent again after a domain switch and back', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const inner = recorded.port;
+    setWorkSessionPort({
+      ...inner,
+      create: async (...args: Parameters<PlannerPort['create']>) => {
+        const result = await inner.create(...args);
+        await gate;
+        return result;
+      },
+    });
+    const first = render(<WorkDomain {...port('home')} now={fixedNow} />);
+    await screen.findByRole('heading', { level: 2, name: 'Status board' });
+    await user().type(screen.getByRole('textbox', { name: 'Capture to Inbox' }), 'Oil the hinges{Enter}');
+    await waitFor(() => expect(recorded.writes()).toHaveLength(1));
+    first.unmount();
+
+    render(<WorkDomain {...port('home')} now={fixedNow} />);
+    await screen.findByRole('heading', { level: 2, name: 'Status board' });
+    const input = screen.getByRole('textbox', { name: 'Capture to Inbox' }) as HTMLInputElement;
+    expect(input.value).toBe('Oil the hinges');
+    await user().type(input, '{Enter}');
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(recorded.writes()).toHaveLength(1);
+
+    await act(async () => { release(); await gate; });
+    await waitFor(() => expect(input.value).toBe(''));
+    expect(recorded.writes()).toHaveLength(1);
+    expect(session().store.getState().items.filter((item) => item.title === 'Oil the hinges')).toHaveLength(1);
   });
 });
 

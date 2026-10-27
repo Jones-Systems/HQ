@@ -69,7 +69,8 @@ export function TimelineView() {
   };
 
   return (
-    <div ref={root} className="wv-tl-wrap">
+    // A drag that ends anywhere, dropped or cancelled, disarms; a later unrelated drop must not move the item.
+    <div ref={root} className="wv-tl-wrap" onDragEnd={() => { dragging.current = null; }}>
       <ViewHint>Drag a row to another lane to change its horizon, or press Alt+↑ or Alt+↓, or M for its menu. Bars appear only between a start date and a later target or deadline you set.</ViewHint>
       <div className="wv-tl-nav">
         <div className="wv-seg" role="group" aria-label="Timeline navigation">

@@ -1,4 +1,4 @@
-import { forwardRef, useId, useState, type FormEvent } from 'react';
+import { forwardRef, useId, type FormEvent } from 'react';
 import { Button, StatusChip } from '@hq/ui';
 import { reportWrite } from '../board';
 import { DRAFT_LABEL, DRAFT_SCOPE_NOTE, suggestDate } from '../capture';
@@ -24,8 +24,8 @@ export interface ToolbarCaptureProps {
 export const ToolbarCapture = forwardRef<HTMLInputElement, ToolbarCaptureProps>(function ToolbarCapture({ session, state, now, onMore }, ref) {
   const id = useId();
   const { capture } = useWorkUi(session.ui);
-  const [busy, setBusy] = useState(false);
   const { ui, store, feedback, drafts } = session;
+  const busy = capture.sending;
   const settings = state.confirmed?.settings ?? DEFAULT_SETTINGS;
   const today = plannerToday(settings, now?.());
   const offline = state.save.kind === 'offline' || (state.load === 'unavailable' && !state.confirmed);
@@ -42,10 +42,10 @@ export const ToolbarCapture = forwardRef<HTMLInputElement, ToolbarCaptureProps>(
   };
 
   const save = async () => {
-    if (busy) return;
+    if (ui.getState().capture.sending) return;
     if (!title) { ui.setCapture({ error: 'A title is required.' }); return; }
     if (offline) { ui.setCapture({ unavailable: true }); return; }
-    setBusy(true);
+    ui.setCapture({ sending: true });
     try {
       const sent = capture.text;
       const outcome = await store.create(fields());
@@ -58,7 +58,7 @@ export const ToolbarCapture = forwardRef<HTMLInputElement, ToolbarCaptureProps>(
       // Text typed while the create was in flight stays; only what was sent is cleared.
       ui.setCapture(ui.getState().capture.text === sent ? { text: '', date: null, unavailable: false, error: null } : { unavailable: false, error: null });
     } finally {
-      setBusy(false);
+      ui.setCapture({ sending: false });
     }
   };
 
@@ -82,7 +82,8 @@ export const ToolbarCapture = forwardRef<HTMLInputElement, ToolbarCaptureProps>(
           placeholder="Capture to Inbox…"
           aria-invalid={capture.error ? true : undefined}
           aria-describedby={capture.error ? `${id}-error` : undefined}
-          onChange={(event) => ui.setCapture({ text: event.target.value.replace(/[\r\n]+/gu, ' '), error: null })}
+          // An edit drops a stale unreachable flag once the Planner no longer reads as offline.
+          onChange={(event) => ui.setCapture({ text: event.target.value.replace(/[\r\n]+/gu, ' '), error: null, unavailable: capture.unavailable && offline })}
         />
         {capture.unavailable
           ? <Button variant="primary" type="submit">Keep as HQ draft</Button>

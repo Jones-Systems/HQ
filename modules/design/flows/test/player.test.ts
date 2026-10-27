@@ -40,6 +40,26 @@ describe('prototype player', () => {
     assert.deepEqual(empty.steps.at(-1)!.outcome, { kind: 'back-unavailable' });
   });
 
+  it('skips back history entries whose screen a flow revision removed', () => {
+    const raw = checkoutRaw();
+    const revised = parsed({ ...raw,
+      screens: (raw.screens as Record<string, unknown>[]).filter((screen) => screen.id !== 'checkout-error'),
+      hotspots: (raw.hotspots as Record<string, unknown>[]).filter((hotspot) => hotspot.screenId !== 'checkout-error') });
+    const player = createPlayer(revised);
+    const visited = run([activate('h-checkout'), activate('h-decline'), activate('h-retry')]);
+    assert.deepEqual(visited.history, ['cart', 'checkout', 'checkout-error']);
+    const back = player.reduce(visited, { type: 'back' });
+    assert.equal(back.current, 'checkout');
+    assert.deepEqual(back.history, ['cart']);
+    assert.deepEqual(back.steps.at(-1)!.outcome, { kind: 'back', to: 'checkout' });
+    const onlyStale = run([{ type: 'start', screenId: screenId('checkout-error') }, activate('h-retry')]);
+    assert.deepEqual(onlyStale.history, ['checkout-error']);
+    const unavailable = player.reduce(onlyStale, { type: 'back' });
+    assert.equal(unavailable.current, 'checkout');
+    assert.deepEqual(unavailable.history, []);
+    assert.deepEqual(unavailable.steps.at(-1)!.outcome, { kind: 'back-unavailable' });
+  });
+
   it('records external links as exits without leaving the current screen', () => {
     const state = run([activate('h-help')]);
     assert.equal(state.current, 'cart');

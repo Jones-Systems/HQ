@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { MAX_AST_NODES, MAX_RESULTS, MAX_SNIPPET_LENGTH, MAX_TOPIC_ID_LENGTH, MAX_TOPICS, validateTopicList } from '../../contract/src/index.ts';
-import { BM25_B, BM25_K1, TITLE_WEIGHT, createMemoryIndexStore, createWikiHost, parseSnapshot, profileIndexKey, validateSourceProfile, type IndexSnapshot } from '../src/index.ts';
+import { createMemoryIndexStore, createWikiHost, parseSnapshot, profileIndexKey, validateSourceProfile, type IndexSnapshot } from '../src/index.ts';
 import { clock, commitOf, memoryHost, memorySource, must, profileFor } from './support.ts';
 
 function words(text: string): string[] {
@@ -26,10 +26,6 @@ function reference(docs: Record<string, { title: string; body: string }>, term: 
 }
 
 describe('BM25 ranking', () => {
-  test('parameters are the plan values', () => {
-    assert.deepEqual([BM25_K1, BM25_B, TITLE_WEIGHT], [1.2, 0.75, 2]);
-  });
-
   test('scores match an independent reference implementation (title weight 2, k1 1.2, b 0.75)', async () => {
     const docs = {
       'alpha.md': { title: 'alpha', body: 'beta beta gamma' },
