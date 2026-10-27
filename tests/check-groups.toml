@@ -34,7 +34,7 @@ tests = ["modules/design/requests/**/*.test.ts", "modules/design/requests/**/*.t
 summary = "taste behavioral checks owned by its section."
 covers = ["spec.hq-design#test.taste.001"]
 direct_surfaces = ["modules/design/taste/"]
-tests = ["modules/design/taste/**/*.test.ts", "modules/design/taste/**/*.test.mjs"]
+tests = ["modules/design/taste/**/*.test.ts", "modules/design/taste/**/*.test.mjs", "modules/design/taste/**/*.test.tsx"]
 
 [groups.design-references]
 summary = "references behavioral checks owned by its section."
