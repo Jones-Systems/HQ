@@ -58,6 +58,12 @@ function view(workspace: DesignWorkspace, context: ProjectContext = A) {
   </DesignWorkspaceContext.Provider>;
 }
 
+async function renderReady(ui: Parameters<typeof render>[0]) {
+  let mounted!: ReturnType<typeof render>;
+  await act(async () => { mounted = render(ui); });
+  return mounted;
+}
+
 async function choose(id = FIRST) {
   fireEvent.change(await screen.findByLabelText('Version to rate'), { target: { value: id } });
   await screen.findByText('Project profile');
@@ -67,7 +73,7 @@ describe('Taste production composition', () => {
   it('saves against the opaque selected project and the explicitly chosen durable version', async () => {
     const { double, workspace, seed } = harness();
     await seed(A);
-    render(view(workspace));
+    await renderReady(view(workspace));
     await screen.findByText('Choose a saved version to rate.');
     expect(screen.queryByText('Project profile')).toBeNull();
     expect(double.calls.filter(({ route }) => route === 'doc.put')).toHaveLength(0);
@@ -93,10 +99,10 @@ describe('Taste production composition', () => {
     const { double, workspace, seed } = harness();
     await seed(A, []);
     await seed(B);
-    const mounted = render(view(workspace));
+    const mounted = await renderReady(view(workspace));
     await screen.findByText('No saved versions for this project yet.');
     expect(screen.queryByRole('radio')).toBeNull();
-    mounted.rerender(view(workspace, B));
+    await act(async () => { mounted.rerender(view(workspace, B)); });
     await choose();
     fireEvent.change(screen.getByLabelText('Version to rate'), { target: { value: '' } });
     expect(screen.getByText('Choose a saved version to rate.')).toBeTruthy();
@@ -111,7 +117,7 @@ describe('Taste production composition', () => {
     double.failWith((route, params) => route === 'doc.get' && 'key' in params
       && params.key === (failed === 'journal' ? TASTE_DOCUMENT_KEY : `design/projects/${contentKey(projectId(A.id))}`)
       ? { ok: false, kind: 'unavailable' } : undefined);
-    render(view(workspace));
+    await renderReady(view(workspace));
     if (failed === 'journal') {
       fireEvent.change(await screen.findByLabelText('Version to rate'), { target: { value: FIRST } });
       await screen.findByText('Taste is unavailable right now.');
@@ -127,20 +133,20 @@ describe('Taste production composition', () => {
     const { double, workspace, seed } = harness();
     await seed(A);
     await seed(B);
-    const mounted = render(view(workspace));
+    const mounted = await renderReady(view(workspace));
     await choose();
     fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'First version draft' } });
     await choose(SECOND);
     expect((screen.getByLabelText('Note') as HTMLTextAreaElement).value).toBe('');
     fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Project A draft' } });
-    mounted.rerender(view(workspace, B));
+    await act(async () => { mounted.rerender(view(workspace, B)); });
     await screen.findByText('Choose a saved version to rate.');
     expect((screen.getByLabelText('Version to rate') as HTMLSelectElement).value).toBe('');
     expect(screen.queryByLabelText('Note')).toBeNull();
     await choose(SECOND);
     expect((screen.getByLabelText('Note') as HTMLTextAreaElement).value).toBe('');
     expect(screen.getByLabelText('Project · Other selected project')).toBeTruthy();
-    mounted.rerender(view(workspace, A));
+    await act(async () => { mounted.rerender(view(workspace, A)); });
     await screen.findByText('Choose a saved version to rate.');
     expect(double.calls.filter(({ route }) => route === 'doc.put')).toHaveLength(0);
   });
@@ -156,10 +162,10 @@ describe('Taste production composition', () => {
       if (key === TASTE_DOCUMENT_KEY) { waiting = true; await held; }
       return result;
     } });
-    const mounted = render(view(oldWorkspace));
+    const mounted = await renderReady(view(oldWorkspace));
     fireEvent.change(await screen.findByLabelText('Version to rate'), { target: { value: SECOND } });
     await waitFor(() => expect(waiting).toBe(true));
-    mounted.rerender(view(createDesignWorkspace(documents)));
+    await act(async () => { mounted.rerender(view(createDesignWorkspace(documents))); });
     await screen.findByText('Choose a saved version to rate.');
     expect(screen.queryByText('Project profile')).toBeNull();
     await act(async () => release());
@@ -168,7 +174,7 @@ describe('Taste production composition', () => {
     await choose();
     expect(screen.getByRole('heading', { name: 'Saved landing v1' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Old client draft' } });
-    mounted.rerender(view(createDesignWorkspace(documents)));
+    await act(async () => { mounted.rerender(view(createDesignWorkspace(documents))); });
     await screen.findByText('Choose a saved version to rate.');
     await choose();
     expect((screen.getByLabelText('Note') as HTMLTextAreaElement).value).toBe('');
@@ -179,13 +185,13 @@ describe('Taste production composition', () => {
     const { double, workspace, seed } = harness();
     await seed(A);
     double.failWith((route) => route === 'doc.put' ? { ok: false, kind: 'unknown' } : undefined);
-    const mounted = render(view(workspace));
+    const mounted = await renderReady(view(workspace));
     await choose();
     fireEvent.click(screen.getByRole('radio', { name: 'Overall: 4, Like' }));
     await screen.findByText('The save may or may not have reached the journal. Retrying sends the same entry and cannot duplicate it.');
     await waitFor(() => expect((screen.getByRole('button', { name: 'Retry' }) as HTMLButtonElement).disabled).toBe(false));
     expect(double.calls.filter(({ route }) => route === 'doc.put')).toHaveLength(1);
-    mounted.rerender(view(workspace));
+    await act(async () => { mounted.rerender(view(workspace)); });
     expect(double.calls.filter(({ route }) => route === 'doc.put')).toHaveLength(1);
     expect(screen.queryByText(/Nothing was saved/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
@@ -200,7 +206,7 @@ describe('Taste production composition', () => {
   });
 
   it('retains the labelled in-memory preview when documents are null', async () => {
-    render(view(createDesignWorkspace(null)));
+    await renderReady(view(createDesignWorkspace(null)));
     await screen.findByRole('heading', { name: 'Synthetic landing page · v2' });
     await screen.findByText('Project profile');
     expect(screen.getByText('Example')).toBeTruthy();
