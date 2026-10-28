@@ -114,7 +114,7 @@ export function handoffView(input: HandoffViewInput): HandoffView {
  */
 export function acceptStatus(stored: HandoffStatus | null, next: HandoffStatus): { readonly accept: boolean; readonly reason?: string } {
   if (!stored) return { accept: true };
-  if (next.observedAt < stored.observedAt) return { accept: false, reason: 'older than the stored status' };
+  if (Date.parse(next.observedAt) < Date.parse(stored.observedAt)) return { accept: false, reason: 'older than the stored status' };
   if (TERMINAL_STATES.includes(stored.state) && next.state !== stored.state) return { accept: false, reason: `would leave terminal state ${stored.state}` };
   return { accept: true };
 }

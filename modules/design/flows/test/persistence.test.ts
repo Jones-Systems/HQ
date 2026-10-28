@@ -43,6 +43,16 @@ describe('flow repository', () => {
     assert.deepEqual(await repository.listForProject(projectId('project-synthetic')), []);
     assert.equal(storage.writes.length, 1, 'only the seed write');
   });
+
+  it('skips a malformed stored key instead of failing the whole listing', async () => {
+    const storage = createFakeFlowStorage();
+    const repository = createFlowRepository(storage);
+    await repository.save(checkout());
+    await storage.putDocument('workspace', 'design/flows/%E0', checkoutRaw());
+    assert.deepEqual((await repository.listForProject(projectId('project-synthetic'))).map((flow) => flow.id), ['flow-checkout']);
+    const items = await createFlowCanvasProvider(repository).listItems(projectId('project-synthetic'));
+    assert.deepEqual(items.map((item) => item.entityId), ['flow-checkout', 'flow-checkout']);
+  });
 });
 
 describe('flow CanvasItemProvider', () => {

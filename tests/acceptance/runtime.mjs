@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -61,10 +61,15 @@ export async function createRuntime(parent) {
         for (const resource of [...resources].reverse()) {
           try { await resource.cleanup(); } catch (error) { errors.push(new Error(resource.label, { cause: error })); }
         }
-        const results = await Promise.allSettled([...children].map(stop));
+        const captured = [...children];
+        const results = await Promise.allSettled(captured.map(stop));
         errors.push(...results.filter(result => result.status === 'rejected').map(result => result.reason));
         try { await rm(root, { recursive: true, force: true }); } catch (error) { errors.push(error); }
+        let rootAbsent = false;
+        try { await access(root); errors.push(new Error('Owned root remains after cleanup')); }
+        catch (error) { if (error.code === 'ENOENT') rootAbsent = true; else errors.push(error); }
         if (errors.length) throw new AggregateError(errors, 'Owned resource cleanup failed');
+        return { rootAbsent, capturedChildrenClosed: captured.every(child => child.exitCode !== null || child.signalCode !== null || child.launchError), remainingChildren: children.size, resourcesClosed: resources.length };
       })();
     },
   };

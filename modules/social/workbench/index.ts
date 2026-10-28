@@ -10,3 +10,4 @@ export { summarizeRun, type ResultSummary } from './results';
 export { draftFromResult, runAsOf, runCitation } from './citation';
 export { POLL_INTERVAL_MS, documentVisibility, watchRun, type Visibility } from './polling';
 export { runTool, workbenchView, type Attempt, type ToolDraft, type WorkbenchView } from './state';
+export { startDraftRunId } from './StartDraft';

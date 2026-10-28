@@ -8,7 +8,7 @@
  * visible project. Navigation performs no storage writes.
  */
 import {
-  systemClock, type CatalogEntryView, type CatalogReadPort, type ClockPort, type ProjectRecord,
+  StorageConflictError, systemClock, type CatalogEntryView, type CatalogReadPort, type ClockPort, type ProjectRecord,
   type ProjectRegistryPort, type ProjectStoragePort, type RegistryProvenance, type ThumbnailPort,
 } from './contract.ts';
 import {
@@ -276,6 +276,11 @@ export class ProjectsController {
       return { ok: true };
     } catch (error) {
       this.#set({ edit: { status: 'error', message: message(error) } });
+      if (error instanceof StorageConflictError) {
+        // The cached revision is stale; reload so the next edit applies to the stored revision.
+        this.#content.delete(project);
+        await this.#load(project);
+      }
       return { ok: false, error: message(error) };
     }
   }

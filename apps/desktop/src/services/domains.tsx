@@ -10,10 +10,13 @@ import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES } from '../../../..
 import { bridgeTransport, createPlannerLive } from '../../../../modules/work/live';
 import { serviceStatus } from './data-source-status';
 
+type Services = Pick<HqServices, 'social' | 'work'> & { config: Pick<HqServices['config'], 'status'> };
+type Examples = { planner?: () => import('../../../../modules/work/core/port').PlannerPort; social?: () => import('../../../../modules/social/core/port').SocialWorkspacePort };
+
 type Selection = 'live' | 'example' | 'unavailable';
 export const RELOAD_NOTE = 'Endpoint changes apply after HQ reloads.';
 /** No endpoint is read here. Only an explicit, valid unconfigured answer selects examples. */
-export async function selectService(services: HqServices | undefined, domain: ServiceDomain): Promise<Selection> {
+export async function selectService(services: Services | undefined, domain: ServiceDomain): Promise<Selection> {
   try {
     if (!services || typeof services[domain]?.call !== 'function' || typeof services.config?.status !== 'function') return 'unavailable';
     const status = await services.config.status(domain);
@@ -30,7 +33,7 @@ function Surface({ domain, selection, children }: { domain: string; selection: S
   </section>;
 }
 /** One factory per renderer. Promises cache the choice across remounts and concurrent renders. */
-export function createServiceDomains(getServices: () => HqServices | undefined) {
+export function createServiceDomains(getServices: () => Services | undefined, examples?: Examples) {
   let socialChoice: ReturnType<typeof chooseSocial> | undefined;
   let workChoice: Promise<Selection> | undefined;
   let workExport: ReturnType<typeof createWorkExportClient> | undefined;
@@ -38,7 +41,7 @@ export function createServiceDomains(getServices: () => HqServices | undefined) 
     const services = getServices();
     const selection = await selectService(services, 'social');
     const port = selection === 'live' ? createLiveSocialPort(services!.social)
-      : selection === 'example' ? createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port : null;
+      : selection === 'example' ? (examples?.social?.() ?? createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port) : null;
     return { selection, port };
   }
   function Social(props: ModulePort) {
@@ -53,7 +56,7 @@ export function createServiceDomains(getServices: () => HqServices | undefined) 
       const planner = createPlannerLive(bridgeTransport(services!.work));
       workExport = createWorkExportClient(services!.work);
       setWorkSessionPort(planner.port, { example: false, recovery: planner.recovery });
-    } else if (selection === 'example') setWorkSessionPort(examplePlanner(), { example: true });
+    } else if (selection === 'example') setWorkSessionPort(examples?.planner?.() ?? examplePlanner(), { example: true });
     return selection;
   }
   function Work(props: ModulePort) {

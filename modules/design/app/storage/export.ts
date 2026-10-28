@@ -1,7 +1,7 @@
 /**
  * Privacy-projected export of frozen requests, bound to the v1 packet shape as it stands at requests
- * PR33 (head 896a726dd92754c17f45e732b5c2cbd07a5ab3fa; the packet, freeze and review schemas are
- * unchanged since PR17 2438d6ff). DISABLED by default and fail-closed.
+ * head fb392cf5fa99ab5656df8b22b4a316b05153d5b5 (PR99's fixes on PR33 896a726d; the packet, freeze and review
+ * schemas are unchanged since PR17 2438d6ff). DISABLED by default and fail-closed.
  *
  * Why a projection and not just "export the workspace namespace": a freeze record holds the packet
  * AND the consumed draft (recoverable local history, including unselected attachment candidates)
@@ -17,7 +17,7 @@ import { canonicalBytes } from './canonical.ts';
 import { NamespaceClassError, type WorkspaceReader } from './backing.ts';
 
 export const REQUESTS_PACKET_PIN = Object.freeze({
-  requestsHead: '896a726dd92754c17f45e732b5c2cbd07a5ab3fa',
+  requestsHead: 'fb392cf5fa99ab5656df8b22b4a316b05153d5b5',
   packetSchema: 'hq.design.decision-packet/v1',
   freezeSchema: 'hq.design.request-freeze/v1',
   reviewEventSchema: 'hq.design.request-review-event/v1',

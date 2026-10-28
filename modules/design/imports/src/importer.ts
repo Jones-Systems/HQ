@@ -335,6 +335,13 @@ async function buildPlan(
     else if ((await recordDigest(ctx, existing)) !== existing.importState.writtenDigest) action = 'conflict';
     else action = 'updated';
 
+    // An open conflict this import neither re-raises nor still offers is stale:
+    // withdraw it so `take-incoming` cannot later apply a version the source dropped.
+    const stillPending = action === 'unchanged' && existing!.importState.itemDigest !== item.itemDigest;
+    if (conflict !== null && conflict.status === 'open' && action !== 'conflict' && !stillPending) {
+      conflictOps.push(put(ns, conflictDocument, KEYS.conflict(recordIdValue), { ...conflict, status: 'withdrawn', resolvedAt: importedAt }));
+    }
+
     if (action !== 'unchanged') {
       // Immutable version evidence: written once, never rewritten.
       if (!plannedVersions.has(versionIdValue)) {
@@ -399,7 +406,7 @@ async function buildPlan(
     counts: { items: records.length, created: count('created'), updated: count('updated'), unchanged: count('unchanged'), conflicts: count('conflict') },
     records, conflicts,
   };
-  const noop = manifest.counts.unchanged === manifest.counts.items;
+  const noop = manifest.counts.unchanged === manifest.counts.items && conflictOps.length === 0;
   if (noop) return { ok: true, noop, manifest, ops: [] };
   const ops: WriteOp[] = [
     ...blobOps, ...versionOps, ...recordOps, ...conflictOps,

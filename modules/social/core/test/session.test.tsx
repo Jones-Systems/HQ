@@ -76,6 +76,20 @@ describe('Social session state', () => {
     expect(isDirty(session.getState().editors.d!)).toBe(false);
   });
 
+  it('keeps the conflicted text and the conflict when reloading the latest copy fails', async () => {
+    const { port, controls } = createFixtureWorkspace();
+    const session = socialSession('p');
+    await session.load(port);
+    session.openEditor('d', workspaceSnapshot(session.getState().workspace)!.content.find((item) => item.id === FIXTURE_IDS.openDay)!);
+    session.editDraft('d', { body: 'Mine' });
+    controls.editElsewhere(FIXTURE_IDS.openDay, { body: 'Theirs' });
+    await session.saveEditor(port, 'd');
+    controls.setUnavailable(true);
+    expect(await session.reopenLatest(port, 'd')).toBeNull();
+    expect(session.getState().editors.d).toMatchObject({ status: 'conflict', fields: { body: 'Mine' } });
+    expect(session.getState().workspace).toMatchObject({ status: 'error', error: { kind: 'unavailable' } });
+  });
+
   it('keeps the last snapshot visible as stale when a reload fails', async () => {
     const { port, controls } = createFixtureWorkspace();
     const session = socialSession('p');

@@ -5,7 +5,7 @@ import {
   FEATURE_HQ_REFERENCES, hasFeature, isActiveRun, isDirty, isRunId,
   type Brand, type DraftEditor, type RunRecord, type WorkspaceLoad, type WorkspaceSnapshot,
 } from '../core';
-import { DELIVERED_LIMITS } from '../workbench';
+import { DELIVERED_LIMITS, startDraftRunId } from '../workbench';
 import { Freshness, clockTime, isOffline, isStale } from './freshness';
 
 export interface OverviewProps {
@@ -21,6 +21,12 @@ export interface OverviewProps {
 }
 
 const LIST_LIMIT = 5;
+
+/** Where an unsaved editor's text is shown: a Start draft on its run receipt, otherwise its Library editor. */
+function editorDestination(key: string): string {
+  const runId = startDraftRunId(key);
+  return runId === null ? `library/${key}` : `runs/${runId}`;
+}
 
 export const CAPABILITIES: readonly { readonly name: string; readonly tone: StatusTone; readonly label: string; readonly detail: string }[] = [
   { name: 'Analysis', tone: 'success', label: 'Available', detail: 'eight workbenches, offline, on material you supply' },
@@ -137,7 +143,7 @@ export function Overview({ snapshot, load, editors, brand, navigate, now, onChec
             <ul className="sd-rows">
               {unsaved.map(([key, editor]) => (
                 <li key={`editor-${key}`} className="sd-row">
-                  <button type="button" className="sd-row-main" onClick={() => navigate(`library/${key}`)}>
+                  <button type="button" className="sd-row-main" onClick={() => navigate(editorDestination(key))}>
                     <strong>{editor.fields.title || 'Untitled draft'}</strong>
                     <span className="hq-meta">{editor.status === 'conflict' ? 'Changed elsewhere' : 'Not saved yet'} · kept in this session</span>
                   </button>

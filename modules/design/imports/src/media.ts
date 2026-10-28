@@ -62,12 +62,14 @@ export function checkRecording(mediaType: string, bytes: Uint8Array): MediaCheck
 
 /**
  * Relative POSIX path with no traversal, absolute, drive, backslash, empty or
- * control-character segments. Case-folded duplicates are rejected separately.
+ * control-character segments. Percent signs and segments ending in a space or
+ * dot are rejected because URL parsers and Windows filesystems normalise them
+ * into traversal. Case-folded duplicates are rejected separately.
  */
 export function isSafeBundlePath(path: string): boolean {
   if (path.length === 0 || path.length > LIMITS.maxPathLength) return false;
-  if (/[\u0000-\u001f\u007f\\]/u.test(path) || path.startsWith('/') || /^[A-Za-z]:/u.test(path)) return false;
-  return path.split('/').every((segment) => segment.length > 0 && segment !== '.' && segment !== '..');
+  if (/[\u0000-\u001f\u007f\\%]/u.test(path) || path.startsWith('/') || /^[A-Za-z]:/u.test(path)) return false;
+  return path.split('/').every((segment) => segment.length > 0 && !segment.endsWith('.') && !segment.endsWith(' '));
 }
 
 export function checkHtmlBundle(entry: string, files: readonly SourceFile[]): MediaCheck<null> {

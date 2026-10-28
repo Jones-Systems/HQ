@@ -38,7 +38,10 @@ export function createFlowRepository(storage: FlowStoragePort): FlowRepository {
     async listForProject(projectId) {
       const flows: FlowDocument[] = [];
       for (const key of await storage.listKeys('workspace', FLOW_KEY_PREFIX)) {
-        const result = await load(decodeURIComponent(key.slice(FLOW_KEY_PREFIX.length)) as FlowId);
+        let id: FlowId;
+        // A malformed key cannot name a flow; skip it rather than fail the whole listing.
+        try { id = decodeURIComponent(key.slice(FLOW_KEY_PREFIX.length)) as FlowId; } catch { continue; }
+        const result = await load(id);
         if (result.status === 'ok' && result.flow.projectId === projectId) flows.push(result.flow);
       }
       return flows;

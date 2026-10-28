@@ -109,7 +109,8 @@ export function createEditor(store: WorkStore, feedback: Feedback, detail: Detai
     }
     const sent = buffer.text;
     const value = field === 'area' ? (sent.trim() ? sent : null) : sent;
-    const outcome = await save({ [field]: value }, { base: { [field]: buffer.base }, toast: field === 'notes' ? undefined : `Saved ${FIELD_WORD[field]}` });
+    // The buffer base is display text (null shown as ''); compare against the Planner's raw value, just checked equal.
+    const outcome = await save({ [field]: value }, { base: { [field]: item[field] }, toast: field === 'notes' ? undefined : `Saved ${FIELD_WORD[field]}` });
     if (outcome.status === 'saved') {
       const now = detail.buffer(itemId, field);
       if (now?.text === sent) detail.clearBuffer(itemId, field);
