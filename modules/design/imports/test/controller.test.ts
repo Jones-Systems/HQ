@@ -103,6 +103,9 @@ test('media checks: signatures, dimensions, safe paths and URL policy', () => {
   assert.equal(checkRecording('video/quicktime', mp4()).ok, false);
   for (const path of ['../x', '/abs', 'C:/x', 'a\\b', 'a//b', './a', 'a/./b', '']) assert.equal(isSafeBundlePath(path), false, path);
   assert.equal(isSafeBundlePath('assets/img/logo.png'), true);
+  // Encoded dot segments and trailing space/dot segments normalise into traversal elsewhere.
+  for (const path of ['%2e%2e/x', '.%2E/x', 'a/%2e%2e/b', 'a%2Fb', '.. /x', 'x./y', 'a/b.', 'a /b']) assert.equal(isSafeBundlePath(path), false, path);
+  for (const path of ['index.html', 'css/site.css', 'my file.html', '.well-known/a.json']) assert.equal(isSafeBundlePath(path), true, path);
   const html = { path: 'index.html', mediaType: 'text/html', bytes: new Uint8Array(1) };
   assert.equal(checkHtmlBundle('index.html', [html, { ...html, path: 'INDEX.html' }]).ok, false, 'case-folded duplicate');
   assert.equal(checkHtmlBundle('main.html', [html]).ok, false);

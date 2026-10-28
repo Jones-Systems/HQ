@@ -120,13 +120,19 @@ export class SocialSession {
     return this.save(port, key, editor, { ...editor.fields });
   }
 
-  /** Reloads the workspace and replaces the editor with the latest stored copy. */
+  /**
+   * Reloads the workspace and replaces the editor with the latest stored copy. Only a fresh read holding a
+   * newer version replaces it; otherwise the editor keeps its text and state, and null is returned.
+   */
   async reopenLatest(port: SocialWorkspacePort, key: string): Promise<Draft | null> {
     const editor = this.state.editors[key];
     if (!editor?.base) return null;
     await this.load(port);
-    const latest = workspaceSnapshot(this.state.workspace)?.content.find((draft) => draft.id === editor.base!.id) ?? null;
-    if (latest) this.setEditor(key, { base: latest, fields: draftFields(latest), status: 'editing' });
+    const load = this.state.workspace;
+    if (load.status !== 'ready') return null;
+    const latest = load.snapshot.content.find((draft) => draft.id === editor.base!.id);
+    if (!latest || latest.version <= editor.base.version) return null;
+    this.setEditor(key, { base: latest, fields: draftFields(latest), status: 'editing' });
     return latest;
   }
 

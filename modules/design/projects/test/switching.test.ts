@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { createProjectsController } from '../src/controller.ts';
-import { stableStringify } from '../src/content.ts';
+import { addView, stableStringify } from '../src/content.ts';
 import { createProvisionalLocalRegistry } from '../src/registry.ts';
+import { contentKey } from '../src/repository.ts';
 import { exportSessionMemory, importSessionMemory, memoryFor, parseDestination, toDestination } from '../src/session.ts';
 import { projectId, versionId, viewId } from '../src/ids.ts';
 import type { CatalogReadPort, ProjectRegistryPort } from '../src/contract.ts';
@@ -131,6 +132,25 @@ describe('project switching', () => {
     // Persisted and re-read: earlier versions are value-identical, field for field.
     earlier.forEach((version, index) => assert.equal(stableStringify(after.content.versions[index]), stableStringify(version)));
     assert.equal(memoryFor(controller.getSnapshot().session, A).selection.versionId, after.content.versions.at(-1)!.id);
+  });
+
+  test('an edit conflict reloads the project so the next edit applies to the fresh revision', async () => {
+    const { controller, storage, seeded } = await setup();
+    const A = seeded.projectIds[0]!;
+    controller.openProject(A);
+    await settle();
+    // A concurrent writer bumps the stored revision behind the cached copy.
+    const concurrent = addView(seeded.contents[0]!, { id: viewId('concurrent-view'), title: 'Concurrent', kind: 'page' }, '2026-01-02T00:00:00.000Z');
+    storage.seed('workspace', contentKey(A), concurrent);
+    const conflicted = await controller.addView('Mine', 'screen');
+    assert.equal(conflicted.ok, false);
+    assert.equal(controller.getSnapshot().edit.status, 'error', 'the conflict is surfaced');
+    const reloaded = controller.getSnapshot().active;
+    assert.equal(reloaded?.status, 'ready');
+    assert.ok(reloaded?.status === 'ready' && reloaded.content.views.some((view) => view.id === 'concurrent-view'), 'fresh content is shown');
+    assert.deepEqual(await controller.addView('Mine', 'screen'), { ok: true }, 'the retry does not conflict forever');
+    const after = controller.getSnapshot().active;
+    assert.deepEqual(after?.status === 'ready' ? after.content.views.slice(-2).map((view) => view.title) : null, ['Concurrent', 'Mine']);
   });
 
   test('rapid A→B→C shows only C even when earlier loads resolve late', async () => {

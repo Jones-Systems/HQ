@@ -231,14 +231,21 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
     const replayed = 'replayed' in result && result.replayed;
     const stale = 'stale' in result && result.stale === true;
     if (stale) set({ refreshDue: true });
-    // A replay carries the originally recorded items, which may be stale.
-    if (!replayed && result.stateVersion > known) {
+    // A replay carries the originally recorded items, which may be stale. Responses may arrive out of order, so an
+    // older response still contributes each item at a newer revision than the one held, and the state version only
+    // moves forward. A move renumbers neighbours without a new revision, so a newer response also keeps equal ones.
+    if (!replayed) {
+      const newer = result.stateVersion > known;
       let items = confirmed.items;
       const updates = 'settings' in result ? [] : [...(result.item ? [result.item] : []), ...result.changed];
       for (const update of updates) {
-        items = items.some((item) => item.id === update.id) ? items.map((item) => item.id === update.id ? update : item) : [...items, update];
+        const held = items.find((item) => item.id === update.id);
+        if (!held) items = [...items, update];
+        else if (update.revision > held.revision || (newer && update.revision === held.revision)) items = items.map((item) => item.id === update.id ? update : item);
       }
-      set({ confirmed: { ...confirmed, items, stateVersion: result.stateVersion, settings: 'settings' in result ? result.settings : confirmed.settings } });
+      if (newer || items !== confirmed.items) {
+        set({ confirmed: { ...confirmed, items, stateVersion: Math.max(known, result.stateVersion), settings: newer && 'settings' in result ? result.settings : confirmed.settings } });
+      }
     }
     if (replayed || stale || result.stateVersion !== known + 1) void refresh();
   }

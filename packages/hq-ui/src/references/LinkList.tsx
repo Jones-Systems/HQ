@@ -23,21 +23,31 @@ export function LinkList({ entries, projectId, onOpen, onUnlink, onUpdateSnapsho
   const [error, setError] = useState('');
   const undoRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLParagraphElement>(null);
+  // Disabling the focused button drops keyboard focus to <body>; give it back when nothing else took it.
+  const returnFocus = useRef<HTMLElement | null>(null);
   useEffect(() => { if (notice) undoRef.current?.focus(); }, [notice]);
-  const mutate = async (message: string, action: () => ReferenceUndo | Promise<ReferenceUndo>) => {
-    if (busy.current) return;
+  useEffect(() => {
+    const target = returnFocus.current;
+    if (pending || !target) return;
+    returnFocus.current = null;
+    if (target.isConnected && (!document.activeElement || document.activeElement === document.body)) target.focus();
+  }, [pending]);
+  const start = () => {
     busy.current = true;
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setPending(true);
     setError('');
+  };
+  const mutate = async (message: string, action: () => ReferenceUndo | Promise<ReferenceUndo>) => {
+    if (busy.current) return;
+    start();
     try { setNotice({ message, action: await action() }); }
     catch { setError('Change was not confirmed. Check the source record before trying again.'); }
     finally { busy.current = false; setPending(false); }
   };
   const undo = async () => {
     if (!notice || busy.current) return;
-    busy.current = true;
-    setPending(true);
-    setError('');
+    start();
     try { await notice.action.undo(); setNotice(undefined); headingRef.current?.focus(); }
     catch { setError('Undo was not confirmed. Check the source record before trying again.'); }
     finally { busy.current = false; setPending(false); }

@@ -409,6 +409,10 @@ export function createOutbox(options: OutboxOptions): Outbox {
     if (inflight.has(initial.record.packet.packetId)) {
       return { dispatchId, before: first.state, after: first.state, detail: 'send in progress in this session' };
     }
+    // An owner-confirmed fence holds the reservation; a readback write here would discard its answer.
+    if (resolving.has(initial.record.packet.packetId)) {
+      return { dispatchId, before: first.state, after: first.state, detail: 'owner-confirmed resolution in progress in this session' };
+    }
     let stored: StoredDispatch | null = initial;
     if (first.state === 'submitting') stored = await interrupt(initial);
     if (!stored) return { dispatchId, before: first.state, after: first.state, detail: 'record changed concurrently' };
@@ -489,6 +493,8 @@ export function createOutbox(options: OutboxOptions): Outbox {
     if (usedResolutions.has(key)) return refused('This resolution confirmation was already used.');
     resolving.add(record.packet.packetId);
     usedResolutions.add(key);
+    let fenced = false;
+    let answer: string | null = null;
     try {
       // Consume the generation before the effect, including across processes or a restart.
       // A crash or lost answer leaves unknown; this confirmation cannot repeat the fence.
@@ -509,6 +515,7 @@ export function createOutbox(options: OutboxOptions): Outbox {
       }
       let next = reserved;
       let detail = 'Still unknown: unrecognized fence result. Nothing is resent.';
+      fenced = true;
       if (isRecord(raw) && raw.kind === 'found' && isRecord(raw.receipt)
         && (raw.receipt.status === 'accepted' || raw.receipt.status === 'held')
         && isReceipt(raw.receipt, latest.idempotencyKey, raw.receipt.status)) {
@@ -526,12 +533,16 @@ export function createOutbox(options: OutboxOptions): Outbox {
         }
         next = transitionAttempt(reserved, { state: 'unknown', basis: reserved.basis, at: nowIso(), reason: detail });
       }
+      answer = `${next.state}: ${detail}`;
       const put = await store.put(withLatest(record, next), reservation.revision);
       return {
         outcome: 'resolved', state: next.state as 'accepted' | 'held' | 'no-effect' | 'unknown', persisted: put.ok,
         detail: put.ok ? detail : `${detail} Record changed concurrently; fence result not saved.`,
       };
     } catch (error) {
+      if (fenced) {
+        return { outcome: 'persist-failed', reason: `The fence was called${answer ? ` and answered (${answer})` : ''}, but saving the result failed; the record stays unknown. Do not retry this confirmation (${errorText(error)}).` };
+      }
       return { outcome: 'persist-failed', reason: `Resolution persistence failed; do not retry this confirmation (${errorText(error)}).` };
     } finally {
       resolving.delete(record.packet.packetId);

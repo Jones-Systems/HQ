@@ -199,7 +199,8 @@ export async function createRunsPipeline(
           reason: session.state.error ?? 'Unknown handoff. Do not resend.',
         };
         const result: SubmitResult = await pending;
-        await refresh(session);
+        // The outbox result is durable; a failed lane read-back must not relabel it unknown. Refresh re-reads it.
+        await refresh(session).catch(() => undefined);
         return result;
       } catch (error) {
         return {

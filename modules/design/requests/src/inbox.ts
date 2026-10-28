@@ -20,9 +20,12 @@ export function inboxOf(candidates: readonly ReturnedCandidate[], reviews: reado
       candidate, decision: events.at(-1)?.decision ?? null,
       origin: candidate.provenance?.origin ?? 'connector', versionless: candidate.candidateVersionId === null,
     };
-  }).sort((a, b) => (a.candidate.observedAt === b.candidate.observedAt
-    ? (a.candidate.candidateId < b.candidate.candidateId ? -1 : 1)
-    : (a.candidate.observedAt < b.candidate.observedAt ? 1 : -1)));
+  }).sort((a, b) => {
+    // Timestamps may or may not carry fractional seconds, so compare instants, not strings.
+    const age = Date.parse(b.candidate.observedAt) - Date.parse(a.candidate.observedAt);
+    if (age !== 0) return age;
+    return a.candidate.candidateId < b.candidate.candidateId ? -1 : 1;
+  });
 }
 
 export function unreviewedCount(items: readonly InboxItem[]): number {

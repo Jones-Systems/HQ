@@ -1,13 +1,22 @@
+import { useState } from 'react';
 import { Button, SaveIndicator, StatusChip } from '@hq/ui';
-import { CHANNELS, isDirty, workspaceSnapshot, type Channel, type RunRecord } from '../core';
+import { CHANNELS, workspaceSnapshot, type Channel, type RunRecord } from '../core';
+import { errorText, reconcileUnknownSave, saveStateOf, type Reconciliation } from '../content/actions';
 import { canSaveCitation, draftFromResult, runCitation } from './citation';
 import { useWorkbench } from './env';
 import { SelectField, TextField } from './fields';
 import { shortId } from './format';
 import type { ResultSummary } from './results';
 
+const START_DRAFT_PREFIX = 'workbench-run:';
+
 export function startDraftKey(runId: string): string {
-  return `workbench-run:${runId}`;
+  return `${START_DRAFT_PREFIX}${runId}`;
+}
+
+/** The run whose receipt holds a Start draft editor, or null for any other editor key. */
+export function startDraftRunId(key: string): string | null {
+  return key.startsWith(START_DRAFT_PREFIX) ? key.slice(START_DRAFT_PREFIX.length) : null;
 }
 
 /**
@@ -22,6 +31,7 @@ export function StartDraft({ run, toolName, summary }: { readonly run: RunRecord
   const editor = state.editors[key];
   const citation = runCitation(run, toolName, context.id);
   const savesCitation = canSaveCitation(features);
+  const [check, setCheck] = useState<Reconciliation | null>(null);
 
   if (!editor) {
     return (
@@ -33,14 +43,25 @@ export function StartDraft({ run, toolName, summary }: { readonly run: RunRecord
   }
 
   const saved = editor.base;
-  const saveState = editor.status === 'saving' ? 'saving' : editor.status === 'error' || editor.status === 'conflict' ? 'failed' : saved && !isDirty(editor) ? 'saved' : 'unsaved';
+  const saveState = saveStateOf(editor);
+  // A save whose result is unknown is never repeated until a check shows it did not happen (RS-3).
+  const unchecked = editor.status === 'error' && editor.error?.kind === 'unknown' && check?.kind !== 'not-applied';
+  const save = () => {
+    if (unchecked) return;
+    setCheck(null);
+    void session.saveEditor(port, key);
+  };
   const id = (field: string) => `sw-start-${run.id}-${field}`;
   const brands = snapshot?.brands ?? [];
   return (
     <section className="sw-start sw-start--open" aria-labelledby={id('title-heading')}>
       <div className="sw-panel-head">
         <h4 id={id('title-heading')}>{saved ? 'Draft in library' : 'Unsaved draft'}</h4>
-        <SaveIndicator state={saveState} {...(saveState === 'failed' ? { onRetry: () => void session.saveEditor(port, key) } : {})} />
+        <SaveIndicator
+          state={saveState}
+          {...(saveState === 'failed' ? { onRetry: save } : {})}
+          onCheck={async () => setCheck(await reconcileUnknownSave(session, port, key))}
+        />
       </div>
       <TextField id={id('title')} label="Title" value={editor.fields.title} onChange={(title) => session.editDraft(key, { title })} />
       <TextField id={id('body')} label="Draft" multiline rows={8} value={editor.fields.body} onChange={(body) => session.editDraft(key, { body })} />
@@ -67,13 +88,28 @@ export function StartDraft({ run, toolName, summary }: { readonly run: RunRecord
         </details>
       </div>
       {editor.error && 'message' in editor.error && <p className="sw-error" role="alert">{editor.error.message}</p>}
-      {editor.error && !('message' in editor.error) && <p className="sw-error" role="alert">Not saved: the Social service answered {editor.error.kind}. Your text is kept here.</p>}
+      {editor.error && !('message' in editor.error) && editor.error.kind !== 'unknown' && <p className="sw-error" role="alert">Not saved: the Social service answered {editor.error.kind}. Your text is kept here.</p>}
+      {editor.error?.kind === 'unknown' && !check && <p className="sw-error" role="alert">{errorText(editor.error)} Your text is kept here.</p>}
+      {check && (
+        <p className="sw-hint" role="status">
+          {check.kind === 'applied' && 'Checked: your save was stored.'}
+          {check.kind === 'not-applied' && 'Checked: the save did not happen. Your text is kept; save again when ready.'}
+          {check.kind === 'changed' && 'Checked: a different version is stored now. Open it in the library before saving again.'}
+          {check.kind === 'unavailable' && 'Could not check: the Social service is unreachable. Your text is kept.'}
+          {check.kind === 'possible-match' && (
+            <>
+              A draft with exactly this text now exists. It may be your save, but that cannot be proved.{' '}
+              <Button size="sm" variant="ghost" onClick={() => navigate(`library/${check.drafts[0]!.id}`)}>Open it</Button>
+            </>
+          )}
+        </p>
+      )}
       <div className="sw-actions">
-        <Button variant="primary" busy={editor.status === 'saving'} busyLabel="Saving" onClick={() => void session.saveEditor(port, key)}>
+        <Button variant="primary" busy={editor.status === 'saving'} busyLabel="Saving" disabled={unchecked} onClick={save}>
           {saved ? 'Save changes' : 'Save to library'}
         </Button>
         {saved && <Button onClick={() => navigate(`library/${saved.id}`)}>Open in library</Button>}
-        {!saved && <Button variant="ghost" onClick={() => session.closeEditor(key)}>Discard</Button>}
+        {!saved && <Button variant="ghost" disabled={editor.status === 'saving'} onClick={() => { setCheck(null); session.closeEditor(key); }}>Discard</Button>}
       </div>
       <p className="sw-hint">Saving stores a draft only. It never posts, schedules or publishes.</p>
     </section>

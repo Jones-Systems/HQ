@@ -225,6 +225,45 @@ it('guards pending mutations and keeps failed Undo available with an honest erro
   expect(undo).toHaveBeenCalledOnce();
 });
 
+/** Chromium's focus fixup moves focus to <body> when the focused button becomes disabled; happy-dom does not. */
+function dropFocusLikeChromium() {
+  const sink = document.body.appendChild(document.createElement('input'));
+  sink.focus();
+  sink.remove();
+}
+
+it('returns keyboard focus to the control after a failed action, where browsers drop it from the disabled button', async () => {
+  const user = userEvent.setup();
+  let fail!: (reason: Error) => void;
+  const unlink = vi.fn(() => new Promise<never>((_, reject) => { fail = reject; }));
+  render(<LinkList entries={[entries[0]!]} now={NOW} projectId="demo-project" onUnlink={unlink} />);
+  await user.tab();
+  const button = screen.getByRole('button', { name: /^Unlink/ });
+  expect(document.activeElement).toBe(button);
+  await user.keyboard('{Enter}');
+  dropFocusLikeChromium();
+  expect(document.activeElement).toBe(document.body);
+  await act(async () => { fail(new Error('conflict')); });
+  expect(await screen.findByRole('alert')).toBeTruthy();
+  expect(document.activeElement).toBe(button);
+});
+
+it('returns keyboard focus to Undo after a failed Undo', async () => {
+  const user = userEvent.setup();
+  let fail!: (reason: Error) => void;
+  const undo = vi.fn(() => new Promise<void>((_, reject) => { fail = reject; }));
+  render(<LinkList entries={[entries[0]!]} now={NOW} projectId="demo-project" onUnlink={async () => ({ undo })} />);
+  await user.tab();
+  await user.keyboard('{Enter}');
+  const undoButton = await screen.findByRole('button', { name: 'Undo' });
+  await waitFor(() => expect(document.activeElement).toBe(undoButton));
+  await user.keyboard('{Enter}');
+  dropFocusLikeChromium();
+  await act(async () => { fail(new Error('version conflict')); });
+  expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Undo was not confirmed. Check the source record before trying again.');
+  expect(document.activeElement).toBe(undoButton);
+});
+
 it('never offers snapshot updates for invalid, stale, unavailable or foreign observations', () => {
   const cases: ReferenceEntry[] = [
     { ...entries[1]!, stale: true },

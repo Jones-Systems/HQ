@@ -13,12 +13,12 @@ import { digestBytes } from './identity.ts';
 export const CATALOG_CACHE_KEY = 'design.discovery.catalog';
 export const CATALOG_CACHE_SCHEMA = 'hq.design.discovery-cache/v1';
 
-export type CacheLoadStatus = 'warm' | 'cold' | 'corrupt-rebuilt' | 'future-readonly';
+export type CacheLoadStatus = 'warm' | 'cold' | 'corrupt-rebuilt' | 'future-readonly' | 'unavailable-readonly';
 
 export interface CacheLoad {
   readonly status: CacheLoadStatus;
   readonly catalog: CatalogState;
-  /** False when the stored cache is from a newer schema; it must not be overwritten. */
+  /** False when the stored cache is from a newer schema or could not be read; it must not be overwritten. */
   readonly writable: boolean;
 }
 
@@ -116,7 +116,8 @@ export function serializeCatalogCache(catalog: CatalogState, savedAt: IsoTime): 
 /** Reads only the local cache. Never waits on a source and never writes the workspace. */
 export async function loadCatalogCache(port: CacheStoragePort, savedAt: IsoTime): Promise<CacheLoad> {
   let text: string | null;
-  try { text = await port.readDocument(CATALOG_CACHE_KEY); } catch { text = ''; }
+  // A failed read says nothing about the stored bytes, so never rebuild over them.
+  try { text = await port.readDocument(CATALOG_CACHE_KEY); } catch { return { status: 'unavailable-readonly', catalog: EMPTY_CATALOG, writable: false }; }
   if (text === null) return { status: 'cold', catalog: EMPTY_CATALOG, writable: true };
   const parsed = await parseCatalogCache(text);
   if (parsed.kind === 'ok') return { status: 'warm', catalog: parsed.catalog, writable: true };

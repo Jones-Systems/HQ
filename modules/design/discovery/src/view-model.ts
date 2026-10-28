@@ -65,6 +65,7 @@ const SOURCE_LABELS: Record<SourceStatus | 'refreshing', string> = {
 const CACHE_LABELS: Record<DiscoveryState['cacheStatus'], string> = {
   'not-loaded': 'Loading cache…', warm: 'Showing cached catalog', cold: 'No cached catalog yet',
   'corrupt-rebuilt': 'Cache was unreadable and has been rebuilt', 'future-readonly': 'Cache is from a newer version and is left unchanged',
+  'unavailable-readonly': 'Cache could not be read and is left unchanged',
 };
 
 export function ageLabel(iso: string | null, now: number): string {

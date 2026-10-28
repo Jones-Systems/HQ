@@ -129,6 +129,24 @@ describe('Calendar moves', () => {
     expect(lastWrite(rec)!.args.slice(0, 3)).toEqual(['ex-choir', 1, { dates: [] }]);
   });
 
+  it('a cancelled chip drag leaves nothing armed: a later unrelated drop on a day or the tray changes nothing', async () => {
+    const { rec, container } = await setup({ view: 'calendar' });
+    const holder = chip('Repaint the garden shed').closest<HTMLElement>('[data-focus-key]')!;
+    fireEvent.dragStart(holder);
+    fireEvent.dragEnd(holder);
+    const day = container.querySelector<HTMLElement>('.wv-month [data-day="2026-10-27"]')!;
+    fireEvent.drop(day);
+    fireEvent.drop(screen.getByRole('region', { name: 'Unscheduled items' }));
+    const tray = screen.getByRole('region', { name: 'Unscheduled items' });
+    const undated = within(tray).getByText('Tune up the old bicycle').closest<HTMLElement>('[draggable="true"]')!;
+    fireEvent.dragStart(undated);
+    fireEvent.dragEnd(undated);
+    fireEvent.drop(day);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(rec.writes()).toHaveLength(0);
+  });
+
   it('dragging an unscheduled item onto a day asks which kind of date to create', async () => {
     const user = userEvent.setup();
     const { rec, container } = await setup({ view: 'calendar' });
@@ -232,6 +250,15 @@ describe('Timeline moves', () => {
     fireEvent.drop(lane);
     await waitFor(() => expect(rec.writes()).toHaveLength(1));
     expect(lastWrite(rec)!.args.slice(0, 3)).toEqual(['ex-bike', 1, { horizon: 'later' }]);
+  });
+
+  it('a cancelled row drag leaves nothing armed: a later unrelated drop on a lane changes nothing', async () => {
+    const { rec } = await setup({ view: 'timeline' });
+    fireEvent.dragStart(row('Tune up the old bicycle'));
+    fireEvent.dragEnd(row('Tune up the old bicycle'));
+    fireEvent.drop(screen.getByRole('region', { name: /^Later lane/ }));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(rec.writes()).toHaveLength(0);
   });
 
   it('draws a bar only between a start date and a later end, and shows eight quarters', async () => {

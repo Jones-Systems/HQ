@@ -28,6 +28,18 @@ it('aggregates read-only providers, deduplicates, caches per identity, and refre
   now += RESOLUTION_MAX_AGE + 1; expect((await port.resolve(envelope)).status).toBe('unknown'); expect(p.resolve).toHaveBeenCalledTimes(2);
   expect(open).not.toHaveBeenCalled();
 });
+it('a failed or inconclusive resolution is not cached, so the next resolve asks the provider again', async () => {
+  let failing = true;
+  const p = provider(vi.fn(async () => { if (failing) throw new Error('transient'); return { status: 'available' as const, observedAt: new Date(1000).toISOString(), destination: 'item/one' }; }));
+  const port = createReferencePort([p], { projectId: () => 'hq-local', open: vi.fn(), notice: vi.fn() }, () => 1000);
+  expect((await port.resolve(envelope)).status).toBe('unavailable');
+  failing = false;
+  expect((await port.resolve(envelope)).status).toBe('available'); expect(p.resolve).toHaveBeenCalledTimes(2);
+  await port.resolve(envelope); expect(p.resolve).toHaveBeenCalledTimes(2);
+  const inconclusive = { domain: 'work' as const, kinds: ['item'], find: vi.fn(async () => []), resolve: vi.fn(async () => ({ status: 'unknown' as const, observedAt: new Date(1000).toISOString() })) } satisfies ReferenceProvider;
+  const second = createReferencePort([inconclusive], { projectId: () => 'hq-local', open: vi.fn(), notice: vi.fn() }, () => 1000);
+  await second.resolve(envelope); await second.resolve(envelope); expect(inconclusive.resolve).toHaveBeenCalledTimes(2);
+});
 it('unknown kinds and mismatched projects remain read-only and never call a provider', () => {
   const p = provider(), open = vi.fn(), notice = vi.fn(), port = createReferencePort([p], { projectId: () => 'hq-local', open, notice });
   const back = { label: 'Source', to: envelope.returnDestination };

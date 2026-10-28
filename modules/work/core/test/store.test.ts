@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createPlannerLive } from '../../live';
 import { fixtureTransport } from '../../live/test/support';
 import { createFixturePlanner, MAX_REMEMBERED_REQUESTS } from '../fixtures/adapter';
@@ -380,6 +380,52 @@ describe('undo (RW-7, RW-8)', () => {
     const { store, byTitle } = await setup();
     for (let i = 0; i < UNDO_LIMIT + 5; i += 1) await store.patch(byTitle('A').id, { notes: `n${i}` });
     expect(store.getState().undo).toHaveLength(UNDO_LIMIT);
+  });
+});
+
+describe('save responses arriving out of order', () => {
+  it('keeps an older response for another card instead of dropping it', async () => {
+    const now = clock();
+    const fixture = createFixturePlanner({ now, newId: counter('item') });
+    const otherRid = counter('other-', 8);
+    for (const title of ['B', 'A']) await fixture.port.create({ title, status: 'next' }, otherRid());
+    const faulty = withFaults(fixture.port);
+    // Each patch is applied by the Planner at once; its response is held until released.
+    const held: (() => void)[] = [];
+    const port: PlannerPort = {
+      ...faulty.port,
+      patch: async (...args: Parameters<PlannerPort['patch']>) => {
+        const result = await faulty.port.patch(...args);
+        await new Promise<void>((resolve) => held.push(resolve));
+        return result;
+      },
+    };
+    const store = createWorkStore(port, { now, newRequestId: counter('req-', 8) });
+    await store.load();
+    const byTitle = (title: string) => store.getState().confirmed!.items.find((i) => i.title === title)!;
+    const start = store.getState().confirmed!.stateVersion;
+    // No snapshot can repair the held state behind the store's back.
+    faulty.faults.readsUnavailable(true);
+
+    const savingA = store.patch(byTitle('A').id, { notes: 'A notes' });
+    await vi.waitFor(() => expect(held).toHaveLength(1));
+    const savingB = store.patch(byTitle('B').id, { notes: 'B notes' });
+    await vi.waitFor(() => expect(held).toHaveLength(2));
+    held[1]!();
+    expect(await savingB).toMatchObject({ status: 'saved' });
+    held[0]!();
+    expect(await savingA).toMatchObject({ status: 'saved' });
+
+    expect(byTitle('A')).toMatchObject({ notes: 'A notes', revision: 2 });
+    expect(byTitle('B')).toMatchObject({ notes: 'B notes', revision: 2 });
+    expect(store.getState().confirmed!.stateVersion).toBe(start + 2);
+
+    faulty.faults.readsUnavailable(false);
+    const again = store.patch(byTitle('A').id, { notes: 'A again' });
+    await vi.waitFor(() => expect(held).toHaveLength(3));
+    held[2]!();
+    expect(await again).toMatchObject({ status: 'saved' });
+    expect(byTitle('A')).toMatchObject({ notes: 'A again', revision: 3 });
   });
 });
 

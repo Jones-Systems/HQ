@@ -246,6 +246,25 @@ test('status readback stores the last-known value and refuses stale, regressing 
   assert.equal(stored.state, 'returned');
 });
 
+test('status freshness compares instants, with and without fractional seconds', async () => {
+  const newer = await frozenWithDestination();
+  await newer.session.send(newer.e.connector.dispatch, newer.packet.packetId, 'dest-1');
+  newer.e.connector.set(newer.link, 'running', {}, '2026-01-01T02:00:00Z');
+  await newer.session.refreshHandoff(newer.e.connector.status);
+  newer.e.connector.set(newer.link, 'returned', {}, '2026-01-01T02:00:00.500Z');
+  await newer.session.refreshHandoff(newer.e.connector.status);
+  assert.equal(newer.session.state.statuses[0]!.state, 'returned', 'a later reading with fractional seconds is accepted');
+
+  const older = await frozenWithDestination();
+  await older.session.send(older.e.connector.dispatch, older.packet.packetId, 'dest-1');
+  older.e.connector.set(older.link, 'running', {}, '2026-01-01T02:00:00.500Z');
+  await older.session.refreshHandoff(older.e.connector.status);
+  older.e.connector.set(older.link, 'queued', {}, '2026-01-01T02:00:00Z');
+  await older.session.refreshHandoff(older.e.connector.status);
+  assert.equal(older.session.state.statuses[0]!.state, 'running', 'an earlier reading without fractional seconds is refused');
+  assert.match(older.session.state.readbackNotes.join(' '), /older than the stored status/u);
+});
+
 test('a failing or malformed status read keeps the last-known status and reports why', async () => {
   const { e, session, packet, link } = await frozenWithDestination();
   await session.send(e.connector.dispatch, packet.packetId, 'dest-1');
@@ -316,6 +335,16 @@ test('inbox order is newest first and tracks the latest decision per candidate',
   await session.review(older, 'reject');
   const items = inboxOf(session.state.candidates, session.state.reviews);
   assert.deepEqual(items.map((item) => [item.candidate.candidateId, item.decision]), [['cand-new', null], ['cand-old', 'reject']]);
+});
+
+test('inbox order compares instants, with and without fractional seconds', async () => {
+  const { e, session, link } = await frozenWithDestination();
+  e.connector.publishReturn({ ...connectorReturn(link, 'cand-whole'), observedAt: '2026-01-02T00:00:00Z' });
+  e.connector.publishReturn({ ...connectorReturn(link, 'cand-later'), observedAt: '2026-01-02T00:00:00.500Z' });
+  e.connector.publishReturn({ ...connectorReturn(link, 'cand-tie'), observedAt: '2026-01-02T00:00:00.000Z' });
+  await session.refreshReturns(e.connector.returns);
+  const items = inboxOf(session.state.candidates, session.state.reviews);
+  assert.deepEqual(items.map((item) => item.candidate.candidateId), ['cand-later', 'cand-tie', 'cand-whole'], 'equal instants fall back to candidate id');
 });
 
 test('a return without a comparable version is stored, listed and reviewable without inventing a version', async () => {
