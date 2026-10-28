@@ -152,6 +152,34 @@ it('BQ-4(c) checks every private directory owner and group/world write bits', as
     expect(await reader(f.home, { fs: { ...fs, lstat } })(publisherId, null)).toEqual({ kind: 'held', reason: 'bindings_untrusted' });
   }
 });
+it('BQ-R1 keeps intermediate directory custody checks when home has a trailing separator', async () => {
+  const home = '/synthetic/h', directory = home + '/.local/share/host-tooling/hq-sync/consumer-bindings';
+  const file = directory + '/' + publisherId + '.json', bytes = vector();
+  let localMode = 0o700n;
+  const stat = (path: string) => ({
+    dev: 1n, ino: BigInt(path.length), uid: 1000n, nlink: 1n,
+    mode: path === home + '/.local' ? localMode : path === file ? 0o600n : 0o700n,
+    size: path === file ? BigInt(bytes.length) : 0n,
+    isDirectory: () => path !== file, isFile: () => path === file, isSymbolicLink: () => false,
+  });
+  const open = vi.fn(async (path: string) => {
+    let position = 0;
+    return { stat: async () => stat(path), close: async () => {},
+      read: async (buffer: Uint8Array, offset: number, length: number) => {
+        const part = bytes.subarray(position, position + length);
+        buffer.set(part, offset); position += part.length; return { bytesRead: part.length };
+      } };
+  });
+  const seam = { platform: 'linux', uid: () => 1000, constants, fs: { lstat: async (path: string) => stat(path), open } };
+  for (const suffix of ['', '/']) {
+    const read = reader(home + suffix, seam);
+    localMode = 0o700n;
+    expect(await read(publisherId, null)).toMatchObject({ kind: 'advanced', set: { sha256: vectorSha } });
+    localMode = 0o720n; open.mockClear();
+    expect(await read(publisherId, null)).toEqual({ kind: 'held', reason: 'bindings_untrusted' });
+    expect(open).not.toHaveBeenCalled();
+  }
+});
 it('BQ-4(d) refuses FIFO, directory, extra link, loose modes, foreign descriptor uid and oversize', async () => {
   for (const kind of ['fifo', 'directory', 'hardlink', '0640', '0644', 'owner', 'oversize']) {
     const f = await homeFixture();
