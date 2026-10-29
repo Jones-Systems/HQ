@@ -1,0 +1,104 @@
+name: HQ hosted browser qualification
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hq-browser-qualification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: Hosted browser qualification (advisory)
+    if: >-
+      github.repository == 'Jones-Systems/HQ' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        !github.event.pull_request.draft &&
+        contains(github.event.pull_request.body, '<!-- hq-browser-qualification -->')))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out actual candidate (PR merge SHA)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+      - name: Use Python 3
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13.5'
+      - name: Build once and qualify with owned cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$RUNNER_TEMP/hq-browser-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          printf 'HQ_BROWSER_ROOT=%s\n' "$root" >> "$GITHUB_ENV"
+          helper=apps/desktop/scripts/browser-qualification/native.py
+          test ! -e "$root"
+          test ! -L "$root"
+          phase=prepare
+          finish() {
+            original_status=$?
+            trap - EXIT INT TERM
+            set +e
+            if test -f "$root/owner.json"; then
+              python3 "$helper" --finalize "$root" "$phase" "$original_status"
+              cleanup_status=$?
+              if test "$original_status" -eq 0; then original_status=$cleanup_status; fi
+            fi
+            exit "$original_status"
+          }
+          trap finish EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          python3 "$helper" --prepare "$root"
+          mkdir "$root/tmp"
+          export TMPDIR="$root/tmp"
+          export npm_config_cache="$root/npm-cache"
+          export HQ_BROWSER_PYTHON="$(python3 -c 'import sys; print(sys.executable)')"
+          phase=install
+          python3 "$helper" --admit "$root" "$phase"
+          npm ci --ignore-scripts --no-audit --no-fund >"$root/build.log" 2>&1
+          phase=build
+          python3 "$helper" --admit "$root" "$phase"
+          npm run build >>"$root/build.log" 2>&1
+          phase=production
+          python3 "$helper" --admit "$root" "$phase"
+          node apps/desktop/scripts/build-browser-preview.mjs --verify-production >>"$root/build.log" 2>&1
+          phase=bundle
+          python3 "$helper" --admit "$root" "$phase"
+          node apps/desktop/scripts/build-browser-preview.mjs --out "$root/bundle" >>"$root/build.log" 2>&1
+          phase=browser
+          python3 "$helper" --admit "$root" "$phase"
+          node apps/desktop/scripts/browser-qualification/run.mjs --revision "$GITHUB_SHA" --bundle "$root/bundle" --out "$root/evidence" >>"$root/build.log" 2>&1
+          phase=complete
+      - name: Preserve sanitized synthetic receipts only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hq-browser-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            ${{ env.HQ_BROWSER_ROOT }}/evidence/report.json
+            ${{ env.HQ_BROWSER_ROOT }}/evidence/hashes.json
+            ${{ env.HQ_BROWSER_ROOT }}/cleanup.json
+            ${{ env.HQ_BROWSER_ROOT }}/admission-prepare.json
+            ${{ env.HQ_BROWSER_ROOT }}/admission-install.json
+            ${{ env.HQ_BROWSER_ROOT }}/admission-build.json
+            ${{ env.HQ_BROWSER_ROOT }}/admission-production.json
+            ${{ env.HQ_BROWSER_ROOT }}/admission-bundle.json
+            ${{ env.HQ_BROWSER_ROOT }}/admission-browser.json
