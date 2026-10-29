@@ -1,5 +1,9 @@
 {
   "schema": "hq.cli.checks/v1",
+  "runtimes": {
+    "node": ">=22.18.0 (package.json engines; runs src/*.ts by type stripping, no build step)",
+    "python": ">=3.9 for hq-cli-e2e only (in-tree services/planner, standard library only)"
+  },
   "groups": {
     "hq-cli-t2": {
       "command": "node --test --test-concurrency=1 test/core.test.mjs test/reads.test.mjs test/transport.test.mjs",
@@ -32,7 +36,7 @@
       "modules": [
         "test/e2e/planner.test.mjs"
       ],
-      "environment": "Explicit opt-in; Node >=22.18 and python3; actual in-tree services/planner; synthetic loopback only; unique package scratch and child cleanup on success/failure/SIGINT/SIGTERM"
+      "environment": "Explicit opt-in; Node >=22.18 and python3 >=3.9; actual in-tree services/planner; synthetic loopback only; unique package scratch and child cleanup on success/failure/crash/SIGINT/SIGTERM; HQR-A3 regressions are node:test todo until A3 merges"
     },
     "hq-cli": {
       "command": "npm test",

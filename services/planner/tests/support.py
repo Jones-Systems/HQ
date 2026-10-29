@@ -2,12 +2,14 @@
 
 Scratch lives under ``tests/.scratch/`` inside the website directory (not
 /tmp). Each test gets its own ``TemporaryDirectory`` there, removed on
-success, failure or cancellation by the context manager; the shared
-``.scratch`` parent is removed afterwards only if empty.
+success, failure or cancellation by test cleanup; the shared
+``.scratch`` parent is removed afterwards only if empty. SIGTERM is mapped to
+the same ``KeyboardInterrupt`` unwinding as SIGINT so cleanups still run.
 """
 
 from __future__ import annotations
 
+import signal
 import sys
 import tempfile
 import unittest
@@ -19,7 +21,27 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
+def _terminate(signum, frame):
+    raise KeyboardInterrupt(f"signal {signum}")
+
+
+# Default SIGTERM kills Python without running cleanups and leaks scratch.
+# Leave any handler a runner already installed in place.
+try:
+    if signal.getsignal(signal.SIGTERM) is signal.SIG_DFL:
+        signal.signal(signal.SIGTERM, _terminate)
+except ValueError:
+    pass  # imported off the main thread; signals cannot be handled here
+
+
 class StoreTestCase(unittest.TestCase):
+    def run(self, result=None):
+        try:
+            return super().run(result)
+        finally:
+            # unittest skips doCleanups when KeyboardInterrupt escapes setup or a test.
+            self.doCleanups()
+
     def setUp(self):
         SCRATCH.mkdir(exist_ok=True)
         self._tmp = tempfile.TemporaryDirectory(dir=SCRATCH, prefix="store-")
@@ -30,8 +52,12 @@ class StoreTestCase(unittest.TestCase):
         self.store = Store(self.db_path)
 
     def _cleanup(self):
-        self.store.close()
-        self._tmp.cleanup()
+        try:
+            store = getattr(self, "store", None)  # absent if Store() raised in setUp
+            if store is not None:
+                store.close()
+        finally:
+            self._tmp.cleanup()
         try:
             SCRATCH.rmdir()
         except OSError:
