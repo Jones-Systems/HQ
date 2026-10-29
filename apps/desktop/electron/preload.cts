@@ -31,3 +31,23 @@ const services: import('@hq/contracts/services').HqServices = Object.freeze({
   }),
 });
 contextBridge.exposeInMainWorld('hqServices', services);
+
+const updates: import('@hq/contracts/updates').UpdatesPort = Object.freeze({
+  status: () => ipcRenderer.invoke('hq:updates:command', 'status', {}),
+  subscribe: (listener: (status: import('@hq/contracts/updates').UpdateStatus) => void) => {
+    const receive = (_event: Electron.IpcRendererEvent, status: import('@hq/contracts/updates').UpdateStatus) => listener(status);
+    ipcRenderer.on('hq:updates:status', receive);
+    return () => ipcRenderer.removeListener('hq:updates:status', receive);
+  },
+  check: () => ipcRenderer.invoke('hq:updates:command', 'check', {}),
+  download: (candidateId: string) => ipcRenderer.invoke('hq:updates:command', 'download', { candidateId }),
+  cancelDownload: () => ipcRenderer.invoke('hq:updates:command', 'cancelDownload', {}),
+  setPreferences: (preferences: import('@hq/contracts/updates').UpdatePreferences) => ipcRenderer.invoke('hq:updates:command', 'preferences', preferences),
+  schedule: (candidateId: string) => ipcRenderer.invoke('hq:updates:command', 'schedule', { candidateId }),
+  cancelScheduled: () => ipcRenderer.invoke('hq:updates:command', 'cancelScheduled', {}),
+  shellReady: async () => {
+    const result = await ipcRenderer.invoke('hq:updates:command', 'shellReady', {});
+    if (!result || result.ok !== true) throw Error('HQ startup acknowledgement is unavailable.');
+  },
+});
+contextBridge.exposeInMainWorld('hqUpdates', updates);
