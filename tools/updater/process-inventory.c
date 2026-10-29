@@ -17,6 +17,24 @@
 #define MAX_OUTPUT (4u * 1024u * 1024u)
 #define ENUMERATION_ATTEMPTS 3
 
+static const char *failure_stage = "allocation";
+static int failure_errno = 0;
+static const char *failure_recheck = "not-run";
+static const char *failure_path_result = NULL;
+static char failure_before_class[96] = "not-run";
+static char failure_recheck_class[96] = "not-run";
+static uid_t failure_caller_uid = 0;
+
+static void stage(const char *value) {
+    failure_stage = value;
+    failure_errno = 0;
+    failure_recheck = "not-run";
+    failure_path_result = NULL;
+    strcpy(failure_before_class, "not-run");
+    strcpy(failure_recheck_class, "not-run");
+    failure_caller_uid = 0;
+}
+
 struct output {
     char *bytes;
     size_t used;
@@ -79,7 +97,9 @@ static bool same_time(const struct timeval *left, const struct timeval *right) {
 static bool boot_time(struct timeval *boot) {
     int mib[] = { CTL_KERN, KERN_BOOTTIME };
     size_t length = sizeof(*boot);
-    return sysctl(mib, 2, boot, &length, NULL, 0) == 0 && length == sizeof(*boot) && valid_time(boot);
+    int result = sysctl(mib, 2, boot, &length, NULL, 0);
+    if (result != 0) failure_errno = errno;
+    return result == 0 && length == sizeof(*boot) && valid_time(boot);
 }
 
 /*
@@ -92,7 +112,7 @@ static int read_process(pid_t pid, struct kinfo_proc *information) {
     int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, pid };
     size_t length = sizeof(*information);
     memset(information, 0, sizeof(*information));
-    if (sysctl(mib, 4, information, &length, NULL, 0) != 0) return -1;
+    if (sysctl(mib, 4, information, &length, NULL, 0) != 0) { failure_errno = errno; return -1; }
     if (length == 0) return 0;
     if (length != sizeof(*information) || information->kp_proc.p_pid != pid) return -1;
     return 1;
@@ -102,27 +122,70 @@ static bool same_birth(const struct kinfo_proc *left, const struct kinfo_proc *r
     return left->kp_proc.p_pid == right->kp_proc.p_pid && same_time(&left->kp_proc.p_starttime, &right->kp_proc.p_starttime);
 }
 
+static const char *uid_class(uid_t uid) {
+    return uid == 0 ? "root" : uid == failure_caller_uid ? "caller" : "other";
+}
+
+static void process_class(const struct kinfo_proc *information, char *buffer, size_t capacity) {
+    const char *state;
+    switch (information->kp_proc.p_stat) {
+        case SIDL: state = "idle"; break;
+        case SRUN: state = "run"; break;
+        case SSLEEP: state = "sleep"; break;
+        case SSTOP: state = "stop"; break;
+        case SZOMB: state = "zombie"; break;
+        default: state = "other";
+    }
+    /* Fixed labels only; caller means effective UID, with root taking precedence. */
+    snprintf(buffer, capacity, "%s,%s,%s,%s,%s,%s,%s,%s",
+        information->kp_proc.p_pid == 1 ? "pid1" : "other",
+        information->kp_eproc.e_ppid == 0 ? "zero" : "nonzero",
+        information->kp_proc.p_flag & P_SYSTEM ? "yes" : "no",
+        information->kp_proc.p_flag & P_WEXIT ? "yes" : "no", state,
+        uid_class(information->kp_eproc.e_ucred.cr_uid),
+        uid_class(information->kp_eproc.e_pcred.p_ruid),
+        uid_class(information->kp_eproc.e_pcred.p_svuid));
+}
+
 static bool inactive(const struct kinfo_proc *expected) {
     struct kinfo_proc current;
     int found = read_process(expected->kp_proc.p_pid, &current);
-    return found == 0 || (found == 1 && same_birth(expected, &current) && current.kp_proc.p_stat == SZOMB);
+    bool is_inactive = found == 0 || (found == 1 && same_birth(expected, &current) && current.kp_proc.p_stat == SZOMB);
+    /* Classify only the existing recheck; uncertainty and PID reuse still fail closed. */
+    if (!is_inactive) {
+        failure_recheck = found < 0 ? "unavailable" : same_birth(expected, &current) ? "same-live" : "reused";
+        if (failure_path_result) {
+            if (found == 1 && same_birth(expected, &current)) process_class(&current, failure_recheck_class, sizeof(failure_recheck_class));
+            else strcpy(failure_recheck_class, "unknown");
+        }
+    }
+    return is_inactive;
 }
 
-static bool executable_path(pid_t pid, char *buffer) {
+static bool executable_path(const struct kinfo_proc *expected, char *buffer) {
     memset(buffer, 0, PROC_PIDPATHINFO_MAXSIZE);
-    int length = proc_pidpath(pid, buffer, PROC_PIDPATHINFO_MAXSIZE);
-    return length > 0 && length < PROC_PIDPATHINFO_MAXSIZE && buffer[0] == '/' && strnlen(buffer, PROC_PIDPATHINFO_MAXSIZE) < PROC_PIDPATHINFO_MAXSIZE;
+    errno = 0;
+    int length = proc_pidpath(expected->kp_proc.p_pid, buffer, PROC_PIDPATHINFO_MAXSIZE);
+    if (length <= 0) failure_errno = errno;
+    bool valid = length > 0 && length < PROC_PIDPATHINFO_MAXSIZE && buffer[0] == '/' && strnlen(buffer, PROC_PIDPATHINFO_MAXSIZE) < PROC_PIDPATHINFO_MAXSIZE;
+    if (!valid) {
+        failure_path_result = length == 0 ? "zero" : length < 0 ? "negative" : "invalid-positive";
+        failure_caller_uid = geteuid();
+        process_class(expected, failure_before_class, sizeof(failure_before_class));
+    }
+    return valid;
 }
 
 static bool list_processes(struct kinfo_proc **information, size_t *count) {
     int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
     for (int attempt = 0; attempt < ENUMERATION_ATTEMPTS; attempt++) {
         size_t needed = 0;
-        if (sysctl(mib, 4, NULL, &needed, NULL, 0) != 0 || needed == 0 || needed > MAX_PROCESSES * sizeof(struct kinfo_proc)) return false;
+        if (sysctl(mib, 4, NULL, &needed, NULL, 0) != 0) { failure_errno = errno; return false; }
+        if (needed == 0 || needed > MAX_PROCESSES * sizeof(struct kinfo_proc)) return false;
         size_t capacity = needed + 32 * sizeof(struct kinfo_proc);
         if (capacity > MAX_PROCESSES * sizeof(struct kinfo_proc)) capacity = MAX_PROCESSES * sizeof(struct kinfo_proc);
         struct kinfo_proc *buffer = calloc(1, capacity);
-        if (!buffer) return false;
+        if (!buffer) { failure_errno = ENOMEM; return false; }
         size_t length = capacity;
         if (sysctl(mib, 4, buffer, &length, NULL, 0) == 0) {
             if (length == 0 || length > capacity || length % sizeof(struct kinfo_proc) != 0) { free(buffer); return false; }
@@ -131,6 +194,7 @@ static bool list_processes(struct kinfo_proc **information, size_t *count) {
             return true;
         }
         int error = errno;
+        failure_errno = error;
         free(buffer);
         if (error != ENOMEM) return false;
     }
@@ -148,7 +212,12 @@ int main(int argc, char **argv) {
     bool first = true;
     bool observed_self = false;
     int result = 2;
-    if (!out.bytes || !boot_time(&boot) || !list_processes(&processes, &count)) goto failure;
+    if (!out.bytes) { failure_errno = ENOMEM; goto failure; }
+    stage("boot");
+    if (!boot_time(&boot)) goto failure;
+    stage("enumeration");
+    if (!list_processes(&processes, &count)) goto failure;
+    stage("output");
     if (!append(&out, "{\"schemaVersion\":1,\"complete\":true,\"boot\":\"%jd:%06jd\",\"processes\":[", (intmax_t)boot.tv_sec, (intmax_t)boot.tv_usec)) goto failure;
     for (size_t index = 0; index < count; index++) {
         const struct kinfo_proc *listed = &processes[index];
@@ -158,38 +227,57 @@ int main(int argc, char **argv) {
         struct kinfo_proc after;
         char first_path[PROC_PIDPATHINFO_MAXSIZE];
         char second_path[PROC_PIDPATHINFO_MAXSIZE];
+        stage("process-before");
         int found = read_process(pid, &before);
         if (found == 0) continue;
         if (found < 0 || !same_birth(listed, &before)) goto failure;
         if (pid == 0) {
+            stage("kernel");
             /* Kernel classification uses metadata, never a mutable process name. */
             if (!(before.kp_proc.p_flag & P_SYSTEM) || before.kp_eproc.e_ppid != 0) goto failure;
             continue;
         }
+        stage("process-identity");
         if (pid < 0 || !valid_time(&before.kp_proc.p_starttime) || before.kp_eproc.e_ppid < 0) goto failure;
+        stage("zombie-before");
         if (before.kp_proc.p_stat == SZOMB) { if (inactive(&before)) continue; goto failure; }
-        if (!executable_path(pid, first_path)) { if (inactive(&before)) continue; goto failure; }
+        stage("path-before");
+        if (!executable_path(&before, first_path)) { int original_errno = failure_errno; if (inactive(&before)) continue; failure_errno = original_errno; goto failure; }
+        stage("process-middle");
         found = read_process(pid, &middle);
         if (found == 0) continue;
         if (found < 0 || !same_birth(&before, &middle) || before.kp_eproc.e_ppid != middle.kp_eproc.e_ppid) goto failure;
+        stage("zombie-middle");
         if (middle.kp_proc.p_stat == SZOMB) { if (inactive(&middle)) continue; goto failure; }
-        if (!executable_path(pid, second_path)) { if (inactive(&middle)) continue; goto failure; }
+        stage("path-after");
+        if (!executable_path(&middle, second_path)) { int original_errno = failure_errno; if (inactive(&middle)) continue; failure_errno = original_errno; goto failure; }
+        stage("process-after");
         found = read_process(pid, &after);
         if (found == 0) continue;
         if (found < 0 || !same_birth(&middle, &after) || middle.kp_eproc.e_ppid != after.kp_eproc.e_ppid || strcmp(first_path, second_path) != 0) goto failure;
+        stage("zombie-after");
         if (after.kp_proc.p_stat == SZOMB) { if (inactive(&after)) continue; goto failure; }
         if (pid == getpid()) observed_self = true;
+        stage("output");
         if (!first && !append(&out, ",")) goto failure;
         first = false;
         if (!append(&out, "{\"pid\":%jd,\"ppid\":%jd,\"start\":\"%jd:%06jd\",\"boot\":\"%jd:%06jd\",\"executable\":", (intmax_t)pid, (intmax_t)after.kp_eproc.e_ppid, (intmax_t)after.kp_proc.p_starttime.tv_sec, (intmax_t)after.kp_proc.p_starttime.tv_usec, (intmax_t)boot.tv_sec, (intmax_t)boot.tv_usec)) goto failure;
         if (!quoted(&out, second_path) || !append(&out, "}")) goto failure;
     }
-    if (!observed_self || !boot_time(&boot_after) || !same_time(&boot, &boot_after) || !append(&out, "]}\n")) goto failure;
-    if (fwrite(out.bytes, 1, out.used, stdout) != out.used || fflush(stdout) != 0) goto failure;
+    stage("observer");
+    if (!observed_self) goto failure;
+    stage("boot-after");
+    if (!boot_time(&boot_after) || !same_time(&boot, &boot_after)) goto failure;
+    stage("output");
+    if (!append(&out, "]}\n")) goto failure;
+    if (fwrite(out.bytes, 1, out.used, stdout) != out.used || fflush(stdout) != 0) { failure_errno = errno; goto failure; }
     result = 0;
     goto finish;
 failure:
-    fputs("HQ process inventory is incomplete; activation is held.\n", stderr);
+    /* Fixed classes and bounded original errno expose no process identities or paths. */
+    fprintf(stderr, "HQ inventory failure: stage=%s errno=%d recheck=%s", failure_stage, failure_errno >= 0 && failure_errno <= 4095 ? failure_errno : 0, failure_recheck);
+    if (failure_path_result) fprintf(stderr, " path-result=%s before=%s recheck-class=%s", failure_path_result, failure_before_class, failure_recheck_class);
+    fputc('\n', stderr);
 finish:
     free(processes);
     free(out.bytes);

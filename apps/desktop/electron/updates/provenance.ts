@@ -6,6 +6,15 @@ import type { UpdateManifest } from '@hq/contracts/updates';
 import { REPOSITORY, REPOSITORY_URL, WORKFLOW, UpdateFailure, checkAbort, object } from './contract.js';
 
 const OID = '1.3.6.1.4.1.57264.1.';
+function provenanceRef(manifest: UpdateManifest): string {
+  if (manifest.signing === 'developer-id') {
+    if (!manifest.signingPolicy || manifest.sourceRef !== 'refs/heads/main' || manifest.releaseTag !== `hq-desktop-signed-${manifest.runId}`) throw new UpdateFailure('provenance');
+    return 'refs/heads/main';
+  }
+  if (manifest.signing !== 'adhoc' || manifest.signingPolicy || manifest.sourceRef || manifest.releaseTag.startsWith('hq-desktop-signed-')) throw new UpdateFailure('provenance');
+  return `refs/tags/${manifest.releaseTag}`;
+}
+
 const ISSUER = 'https://token.actions.githubusercontent.com';
 
 export function certificateClaim(certificate: Pick<X509Certificate, 'extensions'>, suffix: number): string {
@@ -19,7 +28,7 @@ export function certificateClaim(certificate: Pick<X509Certificate, 'extensions'
 }
 
 export function verifyCertificateClaims(certificate: Pick<X509Certificate, 'extensions' | 'subjectAltName'>, manifest: UpdateManifest): void {
-  const ref = `refs/tags/${manifest.releaseTag}`;
+  const ref = provenanceRef(manifest);
   const workflow = `${REPOSITORY_URL}/${WORKFLOW}@${ref}`;
   if (certificate.subjectAltName !== workflow) throw new UpdateFailure('provenance');
   const expected: Readonly<Record<number, string>> = {
@@ -31,6 +40,7 @@ export function verifyCertificateClaims(certificate: Pick<X509Certificate, 'exte
 }
 
 export function verifyStatement(statement: unknown, manifest: UpdateManifest, archiveHash: string, manifestHash: string): void {
+  if (archiveHash !== manifest.archive.sha256) throw new UpdateFailure('provenance');
   if (!object(statement) || statement._type !== 'https://in-toto.io/Statement/v1' || statement.predicateType !== 'https://slsa.dev/provenance/v1' || !Array.isArray(statement.subject) || statement.subject.length > 16) throw new UpdateFailure('provenance');
   for (const [name, digest] of [[manifest.archive.name, archiveHash], [`hq-darwin-${manifest.architecture}.json`, manifestHash]]) {
     const subjects = statement.subject.filter(subject => object(subject) && subject.name === name);
@@ -40,7 +50,7 @@ export function verifyStatement(statement: unknown, manifest: UpdateManifest, ar
   if (!object(predicate) || !object(predicate.buildDefinition) || !object(predicate.runDetails)) throw new UpdateFailure('provenance');
   const build = predicate.buildDefinition, run = predicate.runDetails;
   if (build.buildType !== 'https://actions.github.io/buildtypes/workflow/v1' || !object(build.externalParameters) || !object(build.externalParameters.workflow) || !object(build.internalParameters) || !object(build.internalParameters.github) || !Array.isArray(build.resolvedDependencies)) throw new UpdateFailure('provenance');
-  const ref = `refs/tags/${manifest.releaseTag}`, workflow = build.externalParameters.workflow, github = build.internalParameters.github;
+  const ref = provenanceRef(manifest), workflow = build.externalParameters.workflow, github = build.internalParameters.github;
   if (workflow.path !== WORKFLOW || workflow.repository !== REPOSITORY_URL || workflow.ref !== ref || github.event_name !== 'push' || github.repository_id !== String(REPOSITORY.id) || github.repository_owner_id !== String(REPOSITORY.ownerId) || github.runner_environment !== 'github-hosted') throw new UpdateFailure('provenance');
   if (!object(run.metadata) || run.metadata.invocationId !== `${REPOSITORY_URL}/actions/runs/${manifest.runId}/attempts/${manifest.runAttempt}` || !object(run.builder) || run.builder.id !== `${REPOSITORY_URL}/${WORKFLOW}@${ref}`) throw new UpdateFailure('provenance');
   const sources = build.resolvedDependencies.filter(source => object(source) && source.uri === `git+${REPOSITORY_URL}@${ref}`);

@@ -7,9 +7,44 @@ const cp = require('node:child_process');
 const { promisify } = require('node:util');
 const { ensure, UpdateError, object, integer, text, inside, readJson, readBuildReceipt, canonical, validateProcess, sameProcess, assertNoSymlink, syncDirectory, MAX_EXPANDED_BYTES, MAX_FILE_COUNT, SYNTHETIC_ID } = require('./contract.cjs');
 
+const { requirement, verifySignatureDetails, verifyDesignatedRequirement } = require('./signing.cjs');
+
 const INVENTORY_PATH = path.join(__dirname, 'process-inventory');
 const MAX_INVENTORY_BYTES = 4 * 1024 * 1024;
 const MAX_INVENTORY_PROCESSES = 32768;
+const INVENTORY_FAILURE_STAGES = new Set(['allocation', 'boot', 'enumeration', 'output', 'process-before', 'kernel', 'process-identity', 'zombie-before', 'path-before', 'process-middle', 'zombie-middle', 'path-after', 'process-after', 'zombie-after', 'observer', 'boot-after']);
+const INVENTORY_FAILURE_RECHECKS = new Set(['not-run', 'same-live', 'reused', 'unavailable']);
+
+function inventoryProcessClass(value) {
+  const match = /^(pid1|other),(zero|nonzero),(yes|no),(yes|no),(idle|run|sleep|stop|zombie|other),(root|caller|other),(root|caller|other),(root|caller|other)$/.exec(value);
+  if (!match || match[0] !== value) return null;
+  const [, pid, parent, system, exiting, state, effectiveUid, realUid, savedUid] = match;
+  return { pid, parent, system, exiting, state, effectiveUid, realUid, savedUid };
+}
+
+function inventoryFailure(cause) {
+  // Native output may contain process data; only this closed diagnostic record is publishable.
+  const match = typeof cause?.stderr === 'string' && /^HQ inventory failure: stage=([a-z-]+) errno=([0-9]{1,4})(?: recheck=([a-z-]+)(?: path-result=(zero|negative|invalid-positive) before=([a-z0-9,-]+) recheck-class=([a-z0-9,-]+))?)?\n?$/.exec(cause.stderr);
+  const before = match?.[4] ? inventoryProcessClass(match[5]) : null;
+  const recheckClass = match?.[4] ? inventoryProcessClass(match[6]) : null;
+  const validClasses = !match?.[4] || (
+    ['path-before', 'path-after'].includes(match[1]) && before && (
+      match[3] === 'same-live' ? recheckClass && recheckClass.pid === before.pid && recheckClass.state !== 'zombie' :
+        match[3] === 'not-run' ? match[6] === 'not-run' :
+          ['unavailable', 'reused'].includes(match[3]) && match[6] === 'unknown'
+    )
+  );
+  const valid = match && match[0] === cause.stderr && INVENTORY_FAILURE_STAGES.has(match[1]) && Number(match[2]) <= 4095 && (match[3] === undefined || INVENTORY_FAILURE_RECHECKS.has(match[3])) && validClasses;
+  const launchErrno = Number.isInteger(cause?.errno) && Math.abs(cause.errno) <= 4095 ? Math.abs(cause.errno) : null;
+  return {
+    stage: valid ? match[1] : 'unavailable', errno: valid ? Number(match[2]) : launchErrno,
+    exitCode: Number.isInteger(cause?.code) && cause.code >= 0 && cause.code <= 255 ? cause.code : null,
+    signal: ['SIGABRT', 'SIGBUS', 'SIGILL', 'SIGINT', 'SIGKILL', 'SIGSEGV', 'SIGTERM', 'SIGTRAP'].includes(cause?.signal) ? cause.signal : null,
+    // Legacy helpers supply no recheck evidence; diagnostic labels never authorize activation.
+    recheck: valid && match[3] !== undefined ? match[3] : 'unavailable',
+    ...(valid && match[4] ? { pathResult: match[4], before, recheckClass: recheckClass ?? match[6] } : {}),
+  };
+}
 
 function parseProcessInventory(output, observerPid) {
   try {
@@ -54,7 +89,10 @@ function createNativeAdapter({ fs: io = fs, execFile = promisify(cp.execFile), s
     supported();
     let observation;
     try { observation = await execute(INVENTORY_PATH, []); } catch (cause) {
-      throw new UpdateError('recovery-required', 'Process inventory is unavailable; activation is held.', { cause });
+      const diagnostic = inventoryFailure(cause);
+      const error = new UpdateError('recovery-required', `Process inventory is unavailable; activation is held. ${JSON.stringify(diagnostic)}`, { cause });
+      error.inventoryFailure = diagnostic;
+      throw error;
     }
     return parseProcessInventory(observation.stdout, observation.observerPid);
   }
@@ -96,8 +134,19 @@ function createNativeAdapter({ fs: io = fs, execFile = promisify(cp.execFile), s
     await execute('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundlePath]);
     const signature = await execute('/usr/bin/codesign', ['--display', '--verbose=4', bundlePath]);
     const details = String(signature.stderr || signature.stdout);
-    ensure(/(?:^|\n)Signature=adhoc(?:\n|$)/.test(details), 'Unexpected signing class.', 'integrity');
-    ensure(new RegExp(`(?:^|\\n)Identifier=${receipt.bundleId.replaceAll('.', '\\.')}\\n`).test(details), 'Code signature identity differs.', 'integrity');
+    try {
+      verifySignatureDetails(details, receipt.bundleId, Boolean(receipt.signingPolicy));
+      if (receipt.signingPolicy) {
+        await execute('/usr/bin/codesign', ['--verify', '--deep', '--strict', '-R', `=${requirement(receipt.bundleId)}`, bundlePath]);
+        const designated = await execute('/usr/bin/codesign', ['--display', '-r-', bundlePath]);
+        verifyDesignatedRequirement(String(designated.stderr || designated.stdout), receipt.bundleId);
+        await execute('/usr/bin/xcrun', ['stapler', 'validate', bundlePath]);
+        await execute('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=2', bundlePath]);
+      }
+    } catch (cause) {
+      if (cause.killed || cause.signal || (cause.code && typeof cause.code !== 'number')) throw cause;
+      throw new UpdateError('integrity', 'Code signing admission failed.', { cause });
+    }
     return receipt;
   }
   async function legacyIdentity(bundlePath) {

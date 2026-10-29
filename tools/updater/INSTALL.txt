@@ -4,8 +4,11 @@ Authenticate the downloaded archive and its provenance from the fixed
 Jones-Systems/HQ release before executing any bundled program. Follow the
 release's independent SHA-256 and Sigstore attestation verification procedure.
 A verifier shipped inside a download cannot authenticate its own first execution.
-Ad-hoc code signing checks package consistency; it is not Developer ID signing,
-notarization or Gatekeeper approval. Native qualification remains a release gate.
+Ad-hoc development previews check package consistency; they do not claim
+Developer ID or notarization. Production receipts require Team 2CUPSQS986,
+identifier org.jones-systems.hq.local, hardened runtime, a secure timestamp and
+a validated stapled notarization ticket. Source support alone does not prove
+that a release passed those checks. Native qualification remains a release gate.
 
 After independent verification, use the release's Install HQ launcher, or run:
 

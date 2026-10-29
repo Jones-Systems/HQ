@@ -16,6 +16,62 @@ const receipt = overrides => buildReceipt({ sourceSha: 'a'.repeat(40), sourceTre
 const put = (root, name, value) => { const file = path.join(root, name); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
 const load = (root, name) => JSON.parse(fs.readFileSync(path.join(root, name), 'utf8'));
 
+function ciRunnerFixture(cpuPercentages, { memory = 1024, exitCode = 0 } = {}) {
+  const { runInNewContext } = require('node:vm');
+  const events = new EventEmitter();
+  const samples = [], delays = [], launches = [];
+  let ticks = 0, idle = 0, reads = 0;
+  const fakeOs = {
+    cpus() {
+      if (reads++ % 2) { ticks += 100; idle += 100 - cpuPercentages[Math.min((reads - 2) / 2, cpuPercentages.length - 1)]; }
+      return [{ times: { idle, user: ticks - idle } }];
+    },
+    freemem: () => memory, totalmem: () => 4096,
+  };
+  const module = { exports: {} };
+  const fakeProcess = Object.assign(events, { env: {}, stdout: { write: text => samples.push(JSON.parse(text)) } });
+  const fakeRequire = name => name === 'node:os' ? fakeOs : name === 'node:child_process' ? {
+    spawn(command, args, options) {
+      launches.push({ command, args, options });
+      const child = new EventEmitter();
+      queueMicrotask(() => { child.exitCode = exitCode; child.emit('exit', exitCode, null); });
+      return child;
+    },
+  } : require(name);
+  runInNewContext(fs.readFileSync(path.join(__dirname, '../ci-run.cjs'), 'utf8'), {
+    require: fakeRequire, module, process: fakeProcess,
+    setTimeout: (resolve, ms) => { delays.push(ms); queueMicrotask(resolve); },
+  });
+  return { run: module.exports.run, samples, delays, launches };
+}
+
+test('CI admission resamples a busy host before exactly one command start', async () => {
+  const fixture = ciRunnerFixture([90, 85, 20]);
+  assert.equal(await fixture.run(['fixture-command', 'literal-arg']), 0);
+  assert.deepEqual(fixture.samples.map(sample => sample.starts), [0, 0, 1]);
+  assert.equal(fixture.launches.length, 1);
+  assert.equal(fixture.launches[0].command, 'fixture-command');
+  assert.deepEqual(fixture.launches[0].args, ['literal-arg']);
+  assert.equal(fixture.launches[0].options.env.CMAKE_BUILD_PARALLEL_LEVEL, '1');
+  assert.ok(fixture.delays.reduce((sum, delay) => sum + delay, 0) <= 55_000);
+});
+
+test('CI admission bounds busy waits, fails closed on missing memory and never retries a started command', async () => {
+  const busy = ciRunnerFixture([85]);
+  await assert.rejects(busy.run(['fixture-command']), /CI command held/);
+  assert.equal(busy.launches.length, 0);
+  assert.equal(busy.samples.length, 10);
+  assert.ok(busy.delays.reduce((sum, delay) => sum + delay, 0) <= 55_000);
+  const missing = ciRunnerFixture([20], { memory: 0 });
+  await assert.rejects(missing.run(['fixture-command']), /CI command held/);
+  assert.equal(missing.launches.length, 0);
+  assert.equal(missing.samples.length, 1);
+  const failed = ciRunnerFixture([20], { exitCode: 17 });
+  assert.equal(await failed.run(['fixture-command']), 17);
+  assert.equal(failed.launches.length, 1);
+  assert.equal(failed.samples.length, 1);
+});
+
 test('packaged layout carries exact receipt, nested hosts, bootstrap and transitive runtime dependencies', async () => {
   await withOwnedDirectory(scratch, 'layout-', async root => {
     const source = path.join(root, 'source'), target = path.join(root, 'app');
@@ -163,3 +219,185 @@ test('cleanup failure does not replace the original failure and removes signal h
 });
 
 module.exports = { receipt, put, tinyZip };
+
+test('production context requires explicit activation and exact canonical main push or artifact-only dispatch', () => {
+  const { assertSigningContext, selectIdentity, cleanEnvironment } = require('../developer-id.cjs');
+  const event = { repository: { default_branch: 'main', id: REPOSITORY.id, owner: { id: REPOSITORY.ownerId } } };
+  const env = { GITHUB_REPOSITORY: REPOSITORY.name, GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/heads/main', GITHUB_WORKFLOW_REF: `${REPOSITORY.name}/${WORKFLOW}@refs/heads/main`, GITHUB_WORKFLOW_SHA: 'a'.repeat(40), GITHUB_SHA: 'a'.repeat(40), HQ_SIGNING_MODE: 'developer-id', HQ_SIGNED_RELEASES_ENABLED: 'true' };
+  assert.doesNotThrow(() => assertSigningContext(env, event));
+  for (const change of [{ GITHUB_EVENT_NAME: 'pull_request' }, { HQ_SIGNED_RELEASES_ENABLED: undefined }, { HQ_SIGNED_RELEASES_ENABLED: 'false' }, { GITHUB_REF: 'refs/tags/hq-desktop-test' }, { GITHUB_REF: 'refs/heads/untrusted' }, { GITHUB_WORKFLOW_SHA: 'b'.repeat(40) }, { GITHUB_REPOSITORY: 'another/HQ' }, { HQ_SIGNING_MODE: 'adhoc-development' }]) assert.throws(() => assertSigningContext({ ...env, ...change }, event));
+  assert.doesNotThrow(() => assertSigningContext({ ...env, GITHUB_EVENT_NAME: 'push' }, event));
+  assert.throws(() => assertSigningContext(env, { repository: { ...event.repository, default_branch: 'other' } }));
+  const identity = `1) ${'A'.repeat(40)} "Developer ID Application: Fixture (2CUPSQS986)"`;
+  assert.equal(selectIdentity(identity), 'A'.repeat(40));
+  for (const value of ['', identity.replace('2CUPSQS986', 'WRONGTEAM00'), `${identity}\n${identity}`]) assert.throws(() => selectIdentity(value));
+  assert.deepEqual(cleanEnvironment({ KEEP: 'value', MACOS_SIGNING_CERTIFICATE_PASSWORD: 'synthetic', APPLE_NOTARY_API_KEY_P8_BASE64: 'synthetic' }), { KEEP: 'value' });
+});
+
+test('Developer ID signs nested code inside out with stable IDs, timestamp and hardened runtime and refuses fallback', async () => {
+  const { signAndVerify, signingTargets } = require('../package.cjs');
+  const { requirement, PRODUCT_ID } = require('../../signing.cjs');
+  await withOwnedDirectory(scratch, 'signing-', async root => {
+    const bundle = path.join(root, 'HQ.app');
+    put(bundle, 'Contents/MacOS/HQ', 'fixture');
+    put(bundle, 'Contents/Resources/app/tools/updater/process-inventory', 'fixture');
+    put(bundle, 'Contents/Frameworks/HQ Helper.app/Contents/MacOS/HQ Helper', 'fixture');
+    const native = path.join(bundle, 'Contents/Resources/app/native.node');
+    fs.writeFileSync(native, Buffer.from('cffaedfe00000000', 'hex'));
+    const calls = [], ids = new Map();
+    const run = (file, args) => {
+      calls.push([file, args]);
+      if (file === '/usr/bin/lipo') return 'arm64';
+      if (file === '/usr/bin/plutil') return args.includes('CFBundleIdentifier') ? (args.at(-1).includes('HQ Helper.app') ? `${PRODUCT_ID}.helper` : PRODUCT_ID) : 'HQ';
+      if (args.includes('--sign')) ids.set(args.at(-1), args[args.indexOf('--identifier') + 1]);
+      if (args.includes('-r-')) return `designated => ${requirement()}`;
+      if (args.includes('--display')) return `Identifier=${ids.get(args.at(-1))}\nAuthority=Developer ID Application: Fixture (2CUPSQS986)\nTeamIdentifier=2CUPSQS986\nTimestamp=fixture\nCodeDirectory flags=0x10000(runtime)\n`;
+      return '';
+    };
+    const targets = signingTargets(bundle, run);
+    assert.equal(targets.at(-1).filename, bundle);
+    assert.ok(targets.some(target => target.filename === native));
+    signAndVerify(bundle, 'arm64', run, { mode: 'developer-id', identity: 'A'.repeat(40), keychain: '/fixture/isolated.keychain' });
+    const signs = calls.filter(([, args]) => args.includes('--sign'));
+    assert.equal(signs.length, targets.length);
+    assert.equal(signs.at(-1)[1].at(-1), bundle);
+    assert.ok(signs.every(([, args]) => args.includes('--timestamp') && args.includes('runtime') && !args.includes('--deep') && !args.includes('-')));
+    assert.ok(targets.every(target => calls.some(([, args]) => args.includes('-R') && args.includes(`=${requirement(target.identifier)}`))));
+    assert.throws(() => signAndVerify(bundle, 'arm64', run, { mode: 'developer-id' }), /identity and isolated keychain/);
+    assert.throws(() => signAndVerify(bundle, 'arm64', run, { mode: 'automatic' }), /explicit signing mode/);
+  });
+});
+
+test('notarization must be accepted and stapled before distribution; failed submissions remove their exact temporary archive', async () => {
+  const { notarizeAndStaple } = require('../package.cjs');
+  await withOwnedDirectory(scratch, 'notary-', async root => {
+    const bundle = path.join(root, 'HQ.app');
+    put(bundle, 'Contents/file', 'fixture');
+    const signing = { notaryKey: '/synthetic/key.p8', notaryKeyId: 'ABCDEFGHIJ', notaryIssuerId: '11111111-2222-3333-4444-555555555555' };
+    const exercise = status => {
+      const calls = [];
+      const run = (file, args) => {
+        calls.push([file, args]);
+        if (file === '/usr/bin/ditto') fs.writeFileSync(args.at(-1), 'temporary');
+        if (args[0] === 'notarytool') return JSON.stringify({ status });
+        return '';
+      };
+      if (status === 'Accepted') notarizeAndStaple(bundle, root, signing, run);
+      else assert.throws(() => notarizeAndStaple(bundle, root, signing, run), /did not accept/);
+      assert.equal(fs.existsSync(path.join(root, 'notary-submission.zip')), false);
+      return calls;
+    };
+    const accepted = exercise('Accepted');
+    assert.ok(accepted.some(([, args]) => args[0] === 'stapler' && args[1] === 'validate'));
+    assert.ok(accepted.some(([file]) => file === '/usr/sbin/spctl'));
+    const { requirement } = require('../../signing.cjs');
+    assert.ok(accepted.some(([, args]) => args.includes('-R') && args.includes(`=${requirement()}`)));
+    assert.ok(!exercise('Invalid').some(([, args]) => args[0] === 'stapler'));
+  });
+});
+
+test('workflow keeps credentials exclusively in the protected default-branch production job', () => {
+  const workflow = fs.readFileSync(path.resolve(__dirname, '../../../../.github/workflows/hq-desktop-package.yml'), 'utf8');
+  const production = workflow.slice(workflow.indexOf('  developer-id:'), workflow.indexOf('  attest:'));
+  assert.match(production, /environment: macos-signing/);
+  assert.match(production, /github.event_name == 'workflow_dispatch'/);
+  assert.match(production, /github.ref == 'refs\/heads\/main'/);
+  assert.match(production, /vars.HQ_SIGNED_RELEASES_ENABLED == 'true'/);
+  assert.match(workflow, /!startsWith\(github.ref, 'refs\/tags\/hq-desktop-signed-'\)/);
+  assert.match(production, /ref: \$\{\{ github.sha \}\}/);
+  assert.doesNotMatch(workflow.replace(production, ''), /secrets\./);
+  assert.doesNotMatch(workflow, /pull_request_target/);
+  assert.match(workflow, /HQ_SIGNING_MODE: adhoc-development/);
+});
+
+function productionContext(overrides = {}) {
+  return { repository: REPOSITORY.name, repositoryId: REPOSITORY.id, ownerId: REPOSITORY.ownerId, event: 'push', ref: 'refs/heads/main', sourceSha: 'a'.repeat(40), mainSha: 'a'.repeat(40), workflowSha: 'a'.repeat(40), workflowRef: `${REPOSITORY.name}/${WORKFLOW}@refs/heads/main`, runId: '17', runAttempt: '1', enabled: 'true', defaultBranch: 'main', ...overrides };
+}
+
+test('enabled main push reaches the guarded signed publication graph; disabled and advisory events do not publish', () => {
+  const { runInNewContext } = require('node:vm');
+  const workflow = fs.readFileSync(path.resolve(__dirname, '../../../../.github/workflows/hq-desktop-package.yml'), 'utf8');
+  const push = workflow.match(/^  push:\n([\s\S]*?)(?=^  \S)/m)?.[1];
+  assert.ok(push, 'push trigger is required for production release');
+  const branches = push.match(/branches:\s*\[([^\]]+)\]/)?.[1].split(',').map(s => s.trim()) ?? [];
+  assert.ok(branches.includes('main'), 'the signed release graph must be reachable from a main push');
+  const conditions = Object.fromEntries(['package', 'developer-id', 'attest', 'publish'].map(job => {
+    const expression = workflow.match(new RegExp(`^  ${job}:\\n    if: (.+)$`, 'm'))?.[1];
+    assert.ok(expression, `missing ${job} condition`);
+    return [job, expression.replace(/^\$\{\{\s*|\s*\}\}$/g, '').replace(/\.labels\.\*\.name/g, '.labels.map(label => label.name)')];
+  }));
+  function graph(event, enabled, ref = 'refs/heads/main') {
+    const context = {
+      github: { event_name: event, ref, repository: REPOSITORY.name, event: { repository: { default_branch: 'main' }, pull_request: { draft: false, labels: [] } } },
+      vars: { HQ_SIGNED_RELEASES_ENABLED: enabled }, inputs: { signing: 'developer-id' },
+      needs: { package: { result: 'success' }, 'developer-id': { result: 'success' } },
+      startsWith: (value, prefix) => value.startsWith(prefix), contains: (values, value) => values.includes(value), cancelled: () => false,
+    };
+    return Object.fromEntries(Object.entries(conditions).map(([job, expression]) => [job, Boolean(runInNewContext(expression, context))]));
+  }
+  assert.deepEqual(graph('push', 'true'), { package: true, 'developer-id': true, attest: true, publish: true });
+  assert.equal(assertReleaseContext(productionContext()), 'hq-desktop-signed-17');
+  assert.deepEqual(graph('push', 'false'), { package: false, 'developer-id': false, attest: false, publish: false });
+  assert.deepEqual(graph('schedule', 'true'), { package: true, 'developer-id': false, attest: false, publish: false });
+  assert.deepEqual(graph('workflow_dispatch', 'true'), { package: true, 'developer-id': true, attest: false, publish: false });
+  assert.deepEqual(graph('push', 'true', 'refs/heads/feature'), { package: false, 'developer-id': false, attest: false, publish: false });
+  assert.deepEqual(graph('push', 'true', 'refs/tags/hq-desktop-signed-17'), { package: false, 'developer-id': false, attest: false, publish: false });
+});
+
+test('production release guard preserves disabled defaults and rejects other events, refs, commits and reserved ad-hoc tags', () => {
+  assert.equal(assertReleaseContext(productionContext()), 'hq-desktop-signed-17');
+  for (const change of [{ enabled: undefined }, { enabled: 'false' }, { event: 'workflow_dispatch' }, { event: 'pull_request' }, { defaultBranch: 'other' }, { ref: 'refs/heads/feature' }, { ref: 'refs/tags/hq-desktop-signed-17' }, { mainSha: 'b'.repeat(40) }, { sourceSha: 'b'.repeat(40) }, { workflowSha: 'b'.repeat(40) }, { repositoryId: 1 }, { ownerId: 1 }]) assert.throws(() => assertReleaseContext(productionContext(change)));
+});
+
+test('production publication binds both signed archives and manifests, creates one exact tag and reads back every asset digest', async () => {
+  const { DEVELOPER_ID } = require('../../signing.cjs');
+  const { verifyReleaseFiles, publishProduction } = require('../stage-release.cjs');
+  await withOwnedDirectory(scratch, 'publish-', async root => {
+    for (const architecture of ['arm64', 'x64']) {
+      const archive = tinyZip([['HQ.app/file', 'fixture']]);
+      const archivePath = path.join(root, `hq-darwin-${architecture}.zip`);
+      fs.writeFileSync(archivePath, archive);
+      const build = { ...receipt({ architecture }), signingPolicy: { ...DEVELOPER_ID } };
+      const manifest = manifestFor(build, archiveMetrics(archivePath), { releaseTag: 'hq-desktop-signed-17', sourceRef: 'refs/heads/main', runId: '17', runAttempt: 1, event: 'push', publishedAt: '2026-10-22T00:00:00.000Z' });
+      put(root, `hq-darwin-${architecture}.json`, manifest);
+      put(root, `hq-darwin-${architecture}.sigstore.json`, { dsseEnvelope: {}, verificationMaterial: {} });
+    }
+    assert.equal(verifyReleaseFiles(root, 'arm64', productionContext()).manifest.sourceRef, 'refs/heads/main');
+    const run = (mode = 'success') => {
+      let created = false, released = false, releases = 0, posts = 0, assets = [];
+      const request = (endpoint, method = 'GET', body) => {
+        if (method === 'POST') { posts++; assert.deepEqual(body, { ref: 'refs/tags/hq-desktop-signed-17', sha: 'a'.repeat(40) }); created = true; return { status: 201 }; }
+        if (endpoint.includes('/git/ref/')) {
+          if (mode === 'existing') return { status: 200, body: {} };
+          if (!created) return { status: mode === 'unknown' ? 503 : 404 };
+          return { status: 200, body: { ref: 'refs/tags/hq-desktop-signed-17', object: { type: 'commit', sha: (mode === 'wrong-tag' ? 'b' : 'a').repeat(40) } } };
+        }
+        return released ? { status: 200, body: { tag_name: 'hq-desktop-signed-17', draft: false, prerelease: true, assets: mode === 'partial' ? assets.slice(1) : assets } } : { status: 404 };
+      };
+      const create = (tag, files) => {
+        releases++; released = true;
+        assert.equal(tag, 'hq-desktop-signed-17');
+        assets = files.map(file => ({ name: path.basename(file), size: fs.statSync(file).size, digest: `sha256:${createHash('sha256').update(fs.readFileSync(file)).digest('hex')}` }));
+        return { status: mode === 'lost-response' ? 1 : 0 };
+      };
+      if (['success', 'lost-response'].includes(mode)) {
+        const result = publishProduction(productionContext(), root, request, create);
+        assert.equal(result.verified, true); assert.equal(result.responseLost, mode === 'lost-response');
+        assert.equal(posts, 1); assert.equal(releases, 1);
+      } else {
+        assert.throws(() => publishProduction(productionContext(), root, request, create));
+        assert.equal(posts, ['existing', 'unknown'].includes(mode) ? 0 : 1);
+        assert.equal(releases, mode === 'partial' ? 1 : 0);
+      }
+    };
+    for (const mode of ['success', 'lost-response', 'existing', 'unknown', 'wrong-tag', 'partial']) run(mode);
+    const filename = path.join(root, 'hq-darwin-arm64.json'), original = fs.readFileSync(filename);
+    for (const mutation of [{ sourceSha: 'b'.repeat(40) }, { runAttempt: 2 }, { sourceRef: 'refs/heads/feature' }, { signing: 'adhoc' }, { repository: { ...REPOSITORY, id: 1 } }]) {
+      put(root, 'hq-darwin-arm64.json', { ...JSON.parse(original), ...mutation });
+      assert.throws(() => verifyReleaseFiles(root, 'arm64', productionContext()));
+    }
+    fs.writeFileSync(filename, original);
+    fs.appendFileSync(path.join(root, 'hq-darwin-arm64.zip'), 'tampered');
+    assert.throws(() => verifyReleaseFiles(root, 'arm64', productionContext()), /artifact identity/);
+  });
+});
