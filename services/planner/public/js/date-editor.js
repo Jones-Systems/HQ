@@ -161,23 +161,34 @@ export function openDateEditor({ item, entry = null, defaults = {}, title = null
 
   return new Promise((resolve) => {
     let saved = false;
+    // One change at a time: a double click must not send the edit twice.
+    let busy = false;
+    const once = (run) => async (ctx) => {
+      if (busy) return;
+      busy = true;
+      try {
+        await run(ctx);
+      } finally {
+        busy = false;
+      }
+    };
     const actions = [];
     if (entry) {
       actions.push({
         label: 'Remove date', kind: 'danger-ghost', icon: 'trash',
-        onClick: async ({ close }) => {
+        onClick: once(async ({ close }) => {
           try {
             await changeDate(item, entry.id, null, { label: 'Remove date', message: `Removed ${KIND_LABEL[entry.kind].toLowerCase()} date.` });
             saved = true;
             close();
           } catch { /* reported */ }
-        },
+        }),
       });
     }
     actions.push({ label: 'Cancel', onClick: ({ close }) => close() });
     actions.push({
       label: entry ? 'Save date' : 'Add date', kind: 'primary', icon: 'check',
-      onClick: async ({ close }) => {
+      onClick: once(async ({ close }) => {
         const problem = localCheck(draft, timed);
         if (problem) {
           errorBox.textContent = problem;
@@ -200,7 +211,7 @@ export function openDateEditor({ item, entry = null, defaults = {}, title = null
           errorBox.textContent = err.payload?.errors?.map((e) => e.message).join(' ') || err.message;
           errorBox.hidden = false;
         }
-      },
+      }),
     });
     openDialog({
       title: title || (entry ? `Edit ${KIND_LABEL[entry.kind].toLowerCase()} date` : 'Add a date'),
