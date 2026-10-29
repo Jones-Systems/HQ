@@ -2401,7 +2401,7 @@ No lane relays status through the owner.
   "kind": "implementation",
   "profile_role": "builder",
   "accountable_owner": "lane-t8",
-  "objective": "K1 from the runtime host candidate 73a6532159686c769ba6e39d8070907b2a9b021e: the storage engine and adapters in ctx.lane-t8.001 — WorkspaceRecords, references/evidence/outbox/discovery-cache adapters, the hq.design.storage.import-txn/v1 transaction (validate, preflight, stage, single commitPuts, replay, intent CAS), blocked-intent overlay, explicit import.repair with quarantine, read-only diagnostics and bundle/v1 export with the omitted report, exported only from node.ts. Status constants stay off. Publish one non-draft PR against work/hq-design-runtime-host.",
+  "objective": "K1 from the runtime host candidate 73a6532159686c769ba6e39d8070907b2a9b021e: the storage engine and adapters in ctx.lane-t8.001 — WorkspaceRecords, references/evidence/outbox/discovery-cache adapters, the hq.design.storage.import-txn/v1 transaction (validate, preflight, stage, single commitPuts, replay, intent CAS), blocked-intent overlay, explicit import.repair with quarantine, read-only diagnostics and bundle/v1 export with the omitted report, exported only from node.ts. The engine's TRANSACTION_STATUS and EXPORT_STATUS constants stay off. Imports transactions are enabled only through the qualified single-runtime construction (PR170) via an explicit `openEmittedDesignStore` option that defaults to disabled; export stays off. Publish one non-draft PR against work/hq-design-runtime-host.",
   "context_refs": [
     "spec.hq-integration-parallel-execution#ctx.lane-t8.001"
   ],

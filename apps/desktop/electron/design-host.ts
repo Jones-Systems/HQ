@@ -78,7 +78,11 @@ function checkedDocument(value: StoredDocument | null): StoredDocument | null {
   if (value !== null && (!jsonValue(value.value) || Buffer.byteLength(JSON.stringify(value.value)) > DESIGN_VALUE_CAP)) throw new Error('Unavailable document');
   return value;
 }
-export async function openEmittedDesignStore(userData: string): Promise<DesignStore> {
+export async function openEmittedDesignStore(userData: string, options: { readonly imports?: 'disabled' | 'enabled' } = {}): Promise<DesignStore> {
+  if (options.imports === 'enabled') {
+    const module = await import(new URL('./design-host/modules/design/app/storage/enabled-candidate.js', import.meta.url).href) as { openEnabledDesignStorage(options: { root: string }): Promise<DesignStore> };
+    return module.openEnabledDesignStorage({ root: join(userData, 'design-store') });
+  }
   const module = await import(new URL('./design-host/modules/design/app/storage/node.js', import.meta.url).href) as { openDesignStorage(options: { root: string }): Promise<DesignStore> };
   return module.openDesignStorage({ root: join(userData, 'design-store') });
 }
