@@ -41,6 +41,7 @@ hq planner items history item0001
 hq planner settings get
 ```
 
+`item0001` stands for an item ID returned by `items list`.
 Planner is exactly `planner:main` with seven fixed columns. Areas are metadata,
 not extra boards. Board counts distinguish active (unarchived) and archived items.
 List defaults to `--archive active`; `archived` and `all` are explicit alternatives.
