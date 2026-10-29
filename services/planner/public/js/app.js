@@ -40,6 +40,7 @@ const THEME_KEY = 'planning.theme';
 
 const route = { view: 'glance', item: null, filters: { ...EMPTY_FILTERS } };
 let pendingFocusKey = null;
+let detailReturnKey = null; // focus key of the control that opened the detail panel
 let renderQueued = false;
 let renderDeferred = false;
 
@@ -80,11 +81,17 @@ const ctx = {
     navigate(hashFor(view, { item: null }));
     document.getElementById('main')?.focus({ preventScroll: true });
   },
-  openItem(id) { navigate(hashFor(route.view, { item: id })); },
+  openItem(id) {
+    const active = document.activeElement;
+    const main = document.getElementById('main');
+    if (!route.item) detailReturnKey = active && main?.contains(active) ? active.dataset.focusKey || null : null;
+    navigate(hashFor(route.view, { item: id }));
+  },
   closeItem() {
     const id = route.item;
     navigate(hashFor(route.view, { item: null }));
-    if (id) pendingFocusKey = `card:${id}`;
+    if (id) pendingFocusKey = detailReturnKey || `card:${id}`;
+    detailReturnKey = null;
   },
   rerender: () => scheduleRender(),
   keepFocus(key) { pendingFocusKey = key; },
@@ -135,7 +142,7 @@ function buildShell() {
       h('span', { id: 'mobile-sync', class: 'mobile-sync', role: 'status' })),
     h('div', { class: 'topbar-tools' },
       h('label', { class: 'search' }, icon('search', { size: 16 }), search),
-      button('Filters', { icon: 'filter', kind: 'subtle', onClick: () => openFilterMenu(), attrs: { id: 'filter-btn', 'aria-haspopup': 'true' } }),
+      button('Filters', { icon: 'filter', kind: 'subtle', onClick: () => openFilterMenu(), attrs: { id: 'filter-btn', 'aria-haspopup': 'dialog' } }),
       button('New', { icon: 'plus', kind: 'primary', onClick: () => openCapture({}), attrs: { class: 'btn btn-primary topbar-new', title: 'New item (N)' } })),
   );
 
@@ -145,7 +152,7 @@ function buildShell() {
     tabbar.append(h('a', { href: `#/${id}`, class: 'tab', dataset: { view: id } }, icon(v.icon, { size: 20 }), h('span', { text: v.label })));
   }
   tabbar.append(h('button', { type: 'button', class: 'tab', on: { click: (e) => openMoreMenu(e.currentTarget) }, 'aria-haspopup': 'menu' },
-    icon('menu', { size: 20 }), h('span', { text: 'More' })));
+    icon('more', { size: 20 }), h('span', { text: 'More' })));
 
   document.getElementById('fab').addEventListener('click', () => openCapture({}));
   mountDetail(document.getElementById('detail'), ctx);
@@ -153,6 +160,8 @@ function buildShell() {
 
 function renderNav() {
   const nav = document.getElementById('nav');
+  // The nav is rebuilt on every render; keep keyboard focus on the same link.
+  const focusedView = nav.contains(document.activeElement) ? document.activeElement.dataset.view : null;
   clear(nav);
   const live = state.items.filter(isLive);
   const b = reviewBuckets(live, ctx.today, state.settings);
@@ -165,10 +174,11 @@ function renderNav() {
     const current = route.view === v.id;
     nav.append(h('a', {
       href: hashFor(v.id, { item: null }), class: ['nav-item', current && 'is-current'], 'aria-current': current ? 'page' : null,
-      title: `${v.label} (${v.key})`,
+      title: `${v.label} (${v.key})`, dataset: { view: v.id },
     }, icon(v.icon, { size: 18 }), h('span', { class: 'nav-label', text: v.label }),
     counts[v.id] ? h('span', { class: ['nav-count', v.id === 'review' && b.overdue.length && 'is-alert'], text: String(counts[v.id]) }) : ''));
   }
+  if (focusedView) nav.querySelector(`[data-view="${focusedView}"]`)?.focus({ preventScroll: true });
   for (const tab of document.querySelectorAll('#tabbar .tab[data-view]')) {
     const on = tab.dataset.view === route.view;
     tab.classList.toggle('is-current', on);
@@ -276,7 +286,8 @@ function render() {
   });
   const active = document.activeElement;
   const requested = pendingFocusKey;
-  const focusKey = requested || (active && main.contains(active) ? active.dataset.focusKey : null);
+  const focusWasInMain = Boolean(active && active !== main && main.contains(active));
+  const focusKey = requested || (focusWasInMain ? active.dataset.focusKey : null);
   pendingFocusKey = null;
   const sameView = main.dataset.view === route.view;
 
@@ -302,10 +313,11 @@ function render() {
       if (s) [el.scrollLeft, el.scrollTop] = s;
     });
   }
-  if (focusKey) {
-    const target = main.querySelector(`[data-focus-key="${CSS.escape(focusKey)}"]`);
-    if (target) target.focus({ preventScroll: !requested });
-  }
+  const target = focusKey ? main.querySelector(`[data-focus-key="${CSS.escape(focusKey)}"]`) : null;
+  if (target) target.focus({ preventScroll: !requested });
+  // The focused control was replaced and has no (visible) counterpart: keep
+  // focus in the content instead of letting it fall back to <body>.
+  if ((requested || focusWasInMain) && (!target || document.activeElement !== target)) main.focus({ preventScroll: true });
   if (state.phase === 'ready') renderDetail(route.item, ctx);
   else if (detailOpenId() && !route.item) closeDetailPanel();
 }
@@ -756,7 +768,8 @@ function cycleTheme() {
 // ------------------------------------------------------------- keyboard
 
 function onGlobalKey(e) {
-  if (document.querySelector('dialog[open]')) return;
+  // A menu or control already handled this key (for example Escape closing a menu).
+  if (e.defaultPrevented || document.querySelector('dialog[open]')) return;
   const typing = isTypingTarget(e.target);
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !typing) {
     e.preventDefault();
