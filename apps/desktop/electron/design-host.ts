@@ -41,6 +41,7 @@ export interface DesignStore {
   close(): Promise<void>;
 }
 export const DOCUMENT_ROOTS = ['design/projects/', 'design/components/', 'design/flows/', 'design/compare/', 'design/annotations/', 'design.canvas.arrangement.v1/', 'design/requests/', 'design/connector/outbox/', 'design/connector/evidence/', 'design/references/'] as const;
+export const TASTE_JOURNAL_KEY = 'design/taste/journal.v1';
 export const DESIGN_BLOB_CAP = 16 * 1024 * 1024;
 const disabled = () => ({ ok: false as const, kind: 'unavailable' as const, reason: 'disabled' as const });
 const digest = (v: unknown): v is BlobDigest => typeof v === 'string' && /^sha256:[0-9a-f]{64}$/.test(v);
@@ -120,7 +121,7 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
       } else if (route === 'doc.list') {
         if (!keys(params, ['prefix']) || !allowedDocumentKey(params.prefix, true)) return { ok: false, kind: 'invalid' };
       } else if (route === 'doc.get' || route === 'doc.put') {
-        if (!keys(params, route === 'doc.put' ? ['key', 'value'] : ['key'], route === 'doc.put' ? ['expectedRevision'] : []) || !allowedDocumentKey(params.key)) return { ok: false, kind: 'invalid' };
+        if (!keys(params, route === 'doc.put' ? ['key', 'value'] : ['key'], route === 'doc.put' ? ['expectedRevision'] : []) || !(params.key === TASTE_JOURNAL_KEY || allowedDocumentKey(params.key))) return { ok: false, kind: 'invalid' };
         if (route === 'doc.put' && (!(!Object.hasOwn(params, 'expectedRevision') || params.expectedRevision === null || (Number.isSafeInteger(params.expectedRevision) && (params.expectedRevision as number) >= 0)) || !jsonValue(params.value) || Buffer.byteLength(JSON.stringify(params.value)) > DESIGN_VALUE_CAP)) return { ok: false, kind: 'invalid' };
       } else return { ok: false, kind: 'invalid' };
     } catch { return { ok: false, kind: 'invalid' }; }

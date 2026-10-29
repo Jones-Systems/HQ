@@ -61,7 +61,7 @@ env:
     requests|modules/design/requests|root|test/*.test.ts|vitest.config.ts|cone|test/**/*.test.tsx|-
     taste|modules/design/taste|root|test/*.test.ts|vitest.config.ts|cone|test/ui/**/*.test.tsx|-
     ui|modules/design/ui|root|test/node/*.test.ts|vitest.config.ts|cone|test/vite/**/*.test.ts|-
-    app|modules/design/app|root|compose/test/*.test.ts|-|-|-|-
+    app|modules/design/app|root|compose/test/*.test.ts|vitest.config.ts|cone|compose/test/**/*.test.tsx|-
     app-storage|modules/design/app/storage|root|test/*.test.ts|-|-|-|-
     app-sections|modules/design/app/sections|root|**/*.test.ts|vitest.config.ts|cone|test/**/*.test.tsx|-
     app-references-provider|modules/design/app/references-provider|root|test/*.test.ts|-|-|-|-
