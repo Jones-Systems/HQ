@@ -25,11 +25,26 @@ export interface TastePanelProps {
 }
 
 /** HQ taste rating controls. Saving appends to the journal; it never changes model defaults. */
-export function TastePanel({
+export function TastePanel(props: TastePanelProps) {
+  const [binding, setBinding] = useState({ client: props.client, generation: 0 });
+  if (binding.client !== props.client) {
+    setBinding({ client: props.client, generation: binding.generation + 1 });
+    return null;
+  }
+  // Unmount all drafts, exports and pending reads when the selection or adapter changes.
+  return <TastePanelSession key={JSON.stringify([binding.generation, props.projectId, props.subject.id])} {...props} />;
+}
+
+function TastePanelSession({
   client, subject, projectId, projectName, flags = DEFAULT_TASTE_FLAGS, aspects = DEFAULT_ASPECTS,
   newId = randomId, initialSnapshot,
 }: TastePanelProps) {
-  const [snapshot, setSnapshot] = useState<TasteSnapshot | null>(initialSnapshot ?? null);
+  const [snapshot, setSnapshot] = useState<TasteSnapshot | null>(() => {
+    const scope = initialSnapshot?.project?.scope;
+    const matches = projectId === null ? initialSnapshot?.project === null
+      : scope?.kind === 'project' && scope.projectId === projectId;
+    return matches ? initialSnapshot ?? null : null;
+  });
   const [loadError, setLoadError] = useState(false);
   const [scopeKind, setScopeKind] = useState<'general' | 'project'>(projectId ? 'project' : 'general');
   const [busy, setBusy] = useState(false);
@@ -41,18 +56,30 @@ export function TastePanel({
       setSnapshot(await client.snapshot(projectId));
       setLoadError(false);
     } catch {
+      setSnapshot(null);
       setLoadError(true);
     }
   }, [client, projectId]);
 
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    let current = true;
+    void client.snapshot(projectId).then((value) => {
+      if (current) { setSnapshot(value); setLoadError(false); }
+    }, () => {
+      if (current) { setSnapshot(null); setLoadError(true); }
+    });
+    return () => { current = false; };
+  }, [client, projectId]);
   useEffect(() => { if (!projectId) setScopeKind('general'); }, [projectId]);
 
   const submit = useCallback(async (command: TasteCommand | null) => {
     if (!command) return;
     setBusy(true);
     try {
-      setOutcome(describeResult(await client.submit(command)));
+      const result = await client.submit(command);
+      const uncertainWrite = result.status === 'fail-closed'
+        && ['write-failed', 'partial-write', 'sync-failed'].includes(result.reason);
+      setOutcome(uncertainWrite ? describeUnknown(command) : describeResult(result));
     } catch {
       setOutcome(describeUnknown(command));
     } finally {
@@ -111,7 +138,7 @@ export function TastePanel({
               onRate={(value) => submit(ratingCommand(scope, subject, slot, value, newId))} />;
           })}
         </section>
-        <NotesEditor disabled={readOnly} slots={[...slots.liking, ...slots.descriptive]}
+        <NotesEditor key={scopeKind} disabled={readOnly} slots={[...slots.liking, ...slots.descriptive]}
           onNote={(text) => submit(noteCommand(scope, subject, text, newId))}
           onCounterevidence={(slot, text) => submit(counterevidenceCommand(scope, subject, slot, text, newId))} />
       </div>
@@ -135,7 +162,7 @@ export function TastePanel({
             </span>}
           </li>)}</ul>
         </section>}
-        <ExportControls client={client} scope={scope} />
+        <ExportControls key={scopeKind} client={client} scope={scope} disabled={readOnly} />
       </aside>
     </div>
 
@@ -247,7 +274,9 @@ function ProfileSummary({ profile, title, aspects }: {
   </section>;
 }
 
-function ExportControls({ client, scope }: { readonly client: TasteClientPort; readonly scope: TasteScope }) {
+function ExportControls({ client, scope, disabled }: {
+  readonly client: TasteClientPort; readonly scope: TasteScope; readonly disabled: boolean;
+}) {
   const [includeNotes, setIncludeNotes] = useState(false);
   const [includeCounterevidence, setIncludeCounterevidence] = useState(false);
   const [result, setResult] = useState<ProfileExport | null>(null);
@@ -258,11 +287,12 @@ function ExportControls({ client, scope }: { readonly client: TasteClientPort; r
       <span>Include notes</span></label>
     <label className="taste-check"><input type="checkbox" checked={includeCounterevidence}
       onChange={(event) => setIncludeCounterevidence(event.target.checked)} /><span>Include counterevidence</span></label>
-    <button type="button" className="taste-button" onClick={async () => {
+    <button type="button" className="taste-button" disabled={disabled} onClick={async () => {
       try {
         setResult(await client.exportProfile({ scope, includeNotes, includeCounterevidence }));
         setFailed(false);
       } catch {
+        setResult(null);
         setFailed(true);
       }
     }}>Export</button>
