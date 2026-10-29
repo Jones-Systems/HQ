@@ -1,0 +1,312 @@
+schema = "codex.v3-check-groups/v1"
+
+[groups.design-projects]
+summary = "projects behavioral checks owned by its section."
+covers = ["spec.hq-design#test.projects.001"]
+direct_surfaces = ["modules/design/projects/"]
+tests = ["modules/design/projects/**/*.test.ts", "modules/design/projects/**/*.test.mjs"]
+
+[groups.design-canvas]
+summary = "canvas behavioral checks owned by its section."
+covers = ["spec.hq-design#test.canvas.001"]
+direct_surfaces = ["modules/design/canvas/"]
+tests = ["modules/design/canvas/**/*.test.ts", "modules/design/canvas/**/*.test.tsx", "modules/design/canvas/**/*.test.mjs"]
+
+[groups.design-compare]
+summary = "compare behavioral checks owned by its section."
+covers = ["spec.hq-design#test.compare.001", "spec.hq-integration-parallel-execution#test.preview-compare.001"]
+direct_surfaces = ["modules/design/compare/"]
+tests = ["modules/design/compare/**/*.test.ts", "modules/design/compare/**/*.test.mjs"]
+
+[groups.design-annotations]
+summary = "annotations behavioral checks owned by its section."
+covers = ["spec.hq-design#test.annotations.001", "spec.hq-integration-parallel-execution#test.preview-agent.001"]
+direct_surfaces = ["modules/design/annotations/"]
+tests = ["modules/design/annotations/**/*.test.ts", "modules/design/annotations/**/*.test.tsx", "modules/design/annotations/**/*.test.mjs"]
+
+[groups.design-requests]
+summary = "requests behavioral checks owned by its section."
+covers = ["spec.hq-design#test.requests.001"]
+direct_surfaces = ["modules/design/requests/"]
+tests = ["modules/design/requests/**/*.test.ts", "modules/design/requests/**/*.test.tsx", "modules/design/requests/**/*.test.mjs"]
+
+[groups.design-taste]
+summary = "taste behavioral checks owned by its section."
+covers = ["spec.hq-design#test.taste.001"]
+direct_surfaces = ["modules/design/taste/"]
+tests = ["modules/design/taste/**/*.test.ts", "modules/design/taste/**/*.test.mjs"]
+
+[groups.design-references]
+summary = "references behavioral checks owned by its section."
+covers = ["spec.hq-design#test.references.001"]
+direct_surfaces = ["modules/design/references/"]
+tests = ["modules/design/references/**/*.test.ts", "modules/design/references/**/*.test.tsx", "modules/design/references/**/*.test.mjs"]
+
+[groups.design-store]
+summary = "store behavioral checks owned by its section."
+covers = ["spec.hq-design#test.store.001"]
+direct_surfaces = ["packages/design-store/"]
+tests = ["packages/design-store/**/*.test.ts", "packages/design-store/**/*.test.mjs"]
+
+[groups.design-components]
+summary = "components behavioral checks owned by its section."
+covers = ["spec.hq-design#test.components.001", "spec.hq-integration-parallel-execution#test.component-runner-port.001"]
+direct_surfaces = ["modules/design/components/"]
+tests = ["modules/design/components/**/*.test.ts", "modules/design/components/**/*.test.tsx", "modules/design/components/**/*.test.mjs"]
+
+[groups.design-flows]
+summary = "flows behavioral checks owned by its section."
+covers = ["spec.hq-design#test.flows.001"]
+direct_surfaces = ["modules/design/flows/"]
+tests = ["modules/design/flows/**/*.test.ts", "modules/design/flows/**/*.test.mjs"]
+
+[groups.design-connector]
+summary = "connector behavioral checks owned by its section."
+covers = ["spec.hq-design#test.connector.001", "spec.hq-integration-parallel-execution#test.connector-resolve-unknown.001"]
+direct_surfaces = ["modules/design/connector/"]
+tests = ["modules/design/connector/**/*.test.ts", "modules/design/connector/**/*.test.mjs"]
+
+[groups.design-imports]
+summary = "imports behavioral checks owned by its section."
+covers = ["spec.hq-design#test.imports.001"]
+direct_surfaces = ["modules/design/imports/"]
+tests = ["modules/design/imports/**/*.test.ts", "modules/design/imports/**/*.test.mjs"]
+
+[groups.design-ui]
+summary = "ui behavioral checks owned by its section."
+covers = ["spec.hq-design#test.ui.001"]
+direct_surfaces = ["modules/design/ui/"]
+tests = ["modules/design/ui/**/*.test.ts", "modules/design/ui/**/*.test.mjs"]
+
+[groups.design-discovery]
+summary = "discovery behavioral checks owned by its section."
+covers = ["spec.hq-design#test.discovery.001"]
+direct_surfaces = ["modules/design/discovery/"]
+tests = ["modules/design/discovery/**/*.test.ts", "modules/design/discovery/**/*.test.mjs"]
+
+[groups.hq-root-build]
+summary = "Root npm ci, typecheck, Vitest and build over every mounted domain."
+covers = ["spec.hq-ui-modernization#test.acceptance.001", "spec.hq-integration-parallel-execution#test.joint-shell.001", "spec.hq-integration-parallel-execution#test.wiki-mount.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001", "spec.hq-integration-parallel-execution#test.shared-r3.001", "spec.hq-integration-parallel-execution#test.reference-round-trip.001", "spec.hq-integration-parallel-execution#test.receiver-adapter.001", "spec.hq-integration-parallel-execution#test.closure-qualification.001", "spec.hq-integration-parallel-execution#test.preview-host.001", "spec.hq-integration-parallel-execution#test.preview-enablement.001", "spec.hq-integration-parallel-execution#test.component-static-enablement.001", "spec.hq-integration-parallel-execution#test.component-scripted-enablement.001", "spec.hq-integration-parallel-execution#test.new-thread-transport.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+direct_surfaces = ["package.json", "package-lock.json", "tsconfig.json", "vitest.config.ts", "apps/desktop/", "packages/contracts/"]
+tests = ["apps/desktop/**/*.test.ts", "apps/desktop/**/*.test.tsx", "packages/contracts/**/*.test.ts"]
+
+[groups.hq-cli-planner]
+summary = "HQ CLI node tests and Planner Python/Node backend tests."
+covers = ["spec.hq-integration-parallel-execution#test.final-acceptance.001", "spec.hq-integration-parallel-execution#test.cli-planner-ci.001"]
+direct_surfaces = ["tools/hq-cli/", "services/planner/"]
+tests = ["tools/hq-cli/**/*.test.*", "services/planner/tests/**"]
+
+[groups.hq-social-live]
+summary = "Social live adapter contract tests over a wire stub."
+covers = ["spec.hq-ui-modernization#test.work-calendar.001", "spec.hq-integration-parallel-execution#test.social-live.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+direct_surfaces = ["modules/social/"]
+tests = ["modules/social/**/*.test.ts", "modules/social/**/*.test.tsx"]
+
+[groups.hq-work-runtime]
+summary = "Work live runtime and replay tests over Planner wire fixtures."
+covers = ["spec.hq-ui-modernization#test.work-calendar.001", "spec.hq-integration-parallel-execution#test.work-runtime.001", "spec.hq-integration-parallel-execution#test.work-session-injection.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+direct_surfaces = ["modules/work/"]
+tests = ["modules/work/**/*.test.ts", "modules/work/**/*.test.tsx"]
+
+[groups.hq-wiki-module]
+summary = "Wiki contract, core, UI and assembly tests over synthetic Git corpora."
+covers = ["spec.hq-integration-parallel-execution#test.wiki-assembly.001", "spec.hq-integration-parallel-execution#test.wiki-mount.001"]
+direct_surfaces = ["modules/wiki/"]
+tests = ["modules/wiki/**/*.test.ts", "modules/wiki/**/*.test.tsx"]
+
+[groups.hq-shared-bridge]
+summary = "Electron main/preload, closed routes, shared contracts and live wiring."
+covers = ["spec.hq-ui-modernization#test.acceptance.001", "spec.hq-integration-parallel-execution#test.shared-bridge.001", "spec.hq-integration-parallel-execution#test.live-wiring.001"]
+direct_surfaces = ["apps/desktop/electron/", "apps/desktop/src/services/", "packages/contracts/"]
+tests = ["apps/desktop/electron/**/*.test.ts", "apps/desktop/src/**/*.integration.test.tsx"]
+
+[groups.hq-electron-acceptance]
+summary = "Dependency-free Electron acceptance harness driven over CDP."
+covers = ["spec.hq-integration-parallel-execution#test.acceptance-harness.001", "spec.hq-integration-parallel-execution#test.acceptance-infrastructure.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001", "spec.hq-integration-parallel-execution#test.acceptance-scenarios.001", "spec.hq-integration-parallel-execution#test.preview-scenarios.001"]
+direct_surfaces = ["tests/acceptance/"]
+tests = ["tests/acceptance/**/*.mjs"]
+
+[groups.hq-source-readback]
+summary = "Native GitHub ref, PR and ancestry readback after each landing; no repository test files."
+covers = ["spec.hq-integration-parallel-execution#test.source-landing.001", "spec.hq-integration-parallel-execution#test.main-delivery.001"]
+direct_surfaces = ["docs/engineering-specs/hq-integration-parallel-execution.md"]
+tests = []
+
+[groups.hq-design-storage-engine]
+summary = "K1 storage engine, import transaction, export and fault-injection suites."
+covers = ["spec.hq-integration-parallel-execution#test.design-storage-engine.001", "spec.hq-integration-parallel-execution#test.import-export-qualification.001", "spec.hq-integration-parallel-execution#test.import-export-enablement.001"]
+direct_surfaces = ["modules/design/app/storage/"]
+tests = ["modules/design/app/storage/**/*.test.ts"]
+
+[groups.hq-design-app-sections]
+summary = "K2 production Requests, Runs and References sections and the app-sections workflow row."
+covers = ["spec.hq-integration-parallel-execution#test.design-app-sections.001"]
+direct_surfaces = ["modules/design/app/sections/", ".github/workflows/design-sections.yml"]
+tests = ["modules/design/app/sections/**/*.test.ts", "modules/design/app/sections/**/*.test.tsx"]
+
+[groups.hq-design-local-catalog]
+summary = "K3 laptop-local catalog snapshot builder and SourceAdapter guards."
+covers = ["spec.hq-integration-parallel-execution#test.design-local-catalog.001"]
+direct_surfaces = ["modules/design/discovery/node/", "modules/design/discovery/src/adapters/"]
+tests = ["modules/design/discovery/test/**/*.test.ts"]
+
+[groups.hq-shared-r3]
+summary = "Shared r3 routes, gate, Work export, references contract and shell open/return."
+covers = ["spec.hq-integration-parallel-execution#test.shared-r3.001", "spec.hq-integration-parallel-execution#test.import-export-qualification.001"]
+direct_surfaces = ["packages/contracts/", "apps/desktop/electron/", "apps/desktop/design-host/", "apps/desktop/tsconfig.design-host.json", "apps/desktop/src/App.tsx", "apps/desktop/src/references.ts", "apps/desktop/src/reference-providers.ts"]
+tests = ["packages/contracts/**/*.test.ts", "apps/desktop/electron/**/*.test.ts", "apps/desktop/src/references.test.ts"]
+
+[groups.hq-design-reference-provider]
+summary = "K4 read-only Design reference provider."
+covers = ["spec.hq-integration-parallel-execution#test.design-reference-provider.001"]
+direct_surfaces = ["modules/design/app/references-provider/"]
+tests = ["modules/design/app/references-provider/**/*.test.ts"]
+
+[groups.hq-design-compose]
+summary = "CL1b production descriptors and compose binding."
+covers = ["spec.hq-integration-parallel-execution#test.design-compose-mount.001", "spec.hq-integration-parallel-execution#test.preview-compose.001"]
+direct_surfaces = ["modules/design/app/compose/", "modules/design/app/index.ts", "modules/design/requests/design-module.ts", "modules/design/connector/design-module.ts", "modules/design/references/design-module.ts"]
+tests = ["modules/design/app/compose/**/*.test.ts", "modules/design/app/compose/**/*.test.tsx"]
+
+[groups.hq-reference-ui]
+summary = "@hq/ui ReferenceChip, LinkList and LinkPicker."
+covers = ["spec.hq-integration-parallel-execution#test.reference-ui.001"]
+direct_surfaces = ["packages/hq-ui/src/references/", "packages/hq-ui/src/index.ts"]
+tests = ["packages/hq-ui/test/references/**/*.test.ts", "packages/hq-ui/test/references/**/*.test.tsx"]
+
+[groups.hq-social-references]
+summary = "Read-only Social reference provider and link editor."
+covers = ["spec.hq-integration-parallel-execution#test.social-references.001"]
+direct_surfaces = ["modules/social/references/", "modules/social/content/"]
+tests = ["modules/social/references/**/*.test.ts", "modules/social/references/**/*.test.tsx", "modules/social/content/**/*.test.ts", "modules/social/content/**/*.test.tsx"]
+
+[groups.hq-work-references]
+summary = "Work reference provider, Links section and RW-6 Export UI."
+covers = ["spec.hq-integration-parallel-execution#test.work-references.001", "spec.hq-integration-parallel-execution#test.work-export-ui.001"]
+direct_surfaces = ["modules/work/references/", "modules/work/detail/", "modules/work/export/"]
+tests = ["modules/work/references/**/*.test.ts", "modules/work/references/**/*.test.tsx", "modules/work/detail/**/*.test.ts", "modules/work/detail/**/*.test.tsx", "modules/work/export/**/*.test.ts", "modules/work/export/**/*.test.tsx"]
+
+[groups.hq-reference-round-trip]
+summary = "Shell provider registration and the integrated reference round trip."
+covers = ["spec.hq-integration-parallel-execution#test.reference-round-trip.001"]
+direct_surfaces = ["apps/desktop/src/reference-providers.ts"]
+tests = ["apps/desktop/src/references.integration.test.tsx"]
+
+[groups.hq-hosted-ci]
+summary = "Hosted CLI and Planner workflow; evidence is the hosted run, no repository test files."
+covers = ["spec.hq-integration-parallel-execution#test.cli-planner-ci.001"]
+direct_surfaces = [".github/workflows/cli-planner.yml"]
+tests = []
+
+[groups.hq-receiver-adapter]
+summary = "Existing-thread Jones Code receiver adapter against the Q-S wire stub."
+covers = ["spec.hq-integration-parallel-execution#test.receiver-adapter.001"]
+direct_surfaces = ["apps/desktop/electron/jones-code/", "packages/contracts/src/jones-code.ts"]
+tests = ["apps/desktop/electron/jones-code/**/*.test.ts"]
+
+[groups.hq-capability-closure]
+summary = "Typed closed/held capability matrix at one exact head; runs other groups."
+covers = ["spec.hq-integration-parallel-execution#test.closure-qualification.001", "spec.hq-integration-parallel-execution#test.final-acceptance.001"]
+direct_surfaces = ["docs/engineering-specs/hq-integration-parallel-execution.md"]
+tests = []
+
+[groups.hq-held-gates]
+summary = "Held-capability gate readback; native evidence only, no repository test files."
+covers = ["spec.hq-integration-parallel-execution#test.receiver-s1-qualification.001", "spec.hq-integration-parallel-execution#test.new-thread-u1-qualification.001", "spec.hq-integration-parallel-execution#test.preview-s2-qualification.001", "spec.hq-integration-parallel-execution#test.component-containment-gate.001", "spec.hq-integration-parallel-execution#test.wiki-private-validation-gate.001", "spec.hq-integration-parallel-execution#test.service-enablement-qualification.001", "spec.hq-integration-parallel-execution#test.laptop-route-binding.001"]
+direct_surfaces = ["docs/engineering-specs/hq-integration-parallel-execution.md"]
+tests = []
+
+[groups.hq-preview-agent]
+summary = "PV-M1 preview agent suites under the existing annotations row globs."
+covers = ["spec.hq-integration-parallel-execution#test.preview-agent.001"]
+direct_surfaces = ["modules/design/annotations/src/preview-agent/", "modules/design/annotations/test/"]
+tests = ["modules/design/annotations/test/*.test.ts", "modules/design/annotations/test/**/*.render.test.tsx"]
+
+[groups.hq-preview-compare]
+summary = "PV-M2 compare host-surface suites under the existing compare row glob."
+covers = ["spec.hq-integration-parallel-execution#test.preview-compare.001"]
+direct_surfaces = ["modules/design/compare/src/"]
+tests = ["modules/design/compare/src/**/*.test.ts"]
+
+[groups.hq-component-runner-port]
+summary = "CC-M1 component runner port suites under the existing components row globs."
+covers = ["spec.hq-integration-parallel-execution#test.component-runner-port.001"]
+direct_surfaces = ["modules/design/components/src/", "modules/design/components/ui/", "modules/design/components/tests/"]
+tests = ["modules/design/components/tests/*.test.ts", "modules/design/components/ui/**/*.test.tsx"]
+
+[groups.hq-preview-host]
+summary = "Preview host, component runner, contents factory and status-constant suites without Electron."
+covers = ["spec.hq-integration-parallel-execution#test.preview-host.001", "spec.hq-integration-parallel-execution#test.preview-enablement.001", "spec.hq-integration-parallel-execution#test.component-static-enablement.001", "spec.hq-integration-parallel-execution#test.component-scripted-enablement.001"]
+direct_surfaces = ["apps/desktop/electron/contents-factory.ts", "apps/desktop/electron/preview/", "apps/desktop/electron/components/", "packages/contracts/src/preview.ts"]
+tests = ["apps/desktop/electron/contents-factory.test.ts", "apps/desktop/electron/preview/**/*.test.ts", "apps/desktop/electron/components/**/*.test.ts"]
+
+[groups.hq-preview-acceptance]
+summary = "Native preview and component suites on the built app; qualifying runs need a display."
+covers = ["spec.hq-integration-parallel-execution#test.preview-scenarios.001", "spec.hq-integration-parallel-execution#test.preview-s2-qualification.001", "spec.hq-integration-parallel-execution#test.component-containment-gate.001"]
+direct_surfaces = ["tests/acceptance/preview/"]
+tests = ["tests/acceptance/preview/**/*.test.mjs", "tests/acceptance/preview/run.mjs", "tests/acceptance/preview/packaged.mjs"]
+
+[groups.hq-jones-client-launch]
+# Cross-repository group: the checks execute in a Jones-Systems/Jones-Code task
+# worktree (target base fa7c6c013811db33d128422027697dbaa1517b60), not in HQ, so
+# tests = [] in HQ. The bound focused commands, run serially from the Jones Code
+# root, are the final candidate union in spec.jones-client-launch#ctx.test-plan.001;
+# they are not duplicated here, so this comment cannot drift from the plan.
+summary = "Jones-Code target (fa7c6c0) focused client-launch checks; run in a Jones-Code task worktree, not HQ; commands in spec.jones-client-launch#ctx.test-plan.001."
+covers = ["spec.jones-client-launch#test.client-launch.001"]
+direct_surfaces = ["docs/engineering-specs/jones-client-launch.md"]
+tests = []
+
+[groups.hq-connector-resolve-unknown]
+summary = "CN-U1 connector Resolve unknown and new-thread eligibility suites under the existing connector row glob."
+covers = ["spec.hq-integration-parallel-execution#test.connector-resolve-unknown.001"]
+direct_surfaces = ["modules/design/connector/src/", "modules/design/connector/test/"]
+tests = ["modules/design/connector/test/*.test.ts"]
+
+[groups.hq-new-thread-transport]
+summary = "Main-only new-thread Jones Code transport against the Q-N wire stub; never live."
+covers = ["spec.hq-integration-parallel-execution#test.new-thread-transport.001"]
+direct_surfaces = ["apps/desktop/electron/jones-code/", "packages/contracts/src/jones-code.ts"]
+tests = ["apps/desktop/electron/jones-code/**/*.test.ts"]
+
+[groups.hq-ui]
+summary = "Shared visual tokens, primitives, splitters and calendar interactions."
+covers = ["spec.hq-ui-modernization#test.work-calendar.001", "spec.hq-ui-modernization#test.acceptance.001"]
+direct_surfaces = ["packages/hq-ui/", "docs/design/hq-visual-system/tokens/"]
+tests = ["packages/hq-ui/**/*.test.ts", "packages/hq-ui/**/*.test.tsx"]
+
+[groups.hq-source-registry]
+summary = "Registered-project and gallery source mapping, persisted enrollment and native Settings behavior."
+covers = ["spec.hq-integration-parallel-execution#test.registry-adapters.001", "spec.hq-integration-parallel-execution#test.source-registry-host.001"]
+direct_surfaces = ["modules/design/discovery/src/adapters/", "apps/desktop/electron/sources/", "apps/desktop/src/settings/ProjectSources.tsx", "apps/desktop/src/interactive-runtime.ts", "packages/contracts/src/catalog.ts"]
+tests = ["modules/design/discovery/test/adapters/**/*.test.ts", "apps/desktop/electron/sources/**/*.test.ts", "apps/desktop/src/settings/ProjectSources.test.tsx", "apps/desktop/src/interactive-runtime.test.ts"]
+
+[groups.hq-updates-bridge]
+summary = "Updater sender authorization, narrow preload and durable shell-health gate."
+covers = ["spec.app-updates-hq#ac.verification.001"]
+direct_surfaces = ["apps/desktop/electron/main.ts", "apps/desktop/electron/preload.cts", "apps/desktop/electron/update-bridge.ts", "apps/desktop/src/main.tsx", "packages/contracts/src/updates.ts"]
+tests = ["apps/desktop/electron/update-bridge.test.ts", "apps/desktop/electron/update-preload.test.ts", "apps/desktop/electron/r3-preload.test.ts"]
+
+[groups.hq-updates-ui]
+summary = "Settings update discovery, progress, exact candidate scheduling and subscription lifetime."
+covers = ["spec.app-updates-hq#ac.verification.001"]
+direct_surfaces = ["apps/desktop/src/settings/Updates.tsx", "apps/desktop/src/settings/updates.css", "apps/desktop/src/ServiceSettings.tsx", "apps/desktop/src/environment.d.ts"]
+tests = ["apps/desktop/src/settings/Updates.test.tsx", "apps/desktop/src/ServiceSettings.test.tsx"]
+
+[groups.hq-updates-discovery]
+summary = "Release provenance, bounded downloads, candidate preparation and updater state lifetime."
+covers = ["spec.app-updates-hq#ac.verification.001"]
+direct_surfaces = ["apps/desktop/electron/updates/"]
+tests = ["apps/desktop/electron/updates/**/*.test.ts"]
+
+[groups.hq-updates-transaction]
+summary = "Installation records, process leases, profile fencing and interrupted binary transactions."
+covers = ["spec.app-updates-hq#ac.verification.001"]
+direct_surfaces = ["tools/updater/"]
+tests = ["tools/updater/*.test.cjs", "tools/updater/test/**/*.test.cjs"]
+
+[groups.hq-updates-package]
+summary = "Package identity, compatibility epoch and synthetic native install/update qualification."
+covers = ["spec.app-updates-hq#ac.verification.001"]
+direct_surfaces = ["tools/updater/packaging/", ".github/workflows/hq-desktop-package.yml"]
+tests = ["tools/updater/packaging/**/*.test.cjs"]
