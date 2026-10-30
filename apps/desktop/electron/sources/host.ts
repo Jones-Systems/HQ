@@ -8,6 +8,7 @@ import { boundedResponse, type FetchPort } from '../jones-code/wire.js';
 import { hash } from '../jones-code/receiver.js';
 import { previewTarget } from '../preview/policy.js';
 import { keys, record } from '../services.js';
+import type { GenerationConsumer } from './generations/index.js';
 interface Source extends SourceStatus { readonly base?: string; readonly snapshot?: CatalogSnapshot; readonly active: boolean }
 interface State { readonly schema: 'hq.sources/v2'; readonly sources: readonly Source[] }
 export interface RegistryMappers {
@@ -36,7 +37,9 @@ export function createSourceHost(options: {
   catalog: { call(route: unknown, params: unknown): Promise<DesignStorageResult<unknown>> };
   jones: { projects(hostId?: string): Promise<unknown>; environment(hostId?: string): Promise<{ hostId: string; fingerprint: string }> };
   store?: JsonStore<State>; mappers?: () => Promise<RegistryMappers>; fetch?: FetchPort;
+  generations?: GenerationConsumer;
 }) {
+  const generations = options.generations;
   const store = options.store ?? jsonStore<State>(join(options.userData, 'sources'), 'registry.json');
   let state: State | undefined, serial = Promise.resolve();
   const exclusive = <T>(fn: () => Promise<T>): Promise<T> => { const next = serial.then(fn); serial = next.then(() => {}, () => {}); return next; };
@@ -101,6 +104,12 @@ export function createSourceHost(options: {
     }
   }
   return {
+    ...(generations ? { generations: {
+      refresh: () => generations.refresh(),
+      current: () => generations.current(),
+      manifest: () => generations.manifest(),
+      readBlob: (path: string) => generations.readFile(path),
+    } } : {}),
     async call(route: unknown, raw: unknown): Promise<SourceResult<unknown>> {
       if (!record(raw) || typeof route !== 'string') return { ok: false, kind: 'invalid' };
       const p = raw;

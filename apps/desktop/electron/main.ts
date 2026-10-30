@@ -9,6 +9,7 @@ import { createMainWindow } from './contents-factory.js';
 import { createPreviewHost } from './preview/host.js';
 import { createJonesHost } from './jones-code/host.js';
 import { createSourceHost } from './sources/host.js';
+import { createGenerationSourcesHost } from './sources/generation-host.js';
 
 import { allowedSender, CHANNELS, createServices } from './services.js';
 import { openServiceConfig } from './service-config.js';
@@ -118,6 +119,7 @@ if (ownsInstance) app.whenReady().then(async () => {
   });
   const jones = createJonesHost(app.getPath('userData'));
   const sources = createSourceHost({ userData: app.getPath('userData'), catalog, jones });
+  const generationSources = createGenerationSourcesHost({ userData: app.getPath('userData') });
   const exportWork = createWorkExport(config, save);
   const authorized = (event: Electron.IpcMainInvokeEvent) => mainWindow !== undefined && allowedSender(event, mainWindow.webContents, builtUrl, developmentUrl);
   const handleDomain = (channel: string, listener: (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown) => {
@@ -133,6 +135,7 @@ if (ownsInstance) app.whenReady().then(async () => {
   });
   handleDomain('hq:svc:preview', (event, route: unknown, params: unknown) => authorized(event) ? preview.call(route, params) : { ok: false, kind: 'unavailable' });
   handleDomain('hq:svc:sources', (event, route: unknown, params: unknown) => authorized(event) ? sources.call(route, params) : { ok: false, kind: 'unavailable' });
+  handleDomain('hq:svc:generation-sources', (event, route: unknown, params: unknown) => authorized(event) ? generationSources.call(route, params) : { ok: false, kind: 'unavailable' });
   handleDomain('hq:svc:wiki-admin', wikiAdminIpcHandler(authorized, wiki, async kind => {
     const result = await dialog.showOpenDialog({ title: kind === 'profile' ? 'Import Wiki source profile' : 'Choose local bare Wiki repository', properties: kind === 'profile' ? ['openFile'] : ['openDirectory'], ...(kind === 'profile' ? { filters: [{ name: 'Source profile', extensions: ['json'] }] } : {}) });
     return result.canceled ? null : result.filePaths[0] ?? null;
