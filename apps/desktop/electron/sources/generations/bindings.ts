@@ -152,8 +152,9 @@ export function createConsumerBindingReader(seam: ConsumerBindingReaderSeam) {
       requireGeneration((seam.platform === 'linux' || seam.platform === 'darwin') && typeof seam.uid === 'function'
         && typeof c.O_RDONLY === 'number' && [c.O_NOFOLLOW, c.O_NONBLOCK, c.O_DIRECTORY].every(value => typeof value === 'number' && Number.isInteger(value) && value > 0));
       const uid = BigInt(seam.uid());
-      const home = seam.home();
-      requireGeneration(isAbsolute(home) && !home.includes('\0') && normalize(home) === home);
+      const homePath = seam.home();
+      requireGeneration(isAbsolute(homePath) && !homePath.includes('\0') && normalize(homePath) === homePath);
+      const home = homePath === '/' ? homePath : homePath.replace(/\/$/, '');
       const directory = join(home, '.local', 'share', 'host-tooling', 'hq-sync', 'consumer-bindings');
       const file = join(directory, publisherId + '.json');
       const privateDirectory = (info: ReaderStat) => info.isDirectory() && !info.isSymbolicLink() && info.uid === uid && (info.mode & 0o022n) === 0n;
