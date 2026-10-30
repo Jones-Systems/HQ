@@ -54,9 +54,13 @@ export interface StoredDocument {
 }
 export type DesignStorageResult<T> = { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly kind: 'conflict' | 'invalid' | 'read-only' | 'unavailable' | 'unknown'; readonly reason?: 'disabled' };
-export const DESIGN_SERVICE_ROUTES = ['doc.get', 'doc.put', 'doc.list', 'cache.get', 'cache.put', 'blob.put', 'blob.get', 'blob.has', 'event.append', 'event.read', 'import.commit', 'import.status', 'import.repair', 'storage.diagnostics', 'export.preview', 'export.save', 'catalog.roots', 'catalog.chooseRoot', 'catalog.forget', 'catalog.snapshot', 'catalog.preview'] as const;
+export const DESIGN_SERVICE_ROUTES = ['doc.get', 'doc.put', 'doc.list', 'cache.get', 'cache.put', 'blob.put', 'blob.get', 'blob.has', 'event.append', 'event.read', 'import.commit', 'import.status', 'import.repair', 'storage.diagnostics', 'export.preview', 'export.save', 'catalog.roots', 'catalog.chooseRoot', 'catalog.forget', 'catalog.snapshot', 'catalog.preview', 'import.pick'] as const;
 export type DesignServiceRoute = (typeof DESIGN_SERVICE_ROUTES)[number];
+export type ImportPickResult = { readonly status: 'canceled' }
+  | { readonly status: 'rejected'; readonly reason: 'unavailable' | 'invalid-selection' | 'too-many-files' | 'not-regular-file' | 'file-too-large' | 'total-too-large' | 'invalid-png' | 'file-changed' | 'read-limit' }
+  | { readonly status: 'picked'; readonly files: readonly { readonly name: string; readonly mediaType: 'image/png'; readonly bytes: Uint8Array }[] };
 export interface DesignServiceParams extends importRecordParams, CatalogParams {
+  readonly 'import.pick': Record<string, never>;
   readonly 'doc.get': { readonly key: string };
   /** Absent: unconditional write. `null`: the key must not exist. A number: must equal the current revision. */
   readonly 'doc.put': { readonly key: string; readonly value: JsonValue; readonly expectedRevision?: number | null };
@@ -64,6 +68,7 @@ export interface DesignServiceParams extends importRecordParams, CatalogParams {
   readonly 'cache.get': { readonly key: string };
 }
 export interface DesignServiceValues extends importRecordValues, CatalogValues {
+  readonly 'import.pick': ImportPickResult;
   readonly 'doc.get': StoredDocument | null;
   readonly 'doc.put': StoredDocument;
   readonly 'doc.list': string[];
