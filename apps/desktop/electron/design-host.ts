@@ -4,6 +4,7 @@ import type { DesignStorageResult, JsonValue, StoredDocument } from '@hq/contrac
 import type { BlobDigest, BlobRef, EventRead, ImportWriteOp } from '@hq/contracts/design-records';
 import { ReadersWriterGate } from './readers-writer-gate.js';
 import type { SaveBytes } from './save-dialog.js';
+import type { ImportPickerResult as ImportPickResult } from './import-picker.js';
 import { jsonValue, keys, record } from './services.js';
 
 type NodeResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly kind: 'unavailable'; readonly reason: string };
@@ -78,12 +79,28 @@ function checkedDocument(value: StoredDocument | null): StoredDocument | null {
   if (value !== null && (!jsonValue(value.value) || Buffer.byteLength(JSON.stringify(value.value)) > DESIGN_VALUE_CAP)) throw new Error('Unavailable document');
   return value;
 }
-export async function openEmittedDesignStore(userData: string): Promise<DesignStore> {
+export async function openEmittedDesignStore(userData: string, options: { readonly imports?: 'disabled' | 'enabled' } = {}): Promise<DesignStore> {
+  if (options.imports === 'enabled') {
+    const module = await import(new URL('./design-host/modules/design/app/storage/enabled-candidate.js', import.meta.url).href) as { openEnabledDesignStorage(options: { root: string }): Promise<DesignStore> };
+    return module.openEnabledDesignStorage({ root: join(userData, 'design-store') });
+  }
   const module = await import(new URL('./design-host/modules/design/app/storage/node.js', import.meta.url).href) as { openDesignStorage(options: { root: string }): Promise<DesignStore> };
   return module.openDesignStorage({ root: join(userData, 'design-store') });
 }
+function pickResult(value: unknown): DesignStorageResult<unknown> {
+  if (!record(value)) return { ok: false, kind: 'unavailable' };
+  if (value.status === 'canceled') return { ok: true, value: { status: 'canceled' } };
+  if (value.status === 'rejected' && typeof value.reason === 'string') return { ok: true, value: { status: 'rejected', reason: value.reason } };
+  if (value.status !== 'picked' || !Array.isArray(value.files)) return { ok: false, kind: 'unavailable' };
+  const files = [];
+  for (const file of value.files) {
+    if (!record(file) || typeof file.name !== 'string' || file.mediaType !== 'image/png' || !(file.bytes instanceof Uint8Array)) return { ok: false, kind: 'unavailable' };
+    files.push({ name: file.name, mediaType: 'image/png' as const, bytes: new Uint8Array(file.bytes) });
+  }
+  return { ok: true, value: { status: 'picked', files } };
+}
 /** Lazy singleton, with an idempotent close that drains every admitted operation before closing. */
-export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBytes) {
+export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBytes, pick?: () => Promise<ImportPickResult>) {
   const gate = new ReadersWriterGate();
   let store: Promise<DesignStore> | undefined, closing = false, closePromise: Promise<void> | undefined;
   const active = new Set<Promise<unknown>>();
@@ -111,7 +128,7 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
         if (!keys(params, ['ops']) || !validImportOps(params.ops)) return { ok: false, kind: 'invalid' };
       } else if (route === 'import.repair') {
         if (!keys(params, ['txnId']) || typeof params.txnId !== 'string' || !/^[a-f0-9]{64}$/.test(params.txnId)) return { ok: false, kind: 'invalid' };
-      } else if (route === 'import.status' || route === 'storage.diagnostics') {
+      } else if (route === 'import.status' || route === 'storage.diagnostics' || route === 'import.pick') {
         if (!keys(params, [])) return { ok: false, kind: 'invalid' };
       } else if (route === 'export.preview' || route === 'export.save') {
         if (!keys(params, ['exportedAt']) || typeof params.exportedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(params.exportedAt) || !Number.isFinite(Date.parse(params.exportedAt))) return { ok: false, kind: 'invalid' };
@@ -124,6 +141,9 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
         if (route === 'doc.put' && (!(!Object.hasOwn(params, 'expectedRevision') || params.expectedRevision === null || (Number.isSafeInteger(params.expectedRevision) && (params.expectedRevision as number) >= 0)) || !jsonValue(params.value) || Buffer.byteLength(JSON.stringify(params.value)) > DESIGN_VALUE_CAP)) return { ok: false, kind: 'invalid' };
       } else return { ok: false, kind: 'invalid' };
     } catch { return { ok: false, kind: 'invalid' }; }
+    if (route === 'import.pick') {
+      try { return pick ? pickResult(await pick()) : disabled(); } catch { return { ok: false, kind: 'unavailable' }; }
+    }
     let current: DesignStore;
     try { current = await getStore(); } catch { return { ok: false, kind: 'unavailable' }; }
     const p = params as Record<string, unknown>;
@@ -184,7 +204,7 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
       let captured: unknown;
       try { if (!record(params)) throw Error(); captured = structuredClone(params); } catch { return Promise.resolve<DesignStorageResult<unknown>>({ ok: false, kind: 'invalid' }); }
       const exclusive = typeof route === 'string' && (route.startsWith('import.') || route.startsWith('export.'));
-      const operation = exclusive ? gate.exclusive(() => execute(route, captured)) : gate.shared(() => execute(route, captured));
+      const operation = route === 'import.pick' ? execute(route, captured) : exclusive ? gate.exclusive(() => execute(route, captured)) : gate.shared(() => execute(route, captured));
       active.add(operation);
       void operation.finally(() => active.delete(operation));
       return operation;
