@@ -1,5 +1,6 @@
 {
   "name": "hq",
+  "productName": "HQ",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +13,7 @@
     "modules/wiki"
   ],
   "engines": {
-    "node": ">=22.18.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
     "dev": "npm run build:electron && concurrently --kill-others --success first \"npm run dev:web\" \"wait-on tcp:127.0.0.1:5173 && cross-env HQ_DEV_SERVER_URL=http://127.0.0.1:5173 electron apps/desktop/dist-electron/main.js\"",
@@ -40,5 +41,11 @@
     "vite": "8.3.4",
     "vitest": "5.0.5",
     "wait-on": "9.5.1"
+  },
+  "dependencies": {
+    "@sigstore/bundle": "5.0.0",
+    "@sigstore/core": "4.0.1",
+    "@sigstore/tuf": "5.0.0",
+    "@sigstore/verify": "4.1.2"
   }
 }

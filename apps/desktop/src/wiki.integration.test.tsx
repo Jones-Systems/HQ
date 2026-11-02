@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { buildCorpus } from '../../../modules/wiki/app/test/corpus.ts';
@@ -19,11 +19,23 @@ it('real shell reads search, pages, backlinks and topics through the seven-metho
   const handler = wikiIpcHandler((authorized: boolean) => authorized, bridge);
   const methods = ['listSources', 'search', 'getPage', 'resolveAlias', 'getBacklinks', 'listTopics', 'indexStatus'];
   const calls: string[] = [];
-  const wiki = Object.freeze(Object.fromEntries(methods.map(method => [method, async (...args: unknown[]) => { calls.push(method); return structuredClone(await handler(true, method, structuredClone(args))); }])));
+  let observeFirstSources!: (result: Promise<unknown>) => void;
+  const firstSources = new Promise<unknown>(resolve => { observeFirstSources = resolve; });
+  let sourcesObserved = false;
+  const wiki = Object.freeze(Object.fromEntries(methods.map(method => [method, async (...args: unknown[]) => {
+    calls.push(method);
+    const result = (async () => structuredClone(await handler(true, method, structuredClone(args))))();
+    if (method === 'listSources' && !sourcesObserved) {
+      sourcesObserved = true;
+      observeFirstSources(result);
+    }
+    return result;
+  }])));
   Object.defineProperty(window, 'hqServices', { configurable: true, value: Object.freeze({ wiki }) });
   const view = render(<App />);
   expect(within(screen.getByRole('navigation', { name: 'Domains' })).getAllByRole('button').map(b => b.textContent)).toEqual(['Design', 'Social', 'Work', 'Wiki']);
   fireEvent.click(screen.getByRole('button', { name: 'Wiki' }));
+  await act(async () => { expect(await firstSources).toMatchObject({ ok: true }); });
   await waitFor(() => expect(view.container.textContent).toContain(corpus.repos.bl.commit.slice(0, 12)));
   fireEvent.change(view.container.querySelector('input[name="q"]')!, { target: { value: 'quokkaharbor' } });
   fireEvent.submit(view.container.querySelector('form[role="search"]')!);
