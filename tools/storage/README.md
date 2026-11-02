@@ -16,15 +16,24 @@ Paths resolve from each config's URL, independently of the invocation's working
 directory. The root Vitest projects inherit its cache destination. `.t3/` is
 already ignored. Compiled outputs and their replacement behavior are unchanged.
 
-Module-local `modules/design/*/vitest.config.ts` files, including the app config,
-and the `design-sections.yml` matrix remain outside this slice; their caches
-keep their default locations. Existing caches are not moved or removed. The new
+The nine module-local Vitest configs for annotations, app/sections, canvas,
+compare, components, references, requests, taste and ui use separate
+`.t3/cache/design-<namespace>` destinations. The Design integration preview
+Vite config uses `.t3/cache/design-preview`. Each resolves from its own config
+URL. The Design matrix consumes these configs without a workflow change.
+
+**Uncovered:** `modules/design/app/vitest.config.ts` (the separate PR168
+candidate) and the eight Vite configs under
+`modules/design/{canvas/harness,compare/demo,components/harness,projects/harness,references/harness,requests/harness,taste/preview,ui/harness}/`
+retain their default cache placement. Covering those requires a separate scope
+release. Existing caches are not moved or removed. The new
 locations persist with the worktree, without automatic eviction, byte limits
 or producer admission. This is cache placement, not full Stage B coverage.
 
-`tools/storage/test/cache-config.test.mjs` evaluates the three config expressions
-without installing or starting Vite. It checks isolated namespaces and checkout
-relocation, including spaces in paths and unrelated working directories. The
+`tools/storage/test/cache-config.test.mjs` evaluates the allocated config expressions
+using Node's type erasure without installing or starting Vite or a server. It
+checks isolated namespaces and checkout relocation, including spaces in paths
+and unrelated working directories. The
 required hosted typecheck/build/tests exercise the actual Vite/Vitest APIs.
 
 ## Policy and accounting
@@ -176,7 +185,7 @@ not a production configuration mechanism; no environment variable lowers
 defaults. Tests admit their temporary filesystem before allocation and remove
 their exact fixture roots. No dependencies, compiler or browser are needed.
 
-Stage B remains uncovered: producer routing and module-local Design caches;
+Stage B remains uncovered: producer routing and the unallocated Design caches above;
 the byte-accounting evidence writer, closure preallocation, pending-write and
 artifact bounds, screenshots and bounded trace collection; check registration
 and campaign amendments. The per-run/ordinary/closure/artifact settings above

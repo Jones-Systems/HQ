@@ -7,6 +7,7 @@ import { defineConfig } from 'vitest/config';
  * Run from the repository root: npx vitest run --config modules/design/canvas/vitest.config.ts
  */
 export default defineConfig({
+  cacheDir: fileURLToPath(new URL('../../../.t3/cache/design-canvas', import.meta.url)),
   root: fileURLToPath(new URL('.', import.meta.url)),
   test: { include: ['test/view/**/*.test.tsx'], environment: 'node' },
 });
