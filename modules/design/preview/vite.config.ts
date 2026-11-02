@@ -40,8 +40,8 @@ function requestLog(): Plugin {
 
 export default defineConfig({
   root: here('.'),
-  // Keep caches and build output in the root install, not in the source tree.
-  cacheDir: here('../../../node_modules/.vite/design-preview'),
+  // Keep the cache worktree-local; compiled output retains its existing root.
+  cacheDir: here('../../../.t3/cache/design-preview'),
   plugins: [requestLog()],
   // Exact candidate commit shown in the fake shell; supplied by the operator, never computed here.
   define: { __HQD_CANDIDATE__: JSON.stringify(process.env.HQD_PREVIEW_CANDIDATE ?? 'unrecorded') },
