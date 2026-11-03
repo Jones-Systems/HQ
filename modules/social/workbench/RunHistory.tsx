@@ -196,10 +196,8 @@ export function RunHistory({ selectedRunId }: { readonly selectedRunId: string |
 function ReceiptAction({ run, status, toolName, onOpenTool }: {
   readonly run: RunRecord; readonly status: ObservedRunStatus; readonly toolName: string; readonly onOpenTool: () => void;
 }) {
-  if (status === 'unknown') {
-    return <p className="rh-again-note">Don't start it again until the status is known. Use Check again on the receipt, or Refresh the list.</p>;
-  }
-  if (isActiveRun(run)) return null;
+  // An unknown status is explained, with Check again, by the receipt itself; nothing here points at a second run.
+  if (status === 'unknown' || isActiveRun(run)) return null;
   return (
     <section className="rh-again" aria-label="Open the workbench">
       <Button size="sm" variant="secondary" onClick={onOpenTool}>Open {/workbench$/iu.test(toolName) ? toolName : `${toolName} workbench`}<SocialIcon name="arrow-right" /></Button>

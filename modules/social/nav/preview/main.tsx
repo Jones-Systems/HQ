@@ -186,12 +186,30 @@ const SCENARIOS: Record<string, Scenario> = {
     caption: 'Calendar with a planned fortnight and timed entries', destination: 'calendar/2026-10',
     options: { features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX], seed: plannedSeed() },
   },
+  'calendar-offline': {
+    caption: 'Calendar inside the frame while the service is unreachable: the frame bar says changes are paused; chips are disabled', destination: 'calendar/2026-10',
+    options: { features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX], seed: plannedSeed() },
+    drive: async (fixture) => {
+      await until(() => document.querySelector('.cal-chip'));
+      fixture.controls.setUnavailable(true);
+      await socialSession(CONTEXT.id).load(socialWorkspacePort());
+    },
+  },
   workbenches: { caption: 'Workbenches mounted in the domain, with the delivered limits', destination: 'workbenches' },
   runs: { caption: 'Run history mounted in the domain', destination: `runs/${FIXTURE_IDS.failedRun}` },
   'runs-list': { caption: 'Run history, no receipt open', destination: 'runs' },
   'runs-today': {
     caption: 'Run history with runs from today and an active run', destination: 'runs',
     options: { seed: (() => { const seed = fictionalSeed(); seed.runs.unshift(...recentRuns()); return seed; })() },
+  },
+  'runs-offline': {
+    caption: 'Run history inside the frame while the service is unreachable: runs last seen active read Unknown', destination: 'runs',
+    options: { seed: (() => { const seed = fictionalSeed(); seed.runs.unshift(...recentRuns()); return seed; })() },
+    drive: async (fixture) => {
+      await until(() => document.querySelector('[data-run-row]'));
+      fixture.controls.setUnavailable(true);
+      await socialSession(CONTEXT.id).load(socialWorkspacePort());
+    },
   },
   offline: {
     caption: 'Service unreachable: last synced data labelled Offline, active runs Unknown', destination: 'home',

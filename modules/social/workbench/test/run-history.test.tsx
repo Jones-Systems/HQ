@@ -319,7 +319,9 @@ describe('running a run again', () => {
     await s.user.click(row(FIXTURE_IDS.runningRun));
     const side = await screen.findByRole('complementary', { name: 'Selected receipt' });
     expect(within(side).queryByRole('button', { name: /^Open .* workbench$/u })).toBeNull();
-    expect(within(side).getByText(/Don't start it again until the status is known\. Use Check again/u)).toBeTruthy();
+    expect(within(side).getByText(/Status unknown\./u).closest('[role="status"]')?.textContent).toMatch(/Don't start it again until the status is known/u);
+    expect(within(side).getByRole('button', { name: 'Check again' })).toBeTruthy();
+    expect(within(side).getAllByText(/Don't start it again/u)).toHaveLength(1);
     expect(executions(s.recorded)).toHaveLength(0);
   });
 
