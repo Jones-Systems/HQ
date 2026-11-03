@@ -12,6 +12,12 @@ it('emitted sandbox preload sends the exact typed r3 calls through closed channe
   }
   await services.work.call('export', { format: 'markdown' }); expect(invoke).toHaveBeenLastCalledWith('hq:svc:work', 'export', { format: 'markdown' });
   expect(Object.keys(services.design)).toEqual(['call']); expect(Object.keys(services.work)).toEqual(['call']);
+  // The device document for Work: its own closed channel, exposed directly after `work`, with the same single member.
+  await services.workLocal!.call('load', {}); expect(invoke).toHaveBeenLastCalledWith('hq:svc:work-local', 'load', {});
+  const save = { binding: 'binding-token', expectedRevision: 0, value: { queue: [] } };
+  await services.workLocal!.call('save', save); expect(invoke).toHaveBeenLastCalledWith('hq:svc:work-local', 'save', save);
+  expect(Object.keys(services.workLocal!)).toEqual(['call']);
+  const exposed = Object.keys(services); expect(exposed.slice(exposed.indexOf('work'), exposed.indexOf('work') + 2)).toEqual(['work', 'workLocal']);
   const mainFrame = { url: 'file:///app/index.html' }, contents = { mainFrame };
   expect(allowedSender({ sender: contents, senderFrame: { ...mainFrame } }, contents, mainFrame.url, null)).toBe(false);
   expect(allowedSender({ sender: contents, senderFrame: mainFrame }, contents, mainFrame.url, null)).toBe(true);
