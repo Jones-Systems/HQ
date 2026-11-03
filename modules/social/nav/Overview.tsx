@@ -1,13 +1,16 @@
-import type { ReactNode } from 'react';
-import { Button, StatusChip, type StatusTone } from '@hq/ui';
-import { dateLabel, localToday } from '../content';
+import { useId } from 'react';
+import { Button, StatusChip, useListMotion, type ReferencePort, type StatusTone } from '@hq/ui';
+import { localToday, parseContentDestination } from '../content';
+import { isActiveRun, isRunId, type Brand, type DraftEditor, type RunRecord, type WorkspaceLoad, type WorkspaceSnapshot } from '../core';
+import { ChannelBadge, EmptyState, PageHeader, SocialIcon, useSocialFrame, type SocialIconName } from '../ui';
+import { DELIVERED_LIMITS } from '../workbench';
+import { brandInitials } from './BrandSwitcher';
+import { Freshness, isOffline, isStale } from './freshness';
+import { LinkedAcrossHq } from './LinkedAcrossHq';
 import {
-  FEATURE_HQ_REFERENCES, hasFeature, isActiveRun, isDirty, isRunId,
-  type Brand, type DraftEditor, type RunRecord, type WorkspaceLoad, type WorkspaceSnapshot,
-} from '../core';
-import { DELIVERED_LIMITS, startDraftRunId } from '../workbench';
-import { Freshness, clockTime, isOffline, isStale } from './freshness';
-import { PageHeader } from '../ui';
+  ATTENTION_LIMIT, attentionItems, dateParts, LIST_LIMIT, nextUp, plannedLabel, relativeDay, unsavedLabel, whenLabel, type AttentionItem,
+} from './overview-model';
+import './pages.css';
 
 export interface OverviewProps {
   readonly snapshot: WorkspaceSnapshot;
@@ -19,21 +22,17 @@ export interface OverviewProps {
   readonly now: () => Date;
   /** Reads the workspace again; a read never resends a run or a save. */
   readonly onCheck: () => void;
-}
-
-const LIST_LIMIT = 5;
-
-/** Where an unsaved editor's text is shown: a Start draft on its run receipt, otherwise its Library editor. */
-function editorDestination(key: string): string {
-  const runId = startDraftRunId(key);
-  return runId === null ? `library/${key}` : `runs/${runId}`;
+  /** The active HQ project. Links into any other project are read-only. */
+  readonly projectId?: string;
+  /** The shell's reference service, used by *Open* in Linked across HQ. */
+  readonly references?: ReferencePort;
 }
 
 export const CAPABILITIES: readonly { readonly name: string; readonly tone: StatusTone; readonly label: string; readonly detail: string }[] = [
-  { name: 'Analysis', tone: 'success', label: 'Available', detail: 'eight workbenches, offline, on material you supply' },
-  { name: 'Drafts & calendar', tone: 'success', label: 'Available', detail: 'planned dates are editorial labels only' },
+  { name: 'Analysis', tone: 'success', label: 'Available', detail: 'on material you supply' },
+  { name: 'Drafts & calendar', tone: 'success', label: 'Available', detail: 'dates are editorial only' },
   { name: 'Live collection', tone: 'unavailable', label: 'Not available', detail: 'HQ collects nothing' },
-  { name: 'Accounts & posting', tone: 'unavailable', label: 'Not available', detail: 'no account connections; nothing is posted' },
+  { name: 'Accounts & posting', tone: 'unavailable', label: 'Not available', detail: 'nothing is posted' },
 ];
 
 function runStatus(run: RunRecord, offline: boolean): { tone: StatusTone; label: string } {
@@ -48,143 +47,193 @@ function runStatus(run: RunRecord, offline: boolean): { tone: StatusTone; label:
   }
 }
 
-function Card({ title, freshness, children }: { readonly title: string; readonly freshness?: ReactNode; readonly children: ReactNode }) {
-  const id = `sd-card-${title.toLowerCase().replace(/[^a-z]+/gu, '-')}`;
-  return (
-    <section className="sd-card" aria-labelledby={id}>
-      <header className="sd-card-head"><h2 id={id}>{title}</h2>{freshness}</header>
-      {children}
-    </section>
-  );
+/**
+ * Where an unsaved editor's text is shown: its Library page when the key is a draft (or `new`); for a key that names a
+ * run (`<kind>:<runId>`, a draft started from a result) that run's receipt; otherwise the Library, which lists drafts.
+ */
+function editorDestination(key: string): string {
+  if (parseContentDestination(`library/${key}`)) return `library/${key}`;
+  const runId = key.split(':')[1];
+  return runId !== undefined && isRunId(runId) ? `runs/${runId}` : 'library';
 }
 
-/** Overview (RC-6): capability, coming up, needs attention, recent research and links across HQ, each with its freshness. */
-export function Overview({ snapshot, load, editors, brand, navigate, now, onCheck }: OverviewProps) {
+const ATTENTION_ICONS: { readonly [K in AttentionItem['kind']]: { readonly icon: SocialIconName; readonly tone: StatusTone } } = {
+  unsaved: { icon: 'file', tone: 'warning' },
+  failed: { icon: 'alert', tone: 'danger' },
+  interrupted: { icon: 'clock', tone: 'warning' },
+  unknown: { icon: 'offline', tone: 'unknown' },
+};
+
+/**
+ * Overview (RC-6): the selected brand, what Social can do here, what is next, what needs attention, recent research
+ * and links across HQ. The sync pill in the page header carries freshness and the example-workspace note, so the
+ * page repeats neither; mounted on its own it shows one freshness line itself.
+ */
+export function Overview({ snapshot, load, editors, brand, navigate, now, onCheck, projectId, references }: OverviewProps) {
+  const id = useId();
+  const framed = useSocialFrame() !== null;
   const offline = isOffline(load);
-  const fresh = <Freshness load={load} snapshot={snapshot} />;
-  const inBrand = (brandId: string) => !brand || brandId === brand.id;
-  const toolName = (run: RunRecord) => snapshot.tools.find((tool) => tool.id === run.tool)?.name ?? run.tool;
-  const today = localToday(now());
+  const clock = now();
+  const today = localToday(clock);
+  const toolOf = (run: RunRecord) => snapshot.tools.find((tool) => tool.id === run.tool);
 
-  const comingUp = snapshot.content
-    .filter((draft) => draft.archived === 0 && inBrand(draft.brand_id) && draft.planned_date !== '' && draft.planned_date >= today)
-    .sort((a, b) => a.planned_date.localeCompare(b.planned_date) || a.title.localeCompare(b.title))
-    .slice(0, LIST_LIMIT);
-
-  const unsaved = Object.entries(editors)
-    .filter(([key, editor]) => !key.startsWith('change:') && inBrand(editor.fields.brand_id) && (isDirty(editor) || editor.status !== 'editing'))
-    .slice(0, LIST_LIMIT);
-  const attentionRuns = snapshot.runs
-    .filter((run) => run.status === 'failed' || run.status === 'interrupted' || (offline && isActiveRun(run)))
-    .slice(0, LIST_LIMIT);
-
+  const upcoming = nextUp(snapshot.content, brand?.id ?? null, today);
+  const attention = attentionItems(snapshot, editors, brand?.id ?? null, offline);
+  const attentionShown = attention.slice(0, ATTENTION_LIMIT);
   const recent = snapshot.runs.slice(0, LIST_LIMIT);
-  const references = hasFeature(snapshot, FEATURE_HQ_REFERENCES);
-  const links = snapshot.content
-    .filter((draft) => draft.archived === 0 && inBrand(draft.brand_id))
-    .flatMap((draft) => (draft.links ?? []).map((link) => ({ draft, link })));
 
-  const runRow = (run: RunRecord, note?: string) => {
+  const nextRef = useListMotion<HTMLUListElement>(upcoming.drafts.map((draft) => draft.id));
+  const attentionRef = useListMotion<HTMLUListElement>(attentionShown.map((item) => (item.kind === 'unsaved' ? item.key : `${item.kind}:${item.run.id}`)));
+  const recentRef = useListMotion<HTMLUListElement>(recent.map((run) => run.id));
+
+  const runRow = (run: RunRecord, note?: string, mark?: { readonly icon: SocialIconName; readonly tone: StatusTone }) => {
+    const tool = toolOf(run);
     const status = runStatus(run, offline);
     return (
-      <li key={run.id} className="sd-row">
-        <button type="button" className="sd-row-main" onClick={() => navigate(`runs/${run.id}`)}>
-          <strong>{toolName(run)}</strong>
-          <span className="hq-meta">{clockTime(run.created_at)}{note ? ` · ${note}` : ''}</span>
-        </button>
-        {run.is_example === 1 && <span className="sd-tag">Example data</span>}
-        <StatusChip tone={status.tone} label={status.label} />
-      </li>
+      <button type="button" className="sx-row sd-row" onClick={() => navigate(`runs/${run.id}`)}>
+        {mark
+          ? <span className="sx-mark sd-mark" aria-hidden="true" data-tone={mark.tone}><SocialIcon name={mark.icon} /></span>
+          : <span className="sx-mark" aria-hidden="true">{tool?.mark ?? '··'}</span>}
+        <span className="sx-row-main">
+          <span className="sx-row-title">{tool?.name ?? run.tool}</span>
+          <span className="sx-row-meta sd-wrap">{whenLabel(run.created_at, clock)}{note ? ` · ${note}` : ''}</span>
+        </span>
+        <span className="sx-row-side">
+          {run.is_example === 1 && <span className="sx-tag sx-tag--example">Example data</span>}
+          <StatusChip tone={status.tone} label={status.label} />
+        </span>
+      </button>
     );
   };
 
   return (
-    <div className="sd-page">
-      <PageHeader title="Overview" description={brand ? brand.name : 'All brands'}
-        actions={<Button variant="primary" onClick={() => navigate('library/new')}>New draft</Button>}>
-        {isStale(load) && (
-          <span className="sd-inline" role="status">
-            <span>{isOffline(load) ? 'The Social service is unreachable.' : 'The workspace could not be refreshed.'} Showing the last synced data.</span>
-            <Button size="sm" variant="secondary" onClick={onCheck}>Check again</Button>
+    <div className="sx-page sd-overview">
+      <PageHeader
+        title="Overview"
+        description={
+          <>
+            <span className="sd-avatar" aria-hidden="true" data-all={brand ? undefined : ''}>{brand ? brandInitials(brand.name) : <SocialIcon name="brands" />}</span>
+            {brand ? brand.name : 'All brands'}
+          </>
+        }
+        actions={<Button variant="primary" onClick={() => navigate('library/new')}><SocialIcon name="plus" />New draft</Button>}
+      >
+        {!framed && (
+          <span className="sd-inline">
+            {isStale(load) && (
+              <>
+                <span role="status">{offline ? 'The Social service is unreachable.' : 'The workspace could not be refreshed.'} Showing the last synced data.</span>
+                <Button size="sm" variant="secondary" onClick={onCheck}>Check again</Button>
+              </>
+            )}
+            <Freshness load={load} snapshot={snapshot} />
           </span>
         )}
       </PageHeader>
 
-      <section className="sd-capabilities" aria-label="What Social can do here">
-        <ul>
-          {CAPABILITIES.map((item) => (
-            <li key={item.name}><span>{item.name}</span><StatusChip tone={item.tone} label={item.label} detail={item.detail} /></li>
-          ))}
-        </ul>
-        <p className="sd-limits" role="note"><b>Delivered limits</b> {DELIVERED_LIMITS}</p>
-      </section>
+      <div className="sx-grid sx-grid--2 sd-overview-grid hq-stagger">
+        <section className="sd-capabilities" aria-label="What Social can do here">
+          <ul>
+            {CAPABILITIES.map((item) => (
+              <li key={item.name}><span>{item.name}</span><StatusChip tone={item.tone} label={item.label} detail={item.detail} /></li>
+            ))}
+          </ul>
+          <p className="sd-limits" role="note"><b>Delivered limits</b> {DELIVERED_LIMITS}</p>
+        </section>
 
-      <div className="sd-cards">
-        <Card title="Coming up" freshness={fresh}>
-          {comingUp.length ? (
-            <ul className="sd-rows">
-              {comingUp.map((draft) => (
-                <li key={draft.id} className="sd-row">
-                  <button type="button" className="sd-row-main" onClick={() => navigate(`library/${draft.id}`)}>
-                    <strong>{draft.title}</strong>
-                    <span className="hq-meta">{draft.channel} · planned {dateLabel(draft.planned_date)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="sd-empty">Nothing has a planned date from today on. <Button size="sm" variant="ghost" onClick={() => navigate('calendar')}>Open calendar</Button></p>
-          )}
-          <p className="hq-meta">Planned dates are editorial intent; nothing is posted.</p>
-        </Card>
-
-        <Card title="Needs attention" freshness={fresh}>
-          {unsaved.length + attentionRuns.length ? (
-            <ul className="sd-rows">
-              {unsaved.map(([key, editor]) => (
-                <li key={`editor-${key}`} className="sd-row">
-                  <button type="button" className="sd-row-main" onClick={() => navigate(editorDestination(key))}>
-                    <strong>{editor.fields.title || 'Untitled draft'}</strong>
-                    <span className="hq-meta">{editor.status === 'conflict' ? 'Changed elsewhere' : 'Not saved yet'} · kept in this session</span>
-                  </button>
-                  <StatusChip tone="warning" label="Unsaved changes" />
-                </li>
-              ))}
-              {attentionRuns.map((run) => runRow(run, offline && isActiveRun(run) ? "don't start it again until its status is known" : run.error ?? undefined))}
-            </ul>
-          ) : <p className="sd-empty">Nothing needs attention.</p>}
-          <p className="hq-meta">Stale sources aren't tracked: the source registry is proposed.</p>
-        </Card>
-
-        <Card title="Recent research" freshness={fresh}>
-          {recent.length ? <ul className="sd-rows">{recent.map((run) => runRow(run))}</ul> : (
-            <p className="sd-empty">No runs yet. <Button size="sm" variant="ghost" onClick={() => navigate('workbenches')}>Open workbenches</Button></p>
-          )}
-          <p className="hq-meta">Runs are not tied to a brand; this lists the workspace's latest runs.</p>
-        </Card>
-
-        <Card title="Linked across HQ" freshness={references ? fresh : undefined}>
-          {!references ? (
-            <p className="sd-empty"><StatusChip tone="unavailable" label="Not available" detail="needs Social service support (hq-references-v1)" /></p>
-          ) : links.length ? (
-            <ul className="sd-rows">
-              {links.map(({ draft, link }) => {
-                const inSocial = link.domain === 'social' && link.kind === 'run' && isRunId(link.entityId);
+        <section className="sx-panel sd-card hq-lift" aria-labelledby={`${id}-next`}>
+          <header className="sx-panel-head">
+            <h2 id={`${id}-next`}>Next up</h2>
+            {upcoming.past && <span className="sx-tag">Past</span>}
+            <Button size="sm" variant="ghost" onClick={() => navigate('calendar')}>Calendar<SocialIcon name="arrow-right" /></Button>
+          </header>
+          {upcoming.drafts.length ? (
+            <ul className="sx-list" ref={nextRef}>
+              {upcoming.drafts.map((draft) => {
+                const { weekday, day, month } = dateParts(draft.planned_date);
                 return (
-                  <li key={`${draft.id}/${link.domain}/${link.kind}/${link.entityId}`} className="sd-row">
-                    <span className="sd-row-main sd-row-static">
-                      <strong>{link.title}</strong>
-                      <span className="hq-meta">{link.domain} · {link.kind}{link.sourceRevision ? ` · as of ${link.sourceRevision}` : ''} · from “{draft.title}”</span>
-                    </span>
-                    <StatusChip tone="unknown" label="Not checked" detail="the owner's current state isn't read yet" />
-                    {inSocial && <Button size="sm" variant="ghost" onClick={() => navigate(`runs/${link.entityId}`)}>Open run</Button>}
+                  <li key={draft.id} data-hq-motion-key={draft.id}>
+                    <button type="button" className="sx-row sd-row" onClick={() => navigate(`library/${draft.id}`)}>
+                      <span className="sd-date" aria-hidden="true" data-past={upcoming.past ? '' : undefined}><span>{weekday}</span><b>{day}</b><span>{month}</span></span>
+                      <span className="sx-row-main">
+                        <span className="sx-row-title">{draft.title}</span>
+                        <span className="sx-row-meta"><ChannelBadge channel={draft.channel} label /> planned {plannedLabel(draft.planned_date, today)} · {relativeDay(draft.planned_date, today)}</span>
+                      </span>
+                      <SocialIcon name="chevron-right" className="sd-row-arrow" />
+                    </button>
                   </li>
                 );
               })}
             </ul>
-          ) : <p className="sd-empty">No drafts{brand ? ` of ${brand.name}` : ''} link to anything across HQ.</p>}
-          <p className="hq-meta">Links are shown as saved snapshots. Opening Design or Work records from here arrives with HQ references.</p>
-        </Card>
+          ) : (
+            <EmptyState icon="calendar" title="Nothing has a planned date" action={<Button size="sm" variant="secondary" onClick={() => navigate('calendar')}>Open calendar</Button>}>
+              Plan a draft on the calendar and it shows up here.
+            </EmptyState>
+          )}
+          <p className="sx-panel-foot">
+            {upcoming.past ? 'Nothing is planned from today on, so these are the nearest past dates. ' : ''}Planned dates are editorial intent; nothing is posted.
+          </p>
+        </section>
+
+        <section className="sx-panel sd-card hq-lift" aria-labelledby={`${id}-attention`}>
+          <header className="sx-panel-head">
+            <h2 id={`${id}-attention`}>Needs attention</h2>
+            {attention.length > 0 && <span className="hq-meta">{attention.length}</span>}
+          </header>
+          {attentionShown.length ? (
+            <ul className="sx-list" ref={attentionRef}>
+              {attentionShown.map((item) => {
+                const mark = ATTENTION_ICONS[item.kind];
+                const motionKey = item.kind === 'unsaved' ? item.key : `${item.kind}:${item.run.id}`;
+                if (item.kind === 'unsaved') {
+                  const label = unsavedLabel(item.editor, item.save);
+                  return (
+                    <li key={motionKey} data-hq-motion-key={motionKey}>
+                      <button type="button" className="sx-row sd-row" onClick={() => navigate(editorDestination(item.key))}>
+                        <span className="sx-mark sd-mark" aria-hidden="true" data-tone={mark.tone}><SocialIcon name={mark.icon} /></span>
+                        <span className="sx-row-main">
+                          <span className="sx-row-title">{item.editor.fields.title || 'Untitled draft'}</span>
+                          <span className="sx-row-meta sd-wrap">{label.meta}</span>
+                        </span>
+                        <span className="sx-row-side"><StatusChip tone={label.tone} label={label.label} /></span>
+                      </button>
+                    </li>
+                  );
+                }
+                const note = item.kind === 'unknown' ? "don't start it again until its status is known" : item.run.error ?? undefined;
+                return (
+                  <li key={motionKey} data-hq-motion-key={motionKey}>{runRow(item.run, note, mark)}</li>
+                );
+              })}
+            </ul>
+          ) : (
+            <EmptyState icon="check" title="Nothing needs attention">Unsaved drafts and failed or interrupted runs show up here.</EmptyState>
+          )}
+          <p className="sx-panel-foot">
+            {attention.length > attentionShown.length ? `${attention.length - attentionShown.length} more in Run history and the Library. ` : ''}
+            Stale sources aren't tracked: the source registry is proposed.
+          </p>
+        </section>
+
+        <section className="sx-panel sd-card hq-lift" aria-labelledby={`${id}-recent`}>
+          <header className="sx-panel-head">
+            <h2 id={`${id}-recent`}>Recent research</h2>
+            <Button size="sm" variant="ghost" onClick={() => navigate('runs')}>All runs<SocialIcon name="arrow-right" /></Button>
+          </header>
+          {recent.length ? (
+            <ul className="sx-list" ref={recentRef}>{recent.map((run) => <li key={run.id} data-hq-motion-key={run.id}>{runRow(run)}</li>)}</ul>
+          ) : (
+            <EmptyState icon="workbenches" title="No runs yet" action={<Button size="sm" variant="secondary" onClick={() => navigate('workbenches')}>Open workbenches</Button>}>
+              Run a workbench on material you supply and its result shows up here.
+            </EmptyState>
+          )}
+          <p className="sx-panel-foot">Runs are not tied to a brand; this lists the workspace's latest runs.</p>
+        </section>
+
+        <LinkedAcrossHq
+          snapshot={snapshot} brand={brand} navigate={navigate}
+          {...(projectId !== undefined ? { projectId } : {})} {...(references ? { references } : {})}
+        />
       </div>
     </div>
   );

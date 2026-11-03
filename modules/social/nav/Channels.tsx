@@ -1,12 +1,20 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button, StatusChip, type StatusTone } from '@hq/ui';
 import type { Channel } from '../core';
-import { PageHeader } from '../ui';
+import { ChannelBadge, PageHeader, SocialIcon } from '../ui';
+import './pages.css';
 
 /** Channels with a platform account behind them; General and Article drafts aren't tied to an account. */
 export const ACCOUNT_CHANNELS: readonly Channel[] = ['X', 'LinkedIn', 'TikTok', 'Instagram', 'Facebook', 'Reddit'];
 
-const ROWS: readonly { readonly name: string; readonly tone: StatusTone; readonly label: string }[] = [
+interface Capability {
+  readonly name: string;
+  readonly tone: StatusTone;
+  readonly label: 'Available' | 'Planned';
+}
+
+/** The same four capabilities for every channel: only text checks and analysis exist today. */
+const CAPABILITIES: readonly Capability[] = [
   { name: 'Text checks & analysis', tone: 'success', label: 'Available' },
   { name: 'Account connection', tone: 'neutral', label: 'Planned' },
   { name: 'Collection', tone: 'neutral', label: 'Planned' },
@@ -21,44 +29,84 @@ export const PUBLISHING_NEEDS: readonly string[] = [
   'Planned dates staying editorial until a post is explicitly approved.',
 ];
 
+/** Where each channel's available capability lives: the Channel preview checks five text profiles; Reddit is analysis of a corpus. */
+function checkTool(channel: Channel): { readonly tool: string; readonly name: string } {
+  return channel === 'Reddit' ? { tool: 'reddit-opportunities', name: 'Reddit opportunities' } : { tool: 'social-publisher', name: 'Channel preview' };
+}
+
 /**
- * Channels & accounts (SOC-8): a static, honest capability page. No control here has an external effect;
- * Connect account is inert and says that nothing changed.
+ * Channels & accounts (SOC-8): one honest capability matrix, channels by capability. No control here has an external
+ * effect; *Connect account…* is inert and says that nothing changed.
  */
 export function Channels({ navigate }: { readonly navigate: (destination: string) => void }) {
-  const [notice, setNotice] = useState<string | null>(null);
+  const id = useId();
+  const [notice, setNotice] = useState<{ readonly text: string; readonly count: number } | null>(null);
+  const whyId = `${id}-why`;
   return (
-    <div className="sd-page">
-      <PageHeader title="Channels & accounts" actions={<StatusChip tone="neutral" label="Later" />} />
-      <p className="sd-note" role="note">
-        What HQ can do for each channel today. Nothing on this page connects an account, collects data, posts or schedules.
-      </p>
-      <p className="sd-status" role="status">{notice}</p>
-      <ul className="sd-channels">
-        {ACCOUNT_CHANNELS.map((channel) => (
-          <li key={channel} className="sd-card">
-            <header className="sd-card-head"><h2 id={`sd-channel-${channel}`}>{channel}</h2></header>
-            <dl className="sd-capability-list">
-              {ROWS.map((row) => (
-                <div key={row.name}><dt>{row.name}</dt><dd><StatusChip tone={row.tone} label={row.label} /></dd></div>
-              ))}
-            </dl>
-            <span className="sd-inline">
-              <Button
-                size="sm" variant="secondary" aria-disabled="true" aria-describedby={`sd-channel-${channel}-why`}
-                onClick={() => setNotice(`Nothing changed. Connecting ${channel} accounts isn't available in HQ.`)}
-              >
-                Connect account…
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => navigate('workbenches/social-publisher')}>Check text in Channel preview</Button>
-            </span>
-            <small id={`sd-channel-${channel}-why`} className="hq-meta">Account connections aren't built; each would need its own approval.</small>
-          </li>
-        ))}
-      </ul>
-      <section className="sd-card" aria-labelledby="sd-publishing-needs">
-        <header className="sd-card-head"><h2 id="sd-publishing-needs">What publishing would need</h2></header>
-        <ul className="sd-list">{PUBLISHING_NEEDS.map((item) => <li key={item}>{item}</li>)}</ul>
+    <div className="sx-page sd-channels">
+      <PageHeader
+        title="Channels & accounts" description="What HQ Social can and can't do with each platform today."
+        actions={<StatusChip tone="neutral" label="Later" />}
+      />
+
+      <section className="sx-panel sx-panel--sunken sd-why hq-enter-fade" id={whyId} aria-labelledby={`${id}-why-title`}>
+        <h2 id={`${id}-why-title`} className="sd-subhead">Why accounts can't be linked yet</h2>
+        <p>
+          HQ can't link an account today, and it can't post anything. Account connection, collection and publishing are planned, but each needs
+          its own approval: what HQ may access, where credentials are kept, and a confirmation step for every post. Nothing on this page changes any account.
+        </p>
+      </section>
+
+      <div className="sx-table-wrap sd-matrix-wrap hq-enter-rise">
+        <table className="sx-table sd-matrix">
+          <caption className="hq-sr-only">What HQ Social can do for each channel today</caption>
+          <thead>
+            <tr>
+              <th scope="col">Channel</th>
+              {CAPABILITIES.map((capability) => <th key={capability.name} scope="col">{capability.name}</th>)}
+              <th scope="col"><span className="hq-sr-only">Connect</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {ACCOUNT_CHANNELS.map((channel) => {
+              const where = checkTool(channel);
+              return (
+                <tr key={channel}>
+                  <th scope="row" className="sd-matrix-channel">
+                    <span className="sd-channel-cell"><ChannelBadge channel={channel} /><span aria-hidden="true">{channel}</span></span>
+                  </th>
+                  {CAPABILITIES.map((capability, index) => (
+                    <td key={capability.name}>
+                      <StatusChip tone={capability.tone} label={capability.label} />
+                      {index === 0 && (
+                        <Button
+                          size="sm" variant="ghost" className="sd-matrix-link" aria-label={`Check ${channel} text in ${where.name}`}
+                          onClick={() => navigate(`workbenches/${where.tool}`)}
+                        >
+                          {where.name}<SocialIcon name="arrow-right" />
+                        </Button>
+                      )}
+                    </td>
+                  ))}
+                  <td className="sd-matrix-action">
+                    <Button
+                      size="sm" variant="secondary" aria-disabled="true" aria-describedby={whyId}
+                      onClick={() => setNotice({ text: `Nothing changed. Connecting ${channel} accounts isn't available in HQ.`, count: (notice?.count ?? 0) + 1 })}
+                    >
+                      Connect account…
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="sd-status" role="status">{notice && <span key={notice.count} className="hq-enter-fade">{notice.text}</span>}</p>
+
+      <section className="sx-panel" aria-labelledby={`${id}-needs`}>
+        <header className="sx-panel-head"><h2 id={`${id}-needs`}>What publishing would need</h2></header>
+        <ol className="sd-needs">{PUBLISHING_NEEDS.map((item) => <li key={item}>{item}</li>)}</ol>
       </section>
     </div>
   );
