@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { ToastStoreProvider, createToastStore, type ToastStore } from '@hq/ui';
 import type { UpdateCandidate, UpdatePreferences, UpdateResult, UpdateStatus, UpdatesPort } from '@hq/contracts/updates';
 import { Updates } from './Updates';
 
@@ -285,4 +286,55 @@ it('shows unsupported installed status while keeping update controls disabled', 
   fireEvent.click(check);
   expect(fixture.port.check).not.toHaveBeenCalled();
   expect(screen.getAllByRole('checkbox').every(input => (input as HTMLInputElement).disabled)).toBe(true);
+});
+
+function renderWithToasts(port: UpdatesPort) {
+  const store: ToastStore = createToastStore();
+  render(<ToastStoreProvider store={store}><Updates port={port} /></ToastStoreProvider>);
+  return store;
+}
+
+it('confirms a finished check with a toast that names the version', async () => {
+  const fixture = bridge();
+  fixture.port.check.mockResolvedValue(success(status({ phase: 'available', candidate })));
+  const store = renderWithToasts(fixture.port);
+  await screen.findByText('Version 1.0.0');
+  fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+  await waitFor(() => expect(store.getSnapshot()).toEqual([expect.objectContaining({ tone: 'success', title: 'HQ 1.1.0 is available' })]));
+});
+
+it('reports a failed check with what happened and a Retry that repeats only the check', async () => {
+  const fixture = bridge();
+  fixture.port.check.mockResolvedValueOnce({ ok: false, code: 'network', status: status() });
+  fixture.port.check.mockResolvedValueOnce(success(status({ lastCheckedAt: '2026-10-22T13:00:00Z' })));
+  const store = renderWithToasts(fixture.port);
+  await screen.findByText('Version 1.0.0');
+  fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+  await waitFor(() => expect(store.getSnapshot()).toHaveLength(1));
+  const [failure] = store.getSnapshot();
+  expect(failure).toMatchObject({ tone: 'danger', title: 'Update action failed', description: 'HQ could not reach the update service. Check your connection and try again.', action: { label: 'Retry' } });
+  await act(async () => { failure!.action!.onAction(); });
+  await waitFor(() => expect(fixture.port.check).toHaveBeenCalledTimes(2));
+  expect(fixture.port.download).not.toHaveBeenCalled();
+});
+
+it('does not offer Retry for a failed download and never repeats it on its own', async () => {
+  const fixture = bridge(status({ phase: 'available', candidate }));
+  fixture.port.download.mockResolvedValue({ ok: false, code: 'space', status: status({ phase: 'available', candidate }) });
+  const store = renderWithToasts(fixture.port);
+  fireEvent.click(await screen.findByRole('button', { name: 'Download update' }));
+  await waitFor(() => expect(store.getSnapshot()).toHaveLength(1));
+  expect(store.getSnapshot()[0]!.action).toBeUndefined();
+  expect(fixture.port.download).toHaveBeenCalledOnce();
+});
+
+it('marks a lost result as unconfirmed with a Check action instead of a retry', async () => {
+  const fixture = bridge();
+  fixture.port.check.mockRejectedValue(new Error('bridge closed'));
+  const store = renderWithToasts(fixture.port);
+  await screen.findByText('Version 1.0.0');
+  fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+  await waitFor(() => expect(store.getSnapshot()).toHaveLength(1));
+  expect(store.getSnapshot()[0]).toMatchObject({ title: "Couldn't confirm the update action", action: { label: 'Check' } });
+  expect(fixture.port.check).toHaveBeenCalledOnce();
 });
