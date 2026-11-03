@@ -1,14 +1,19 @@
-import { Button } from '@hq/ui';
+import { InlineNotice, useToast } from '@hq/ui';
 import { useState, type ComponentType } from 'react';
 import { CLAIM_LEVELS, type ClaimJudgment, type CompareSlotProps, type ReturnedCandidate, type ReviewDecision } from '../src/contract.ts';
 import { CLAIM_LEVEL_LABELS, reviewCandidate } from '../src/review.ts';
 import type { RequestSession, SessionState } from '../src/session.ts';
+import { useSimulationLabel } from './context.ts';
+import { GuardedButton } from './GuardedButton.tsx';
+import { DECISION_LABELS, PROVENANCE_LABELS, holdReason, requestTitle, returnProvenance, utc } from './model.ts';
 
 export interface ReviewScreenProps {
   readonly session: RequestSession;
   readonly state: SessionState;
   readonly candidate: ReturnedCandidate;
   readonly CompareSlot: ComponentType<CompareSlotProps>;
+  /** Offered after a Revise so the owner can go straight to the new linked draft. */
+  readonly onOpenDraft?: () => void;
 }
 
 const DECISIONS: readonly { readonly decision: ReviewDecision; readonly label: string }[] = [
@@ -18,34 +23,67 @@ const DECISIONS: readonly { readonly decision: ReviewDecision; readonly label: s
   { decision: 'reject', label: 'Reject' },
 ];
 
-export function ReviewScreen({ session, state, candidate, CompareSlot }: ReviewScreenProps) {
+const OUTCOMES: Readonly<Record<ReviewDecision, string>> = {
+  accept: 'Recorded in this request’s history. Nothing was sent or run.',
+  revise: 'A linked revision draft was started and all evidence was kept. Nothing was sent or run.',
+  defer: 'Recorded in this request’s history. You can decide later.',
+  reject: 'Recorded that you declined the result. No draft and no work was started.',
+};
+
+export function ReviewScreen({ session, state, candidate, CompareSlot, onOpenDraft }: ReviewScreenProps) {
+  const toast = useToast();
+  const simulationLabel = useSimulationLabel();
   const [note, setNote] = useState('');
   const [judgments, setJudgments] = useState<Record<string, ClaimJudgment['judgment']>>({});
   const packet = state.packets.find((item) => item.packetId === candidate.packet.packetId);
   const review = reviewCandidate(candidate, state.reviews);
-  const disabled = state.busy !== null || state.readOnly !== null || state.unknown;
+  const hold = holdReason(state);
+  const disabled = hold !== null;
+  const provenance = returnProvenance(candidate, simulationLabel);
 
   if (!packet || packet.authoringDigest !== candidate.packet.authoringDigest) {
-    return <section className="hqr-panel" role="alert"><h2>Returned candidate</h2>
-      <p>This candidate does not match a frozen packet of this request. It cannot be reviewed here.</p></section>;
+    return <section className="hqr-panel" aria-labelledby="hqr-review-title"><h2 id="hqr-review-title">Returned candidate</h2>
+      <InlineNotice tone="danger" title="This return can't be reviewed here">
+        This candidate does not match a frozen packet of this request. It cannot be reviewed here.
+      </InlineNotice></section>;
   }
 
   const decide = async (decision: ReviewDecision) => {
+    if (hold) return;
     const list = Object.entries(judgments).map(([claimId, judgment]) => ({ claimId, judgment }) as ClaimJudgment);
-    if (await session.review(candidate, decision, note, list)) { setNote(''); setJudgments({}); }
+    const event = await session.review(candidate, decision, note, list);
+    if (event) {
+      setNote(''); setJudgments({});
+      toast.success(`${DECISION_LABELS[decision]} packet #${packet.lineage.sequence}`, {
+        description: OUTCOMES[decision],
+        ...(decision === 'revise' && onOpenDraft ? { action: { label: 'Open draft', onAction: onOpenDraft } } : {}),
+      });
+      return;
+    }
+    const after = session.state;
+    if (after.unknown) {
+      toast.unknown('Decision result unknown', {
+        description: `${after.error ?? 'The result was not confirmed.'} Reconcile to read what was saved.`,
+        action: { label: 'Reconcile', onAction: () => { void session.reconcile(); } },
+      });
+    } else if (after.error) {
+      toast.error("Couldn't record the decision", { description: `${after.error} Your note and judgments are kept.` });
+    }
   };
 
   return <section className="hqr-panel" aria-labelledby="hqr-review-title">
     <header className="hqr-panel-header">
-      <h2 id="hqr-review-title">Review returned candidate</h2>
-      <p className="hqr-muted">For packet #{packet.lineage.sequence} · reported status <strong>{candidate.observedStatus}</strong> as of {candidate.observedAt.slice(0, 16).replace('T', ' ')} UTC
+      <h2 id="hqr-review-title" tabIndex={-1}>Review returned candidate</h2>
+      <p className="hqr-muted">{requestTitle(state)} · For packet #{packet.lineage.sequence} · reported status <strong>{candidate.observedStatus}</strong> as of {utc(candidate.observedAt)}
         {review.decision && <> · latest decision <strong>{review.decision}</strong></>}</p>
     </header>
 
-    {candidate.provenance?.origin === 'owner-reported' && <p className="hqr-alert" role="note">
-      Reported by you, outside HQ. It is not verified, and none of it counts as observed.</p>}
+    {candidate.provenance?.origin === 'owner-reported' && <InlineNotice tone="warning" title="Owner-reported" live="off">
+      Reported by you, outside HQ. It is not verified, and none of it counts as observed.</InlineNotice>}
+    {provenance === 'simulated' && <InlineNotice tone="info" title="Simulation" live="off">
+      This return was produced by the simulated receiver. Nothing was sent or run, and it is not native verification.</InlineNotice>}
     <dl className="hqr-facts" aria-label="Provenance">
-      <dt>Source</dt><dd>{candidate.provenance?.origin === 'owner-reported' ? 'Owner-reported' : 'Connector'}</dd>
+      <dt>Source</dt><dd>{candidate.provenance?.origin === 'owner-reported' ? 'Owner-reported' : 'Connector'}{provenance === 'simulated' && ` · ${PROVENANCE_LABELS.simulated}`}</dd>
       <dt>Host</dt><dd>{candidate.provenance?.host ?? 'not reported'}</dd>
       <dt>Model</dt><dd>{candidate.provenance?.model ?? 'not reported'}</dd>
     </dl>
@@ -87,15 +125,15 @@ export function ReviewScreen({ session, state, candidate, CompareSlot }: ReviewS
       <textarea rows={3} value={note} disabled={disabled} onChange={(event) => setNote(event.target.value)} />
     </label>
     <div className="hqr-inline">
-      {DECISIONS.map((item) => <Button key={item.decision} type="button" disabled={disabled} variant={item.decision === 'accept' ? 'primary' : 'secondary'}
-        onClick={() => { void decide(item.decision); }}>{item.label}</Button>)}
+      {DECISIONS.map((item) => <GuardedButton key={item.decision} unavailable={hold} variant={item.decision === 'accept' ? 'primary' : 'secondary'}
+        onClick={() => { void decide(item.decision); }}>{item.label}</GuardedButton>)}
     </div>
     <p className="hqr-hint">Decisions are appended to this request's history. Revise starts a new linked draft and keeps all evidence. Reject records that you declined the result; it starts no draft and no work.</p>
 
     {review.history.length > 0 && <>
       <h3>Decision history</h3>
       <ol className="hqr-list">{review.history.map((event) => <li key={event.eventId}>
-        <strong>{event.decision}</strong> <span className="hqr-muted">{event.at.slice(0, 16).replace('T', ' ')} UTC</span>{event.note && <> — {event.note}</>}
+        <strong>{event.decision}</strong> <span className="hqr-muted">{utc(event.at)}</span>{event.note && <> — {event.note}</>}
       </li>)}</ol>
     </>}
   </section>;
