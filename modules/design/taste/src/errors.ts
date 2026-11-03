@@ -53,6 +53,14 @@ export class TasteReadOnlyError extends Error {
   }
 }
 
+/** The store refused the journal for its size, so the journal is full. Nothing was written. */
+export class TasteJournalFullError extends Error {
+  constructor() {
+    super('The taste journal is full. Nothing was saved.');
+    this.name = 'TasteJournalFullError';
+  }
+}
+
 /** The input was refused as invalid. Still a `TypeError`, so existing handlers keep working. */
 export class TasteInvalidInputError extends TypeError {
   constructor(message: string) {

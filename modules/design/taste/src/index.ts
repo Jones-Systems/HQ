@@ -13,5 +13,6 @@ export {
   type ProjectTasteContribution, type ProjectTasteOptions, type TasteDocumentPort, type TasteJournalDocument,
 } from './project-service.ts';
 export {
-  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteProjectBindingError, TasteReadOnlyError, TasteUnavailableError,
+  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteJournalFullError, TasteProjectBindingError, TasteReadOnlyError,
+  TasteUnavailableError,
 } from './errors.ts';

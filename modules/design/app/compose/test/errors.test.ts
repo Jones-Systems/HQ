@@ -10,7 +10,8 @@ import { ReadOnlyContentError } from '../../../projects/src/repository.ts';
 import { ContentError, VersionMutationError } from '../../../projects/src/content.ts';
 import { IntegrityError } from '../../../components/src/workspace/library.ts';
 import {
-  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteProjectBindingError, TasteReadOnlyError, TasteUnavailableError,
+  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteJournalFullError, TasteProjectBindingError, TasteReadOnlyError,
+  TasteUnavailableError,
 } from '../../../taste/src/project-service.ts';
 import { SourceUnavailableError } from '../../../discovery/src/contract.ts';
 import { PreviewError } from '../../../discovery/src/previews.ts';
@@ -56,6 +57,7 @@ const CASES: readonly (readonly [string, unknown, string])[] = [
   ['taste newer journal', new TasteReadOnlyError('unsupported-stored-schema'), 'read-only'],
   ['taste read-only store', new TasteReadOnlyError('store-read-only'), 'read-only'],
   ['taste journal fault (not "unavailable" though it extends that class)', new TasteJournalFaultError('incomplete-tail'), 'corrupt'],
+  ['taste journal full', new TasteJournalFullError(), 'too-large'],
   ['discovery source offline', new SourceUnavailableError(), 'unavailable'],
   ['preview too large', new PreviewError('too-large', 'big'), 'too-large'],
   ['preview aborted', new PreviewError('aborted', 'stop'), 'cancelled'],
@@ -95,6 +97,11 @@ describe('classifyDesignError', () => {
     assert.deepEqual(taste(new TasteReadOnlyError('unsupported-stored-schema')), ['read-only', 'no-effect', 'unsupported-stored-schema']);
     assert.deepEqual(taste(new TasteReadOnlyError('store-read-only')), ['read-only', 'no-effect', 'store-read-only']);
     assert.deepEqual(taste(new TasteJournalFaultError('hash-mismatch')), ['corrupt', 'no-effect', 'hash-mismatch']);
+    assert.deepEqual(taste(new TasteJournalFullError()), ['too-large', 'no-effect', 'journal-full']);
+    // A full journal is not "refused": it reads as too large, with its own sentence and status.
+    const full = classifyDesignError(new TasteJournalFullError(), context);
+    assert.equal(full.description, 'Your taste journal is full, so nothing was saved.');
+    assert.deepEqual([designFeedback(full).status, designFeedback(full).action, designFeedback(full).meta], ['Too large', undefined, 'taste.save · journal-full']);
     // An unrecognised write failure stays an unknown effect.
     assert.deepEqual(taste(new Error('socket hang up')), ['unknown', 'unknown-effect', undefined]);
     assert.equal(designFeedback(classifyDesignError(new TasteReadOnlyError('unsupported-stored-schema'), context)).meta, 'taste.save · unsupported-stored-schema');

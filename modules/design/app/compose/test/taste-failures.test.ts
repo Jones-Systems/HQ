@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { ProfileExport, ProjectId, TasteClientPort, TasteCommand, TasteSnapshot } from '../../../taste/src/contract.ts';
 import {
-  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteProjectBindingError, TasteReadOnlyError, TasteUnavailableError,
+  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteJournalFullError, TasteProjectBindingError, TasteReadOnlyError,
+  TasteUnavailableError,
 } from '../../../taste/src/project-service.ts';
 import { DesignBridgeConflictError, DesignBridgeError } from '../bridge-documents.ts';
 import type { DesignFeedback } from '../errors.ts';
@@ -58,6 +59,7 @@ describe('reportTasteFailures', () => {
       [() => new TasteInvalidInputError('Invalid export options'), 'invalid', undefined, ''],
       [() => new TasteReadOnlyError('unsupported-stored-schema'), 'read-only', 'unsupported-stored-schema', ''],
       [() => new TasteJournalFaultError('incomplete-tail'), 'corrupt', 'incomplete-tail', ''],
+      [() => new TasteJournalFullError(), 'too-large', 'journal-full', ''],
       [() => new DesignBridgeConflictError(), 'conflict', undefined, 'Reload'],
       [() => new DesignBridgeError('invalid'), 'invalid', undefined, ''],
     ];

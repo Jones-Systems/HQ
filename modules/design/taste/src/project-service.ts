@@ -5,17 +5,25 @@ import {
   type TasteSubject,
 } from './contract.ts';
 import {
-  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteProjectBindingError, TasteReadOnlyError, TasteUnavailableError,
+  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteJournalFullError, TasteProjectBindingError, TasteReadOnlyError,
+  TasteUnavailableError,
 } from './errors.ts';
 import { canonicalize } from './jcs.ts';
 import { createJournalRecord, verifyJournalBytes, type AppendPrecondition } from './journal.ts';
 import { parseExportOptions, parseTasteCommand, TasteService, type TasteJournalPort } from './service.ts';
 
 export {
-  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteProjectBindingError, TasteReadOnlyError, TasteUnavailableError,
+  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteJournalFullError, TasteProjectBindingError, TasteReadOnlyError,
+  TasteUnavailableError,
 };
 
 export const TASTE_DOCUMENT_KEY = 'design/taste/journal.v1';
+/**
+ * The most bytes of JSON one stored document may hold. This is the desktop host's `DESIGN_VALUE_CAP`. The host
+ * answers an oversized put with a bare `invalid`, so a refused put of a well-formed journal over this size is a
+ * full journal; the host test pins the two numbers together.
+ */
+export const MAX_JOURNAL_DOCUMENT_BYTES = 2_000_000;
 const SCHEMA = 'hq.design.taste-journal/v1';
 /** A document whose schema is a later version of this one: it is read-only here, never "unavailable". */
 const SCHEMA_VERSION = /^hq\.design\.taste-journal\/v([1-9][0-9]*)$/u;
@@ -32,8 +40,9 @@ export type TasteJournalDocument = {
  * Null from get means absent; read failures must reject rather than return null.
  *
  * A put that rejects with proof that nothing was written says so, and the client rethrows it typed: `code`
- * `conflict` (revision changed), `read-only`, `invalid-argument` or `too-large`, `closed`, or a `DesignBridgeError`
- * of kind `read-only`, `invalid` or `unavailable`. Any other rejection is a lost acknowledgement: the write may
+ * `conflict` (revision changed), `read-only`, `too-large` (the journal is full), `invalid-argument`, `closed`, or a
+ * `DesignBridgeError` of kind `read-only`, `invalid` or `unavailable`. A bridge `invalid` for a document over
+ * `MAX_JOURNAL_DOCUMENT_BYTES` is also a full journal; any other `invalid` is a refused request. Any other rejection is a lost acknowledgement: the write may
  * have happened, so the append resolves `fail-closed` / `sync-failed` and is reconciled by replaying its event ID.
  */
 export interface TasteDocumentPort {
@@ -66,15 +75,19 @@ const isNewerSchema = (value: unknown): boolean => {
 };
 
 /** A rejected put that proves nothing was written, as a typed Taste failure; null when the outcome is unknown. */
-function definitePutFailure(error: unknown): Error | null {
+function definitePutFailure(error: unknown, document: TasteJournalDocument): Error | null {
   if (typeof error !== 'object' || error === null) return null;
   const { code, name, kind } = error as { code?: unknown; name?: unknown; kind?: unknown };
   const bridge = name === 'DesignBridgeError';
   if (code === 'conflict' || name === 'StorageConflictError') return new TasteConflictError();
   if (code === 'read-only' || (bridge && kind === 'read-only')) return new TasteReadOnlyError('store-read-only');
-  if (code === 'invalid-argument' || code === 'too-large' || (bridge && kind === 'invalid')) {
-    return new TasteInvalidInputError('The store refused the taste journal. Nothing was saved.');
+  if (code === 'too-large') return new TasteJournalFullError();
+  if (bridge && kind === 'invalid') {
+    // The bridge carries no reason for a size refusal. Our document is always well formed, so over the cap is the size.
+    return encoder.encode(JSON.stringify(document)).byteLength > MAX_JOURNAL_DOCUMENT_BYTES
+      ? new TasteJournalFullError() : new TasteInvalidInputError('The store refused the taste journal. Nothing was saved.');
   }
+  if (code === 'invalid-argument') return new TasteInvalidInputError('The store refused the taste journal. Nothing was saved.');
   if (code === 'closed' || (bridge && kind === 'unavailable')) return new TasteUnavailableError();
   return null;
 }
@@ -161,15 +174,15 @@ class DocumentJournal implements TasteJournalPort {
     const rejection = precondition?.(this.#records);
     if (rejection) return { status: 'rejected', reason: rejection };
     const record = await createJournalRecord(this.head, id, payload, this.#options.clock.now(), this.#options.sha256);
+    const document: TasteJournalDocument = { schema: SCHEMA, jsonl: `${this.#jsonl}${canonicalize(record)}\n` };
     try {
-      const saved = await this.#options.documents.putDocument(TASTE_DOCUMENT_KEY,
-        { schema: SCHEMA, jsonl: `${this.#jsonl}${canonicalize(record)}\n` }, { expectedRevision: this.#revision });
+      const saved = await this.#options.documents.putDocument(TASTE_DOCUMENT_KEY, document, { expectedRevision: this.#revision });
       if (!Number.isSafeInteger(saved.revision) || saved.revision <= (this.#revision ?? 0)) {
         return { status: 'fail-closed', reason: 'sync-failed' };
       }
     } catch (error) {
       // A rejection that proves nothing was written (a lost compare-and-set, a refusal) is thrown typed.
-      const definite = definitePutFailure(error);
+      const definite = definitePutFailure(error, document);
       if (definite) throw definite;
       // A lost acknowledgement must never overwrite or be retried automatically.
       // Reopening and explicitly replaying the same clientEventId reconciles a durable append.

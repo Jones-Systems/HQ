@@ -143,7 +143,7 @@ panel in the HQ shell remains root's integration step (owner disposition C1).
 - A thrown `submit` is shown as unknown and offers a retry of the identical
   command; the journal's idempotency makes that safe. The project-bound client
   throws typed errors (`errors.ts`) only where it can prove nothing was written
-  (a lost compare-and-set, a refusal, an unreadable journal); the Design
+  (a lost compare-and-set, a refusal, a full journal, an unreadable journal); the Design
   composition classifies them by name (`app/compose/BACKEND-CONTRACT.md`, section 2a).
 
 ## Checks

@@ -191,6 +191,7 @@ export function classifyDesignError(error: unknown, context: DesignFailureContex
   if (named(error, 'ReadOnlyContentError', 'ReadOnlyRequestError')) return failure('read-only');
   if (named(error, 'TasteReadOnlyError')) return failure('read-only', record(error) && typeof error.reason === 'string' ? error.reason : undefined);
   if (named(error, 'TasteJournalFaultError')) return failure('corrupt', record(error) && typeof error.reason === 'string' ? error.reason : undefined);
+  if (named(error, 'TasteJournalFullError')) return failure('too-large', 'journal-full', 'Your taste journal is full, so nothing was saved.');
   if (named(error, 'OutcomeUnknownError')) return failure('unknown');
   if (named(error, 'StaleDraftError')) return failure('stale');
   if (named(error, 'TasteProjectBindingError')) return failure('stale', 'project-binding');

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { projectId } from '../src/contract.ts';
+import { MAX_TEXT_LENGTH, noteId, projectId } from '../src/contract.ts';
 import {
-  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteProjectBindingError, TasteReadOnlyError, TasteUnavailableError,
-  type TasteJournalDocument,
+  MAX_JOURNAL_DOCUMENT_BYTES, TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteJournalFullError, TasteProjectBindingError,
+  TasteReadOnlyError, TasteUnavailableError, type TasteJournalDocument,
 } from '../src/project-service.ts';
-import { SCHEMA, Documents, bind } from './document-port.ts';
+import { SCHEMA, Documents, bind, seedJournal } from './document-port.ts';
 import { PROJECT_A, rate, subject } from './helpers.ts';
 
 const A = projectId('project-a');
@@ -18,9 +18,10 @@ const bridgeError = (kind: string) => Object.assign(new Error(`Design storage br
 test('every error has a stable name, because the composition classifies by name and never by message', () => {
   assert.deepEqual([
     new TasteUnavailableError(), new TasteProjectBindingError(), new TasteConflictError(), new TasteReadOnlyError('unsupported-stored-schema'),
-    new TasteInvalidInputError('x'), new TasteJournalFaultError('incomplete-tail'),
+    new TasteInvalidInputError('x'), new TasteJournalFaultError('incomplete-tail'), new TasteJournalFullError(),
   ].map((error) => error.name), [
     'TasteUnavailableError', 'TasteProjectBindingError', 'TasteConflictError', 'TasteReadOnlyError', 'TasteInvalidInputError', 'TasteJournalFaultError',
+    'TasteJournalFullError',
   ]);
   assert.equal(new TasteConflictError().code, 'conflict');
   assert.equal(new TasteReadOnlyError('store-read-only').reason, 'store-read-only');
@@ -56,7 +57,7 @@ test('a put refused with proof that nothing was written rejects typed; an unprov
     [Object.assign(new Error(), { code: 'read-only' }), TasteReadOnlyError, 'store-read-only'],
     [bridgeError('read-only'), TasteReadOnlyError, 'store-read-only'],
     [Object.assign(new Error(), { code: 'invalid-argument' }), TasteInvalidInputError],
-    [Object.assign(new Error(), { code: 'too-large' }), TasteInvalidInputError],
+    [Object.assign(new Error(), { code: 'too-large' }), TasteJournalFullError],
     [bridgeError('invalid'), TasteInvalidInputError],
     [Object.assign(new Error(), { code: 'closed' }), TasteUnavailableError],
     [bridgeError('unavailable'), TasteUnavailableError],
@@ -76,6 +77,35 @@ test('a put refused with proof that nothing was written rejects typed; an unprov
     documents.putError = fault;
     assert.deepEqual(await bind(documents, A).submit(rate({ scope: PROJECT_A, subject: item, value: 4 })), { status: 'fail-closed', reason: 'sync-failed' });
   }
+});
+
+test('a full journal rejects as full, while a refusal of a journal within the cap stays invalid', async () => {
+  // About 4 KB of text per note: a journal just over the host's cap for one document.
+  const notes = Math.ceil(MAX_JOURNAL_DOCUMENT_BYTES / MAX_TEXT_LENGTH) + 5;
+  const events = Array.from({ length: notes }, (_, index) => ({
+    id: `note-${index}`,
+    event: { type: 'note.added' as const, noteId: noteId(`note-${index}`), scope: { kind: 'general' as const }, subjectId: null, about: null, text: 'x'.repeat(MAX_TEXT_LENGTH) },
+  }));
+  const full = new Documents();
+  const jsonl = await seedJournal(full, events);
+  assert.ok(Buffer.byteLength(jsonl) > MAX_JOURNAL_DOCUMENT_BYTES);
+  // The host answers an oversized put with a bare bridge `invalid`; the store itself says `too-large`.
+  for (const fault of [bridgeError('invalid'), Object.assign(new Error(), { code: 'too-large' })]) {
+    full.putError = fault;
+    const before = structuredClone(full.value);
+    await assert.rejects(bind(full, A).submit(rate({ scope: PROJECT_A, subject: item, value: 4 })), (error: Error) => error instanceof TasteJournalFullError);
+    assert.deepEqual(full.value, before);
+    assert.equal(full.revision, 1);
+  }
+  // Within the cap, the same bridge refusal is a refused request, and the store's invalid-argument stays invalid.
+  const small = new Documents();
+  await seedJournal(small, events.slice(0, 3));
+  for (const fault of [bridgeError('invalid'), Object.assign(new Error(), { code: 'invalid-argument' })]) {
+    small.putError = fault;
+    await assert.rejects(bind(small, A).submit(rate({ scope: PROJECT_A, subject: item, value: 4 })), (error: Error) => error instanceof TasteInvalidInputError);
+  }
+  // A full journal stays readable.
+  assert.equal((await bind(full, A).snapshot(A)).journal.state, 'open');
 });
 
 test('a journal saved by a newer schema is read-only on every path, and is left exactly as stored', async () => {

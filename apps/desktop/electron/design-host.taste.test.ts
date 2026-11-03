@@ -7,15 +7,17 @@ import { openDesignStorage } from '../../../modules/design/app/storage/node.ts';
 import { createBridgeWorkspaceDocuments, DesignBridgeError } from '../../../modules/design/app/compose/bridge-documents.ts';
 import { classifyDesignError, type DesignFailureContext } from '../../../modules/design/app/compose/errors.ts';
 import {
-  assessmentId, clientEventId, projectId, projectVersionSubject, qualifySubjectId,
+  assessmentId, clientEventId, GENESIS_HASH, MAX_TEXT_LENGTH, noteId, projectId, projectVersionSubject, qualifySubjectId,
   type TasteClientPort, type TasteCommand, type TasteScope,
 } from '../../../modules/design/taste/src/contract.ts';
+import { canonicalize } from '../../../modules/design/taste/src/jcs.ts';
+import { createJournalRecord } from '../../../modules/design/taste/src/journal.ts';
 import { nodeSha256 } from '../../../modules/design/taste/src/node-file-system.ts';
 import {
-  createProjectTasteContribution, TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteProjectBindingError,
-  TasteReadOnlyError, TasteUnavailableError, type TasteDocumentPort, type TasteJournalDocument,
+  createProjectTasteContribution, MAX_JOURNAL_DOCUMENT_BYTES, TasteConflictError, TasteInvalidInputError, TasteJournalFaultError,
+  TasteJournalFullError, TasteProjectBindingError, TasteReadOnlyError, TasteUnavailableError, type TasteDocumentPort, type TasteJournalDocument,
 } from '../../../modules/design/taste/src/project-service.ts';
-import { createDesignHost, TASTE_JOURNAL_KEY } from './design-host';
+import { createDesignHost, DESIGN_VALUE_CAP, TASTE_JOURNAL_KEY } from './design-host';
 
 /**
  * The Taste journal through the real desktop host: a real store in a temporary directory, the renderer's document
@@ -79,6 +81,26 @@ function rating(id: string, project: typeof A, scope: TasteScope, value: 1 | 2 |
 }
 
 const stored = async (documents: TasteDocumentPort) => documents.getDocument(TASTE_JOURNAL_KEY);
+
+/** A valid journal of notes whose stored document is within 300 bytes of the host cap, built in memory. */
+async function nearlyFullJournal(): Promise<TasteJournalDocument> {
+  const bytes = (text: string) => Buffer.byteLength(JSON.stringify(text)) - 2;
+  let head = { seq: 0, hash: GENESIS_HASH };
+  let jsonl = '';
+  let size = Buffer.byteLength(JSON.stringify({ schema: SCHEMA, jsonl: '' }));
+  for (let index = 0; ; index += 1) {
+    const text = 'x'.repeat(size + 4800 < DESIGN_VALUE_CAP ? MAX_TEXT_LENGTH : 1);
+    const record = await createJournalRecord(head, clientEventId(`note-${index}`), {
+      type: 'note.added', noteId: noteId(`note-${index}`), scope: GENERAL, subjectId: null, about: null, text,
+    }, '2026-11-03T00:00:00.000Z', nodeSha256);
+    const line = `${canonicalize(record)}\n`;
+    if (DESIGN_VALUE_CAP - (size + bytes(line)) < 300) break;
+    jsonl += line;
+    size += bytes(line);
+    head = { seq: record.seq, hash: record.hash };
+  }
+  return { schema: SCHEMA, jsonl };
+}
 const jsonlOf = (value: unknown) => (value as TasteJournalDocument).jsonl;
 async function failure(promise: Promise<unknown>) {
   try { await promise; } catch (error) { return error; }
@@ -228,10 +250,31 @@ describe('Taste journal through the real design host', () => {
     expect(await stored(readOnly.documents)).toEqual(written);
   });
 
-  it('rejects a journal the host refuses as invalid without writing it', async () => {
+  it('rejects a save that would outgrow the host cap as a full journal, keeps the stored journal and stays readable', async () => {
+    // The client names the cap itself, because the host answers an oversized put with a bare refusal.
+    expect(MAX_JOURNAL_DOCUMENT_BYTES).toBe(DESIGN_VALUE_CAP);
     const root = await emptyStoreRoot();
     const { documents } = open(root);
-    // The host caps one document at 2,000,000 bytes, so a journal that outgrows it is refused whole.
+    const document = await nearlyFullJournal();
+    expect(Buffer.byteLength(JSON.stringify(document))).toBeLessThanOrEqual(DESIGN_VALUE_CAP);
+    await documents.putDocument(TASTE_JOURNAL_KEY, document, { expectedRevision: null });
+    const before = await stored(documents);
+
+    const client = clientFor(documents);
+    const error = await failure(client.submit(rating('general-a', A, GENERAL, 5)));
+    expect(error).toBeInstanceOf(TasteJournalFullError);
+    expect(classifyDesignError(error, SAVE)).toMatchObject({
+      kind: 'too-large', outcome: 'no-effect', recovery: 'none', reason: 'journal-full', description: 'Your taste journal is full, so nothing was saved.',
+    });
+    expect(await stored(documents)).toEqual(before);
+    expect((await client.snapshot(A)).journal).toMatchObject({ state: 'open' });
+    expect((await client.exportProfile({ scope: GENERAL, includeNotes: true, includeCounterevidence: false })).digest).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('rejects a request the host refuses as invalid, not as a full journal, without writing it', async () => {
+    const root = await emptyStoreRoot();
+    const { documents } = open(root);
+    // The transport pads a small document past the cap. The journal itself is small, so this is a refused request, not a full journal.
     const oversized: TasteDocumentPort = { ...documents, putDocument: (key, value, options) =>
       documents.putDocument(key, { ...value, padding: 'x'.repeat(2_100_000) } as never, options) };
     const error = await failure(clientFor(oversized).submit(rating('general-a', A, GENERAL, 5)));

@@ -93,23 +93,19 @@ New section errors must set `this.name` and either be added to `classifyDesignEr
 
 | name | kind |
 | --- | --- |
-| `StoreError` with `code: 'conflict'` (bridge), `StorageConflictError`, `CanvasWriteConflictError`, `FreezeConflictError`, `IntegrityError` with `reason: 'exists'` | conflict |
-| `ContentError`, `VersionMutationError`, `InvalidIdError`, `ValidationError`, `CanonicalJsonError`, `CanonicalizationError`, `NonCanonicalBytesError`, `DispatchTransitionError`, `NamespaceClassError`, `OutboxRecordError`, storage scope errors | invalid |
+| `StoreError` with `code: 'conflict'` (bridge), `StorageConflictError`, `CanvasWriteConflictError`, `FreezeConflictError`, `TasteConflictError`, `IntegrityError` with `reason: 'exists'` | conflict |
+| `ContentError`, `VersionMutationError`, `InvalidIdError`, `ValidationError`, `CanonicalJsonError`, `CanonicalizationError`, `NonCanonicalBytesError`, `DispatchTransitionError`, `NamespaceClassError`, `OutboxRecordError`, `TasteInvalidInputError`, storage scope errors | invalid |
 | `SendBlockedError`, `FreezeBlockedError` (reason `blocked`; the description is the store's own reasons), `ExportProjectionError` (reason `blocked`) | invalid |
 | `ReadOnlyContentError`, `ReadOnlyRequestError` | read-only |
-| `UnsupportedSchemaError` (reason `unsupported-schema`), `reason: 'unsupported-stored-schema'`: saved by a newer HQ | read-only |
+| `UnsupportedSchemaError` (reason `unsupported-schema`), `TasteReadOnlyError` and any error with `reason: 'unsupported-stored-schema'`: saved by a newer HQ. `TasteReadOnlyError` with reason `store-read-only` keeps the neutral wording | read-only |
 | `ExportDisabledError`, `DesignBridgeError` with `reason: 'disabled'` | disabled |
 | `TasteUnavailableError` | unavailable |
 | `SourceUnavailableError` (reason `source-offline`: the source, not storage, is unreachable) | unavailable |
-| `PreviewError` with `reason: 'too-large'` | too-large |
+| `PreviewError` with `reason: 'too-large'`, `TasteJournalFullError` (reason `journal-full`) | too-large |
 | `PreviewError` with `reason: 'aborted'`, `AbortError` during a read | cancelled |
 | `StaleDraftError`, `TasteProjectBindingError` (reason `project-binding`) | stale |
-| `reason: 'corrupt-stored-record'`, `IntegrityError` with `reason: 'mismatch'` | corrupt |
+| `reason: 'corrupt-stored-record'`, `IntegrityError` with `reason: 'mismatch'`, `TasteJournalFaultError` (reason is the journal's fail-closed reason) | corrupt |
 | `OutcomeUnknownError`, `AbortError` during a write | unknown |
-| `TasteConflictError` | conflict |
-| `TasteInvalidInputError` | invalid |
-| `TasteReadOnlyError` (reason `unsupported-stored-schema`: saved by a newer HQ; reason `store-read-only`: neutral wording) | read-only |
-| `TasteJournalFaultError` (reason is the journal's fail-closed reason) | corrupt |
 
 `DesignBridgeError` is also recognised by its name, in case a second bundle chunk carries its own copy of
 the class.
@@ -156,7 +152,8 @@ What rejects, and how it classifies:
 | Stored schema is a later `hq.design.taste-journal/vN` (N > 1), on read and on write | `TasteReadOnlyError` | read-only (`unsupported-stored-schema`) |
 | Journal verified with a fault, on export | `TasteJournalFaultError` | corrupt (the fail-closed reason) |
 | Save lost the revision compare-and-set (host `conflict`) | `TasteConflictError` | conflict |
-| Host refused the save as invalid, read-only or unavailable | `TasteInvalidInputError`, `TasteReadOnlyError` (`store-read-only`), `TasteUnavailableError` | invalid, read-only, unavailable |
+| The save would take the journal past the store's size cap (2,000,000 bytes). The store says `too-large`; the desktop host says a bare `invalid`, which the client reads as full when the document it sent is over the cap | `TasteJournalFullError` | too-large (`journal-full`: "Your taste journal is full, so nothing was saved.") |
+| Host refused any other save as invalid, read-only or unavailable | `TasteInvalidInputError`, `TasteReadOnlyError` (`store-read-only`), `TasteUnavailableError` | invalid, read-only, unavailable |
 | Export options malformed, or an ID that is not a valid identifier | `TasteInvalidInputError` | invalid |
 
 Wording follows section 1. Only `TasteReadOnlyError` with reason `unsupported-stored-schema` says the journal was saved
@@ -167,9 +164,11 @@ unavailable failure carries no reason, shares the toast id `design.storage.unava
 A save whose outcome is unknown (transport lost, no typed refusal) does not reject. It resolves
 `{ status: 'fail-closed', reason: 'sync-failed' }`, which `TastePanel` shows as unconfirmed with an idempotent Retry of
 the same `clientEventId`. Domain refusals (`stale-supersede`, `already-rated`, `project-mismatch`, ...) also resolve
-as `rejected` results that the panel explains. Neither goes through `reportTasteFailures`. A journal that verified
-with a fault resolves a snapshot with `journal.state: 'fail-closed'` (read-only, verified prefix kept), which the
-panel also shows.
+as `rejected` results that the panel explains. Neither goes through `reportTasteFailures`. A journal that verified with a fault resolves a
+snapshot with `journal.state: 'fail-closed'` (read-only, verified prefix kept), which the panel also shows.
+
+After a typed rejection the panel stays conservative (it says the save "may or may not have reached the journal", and its
+Retry is idempotent) while the notice carries the definite outcome, for example "nothing was saved".
 
 ### Subject identity
 
