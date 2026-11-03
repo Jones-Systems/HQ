@@ -1,16 +1,18 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { Button, Dialog, StateView, StatusChip, Tabs } from '@hq/ui';
+import { useEffect, useRef, useState } from 'react';
+import { Button, Dialog, FieldError, InlineNotice, Skeleton, StatusChip, Tabs, useToast } from '@hq/ui';
 import { checkRunSubmission, isJsonObject, portErrorOf, workspaceSnapshot, type PortError, type ToolId } from '../core';
+import { EmptyState, PageHeader, SocialIcon } from '../ui';
 import { TOOL_GUIDES } from './catalog';
 import { useWorkbench } from './env';
 import { fieldId } from './fields';
 import { parseJsonText } from './imports';
 import { buildInput, formFromInput, nativeWarnings, type Problem, type ToolForm } from './inputs';
 import { RunReceipt } from './RunReceipt';
+import { WAITS_HERE } from './setup';
 import { newDraft, runTool, setAttempt, setDraft, toolDraft, workbenchView, type Attempt, type ToolDraft } from './state';
 import { ToolFormView } from './ToolForms';
+import { ToolRail } from './ToolRail';
 import { UnknownOutcome } from './UnknownOutcome';
-import { PageHeader } from '../ui';
 
 function stringify(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -47,8 +49,15 @@ function rejectionText(error: Exclude<PortError, { kind: 'unknown' }>): { title:
   }
 }
 
+/** The platform's run chord: ⌘ Return on a Mac, Ctrl Return elsewhere. Either chord runs the tool on any platform. */
+function chordKeys(): readonly string[] {
+  const platform = typeof navigator === 'undefined' ? '' : navigator.platform || navigator.userAgent;
+  return /Mac|iPhone|iPad/u.test(platform) ? ['⌘', '↵'] : ['Ctrl', '↵'];
+}
+
 export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
-  const { port, session, state, clock } = useWorkbench();
+  const { port, session, state, clock, navigate, example } = useWorkbench();
+  const toast = useToast();
   const snapshot = workspaceSnapshot(state.workspace);
   const view = workbenchView(state);
   const draft = toolDraft(view, tool, clock());
@@ -58,15 +67,6 @@ export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
   const name = serviceTool?.name ?? tool;
   const serviceDown = state.workspace.status === 'error';
   const summaryRef = useRef<HTMLDivElement>(null);
-  const resultsId = useId();
-  const [resultsOpen, setResultsOpen] = useState(() => {
-    try { return localStorage.getItem('hq.social.workbench-results.v1') !== 'closed'; } catch { return true; }
-  });
-  const toggleResults = () => setResultsOpen(current => {
-    try { localStorage.setItem('hq.social.workbench-results.v1', current ? 'closed' : 'open'); }
-    catch { /* Result visibility stays usable without preference storage. */ }
-    return !current;
-  });
   const [blocked, setBlocked] = useState<readonly Problem[]>([]);
   const [exampleState, setExampleState] = useState<{ loading: boolean; error: string | null }>({ loading: false, error: null });
   const [confirming, setConfirming] = useState<{ input: Record<string, unknown>; isExample: boolean } | null>(null);
@@ -133,8 +133,23 @@ export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
     }
   };
 
-  /** The explicit Run action: the only path to `submitRun`. */
+  /** The only caller of `submitRun`. A lost response or a refusal is also raised as a toast that stays until dismissed. */
+  const submit = async (input: Record<string, unknown>, isExample: boolean) => {
+    const outcome = await runTool(port, session, tool, input, isExample);
+    if (outcome?.status === 'unknown') {
+      toast.unknown(`${name} run: outcome unknown`, {
+        id: `run-outcome:${tool}`, description: 'The response was lost, so the Social service may or may not have created it. HQ will not send it again.',
+        action: { label: 'Check', onAction: () => void session.load(port) },
+      });
+    } else if (outcome?.status === 'rejected') {
+      const text = rejectionText(outcome.error);
+      toast.error(text.title, { id: `run-outcome:${tool}`, description: text.detail });
+    }
+  };
+
+  /** The explicit Run action, from the button or ⌘/Ctrl+Enter: one submit. */
   const run = () => {
+    if (serviceDown) return;
     const current = latest();
     const pending = pendingSubmission(tool, current);
     if ('problems' in pending) {
@@ -147,8 +162,22 @@ export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
       setConfirming(pending);
       return;
     }
-    void runTool(port, session, tool, pending.input, pending.isExample);
+    void submit(pending.input, pending.isExample);
   };
+
+  const runRef = useRef(run);
+  runRef.current = run;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey) || event.altKey || event.repeat || event.defaultPrevented) return;
+      // A dialog owns its own keys, including the confirmation for running again.
+      if ((event.target as Element | null)?.closest?.('dialog, [role="dialog"], [role="alertdialog"]')) return;
+      event.preventDefault();
+      runRef.current();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   const formProblems = draft.mode === 'form' && draft.showProblems ? buildInput(draft.form).problems : [];
   const jsonParse = draft.mode === 'json' ? parseJsonText(draft.json) : null;
@@ -162,82 +191,92 @@ export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
   };
 
   return (
-    <section className="sw-page" aria-labelledby="sw-tool-title">
+    <section className="sw-page sx-page" aria-labelledby="sw-tool-title">
       <PageHeader
         headingId="sw-tool-title" title={name}
-        eyebrow={`${serviceTool?.category ?? 'Workbench'} · Workbench`}
+        eyebrow={<><button type="button" className="sw-crumb" onClick={() => navigate('workbenches')}><SocialIcon name="chevron-left" />All workbenches</button> · {serviceTool?.category ?? 'Workbench'}</>}
         {...(serviceTool ? { description: serviceTool.description } : {})}
       >
         <p className="sw-limit"><b>Limit</b> {guide.limit}</p>
         <p className="sw-note"><b>Covers</b> {guide.recipe}</p>
       </PageHeader>
-      <div className="sw-workbench">
-        <section className="sw-panel" aria-labelledby="sw-inputs-title">
-          <div className="sw-panel-head">
-            <h2 id="sw-inputs-title">Your inputs</h2>
-            <Button size="sm" variant="secondary" busy={exampleState.loading} busyLabel="Loading example" onClick={() => void loadExample()}>Load example</Button>
-          </div>
-          <ExampleStatus draft={draft} />
-          {exampleState.error && <p className="sw-error" role="alert">{exampleState.error}</p>}
-          {blocked.length > 0 && (
-            <div className="sw-problems" role="alert" tabIndex={-1} ref={summaryRef}>
-              <h3>Fix {blocked.length === 1 ? 'this problem' : `these ${blocked.length} problems`} before running</h3>
-              <ul>
-                {blocked.map((problem, index) => (
-                  <li key={index}><button type="button" className="sw-link" onClick={() => focusField(problem.field)}>{problem.message}</button></li>
-                ))}
-              </ul>
+      <div className="sw-layout">
+        <ToolRail selected={tool} />
+        <div className="sw-main">
+          <section className="sx-panel sw-panel" aria-labelledby="sw-inputs-title">
+            <div className="sx-panel-head">
+              <h2 id="sw-inputs-title">Your inputs</h2>
+              <Button size="sm" variant="secondary" busy={exampleState.loading} busyLabel="Loading example" onClick={() => void loadExample()}>Load example</Button>
             </div>
-          )}
-          <Tabs
-            label="Input mode" selectedId={draft.mode} onSelectedChange={onMode}
-            tabs={[
-              { id: 'form', label: guide.input === 'fields' ? 'Form' : 'Form and file import', panel: <ToolFormView form={draft.form} onChange={onForm} problems={formProblems} /> },
-              {
-                id: 'json', label: 'Advanced JSON',
-                panel: (
-                  <div className="sw-form">
-                    <div className={jsonError ? 'sw-field sw-field--invalid' : 'sw-field'}>
-                      <label className="sw-label" htmlFor={`sw-${tool}-json`}>Native input object</label>
-                      <textarea
-                        id={`sw-${tool}-json`} className="sw-input sw-input--mono sw-json" rows={16} spellCheck={false} value={draft.json}
-                        aria-invalid={jsonError ? true : undefined} aria-describedby={`sw-${tool}-json-hint${jsonError ? ` sw-${tool}-json-error` : ''}`}
-                        onChange={(event) => onJson(event.target.value)}
-                      />
-                      <p className="sw-hint" id={`sw-${tool}-json-hint`}>The exact object sent with Run. The service accepts at most 2,000,000 bytes.</p>
-                      {jsonError && <p className="sw-error" id={`sw-${tool}-json-error`}>{jsonError}</p>}
-                    </div>
-                    {draft.jsonNote && <p className="sw-note" role="status">{draft.jsonNote}</p>}
-                    {jsonWarnings.length > 0 && (
-                      <div className="sw-warnings">
-                        <p><b>The tool may fail.</b> These checks don't block Run in Advanced JSON:</p>
-                        <ul>{jsonWarnings.map((warning, index) => <li key={index}>{warning.message}</li>)}</ul>
+            <ExampleStatus draft={draft} />
+            {exampleState.error && <p className="sw-error" role="alert">{exampleState.error}</p>}
+            {blocked.length > 0 && (
+              <div className="sw-problems" role="alert" tabIndex={-1} ref={summaryRef}>
+                <h3>Fix {blocked.length === 1 ? 'this problem' : `these ${blocked.length} problems`} before running</h3>
+                <ul>
+                  {blocked.map((problem, index) => (
+                    <li key={index}><button type="button" className="sw-link" onClick={() => focusField(problem.field)}>{problem.message}</button></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <Tabs
+              label="Input mode" selectedId={draft.mode} onSelectedChange={onMode}
+              tabs={[
+                { id: 'form', label: guide.input === 'fields' ? 'Form' : 'Form and file import', panel: <ToolFormView form={draft.form} onChange={onForm} problems={formProblems} /> },
+                {
+                  id: 'json', label: 'Advanced JSON',
+                  panel: (
+                    <div className="sw-form">
+                      <div className={jsonError ? 'sw-field sw-field--invalid' : 'sw-field'}>
+                        <label className="sw-label" htmlFor={`sw-${tool}-json`}>Native input object</label>
+                        <textarea
+                          id={`sw-${tool}-json`} className="sw-input sw-input--mono sw-json" rows={16} spellCheck={false} value={draft.json}
+                          aria-invalid={jsonError ? true : undefined} aria-describedby={`sw-${tool}-json-hint${jsonError ? ` sw-${tool}-json-error` : ''}`}
+                          onChange={(event) => onJson(event.target.value)}
+                        />
+                        <p className="sw-hint" id={`sw-${tool}-json-hint`}>The exact object sent with Run. The service accepts at most 2,000,000 bytes.</p>
+                        <FieldError id={`sw-${tool}-json-error`}>{jsonError}</FieldError>
                       </div>
-                    )}
-                  </div>
-                ),
-              },
-            ]}
-          />
-          {guide.notices.map((notice) => <p key={notice} className="sw-note">{notice}</p>)}
-          <div className="sw-actions">
-            <Button
-              variant="primary" busy={submitting} busyLabel="Sending run" disabled={serviceDown}
-              aria-describedby={serviceDown ? 'sw-run-paused' : undefined} onClick={run}
-            >
-              {attempt?.status === 'unknown' ? 'Run again…' : `Run ${name}`}
-            </Button>
-            {serviceDown && <p className="sw-hint" id="sw-run-paused">Runs pause while the Social service is unreachable.</p>}
-            {!serviceDown && <p className="sw-hint">Nothing runs until you choose Run. Each Run creates one run; nothing is retried.</p>}
-          </div>
-        </section>
-        <section className="sw-panel" aria-labelledby="sw-results-title">
-          <div className="sw-panel-head"><h2 id="sw-results-title">Results</h2>
-            <Button size="sm" variant="ghost" aria-label={resultsOpen ? 'Hide result details' : 'Show result details'} title={resultsOpen ? 'Hide result details' : 'Show result details'}
-              aria-expanded={resultsOpen} aria-controls={resultsId} onClick={toggleResults}>{resultsOpen ? '⌃' : '⌄'}</Button>
-          </div>
-          <div id={resultsId} hidden={!resultsOpen}><AttemptView tool={tool} toolName={name} attempt={attempt} onClear={() => setAttempt(session, tool, undefined)} /></div>
-        </section>
+                      {draft.jsonNote && <p className="sw-note" role="status">{draft.jsonNote}</p>}
+                      {jsonWarnings.length > 0 && (
+                        <div className="sw-warnings">
+                          <p><b>The tool may fail.</b> These checks don't block Run in Advanced JSON:</p>
+                          <ul>{jsonWarnings.map((warning, index) => <li key={index}>{warning.message}</li>)}</ul>
+                        </div>
+                      )}
+                    </div>
+                  ),
+                },
+              ]}
+            />
+            {guide.notices.map((notice) => <p key={notice} className="sw-note">{notice}</p>)}
+            <div className="sw-run">
+              <div className="sw-run-row">
+                <Button
+                  variant="primary" busy={submitting} busyLabel="Sending run" disabled={serviceDown}
+                  aria-describedby={serviceDown ? 'sw-run-paused' : undefined} aria-keyshortcuts="Control+Enter Meta+Enter" onClick={run}
+                >
+                  {attempt?.status === 'unknown' ? 'Run again…' : `Run ${name}`}
+                </Button>
+                {!serviceDown && (
+                  <span className="sw-kbd-hint" title="Runs this tool once, the same as the Run button">
+                    <span className="hq-sr-only">Shortcut: </span>{chordKeys().map((key) => <kbd key={key}>{key}</kbd>)}
+                  </span>
+                )}
+              </div>
+              {serviceDown && <p className="sw-hint" id="sw-run-paused">Runs pause while the Social service is unreachable.</p>}
+              {!serviceDown && <p className="sw-hint">Nothing runs until you choose Run. Each Run creates one run; nothing is retried.</p>}
+              {!serviceDown && example && draft.example !== 'loaded' && (
+                <p className="sw-hint">{WAITS_HERE} Load an example to see a full run.</p>
+              )}
+            </div>
+          </section>
+          <section className="sx-panel sw-panel sw-results" aria-labelledby="sw-results-title">
+            <div className="sx-panel-head"><h2 id="sw-results-title">Results</h2></div>
+            <AttemptView tool={tool} toolName={name} attempt={attempt} onClear={() => setAttempt(session, tool, undefined)} />
+          </section>
+        </div>
       </div>
       <Dialog
         open={confirming !== null} role="alertdialog" onClose={() => setConfirming(null)}
@@ -248,7 +287,7 @@ export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
           <Button variant="primary" onClick={() => {
             const pending = confirming;
             setConfirming(null);
-            if (pending) void runTool(port, session, tool, pending.input, pending.isExample);
+            if (pending) void submit(pending.input, pending.isExample);
           }}>Run again</Button>
         </>}
       />
@@ -267,18 +306,32 @@ function ExampleStatus({ draft }: { readonly draft: ToolDraft }) {
 }
 
 function AttemptView({ tool, toolName, attempt, onClear }: { readonly tool: ToolId; readonly toolName: string; readonly attempt: Attempt | undefined; readonly onClear: () => void }) {
-  if (!attempt) return <StateView state="empty" title="No run yet" description="Run this workbench to see results here. Nothing runs until you choose Run." />;
+  if (!attempt) {
+    return (
+      <EmptyState icon="play" title="No run yet">
+        Run this workbench to see results here. Nothing runs until you choose Run.
+      </EmptyState>
+    );
+  }
   switch (attempt.status) {
-    case 'submitting': return <StateView state="loading" title="Sending the run" />;
+    case 'submitting':
+      return (
+        <div className="sw-sending" aria-busy="true">
+          <p className="sw-note" role="status">Sending the run…</p>
+          <Skeleton shape="text" lines={3} />
+        </div>
+      );
     case 'accepted': return <RunReceipt key={attempt.run.id} runId={attempt.run.id} initial={attempt.run} />;
     case 'unknown': return <UnknownOutcome tool={tool} toolName={toolName} attempt={attempt} />;
     case 'rejected': {
       const text = rejectionText(attempt.error);
       return (
-        <div className="sw-rejected">
-          <StateView state={attempt.error.kind === 'unavailable' ? 'unavailable' : 'error'} title={text.title} description={text.detail} />
-          <Button size="sm" variant="ghost" onClick={onClear}>Dismiss</Button>
-        </div>
+        <InlineNotice
+          tone={attempt.error.kind === 'unavailable' ? 'warning' : 'danger'} title={text.title} live="off"
+          actions={[{ label: 'Dismiss', onAction: onClear }]}
+        >
+          {text.detail}
+        </InlineNotice>
       );
     }
   }

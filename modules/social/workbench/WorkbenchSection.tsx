@@ -37,6 +37,12 @@ export function isWorkbenchDestination(destination: string): boolean {
   return parseWorkbenchDestination(destination) !== null;
 }
 
+/**
+ * How often the example workspace's runs are read while active. Its simulated worker steps about once a second, so
+ * the default two-second read would skip a step. A live service is read at the normal cadence.
+ */
+export const EXAMPLE_POLL_INTERVAL_MS = 500;
+
 export interface WorkbenchSectionProps {
   readonly port: SocialWorkspacePort;
   readonly context: ProjectContext;
@@ -46,17 +52,22 @@ export interface WorkbenchSectionProps {
   readonly clock?: () => Date;
   readonly visibility?: Visibility;
   readonly pollIntervalMs?: number;
+  /** The fictional example workspace. Defaults to what the Social frame says, and to false outside it. */
+  readonly example?: boolean;
 }
 
 /**
  * The eight tool workbenches, run history and receipts (task.social-workbench.001). Rendering, navigating,
  * loading examples, editing and importing make zero execution calls; only the explicit Run action submits.
  */
-export function WorkbenchSection({ port, context, destination, navigate, clock, visibility, pollIntervalMs }: WorkbenchSectionProps) {
+export function WorkbenchSection({ port, context, destination, navigate, clock, visibility, pollIntervalMs, example }: WorkbenchSectionProps) {
+  const frame = useSocialFrame();
+  const isExample = example ?? frame?.example ?? false;
+  const interval = pollIntervalMs ?? (isExample ? EXAMPLE_POLL_INTERVAL_MS : undefined);
   const environment = useMemo(() => ({
-    port, context, navigate, clock: clock ?? (() => new Date()),
-    ...(visibility ? { visibility } : {}), ...(pollIntervalMs ? { pollIntervalMs } : {}),
-  }), [port, context, navigate, clock, visibility, pollIntervalMs]);
+    port, context, navigate, clock: clock ?? (() => new Date()), example: isExample,
+    ...(visibility ? { visibility } : {}), ...(interval ? { pollIntervalMs: interval } : {}),
+  }), [port, context, navigate, clock, visibility, interval, isExample]);
   return (
     <WorkbenchEnvironmentProvider value={environment}>
       <SectionBody destination={destination} />
