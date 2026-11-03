@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
+import type { Node } from '@oxc-project/types';
+import { parseAst } from 'rolldown/parseAst';
 import { expect, it } from 'vitest';
 
 const repo = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -19,10 +20,19 @@ function sourceFiles(directory: string): string[] {
   });
 }
 
-function staticText(node: ts.Node): string | null {
-  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
-  if (ts.isParenthesizedExpression(node)) return staticText(node.expression);
-  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+// TypeScript 7's root export is version metadata, not the legacy compiler API.
+// Vite's locked Rolldown dependency already supplies a JS/TS parser.
+function parseSource(path: string, source: string) {
+  const lang = /\.d\.[cm]?ts$/u.test(path) ? 'dts'
+    : /\.[cm]?tsx?$/u.test(path) ? (path.endsWith('x') ? 'tsx' : 'ts') : 'jsx';
+  return parseAst(source, { lang, sourceType: 'unambiguous' }, path);
+}
+
+function staticText(node: Node): string | null {
+  if (node.type === 'Literal' && typeof node.value === 'string') return node.value;
+  if (node.type === 'TemplateLiteral' && node.expressions.length === 0) return node.quasis[0].value.cooked;
+  if (node.type === 'ParenthesizedExpression') return staticText(node.expression);
+  if (node.type === 'BinaryExpression' && node.operator === '+') {
     const left = staticText(node.left), right = staticText(node.right);
     return left !== null && right !== null ? left + right : null;
   }
@@ -36,22 +46,29 @@ function importSpecifiers(path: string, source: string): string[] {
       return [...(src ? [src[1]] : []), ...importSpecifiers(`${path}.ts`, script[2])];
     });
   }
-  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
+  const file = parseSource(path, source);
   const specifiers: string[] = [];
-  function add(node: ts.Node | undefined) {
+  function add(node: Node | null | undefined) {
     if (node) { const value = staticText(node); if (value !== null) specifiers.push(value); }
   }
-  function visit(node: ts.Node) {
-    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) add(node.moduleSpecifier);
-    if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) add(node.moduleReference.expression);
-    if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) add(node.argument.literal);
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression;
-      if (callee.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(callee) && callee.text === 'require')
-        || (ts.isPropertyAccessExpression(callee) && (callee.name.text === 'require'
-          || (ts.isIdentifier(callee.expression) && callee.expression.text === 'require' && callee.name.text === 'resolve')))) add(node.arguments[0]);
+  function isNode(value: unknown): value is Node {
+    return value !== null && typeof value === 'object' && 'type' in value && typeof value.type === 'string';
+  }
+  function visit(node: Node) {
+    if (node.type === 'ImportDeclaration' || node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration'
+      || node.type === 'ImportExpression' || node.type === 'TSImportType') add(node.source);
+    if (node.type === 'TSExternalModuleReference') add(node.expression);
+    if (node.type === 'CallExpression') {
+      const callee = node.callee;
+      if ((callee.type === 'Identifier' && callee.name === 'require')
+        || (callee.type === 'MemberExpression' && !callee.computed && callee.property.type === 'Identifier'
+          && (callee.property.name === 'require'
+            || (callee.object.type === 'Identifier' && callee.object.name === 'require' && callee.property.name === 'resolve')))) add(node.arguments[0]);
     }
-    ts.forEachChild(node, visit);
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) { for (const child of value) if (isNode(child)) visit(child); }
+      else if (isNode(value)) visit(value);
+    }
   }
   visit(file);
   return specifiers;
@@ -63,6 +80,21 @@ function isRecordsImport(path: string, specifier: string): boolean {
   const target = resolve(dirname(path), specifier);
   const within = relative(records, target);
   return within === '' || (!within.startsWith('..') && !within.startsWith('/'));
+}
+
+function expectInertTopLevel(path: string, source: string) {
+  for (const exported of parseSource(path, source).body) {
+    const statement = exported.type === 'ExportNamedDeclaration' ? exported.declaration : exported;
+    expect(statement?.type).not.toBe('ExpressionStatement');
+    if (statement?.type === 'VariableDeclaration') for (const declaration of statement.declarations) {
+      if (!declaration.init) continue;
+      expect(declaration.init.type).not.toBe('NewExpression');
+      if (declaration.init.type === 'CallExpression') {
+        expect(relative(records, path)).toBe('write-fence.ts');
+        expect(source.slice(declaration.init.callee.start, declaration.init.callee.end)).toBe('Object.freeze');
+      }
+    }
+  }
 }
 
 it('recognizes static, re-export, dynamic, CommonJS and type imports without mistaking ordinary strings for imports', () => {
@@ -77,13 +109,24 @@ it('recognizes static, re-export, dynamic, CommonJS and type imports without mis
     "import c = require('./hq-records/canonical.js');",
     "type C = import('./hq-records/canonical.js').Digest;",
     "const documentation = 'hq-records/canonical.js';",
+    'const example = "import(\'./hq-records/string.js\')";',
+    "const template = `require('./hq-records/template.js')`;",
+    "const pattern = /import('hq-records')/;",
     "// import './hq-records/comment.js';",
+    "/* export * from './hq-records/block-comment.js'; */",
   ].join('\n'));
   expect(imports).toHaveLength(9);
   expect(imports.every(specifier => isRecordsImport(join(repo, 'apps/fixture.ts'), specifier))).toBe(true);
   expect(isRecordsImport(join(repo, 'apps/fixture.ts'), './unrelated.js')).toBe(false);
   expect(importSpecifiers('fixture.html', '<script type="module" src="./hq-records/keys.js"></script><script>import("./hq-records/canonical.js")</script>'))
     .toEqual(['./hq-records/keys.js', './hq-records/canonical.js']);
+  expect(importSpecifiers('fixture.ts', [
+    "import type { Digest } from './hq-records/canonical.js';",
+    "export { type Digest } from './hq-records/canonical.js';",
+    "require(('./hq-' + ('records/keys.js')));",
+  ].join('\n'))).toEqual(['./hq-records/canonical.js', './hq-records/canonical.js', './hq-records/keys.js']);
+  expect(importSpecifiers('fixture.tsx', 'const view = <div title="hq-records/text.js">{import("./hq-records/keys.js")}</div>;'))
+    .toEqual(['./hq-records/keys.js']);
 });
 
 it('keeps identity contracts inert: no non-test production importer under apps, modules or packages', () => {
@@ -100,6 +143,11 @@ it('keeps identity contracts inert: no non-test production importer under apps, 
 });
 
 it('permits only local contract imports and node:crypto, with no host/store construction on import', () => {
+  expect(() => expectInertTopLevel(join(records, 'canonical.ts'), 'openStore();')).toThrow();
+  expect(() => expectInertTopLevel(join(records, 'canonical.ts'), 'export const store = new Store();')).toThrow();
+  expect(() => expectInertTopLevel(join(records, 'canonical.ts'), 'export const plan = Object.freeze([]);')).toThrow();
+  expect(() => expectInertTopLevel(join(records, 'write-fence.ts'), 'export const store = createStore();')).toThrow();
+  expectInertTopLevel(join(records, 'write-fence.ts'), 'export const plan = Object.freeze([]);');
   const files = sourceFiles(records);
   expect(files.map(path => relative(records, path)).sort()).toEqual([
     'adoption-classifier.ts', 'canonical.ts', 'keys.ts', 'projects-registry.ts', 'write-fence.ts',
@@ -109,17 +157,6 @@ it('permits only local contract imports and node:crypto, with no host/store cons
     for (const specifier of importSpecifiers(path, source)) {
       expect(specifier).toMatch(/^(?:node:crypto|\.\/(?:canonical|keys|projects-registry|adoption-classifier|write-fence)\.js)$/u);
     }
-    const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
-    for (const statement of file.statements) {
-      expect(ts.isExpressionStatement(statement)).toBe(false);
-      if (ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) {
-        if (!declaration.initializer) continue;
-        expect(ts.isNewExpression(declaration.initializer)).toBe(false);
-        if (ts.isCallExpression(declaration.initializer)) {
-          expect(relative(records, path)).toBe('write-fence.ts');
-          expect(declaration.initializer.expression.getText(file)).toBe('Object.freeze');
-        }
-      }
-    }
+    expectInertTopLevel(path, source);
   }
 });
