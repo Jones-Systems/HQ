@@ -79,6 +79,26 @@ New section errors must set `this.name` and either be added to `classifyDesignEr
 | `reason: 'corrupt-stored-record'`, `IntegrityError` with `reason: 'mismatch'` | corrupt |
 | `OutcomeUnknownError` | unknown |
 
+### Operation names
+
+Operations are stable. Imports on the durable env (`imports-env.ts`) report these. The imports reducer, controller
+and views read `failure.operation` and `failure.kind`, never the message.
+
+| operation | write | what failed |
+| --- | --- | --- |
+| `imports.pick` | no | Choosing files with the system picker, or turning them into an import source. |
+| `imports.plan` | no | Reserved for views that wrap planning. The storage layer reports its reads as `imports.read`. |
+| `imports.read` | no | Reading records, history, conflicts or blobs while planning, listing or checking. |
+| `imports.apply` | yes | The atomic commit that applies an import. |
+| `imports.undo` | yes | The atomic commit that undoes an import. |
+| `imports.resolve` | yes | The atomic commit that takes the incoming file or keeps the current one. |
+| `imports.edit` | yes | The atomic commit that saves an owner edit of an imported record. |
+| `imports.export` | no | Backup or export. Always `disabled` in this build (section 4). |
+
+A commit is named by the event it appends to the `imports` stream: `import.applied` is `imports.apply`,
+`import.undone` is `imports.undo`, `conflict.resolved` is `imports.resolve`. A batch with no event is an owner
+edit, `imports.edit`.
+
 ## 2. Bridge envelopes (`bridge-documents.ts`)
 
 The desktop host answers every `hq:svc:design` call with exactly one of:
@@ -103,7 +123,53 @@ Both workspace kinds (`bridged` and the labelled in-memory `fake`) expose `works
 - `notify(projectId)` is for writers. It carries no data and never writes or dispatches.
 
 Writers notify after a durable project-content write succeeds, and also after an unknown outcome, so readers
-re-read instead of trusting a cache. Today live capture acceptance (`interactive-workspace.ts`) notifies.
-Further producers (Imports linking, Projects edits) notify as they land, and are listed here when they do.
+re-read instead of trusting a cache. Producers today:
+
+| producer | notifies |
+| --- | --- |
+| Live capture acceptance (`interactive-workspace.ts`) | After the accepted capture is stored, and after an unknown outcome. |
+| Imports linking (`imports-content-link.ts`, section 4) | After an imports commit that linked versions succeeds, and after an unknown outcome of that commit. |
+
+Further producers (Projects edits) notify as they land, and are listed here when they do.
 
 A listener that throws is isolated. Other listeners still run.
+
+## 4. Imports on the durable store (`imports-env.ts`)
+
+In a bridged workspace, `workspace.importsFor(project)` returns the durable Imports env. It is on by default.
+In the in-memory fake workspace it stays the labelled synthetic env. Bridged mode never shows synthetic data.
+
+| piece | contract |
+| --- | --- |
+| Storage | `imports-storage.ts` adapts the importer's `StoragePort` to the bridge. Keys `imports/...` map to `design/imports/...`. The stream `imports` maps to `design/imports`. Revisions are decimal strings in the importer and numbers on the wire. Each write is one atomic `import.commit`. |
+| Reads | `design/imports/{records,versions,manifests,conflicts,undo}/` are readable with `doc.get` and `doc.list`. `doc.put` refuses them: they change only through `import.commit`. Blobs are checked with `blob.has`, so planning does not list the whole blob store. |
+| Picking | `capabilities.pickSource` calls `import.pick`. The system dialog says the files are imported as the owner's own work, and that wording is the explicit rights statement: `rights: { basis: 'owned', holder: 'Owner' }`. A canceled dialog resolves `null`. A refused pick rejects as a typed failure with the picker's reason, for example `invalid-png`, `file-too-large` or `file-changed` (`stale`). |
+| Identity | One stable source ID (`src-local-png-files`) per project. Item keys are the normalized file names, so the same file is the same item every time: choosing identical files changes nothing and writes nothing. A changed file under the same name is an update. An owner-edited record whose source changed is a conflict. Two files with the same name, or a name that cannot be a key, are `invalid`. |
+| Conflicts | A write that lost a race throws `StorageConflictError`, which classifies as `conflict`. Nothing was written. A plan that went stale before it was applied is the same `conflict`. |
+| Unknown outcome | A commit whose reply was lost is `unknown` (it may have landed). Views offer `Check`, which re-reads history, never a blind retry. |
+| Disabled | A host that does not accept imports answers `{ ok: false, kind: 'unavailable', reason: 'disabled' }`. That is `disabled` with outcome no effect, on every Imports operation. |
+| Backup and export | Not available in this build. `saveBundle` is undefined and the storage port's bundle reads (`listBlobs`, `listStreams`, and `listDocuments` of the whole store) fail with `disabled`, reason `disabled`, message "Backup and export are not available in this build". Nothing is read into a bundle and nothing is written. The host's `export.*` routes stay disabled. A backup draft over the durable store therefore stays empty and is never saved. |
+
+### Imports linking into project content
+
+Importing a PNG makes it a project version, so Projects, Gallery, Compare and Annotations see it.
+
+- Each live image record becomes one view (`screen`) and one version in the project's content document. The
+  version has `origin: 'imported'`, the label `Imported <name>`, a capture binding of route `imported/<name>`,
+  the image size at device pixel ratio 1 and the PNG digest, and a `thumbnail` PreviewRef at the PNG blob.
+  View and version IDs derive from the import record, so the same record always maps to the same IDs.
+- The content document is written in the same atomic `import.commit` as the Imports records and the journal
+  event. Either all of it lands or none. The write is append-only and checked with `assertAppendOnly`.
+- It is idempotent. A record already linked is skipped, so retrying an apply, or taking the incoming file after
+  a conflict, never duplicates a version. A conflicted record is not linked until the owner takes the incoming
+  file.
+- Versions are never removed. **Undo leaves the imported versions in place.** It only marks the import undone in
+  the Imports history. Removing a version needs a separate Projects action.
+- Only PNG items link. An image larger than 2 MiB is imported and linked without a thumbnail, because the
+  thumbnail port caps previews at 2 MiB.
+- A project whose content is read-only (saved by a newer HQ) cannot be linked: the commit fails as `read-only`
+  before anything is written.
+- After the commit succeeds, and after an unknown outcome, the adapter calls `contentEvents.notify(projectId)` for
+  each linked project. A conflict or a refusal writes nothing and does not notify.
+- A commit is capped at 64 MiB of canonical bytes by the host. A batch over the cap fails as `too-large` with
+  reason `import-total`, before anything is sent.

@@ -27,12 +27,15 @@ import { canvasId } from '../../canvas/src/contract.ts';
 import { createProviderRegistry } from '../../canvas/src/providers.ts';
 import { createCanvasProviderAdapter } from './canvas-adapter.ts';
 import { createProjectVersionsProvider } from './project-versions.ts';
-import { canvasProjectIdFor, shellProjectIdFor, importsFor } from './fake-workspace.ts';
+import { canvasProjectIdFor, shellProjectIdFor, type ImportsEnv } from './fake-workspace.ts';
 import { createBridgedDiscovery } from './bridged-discovery.ts';
 import { createWorkspaceThumbnailPort } from './thumbnail-port.ts';
 import { createProjectCompareCatalog } from './compare-catalog.ts';
 import type { EvidenceTag } from './labels.ts';
 import { createProjectContentEvents, type ProjectContentEvents } from './content-events.ts';
+import { bridgeTransportFor } from './bridge-documents.ts';
+import { createDurableImportsEnv, createUnavailableImportsEnv } from './imports-env.ts';
+import type { ImportSource } from '../../imports/src/contract.ts';
 
 function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
   const cache = new Map<string, Promise<T>>();
@@ -139,6 +142,19 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
   const tasteFor = perProject(async (project) => createProjectTasteContribution({
     documents, projectId: tasteProjectId(project.id), sha256: webCryptoSha256, clock,
   }));
+  // Durable Imports: the real picker and store over the same bridge, linked into project content. The source argument
+  // only serves the in-memory workspace. Documents not built on the bridge have no picker or store to offer.
+  const importEnvs = new Map<string, ImportsEnv>();
+  const importsFor = (project: ProjectContext, _syntheticSource?: () => ImportSource): ImportsEnv => {
+    let env = importEnvs.get(project.id);
+    if (!env) {
+      const transport = bridgeTransportFor(documents);
+      env = transport === null ? createUnavailableImportsEnv(clock)
+        : createDurableImportsEnv({ transport, documents, repository, clock, contentEvents });
+      importEnvs.set(project.id, env);
+    }
+    return env;
+  };
   return { bridged: true as const, storageTag, contentEvents, contentFor, projectsFor, componentsFor, flowsFor, compareFor, annotationsEnv,
     annotationSessionFor, canvasFor, discoveryEnv, tasteFor, importsFor };
 }
