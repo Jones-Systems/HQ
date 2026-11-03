@@ -44,11 +44,3 @@ it('releases timed-out checks and ignores their late answers without unlocking a
   vi.useRealTimers(); await waitFor(() => expect((screen.getByRole('button', { name: 'Recheck Social: Reachable' }) as HTMLButtonElement).disabled).toBe(false));
   expect(value.social.call).toHaveBeenCalledTimes(2);
 });
-it('compact rail uses one accessible source summary, preserves worst status and opens Settings', async () => {
-  const value = services(); const manage = vi.fn(); render(<DataSourcesProvider><Connections compact onManage={manage} /></DataSourcesProvider>);
-  const summary = await screen.findByRole('button', { name: /Data sources: Social: Set up · not checked; Work: Set up · not checked; Local Wiki: Index unavailable/ });
-  expect(summary.className).toContain('connection-row--bad');
-  expect(screen.getAllByRole('button')).toHaveLength(1);
-  fireEvent.click(summary); expect(manage).toHaveBeenCalledWith(undefined, summary);
-  expect(value.social.call).not.toHaveBeenCalled(); expect(value.work.call).not.toHaveBeenCalled();
-});

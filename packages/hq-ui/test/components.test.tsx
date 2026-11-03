@@ -379,8 +379,9 @@ describe('selectable menu items', () => {
     const [title, date, unavailable] = screen.getAllByRole('menuitemradio');
     expect(title!.getAttribute('aria-checked')).toBe('true');
     expect(date!.getAttribute('aria-checked')).toBe('false');
-    expect(title!.querySelector('[aria-hidden="true"]')?.textContent).toBe('✓');
-    expect(date!.querySelector('[aria-hidden="true"]')?.textContent).toBe('');
+    expect(title!.querySelector('[aria-hidden="true"] svg')).toBeTruthy();
+    expect(date!.querySelector('[aria-hidden="true"]')?.childElementCount).toBe(0);
+    expect(title!.textContent).toBe('Title');
     await user.keyboard('{End}');
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Reset' }));
     await user.keyboard('{ArrowUp}{Enter}');

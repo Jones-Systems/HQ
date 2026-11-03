@@ -4,5 +4,5 @@ export {
 } from './motion';
 export { Presence, PRESENCE_MOTIONS, usePresence, type PresenceMotion, type PresenceOptions, type PresencePhase, type PresenceProps, type PresenceState } from './Presence';
 export { LIST_MOTION_KEY, useListMotion, type ListMotionOptions } from './useListMotion';
-export { navigateWithTransition, PAGE_TRANSITION_CLASSES, PageTransition, type NavigationDirection, type PageTransitionProps } from './PageTransition';
+export { navigateWithTransition, PAGE_TRANSITION_CLASS, type NavigationDirection } from './page-transition';
 export { Skeleton, type SkeletonProps, type SkeletonShape } from './Skeleton';

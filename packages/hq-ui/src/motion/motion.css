@@ -84,10 +84,14 @@
 .hq-skeleton-lines { display: grid; gap: 8px; width: var(--hq-skeleton-w, 100%); }
 .hq-skeleton-lines > .hq-skeleton--last { width: 62%; }
 
-/* ---------- Page transitions (React <ViewTransition> + View Transitions API) ---------- */
+/* ---------- Page transitions (View Transitions API, started by navigateWithTransition) ---------- */
+.hq-page { view-transition-name: hq-page; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--hq-duration-base); animation-timing-function: var(--hq-ease-standard); }
-::view-transition-old(.hq-page-exit) { animation: hq-fade-out var(--hq-duration-fast) var(--hq-ease-exit) both; }
-::view-transition-new(.hq-page-enter) { animation: hq-rise-in var(--hq-duration-slow) var(--hq-ease-enter) both; }
+/* The old page leaves quickly and the new one rises in. */
+::view-transition-old(hq-page) { animation: hq-fade-out var(--hq-duration-fast) var(--hq-ease-exit) both; }
+::view-transition-new(hq-page) { animation: hq-rise-in var(--hq-duration-slow) var(--hq-ease-enter) both; }
+/* Going back returns to a place the user knows: it fades in without rising. */
+:root:active-view-transition-type(hq-nav-back)::view-transition-new(hq-page) { animation-name: hq-fade-in; animation-duration: var(--hq-duration-base); }
 
 /* ---------- Reduced motion: stop looping animations too (durations already collapse through tokens) ---------- */
 @media (prefers-reduced-motion: reduce) {

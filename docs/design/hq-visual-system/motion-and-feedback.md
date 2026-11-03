@@ -46,7 +46,7 @@ Fonts: `--hq-font-family-sans` now names concrete faces (`-apple-system`, Segoe 
 ## Motion primitives
 
 ```tsx
-import { Presence, usePresence, useListMotion, PageTransition, navigateWithTransition, Skeleton, useReducedMotion } from '@hq/ui';
+import { Presence, usePresence, useListMotion, PAGE_TRANSITION_CLASS, navigateWithTransition, Skeleton, useReducedMotion } from '@hq/ui';
 ```
 
 | API | What it does |
@@ -54,7 +54,7 @@ import { Presence, usePresence, useListMotion, PageTransition, navigateWithTrans
 | `<Presence show motion="rise">…</Presence>` | Mounts with an enter animation and keeps children mounted until the exit animation ends. Motions: `fade`, `rise`, `drop`, `scale`, `slide-end`, `slide-start`, `collapse` (animates real height, so content below glides) and `toast`. `as="li"` and similar change the wrapper. `initial={false}` skips the first enter for restored views. |
 | `usePresence(show, { motion })` | The same behaviour for your own element: `{ mounted, ref, props }`; spread `props` and pass `ref`. |
 | `useListMotion(ids)` | FLIP reordering. Put the returned ref on the list and `data-hq-motion-key={id}` on each item. Items glide to new positions when `ids` changes (sort, filter, drag-drop, insert); new items fade and rise in. |
-| `<PageTransition id={view}>` and `navigateWithTransition(() => setView(next))` | Page or view switch through React's `<ViewTransition>` and the View Transitions API: the old view fades out in 90 ms and the new one rises in over 240 ms. Only updates started with `navigateWithTransition` (or `startTransition`) animate. |
+| `navigateWithTransition(() => setView(next), 'forward')` with `className={PAGE_TRANSITION_CLASS}` on the element that holds the view | Page or view switch through the View Transitions API: the old view fades out in 90 ms, the new one rises in over 240 ms (fades in when the direction is `'back'`) and the rest of the window cross-fades. The update still renders synchronously, so navigation never waits on data and Suspense fallbacks show at once; layout is final while the snapshots animate. Exactly one rendered element may carry the class. Reduced motion and engines without the API swap instantly. |
 | `<Skeleton shape="text" lines={3} />`, `shape="block"`, `shape="circle"`, `width`, `height` | Loading placeholders with sheen. Mark the region `aria-busy="true"` and keep a short status ("Loading cards…"). Prefer skeletons shaped like the content over a spinner in the middle of the panel. |
 | `useReducedMotion()`, `prefersReducedMotion()` | Live preference (OS or shell override) for script-driven animation. |
 | `animateElement(el, keyframes, { duration, easing })` | Web Animations API with tokens. Returns `null` and does nothing under reduced motion. CSP-safe (it writes no `style` attribute). |

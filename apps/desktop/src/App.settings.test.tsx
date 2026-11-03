@@ -18,7 +18,7 @@ it('keeps settings accessible without a bridge and reads only sanitized configur
   const set = vi.fn(); const socialCall = vi.fn(); const workCall = vi.fn();
   Object.defineProperty(window, 'hqServices', { configurable: true, value: { config: { status, set }, social: { call: socialCall }, work: { call: workCall } } });
   render(<App />);
-  await screen.findAllByText('Set up · not checked');
+  await screen.findByRole('button', { name: /^Data sources: Social: Set up · not checked; Work: Set up · not checked/ });
   expect(status).toHaveBeenCalledWith('social'); expect(status).toHaveBeenCalledWith('work');
   expect(socialCall).not.toHaveBeenCalled(); expect(workCall).not.toHaveBeenCalled(); expect(set).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
@@ -105,8 +105,12 @@ it('opens a specific source, keeps Escape within an address edit, and closes on 
   const socialCall = vi.fn(); const workCall = vi.fn();
   Object.defineProperty(window, 'hqServices', { configurable: true, value: { config: { status, set: vi.fn() }, social: { call: socialCall }, work: { call: workCall } } });
   render(<App />);
-  const source = await screen.findByRole('button', { name: 'Social: Set up · not checked' });
-  fireEvent.click(source);
+  const sources = await screen.findByRole('button', { name: /^Data sources: Social: Set up · not checked/ });
+  fireEvent.click(sources);
+  expect(sources.getAttribute('aria-expanded')).toBe('true');
+  expect(socialCall).not.toHaveBeenCalled(); expect(workCall).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Social: Set up · not checked' }));
+  expect(sources.getAttribute('aria-expanded')).toBe('false');
   const page = screen.getByRole('region', { name: 'Settings page' });
   expect(within(page).getByRole('region', { name: 'Social data source' }).className).toContain('is-target');
   expect(socialCall).not.toHaveBeenCalled(); expect(workCall).not.toHaveBeenCalled();
@@ -114,8 +118,10 @@ it('opens a specific source, keeps Escape within an address edit, and closes on 
   const input = within(page).getByRole('textbox', { name: 'New social base URL' }); input.focus();
   fireEvent.keyDown(input, { key: 'Escape' }); expect(page.isConnected).toBe(true);
   fireEvent.keyDown(within(page).getByRole('heading', { name: 'Settings' }), { key: 'Escape' });
-  expect(screen.queryByRole('region', { name: 'Settings page' })).toBeNull(); expect(document.activeElement).toBe(source);
-  fireEvent.click(source); fireEvent.click(screen.getByRole('button', { name: 'Wiki' }));
+  expect(screen.queryByRole('region', { name: 'Settings page' })).toBeNull(); expect(document.activeElement).toBe(sources);
+  fireEvent.click(sources); fireEvent.click(screen.getByRole('button', { name: 'Social: Set up · not checked' }));
+  expect(screen.getByRole('region', { name: 'Settings page' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Wiki' }));
   expect(screen.queryByRole('region', { name: 'Settings page' })).toBeNull(); expect(screen.getByText('Wiki home stub')).toBeTruthy();
 });
 
@@ -136,7 +142,7 @@ it.each(['projects', 'flows'])('preserves the mounted Design %s destination on e
   expect(screen.getByTestId('design-destination').textContent).toBe(destination);
   expect(screen.getByRole('textbox', { name: 'Design draft' })).toBe(draft);
   expect(draft).toHaveProperty('value', 'Unsaved draft');
-  expect(within(screen.getByRole('contentinfo', { name: 'Workspace context' })).getByText('Synthetic source')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Project: Synthetic source' })).toBeTruthy();
   expect(call).not.toHaveBeenCalled();
   act(() => selectDesktopProject({ id: 'synthetic-regular', label: 'Regular project' }));
   expect(screen.getByTestId('design-destination').textContent).toBe('home');

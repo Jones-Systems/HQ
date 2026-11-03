@@ -46,7 +46,7 @@ describe.each(Object.entries(sheets))('%s stylesheet', (_name, css) => {
   it('scopes selectors to .hq-* classes, presence attributes or view-transition pseudo-elements', () => {
     expect(parsed.length).toBeGreaterThan(10);
     for (const { selectors } of parsed) {
-      for (const selector of selectors) expect(selector).toMatch(/^(\.hq-|\[data-hq-presence=|\[data-hq-motion=|:root\[data-hq-motion="reduce"\]|::view-transition-)/);
+      for (const selector of selectors) expect(selector).toMatch(/^(\.hq-|\[data-hq-presence=|\[data-hq-motion=|:root\[data-hq-motion="reduce"\]|::view-transition-|:root:active-view-transition-type\(hq-nav-[a-z]+\)::view-transition-)/);
     }
   });
 
