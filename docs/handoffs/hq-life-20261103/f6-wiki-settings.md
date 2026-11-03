@@ -8,8 +8,14 @@ builders are Sonnet 5.5 at xhigh effort, run as T3 delegated tasks. Nothing from
 
 - **Done:** the flow assessment with before evidence; the Settings and Wiki designs; lane F1's primitives merged
   in; and the shared Wiki base (cache, session, feedback pieces, host affordances, static-test evolution).
-- **In progress (paused):** builders S1 (Settings, close to complete), W1 (Wiki chrome, search, home, history) and W2
-  (Wiki reader, previews, topics). Each has its own handoff, linked below.
+- **In progress (paused):**
+  - S1 (Settings) is feature-complete and checked, waiting for lead review.
+  - W2 (Wiki reader, previews, topics) is mostly done. Its new-behaviour tests and dark and narrow captures are
+    missing.
+  - W1 (Wiki chrome, search, home, history) is unfinished and untested. The builder was killed (out of memory), and
+    the lead committed its work in progress.
+
+  Each has its own handoff, linked below.
 - **Not started:** lead review and fix rounds, integration, consolidated after evidence, full checks, and the two PRs
   against `work/hq-foundation`.
 
@@ -20,9 +26,9 @@ All branches are on `origin` (github.com/Jones-Systems/HQ).
 | Branch | Role | Head | Worktree | Handoff |
 | --- | --- | --- | --- | --- |
 | `work/hq-life-wiki-settings-20261103` | Lane branch: docs, evidence, F1 merge, Wiki base | see the commit carrying this file | `~/.t3/worktrees/HQ/work-hq-life-wiki-settings-20261103` | this file |
-| `work/hq-life-settings-20261103` | S1: Settings redesign (base `4cdb7a7`) | `bf0822b` at pause time; see its handoff for the final head | `~/.t3/worktrees/HQ/work-hq-life-settings-20261103` | [`f6-wiki-settings/hq-life-settings-20261103.md`](f6-wiki-settings/hq-life-settings-20261103.md) on that branch |
-| `work/hq-life-wiki-w1-20261103` | W1: Wiki chrome, search, home, history (base `d2711c7`) | not pushed at pause time; see its handoff | `~/.t3/worktrees/HQ/work-hq-life-wiki-w1-20261103` | [`f6-wiki-settings/hq-life-wiki-w1-20261103.md`](f6-wiki-settings/hq-life-wiki-w1-20261103.md) on that branch |
-| `work/hq-life-wiki-w2-20261103` | W2: Wiki reader, links, previews, topics (base `d2711c7`) | local `f6a773d` at pause time, not yet pushed; see its handoff | `~/.t3/worktrees/HQ/work-hq-life-wiki-w2-20261103` | [`f6-wiki-settings/hq-life-wiki-w2-20261103.md`](f6-wiki-settings/hq-life-wiki-w2-20261103.md) on that branch |
+| `work/hq-life-settings-20261103` | S1: Settings redesign (base `4cdb7a7`). Complete per its report: root `npm run typecheck` exit 0; `npx vitest run apps/desktop` 58 files / 434 tests pass; 53 after images | `bf0822b` (code and evidence); the handoff file commit is pending (see S1 below) | `~/.t3/worktrees/HQ/work-hq-life-settings-20261103` | [`f6-wiki-settings/hq-life-settings-20261103.md`](f6-wiki-settings/hq-life-settings-20261103.md) on that branch (being written) |
+| `work/hq-life-wiki-w1-20261103` | W1: Wiki chrome, search, home, history (base `d2711c7`). The builder was killed (out of memory) before handing off. The lead committed its on-disk work as one `WIP:` commit (`6e2c14f`, typechecks, tests not run) and wrote its handoff from observation | `b9d2f1f` | `~/.t3/worktrees/HQ/work-hq-life-wiki-w1-20261103` | [`f6-wiki-settings/hq-life-wiki-w1-20261103.md`](f6-wiki-settings/hq-life-wiki-w1-20261103.md) on that branch |
+| `work/hq-life-wiki-w2-20261103` | W2: Wiki reader, links, previews, topics (base `d2711c7`). Code done for every Reader and Topics section. `npm test` 536/539: the 3 failures are W1-owned tests needing selector updates. New-behaviour tests not written; dark and narrow captures not taken | `0273a0a` | `~/.t3/worktrees/HQ/work-hq-life-wiki-w2-20261103` | [`f6-wiki-settings/hq-life-wiki-w2-20261103.md`](f6-wiki-settings/hq-life-wiki-w2-20261103.md) on that branch |
 | `work/hq-life-wiki-w3-20261103` | W3: Wiki reference provider. **Cancelled:** lane B5 owns this | `dbdd5bb` (4 commits, pushed before the cancel took effect) | `~/.t3/worktrees/HQ/work-hq-life-wiki-w3-20261103` | none (cancelled); see "W3" below |
 
 Each sub-handoff path is relative to `docs/handoffs/hq-life-20261103/` on that builder's own branch.
@@ -118,16 +124,32 @@ unreviewed and must not be merged by F6. B5 keeps whichever implementation is fu
 
 ## What's left, in priority order
 
-1. **Collect the three handoffs** (S1, W1, W2) and check that each branch is pushed with its WIP. If a builder did
-   not respond, its worktree path is in the table above; inspect `git status` there before touching anything.
+1. **Confirm S1's handoff file** has landed on `work/hq-life-settings-20261103`. If it hasn't, write it from S1's
+   final report in its thread: [F6 S1 · Settings redesign builder](t3-thread://v1/thread:delegated-task:command%3Amcp%3A2c0b707d-7807-49a5-9abd-096df44c10bc%3Adelegate-task%3Af6-s1-settings-20261103).
+   The W1 and W2 handoffs are pushed.
 2. **Review S1** against the Settings design.
    - Look at the screenshots in `docs/design/settings/evidence/after-20261103/` on its branch.
    - Check every changed test assertion against the rule: never weakened.
    - Send fix rounds with `t3_task_continue`, or start a fresh builder from its handoff.
    - Then open PR B (Settings): head `work/hq-life-settings-20261103`, base `work/hq-foundation`, with
      before/after screenshots.
-3. **Finish W1 and W2** from their handoffs. Merge both into the lane branch; their files are disjoint, and the only
-   shared touch point is `view.ts`, which calls the `ReaderView`/`TopicsView` signatures. Then re-run everything.
+3. **Finish W1 and W2** from their handoffs.
+   - **W1 first.** Run its tests, review its test edits, then cover the remaining design items: the not-connected
+     Home (X4), outage toast, scroll restore, shortcuts, narrow overlay and evidence. Update the three W1-owned
+     assertions W2 lists (`navigation.test.ts:16`, around line 115, and `search.test.ts:122`).
+   - **Then W2.** Write its missing behaviour tests (preview, outline, recovery, reader-model), take dark and narrow
+     captures, and fix what they show.
+   - **Merge both into the lane branch.** Their files are disjoint. The shared touch points are `view.ts` calling
+     `ReaderView`/`TopicsView`, W2's `recovery.ts` clicking `button[aria-label="Back"]` (W1 must keep that label),
+     and W2's outline using `.wiki-scroll` as its observer root.
+   - Re-run everything.
+   - **Base-file requests from W2:**
+     - `ViewCtx.back` (a history handle);
+     - a shared outage-toast helper (W2 has `outage.ts`, and W1 has outage toasts in `chrome.ts`; merge them into
+       one);
+     - a reported type error at `ui/test/base.test.ts:109` under `tsc -p modules/wiki/ui/tsconfig.json`
+       (unverified; the module tsconfig is clean);
+     - retiring `Loading`/`ErrorPanel`/`Async` in `common.ts` once W1 stops importing them.
 4. **Consolidate after evidence** from the real renderer. Use the scratch harness, described below, or recreate it.
    Capture light and dark at 1280×820, plus narrow widths and reduced motion.
 5. **Full checks.** Take a CPU sample first.
