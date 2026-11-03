@@ -215,12 +215,26 @@ export function SocialDomain({ context, destination, navigate, port, example = f
     if (section) rememberSection(session, section, destination);
   }, [session, section, destination]);
 
-  // A new section starts at its top, wherever the last one was scrolled to (pages within a section keep theirs).
+  // A new section starts at its top, wherever the last one was scrolled to (pages within a section keep theirs). When
+  // the control that changed it left with the old page, focus lands on the new page's heading, not the document.
   const shownSection = useRef(section);
   useEffect(() => {
     if (shownSection.current === section) return;
     shownSection.current = section;
-    if (main.current) main.current.scrollTop = 0;
+    const area = main.current;
+    if (!area) return;
+    area.scrollTop = 0;
+    let frame = 0;
+    let tries = 0;
+    const land = () => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active.isConnected) return;
+      const heading = area.querySelector<HTMLElement>('h1[tabindex]');
+      if (heading) heading.focus({ preventScroll: true });
+      else if (++tries < 30) frame = requestAnimationFrame(land);
+    };
+    land();
+    return () => cancelAnimationFrame(frame);
   }, [section]);
 
   // N starts a new draft from anywhere in Social, unless the user is typing.

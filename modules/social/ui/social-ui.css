@@ -12,6 +12,8 @@
 .sx-head-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--hq-space-sm) var(--hq-space-lg); }
 .sx-head-text { display: grid; gap: var(--hq-space-2xs); min-width: min(100%, 18rem); flex: 1 1 22rem; }
 .sx-head-text h1 { margin: 0; font: var(--hq-type-display); letter-spacing: var(--hq-type-display-tracking); color: var(--hq-text); overflow-wrap: anywhere; }
+/* Focus lands here only from script after a page change; the page itself shows where you are. */
+.sx-head-text h1:focus { outline: none; }
 .sx-head-eyebrow { margin: 0; font: var(--hq-type-label); color: var(--hq-text-subtle); }
 .sx-head-eyebrow a, .sx-head-eyebrow button { font: inherit; color: inherit; }
 .sx-head-description { margin: 0; max-width: 72ch; font: var(--hq-type-body); color: var(--hq-text-muted); }
