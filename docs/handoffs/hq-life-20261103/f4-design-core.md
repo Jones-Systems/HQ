@@ -2,8 +2,9 @@
 
 Lane F4 makes the HQ Design module's core views alive and complete: Projects (the project gallery and a
 project's Overview/Gallery screen), Canvas, Compare, and the Requests / Returned / Runs handoff. The lead was
-Opus 5.5, with four Sonnet 5.5 builders (F4-B1 to F4-B4; not the backend lanes B1 to B3). Work paused at the owner's request on 2026-11-03, relayed by the
-HQ coordinator. No PR is open. Nothing was merged, deployed or installed.
+Opus 5.5, with four Sonnet 5.5 builders (F4-B1 to F4-B4; not the backend lanes B1 to B3). Work paused at
+the owner's request on 2026-11-03, relayed by the HQ coordinator. No PR is open. Nothing was merged or
+deployed. The only installs were `npm ci` runs inside builder worktrees.
 
 ## Where it stands
 
@@ -14,10 +15,10 @@ HQ coordinator. No PR is open. Nothing was merged, deployed or installed.
 | Foundation: Design-scoped active project | **Done** (`c194b43`). |
 | SVG chevrons for secondary panel toggles (cross-app finding X14) | **Done** (`acced90`). |
 | Section loading skeleton, in-place Try again, section fade-in | **Done** (`d90f846`). |
-| F4 builder B1: Projects gallery + project overview | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
-| F4 builder B2: Canvas | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
-| F4 builder B3: Compare | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
-| F4 builder B4: Requests, Returned and Runs | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
+| F4 builder B1: Projects gallery + project overview | **Paused early.** View source partly written, never compiled or tested. CSS, wiring, tests and screenshots not started. See [builder handoffs](#builder-handoffs). |
+| F4 builder B2: Canvas | **Built, partly verified; cancelled at the pause.** Six commits cover thumbnails, camera easing, the toolbar and feedback. Node tests pass. Other checks are unknown. 54 screenshots exist; there is no handoff file. See [builder handoffs](#builder-handoffs). |
+| F4 builder B3: Compare | **Built, partly verified.** All seven targets built. The Compare typecheck and tests pass. Other cones, 1024×768 and reduced motion not checked. See [builder handoffs](#builder-handoffs). |
+| F4 builder B4: Requests, Returned and Runs | **Written, never compiled.** All six targets written. Nothing compiled, run or captured; new tests not started. See [builder handoffs](#builder-handoffs). |
 | Lead review of builder screenshots, fix rounds | **Not started.** |
 | Integration of builder branches into the lane branch | **Not started.** |
 | After evidence, UI-map entry, full checks, PR against `work/hq-foundation` | **Not started.** |
@@ -26,7 +27,7 @@ HQ coordinator. No PR is open. Nothing was merged, deployed or installed.
 
 | What | Branch | Worktree | Head |
 | --- | --- | --- | --- |
-| Lane (lead) | `work/hq-life-design-core-20261103` | `/home/malcolmjones/.t3/worktrees/HQ/work-hq-life-design-core-20261103` | see the commit adding this file (work before it: `d90f846`) |
+| Lane (lead) | `work/hq-life-design-core-20261103` | `/home/malcolmjones/.t3/worktrees/HQ/work-hq-life-design-core-20261103` | the commit that last changed this file; the lead's code ends at `d90f846` |
 | Base | `work/hq-foundation` `0cd50ab` + lane F1 `work/hq-life-system-20261103` `284393d` (fast-forward) | — | — |
 | Builders | see [builder handoffs](#builder-handoffs) | created by T3 from `origin/work/hq-life-design-core-20261103` at `be4a0b2` | — |
 
@@ -117,33 +118,50 @@ Found during the build:
 
 ## What's left, in priority order
 
-1. **Collect the four builder handoffs** (below). Review each branch's screenshots in
-   `/tmp/f4-evidence/<view>/after/` against its brief and the assessment. Finish the remaining targets with
-   new delegated rounds (pass the original brief, the handoff and the review findings), or do them directly.
-2. **Follow the backend B3 agreement** (see [open questions](#open-questions-and-risks)):
+1. **Fix two example-workspace bugs in the lead-owned `fake-workspace.ts`.** B3 found both.
+   - `compareFor` treats the example project as user-created once Projects has listed it, because
+     `createdInProjects` is true for it. Compare then shows an empty comparison for the example. Decide with the
+     `contentFor(...).example` flag instead, and check the other accessors that call `createdInProjects`.
+   - The example catalog's `listViews(projectId)` returns nothing for the example project: the comparison
+     uses `hq-local` and the sample catalog uses `sample-project`. B3 works around it by reading versions from
+     `snapshot.versions`.
+2. **Review and finish the builder branches, most ready first.** For each branch, read its handoff (linked
+   below) and review its screenshots against its brief and the assessment. Then finish the remaining
+   targets, either directly or in a new delegated round that gets the original brief, the handoff and the
+   review findings.
+   1. Compare (B3): capture 1024×768 and reduced motion, and run the remaining cones.
+   2. Canvas (B2): no handoff exists, so start from its six commit messages and the note under the builder
+      table. Run the canvas and app rows of `HQD_INVENTORY`, including
+      `compose/test/canvas-load-cache.test.ts`. Rerun the dark scenario and explain dark run A's failures,
+      then review the 54 shots.
+   3. Requests (B4): run `npm ci`, then typecheck, test and fix. Add the new tests, then walk the example
+      loop in a browser and capture it. This branch closes finding 2.
+   4. Projects (B1): write `projects.css`, then wire `ProjectsView.tsx` to pass `ui` (the `@hq/ui` exports)
+      and `ProjectActions`. Then compile, test and capture.
+3. **Follow the backend B3 agreement** (see [open questions](#open-questions-and-risks)):
    - Backend B3 rebases; F4 keeps its branch.
    - Re-read on `contentEvents.revision(project.id)` once W1 is available.
    - Have new content writers call `contentEvents.notify`.
    - Send F1 the `ActiveProjectStore` shape (X8).
-3. **Integrate** the builder branches into `work/hq-life-design-core-20261103`, one at a time: projects,
-   canvas, compare, requests. Builders were confined to separate cones, so conflicts should only appear where
-   a builder edited lead-owned lines in `ProjectsView.tsx`, `CanvasView.tsx`, `CompareView.tsx` or
-   `closure-views.tsx`.
-4. **Run checks:** `npm run build:electron`, then `node_modules/.bin/vitest run`, `npm run typecheck`, and
+4. **Integrate** the builder branches into `work/hq-life-design-core-20261103` one at a time, as each passes
+   review. Builders were confined to separate cones, so conflicts should only appear where a builder edited
+   lead-owned lines in `ProjectsView.tsx`, `CanvasView.tsx`, `CompareView.tsx` or `closure-views.tsx`.
+   Squash or reword the `WIP:` commits when integrating.
+5. **Run checks:** `npm run build:electron`, then `node_modules/.bin/vitest run`, `npm run typecheck`, and
    the design-sections rows for every touched cone (app, app-sections, ui, projects, canvas, compare,
    requests, annotations). The commands are in `.github/workflows/design-sections.yml` `HQD_INVENTORY`.
-5. **After evidence:** 1440×900 light and dark, 1280×800, 1024×768, and reduced motion, using
+6. **After evidence:** 1440×900 light and dark, 1280×800, 1024×768, and reduced motion, using
    `/tmp/f4-tools/cdp.mjs` scenarios. Curate into `evidence/design-core-20261103/after/` and update the
    evidence README.
-6. **UI map:** add `docs/ui-map/design-core.md` (entry points, states, journeys, evidence state) and an
+7. **UI map:** add `docs/ui-map/design-core.md` (entry points, states, journeys, evidence state) and an
    index row in `docs/ui-map/README.md`.
-7. **Open one non-draft PR** against `work/hq-foundation` with before/after screenshots, then link and watch
+8. **Open one non-draft PR** against `work/hq-foundation` with before/after screenshots, then link and watch
    it. Do not merge. Note two things in it:
    - F5's PR edits adjacent hunks: `fake-workspace.ts` `discoveryEnv` (beside F4's `projectsFor`) and
      `closure-views.tsx` imports.
    - #179 replaces the desktop compare catalog and thumbnails; recheck Compare for the active project after
      it lands.
-8. **Follow-ups for other owners:**
+9. **Follow-ups for other owners:**
    - Design chrome: inspector closed by default.
    - Shell-owned ⌘K (F7 X2).
    - F5's Sources views may opt into `useDesignProject`; F5 listed this as a follow-up.
@@ -177,7 +195,8 @@ Found during the build:
   `ActiveProjectStore` shape: `current()`, `subscribe(listener)`, `set(project | null)`, nothing durable.
   Then the shell can show or adopt it. Not sent yet because of the pause. HQR-1 activation stays owner-held.
 - The owner should review the active-project scope, the navigation mapping and swipe-only Compare.
-- Builder output has not been reviewed by the lead yet; quality is unknown until it is.
+- The lead has not reviewed any builder output yet, so its quality is unknown. B1's and B4's code has never
+  been compiled, and B2's checks after its first node run are unknown.
 - Merge order with F5 and #179 may produce small conflicts in shared compose files.
 - The desktop (bridged) behaviour of the new views has not been exercised. Evidence comes from the browser
   example workspace only.
@@ -187,22 +206,66 @@ Found during the build:
 - `/tmp/f4-tools/`: the CDP screenshot harness (`cdp.mjs`) and scenarios (`before.mjs`, `flow-handoff.mjs`,
   `flow-projects.mjs`, `check-foundation.mjs`). Task-owned; not committed.
 - `/tmp/f4-evidence/before/`: the full before set (18 view shots and 12 flow shots); 8 are curated in the
-  repo. `/tmp/f4-evidence/foundation/`: 3 foundation-check shots. Builder shots live under
-  `/tmp/f4-evidence/<view>/after/`.
+  repo. `/tmp/f4-evidence/foundation/`: 3 foundation-check shots.
+- Builder evidence, none of it curated or committed yet:
+  - Canvas (B2): `/tmp/f4-evidence/canvas/` (54 after shots, run logs, a probe shot). Its scenarios are in
+    `/tmp/f4-tools/`: `canvas-after.mjs`, `canvas-after-b.mjs` and `canvas-probe.mjs`.
+  - Compare (B3): `/tmp/f4-evidence/compare/after/` (38 shots); its harness is `/tmp/f4-compare/`.
+  - Projects (B1) and Requests (B4) produced no screenshots.
+- Leftover headless Chromium profiles from the harness, `/tmp/f4-chrome-*`, are safe to delete.
 - `/tmp/f4-fd/`: read-only copies of the Frontend-Development guidance at `71c2c70`.
 - Thread-only coordination:
   - F7: X1, X2 and X14 answered.
   - F5: said it is not editing `SectionOutlet.tsx`, and named the shared hunks above.
-- The lead's dev server is stopped and no preview tabs are open.
+- No F4 dev server, screenshot run or builder task is running. All four builder tasks are finished or
+  cancelled, and no preview tabs are open.
 
 ## Builder handoffs
 
-Each builder was told to commit its work (prefix `WIP:`), push, and write a handoff on its own branch at
-`docs/handoffs/hq-life-20261103/f4-design-core/<branch>.md`.
+B1, B3 and B4 committed their work (prefix `WIP:`), pushed their branches and wrote handoffs on them at
+`docs/handoffs/hq-life-20261103/f4-design-core/<branch>.md`. B2 was cancelled; see the note below the table.
+The links below are pinned to the pushed heads.
+Each worktree is `/home/malcolmjones/.t3/worktrees/HQ/<branch with / replaced by ->`. No builder branch is
+merged anywhere, and no builder opened a PR.
 
-| Builder | Branch | Handoff on that branch | Status at pause |
-| --- | --- | --- | --- |
-| F4-B1 Projects | `work/hq-life-design-core-projects-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-projects-20261103.md` | awaiting reply |
-| F4-B2 Canvas | `work/hq-life-design-core-canvas-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-canvas-20261103.md` | awaiting reply |
-| F4-B3 Compare | `work/hq-life-design-core-compare-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-compare-20261103.md` | awaiting reply |
-| F4-B4 Requests, Returned, Runs | `work/hq-life-design-core-requests-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-requests-20261103.md` | awaiting reply |
+| Builder | Branch and head | State at pause |
+| --- | --- | --- |
+| F4-B1 Projects gallery and project screen | `work/hq-life-design-core-projects-20261103` at `f3369a4` ([handoff](https://github.com/Jones-Systems/HQ/blob/f3369a4ae8ede1c37598c8310a9feb79c9d719b0/docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-projects-20261103.md)) | One WIP commit, `ffd00b5`. It adds `view-model.ts` and new view modules (`ui.ts`, `chevron.ts`, `controls.ts`, `forms.ts`, `frame.ts`) and rewrites the gallery, detail, section and hooks views. Never type-checked, run or tested: `npm ci` never ran in that worktree. `projects.css`, the `ProjectsView.tsx` wiring, tests and screenshots are not started. |
+| F4-B2 Canvas | `work/hq-life-design-core-canvas-20261103` at `78a207f`. No handoff file: the builder was cancelled (see the note below the table). | Six commits, without the `WIP:` prefix; their messages are the builder's record. They cover eased camera moves (`e615b8d`); an icon toolbar that explains unavailable actions (`d7e758b`); capture cards, selection and drop feedback, save status and a source banner (`966c360`); version thumbnails and flow frames from composition renderers that re-read the source (`c9cf0ce`); load caches that survive a development remount (`500fd95`); and polish for frames, artboards and the inspector width (`78a207f`). Canvas node tests passed 50/50 at 14:39Z, before the last two commits. Whether `tsc` and vitest ran after its `npm ci` is unknown. 54 screenshots are in `/tmp/f4-evidence/canvas/after/`: light and dark; 1270, 1440 and 1800 wide; reduced motion; save and source failures with recovery; a new project and a new version. |
+| F4-B3 Compare | `work/hq-life-design-core-compare-20261103` at `a1beafd` ([handoff](https://github.com/Jones-Systems/HQ/blob/a1beafddd95e116672ace8b82835e837bbb9203a/docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-compare-20261103.md)) | All seven targets built, including Side by side / Swipe with a slider divider and compact panel headers. Compare `tsc` is clean and Compare vitest passes 97/97. Other cones were not run. 38 screenshots are in `/tmp/f4-evidence/compare/after/`. 1024×768 and reduced motion were not captured, and touch drag was never tried on a touch device. |
+| F4-B4 Requests, Returned and Runs | `work/hq-life-design-core-requests-20261103` at `9b68e15` ([handoff](https://github.com/Jones-Systems/HQ/blob/9b68e1524c8c5723103044610137750c570a13ca/docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-requests-20261103.md)) | Two WIP commits: `45e220d` (source) and `646b93f` (tests). All six targets are written: the example loop, the request list and new-request picker, the stepper with freeze blockers, the Returned tab, Runs cards, and notices and toasts. Never compiled, run or captured: `npm ci` never ran in that worktree. New tests not started. |
+
+**F4-B2 was cancelled without writing a handoff.**
+
+- The first pause message (14:50Z) queued behind the builder's running turn. A steer reached its thread at
+  14:59Z, but the builder kept building: it made two more commits and started another screenshot run.
+- At 15:04Z, about 14 minutes after the pause, the lead cancelled the task (status: interrupted). Its worktree
+  was clean, so nothing was lost. The lead pushed the branch as the builder left it. The cancel stopped its dev
+  server (port 5182) and the screenshot run.
+- Its thread timeline stopped updating at 14:39Z, so later check results are not recorded there.
+- Its last browser-run logs are in `/tmp/f4-evidence/canvas/logs/`. They were written after the screenshots
+  in `after/`.
+  - Light run A passed 13 of 13 steps and light run B passed 2 of 2.
+  - Dark run A failed 10 of 13 steps. The toolbar buttons were never found, and a dynamically imported module
+    failed to load from the dev server, so the canvas may not have loaded in that run. Not explained yet.
+  - Dark run B passed 2 of 2 steps, then ended with a cleanup error when the cancel stopped it.
+
+Notes from the builder handoffs that reach beyond one branch:
+
+- **Lead-owned:** the two `fake-workspace.ts` bugs (priority 1). `.hqd-chrome :focus-visible`
+  (`design-ui.css:13`) outranks component focus rules, so custom focus styles need `.hqd-chrome` in the
+  selector (B3).
+- **Lead decisions requested:**
+  - B1 left `ProjectSwitcher` exported from `projects/src/index.ts` but rendered nowhere. Keep or drop it.
+  - B1 disables Compare, with a reason, when a project has no versions. Confirm Compare needs a version.
+  - B4 made unavailable controls `aria-disabled` so they stay focusable and show their reason. It changed
+    the `.disabled` test assertions to match.
+- **`@hq/ui` doesn't load under `node --test`** (it imports CSS and `.tsx`). B1 passes F1's primitives into
+  the Projects views through a `ui` prop with plain fallbacks. Any cone tested under plain Node needs the
+  same seam.
+- **For other owners:**
+  - F1's `StatusChip` renders a `0` detail as a bare text node; it should test `detail !== undefined` (B4).
+  - B4 changed the `closure-views.tsx` import block, which F5's `mountReferences` edits may conflict with.
+  - The Compare and Requests READMEs and `docs/ui-map` describe the old layouts.
+- **Not built:** a deep link from Runs to the Returned tab. It needs a navigation intent with a tab target,
+  which is a shell change (B4).
