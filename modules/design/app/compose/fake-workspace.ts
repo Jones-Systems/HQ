@@ -31,11 +31,12 @@ import { presetById } from '../../compare/src/presets.ts';
 import { AnnotationController, loadAnnotations } from '../../annotations/src/controller.ts';
 import { annotationId, versionId as annotationVersionId, type SourceFrame, type VersionId as AnnotationVersionId } from '../../annotations/src/contract.ts';
 import { FakeClipboard, MemoryAnnotationStore } from '../../annotations/src/fakes.ts';
-import { FAKE_HOSTS, FakeClock as DiscoveryFakeClock, fixturePreview, fixtureSnapshot, MemoryCachePort } from '../../discovery/src/fakes.ts';
+import { FAKE_HOSTS, FakeClock as DiscoveryFakeClock, FakeSourceAdapter, fixtureSnapshot, MemoryCachePort } from '../../discovery/src/fakes.ts';
+import { digestBytes } from '../../discovery/src/identity.ts';
 import { EMPTY_CATALOG, parseSnapshot, reduceCatalog } from '../../discovery/src/catalog.ts';
 import { CATALOG_CACHE_KEY, serializeCatalogCache } from '../../discovery/src/cache.ts';
 import { DiscoveryService } from '../../discovery/src/discovery.ts';
-import { isoFromMs, type HostId, type SourceEnrollment } from '../../discovery/src/contract.ts';
+import { isoFromMs, SourceUnavailableError, type HostId, type SourceEnrollment } from '../../discovery/src/contract.ts';
 import { createFlowCanvasProvider } from '../../flows/src/canvas.ts';
 import { createFakeFlowStorage } from '../../flows/src/fakes.ts';
 import { parseFlow } from '../../flows/src/model.ts';
@@ -170,23 +171,56 @@ let discovery: Promise<DiscoveryEnv> | null = null;
 export function discoveryEnv(): Promise<DiscoveryEnv> {
   discovery ??= (async () => {
     const cache = new MemoryCachePort();
+    // The example workspace's only source: the labelled fake adapter, never a real host. It serves generated PNG
+    // previews (digest-checked like any source's) and answers refreshes after a short simulated delay. The first
+    // refresh succeeds and finds one new Laptop project; a second one finds Studio offline, so the error handling
+    // can be seen. Opening this page still reads the cached catalog only (`refreshOnOpen` is off).
+    const source = new FakeSourceAdapter();
+    const delay = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(resolve, ms);
+      signal.addEventListener('abort', () => { clearTimeout(timer); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+    });
+    const names: Readonly<Record<string, readonly string[]>> = {
+      [FAKE_HOSTS.laptop]: ['Harbour Notes', 'Field Guide', 'Paper Planes', 'Lantern', 'Orchard Ledger', 'Signal Garden', 'Tidewater', 'Marginalia', 'Night Market'],
+      [FAKE_HOSTS.studio]: ['Atlas Sketches', 'Copper Kettle', 'Daylight Deck', 'Northbound', 'Pocket Almanac', 'Quiet Hours', 'Rooftop Radio', 'Saltmarsh'],
+    };
+    const projectsOf = (host: HostId, hostIndex: number, count: number) => Promise.all((names[host] ?? []).slice(0, count).map(async (name, index) => {
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/gu, '-');
+      const bytes = syntheticPng((hostIndex * 9 + index) * 271 + 3, 192, 120); // 271 steps the hue by about 137°, so neighbours differ
+      const preview = { digest: await digestBytes(bytes), mediaType: 'image/png', bytes: bytes.byteLength, w: 192, h: 120 };
+      source.previews.set(preview.digest, bytes);
+      const revision = Array.from(slug).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7).toString(16).padStart(8, '0') + 'c0ffee42';
+      return {
+        path: slug, name, revision, previews: [preview],
+        ...(index % 2 === 1 ? { repo: { localOnly: false, normalizedRemote: `git.example.test/${hostIndex === 0 ? 'laptop' : 'studio'}/${slug}` } } : {}),
+      };
+    }));
+    const refreshes = new Map<HostId, number>();
+    source.listSnapshot = async (host, signal) => {
+      await delay(host === FAKE_HOSTS.laptop ? 700 : 1100, signal);
+      const round = refreshes.get(host) ?? 0;
+      refreshes.set(host, round + 1);
+      if (host === FAKE_HOSTS.studio && round > 0) throw new SourceUnavailableError('Fake source is offline');
+      const hostIndex = host === FAKE_HOSTS.laptop ? 0 : 1;
+      return fixtureSnapshot(host, round + 2, await projectsOf(host, hostIndex, 9), { observedAtMs: NOW });
+    };
+    const readPreview = source.readPreview.bind(source);
+    source.readPreview = async (ref, signal) => {
+      await delay(160 + (ref.bytes % 5) * 90, signal);
+      return readPreview(ref, signal);
+    };
     let catalog = EMPTY_CATALOG;
-    for (const [host] of HOSTS) {
-      const projects = await Promise.all(Array.from({ length: 8 }, async (_, index) => ({
-        path: `p${String(index).padStart(3, '0')}`,
-        name: `Source project ${host.slice(5, 9)} ${String(index).padStart(3, '0')}`,
-        previews: [(await fixturePreview(`${host}-${index}`)).ref],
-      })));
-      const parsed = await parseSnapshot(await fixtureSnapshot(host, 1, projects), host);
+    for (const [hostIndex, [host]] of HOSTS.entries()) {
+      const parsed = await parseSnapshot(await fixtureSnapshot(host, 1, await projectsOf(host, hostIndex, 8)), host);
       if (!parsed.ok) throw new Error('synthetic discovery snapshot failed to parse');
       catalog = reduceCatalog(catalog, { type: 'snapshot', snapshot: parsed.snapshot, at: isoFromMs(NOW - 60 * 60_000) }).state;
     }
     cache.documents.set(CATALOG_CACHE_KEY, serializeCatalogCache(catalog, isoFromMs(NOW)));
     const enrollments: SourceEnrollment[] = HOSTS.map(([hostId, label]) => ({ hostId, label, adapterKey: 'fake', enrolledAt: isoFromMs(NOW) }));
     const clock = new DiscoveryFakeClock(NOW);
-    const service = new DiscoveryService({ adapters: {}, enrollments, cache, clock, refreshOnOpen: false });
+    const service = new DiscoveryService({ adapters: { fake: source }, enrollments, cache, clock, refreshOnOpen: false });
     const readPort = createCachedCatalogReadPort({
-      cache, hostLabels: Object.fromEntries(HOSTS), dataTag: SYNTHETIC_TAG, provenance: 'synthetic fixture cache (no source adapter registered)',
+      cache, hostLabels: Object.fromEntries(HOSTS), dataTag: SYNTHETIC_TAG, provenance: 'synthetic fixture cache (labelled fake source, refresh-on-open off)',
     });
     await readPort.load();
     return { tag: SYNTHETIC_TAG, cache, clock, service, adapterLabels: { fake: { label: 'Synthetic fake source', fake: true } }, readPort };
