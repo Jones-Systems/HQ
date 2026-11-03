@@ -163,31 +163,31 @@ The edges are Git ancestry, verified with `git merge-base --is-ancestor`. #179 m
 <!-- codex-section:begin id="spec.hq-design-backend#ctx.workstreams.001" -->
 Each workstream is a branch stacked on W1, built by a delegated builder, reviewed by the lead and reviewed again independently before its PR.
 
-- **W1, typed failures and content events** (`work/hq-b3-design-errors-20261103`, done at `3917ee9`).
+- **W1, typed failures and content events** (`work/hq-b3-design-errors-20261103`, PR #192).
   - `compose/errors.ts` maps any backend rejection to a `DesignFailure` with kind, outcome, recovery, section and operation, and maps that failure to toast and inline props. An unconfirmed write offers **Check**, never **Retry**.
   - The bridge keeps the host's `disabled` reason, so a disabled refusal is a definite no-effect.
   - `compose/content-events.ts` lets writers announce project content changes; live capture acceptance notifies.
   - Section errors carry stable names.
   - [`BACKEND-CONTRACT.md`](../../modules/design/app/compose/BACKEND-CONTRACT.md) documents the contract for F4 and F5.
-- **W2, Imports end to end** (`work/hq-b3-design-imports-20261103`, *target*).
+- **W2, Imports end to end** (`work/hq-b3-design-imports-20261103`, built, in review; stacked on W3).
   - Production opens the enabled store and injects the picker on a parent-window dialog that settles on close.
   - The host reads `design/imports/` through `doc.get`/`doc.list`, and writes it only through `import.commit`.
   - A bridge-backed Imports storage port is added.
   - The picked files become a stable `hq.files` source.
   - Imported images become project versions with thumbnails, preferably in the same atomic commit, and the import notifies content events.
   - Tests run end to end over the real host.
-- **W3, content freshness and captures** (`work/hq-b3-design-content-20261103`, *target*).
+- **W3, content freshness and captures** (`work/hq-b3-design-content-20261103`, built, in review).
   - The durable workspace's accessors reload on content events.
   - Views get a one-line revision hook.
   - Annotations gains explicit version selection and capture bytes.
   - Captured versions get thumbnails.
   - The Projects controller refreshes on external writes.
   - Fixes #168's content-snapshot P2.
-- **W4, Taste scope** (`work/hq-b3-design-taste-20261103`, *target*).
+- **W4, Taste scope** (`work/hq-b3-design-taste-20261103`, built, in review).
   - General taste becomes project-qualified, and legacy journals stay readable.
   - Taste failures become typed.
   - Tests cover the journal through the real host.
-- **W6, real-host matrix** (`work/hq-b3-design-e2e-20261103`, *target*).
+- **W6, real-host matrix** (`work/hq-b3-design-e2e-20261103`, in progress).
   - One in-process harness: the real host and file store, IPC-shaped cloning, the renderer bridge, and the section adapters.
   - Every section's operations and failure classes are covered, with durability across a host restart.
   - Defects the matrix finds are fixed with regression tests.
@@ -201,8 +201,9 @@ Each workstream is a branch stacked on W1, built by a delegated builder, reviewe
 1. #179, the composed candidate. It needs the owner's decision on disposing of the originals.
 2. #181, then #183. They are inert and independent; they can also go before #179.
 3. B3 W1, stacked on #179.
-4. B3 W6 and W4. They touch the fewest shared files.
-5. B3 W3, then W2. Both touch `compose/bridged-workspace.ts`. W2 changes production defaults, so it goes last of the four.
+4. B3 W6 and W4. They touch the fewest shared files. W4 and W3 merge cleanly with each other in either order.
+5. B3 W3, then W2. Both edit `compose/bridged-workspace.ts` and the contract, so W2's PR is stacked on W3's
+   branch and merges after it without conflicts. W2 changes production defaults, so it goes last of the four.
 6. B3 W5, after W2.
 7. This assessment can merge at any time; it changes documentation only.
 
@@ -212,7 +213,11 @@ F4 and F5 should build against [`modules/design/app/compose/BACKEND-CONTRACT.md`
 
 - typed failures and their mapping to the shared `@hq/ui` toast, InlineNotice and StatusIndicator;
 - the bridge refusal envelopes;
-- project content events.
+- project content events, and the accessors and hook that keep a view on current content;
+- deep-link destinations, built from each section's descriptor;
+- the current project. Until the owner-held project identity cutover (HQR-1 / D3), Design keeps its own
+  project list. The shell's context does not choose a Design project, so shared surfaces should not promise
+  cross-module project scoping for Design yet.
 
 B3 keeps its edits out of the view files that F5's plan assigns to its builders:
 
@@ -221,7 +226,7 @@ B3 keeps its edits out of the view files that F5's plan assigns to its builders:
 - References wiring;
 - the taste, references, flows, discovery and components UI folders.
 
-Where B3 must touch a view, it changes wiring only, for example selecting the durable Imports environment or calling the content-revision hook. No markup, layout or style changes.
+Where B3 must touch a view, it changes wiring only, for example selecting the durable Imports environment or calling the content-revision hook. No layout or style changes. The one exception is a minimal, unstyled typed notice beside the Taste panel (W4), so a Taste failure is visible before F5 restyles that view with `InlineNotice`.
 
 ## Risks and limits
 
@@ -232,4 +237,11 @@ Where B3 must touch a view, it changes wiring only, for example selecting the du
 
 ## Delivery record
 
-*Filled in as B3 PRs open.*
+Updated as B3 PRs open. Heads are the reviewed commits at the time of writing.
+
+| PR | Workstream | Base | Head |
+| --- | --- | --- | --- |
+| #189 | This assessment | `work/hq-foundation` | this branch |
+| #192 | W1, typed failures and content events | `work-hq-t1-app-source-compose-20261103` (#179) | `1fe0c16` |
+
+W2, W3, W4 and W6 open after the lead review and an independent review of each.
