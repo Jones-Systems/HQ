@@ -61,8 +61,8 @@
   --hq-artwork-checker-size: 8px;
 
   /* Typography */
-  --hq-font-family-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --hq-font-family-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --hq-font-family-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", "Noto Sans", system-ui, sans-serif;
+  --hq-font-family-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --hq-font-weight-regular: 400;
   --hq-font-weight-medium: 500;
   --hq-font-weight-semibold: 600;
@@ -128,11 +128,21 @@
   --hq-size-window-min-height: 560px;
 
   /* Motion and layering */
+  --hq-duration-instant: 60ms;
   --hq-duration-fast: 90ms;
   --hq-duration-base: 160ms;
   --hq-duration-slow: 240ms;
+  --hq-duration-slower: 360ms;
   --hq-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --hq-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --hq-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --hq-ease-spring: linear(0, 0.059 4%, 0.193 8%, 0.357 12%, 0.519 16%, 0.664 20%, 0.808 25%, 0.910 30%, 0.975 35%, 1.011 40%, 1.030 47%, 1.028 55%, 1.016 65%, 1.003 80%, 1);
+  --hq-motion-distance-sm: 4px;
+  --hq-motion-distance-md: 8px;
+  --hq-motion-distance-lg: 16px;
+  --hq-motion-scale-press: 0.97;
+  --hq-motion-scale-enter: 0.96;
+  --hq-motion-stagger: 28ms;
   --hq-z-sticky: 10;
   --hq-z-drawer: 30;
   --hq-z-popover: 40;
@@ -245,8 +255,34 @@
   --hq-shadow-drag: 0 16px 32px rgba(0, 0, 0, 0.60);
 }
 
+/* Reduced motion: the OS preference, or the shell's explicit <html data-hq-motion="reduce"> override. */
 @media (prefers-reduced-motion: reduce) {
-  :root { --hq-duration-fast: 0ms; --hq-duration-base: 0ms; --hq-duration-slow: 0ms; }
+  :root {
+    --hq-duration-instant: 0ms;
+    --hq-duration-fast: 0ms;
+    --hq-duration-base: 0ms;
+    --hq-duration-slow: 0ms;
+    --hq-duration-slower: 0ms;
+    --hq-motion-distance-sm: 0px;
+    --hq-motion-distance-md: 0px;
+    --hq-motion-distance-lg: 0px;
+    --hq-motion-scale-press: 1;
+    --hq-motion-scale-enter: 1;
+    --hq-motion-stagger: 0ms;
+  }
+}
+:root[data-hq-motion="reduce"] {
+  --hq-duration-instant: 0ms;
+  --hq-duration-fast: 0ms;
+  --hq-duration-base: 0ms;
+  --hq-duration-slow: 0ms;
+  --hq-duration-slower: 0ms;
+  --hq-motion-distance-sm: 0px;
+  --hq-motion-distance-md: 0px;
+  --hq-motion-distance-lg: 0px;
+  --hq-motion-scale-press: 1;
+  --hq-motion-scale-enter: 1;
+  --hq-motion-stagger: 0ms;
 }
 
 /* Preserved content (spec RS-2 marker data-hq-content="captured" | "producer" | "export"): captured screenshots,

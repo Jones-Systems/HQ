@@ -1,0 +1,100 @@
+/* @hq/ui motion primitives. Every duration, easing, distance and scale comes from the motion tokens, which collapse to
+   their end state under prefers-reduced-motion and <html data-hq-motion="reduce">. Opacity appears only inside
+   keyframes for transient enter/exit; nothing here targets [data-hq-content] or leaves preserved content altered. */
+
+/* ---------- Keyframes ---------- */
+@keyframes hq-fade-in { from { opacity: 0; } }
+@keyframes hq-fade-out { to { opacity: 0; } }
+@keyframes hq-rise-in { from { opacity: 0; transform: translateY(var(--hq-motion-distance-md)); } }
+@keyframes hq-rise-out { to { opacity: 0; transform: translateY(var(--hq-motion-distance-sm)); } }
+@keyframes hq-drop-in { from { opacity: 0; transform: translateY(calc(-1 * var(--hq-motion-distance-md))); } }
+@keyframes hq-drop-out { to { opacity: 0; transform: translateY(calc(-1 * var(--hq-motion-distance-sm))); } }
+@keyframes hq-scale-in { from { opacity: 0; transform: scale(var(--hq-motion-scale-enter)); } }
+@keyframes hq-scale-out { to { opacity: 0; transform: scale(var(--hq-motion-scale-enter)); } }
+@keyframes hq-slide-end-in { from { opacity: 0; transform: translateX(var(--hq-motion-distance-lg)); } }
+@keyframes hq-slide-end-out { to { opacity: 0; transform: translateX(var(--hq-motion-distance-lg)); } }
+@keyframes hq-slide-start-in { from { opacity: 0; transform: translateX(calc(-1 * var(--hq-motion-distance-lg))); } }
+@keyframes hq-slide-start-out { to { opacity: 0; transform: translateX(calc(-1 * var(--hq-motion-distance-lg))); } }
+@keyframes hq-collapse-in { from { opacity: 0; height: 0; } }
+@keyframes hq-collapse-out { to { opacity: 0; height: 0; } }
+@keyframes hq-flash { from { background-color: var(--hq-accent-soft); } }
+@keyframes hq-shimmer-text { to { background-position: -200% 0; } }
+
+/* ---------- Presence (usePresence / <Presence>) ---------- */
+[data-hq-presence="exit"] { pointer-events: none; }
+[data-hq-presence="enter"][data-hq-motion="fade"] { animation: hq-fade-in var(--hq-duration-base) var(--hq-ease-standard) both; }
+[data-hq-presence="exit"][data-hq-motion="fade"] { animation: hq-fade-out var(--hq-duration-fast) var(--hq-ease-exit) both; }
+[data-hq-presence="enter"][data-hq-motion="rise"] { animation: hq-rise-in var(--hq-duration-slow) var(--hq-ease-enter) both; }
+[data-hq-presence="exit"][data-hq-motion="rise"] { animation: hq-rise-out var(--hq-duration-base) var(--hq-ease-exit) both; }
+[data-hq-presence="enter"][data-hq-motion="drop"] { animation: hq-drop-in var(--hq-duration-slow) var(--hq-ease-enter) both; }
+[data-hq-presence="exit"][data-hq-motion="drop"] { animation: hq-drop-out var(--hq-duration-base) var(--hq-ease-exit) both; }
+[data-hq-presence="enter"][data-hq-motion="scale"] { animation: hq-scale-in var(--hq-duration-slow) var(--hq-ease-spring) both; }
+[data-hq-presence="exit"][data-hq-motion="scale"] { animation: hq-scale-out var(--hq-duration-fast) var(--hq-ease-exit) both; }
+[data-hq-presence="enter"][data-hq-motion="slide-end"] { animation: hq-slide-end-in var(--hq-duration-slow) var(--hq-ease-enter) both; }
+[data-hq-presence="exit"][data-hq-motion="slide-end"] { animation: hq-slide-end-out var(--hq-duration-base) var(--hq-ease-exit) both; }
+[data-hq-presence="enter"][data-hq-motion="slide-start"] { animation: hq-slide-start-in var(--hq-duration-slow) var(--hq-ease-enter) both; }
+[data-hq-presence="exit"][data-hq-motion="slide-start"] { animation: hq-slide-start-out var(--hq-duration-base) var(--hq-ease-exit) both; }
+/* Collapse animates the real height (interpolate-size), so content below glides instead of jumping. Put padding
+   on a child, not on the collapsing element. */
+[data-hq-motion="collapse"] { interpolate-size: allow-keywords; overflow: clip; }
+[data-hq-presence="enter"][data-hq-motion="collapse"] { animation: hq-collapse-in var(--hq-duration-slow) var(--hq-ease-standard) both; }
+[data-hq-presence="exit"][data-hq-motion="collapse"] { animation: hq-collapse-out var(--hq-duration-base) var(--hq-ease-standard) both; }
+
+/* ---------- Mount-only enter utilities ---------- */
+.hq-enter-fade { animation: hq-fade-in var(--hq-duration-base) var(--hq-ease-standard) both; }
+.hq-enter-rise { animation: hq-rise-in var(--hq-duration-slow) var(--hq-ease-enter) both; }
+.hq-enter-drop { animation: hq-drop-in var(--hq-duration-slow) var(--hq-ease-enter) both; }
+.hq-enter-scale { animation: hq-scale-in var(--hq-duration-slow) var(--hq-ease-spring) both; }
+.hq-enter-slide-end { animation: hq-slide-end-in var(--hq-duration-slow) var(--hq-ease-enter) both; }
+/* Children of .hq-stagger rise in one after another (first 12; later ones share the last delay). */
+.hq-stagger > * { animation: hq-rise-in var(--hq-duration-slow) var(--hq-ease-enter) both; animation-delay: calc(12 * var(--hq-motion-stagger)); }
+.hq-stagger > :nth-child(1) { animation-delay: 0ms; }
+.hq-stagger > :nth-child(2) { animation-delay: calc(1 * var(--hq-motion-stagger)); }
+.hq-stagger > :nth-child(3) { animation-delay: calc(2 * var(--hq-motion-stagger)); }
+.hq-stagger > :nth-child(4) { animation-delay: calc(3 * var(--hq-motion-stagger)); }
+.hq-stagger > :nth-child(5) { animation-delay: calc(4 * var(--hq-motion-stagger)); }
+.hq-stagger > :nth-child(6) { animation-delay: calc(5 * var(--hq-motion-stagger)); }
+.hq-stagger > :nth-child(7) { animation-delay: calc(6 * var(--hq-motion-stagger)); }
+.hq-stagger > :nth-child(8) { animation-delay: calc(7 * var(--hq-motion-stagger)); }
+.hq-stagger > :nth-child(9) { animation-delay: calc(8 * var(--hq-motion-stagger)); }
+.hq-stagger > :nth-child(10) { animation-delay: calc(9 * var(--hq-motion-stagger)); }
+.hq-stagger > :nth-child(11) { animation-delay: calc(10 * var(--hq-motion-stagger)); }
+.hq-stagger > :nth-child(12) { animation-delay: calc(11 * var(--hq-motion-stagger)); }
+
+/* ---------- Interaction feedback ---------- */
+/* Press: a quick, small scale-down while held. Buttons from @hq/ui already have it. */
+.hq-press { transition: transform var(--hq-duration-fast) var(--hq-ease-standard); }
+.hq-press:active:not(:disabled):not([aria-disabled="true"]) { transform: scale(var(--hq-motion-scale-press)); transition-duration: var(--hq-duration-instant); }
+/* Lift: hover raises a card by 1px with the raised shadow. */
+.hq-lift { transition: transform var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard); }
+.hq-lift:hover { transform: translateY(calc(-0.25 * var(--hq-motion-distance-sm))); box-shadow: var(--hq-shadow-raised); }
+/* Flash: a one-shot accent wash that confirms where a change landed (moved card, saved row). It is a colour fade,
+   not movement, so it also plays under reduced motion. Restart it by removing and re-adding the class. */
+.hq-flash { animation: hq-flash 1200ms var(--hq-ease-standard) both; }
+/* Shimmering text for in-progress labels ("Syncing…"). Static muted text under reduced motion. */
+.hq-shimmer-text {
+  color: transparent; background: linear-gradient(90deg, var(--hq-text-muted) 0%, var(--hq-text) 50%, var(--hq-text-muted) 100%) 0 0 / 200% 100%;
+  -webkit-background-clip: text; background-clip: text; animation: hq-shimmer-text 1.6s linear infinite;
+}
+
+/* ---------- Skeleton shapes (sheen lives on .hq-skeleton in hq-ui.css) ---------- */
+.hq-skeleton--text { height: 10px; width: var(--hq-skeleton-w, 100%); }
+.hq-skeleton--block { width: var(--hq-skeleton-w, 100%); height: var(--hq-skeleton-h, 64px); border-radius: var(--hq-radius-md); }
+.hq-skeleton--circle { width: var(--hq-skeleton-w, 24px); height: var(--hq-skeleton-h, var(--hq-skeleton-w, 24px)); border-radius: 50%; }
+.hq-skeleton-lines { display: grid; gap: 8px; width: var(--hq-skeleton-w, 100%); }
+.hq-skeleton-lines > .hq-skeleton--last { width: 62%; }
+
+/* ---------- Page transitions (React <ViewTransition> + View Transitions API) ---------- */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--hq-duration-base); animation-timing-function: var(--hq-ease-standard); }
+::view-transition-old(.hq-page-exit) { animation: hq-fade-out var(--hq-duration-fast) var(--hq-ease-exit) both; }
+::view-transition-new(.hq-page-enter) { animation: hq-rise-in var(--hq-duration-slow) var(--hq-ease-enter) both; }
+
+/* ---------- Reduced motion: stop looping animations too (durations already collapse through tokens) ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .hq-shimmer-text { animation: none; color: var(--hq-text-muted); background: none; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+:root[data-hq-motion="reduce"] .hq-shimmer-text { animation: none; color: var(--hq-text-muted); background: none; }
+:root[data-hq-motion="reduce"] .hq-skeleton::after { animation: none; }
+:root[data-hq-motion="reduce"] .hq-spinner { animation-duration: 2.4s; }
+:root[data-hq-motion="reduce"]::view-transition-group(*), :root[data-hq-motion="reduce"]::view-transition-old(*), :root[data-hq-motion="reduce"]::view-transition-new(*) { animation: none !important; }

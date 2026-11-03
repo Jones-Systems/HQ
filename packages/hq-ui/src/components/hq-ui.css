@@ -26,8 +26,11 @@
   height: var(--hq-size-control-md); min-width: var(--hq-size-hit-min); padding: 0 var(--hq-space-md);
   border: 0; border-radius: var(--hq-radius-control);
   font: var(--hq-type-label); white-space: nowrap; cursor: pointer;
-  transition: background var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard);
+  transition: background var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard),
+    transform var(--hq-duration-fast) var(--hq-ease-standard);
 }
+/* Press feedback: a quick, small scale-down while held (no movement under reduced motion; the scale token is 1). */
+.hq-btn:active:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]) { transform: scale(var(--hq-motion-scale-press)); transition-duration: var(--hq-duration-instant); }
 .hq-btn svg { width: var(--hq-size-icon-md); height: var(--hq-size-icon-md); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .hq-btn .hq-icon { display: inline-flex; }
 .hq-btn--sm { height: var(--hq-size-control-sm); padding: 0 var(--hq-space-sm); }
