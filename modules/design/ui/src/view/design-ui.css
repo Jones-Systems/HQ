@@ -56,6 +56,11 @@
 .hqd-chrome .hqd-placeholder { max-width: 520px; padding: 48px 40px; }
 .hqd-chrome .hqd-placeholder h2 { margin: 0 0 10px; font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
 .hqd-chrome .hqd-placeholder p { margin: 0; color: var(--hqd-muted); line-height: 1.7; }
+/* Section loading appears after a short delay so quick loads never flash a skeleton. */
+.hqd-chrome .hqd-section-loading { display: grid; align-content: start; gap: 24px; padding: 24px; animation-delay: var(--hq-duration-fast); }
+.hqd-chrome .hqd-section-loading-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.hqd-chrome .hqd-section-loading-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.hqd-chrome .hqd-section-failed { max-width: 640px; padding: 24px; }
 
 .hqd-chrome .hqd-facts, .hqd-chrome .hqd-shortcuts { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; font-size: 12px; }
 .hqd-chrome .hqd-facts { grid-template-columns: 92px 1fr; }

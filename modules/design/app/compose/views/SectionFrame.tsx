@@ -22,7 +22,7 @@ export interface SectionFrameProps {
 export function SectionFrame({ lane, tags, notes = [], fill = false, scope, children }: SectionFrameProps) {
   const nonReal = tags.filter((tag) => tag.status !== 'workspace');
   const details = [...new Set([...tags.map((tag) => tag.text), ...notes])];
-  return <div className="hqd-compose-frame" data-compose-lane={lane}>
+  return <div className="hqd-compose-frame hq-enter-fade" data-compose-lane={lane}>
     {(scope !== undefined || nonReal.length > 0 || details.length > 0) && <div className="hqd-compose-provenance" role="note">
       {scope}
       {nonReal.map((tag) => <StatusChip key={`${tag.status}:${tag.text}`} tone={tag.status === 'cached' ? 'warning' : 'info'}
