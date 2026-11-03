@@ -74,12 +74,13 @@ pending or explicitly later).
 | G2 | A write that finds the Planner unreachable fails and its projection rolls back. | Board, detail and review edits are lost while the service is down. | B1 |
 | G3 | "Check connection" maps any 2xx `GET /api/version` to Reachable and anything else to Unreachable. | A 421 from the Host allow-list, a non-Planner service and a Planner without replay all look the same. | B1 |
 | G4 | `PlannerError` `unavailable` carries no reason; the store reduces every failed read to an offline flag. | The UI cannot say why it is offline. | B1 |
-| G5 | Endpoint changes apply after a reload. | Deliberate: a live session never swaps its Planner. | unchanged |
+| G5 | Endpoint changes apply after a reload. | Deliberate: a live session never swaps its Planner. | unchanged; see G11 |
 | G6 | Real-Planner tests cover one lost create. | Move, patch, archive, restore, review, settings, history, conflicts, offline and restart paths are proved only against fixtures and recorded exchanges. | B1 |
 | G7 | A replay lookup answered 400 (a baseline newer than the store, as after a store swap) is reported as `unavailable`. | A misleading offline banner until the next poll; the write stays unchecked. | B1 |
 | G8 | `services/README.md` and `proposal.hq-work-adapter-boundary` GW-1/GW-7 describe the live path as unbuilt. | Stale documentation. | B1 |
 | G9 | The real-Planner shell test stores its SQLite under the checkout (`.t3/live-wiring/`, ignored). | Test data inside the repository tree. | B1 |
 | G10 | No item history panel; week start and display zone are read-only in HQ. | Presentation scope. | F2 or later |
+| G11 | Main resolves the Work address on every call, so a saved address change reaches the running session before the reload that `RELOAD_NOTE` asks for. | Until that reload, the session's polls, writes, queued sends and replay checks go to the new address. Item writes for unknown IDs fail `not_found`, and a store older than a recorded baseline answers `store_changed`, but an explicit Apply of an unconfirmed create could land on the new Planner. | Recorded for the owner. B1 binds the device document to the address it was loaded for (`binding`), so saved changes never move between addresses |
 
 Recorded Planner findings that the HQR pull requests deferred for owner judgment (for example restoring backups over
 5,000 items, unbounded backup and request-record growth, SIGTERM handling, no-op mutations bumping the state
@@ -136,8 +137,20 @@ interface PlannerRecovery { …; exportIntent?(requestId): RecoveryIntent | null
 ```
 
 The live adapter classifies failures: no answer is `unreachable`; HTTP 403 or 421 is `refused`; a 5xx read is
-`server_error`; an unexpected status or malformed body on `state` or `version` is `incompatible`. `probePlanner`
-(live) reads only `GET /api/version` and returns `PlannerHealth`; Settings uses it for "Check connection".
+`server_error`; an unexpected status or malformed body on `state` or `version` is `incompatible`. A write that may
+have been applied stays `unknown` whatever the status. A replay answered 400 because the recorded baseline is newer
+than the store is `replay_indeterminate` with reason `store_changed` (G7). `probePlanner(transport)` (live) reads only
+`GET /api/version` and returns `PlannerHealth`; `PlannerLive.health()` calls it. Settings uses it for "Check
+connection" through `plannerHealthStatus`:
+
+| Health | Settings text | Tone |
+| --- | --- | --- |
+| `ready` | Reachable · Planner API 2 | good |
+| `limited` | Reachable · limited (no replay, no HQ links, no batch create) | neutral |
+| `refused` | Refused · start the Planner with --allowed-host for this address | bad |
+| `unreachable` | Unreachable | bad |
+| `server_error` | Planner error | bad |
+| `incompatible` | Not a compatible Planner | bad |
 
 ### Store contract additions
 
@@ -150,9 +163,10 @@ type ConnectionState =
   | { status: 'offline'; since: string; checkedAt: string; reason: UnavailableReason };
 
 interface QueuedWrite {
-  queueId: string;
-  requestId: string;          // assigned when queued; used for its single first send
+  queueId: string;            // unique across restarts
+  requestId: string;          // the ID of its latest send (or reserved for the first); never reused once sent
   write: WriteOp;             // patch | move | setArchived | markReviewed | updateSettings; never create
+  base: Item | Settings;      // what the user saw when making the edit: the compare-and-swap base
   queuedAt: string;
   state: 'queued' | 'sending' | 'conflict' | 'rejected';
   conflict?: { fields: string[]; current: Item | null; settings?: Settings };   // state 'conflict'
@@ -172,42 +186,67 @@ type WriteOutcome = … | { status: 'failed'; error: PlannerError; queued?: { qu
 store.flushQueued(): Promise<void>;                                   // "Send now"; also runs on reconnect
 store.resolveQueued(queueId, 'keep_mine' | 'discard'): Promise<WriteOutcome | null>;
 store.discardQueued(queueId): void;
+QUEUE_LIMIT = 200; DURABLE_SCOPE_NOTE   // shown instead of UNCONFIRMED_SCOPE_NOTE when durable !== 'off'
 ```
 
-Precedence of `save`: `offline` (with the queued count) before `unconfirmed`, then `queued`, `saving`, `saved`.
+Precedence of `save`: `offline` (with `queued` only when the count is above zero) before `unconfirmed`, then
+`queued`, `saving`, `saved`. The count covers queued entries in every state. `saveLabel` adds `Offline · N queued`
+and `N queued`; existing labels are unchanged. Without durability or the `offlineQueue` option, the store behaves
+exactly as before: no queueing, and `save` never carries `queued`.
+
+A queued write's outcome is `failed` with `error.kind === 'unavailable'` and `queued.queueId`: callers that only know
+the old shape still see "not saved yet", and callers that read `queued` can say "kept on this device". Treat a
+queued outcome as kept, not rolled back: the change stays projected on the board.
+
+`connection` is `connecting` until the first read answers, `online` after any successful read or write (`limits` from
+the snapshot's features), and `offline` after a failed read, or a write or Check that finds the Planner unavailable.
+`since` keeps the start of the outage. A read failing with anything other than `unavailable` is `incompatible`.
 
 ### Offline queue semantics
 
 - **Queueing.** With durability registered for the port (production live mode), a patch, move, archive or restore,
-  review mark or settings write that finds the Planner unavailable (known not sent) is queued instead of failing. The
-  outcome is `failed` with `error.kind === 'unavailable'` and a `queued` reference, so existing callers keep
-  working; the queued write is projected on the board until it is sent or dropped. While queued writes exist for an
-  item, later writes to that item queue behind them, so per-item order holds.
+  review mark or settings write is queued instead of sent while the store is offline, and queued instead of failing
+  when its send finds the Planner unavailable (known not sent). While a target (an item, or the settings) has queued
+  entries, later writes to it queue behind them, so per-target order holds even online. The queued write is
+  projected on the board until it is sent or dropped; entries in `conflict` or `rejected` are not projected, so the
+  board shows the Planner's version there. Queued writes add no undo entry, and Undo refuses while its item has
+  queued entries. Past `QUEUE_LIMIT` a write fails as before, with a notice that it was not kept.
 - **Creates are not queued.** An offline capture stays an explicit HQ draft (P-5); the durable drafts slot below
   lets the capture lane keep drafts across restarts.
-- **Flushing.** On the first successful read after being offline, and on `flushQueued()`, queued writes are sent in
-  order, one at a time, each with its own request ID through the ordinary first-send path. Before each send the
-  store compares the Planner's current item with what the edit was made against (compare and swap):
-  - unchanged, or changed only in fields this write does not touch: rebase onto the current revision and send;
-  - changed in a field this write touches, or moved, archived or restored elsewhere: nothing is sent; the entry
-    becomes `conflict` with the differing fields and the Planner's current item, and a notice names it.
-  `resolveQueued(id, 'keep_mine')` sends it at the current revision; `'discard'` drops it. A rejection (`invalid`,
-  `not_found`, `order_conflict`) becomes `rejected`. A lost answer moves the write to the unconfirmed queue as today.
+- **Flushing.** On the first successful read after being offline, after a restore once the Planner answers, and on
+  `flushQueued()`, the store refreshes and then sends queued writes one at a time in order, each through the ordinary
+  first-send path with a fresh request ID. A target whose first entry is `conflict` or `rejected` waits until the
+  user resolves it. Before each send the store compares base, mine and the Planner's current version, field by field
+  (compare and swap):
+  - a patch conflicts only on a field the Planner changed from the base to a value other than mine; if every patched
+    field already has my value it is dropped as done;
+  - a move conflicts when the Planner changed the status to one other than my target, or archived or restored the
+    item; an archive or restore already in the wanted state is dropped; a review mark is always sent;
+  - a settings write conflicts on keys both sides changed differently; otherwise the Planner's current settings are
+    sent with my changed keys applied.
+  A conflict sends nothing: the entry becomes `conflict` with the field names and the Planner's current item or
+  settings, and a notice names it. `resolveQueued(id, 'keep_mine')` rebases it on that current version and sends
+  it; `'discard'` drops it. A Planner `revision_conflict` re-runs the comparison once; `invalid`, `not_found` and
+  `order_conflict` make the entry `rejected`. A lost answer moves the write to the unconfirmed queue as today.
 - **Durability.** Queued writes and unconfirmed writes, each unconfirmed one with the adapter's exported
-  `RecoveryIntent`, are saved through `registerWorkDurability(port, persistence)` after every change. On the next
-  start the first Work session for that Planner restores them: queued writes flush when the Planner answers, and
-  unconfirmed writes are re-adopted into the adapter so Check and Apply work again. An intent that cannot be adopted
-  is shown as `no_intent`. A replay baseline newer than the store is `store_changed`.
-- **Desktop storage.** A new closed `hqServices.workLocal` transport (`load`, `save` with an expected revision) on
-  channel `hq:svc:work-local`. Main keeps one JSON document per configured Work endpoint under
-  `<userData>/work-local/<sha256 of the origin>.json` (directory 0700, file 0600, atomic write, size cap). The
-  renderer never learns the path or the address; a different endpoint gets a different document.
+  `RecoveryIntent`, are saved through `registerWorkDurability(port, persistence)` after every change, and an entry is
+  marked `sending` and saved before it is sent. On the next start the first Work session for that Planner restores
+  them: queued writes flush when the Planner answers; a write that was `sending` becomes unconfirmed (never re-sent);
+  and unconfirmed writes are re-adopted into the adapter so Check and Apply work again. An intent that cannot be
+  adopted is shown as `no_intent`. A replay baseline newer than the store is `store_changed`. A document that cannot
+  be read is never overwritten in that session (`durable: 'failed'`).
+- **Desktop storage.** A new closed `hqServices.workLocal` transport (`load`, and `save` with an expected revision and
+  the `binding` that `load` returned) on channel `hq:svc:work-local`. Main keeps one JSON document per configured Work
+  endpoint under `<userData>/work-local/<sha256 of the origin>.json` (directory 0700, file 0600, atomic write, 16 MiB
+  cap). The renderer never learns the path or the address. The binding is an opaque token per address for the main
+  process, so a session that loaded one address's document cannot write into another's after the address changes
+  (G11).
 
 ### What the Work UI shows
 
 | Store state | Suggested indicator |
 | --- | --- |
-| `connection.status === 'offline'`, `reason: 'unreachable'` | Offline banner: "Planner unreachable", last synced time, Try again |
+| `connection.status === 'offline'`, `reason: 'unreachable'` | Offline status: "Planner unreachable", last synced time, Try again. With durability, edits stay allowed and are kept on this device ("changes kept on this device" rather than "changes paused") |
 | `reason: 'refused'` | "The Planner refused this address. Start it with `--allowed-host` for it, or change the address in Settings." |
 | `reason: 'incompatible'` / `'server_error'` | "This address is not a compatible Planner" / "The Planner reported an error" |
 | `connection.limits` includes `no_replay` | Inline note on unconfirmed rows: they can only be read back |
@@ -216,6 +255,10 @@ Precedence of `save`: `offline` (with the queued count) before `unconfirmed`, th
 | `queued[i].state === 'rejected'` | Inline: the Planner's reason, with Discard |
 | `durable === 'failed'` | Warning: "Queued changes are kept for this session only" |
 | `unconfirmed`, `held`, `conflicts`, `notices` | Unchanged |
+
+`connection` and `PlannerLive.health()` are also the Work inputs for the shell's observed service status
+(cross-app finding X3 in `docs/design/hq-cross-app-flow-assessment-20261103.md`, lane F1): `connection` follows every
+read and write the module makes, and `health()` is a read-only check for launch or focus.
 
 ## Test plan
 
