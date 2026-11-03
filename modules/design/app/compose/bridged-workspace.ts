@@ -32,6 +32,7 @@ import { createBridgedDiscovery } from './bridged-discovery.ts';
 import { createWorkspaceThumbnailPort } from './thumbnail-port.ts';
 import { createProjectCompareCatalog } from './compare-catalog.ts';
 import type { EvidenceTag } from './labels.ts';
+import { createProjectContentEvents, type ProjectContentEvents } from './content-events.ts';
 
 function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
   const cache = new Map<string, Promise<T>>();
@@ -42,7 +43,13 @@ function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
   };
 }
 
-export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<Pick<WorkspaceRecords, 'getBlob'>>) {
+export interface BridgedWorkspaceOptions {
+  /** Shared change feed; writers outside this workspace (captures, Imports) notify it. */
+  readonly contentEvents?: ProjectContentEvents;
+}
+
+export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<Pick<WorkspaceRecords, 'getBlob'>>, options: BridgedWorkspaceOptions = {}) {
+  const contentEvents = options.contentEvents ?? createProjectContentEvents();
   const storageTag: EvidenceTag = Object.freeze({ status: 'workspace', text: DEVICE_STORAGE_LABEL });
   const clock = { now: () => new Date().toISOString() };
   const ids = { next: (kind: 'project' | 'view' | 'version') => `${kind}-${globalThis.crypto.randomUUID()}` };
@@ -132,6 +139,6 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
   const tasteFor = perProject(async (project) => createProjectTasteContribution({
     documents, projectId: tasteProjectId(project.id), sha256: webCryptoSha256, clock,
   }));
-  return { bridged: true as const, storageTag, contentFor, projectsFor, componentsFor, flowsFor, compareFor, annotationsEnv,
+  return { bridged: true as const, storageTag, contentEvents, contentFor, projectsFor, componentsFor, flowsFor, compareFor, annotationsEnv,
     annotationSessionFor, canvasFor, discoveryEnv, tasteFor, importsFor };
 }
