@@ -25,7 +25,7 @@ Copies of the builder handoffs sit beside this file, in [`f5-design-sources/`](f
 | `work/hq-life-design-sources-imports-20261103` | `ea2824a` | `373a185` | lane `f5d6bc8` | all listed checks pass, `npm run typecheck` pass | [Imports](f5-design-sources/hq-life-design-sources-imports-20261103.md) |
 | `work/hq-life-design-sources-taste-20261103` | `8d3db74` | `6346fd9` | lane `f5d6bc8` | all listed checks pass, `npm run typecheck` pass; merges cleanly with #168 and #179 | [Taste](f5-design-sources/hq-life-design-sources-taste-20261103.md) |
 | `work/hq-life-design-sources-flows-20261103` | `c47bb5a` | `583d0a0` | lane `f5d6bc8` | section checks pass; **`npm run typecheck` fails** | [Flows](f5-design-sources/hq-life-design-sources-flows-20261103.md) |
-| `work/hq-life-design-sources-discovery-20261103` | `cc0b202` | `cc0b202` | lane `f5d6bc8` | all listed checks pass, `npm run typecheck` pass | pending (see [Builder results](#builder-results)) |
+| `work/hq-life-design-sources-discovery-20261103` | `4f9130d` | `cc0b202` | lane `f5d6bc8` | all listed checks pass, `npm run typecheck` pass | [Discovery](f5-design-sources/hq-life-design-sources-discovery-20261103.md) |
 | `work/hq-life-design-sources-components-20261103` | `6b4bc02` | `1d2d473` | lane `4104a6b` | all listed checks pass, `npm run typecheck` pass | [Components](f5-design-sources/hq-life-design-sources-components-20261103.md) |
 
 No builder ran the root `npm test` (the Electron build and vitest). Every check and screenshot so far is the
@@ -80,12 +80,15 @@ What each builder reported, plus the lead's notes. None of it has been reviewed 
   - **Root `npm run typecheck` fails:** `findLastIndex` at `modules/design/flows/src/player.ts:88` is not in the root config's ES2022 lib.
   - **Lead's reading:** this branch probably caused it. `presentation.ts` now imports types from `player.ts`, which brings that file into the root program, and the other five builders started from the same base and pass. This is not verified. Fix it inside F5's paths, by dropping that import or replacing the call. Changing the shared root `lib` is not this lane's call.
   - **Unstyled harness:** the preview harness does not import `flows.css`.
-- **Discovery.** Its handoff is pending. From its final report:
+- **Discovery.** It reports every brief step done.
   - **Previews:** `data:` URLs for PNG, JPEG and WebP, accepted only when the bytes match the file signature.
-  - **Grid:** virtualised, with roving focus.
+  - **Grid:** virtualised by rows, with roving focus.
   - **Filters and refresh:** source filter chips; refresh with busy state, a result toast, and on failure a Retry toast plus a notice on the affected source.
   - **Explore deck:** skip, or save for Taste.
   - **Other:** **Link to project…** shows only when a handler exists. A details drawer was added. The header now says when the catalog is up to date.
+  - **Behaviour change in the example workspace:** Refresh now runs against the labelled fake source. Before, it showed the "Refresh isn't available yet" hold, which is still implemented and tested but no longer visible there.
+  - **Suggested guard, not written:** a compose test asserting that `discoveryEnv()` enrolls only sources labelled as fake.
+  - **Memory:** the preview cache is capped by entry count, not bytes, and a real source can send previews of up to 5 MiB.
   - **Left alone:** the doc comment on `DiscoveryEnv.service` in `fake-workspace.ts` is stale, and the preview harness still passes a dead `onRequestLink`.
 - **Components.** It reports the A+C blend built: a variant strip whose **Base** tile is preselected and whose highlight glides, a held blueprint stage with backdrop and width presets, controls with constraint hints, a token swatch grid, and a Motion proxy.
   - **The hold is enforced by structure:** tests use a source guarded by a `Proxy`, which fails on any read of markup, styles or script, and assert that no element in the stage host chain carries a transform.
@@ -135,13 +138,14 @@ What each builder reported, plus the lead's notes. None of it has been reviewed 
 Each builder committed its handoff on its own branch, at
 `docs/handoffs/hq-life-20261103/f5-design-sources/hq-life-design-sources-<view>-20261103.md`. The copies here are identical.
 Each branch also holds six screenshots in `docs/design/hq-visual-system/evidence/sources-20261103/wip/<view>/`.
+Screenshot links in these copies resolve only on the builder's own branch.
 
 - [References](f5-design-sources/hq-life-design-sources-references-20261103.md): pushed head `1f4d5b0`
 - [Imports](f5-design-sources/hq-life-design-sources-imports-20261103.md): pushed head `ea2824a`
 - [Taste](f5-design-sources/hq-life-design-sources-taste-20261103.md): pushed head `8d3db74`
 - [Flows](f5-design-sources/hq-life-design-sources-flows-20261103.md): pushed head `c47bb5a`
 - [Components](f5-design-sources/hq-life-design-sources-components-20261103.md): pushed head `6b4bc02`
-- Discovery: pending. Its stop message arrived after it had filed its final report, so it was asked again, for the handoff only. Its code is pushed at `cc0b202` and its worktree is clean.
+- [Discovery](f5-design-sources/hq-life-design-sources-discovery-20261103.md): pushed head `4f9130d`. Its stop message arrived after it had filed its final report, so it was asked again, for the handoff only. It wrote the handoff and changed no code.
 
 ## Appendix: capture script
 
