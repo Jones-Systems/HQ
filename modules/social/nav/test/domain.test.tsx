@@ -120,6 +120,19 @@ describe('secondary navigation', () => {
     expect(main.scrollTop).toBe(0);
   });
 
+  it('lands focus on the new page heading when the control that moved it leaves with the old page', async () => {
+    const s = setup();
+    await overview();
+    await s.user.click(screen.getByRole('button', { name: /Packet 1 has no sources/u }));
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Run history' });
+    await vi.waitFor(() => expect(document.activeElement).toBe(heading));
+    // The sidebar keeps its own focus: changing pages from there never jumps to the heading.
+    const library = side().getByRole('button', { name: 'Library' });
+    await s.user.click(library);
+    await screen.findByRole('heading', { level: 1, name: 'Library' });
+    expect(document.activeElement).toBe(library);
+  });
+
   it('lists the T3 pages in order, with Channels & accounts under Later', async () => {
     setup();
     await overview();

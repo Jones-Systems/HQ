@@ -190,7 +190,8 @@ export function PageHeader({ title, description, eyebrow, actions, children, hea
       <div className="sx-head-row">
         <div className="sx-head-text">
           {eyebrow && <p className="sx-head-eyebrow">{eyebrow}</p>}
-          <h1 id={headingId}>{title}</h1>
+          {/* Focusable only from script: the domain lands focus here when a page change takes the focused control away. */}
+          <h1 id={headingId} tabIndex={-1}>{title}</h1>
           {description && <p className="sx-head-description">{description}</p>}
         </div>
         <div className="sx-head-actions">
