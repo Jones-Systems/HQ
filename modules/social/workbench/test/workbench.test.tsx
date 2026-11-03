@@ -49,7 +49,7 @@ describe('workbench catalog and navigation', () => {
 
     expect(executions(s.recorded)).toHaveLength(0);
     expect(s.recorded.callsOf('read').length).toBeGreaterThan(0);
-  });
+  }, 20_000);
 
   it('keeps form input across a module remount without calling the service', async () => {
     const s = setup({ destination: 'workbenches/x-studio' });

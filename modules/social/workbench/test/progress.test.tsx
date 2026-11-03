@@ -12,7 +12,7 @@ afterEach(() => {
   cleanup();
   resetSocialSessions();
   toastStore.dismiss();
-  vi.unstubAllGlobals();
+  Reflect.deleteProperty(navigator, 'clipboard');
 });
 
 const stateOf = (list: HTMLElement) => [...list.querySelectorAll('li.sx-step')].map((item) => `${item.getAttribute('data-step')}:${item.getAttribute('data-state') ?? 'pending'}`);
@@ -138,8 +138,6 @@ describe('seeded results', () => {
 
 describe('receipt ID', () => {
   it('shows eight characters with the full ID as its title, and copies the full ID with a Copied toast', async () => {
-    const writeText = vi.fn(async () => undefined);
-    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
     const s = setup({ destination: `runs/${FIXTURE_IDS.exampleRun}` });
     const receipt = await screen.findByRole('article');
     const short = FIXTURE_IDS.exampleRun.slice(-8);
@@ -151,7 +149,8 @@ describe('receipt ID', () => {
     const copy = within(receipt).getByRole('button', { name: `Copy receipt ID ${short}` });
     expect(copy.getAttribute('title')).toContain(FIXTURE_IDS.exampleRun);
     await s.user.click(copy);
-    expect(writeText).toHaveBeenCalledWith(FIXTURE_IDS.exampleRun);
+    // user-event's clipboard stub is the page clipboard here: the full ID, not the short form, was copied.
+    expect(await navigator.clipboard.readText()).toBe(FIXTURE_IDS.exampleRun);
     await waitFor(() => expect(toastStore.getSnapshot().map((toast) => toast.title)).toContain('Copied'));
     const toast = toastStore.getSnapshot().find((item) => item.title === 'Copied')!;
     expect(toast.tone).toBe('success');
@@ -161,17 +160,19 @@ describe('receipt ID', () => {
   });
 
   it('says so when the ID could not be copied, and never claims it was', async () => {
-    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: async () => { throw new Error('denied'); } } });
-    const document_ = document as Document & { execCommand: (command: string) => boolean };
-    const exec = vi.spyOn(document_, 'execCommand').mockReturnValue(false);
+    const exec = vi.fn(() => false);
+    Object.defineProperty(document, 'execCommand', { value: exec, configurable: true });
     try {
       const s = setup({ destination: `runs/${FIXTURE_IDS.exampleRun}` });
+      // After setup(): user-event installs its own clipboard stub, which would otherwise replace this one.
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => { throw new Error('denied'); } }, configurable: true });
       const receipt = await screen.findByRole('article');
       await s.user.click(within(receipt).getByRole('button', { name: /^Copy receipt ID/u }));
       await waitFor(() => expect(toastStore.getSnapshot().some((toast) => toast.tone === 'danger')).toBe(true));
       expect(toastStore.getSnapshot().map((toast) => toast.title)).not.toContain('Copied');
+      expect(exec).toHaveBeenCalledWith('copy');
     } finally {
-      exec.mockRestore();
+      Reflect.deleteProperty(document, 'execCommand');
     }
   });
 });
@@ -188,7 +189,7 @@ describe('Ctrl/⌘+Enter', () => {
     const s = await ready();
     const run = screen.getByRole('button', { name: `Run ${await toolName(s, 'social-publisher')}` });
     expect(run.getAttribute('aria-keyshortcuts')).toMatch(/Enter/u);
-    expect(document.body.textContent).toMatch(/Ctrl ↵|⌘↵/u);
+    expect(document.querySelector('.sw-kbd-hint')!.textContent).toMatch(/^Shortcut: (Ctrl|⌘)↵$/u);
     expect(executions(s.recorded)).toHaveLength(0);
     await s.user.keyboard('{Control>}{Enter}{/Control}');
     await waitFor(() => expect(executions(s.recorded)).toHaveLength(1));
