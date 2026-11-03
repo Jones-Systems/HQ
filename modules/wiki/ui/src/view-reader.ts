@@ -151,7 +151,8 @@ function ReaderPage(props: { readonly ctx: ViewCtx; readonly pageKey: PageKey })
   const retryPage = useOutageToasts(ctx, page);
   const scope = useRef<HTMLDivElement | null>(null);
   const value = page.value;
-  const alsoDown = value === undefined && page.error !== null && isOutage(page.error) && backlinks.value === undefined && backlinks.error !== null;
+  // When the Wiki is unreachable the page's own notice says so once; the rail does not repeat it.
+  const quiet = page.error !== null && isOutage(page.error) && backlinks.error !== null && isOutage(backlinks.error);
 
   const headings = useMemo(() => (value !== undefined && value.content.state === 'parsed' ? documentHeadings(value.content.ast, value.title) : null), [value]);
 
@@ -184,22 +185,26 @@ function ReaderPage(props: { readonly ctx: ViewCtx; readonly pageKey: PageKey })
   return h(
     'article',
     { className: 'wiki-reader', 'aria-label': 'Reader', 'data-page': pageId(pageKey) },
-    page.error !== null && value !== undefined
-      ? h(ErrorNotice, { error: page.error, what: 'this page', variant: 'bar', tone: 'warning', actions: recoveryActions(ctx, page.error, { retry: retryPage }) })
-      : null,
     h(
       PreviewProvider,
       null,
       h(
         'div',
         { className: 'wiki-reader-layout' },
-        h('div', { className: 'wiki-article', ref: scope }, article),
+        h(
+          'div',
+          { className: 'wiki-article', ref: scope },
+          // A refresh that failed keeps the page that loaded and says so above it.
+          page.error !== null && value !== undefined
+            ? h(ErrorNotice, { error: page.error, what: 'this page', variant: 'bar', tone: 'warning', actions: recoveryActions(ctx, page.error, { retry: retryPage }) })
+            : null,
+          article,
+        ),
         h(
           'aside',
           { className: 'wiki-rail', 'aria-label': 'Page context' },
           headings === null ? null : h(Outline, { items: headings.outline, scope }),
-          // When the whole Wiki is unreachable the page's own notice already says so, once.
-          alsoDown ? null : h(BacklinksSection, { ctx, current: pageKey, backlinks }),
+          h(BacklinksSection, { ctx, current: pageKey, backlinks, quiet }),
           value === undefined ? null : h(OutLinksSection, { ctx, links: value.outLinks }),
         ),
       ),

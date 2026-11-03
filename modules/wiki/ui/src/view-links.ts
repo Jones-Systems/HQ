@@ -51,15 +51,17 @@ function BacklinksBody(props: { readonly ctx: ViewCtx; readonly current: PageKey
   );
 }
 
-export function BacklinksSection(props: { readonly ctx: ViewCtx; readonly current: PageKey; readonly backlinks: Resource<BacklinkResult> }): ReactElement {
+/** `quiet`: the page already reports that the Wiki is unreachable, so a failure here shows no notice of its own. */
+export function BacklinksSection(props: { readonly ctx: ViewCtx; readonly current: PageKey; readonly backlinks: Resource<BacklinkResult>; readonly quiet?: boolean }): ReactElement | null {
   const { ctx, backlinks } = props;
   const result = backlinks.value;
+  if (props.quiet === true && result === undefined) return null;
   const actions: readonly NoticeAction[] = backlinks.error === null ? [] : recoveryActions(ctx, backlinks.error, { retry: backlinks.retry });
   return h(
     'section',
     { className: 'wiki-backlinks', 'aria-label': 'Backlinks', 'aria-busy': backlinks.status === 'loading' || undefined },
     h('h3', { className: 'wiki-rail-title' }, result === undefined ? 'Linked from' : `Linked from (${result.total})`),
-    backlinks.error === null
+    backlinks.error === null || props.quiet === true
       ? null
       : h(ErrorNotice, { error: backlinks.error, what: 'backlinks', variant: 'bar', tone: result === undefined ? 'danger' : 'warning', actions }),
     result !== undefined

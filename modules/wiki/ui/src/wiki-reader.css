@@ -655,6 +655,7 @@
 .wiki-view .wiki-reader .wiki-article .wiki-notice,
 .wiki-view .wiki-reader .wiki-rail .wiki-notice {
   grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   margin-bottom: var(--hq-space-md);
 }
 
@@ -674,15 +675,6 @@
 
 .wiki-view .wiki-reader .wiki-notice-body {
   font: var(--hq-type-body);
-}
-
-/* A bar notice over the whole reader keeps its single line. */
-.wiki-view .wiki-reader > .wiki-notice--bar {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-}
-
-.wiki-view .wiki-reader > .wiki-notice--bar .wiki-notice-actions {
-  grid-column: auto;
 }
 
 /* ---- loading, raw pages ---- */
