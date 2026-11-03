@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Button } from '@hq/ui';
+import { Button, InlineNotice } from '@hq/ui';
 import { workspaceSnapshot, type WorkspaceLoad, type WorkspaceSnapshot } from '../core';
 import { SocialIcon } from './icons';
 
@@ -101,9 +101,10 @@ export function SyncPill() {
                   : state.tone === 'synced' ? 'Synced with the Social service' : 'Reading the Social workspace…'}
           </p>
           {state.snapshot && <p className="hq-meta">Data as of {longTime(state.snapshot.observedAt)}</p>}
-          {(state.tone === 'offline' || state.tone === 'stale') && (
+          {state.tone === 'offline' && (
             <p>Saving, calendar moves and runs pause until it answers. Your text is kept. Checking again never resends a run.</p>
           )}
+          {state.tone === 'stale' && <p>Showing the last synced data. Checking again only reads; it never resends a run.</p>}
           {frame.example && <p>{frame.exampleNote}</p>}
           <p className="sx-sync-limits"><b>Delivered limits</b> {frame.limits}</p>
           <Button size="sm" variant="secondary" busy={busy} busyLabel="Checking…" onClick={frame.onCheck}>
@@ -112,6 +113,35 @@ export function SyncPill() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Under the page title while the service is unreachable or a refresh failed: one compact bar saying what is shown
+ * and what is paused, as Work does offline. The domain's toast announces the change once; this bar stays, and it
+ * holds through a re-check instead of flickering away while the read runs. Nothing shows before a first snapshot.
+ */
+function FrameNotice() {
+  const frame = useSocialFrame();
+  const state = frame ? syncState(frame.load, frame.example) : null;
+  const failing = state?.snapshot && (state.tone === 'offline' || state.tone === 'stale')
+    ? { tone: state.tone, at: state.snapshot.observedAt } : null;
+  const checking = state?.tone === 'refreshing';
+  const [held, setHeld] = useState<typeof failing>(null);
+  useEffect(() => {
+    if (failing) setHeld({ tone: failing.tone, at: failing.at });
+    else if (!checking) setHeld(null);
+  }, [failing?.tone, failing?.at, checking]);
+
+  const shown = failing ?? (checking ? held : null);
+  if (!frame || !shown) return null;
+  const at = shortTime(shown.at);
+  return (
+    <InlineNotice
+      className="sx-head-notice" tone="warning" variant="bar" live="off"
+      title={shown.tone === 'offline' ? `Offline · last synced ${at} · changes paused` : `Not refreshed · showing data from ${at}`}
+      actions={[{ label: 'Check again', onAction: frame.onCheck, busy: checking, busyLabel: 'Checking…' }]}
+    />
   );
 }
 
@@ -146,6 +176,7 @@ export function PageHeader({ title, description, eyebrow, actions, children, hea
           <SyncPill />
         </div>
       </div>
+      <FrameNotice />
       {children}
     </header>
   );

@@ -1,8 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ModulePort } from '@hq/contracts';
-import { Button, Dialog, Skeleton, Splitter, StateView, useToast, type ReferencePort, type ReturnContext } from '@hq/ui';
+import { Button, Dialog, InlineNotice, Skeleton, Splitter, StateView, useToast, type ReferencePort, type ReturnContext } from '@hq/ui';
 import { BrandManager, SocialContent } from '../content';
-import { isActiveRun, isDirty, useSocialSession, workspaceSnapshot, type SocialSessionState, type SocialWorkspacePort, type WorkspaceLoad } from '../core';
+import { isActiveRun, isDirty, useSocialSession, workspaceSnapshot, type PortError, type SocialSessionState, type SocialWorkspacePort, type WorkspaceLoad } from '../core';
 import { PageHeader, SocialFrameContext, SocialIcon, SyncPill, shortTime, type SocialFrame, type SocialIconName } from '../ui';
 import { DELIVERED_LIMITS, WorkbenchSection, type Visibility } from '../workbench';
 import { chooseBrand, domainView, projectLink, rememberSection, selectedBrand } from './brand';
@@ -80,10 +80,13 @@ function useConnectionNotices(projectId: string, load: WorkspaceLoad, check: () 
       return;
     }
     if (!last) return; // Nothing has loaded: the page itself explains the failure.
+    // Only an unreachable service pauses changes; a failed refresh keeps them working on the data shown.
     toast.show({
       id, tone: 'warning',
       title: state === 'offline' ? 'The Social service is unreachable' : 'The Social workspace could not be refreshed',
-      description: `Showing what loaded at ${shortTime(last.observedAt)}. Saving, calendar moves and runs are paused; your text is kept.`,
+      description: state === 'offline'
+        ? `Showing what loaded at ${shortTime(last.observedAt)}. Saving, calendar moves and runs are paused; your text is kept.`
+        : `Showing what loaded at ${shortTime(last.observedAt)}.`,
       meta: 'Checking again never resends a run',
       action: { label: 'Check again', onAction: check },
     });
@@ -105,28 +108,50 @@ function useNavCounts(state: SocialSessionState, brandId: string | null): Partia
   }, [snapshot, editors, brandId]);
 }
 
-function FirstLoad({ load, onRetry, title }: { readonly load: WorkspaceLoad; readonly onRetry: () => void; readonly title: string }) {
-  if (load.status === 'error') {
-    return (
-      <StateView
-        state={load.error.kind === 'unavailable' ? 'unavailable' : 'error'}
-        title={load.error.kind === 'unavailable' ? 'The Social service is unreachable' : 'The workspace could not be loaded'}
-        description="Nothing was changed. Unsaved text in open drafts is kept for this session."
-        action={{ label: 'Try again', onAction: onRetry }}
-      />
-    );
-  }
+/** Opens HQ Settings on the Social data source; the shell listens for this event. */
+function openSocialSettings(): void {
+  window.dispatchEvent(new CustomEvent('hq-open-settings', { detail: { source: 'social' } }));
+}
+
+/**
+ * A page that reads the workspace before its first snapshot. Loading shows the page's shape. If the read fails,
+ * the page keeps its frame and says so inline, with the recovery next to it: nothing has loaded, so there is
+ * nothing to keep, but navigation, the pill and pages that don't need the workspace stay usable.
+ */
+function FirstLoad({ load, onRetry, title, example }: { readonly load: WorkspaceLoad; readonly onRetry: () => void; readonly title: string; readonly example: boolean }) {
+  // Hold a failure through *Try again* so the page doesn't flip back to its loading shape while the read runs.
+  const [held, setHeld] = useState<PortError | null>(null);
+  useEffect(() => {
+    if (load.status === 'error') setHeld(load.error);
+    else if (load.status !== 'loading') setHeld(null);
+  }, [load]);
+  const failed = load.status === 'error' ? load.error : load.status === 'loading' ? held : null;
+  const retrying = load.status === 'loading' && held !== null;
+  const offline = failed?.kind === 'unavailable';
   return (
-    <div className="sx-page sd-first-load" aria-busy="true">
-      {/* No h1 until the page exists: the heading arrives with the loaded page. */}
+    <div className="sx-page sd-first-load" aria-busy={failed ? undefined : 'true'} data-failed={failed ? '' : undefined}>
       <header className="sx-head">
         <div className="sx-head-row">
           <div className="sx-head-text">
-            <p className="sd-first-load-title" aria-hidden="true">{title}</p>
-            <p className="sx-head-description sd-loading-text">Loading the Social workspace…</p>
+            {/* While loading there is no h1: the heading arrives with the page. A failed page is a page. */}
+            {failed ? <h1>{title}</h1> : <p className="sd-first-load-title" aria-hidden="true">{title}</p>}
+            <p className="sx-head-description sd-loading-text">{failed ? 'Nothing has loaded yet.' : 'Loading the Social workspace…'}</p>
           </div>
           <div className="sx-head-actions"><SyncPill /></div>
         </div>
+        {failed && (
+          <InlineNotice
+            tone={offline ? 'warning' : 'danger'}
+            title={offline ? 'The Social service is unreachable' : 'The workspace could not be loaded'}
+            actions={[
+              { label: 'Try again', onAction: onRetry, busy: retrying, busyLabel: 'Trying again…' },
+              ...(example ? [] : [{ label: 'Open Social settings', onAction: openSocialSettings }]),
+            ]}
+          >
+            Nothing was changed. Unsaved text in open drafts is kept for this session. This page fills in as soon as the
+            workspace answers.
+          </InlineNotice>
+        )}
       </header>
       <div className="sx-grid sd-first-load-grid" aria-hidden="true">
         {[0, 1, 2, 3].map((index) => (
@@ -234,7 +259,7 @@ export function SocialDomain({ context, destination, navigate, port, example = f
       <div className="sd-domain" ref={domain}>
         <aside className="sd-side" aria-label="Social workspace" hidden={sidebar.width === 0}>
           <BrandSwitcher
-            snapshot={snapshot} value={brand ? brand.id : 'all'} link={link}
+            snapshot={snapshot} value={brand ? brand.id : 'all'} link={link} unavailable={load.status === 'error'}
             onChoose={(value) => chooseBrand(session, value)} onManage={() => setManaging(true)}
           />
           <nav className="sd-nav" aria-label="Social">
@@ -269,7 +294,7 @@ export function SocialDomain({ context, destination, navigate, port, example = f
                 action={{ label: 'Open overview', onAction: () => navigate('overview') }}
               />
             ) : needsWorkspace && !snapshot ? (
-              <FirstLoad load={load} onRetry={check} title={SECTION_LABELS[route.section]} />
+              <FirstLoad load={load} onRetry={check} title={SECTION_LABELS[route.section]} example={example} />
             ) : route.section === 'overview' ? (
               snapshot && <Overview snapshot={snapshot} load={load} editors={state.editors} brand={brand} navigate={navigate} now={now ?? (() => new Date())} onCheck={check} />
             ) : route.section === 'sources' ? <Sources sourceId={route.sourceId} navigate={navigate} />

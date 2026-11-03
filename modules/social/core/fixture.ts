@@ -27,6 +27,8 @@ export interface FixtureOptions {
   readonly features?: readonly string[];
   readonly clock?: () => Date;
   readonly seed?: FixtureSeed;
+  /** The HQ project the default seed's brand and sample links point into. Ignored when `seed` is given. */
+  readonly projectId?: string;
   /** Awaited before every call, for loading-state demos. */
   readonly delay?: () => Promise<void>;
 }
@@ -71,7 +73,7 @@ export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWor
   const brandProjects = features.includes(FEATURE_HQ_BRAND_PROJECT);
   const clock = options.clock ?? (() => new Date());
   const now = () => serviceTimestamp(clock());
-  const seed = structuredClone(options.seed ?? fictionalSeed());
+  const seed = structuredClone(options.seed ?? fictionalSeed(options.projectId));
 
   const brands: Brand[] = seed.brands.map(({ project_id, ...brand }) => (brandProjects ? { ...brand, project_id: project_id ?? null } : brand));
   const content: Draft[] = seed.content.map(({ links, planning_slot, ...draft }) => ({ ...draft,
