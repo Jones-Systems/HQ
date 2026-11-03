@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { access, mkdir, mkdtemp, writeFile, readFile } from 'node:fs/promises';
+import { access, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { constants as osConstants } from 'node:os';
+import { openRunnerEvidence } from './evidence-runner.mjs';
 import { createRuntime, connect, until as poll, isolatedEnvironment } from './runtime.mjs';
 
 import { BUILD_SCHEMA, collectBuildInventory, inventoryDigest } from './build-inventory.mjs';
@@ -28,15 +30,18 @@ if (args.some(arg => !['--checkpoint', '--selected', '--routine', '--gallery-onl
   throw new Error('Use --checkpoint, --routine, --selected, --gallery-only --gallery-host <binding.json>, or full; optional --gallery-host with selected/full');
 }
 let cancelled = false;
-const onSignal = () => { cancelled = true; };
+let cancellationSignal;
+const cancellation = new AbortController();
+const onSignal = signal => { cancelled = true; cancellationSignal ??= signal; cancellation.abort(); };
 process.on('SIGINT', onSignal);
 process.on('SIGTERM', onSignal);
 const evidenceParent = join(repo, '.t3/acceptance-evidence');
-await mkdir(evidenceParent, { recursive: true });
-const evidence = await mkdtemp(join(evidenceParent, 'run-'));
+const scratchParent = join(repo, '.t3/acceptance-scratch');
+let evidenceRun;
+let evidence;
 const startedAt = performance.now();
 const report = { schema: 'hq-electron-acceptance/v1', head: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim(), mode: galleryOnly ? 'distinct-host-gallery' : checkpoint ? 'shell-checkpoint' : routine ? 'routine-journeys' : selected ? 'selected-scenarios' : 'full', sourceDirty: execFileSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' }).trim().length > 0, platform: process.platform, nodeVersion: process.version, viewport: { width: 1280, height: 900 }, checks: [], gaps: [], rows: scenarioGaps(), timings: {}, outcome: 'failed' };
-const runtime = await createRuntime(join(repo, '.t3/acceptance-scratch'));
+let runtime;
 let cdp;
 let fixtures;
 let workCaptureBoundary;
@@ -57,6 +62,9 @@ function assertShellReadOnly() {
 let log = '';
 const until = (probe, label, timeout) => poll(() => { if (cancelled) throw new Error('Harness cancelled'); return probe(); }, label, timeout);
 try {
+  evidenceRun = await openRunnerEvidence({ worktree: repo, parent: evidenceParent, scratchParent, signal: cancellation.signal });
+  evidence = evidenceRun.directory;
+  runtime = await createRuntime(scratchParent);
   begin('native-prerequisites');
   if (cancelled) throw new Error('Harness cancelled during startup');
   const darwin = process.platform === 'darwin';
@@ -68,7 +76,7 @@ try {
   report.harness = {};
   for (const path of ['run.mjs', 'runtime.mjs', 'build-inventory.mjs', 'fixtures/setup.mjs', 'fixtures/http.mjs', 'fixtures/remote-gallery.mjs', 'fixtures/host-gallery.mjs', 'scenarios/sources.mjs', 'scenarios/ui.mjs', 'scenarios/work.mjs']) report.harness[path] = createHash('sha256').update(await readFile(join(repo, 'tests/acceptance', path))).digest('hex');
   buildInventory = await collectBuildInventory(repo);
-  await writeFile(join(evidence, 'build-inventory.json'), JSON.stringify(buildInventory, null, 2) + '\n');
+  await evidenceRun.write('build-inventory.json', JSON.stringify(buildInventory, null, 2) + '\n');
   report.build = {};
   for (const path of ['apps/desktop/dist/index.html', 'apps/desktop/dist-electron/main.js', 'apps/desktop/dist-electron/preload.cjs']) report.build[path] = buildInventory.files.find(file => file.path === path).sha256;
   for (const dir of ['tmp', 'home', 'config', 'cache', 'profile']) await mkdir(join(runtime.root, dir));
@@ -140,7 +148,7 @@ try {
   }
   async function launchApp() { app = await launch(); }
   async function restartApp() { await stopApp(); await launchApp(); }
-  async function capture(name) { await writeFile(join(evidence, `${name}.png`), Buffer.from((await cdp.send('Page.captureScreenshot')).data, 'base64')); }
+  async function capture(name) { await evidenceRun.write(`${name}.png`, Buffer.from((await cdp.send('Page.captureScreenshot')).data, 'base64')); }
   report.electronVersion = await cdp.evaluate('window.hqDesktop.versions.electron');
   passed(darwin
     ? 'Native macOS display, owned process groups, built renderer, synthetic fixtures and profile started; Linux namespaces unavailable'
@@ -210,38 +218,58 @@ try {
     log += fixtures.work?.log ?? '';
   }
   report.timings.totalBeforeCleanupMs = Math.round(performance.now() - startedAt);
-  await writeFile(join(evidence, 'report-before-cleanup.json'), JSON.stringify(report, null, 2) + '\n').catch(error => { report.evidenceError = error.message; report.outcome = 'failed'; });
-  await writeFile(join(evidence, 'runtime.log'), log).catch(error => { report.evidenceError = error.message; report.outcome = 'failed'; });
-  cdp?.close();
-  try { report.cleanupReadback = await runtime.close(); report.cleanup = 'passed'; } catch (error) { report.cleanup = 'failed'; report.cleanupError = error.message; report.outcome = 'failed'; }
-  if (fixtures) {
-    try {
-      if (fixtures.work) assertNoServiceMutations(fixtures.work.ledger.slice(0, workCaptureBoundary), 'Work before intentional capture');
-      if (fixtures.social) assertNoServiceMutations(fixtures.social.ledger, 'Social throughout native invocation');
-    } catch (error) {
-      report.outcome = 'failed';
-      replaceRow(report.rows, row('unsolicited-service-mutations', 'fail', [{ id: 'read-only-service-ledgers', status: 'fail' }], [error.message]));
+  const cleanup = async () => {
+    try { cdp?.close(); }
+    finally {
+      if (runtime) {
+        try { report.cleanupReadback = await runtime.close(); report.cleanup = 'passed'; }
+        catch (error) { report.cleanup = 'failed'; report.cleanupError = error.message; report.outcome = 'failed'; }
+      } else report.cleanup = 'not-started';
     }
-  }
-  if (buildInventory) {
-    try {
-      assert.equal(inventoryDigest(await collectBuildInventory(repo)), inventoryDigest(buildInventory), 'Build changed during acceptance');
-      assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim(), report.head, 'Source head changed during acceptance');
-      report.sourceDirty ||= execFileSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' }).trim().length > 0;
-      report.buildIdentity = { schema: BUILD_SCHEMA, sha256: inventoryDigest(buildInventory) };
-    } catch (error) {
-      report.buildBindingError = error.message;
-      report.outcome = 'failed';
-      replaceRow(report.rows, row('build-binding', 'fail', [{ id: 'unchanged-build-and-source', status: 'fail' }], [error.message]));
+  };
+  const verify = async () => {
+    if (fixtures) {
+      try {
+        if (fixtures.work) assertNoServiceMutations(fixtures.work.ledger.slice(0, workCaptureBoundary), 'Work before intentional capture');
+        if (fixtures.social) assertNoServiceMutations(fixtures.social.ledger, 'Social throughout native invocation');
+      } catch (error) {
+        report.outcome = 'failed';
+        replaceRow(report.rows, row('unsolicited-service-mutations', 'fail', [{ id: 'read-only-service-ledgers', status: 'fail' }], [error.message]));
+      }
     }
+    if (buildInventory) {
+      try {
+        assert.equal(inventoryDigest(await collectBuildInventory(repo)), inventoryDigest(buildInventory), 'Build changed during acceptance');
+        assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim(), report.head, 'Source head changed during acceptance');
+        report.sourceDirty ||= execFileSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' }).trim().length > 0;
+        report.buildIdentity = { schema: BUILD_SCHEMA, sha256: inventoryDigest(buildInventory) };
+      } catch (error) {
+        report.buildBindingError = error.message;
+        report.outcome = 'failed';
+        replaceRow(report.rows, row('build-binding', 'fail', [{ id: 'unchanged-build-and-source', status: 'fail' }], [error.message]));
+      }
+    }
+    report.timings.totalMs = Math.round(performance.now() - startedAt);
+    if (cancelled) report.outcome = 'cancelled';
+  };
+  const primary = () => cancellationSignal ? { code: null, signal: cancellationSignal } : {
+    code: ['passed', 'checkpoint-passed', 'routine-passed', 'selected-passed', 'gallery-host-passed'].includes(report.outcome) ? 0 : 1, signal: null,
+  };
+  let result;
+  try {
+    if (evidenceRun) result = await evidenceRun.finalize({ report, log: () => log, cleanup, verify, primary });
+    else {
+      // Admission/startup refusal precedes runtime allocation; still visit every
+      // available cleanup and post-cleanup oracle without unbounded file writes.
+      await cleanup();
+      await verify();
+      result = primary();
+    }
+  } finally {
+    process.off('SIGINT', onSignal);
+    process.off('SIGTERM', onSignal);
   }
-  report.timings.totalMs = Math.round(performance.now() - startedAt);
-  if (cancelled) report.outcome = 'cancelled';
-  process.off('SIGINT', onSignal);
-  process.off('SIGTERM', onSignal);
-  await writeFile(join(evidence, 'report.json'), JSON.stringify(report, null, 2) + '\n');
-  await writeFile(join(evidence, 'runtime.log'), log);
   console.log(JSON.stringify(report, null, 2));
-  console.log(`Evidence: ${evidence}`);
-  process.exitCode = ['passed', 'checkpoint-passed', 'routine-passed', 'selected-passed', 'gallery-host-passed'].includes(report.outcome) ? 0 : 1;
+  console.log(evidence ? `Evidence: ${evidence}` : 'Evidence: not allocated (admission/startup refused)');
+  process.exitCode = result.signal ? 128 + osConstants.signals[result.signal] : result.code;
 }
