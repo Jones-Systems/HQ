@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -629,5 +630,20 @@ describe('Social calendar: now, chips and drag feedback', () => {
     const refusal = await findToast(/Not moved: This draft changed in another window/);
     expect(refusal.getAttribute('data-tone')).toBe('danger');
     expect(within(refusal).getByRole('button', { name: 'Dismiss notification' })).toBeTruthy();
+  });
+});
+
+describe('calendar stylesheet', () => {
+  const css = readFileSync('modules/social/content/calendar.css', 'utf8');
+  it('uses tokens, not raw colours, and no inline styles', () => {
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/iu);
+    expect(css).not.toMatch(/style=/u);
+  });
+  it('drops the lifted tilt under reduced motion', () => {
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.cal-chip--lifted \{ transform: none; \}/u);
+    expect(css).toMatch(/:root\[data-hq-motion="reduce"\] \.cal-chip--lifted \{ transform: none; \}/u);
+  });
+  it('keeps Agenda and the view cycle apart with the small spacing token', () => {
+    expect(css).toMatch(/\.cal-views \{[^}]*gap: var\(--hq-space-sm\)/u);
   });
 });
