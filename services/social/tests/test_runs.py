@@ -10,6 +10,7 @@ from unittest import mock
 from support import ROOT, ServiceTestCase, raw_db
 
 from social_service import runner, tools
+from social_service.errors import ValidationError
 
 QUEUE_FULL = 'Run queue is full. Wait for a run to finish.'
 TOO_LARGE = 'Result is too large to return (limit 1,500,000 bytes)'
@@ -168,6 +169,18 @@ class Refusals(RunCase):
             with self.subTest(message=message):
                 reply = self.post('/api/runs', body)
                 self.assertEqual((reply.status, reply.json), (400, {'error': message}))
+        self.assertEqual(sorted(path.name for path in (self.data / 'runs').iterdir()), before)
+        self.assertEqual(self.get('/api/workspace').json['runs'], [])
+
+    def test_input_too_deeply_nested_to_store_is_a_400_that_leaves_nothing(self):
+        deep = current = {}
+        for _ in range(100_000):  # beyond any interpreter's limit
+            current['next'] = {}
+            current = current['next']
+        before = sorted(path.name for path in (self.data / 'runs').iterdir())
+        with self.assertRaises(ValidationError) as caught:
+            self.service.submit_run({'tool': 'x-studio', 'input': deep})
+        self.assertEqual((caught.exception.status, caught.exception.message), (400, 'Input is nested too deeply'))
         self.assertEqual(sorted(path.name for path in (self.data / 'runs').iterdir()), before)
         self.assertEqual(self.get('/api/workspace').json['runs'], [])
 

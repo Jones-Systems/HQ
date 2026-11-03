@@ -3,6 +3,7 @@
 import json
 import unittest
 from datetime import date
+from unittest import mock
 
 from support import ROOT
 
@@ -50,6 +51,13 @@ class SlotRules(unittest.TestCase):
         self.assertIsNone(timebox.load_zone('Invented/Nowhere'))
         self.assertIsNone(timebox.load_zone(['UTC']))
         self.assertIsNone(timebox.load_zone('posixrules'))
+
+    def test_missing_zone_data_is_detected(self):
+        with mock.patch.object(timebox, '_zone_names', return_value=frozenset()):
+            self.assertFalse(timebox.timezone_data_available())
+            self.assertIsNone(timebox.load_zone('UTC'))
+        with mock.patch.object(timebox, 'ZoneInfo', side_effect=OSError('no tzdata')):
+            self.assertFalse(timebox.timezone_data_available())
 
     def test_start_must_be_a_padded_ascii_quarter_hour(self):
         for start in ('09:00\n', '٠٩:٠٠', '9:00', '09:60', '09:05'):

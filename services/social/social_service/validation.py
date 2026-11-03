@@ -31,6 +31,7 @@ MESSAGES = {
     'version': 'Version required',
     'conflict': 'This draft changed in another window. Close and reopen it before saving.',
     'run_input': 'Choose a known tool and supply a JSON object',
+    'input_too_deep': 'Input is nested too deeply',
     'example_flag': 'Example label must be boolean',
     'queue_full': 'Run queue is full. Wait for a run to finish.',
     'run_id': 'Invalid run ID',

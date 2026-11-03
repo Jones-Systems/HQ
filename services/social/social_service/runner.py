@@ -19,7 +19,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from .errors import ConflictError
+from .errors import ConflictError, ValidationError
 from .store import Store
 from .validation import MESSAGES, RunInput
 from .worker import ERROR_LIMIT, RESULT_LIMIT, TOO_LARGE
@@ -118,11 +118,14 @@ class RunManager:
         with self._submit_lock:
             if self._store.active_run_count() >= self._max_active:
                 raise ConflictError(MESSAGES['queue_full'])
+            try:
+                payload = json.dumps({'tool': run.tool, 'input': run.input}, ensure_ascii=True, allow_nan=False)
+            except RecursionError:
+                raise ValidationError(MESSAGES['input_too_deep']) from None
             run_id = self._new_id()
             directory = self.run_dir(run_id)
             directory.mkdir(parents=True, mode=0o700)
             try:
-                payload = json.dumps({'tool': run.tool, 'input': run.input}, ensure_ascii=True, allow_nan=False)
                 (directory / 'input.json').write_text(payload, encoding='utf-8')
                 record = self._store.insert_run(run_id, run.tool, run.is_example, self._clock())
             except BaseException:

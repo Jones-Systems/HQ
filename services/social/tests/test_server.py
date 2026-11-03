@@ -11,7 +11,7 @@ from unittest import mock
 from support import ServiceTestCase, raw_exchange
 
 from social_service import server as server_module
-from social_service import tools
+from social_service import timebox, tools
 
 HEX32 = re.compile('[0-9a-f]{32}')
 UNRECOGNIZED = 'Unrecognized host'
@@ -377,6 +377,16 @@ class Routes(Endpoint):
     def test_features_without_zone_data_do_not_advertise_timeboxes(self):
         self.restart(timezones=False)
         self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1'])
+
+    def test_the_service_detects_missing_zone_data_for_itself(self):
+        with mock.patch.object(timebox, '_zone_names', return_value=frozenset()):
+            self.restart(timezones=None)
+            self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1'])
+            reply = self.post('/api/content', {'title': 'x', 'planned_date': '2026-10-22',
+                                               'planning_slot': {'start': '09:00', 'duration_minutes': 30, 'timezone': 'UTC'}})
+            self.assertRefused(reply, 400, 'Unknown time zone')
+        self.restart(timezones=None)
+        self.assertEqual(self.get('/api/workspace').json['features'], ['hq-editorial-timebox-v1', 'hq-references-v1'])
 
     def test_future_features_are_not_advertised_yet(self):
         features = self.get('/api/workspace').json['features']
