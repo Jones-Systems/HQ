@@ -888,9 +888,13 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
       }
       savedAt = stamp();
       answered(savedAt);
-      absorb(result);
-      set({ conflicts: state.conflicts.filter((c) => c.itemId !== targetOf(write)) });
-      removeEntry(queueId);
+      try {
+        absorb(result);
+        set({ conflicts: state.conflicts.filter((c) => c.itemId !== targetOf(write)) });
+      } finally {
+        // The write is confirmed whatever happens to the local view: it is never left `sending`.
+        removeEntry(queueId);
+      }
       finish(queueId, { status: 'saved', result } as QueueOutcome);
       return 'sent';
     }
