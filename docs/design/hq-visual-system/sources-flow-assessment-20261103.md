@@ -53,11 +53,38 @@ Taste, Components, Flows. This lane adds cross-links instead and leaves the plac
 
 ## Components families
 
-Recorded separately after rendering. See [Components family decision](#components-family-decision).
+No committed artifact or branch recorded the four alternatives: neither the repository, its history nor any open
+PR names them. This lane defined four layout families from the reference products. Each was drawn at the
+572px column with the held stage. Mockup: [`mockups/components-families.html`](mockups/components-families.html).
+Render: [`evidence/sources-20261103/components-families/families-light.png`](evidence/sources-20261103/components-families/families-light.png).
+
+The working constraint: component execution, static or scripted, stays disabled until native qualification
+(`ac.component-static-enablement.001` and `ac.component-scripted-enablement.001`). No layout may render
+component markup in the renderer. Each stage therefore shows the held blueprint: the declared frame and size,
+the resolved props, and the tokens the component uses.
+
+| Family | Reference | Browse | Test (variants and props) | Held today | With a qualified runner | 572px |
+| --- | --- | --- | --- | --- | --- | --- |
+| A · Workbench | Storybook canvas and controls | Good: library list | Best: stage and controls side by side | Clear | Best: one stable stage rect for the overlay, plus backdrop and width presets | Good |
+| B · Specimen gallery | Figma assets, Mobbin | Best at scale | Weak: detail is a cramped slide-over | Weak: a grid of empty held boxes | Strong once captures exist | Cramped detail |
+| C · Variant matrix | Figma component set, Storybook docs | Weak across components | Best for comparing variants; editing props is a separate step | Most informative: prop-diff chips per variant | Good | Tall |
+| D · Spec sheet | Linear list and detail | Dense, fast by keyboard | Weak: read-only tables | Honest, but inert | Weak | Good |
 
 ## Components family decision
 
-Pending render.
+**Blend A and C, and borrow D's constraint hints.**
+
+- **Frame (A).** The Workbench: library list, stage and controls. It is the only family that serves the testing loop, and it gives a future runner overlay one stable, untransformed stage rectangle.
+- **Variants (C).** A variant strip sits above the stage. Each variant is a compact blueprint tile with its prop-diff chips (`tone: danger · radius: 24`). The current variant is always visible and selected. **Base** (declared defaults) is the first tile and is preselected when a session has no variant. This removes "no variant selected" without changing variant semantics.
+- **Controls (D).** Each control shows its type and constraint inline (`0–24, step 1`, `≤ 60 chars`), with an overridden dot and Reset. A **Spec** disclosure holds the full props table.
+
+Gallery (B) is deferred until captures or a qualified runner exist. Its cards add little while every preview is
+held. The library list switches to an overview grid then.
+
+Motion: the selected-variant highlight glides between tiles. On a variant or prop change, the blueprint content
+cross-fades and the changed values flash. Nothing transforms the stage host. The Motion tab plays the study on an
+HQ-drawn proxy box, labelled as a proxy. The component itself stays held. The Tokens tab becomes a swatch grid,
+and copying a token confirms with a toast.
 
 ## Build plan
 
