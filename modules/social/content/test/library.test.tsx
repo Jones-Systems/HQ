@@ -211,4 +211,35 @@ describe('Library: composer', () => {
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Half a thought');
     expect(session.getState().editors.new?.fields.channel).toBe('X');
   });
+
+  it('keeps Save draft and Archive in the save bar beside the saved state, with Close in the header', async () => {
+    setup(`library/${FIXTURE_IDS.openDay}`);
+    await screen.findByRole('heading', { name: 'Edit draft' });
+    const bar = document.querySelector<HTMLElement>('.soc-savebar')!;
+    expect(within(bar).getByText(/Saved v1/)).toBeTruthy();
+    expect(within(bar).getByRole('button', { name: 'Archive' })).toBeTruthy();
+    const save = within(bar).getByRole('button', { name: 'Save draft' });
+    expect(save.getAttribute('aria-keyshortcuts')).toBe('Control+S Meta+S');
+    expect(save.querySelector('kbd')?.textContent).toMatch(/^(Ctrl|⌘) S$/u);
+    expect(within(bar).queryByRole('button', { name: 'Close' })).toBeNull();
+    const header = document.querySelector<HTMLElement>('.soc-cmp-head')!;
+    expect(within(header).getByRole('button', { name: 'Close' })).toBeTruthy();
+  });
+});
+
+describe('Library: list toggle', () => {
+  it('hides and shows the draft list from a quiet button in the list header, and focus follows it', async () => {
+    const { user } = setup(`library/${FIXTURE_IDS.openDay}`);
+    await screen.findByRole('heading', { name: 'Edit draft' });
+    const head = document.querySelector<HTMLElement>('.soc-lib-head')!;
+    const hide = within(head).getByRole('button', { name: 'Hide draft list' });
+    expect(hide.getAttribute('aria-expanded')).toBe('true');
+    await user.click(hide);
+    const show = await screen.findByRole('button', { name: 'Show draft list' });
+    expect(show.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('list', { name: 'Drafts' })).toBeNull();
+    await user.click(show);
+    expect(await screen.findByRole('list', { name: 'Drafts' })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(within(document.querySelector<HTMLElement>('.soc-lib-head')!).getByRole('button', { name: 'Hide draft list' })));
+  });
 });

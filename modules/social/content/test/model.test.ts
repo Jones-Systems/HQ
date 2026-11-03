@@ -3,7 +3,7 @@ import { isDestination } from '@hq/contracts';
 import { fictionalSeed, type Draft } from '../../core';
 import {
   DEFAULT_FILTERS, calendarPlan, contentDestination, dateLabel, filterDrafts, isLibraryFilters, monthGrid, monthLabel,
-  parseContentDestination, shiftMonth,
+  parseContentDestination, rowDateLabel, shiftMonth,
 } from '../model';
 
 const drafts: Draft[] = fictionalSeed().content;
@@ -110,5 +110,13 @@ describe('editorial calendar time conversion', () => {
   it('navigates Monday-first weeks and single days across month boundaries', () => {
     expect(calendarRange('2026-11-01', 'week')).toEqual(['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01']);
     expect(calendarRange('2026-11-01', 'day')).toEqual(['2026-11-01']);
+  });
+});
+
+describe('library row date', () => {
+  it('drops the year for a crowded row, and leaves the full date to dateLabel', () => {
+    expect(rowDateLabel('2026-10-24')).toBe('24 Oct');
+    expect(rowDateLabel('2026-11-02')).toBe('2 Nov');
+    expect(dateLabel('2026-10-24')).toBe('24 Oct 2026');
   });
 });
