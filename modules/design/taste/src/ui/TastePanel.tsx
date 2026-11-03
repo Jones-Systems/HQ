@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react';
+import { InlineNotice, Presence } from '@hq/ui';
 import {
-  RATING_VALUES,
-  type JournalStatus, type ProfileExport, type ProjectId, type RatingValue, type TasteClientPort, type TasteCommand,
+  type JournalStatus, type ProfileExport, type ProjectId, type TasteClientPort, type TasteCommand,
   type TasteFeatureFlags, type TasteProfile, type TasteScope, type TasteSnapshot, type TasteSubject,
 } from '../contract.ts';
 import { DEFAULT_TASTE_FLAGS } from '../flags.ts';
@@ -10,6 +10,8 @@ import {
   formatMean, noteCommand, randomId, ratingCommand, ratingSlots, scopeFor,
   type AspectDefinition, type NewId, type RatingSlot, type SubmitOutcome,
 } from './view-model.ts';
+import { QuickRateDeck } from './QuickRateDeck.tsx';
+import { RatingRow } from './RatingRow.tsx';
 import './taste.css';
 
 export interface TastePanelProps {
@@ -92,6 +94,12 @@ export function TastePanel({
       ? 'General taste describes your preferences across all work.'
       : 'Project ratings stay with this project unless you include them in general taste.'}</p>
 
+    <Presence show={loadError} motion="collapse">
+      <InlineNotice tone="danger" variant="bar" title="Couldn't refresh taste"
+        actions={[{ label: 'Retry', onAction: () => { void reload(); } }]}>Showing what loaded. Nothing was changed.</InlineNotice>
+    </Presence>
+    <QuickRateDeck client={client} scope={scope} snapshot={snapshot} newId={newId} disabled={readOnly} onSaved={() => { void reload(); }} />
+
     <div className="taste-body">
       <div className="taste-ratings">
         <section aria-labelledby={`${titleId}-liking`}>
@@ -163,30 +171,6 @@ function ScopeOption({ name, value, checked, onSelect, label, disabled = false }
     <input type="radio" name={name} value={value} checked={checked} disabled={disabled} onChange={() => onSelect(value)} />
     <span>{label}</span>
   </label>;
-}
-
-function RatingRow({ slot, name, disabled, onRate, labels, anchors }: {
-  readonly slot: RatingSlot; readonly name: string; readonly disabled: boolean;
-  readonly onRate: (value: RatingValue) => void;
-  readonly labels?: Readonly<Record<RatingValue, string>>;
-  readonly anchors?: readonly [string, string];
-}) {
-  const previous = slot.history.map((item) => item.value).join(', ');
-  return <fieldset className="taste-row" disabled={disabled}>
-    <legend>{slot.label}</legend>
-    <div className="taste-scale">
-      {anchors && <span className="taste-anchor" aria-hidden="true">{anchors[0]}</span>}
-      {RATING_VALUES.map((value) => <label key={value} className="taste-point" data-checked={slot.current?.value === value || undefined}
-        title={labels?.[value]}>
-        <input type="radio" name={name} value={value} checked={slot.current?.value === value}
-          aria-label={labels ? `${slot.label}: ${value}, ${labels[value]}` : `${slot.label}: ${value} of 5`}
-          onChange={() => onRate(value)} />
-        <span aria-hidden="true">{value}</span>
-      </label>)}
-      {anchors && <span className="taste-anchor" aria-hidden="true">{anchors[1]}</span>}
-    </div>
-    {slot.history.length > 0 && <span className="taste-history">Re-rated; earlier {previous}</span>}
-  </fieldset>;
 }
 
 function NotesEditor({ disabled, slots, onNote, onCounterevidence }: {

@@ -6,5 +6,5 @@ import type { DesignSectionDescriptor, DesignSectionProps } from '../ui/contract
 
 export const designModule: DesignSectionDescriptor<ComponentType<DesignSectionProps>> = {
   schema: 'hq.design.section/v1', id: 'taste', title: 'Taste', nav: 'review', order: 40,
-  view: async () => (await import('../app/compose/views/TasteView.tsx')).TasteView,
+  view: async () => (await import('../app/compose/views/TasteSourcesView.tsx')).TasteSourcesView,
 };
