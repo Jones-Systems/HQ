@@ -3,7 +3,8 @@ import { describe, it } from 'node:test';
 import { createBridgeWorkspaceDocuments } from '../bridge-documents.ts';
 import { createBridgedWorkspace } from '../bridged-workspace.ts';
 import { createProjectContentEvents } from '../content-events.ts';
-import { DesignOperationError } from '../errors.ts';
+import { classifyDesignError, designFeedback, DesignOperationError } from '../errors.ts';
+import { IMPORTS_CONTEXTS } from '../imports-storage.ts';
 import { createWorkspaceThumbnailPort } from '../thumbnail-port.ts';
 import { createProjectsStorage } from '../../storage/index.ts';
 import { createImportsController, type ImportsController } from '../../../imports/src/controller.ts';
@@ -39,6 +40,8 @@ function setup() {
   const commitCount = () => double.count('import.commit');
   return { double, documents, workspace, env, controller, repository, content, notified, contentEvents, pick, commitCount };
 }
+
+const feedbackTone = (cause: unknown) => designFeedback(classifyDesignError(cause, IMPORTS_CONTEXTS.read)).tone;
 
 describe('durable Imports env over the bridge', () => {
   it('links imported PNGs into project content inside the same atomic import.commit, with thumbnails that resolve', async () => {
@@ -239,7 +242,9 @@ describe('durable Imports env over the bridge', () => {
       f.controller.setExportChoice(kind);
       assert.equal(await f.controller.exportNow(), null);
       assert.equal(f.controller.getState().status, 'error');
-      assert.equal(f.controller.getState().message, 'Backup and export are not available in this build');
+      // The typed failure's description joins its message, so the panel says what was kept.
+      assert.equal(f.controller.getState().message, 'Backup and export are not available in this build. Your imports are saved on this device. Nothing was changed.');
+      assert.deepEqual([classifyDesignError(f.controller.getState().cause, IMPORTS_CONTEXTS.read).kind, feedbackTone(f.controller.getState().cause)], ['disabled', 'info']);
       assert.equal(f.controller.getState().lastExport, null);
     }
     // Drafts live outside this store: the private draft backup has nothing to include, and nothing to save it with.
@@ -265,9 +270,84 @@ describe('durable Imports env over the bridge', () => {
     const controller = createImportsController(env.deps, importsProject(project.id), env.capabilities);
     await controller.refresh();
     assert.equal(controller.getState().status, 'error');
-    assert.equal(controller.getState().message, 'Imports are not available in this build');
+    // The typed failure's description joins its message, so the panel shows what was kept.
+    assert.equal(controller.getState().message, 'Imports are not available in this build. Nothing was changed.');
+    assert.equal(classifyDesignError(controller.getState().cause, IMPORTS_CONTEXTS.read).kind, 'disabled');
     assert.equal(controller.getState().canPick, false);
     assert.equal(double.calls.length, 0);
     await assert.rejects(() => env.deps.storage.commit([]), (error) => error instanceof DesignOperationError && error.kind === 'disabled');
+  });
+});
+
+describe('typed Imports failures reach the view', () => {
+  /** What a view does with the controller's error state. */
+  const feedbackOf = (cause: unknown) => designFeedback(classifyDesignError(cause, IMPORTS_CONTEXTS.read));
+
+  it('a refused pick shows the full sentence in the state and classifies as invalid, with the picker reason', async () => {
+    const f = setup();
+    f.double.setPick({ status: 'rejected', reason: 'invalid-png' });
+    await f.controller.choose();
+    const state = f.controller.getState();
+    assert.equal(state.status, 'error');
+    const failure = classifyDesignError(state.cause, IMPORTS_CONTEXTS.read);
+    assert.deepEqual([failure.kind, failure.operation, failure.reason, failure.outcome], ['invalid', 'imports.pick', 'invalid-png', 'no-effect']);
+    assert.equal(state.message, `${failure.message}. ${failure.description}`);
+    assert.match(state.message ?? '', /not a PNG image\. Nothing was imported\.$/u);
+    assert.equal(feedbackOf(state.cause).meta, 'imports.pick · invalid-png');
+    // The next attempt replaces the sentence and clears the cause with it.
+    f.pick(pngFile('home.png'));
+    await f.controller.choose();
+    assert.deepEqual([f.controller.getState().status, f.controller.getState().message, f.controller.getState().cause], ['planned', null, null]);
+  });
+
+  it('a conflicted apply shows the full sentence and classifies as conflict under its own operation', async () => {
+    const f = setup();
+    f.pick(pngFile('home.png'));
+    await f.controller.choose();
+    // Another window applies the same import first, so this controller's plan is stale.
+    const source = (await f.env.capabilities.pickSource!())!;
+    const rival = await planImport(f.env.deps, { projectId: importsProject(project.id), source }) as ImportPlan;
+    await applyImport(f.env.deps, rival);
+    await f.controller.apply();
+    const state = f.controller.getState();
+    assert.equal(state.status, 'error');
+    assert.ok(state.cause instanceof DesignOperationError);
+    const failure = classifyDesignError(state.cause, IMPORTS_CONTEXTS.read);
+    assert.deepEqual([failure.kind, failure.operation, failure.outcome, failure.recovery], ['conflict', 'imports.apply', 'no-effect', 'reload']);
+    assert.equal(state.message, `${failure.message}. ${failure.description}`);
+    assert.match(state.message ?? '', /\. \S/u, 'a message and a description, joined');
+    const feedback = feedbackOf(state.cause);
+    assert.deepEqual([feedback.tone, feedback.status, feedback.action?.kind], ['danger', 'Changed elsewhere', 'reload']);
+  });
+
+  it('an apply whose reply is lost is unknown, offers Check, and still tells project readers to re-read', async () => {
+    const f = setup();
+    f.pick(pngFile('home.png'));
+    await f.controller.choose();
+    f.double.loseNextCommitReply();
+    await f.controller.apply();
+    const state = f.controller.getState();
+    assert.equal(state.status, 'error');
+    const failure = classifyDesignError(state.cause, IMPORTS_CONTEXTS.read);
+    assert.deepEqual([failure.kind, failure.operation, failure.outcome, failure.recovery], ['unknown', 'imports.apply', 'unknown-effect', 'check']);
+    assert.equal(state.message, `${failure.message}. ${failure.description}`);
+    const feedback = feedbackOf(state.cause);
+    assert.deepEqual([feedback.tone, feedback.inline, feedback.status, feedback.action, feedback.persistent],
+      ['unknown', 'unknown', 'Unconfirmed', { kind: 'check', label: 'Check' }, true]);
+    assert.deepEqual(f.notified, [1], 'the commit landed, so readers were told once');
+    assert.equal((await f.content()).versions.length, 1, 'and the version is there: Check would find it');
+  });
+
+  it('a lost read is typed as unavailable with Retry, and the cause is what the view classifies', async () => {
+    const f = setup();
+    const lost = new Error('IPC channel closed');
+    f.double.failWith((route) => { if (route === 'doc.list') throw lost; });
+    await f.controller.refresh();
+    const state = f.controller.getState();
+    assert.equal(state.status, 'error');
+    // Reads are typed too: a lost read is unavailable (nothing changed), with a Retry.
+    const feedback = feedbackOf(state.cause);
+    assert.deepEqual([feedback.status, feedback.action?.kind, feedback.meta], ['Unavailable', 'retry', 'imports.read']);
+    assert.ok(state.message !== null && state.message.length > 0);
   });
 });

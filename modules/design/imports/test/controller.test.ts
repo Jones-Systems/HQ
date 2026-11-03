@@ -93,6 +93,36 @@ test('rejections explain that nothing was written', async () => {
   assert.match(summary.headline, /newer format version.*Nothing was written/u);
 });
 
+test('controller: a failure keeps what was thrown as the cause and reads as one sentence; the next message clears both', async () => {
+  const { deps } = setup();
+  const typed = Object.assign(new Error('Could not choose files'), { description: 'One of the files is not a PNG image. Nothing was imported.' });
+  let failure: unknown = typed;
+  const controller = createImportsController(deps, PROJECT, { pickSource: async () => { if (failure !== null) throw failure; return source(0); } });
+  await controller.choose();
+  assert.equal(controller.getState().status, 'error');
+  assert.equal(controller.getState().message, 'Could not choose files. One of the files is not a PNG image. Nothing was imported.');
+  assert.equal(controller.getState().cause, typed, 'the rejection itself, so a view can read its kind and operation');
+  // A message that already ends in a period is not doubled, and an empty description adds nothing.
+  failure = Object.assign(new Error('Could not choose files.'), { description: 'Nothing was imported.' });
+  await controller.choose();
+  assert.equal(controller.getState().message, 'Could not choose files. Nothing was imported.');
+  failure = Object.assign(new Error('Plain failure'), { description: '' });
+  await controller.choose();
+  assert.equal(controller.getState().message, 'Plain failure');
+  // A description that is not a string is ignored; a rejection that is not an Error has no sentence of its own.
+  failure = Object.assign(new Error('Odd failure'), { description: { text: 'no' } });
+  await controller.choose();
+  assert.equal(controller.getState().message, 'Odd failure');
+  failure = 'not an error';
+  await controller.choose();
+  assert.deepEqual([controller.getState().message, controller.getState().cause], ['Unexpected failure', 'not an error']);
+  // Choosing again replaces the message, and the cause goes with it.
+  failure = null;
+  await controller.choose();
+  assert.deepEqual([controller.getState().status, controller.getState().message, controller.getState().cause], ['planned', null, null]);
+  assert.equal(createImportsController(deps, PROJECT).getState().cause, null);
+});
+
 test('media checks: signatures, dimensions, safe paths and URL policy', () => {
   assert.deepEqual(checkPng(png(1, 2)), { ok: true, value: { w: 1, h: 2 } });
   assert.equal(checkPng(png(0, 2)).ok, false);

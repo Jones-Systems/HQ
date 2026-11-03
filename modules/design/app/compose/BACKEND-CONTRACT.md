@@ -113,8 +113,9 @@ the class.
 
 ### Operation names
 
-Operations are stable. Imports on the durable env (`imports-env.ts`) report these. The imports reducer, controller
-and views read `failure.operation` and `failure.kind`, never the message.
+Operations are stable. Imports on the durable env (`imports-env.ts`) report these. The Imports controller keeps
+what was thrown on `state.cause`. A view classifies that to read `failure.operation` and `failure.kind`, never the
+message (section 12 shows how).
 
 | operation | write | what failed |
 | --- | --- | --- |
@@ -328,12 +329,46 @@ In the in-memory fake workspace it stays the labelled synthetic env. Bridged mod
 | --- | --- |
 | Storage | `imports-storage.ts` adapts the importer's `StoragePort` to the bridge. Keys `imports/...` map to `design/imports/...`. The stream `imports` maps to `design/imports`. Revisions are decimal strings in the importer and numbers on the wire. Each write is one atomic `import.commit`. |
 | Reads | `design/imports/{records,versions,manifests,conflicts,undo}/` are readable with `doc.get` and `doc.list`. `doc.put` refuses them: they change only through `import.commit`. Blobs are checked with `blob.has`, so planning does not list the whole blob store. |
-| Picking | `capabilities.pickSource` calls `import.pick`. The system dialog says the files are imported as the owner's own work, and that wording is the explicit rights statement: `rights: { basis: 'owned', holder: 'Owner' }`. A canceled dialog resolves `null`. A refused pick rejects as a typed failure with the picker's reason, for example `invalid-png`, `file-too-large` or `file-changed` (`stale`). |
+| Picking | `capabilities.pickSource` calls `import.pick`. The system dialog says "Only choose files you made. HQ records you as their owner.", and that wording is the explicit rights statement for `rights: { basis: 'owned', holder: 'Owner' }`. `pickSource` records `owned` only. The other bases (`licensed`, `permission`, `public-domain`) need a choice in the Imports UI before a file is picked, which is F5's lane; until then a file that is licensed rather than made by the owner must not be imported here. The panel's introductory sentence ("files you have the rights to use") is the panel's own and is not changed by this lane. A canceled dialog resolves `null`. A refused pick rejects as a typed failure with the picker's reason, for example `invalid-png`, `file-too-large` or `file-changed` (`stale`). |
 | Identity | One stable source ID (`src-local-png-files`) per project. Item keys are the normalized file names, so the same file is the same item every time: choosing identical files changes nothing and writes nothing. A changed file under the same name is an update. An owner-edited record whose source changed is a conflict. Two files with the same name, or a name that cannot be a key, are `invalid`. |
 | Conflicts | A write that lost a race throws `StorageConflictError`, which classifies as `conflict`. Nothing was written. A plan that went stale before it was applied is the same `conflict`. |
 | Unknown outcome | A commit whose reply was lost is `unknown` (it may have landed). Views offer `Check`, which re-reads history, never a blind retry. |
 | Disabled | A host that does not accept imports answers `{ ok: false, kind: 'unavailable', reason: 'disabled' }`. That is `disabled` with outcome no effect, on every Imports operation. |
 | Backup and export | Not available in this build. `saveBundle` is undefined and the storage port's bundle reads (`listBlobs`, `listStreams`, and `listDocuments` of the whole store) fail with `disabled`, reason `disabled`, message "Backup and export are not available in this build". Nothing is read into a bundle and nothing is written. The host's `export.*` routes stay disabled. A backup draft over the durable store therefore stays empty and is never saved. |
+
+### How a view gets the typed failure
+
+The Imports controller's state (`ImportsState`) carries two fields for a failure:
+
+- `message` is the sentence the panel shows. When what was thrown has a string `description`, as every typed
+  failure does, `message` is `<message>. <description>`, so the panel says what was kept. A trailing period on
+  the message is not doubled.
+- `cause` is what was thrown, as thrown. It is `null` unless `status` is `error`, and it is cleared whenever
+  `message` is replaced, so it never outlives its sentence.
+
+The Imports module reads `description` by duck typing and never imports `compose`. A view does the typing:
+
+```ts
+const state = controller.getState();
+if (state.status === 'error') {
+  const feedback = designFeedback(classifyDesignError(state.cause, IMPORTS_CONTEXTS.read));
+  // feedback.meta, .status, .action (Retry, Reload or Check), .persistent
+}
+```
+
+Every Imports rejection is a `DesignOperationError`, and it keeps its own operation, kind and reason. The context
+passed in only matters for a rejection that is not typed, which reads as `unavailable` with Retry.
+
+| what happened | `kind` | `meta` | `action` |
+| --- | --- | --- | --- |
+| A refused pick, for example `invalid-png` | `invalid` | `imports.pick · invalid-png` | none |
+| An apply that lost a race, or whose plan went stale | `conflict` | `imports.apply` | Reload |
+| An apply whose reply was lost (it may have landed) | `unknown` | `imports.apply` | Check, and the notice stays |
+| A read that could not reach storage | `unavailable` | `imports.read` | Retry |
+| Backup or export | `disabled` | `imports.export · disabled` | none |
+
+A plan the importer refuses (for example a newer format) is not an error: `status` is `rejected`, `message` is the
+importer's own sentence and there is no `cause`.
 
 ### Imports linking into project content
 
