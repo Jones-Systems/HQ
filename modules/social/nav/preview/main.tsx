@@ -2,7 +2,7 @@ import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ModulePort } from '@hq/contracts';
 import {
-  FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_REFERENCES, FIXTURE_IDS, FIXTURE_PROJECT_ID, socialSession, type FixtureOptions,
+  FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_REFERENCES, FIXTURE_IDS, FIXTURE_PROJECT_ID, socialSession, workspaceSnapshot, type FixtureOptions,
 } from '../../core';
 import { createWorkbenchFixture, type WorkbenchFixture } from '../../workbench/fixtures/examples';
 import { SocialDomain, setSocialWorkspacePort, socialWorkspacePort } from '..';
@@ -51,6 +51,8 @@ interface Scenario {
   readonly caption: string;
   readonly destination: string;
   readonly options?: FixtureOptions;
+  /** The domain's clock, when the view needs a different day from the default. */
+  readonly now?: () => Date;
   readonly drive?: (fixture: WorkbenchFixture) => Promise<void>;
 }
 
@@ -64,7 +66,45 @@ const SCENARIOS: Record<string, Scenario> = {
     caption: 'Project mismatch: HQ does not switch; Switch HQ project disabled with its reason', destination: 'home', options: { features: LINKED },
     drive: () => chooseBrand(FIXTURE_IDS.harbor),
   },
-  sources: { caption: 'Sources: reserved, proposed', destination: 'sources' },
+  'overview-past': {
+    caption: 'Overview with nothing planned from today on: the nearest past dates, labelled Past', destination: 'home',
+    now: () => new Date('2026-12-01T12:00:00Z'),
+  },
+  'overview-attention': {
+    caption: 'Overview with an unsaved draft above the failed and interrupted runs', destination: 'home',
+    drive: async () => {
+      const session = socialSession(CONTEXT.id);
+      await session.load(socialWorkspacePort());
+      const draft = (await until(() => workspaceSnapshot(session.getState().workspace))).content.find((item) => item.id === FIXTURE_IDS.steepingThread);
+      if (!draft) throw new Error('The fixture draft is missing');
+      session.openEditor(draft.id, draft);
+      session.editDraft(draft.id, { body: `${draft.body}\n2/ Start at two minutes and taste.` });
+    },
+  },
+  sources: { caption: 'Sources: the import desk, with saved sources proposed', destination: 'sources' },
+  'sources-imported': {
+    caption: 'Sources: a fictional file checked on this device, not saved, with the workbench that reads it', destination: 'sources',
+    drive: async () => {
+      (await until(() => button(/^Use fictional example$/u))).click();
+      await until(() => document.querySelector('.sd-detail'));
+    },
+  },
+  'sources-error': {
+    caption: 'Sources: a broken file, the error named by line and column, focus on the message', destination: 'sources',
+    drive: async () => {
+      (await until(() => button(/^Try a broken file$/u))).click();
+      await until(() => document.querySelector('.sd-problem'));
+    },
+  },
+  'sources-dragging': {
+    caption: 'Sources: a file held over the drop zone', destination: 'sources',
+    drive: async () => {
+      const zone = await until(() => document.querySelector('.sd-drop'));
+      const data = new DataTransfer();
+      data.items.add(new File(['{}'], 'feed.json', { type: 'application/json' }));
+      zone.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: data }));
+    },
+  },
   channels: {
     caption: 'Channels & accounts: honest capability page; Connect account changes nothing', destination: 'channels',
     drive: async () => (await until(() => button(/^Connect account…$/u))).click(),
@@ -82,7 +122,7 @@ const SCENARIOS: Record<string, Scenario> = {
   offline: {
     caption: 'Service unreachable: last synced data labelled Offline, active runs Unknown', destination: 'home',
     drive: async (fixture) => {
-      await until(() => document.querySelector('.sd-cards'));
+      await until(() => document.querySelector('.sd-overview-grid'));
       fixture.controls.setUnavailable(true);
       await socialSession(CONTEXT.id).load(socialWorkspacePort());
     },
@@ -109,7 +149,7 @@ function Page() {
   return (
     <main className="preview" data-view={view}>
       <p className="preview-caption">Fictional fixture · {theme} · {scenario.caption}</p>
-      <SocialDomain {...port} port={socialWorkspacePort()} example now={NOW} />
+      <SocialDomain {...port} port={socialWorkspacePort()} example now={scenario.now ?? NOW} />
     </main>
   );
 }
