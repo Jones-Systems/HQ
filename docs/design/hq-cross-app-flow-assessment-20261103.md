@@ -190,7 +190,7 @@ The shell has no transitions. A domain switch is a hard remount (the React key c
 | X1 welcome/checklist | F7 builds, F1 mounts | `apps/desktop/src/onboarding/`, props-only |
 | X1 Projects empty state, "Cached" on first launch | F4/F5 | Design Projects view |
 | X2 global palette and search | F7 builds, F1 mounts | `apps/desktop/src/navigation/`; yields to Design's handled ⌘K; F1's top bar dispatches `hq-open-command-palette` |
-| X2 one palette | F4 + F7 | Needs agreement; no contract change proposed yet |
+| X2 one palette | F4 + F7 | Agreed with F4: in the long term the shell owns one palette, and Design registers its sections and commands with it. Until that registration API exists, Design keeps its own ⌘K and the shell palette yields to it |
 | X3 one status store, header pill, transition toasts | F1 | F1's `services/observed-status.ts`; F6 keeps consuming `useDataSources()` |
 | X4 Social and Wiki inline errors and set-up empty state | F3, F6 | Adopt F1 `InlineNotice` |
 | X5 sample references in the active project | F2, F3 | Sample data only |
@@ -203,7 +203,8 @@ The shell has no transitions. A domain switch is a hard remount (the React key c
 | X8 project semantics in the switcher | F1 | Shows scope only where a domain consumes it |
 | X9 Wiki reference provider | F6 | `modules/wiki/app/src`, plus one registration line in `reference-providers.ts` |
 | X10 shell and domain transitions | F1 | |
-| X11, X12, X13–X16 | as listed | |
+| X14 Design panel toggles | F4 | Fixed on F4's branch (`acced90`, SVG chevrons). F4's Projects builder fixes the Projects detail toggles |
+| X11, X12, X13, X15, X16 | as listed | |
 
 ## F7 fixes in flight
 
@@ -213,4 +214,27 @@ Each builder works on its own worktree from F1's primitives branch (`work/hq-lif
 - **F7-B2, first-run welcome and getting started:** dismissible and reopenable. It reads the data-source state and links to each set-up step.
 - **F7-B1, also:** `ReturnPill` with Alt+← (⌘[ on Mac), `useShellShortcuts` (⌘/Ctrl+1–4, ⌘/Ctrl+,) and `useDocumentTitle`. F1 owns the read-only reference notice and, through F1's own builder, the service-status store (X3).
 
-Their PRs, review verdicts for the other lanes' PRs, and the integration result will be appended here.
+Their PRs will be listed here when they open.
+
+## Reviews and integration (living)
+
+### Lane PR reviews
+
+Each review was posted as a PR review comment. The reviews look at the seams between lanes: status truthfulness, shared vocabulary, references, offline behaviour and project identity.
+
+| PR | Lane | Head reviewed | Verdict | Main cross-app points |
+| --- | --- | --- | --- | --- |
+| #186 | B1, Planner backend (draft) | `7818059`, then `273f8cd` | Comment; nothing blocking | <ul><li>Make health reasons readable from F1's status store.</li><li>Use F6's status words: Address rejected, Unavailable and Not qualified replace Refused, Planner error and Not a compatible Planner.</li><li>Show queued and conflict counts in the shell and in toasts.</li><li>Say so when restored intents are queued.</li><li>Clear the capture notice on reconnect (X15).</li><li>A real-Planner E2E for offline, online and restart.</li></ul> |
+| #187 | B2, Social backend | `3c7c826` | Comment; nothing blocking | <ul><li>#166 is a prerequisite for live references (X5).</li><li>Seed data keyed to the shell project.</li><li>A distinct too-large failure (X3).</li><li>Brands mapped to projects through F1's switcher (X8).</li><li>Example runs that settle.</li><li>Keep the last snapshot while offline (X4).</li></ul> |
+| #188 | B4, infrastructure | `98f739c` | Comment; nothing blocking | <ul><li>Driver lessons for `tools/dev-preview/`.</li><li>`/tmp` is RAM-backed.</li><li>An admission check before launch.</li><li>Screenshot hygiene.</li><li>The I1 fix lands before #182.</li></ul> |
+| #189 | B3, Design backend | `2322626` | Comment; nothing blocking | <ul><li>Use Work's wording for unknown → Check.</li><li>Stable toast ids.</li><li>Reference reads in W3.</li><li>What counts as the current project until HQR-1.</li><li>A capability query for disabled features.</li><li>An Imports deep link.</li></ul> |
+
+None of the four PRs changes running behaviour that F7 could exercise in the app yet: #188 and #189 are documentation only, and #186 and #187 are assessments plus additive types. F7 will run the app and review again when their implementation commits land.
+
+### Integration scan 1 (merge-tree only)
+
+On 2026-11-03 at about 09:15 ET I fetched 14 lane branches. All are based on foundation `0cd50ab`. Every pair was merged with `git merge-tree --write-tree`, 91 pairs in all.
+
+- **One textual conflict:** F4 (`work/hq-life-design-core-20261103` at `d90f846`) × B3 W1 (`work/hq-b3-design-errors-20261103` at `3917ee9`) in `modules/design/app/compose/workspace.ts`. Both edit the return value of `createDesignWorkspace`. F4 adds `activeProject` and `readContent`, and B3 adds `contentEvents`. They also overlap in intent: F4's re-read on mount and B3's planned W3 (reload on content events) fix the same stale content. Both lanes were notified, with a suggestion to use one freshness mechanism that B3 owns in `compose/`.
+- **Every other pair merges cleanly.** Five lanes include F1's base commit `284393d`. Beyond that commit, no lane has yet edited `PresentationShell.tsx`, `state.ts`, `styles.css`, `packages/hq-ui`, `apps/desktop/src/settings`, `apps/desktop/src/services`, `Connections.tsx` or `reference-providers.ts`. Conflicts on shared shell files are therefore still ahead.
+- **No build or test run yet.** The 1-minute load average was 33 on 16 cores during the scan. The build-and-run pass follows once lane PRs open and the load allows.
