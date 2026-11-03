@@ -5,7 +5,7 @@
 .hq-refs h2 { font-size: 24px; font-weight: 550; letter-spacing: -0.5px; margin: 8px 0 2px; }
 .hq-refs h3 { font-size: 14px; font-weight: 600; margin: 10px 0 2px; }
 .hq-refs h4 { font-size: 12px; font-weight: 600; margin: 18px 0 6px; }
-.hq-refs-header { display: grid; grid-template-columns: minmax(0, 1fr) clamp(200px, 26cqi, 320px) auto; grid-template-areas: "heading search import" "panel panel panel"; align-items: end; gap: 16px; }
+.hq-refs-header { display: grid; grid-template-columns: minmax(0, 1fr) clamp(200px, 26cqi, 320px) auto; grid-template-areas: "heading search import" "panel panel panel"; align-items: end; gap: 0 16px; }
 .hq-refs-heading { grid-area: heading; min-width: 0; }
 .hq-refs-header:not(:has(.hq-refs-search)) { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "heading import" "panel panel"; }
 .hq-refs-count, .hq-refs-muted { color: var(--muted); font-size: 12px; margin: 0; }
@@ -98,7 +98,7 @@
 /* ---------- Import: queue rows, then the form for the current image ---------- */
 .hq-refs-import { display: contents; }
 .hq-refs-import > .hq-btn { grid-area: import; }
-.hq-refs-import-panel { grid-area: panel; display: grid; justify-items: stretch; gap: 12px; min-width: 0; width: 100%; }
+.hq-refs-import-panel { grid-area: panel; display: grid; justify-items: stretch; gap: 12px; min-width: 0; width: 100%; margin-top: 16px; }
 .hq-refs-import-panel:empty { display: none; }
 .hq-refs-queue-wrap { display: grid; min-width: 0; padding-bottom: 2px; }
 .hq-refs-queue-card { display: grid; gap: 12px; width: min(680px, 100%); box-sizing: border-box; padding: 14px 16px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
@@ -133,6 +133,7 @@
 }
 @container refs (max-width: 759px) {
   .hq-refs-header { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "heading heading" "search import" "panel panel"; }
+  .hq-refs-search, .hq-refs-import > .hq-btn { margin-top: 12px; }
 }
 
 /* ---------- Lightbox: the large view of one reference, outside .hq-refs so it can cover the window ---------- */
