@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client';
 import type { ModulePort, ReferenceEnvelope } from '@hq/contracts';
 import { ToastViewport, type ReferencePort } from '@hq/ui';
 import {
-  FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_REFERENCES, FIXTURE_IDS, FIXTURE_PROJECT_ID, socialSession, workspaceSnapshot, type FixtureOptions,
+  FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES, FIXTURE_IDS, FIXTURE_PROJECT_ID, fictionalSeed, socialSession, workspaceSnapshot,
+  type Channel, type Draft, type FixtureOptions, type FixtureRun, type FixtureSeed,
 } from '../../core';
 import { createWorkbenchFixture, type WorkbenchFixture } from '../../workbench/fixtures/examples';
 import { createSocialReferenceProvider } from '../../references';
@@ -60,6 +61,42 @@ const RUN_CITATION: ReferenceEnvelope = {
 
 const brandSelect = () => document.querySelector<HTMLSelectElement>('.sd-brand select:not([disabled])');
 const chooseBrand = async (brandId: string) => setValue(await until(brandSelect), brandId, 'change');
+
+const fixtureDraft = (n: number, title: string, channel: Channel, brand: string, date: string, slot: Draft['planning_slot'] = null): Draft => ({
+  id: `d${(100 + n).toString(16).padStart(31, '0')}`, title, body: '', brand_id: brand, channel, planned_date: date, planning_slot: slot,
+  archived: 0, version: 1, updated_at: '2026-10-18T09:00:00+00:00',
+});
+const at = (start: string, duration_minutes = 30): Draft['planning_slot'] => ({ start, duration_minutes, timezone: 'UTC' });
+
+/** A planned fortnight: several channels, a busy day, a long title, timed and untimed entries, and two undated drafts. */
+function plannedSeed(): FixtureSeed {
+  const seed = fictionalSeed();
+  const { larkspur, harbor } = FIXTURE_IDS;
+  seed.content.push(
+    fixtureDraft(1, 'Cupping hour: three steeping times, one leaf, and what each cup teaches us about bitterness', 'X', larkspur, '2026-10-20', at('09:00', 60)),
+    fixtureDraft(2, 'Wholesale price list refresh', 'LinkedIn', larkspur, '2026-10-20', at('13:30')),
+    fixtureDraft(3, 'Behind the blend: sourcing notes', 'Article', larkspur, '2026-10-20'),
+    fixtureDraft(4, 'Autumn window display', 'Instagram', harbor, '2026-10-22', at('11:00', 45)),
+    fixtureDraft(5, 'Saturday market reel', 'TikTok', harbor, '2026-10-24', at('08:30', 60)),
+    fixtureDraft(6, 'Market day thread', 'Reddit', larkspur, '2026-10-27', at('10:00')),
+    fixtureDraft(7, 'Loyalty card update', 'Facebook', harbor, '2026-10-28'),
+    fixtureDraft(8, 'Starter jar reminder', 'General', harbor, '2026-10-30', at('16:00')),
+  );
+  seed.content.push(fixtureDraft(9, 'Gift box idea list', 'LinkedIn', larkspur, ''));
+  return seed;
+}
+
+/** Two runs from today and one from yesterday, so the timeline opens with a Today group and an active run. */
+function recentRuns(): FixtureRun[] {
+  const done = (n: number, tool: FixtureRun['record']['tool'], created: string, finished: string): FixtureRun => ({
+    record: { id: `e${(100 + n).toString(16).padStart(31, '0')}`, tool, status: 'succeeded', is_example: 0, created_at: created, finished_at: finished, error: null },
+  });
+  return [
+    { record: { id: `e${(100).toString(16).padStart(31, '0')}`, tool: 'x-studio', status: 'running', is_example: 0, created_at: '2026-10-20T11:48:00+00:00', finished_at: null, error: null } },
+    done(1, 'seo-studio', '2026-10-20T09:15:00+00:00', '2026-10-20T09:15:07+00:00'),
+    done(2, 'x-intelligence', '2026-10-19T08:30:00+00:00', '2026-10-19T08:32:05+00:00'),
+  ];
+}
 
 /** A missing comma after the first item: the check reports line 5, column 5. */
 const BROKEN_FEED = `{
@@ -245,8 +282,35 @@ const SCENARIOS: Record<string, Scenario> = {
     },
   },
   calendar: { caption: 'Calendar mounted in the domain', destination: 'calendar/2026-10' },
+  'calendar-planned': {
+    caption: 'Calendar with a planned fortnight and timed entries', destination: 'calendar/2026-10',
+    options: { features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX], seed: plannedSeed() },
+  },
+  'calendar-offline': {
+    caption: 'Calendar inside the frame while the service is unreachable: the frame bar says changes are paused; chips are disabled', destination: 'calendar/2026-10',
+    options: { features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX], seed: plannedSeed() },
+    drive: async (fixture) => {
+      await until(() => document.querySelector('.cal-chip'));
+      fixture.controls.setUnavailable(true);
+      await socialSession(CONTEXT.id).load(socialWorkspacePort());
+    },
+  },
   workbenches: { caption: 'Workbenches mounted in the domain, with the delivered limits', destination: 'workbenches' },
   runs: { caption: 'Run history mounted in the domain', destination: `runs/${FIXTURE_IDS.failedRun}` },
+  'runs-list': { caption: 'Run history, no receipt open', destination: 'runs' },
+  'runs-today': {
+    caption: 'Run history with runs from today and an active run', destination: 'runs',
+    options: { seed: (() => { const seed = fictionalSeed(); seed.runs.unshift(...recentRuns()); return seed; })() },
+  },
+  'runs-offline': {
+    caption: 'Run history inside the frame while the service is unreachable: runs last seen active read Unknown', destination: 'runs',
+    options: { seed: (() => { const seed = fictionalSeed(); seed.runs.unshift(...recentRuns()); return seed; })() },
+    drive: async (fixture) => {
+      await until(() => document.querySelector('[data-run-row]'));
+      fixture.controls.setUnavailable(true);
+      await socialSession(CONTEXT.id).load(socialWorkspacePort());
+    },
+  },
   offline: {
     caption: 'Service unreachable: last synced data labelled Offline, active runs Unknown', destination: 'home',
     drive: async (fixture) => {
@@ -269,6 +333,8 @@ scenario.prepare?.();
 const fixture = createWorkbenchFixture({ ...scenario.options, clock: NOW });
 if (view === 'error') fixture.controls.setUnavailable(true);
 setSocialWorkspacePort(fixture.port);
+// Captures drive later states (another window's edit, a lost connection, a new run) through the fixture's own controls.
+(window as unknown as { evidence: WorkbenchFixture }).evidence = fixture;
 
 const libraryReferences: ReferencePort = (() => {
   const provider = createSocialReferenceProvider(socialWorkspacePort(), FIXTURE_PROJECT_ID);
@@ -284,8 +350,8 @@ function Page() {
     <main className="preview" data-view={view}>
       <p className="preview-caption">Fictional fixture · {theme} · {scenario.caption}</p>
       <SocialDomain {...port} port={socialWorkspacePort()} example now={scenario.now ?? NOW} {...(scenario.references ? { references: scenario.references === 'fixture' ? libraryReferences : scenario.references } : {})} />
-      {/* The shell mounts the one toast viewport; the Library views show its toasts too. */}
-      {view.startsWith('library') && <ToastViewport />}
+      {/* The shell mounts the one toast viewport. */}
+      <ToastViewport />
     </main>
   );
 }
