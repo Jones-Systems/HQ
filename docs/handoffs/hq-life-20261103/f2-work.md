@@ -7,7 +7,7 @@ Paused at the owner's request, relayed by the HQ coordinator at 14:50 UTC. No PR
 ## Status
 
 - **Done.** The Work flow assessment is written. The lead-owned Work foundation is on the lane branch, pushed, with typecheck and the Work and shared-UI tests passing. The foundation covers the theme, one chip family, kind and status marks, motion extras, the shared Done control, the stylesheet split and the Plan week route stub.
-- **In progress (paused early).** Five builder slices, each on its own sub-branch. They ran about 20 minutes before the pause, so expect early WIP. Their handoffs are linked [below](#builder-slices).
+- **In progress (paused early).** Five builder slices, each on its own sub-branch, with handoffs pushed. Slices A, B and C wrote most of their source; slice E wrote part of its source; slice D wrote none. No builder ran tests or took screenshots, because host load stayed at 31–70 on 16 cores. Details are [below](#builder-slices).
 - **Not started.**
   - Reviewing builder screenshots against the mockups, and the fix rounds.
   - Integrating the slices into the lane branch.
@@ -34,15 +34,35 @@ Related work in other lanes, read only by F2:
 
 ## Builder slices
 
-Each builder is a T3 delegated task (Claude Sonnet 5.5, effort xhigh) in its own worktree, branched from the lane branch at `18e6502`. All five got the pause instruction at 14:50 UTC. Each was asked to commit its WIP, push, write a handoff on its branch at the path below, and reply with that handoff.
+Each builder is a T3 delegated task (Claude Sonnet 5.5, effort xhigh) in its own worktree, branched from the lane branch at `18e6502`. All five got the pause instruction at 14:50 UTC. Each committed its WIP, pushed, and wrote a handoff on its branch at `docs/handoffs/hq-life-20261103/f2-work/<branch name with / replaced by ->.md`. All five handoffs are on origin:
 
-| Slice | Branch | Handoff on that branch | State at pause |
+- [A · Board](https://github.com/Jones-Systems/HQ/blob/work/hq-life-work-20261103-board/docs/handoffs/hq-life-20261103/f2-work/work-hq-life-work-20261103-board.md)
+- [B · List and detail](https://github.com/Jones-Systems/HQ/blob/work/hq-life-work-20261103-list-detail/docs/handoffs/hq-life-20261103/f2-work/work-hq-life-work-20261103-list-detail.md)
+- [C · Calendar and timeline](https://github.com/Jones-Systems/HQ/blob/work/hq-life-work-20261103-calendar-timeline/docs/handoffs/hq-life-20261103/f2-work/work-hq-life-work-20261103-calendar-timeline.md)
+- [D · Plan week and review](https://github.com/Jones-Systems/HQ/blob/work/hq-life-work-20261103-plan-review/docs/handoffs/hq-life-20261103/f2-work/work-hq-life-work-20261103-plan-review.md)
+- [E · Frame, capture, Glance, feedback](https://github.com/Jones-Systems/HQ/blob/work/hq-life-work-20261103-frame/docs/handoffs/hq-life-20261103/f2-work/work-hq-life-work-20261103-frame.md)
+
+| Slice | Branch | Head (code commit) | State at the pause |
 | --- | --- | --- | --- |
-| A · Board | `work/hq-life-work-20261103-board` | `docs/handoffs/hq-life-20261103/f2-work/work-hq-life-work-20261103-board.md` | pending reply |
-| B · List and detail | `work/hq-life-work-20261103-list-detail` | `docs/handoffs/hq-life-20261103/f2-work/work-hq-life-work-20261103-list-detail.md` | pending reply |
-| C · Calendar and timeline | `work/hq-life-work-20261103-calendar-timeline` | `docs/handoffs/hq-life-20261103/f2-work/work-hq-life-work-20261103-calendar-timeline.md` | pending reply |
-| D · Plan week and review | `work/hq-life-work-20261103-plan-review` | `docs/handoffs/hq-life-20261103/f2-work/work-hq-life-work-20261103-plan-review.md` | pending reply |
-| E · Frame, capture, Glance, feedback | `work/hq-life-work-20261103-frame` | `docs/handoffs/hq-life-20261103/f2-work/work-hq-life-work-20261103-frame.md` | pending reply |
+| A · Board | `work/hq-life-work-20261103-board` | `428c38a` (`c63d414`) | **Source written.** <ul><li>`PageHeader` and a Keyboard popover.</li><li>288 px columns, rails, and an overflow fade with scroll buttons.</li><li>Cards with `DoneButton`.</li><li>Drag physics in `useBoardDrag`: lift and tilt, a placeholder, list motion, settle and flash, Escape flying the card back, a refused-move shake.</li><li>Narrow status tabs, and the capture landing.</li><li>By date restyled; a board skeleton.</li><li>New tests written.</li></ul>tsc passes. No test run, no screenshots. |
+| B · List and detail | `work/hq-life-work-20261103-list-detail` | `c88f158` (`64df3f4`) | **Source written.** <ul><li>List: `PageHeader`, a sticky table, Done, chip-styled native selects, row motion, and columns hidden by container width.</li><li>Detail: slide-in, a wrapping title, status pills, Menu chip pickers, `StatusIndicator`, a Keep mine / Use theirs `InlineNotice`, checklist motion, `FieldError`.</li><li>F7-X13: the Advanced disclosure.</li></ul>tsc passes. No test run, no screenshots. Its own push of the handoff commit was rejected; the lead pushed `c88f158` from its worktree. |
+| C · Calendar and timeline | `work/hq-life-work-20261103-calendar-timeline` | `01b681e` (`a737095`) | **Source written.** <ul><li>Period titles, and a `SegmentedNav` for Month, Week, Day and Agenda.</li><li>Slide transitions.</li><li>Tray groups: This week's focus, Next, and Inbox captures.</li><li>A `Schedule “<title>”` button with a "Pick another day…" dialog.</li><li>Drag landing; month-grid polish; Timeline sticky lanes, a today line and a key.</li><li>An additive `trayGroups` in `moves.ts`.</li></ul>tsc passed before its test edits. It edited `calendar-timeline.test.tsx` and `calendar-polish.test.tsx`; nothing run. |
+| D · Plan week and review | `work/hq-life-work-20261103-plan-review` | `e062238` | **No production code.** The design is written in its handoff: <ul><li>the drop-rule table;</li><li>triage keys N/W/E, 1–4 and C/M/A/H/D/X;</li><li>the ISO-week caveat;</li><li>gaps in `moves.ts` for kind change, pinning a week date to a day, and day-to-week conversion.</li></ul>Nothing run; host load stayed at 31–48. |
+| E · Frame, capture, Glance, feedback | `work/hq-life-work-20261103-frame` | `22a6866` (`6c82b31`) | **Partial.** <ul><li>A toast bridge mirrors the stable feedback API onto F1 toasts, mounting its own viewport when the shell has none.</li><li>`syncIndicator`, the pure mapping for the top-bar status.</li><li>`SyncBanners` now use `InlineNotice`.</li><li>`PlanningViews` has no own toast or banners and reports writes through one `reportWrite`.</li><li>`env.feedback` was added.</li><li>`TopBar`, the compact `ToolbarCapture` with the F7-X15 fix, and `DetailSheet` (F7-X6) are written but **not mounted**: `WorkDomain.tsx` is not rewired, and there is no CSS.</li></ul>Not started: X-4, C-3, Glance, the Weekly plan link, the docs, and the F7-X5 investigation. Nothing run. |
+
+**Builder questions for whoever resumes.** Details are in each slice's handoff.
+
+- **C:** Is Agenda acceptable as a fourth segment? Should `calendar-motion.ts` stay local or be promoted? Is the `calendar-polish.test.tsx` edit acceptable? Could F1 add a kind or class slot to the `@hq/ui` TimeGrid event?
+- **D:** May the Review and Archive tests go in new `review-triage.test.tsx` and `archive.test.tsx` files? Is converting a day date to a week date on "This week, no day" acceptable? Should overdue deadlines show only in the backlog's Overdue group?
+- **B:**
+  - In List, are native selects drawn as chips acceptable, or should List use Menu? Menu would need six call sites in `views.test.tsx` updated.
+  - A true slide-out needs slice E to wrap the panel in Presence.
+  - Could F1 add a prop to `ReferenceChip` or `LinkList` to hide raw provenance?
+  - Should `ChipPicker` and `exiting.tsx` be promoted to shared code?
+- **E:** F1's toast viewport renders each title twice, once visibly and once in a screen-reader live region. Existing `getByText(<toast message>)` queries will find two elements, so they need scoping.
+- **All:**
+  - The builder worktrees had no `node_modules`. Builders made gitignored symlink farms into the lead's install.
+  - Host load of 31–70 kept every builder from running tests.
 
 - **Shared brief.** All builders received the same shared brief, copied here as [`f2-work/builder-brief-common.md`](f2-work/builder-brief-common.md). It covers rules, cross-slice contracts, host etiquette, preview tooling, screenshot requirements and the report format.
 - **Slice briefs.** Each slice brief (cone, mockups, deliverables, tests) is the first message of that builder's thread. The cones match the "Build slices" table in the assessment.
@@ -116,7 +136,13 @@ Each builder is a T3 delegated task (Claude Sonnet 5.5, effort xhigh) in its own
 
 ## What's left, in priority order
 
-1. **Collect the builder WIP.** Read each slice handoff and branch, and review its screenshots against the mockups (`docs/design/work/mockups/evidence/01–13`) and the assessment. Then finish each slice: start a new delegated round with the original slice brief from the builder's thread, the shared brief, and that builder's handoff.
+1. **Finish the builder slices.** Every slice is untested WIP, so:
+   - Start each one by running its scoped vitest and typecheck, following the "what's left" list in its handoff.
+   - Then build its preview and take its screenshots.
+   - Review those screenshots against the mockups (`docs/design/work/mockups/evidence/01–13`) and the assessment.
+   Resume each slice as a new delegated round. Give it the original slice brief (the first message in the builder's thread), the shared brief and that builder's handoff, plus the lead's answers to the builder questions above.
+   - Order: E (the frame, still unmounted) and D (Plan week, not started) need the most work. A, B and C are closest to done.
+   - Run two or three builders at a time, not five.
 2. **Verify the foundation.** Run `npx vitest run apps/desktop/src --no-file-parallelism` and `npm run build` on `40e0ef0` or later, and fix anything the Plan week nav item or the chip changes broke.
 3. **Integrate** into the lane branch in this order:
    - E (frame and feedback API) first, then A, B, C and D;
