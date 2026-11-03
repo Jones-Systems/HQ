@@ -143,7 +143,7 @@ async function capture(options) {
         });
         continue;
       }
-      await step(`${position + 1}: ${action}`, async () => {
+      await step(`step ${position + 1} (${action})`, async () => {
         const result = await perform(session, action, body);
         return action === 'eval' ? String(JSON.stringify(result)).slice(0, 300) : result;
       });

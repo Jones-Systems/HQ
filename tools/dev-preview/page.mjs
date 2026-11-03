@@ -59,6 +59,17 @@ export function findInPage(spec) {
   return { count: 0 };
 }
 
+/** Is this text visible anywhere on the page (rendered text or an aria-label)? Case-insensitive, substring. */
+export function textVisibleInPage(spec) {
+  const squash = value => String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const wanted = squash(spec.text);
+  if (squash(document.body.innerText).includes(wanted)) return true;
+  return [...document.querySelectorAll('[aria-label]')].some(element => {
+    const box = element.getBoundingClientRect();
+    return box.width > 0 && box.height > 0 && squash(element.getAttribute('aria-label')).includes(wanted);
+  });
+}
+
 /** The selected navigation items, for confirming that a click landed. */
 export function currentInPage(spec) {
   const squash = value => String(value ?? '').replace(/\s+/g, ' ').trim();

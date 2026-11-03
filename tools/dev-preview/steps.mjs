@@ -104,7 +104,7 @@ const NORMALIZERS = {
     return { down: b.down, target };
   },
   wait(b) {
-    reject(b, ['ms', 'text', 'selector', 'timeout', 'contains'], 'wait');
+    reject(b, ['ms', 'text', 'selector', 'timeout'], 'wait');
     if (b.ms !== undefined) {
       if (b.text !== undefined || b.selector !== undefined) throw new UsageError('wait: use ms or text/selector, not both');
       return { ms: integer(b.ms, 'ms', { min: 0, max: MAX_WAIT_MS }) };
@@ -113,7 +113,6 @@ const NORMALIZERS = {
     return {
       ...(b.text !== undefined ? { text: text(b.text, 'text', 500) } : {}),
       ...(b.selector !== undefined ? { selector: text(b.selector, 'selector', MAX_SELECTOR) } : {}),
-      contains: flag(b.contains, 'contains', false),
       timeout: integer(b.timeout, 'timeout', { min: 100, max: MAX_WAIT_MS, fallback: 5000 }),
     };
   },

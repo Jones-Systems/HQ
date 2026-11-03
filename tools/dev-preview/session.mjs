@@ -16,7 +16,7 @@ import { startReadFixture } from '../../tests/acceptance/fixtures/http.mjs';
 import { createWikiCorpus } from '../../tests/acceptance/fixtures/wiki.mjs';
 import { BUSY, NAV, fontconfigXml, formatSize, keyEvents, modeNeedsFixtures, parseMode, pickFace, resolveSize, serviceConfigFor } from './config.mjs';
 import { defaultShotsDir, reapStaleRuns, resolveInside, safeFileName, scratchDir, writeOwnerFile } from './files.mjs';
-import { currentInPage, findInPage, mountedInPage, pageStateInPage, settleInPage } from './page.mjs';
+import { currentInPage, findInPage, mountedInPage, pageStateInPage, settleInPage, textVisibleInPage } from './page.mjs';
 import { PrerequisiteError, checkPrerequisites, desktopMain, desktopRenderer, electronBinary, installElectron } from './prereq.mjs';
 
 export { PrerequisiteError };
@@ -388,7 +388,10 @@ export async function startSession(options = {}) {
       async wait(spec) {
         if (spec.ms !== undefined) { await delay(spec.ms); return { waited: spec.ms }; }
         const started = Date.now();
-        await until(async () => (await inPage(findInPage, { text: spec.text, selector: spec.selector, contains: spec.contains })).count > 0, `${describeTarget(spec)} to appear`, spec.timeout);
+        const present = spec.selector
+          ? async () => (await inPage(findInPage, { selector: spec.selector, text: spec.text, contains: true })).count > 0
+          : () => inPage(textVisibleInPage, { text: spec.text });
+        await until(present, `${describeTarget(spec)} to appear`, spec.timeout);
         return { waited: Date.now() - started };
       },
       async status() {

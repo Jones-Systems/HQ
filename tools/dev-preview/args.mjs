@@ -20,6 +20,14 @@ function whole(value, name) {
   return Number(value);
 }
 
+/** An option's value when it was given; an explicitly empty value is a mistake, not "use the default". */
+function given(values, name) {
+  const value = values[name];
+  if (value === undefined) return undefined;
+  if (value.trim() === '') throw new UsageError(`--${name} needs a value`);
+  return value;
+}
+
 const COMMON = {
   repo: { type: 'string' },
   mode: { type: 'string' },
@@ -31,9 +39,9 @@ const COMMON = {
 
 const commonValues = (values, defaultRepo) => ({
   help: values.help === true,
-  repo: resolve(values.repo ?? defaultRepo),
-  mode: parseMode(values.mode ?? DEFAULT_MODE),
-  size: resolveSize(values.size),
+  repo: resolve(given(values, 'repo') ?? defaultRepo),
+  mode: parseMode(given(values, 'mode') ?? DEFAULT_MODE),
+  size: resolveSize(given(values, 'size')),
   wiki: values.wiki !== false,
   installElectron: values['install-electron'] === true,
 });
@@ -44,7 +52,7 @@ export function parseServeArgs(argv, { repo: defaultRepo }) {
   return {
     ...commonValues(values, defaultRepo),
     name: validateSessionName(values.name ?? 'default'),
-    out: values.out ? resolve(values.out) : null,
+    out: given(values, 'out') ? resolve(values.out) : null,
     idleMinutes: idle ?? 90,
   };
 }
@@ -57,12 +65,12 @@ export function parseCaptureArgs(argv, { repo: defaultRepo }) {
   const common = commonValues(values, defaultRepo);
   return {
     ...common,
-    sizes: values.sizes ? parseSizes(values.sizes) : [common.size],
-    themes: values.themes ? parseThemes(values.themes) : [...THEMES],
-    out: values.out ? resolve(values.out) : null,
+    sizes: given(values, 'sizes') ? parseSizes(values.sizes) : [common.size],
+    themes: given(values, 'themes') ? parseThemes(values.themes) : [...THEMES],
+    out: given(values, 'out') ? resolve(values.out) : null,
     reducedMotion: values['reduced-motion'] === true,
     settings: values.settings !== false,
-    stepsFile: values.steps ? resolve(values.steps) : null,
+    stepsFile: given(values, 'steps') ? resolve(values.steps) : null,
   };
 }
 
@@ -124,7 +132,7 @@ export function ctlRequest(command, positionals, values) {
     case 'wait': {
       if (positionals.length === 1 && /^\d+$/.test(positionals[0])) return { route: 'wait', body: normalizeRequest('wait', { ms: Number(positionals[0]) }) };
       if (positionals.length) throw new UsageError('wait takes a number of milliseconds, or --text / --selector');
-      return { route: 'wait', body: normalizeRequest('wait', { text: values.text, selector: values.selector, contains: values.contains, timeout: whole(values.timeout, 'timeout') }) };
+      return { route: 'wait', body: normalizeRequest('wait', { text: values.text, selector: values.selector, timeout: whole(values.timeout, 'timeout') }) };
     }
     default:
       throw new UsageError(`Unknown command "${command}": use ${CTL_COMMANDS.join(', ')}`);

@@ -88,7 +88,7 @@ usage mistake). `--raw` prints string results as plain text.
 | `eval <expression>` | evaluate JavaScript in the renderer |
 | `window <w> <h>` or `<WxH>`, `window reset` | resize the viewport; `reset` returns to the session size |
 | `media <feature>=<value> ...`, `media reset` | emulate e.g. `prefers-color-scheme=dark`, `prefers-reduced-motion=reduce`; settings accumulate until `reset` |
-| `wait <ms>`, `wait --text <label>`, `wait --selector <css> [--timeout ms]` | pause, or wait for something visible |
+| `wait <ms>`, `wait --text <text>`, `wait --selector <css> [--timeout ms]` | pause, or wait until the text is visible anywhere on the page (case-insensitive substring) or a visible element matches the selector |
 | `settle [--timeout ms]` | wait for fonts, animations and loading indicators |
 | `errors [--since N] [--clear]` | console errors, warnings and exceptions seen so far |
 | `svc down\|up [work\|social]` | make the fixture services refuse connections (`live` mode) |
