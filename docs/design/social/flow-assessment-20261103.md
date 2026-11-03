@@ -85,6 +85,17 @@ Severity: **High** blocks or breaks the flow. **Medium** costs the user time or 
 13. **The sidebar is flat.** It has no icons, counts or brand identity, and *Manage brands* looks like body text. *Fix:* a brand switcher with initials avatar, icons and counts (drafts, runs, failed badge), and a *Later* group de-emphasized.
 14. **Shortcuts are thin.** Only ⌘/Ctrl S exists. *Fix:* N (new draft, outside text fields), ⌘/Ctrl Enter (run the current tool), ? (shortcut sheet). Each is listed in the header help.
 
+### Cross-app findings routed to F3
+
+Lane F7's cross-app assessment (`docs/design/hq-cross-app-flow-assessment-20261103.md`, PR #185) routes four findings to Social:
+
+| F7 finding | What F3 does |
+| --- | --- |
+| **X4.** An unreachable service replaces the whole Social area, and the brand picker hangs at "Loading brands…". | Built in the frame. A failed first read keeps the page frame with an inline notice, *Try again* and, for a configured service, *Open Social settings*. Mid-session, one bar under the page title reads "Offline · last synced … · changes paused". The brand picker says *Brands unavailable*. This extends finding 6. |
+| **X5.** Sample references point at `fixture-project`, not the shell's project, so they read as another project's and never open. | The example seed now uses the project it is shown in. The linked draft is paired with Work example item `ex-cupping-hour`, which F2 adds with a link back. The Overview copy is fixed in lane V1. **Not ours:** both shells' reference providers read only live services, so example links resolve as *unavailable* until F7 adds example-mode providers. |
+| **X6.** The Library column stretches, and the editor is clipped at 760 px. | Lane V3. The composer overlays or stacks below about 900 px of content width. |
+| **X13.** Developer text in the editor: serialized reference, paste-JSON field, raw IDs. | Lane V3. Behind an *Advanced* disclosure. |
+
 ## Design direction
 
 **Bar:** the Design area and the Social mockups, with interaction quality taken from best-in-class tools:
@@ -142,7 +153,8 @@ Each lane keeps its tests green, adds focused tests for new behaviour, and captu
   3. draft states (Idea / Drafting / Ready) and per-channel variants;
   4. brand profile fields.
 
-  Until each lands, the UI labels it *Proposed* or derives it honestly from what exists.
+  Until each lands, the UI labels it *Proposed* or derives it honestly from what exists. B2's target `portErrorNotice(error, action)` helper (WS-D) will replace Social's local error wording once it lands.
+- **F7 (cross-app navigation):** in example mode, register reference providers that read the same example stores the domains show, so sample links open on first launch (X5).
 
 ## Acceptance for this lane
 
