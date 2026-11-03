@@ -23,3 +23,4 @@ export { createWikiDomain } from './domain.ts';
 export type { WikiDomain, WikiDomainOptions } from './domain.ts';
 export { createWikiClient } from './client.ts';
 export type { WikiHostPort, WikiModulePort } from './port.ts';
+export { createWikiReferenceProvider, type WikiReferenceProvider } from './references.ts';
