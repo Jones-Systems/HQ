@@ -43,7 +43,7 @@ export function Overview({ headingId, project, onManage }: { headingId: string; 
         <RotateLabel busy={working} label="Recheck all" busyLabel="Rechecking" />
       </ActionButton>
     }>Where HQ gets its data. Each source shows its health and a Manage button for the settings that fix it. These are data sources, not device, SSH or environment connections.</SettingsHeading>
-    <Panel aria-label="Data source status" busy={project.loading}>
+    <Panel role="group" aria-label="Data source status" busy={project.loading}>
       {rows.map(row => <Row key={row.key} icon={row.icon} title={row.name} statusInline
         status={row.loading ? <Skeleton width="72px" /> : row.chip && <ChipBadge chip={row.chip} />}
         description={row.loading ? <Skeleton width="55%" /> : row.detail}

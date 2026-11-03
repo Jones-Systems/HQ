@@ -17,7 +17,7 @@ const deviceIsDark = () => typeof window.matchMedia === 'function' && window.mat
 
 /** A miniature rail and panel. Each layer sets its own `color-scheme` and colour roles, so it never follows the page. */
 function TileLayer({ scope, className }: { scope: CSSProperties; className?: string }) {
-  return <span className={className ? `theme-tile-layer ${className}` : 'theme-tile-layer'} data-hq-token-scope="" style={scope}>
+  return <span className={className ? `theme-tile-layer ${className}` : 'theme-tile-layer'} style={scope}>
     <span className="theme-tile-rail"><i /><i /><i /></span>
     <span className="theme-tile-panel"><b /><u /><u /><s /></span>
   </span>;

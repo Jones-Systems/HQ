@@ -7,6 +7,7 @@ it('enrolls gallery only on explicit submit and clears its private address after
   Object.defineProperty(window, 'hqServices', { configurable: true, value: { sources: { call } } });
   render(<ProjectSources />);
   await waitFor(() => expect(call).toHaveBeenCalledWith('status', {}));
+  fireEvent.click(screen.getByRole('button', { name: 'Enroll a gallery…' }));
   fireEvent.change(screen.getByLabelText('Gallery base URL'), { target: { value: 'https://example.com/gallery/' } });
   expect(call).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole('button', { name: 'Enroll gallery' }));

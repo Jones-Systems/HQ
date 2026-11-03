@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { Button } from '@hq/ui';
 import type { Appearance } from '@hq/contracts';
 import type { ServiceConfigTransport } from '@hq/contracts/services';
@@ -86,10 +86,13 @@ export function ServiceSettings({ config, onClose, returnLabel = 'Design', targe
       <nav className="settings-categories" aria-label="Settings categories" ref={nav} onKeyDown={onNavKey}>
         {CATEGORY_GROUPS.map(group => <div key={group.label} className="settings-nav-group" role="group" aria-label={group.label}>
           <span className="settings-nav-eyebrow" aria-hidden="true">{group.label}</span>
-          {group.items.map(item => <button key={item.id} type="button" aria-current={category === item.id ? 'page' : undefined} aria-describedby={attention[item.id] ? `${descriptions}-${item.id}` : undefined} onClick={() => open(item.id)}>
-            <Icon name={item.icon} /><span className="settings-nav-label">{item.label}</span>
-            {attention[item.id] && <><i className="settings-nav-status" aria-hidden="true" /><span id={`${descriptions}-${item.id}`} className="hq-sr-only">{attention[item.id]}</span></>}
-          </button>)}
+          {group.items.map(item => <Fragment key={item.id}>
+            <button type="button" aria-current={category === item.id ? 'page' : undefined} aria-describedby={attention[item.id] ? `${descriptions}-${item.id}` : undefined} onClick={() => open(item.id)}>
+              <Icon name={item.icon} /><span className="settings-nav-label">{item.label}</span>
+              {attention[item.id] && <i className="settings-nav-status" aria-hidden="true" />}
+            </button>
+            {attention[item.id] && <span id={`${descriptions}-${item.id}`} className="hq-sr-only">{attention[item.id]}</span>}
+          </Fragment>)}
         </div>)}
       </nav>
       <div className="settings-scroll" ref={scroller}>

@@ -106,13 +106,17 @@ it('downloads the displayed candidate and allows cancellation while its request 
   expect(progress.value).toBe(40);
   expect(progress.getAttribute('aria-valuetext')).toBe('40% · 40 MB of 100 MB');
   const cancel = screen.getByRole('button', { name: 'Cancel download' }) as HTMLButtonElement;
-  expect(cancel.disabled).toBe(false);
+  expect(cancel.getAttribute('aria-disabled')).toBeNull();
   fireEvent.click(cancel);
   await waitFor(() => expect(fixture.port.cancelDownload).toHaveBeenCalledOnce());
-  expect((screen.getByRole('button', { name: 'Cancelling…' }) as HTMLButtonElement).disabled).toBe(true);
+  // The running action shows its own busy state and ignores a second activation.
+  const cancelling = screen.getByRole('button', { name: 'Cancelling…' }) as HTMLButtonElement;
+  expect(cancelling.getAttribute('aria-busy')).toBe('true');
+  fireEvent.click(cancelling);
+  expect(fixture.port.cancelDownload).toHaveBeenCalledOnce();
   expect(fixture.port.download).toHaveBeenCalledOnce();
   await act(async () => { download.resolve({ ok: false, code: 'cancelled', status: status({ phase: 'available', candidate }) }); });
-  expect((await screen.findByRole('button', { name: 'Download update' }) as HTMLButtonElement).disabled).toBe(false);
+  expect((await screen.findByRole('button', { name: 'Download update' })).getAttribute('aria-disabled')).toBeNull();
   expect(screen.queryByRole('progressbar')).toBeNull();
   expect(screen.queryByRole('alert')).toBeNull();
   expect(fixture.port.schedule).not.toHaveBeenCalled();
@@ -209,8 +213,15 @@ it('holds further actions after an unconfirmed result until status is refreshed'
   fireEvent.click(await screen.findByRole('button', { name: 'Install on next launch' }));
   expect((await screen.findByRole('alert')).textContent).toContain('HQ could not confirm the result');
   expect(screen.queryByText(/Synthetic transport detail/)).toBeNull();
-  expect((screen.getByRole('button', { name: 'Check for updates' }) as HTMLButtonElement).disabled).toBe(true);
-  expect((screen.getByRole('button', { name: 'Install on next launch' }) as HTMLButtonElement).disabled).toBe(true);
+  // Unavailable actions stay visible and focusable, say why, and ignore activation.
+  const check = screen.getByRole('button', { name: 'Check for updates' });
+  const install = screen.getByRole('button', { name: 'Install on next launch' });
+  expect(check.getAttribute('aria-disabled')).toBe('true');
+  expect(install.getAttribute('aria-disabled')).toBe('true');
+  expect(document.getElementById(check.getAttribute('aria-describedby')!)?.textContent).toBe('Refresh the update status first.');
+  fireEvent.click(check); fireEvent.click(install);
+  expect(fixture.port.check).not.toHaveBeenCalled();
+  expect(fixture.port.schedule).toHaveBeenCalledOnce();
   fixture.port.status.mockResolvedValueOnce(status({ phase: 'scheduled', candidate }));
   fireEvent.click(screen.getByRole('button', { name: 'Refresh update status' }));
   await screen.findByRole('button', { name: 'Cancel scheduled installation' });
@@ -268,8 +279,9 @@ it('shows unsupported installed status while keeping update controls disabled', 
   render(<Updates port={fixture.port} />);
   await screen.findByText('Version 1.0.0');
   expect(screen.getByRole('heading', { name: 'Updates unavailable' })).toBeTruthy();
-  const check = screen.getByRole('button', { name: 'Check for updates' }) as HTMLButtonElement;
-  expect(check.disabled).toBe(true);
+  const check = screen.getByRole('button', { name: 'Check for updates' });
+  expect(check.getAttribute('aria-disabled')).toBe('true');
+  expect(document.getElementById(check.getAttribute('aria-describedby')!)?.textContent).toBe('Updates aren’t available for this installation.');
   fireEvent.click(check);
   expect(fixture.port.check).not.toHaveBeenCalled();
   expect(screen.getAllByRole('checkbox').every(input => (input as HTMLInputElement).disabled)).toBe(true);
