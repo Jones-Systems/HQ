@@ -1,0 +1,5 @@
+/* A receipt's Run ID: a full-width row inside the receipt's fact grid, so the whole ID sits on one line. */
+.sw-facts > .sw-fact-wide { grid-column: 1 / -1; }
+.sw-fact-wide dd { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
+.sw-run-id { font: var(--hq-type-meta); font-size: 11px; color: var(--hq-text-muted); user-select: all; overflow-wrap: anywhere; }
+.sw-run-id-note { flex-basis: 100%; font: var(--hq-type-small); color: var(--hq-text-muted); }

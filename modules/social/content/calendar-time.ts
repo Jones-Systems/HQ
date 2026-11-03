@@ -38,3 +38,18 @@ export function gridPlanning(draft: Draft, day: string, minute: number, resize: 
   const slot = checkSlot({ start: slotClock(start), duration_minutes: duration, timezone: zone }, date, [FEATURE_HQ_EDITORIAL_TIMEBOX]);
   return slot.ok ? { ok: true, value: { planned_date: date, planning_slot: slot.value ?? null } } : slot;
 }
+
+/** "9:00 a.m." from minutes after midnight, matching the shared time grid's labels. Storage stays HH:mm. */
+export function clockLabel(minutes: number): string {
+  const minute = ((minutes % 1440) + 1440) % 1440;
+  const hour = Math.floor(minute / 60);
+  return `${hour % 12 || 12}:${String(minute % 60).padStart(2, '0')} ${hour < 12 ? 'a.m.' : 'p.m.'}`;
+}
+
+/** "30 min", "1 h", "1 h 30 min". */
+export function durationLabel(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest} min`;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}

@@ -1,0 +1,113 @@
+/* Run history timeline and receipt peek (lane F3-V4). Scoped to .rh-*, built only from --hq-* tokens, no inline
+   styles (CSP). Rows pulse only while a run is active; entrances use the shared motion tokens and collapse to an
+   instant change under reduced motion, while the colour and state feedback stays. */
+
+.rh { display: grid; gap: var(--hq-space-lg); min-width: 0; container: rh / inline-size; color: var(--hq-text); font: var(--hq-type-body); }
+.rh h2, .rh p { margin: 0; }
+
+/* ---------- Toolbar ---------- */
+.rh-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm); }
+.rh-filter { display: inline-flex; align-items: center; gap: var(--hq-space-xs); font: var(--hq-type-label); color: var(--hq-text-muted); }
+.rh-filter select {
+  min-height: var(--hq-size-control-sm); max-width: 14rem; padding: 0 var(--hq-space-sm); color-scheme: inherit;
+  font: var(--hq-type-label); color: var(--hq-text); background: var(--hq-input-bg); border: 1px solid var(--hq-input-edge); border-radius: var(--hq-radius-sm);
+}
+.rh-filter select:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
+.rh-hint { font: var(--hq-type-small); color: var(--hq-text-muted); }
+
+/* ---------- Layout: the list, and the receipt beside it ---------- */
+.rh-layout { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-lg); align-items: start; min-width: 0; }
+.rh-layout[data-panel] { grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem); }
+.rh-list { min-width: 0; }
+.rh-timeline { display: grid; gap: var(--hq-space-lg); }
+
+/* ---------- Timeline ---------- */
+.rh-day { display: grid; gap: var(--hq-space-xs); }
+.rh-day-title {
+  display: flex; align-items: center; gap: var(--hq-space-xs); padding: 0 var(--hq-space-xs);
+  font: var(--hq-type-label); color: var(--hq-text-muted); letter-spacing: 0.02em;
+}
+.rh-day:first-child .rh-day-title { color: var(--hq-text); }
+.rh-count {
+  display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 var(--hq-space-2xs); border-radius: var(--hq-radius-pill);
+  background: var(--hq-surface-sunken); color: var(--hq-text-muted); font-size: 11px; font-variant-numeric: tabular-nums;
+}
+.rh-runs {
+  list-style: none; margin: 0; padding: 0; display: grid; overflow: clip;
+  background: var(--hq-surface-raised); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg);
+}
+.rh-item + .rh-item { border-top: 1px solid var(--hq-border); }
+.rh-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--hq-space-sm);
+  width: 100%; min-height: 52px; padding: var(--hq-space-xs) var(--hq-space-md); border: 0; border-radius: 0;
+  background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer;
+  transition: background var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.rh-row:hover { background: var(--hq-surface-hover); }
+.rh-row:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: calc(-1 * var(--hq-size-focus-width)); }
+.rh-row[aria-current="true"] { background: var(--hq-selected-bg); box-shadow: inset 3px 0 0 var(--hq-accent); }
+.rh-main { display: grid; gap: var(--hq-space-3xs); min-width: 0; }
+.rh-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-2xs) var(--hq-space-xs); min-width: 0; }
+.rh-title b { font-weight: var(--hq-font-weight-medium); overflow-wrap: anywhere; }
+.rh-id { font-family: var(--hq-font-family-mono); font-size: 12px; color: var(--hq-text-subtle); }
+.rh-sub { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--hq-space-3xs) var(--hq-space-sm); min-width: 0; }
+.rh-status { align-items: baseline; }
+/* The reason after Failed or Interrupted is prose, not an identifier: sentence font, wrapping, two lines at most. */
+.rh-status .hq-status { white-space: normal; align-items: baseline; }
+.rh-status .hq-status-shape { align-self: center; }
+.rh-status .hq-status-label { font: var(--hq-type-small); font-weight: var(--hq-font-weight-medium); }
+.rh-status .hq-status-detail {
+  font: var(--hq-type-small); color: var(--hq-text-muted); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.rh-row[data-status="succeeded"] .rh-status .hq-status-detail { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rh-time { font: var(--hq-type-small); font-variant-numeric: tabular-nums; color: var(--hq-text-muted); white-space: nowrap; }
+
+/* Status glyphs: a shape and a symbol, never colour alone. Active runs pulse. */
+.rh-glyph {
+  position: relative; display: inline-grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%;
+  background: var(--hq-surface-sunken); color: var(--hq-text-muted);
+}
+.rh-glyph .sx-icon { width: 14px; height: 14px; stroke-width: 2; }
+.rh-glyph[data-state="succeeded"] { background: var(--hq-success-soft); color: var(--hq-success); }
+.rh-glyph[data-state="failed"] { background: var(--hq-danger-soft); color: var(--hq-danger); border-radius: var(--hq-radius-md); }
+.rh-glyph[data-state="interrupted"] { background: var(--hq-warning-soft); color: var(--hq-warning); }
+.rh-glyph[data-state="queued"], .rh-glyph[data-state="running"] { background: var(--hq-info-soft); color: var(--hq-info); }
+.rh-glyph[data-state="unknown"] { background: transparent; border: 1.5px dashed var(--hq-border-strong); }
+.rh-glyph[data-state="queued"]::after, .rh-glyph[data-state="running"]::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--hq-info); opacity: 0;
+  animation: rh-pulse calc(8 * var(--hq-duration-slow)) var(--hq-ease-standard) infinite;
+}
+.rh-glyph[data-state="queued"]::after { animation-duration: calc(14 * var(--hq-duration-slow)); }
+@keyframes rh-pulse { 0% { transform: scale(0.85); opacity: 0.55; } 70%, 100% { transform: scale(1.3); opacity: 0; } }
+
+/* ---------- Receipt peek ---------- */
+.rh-peek {
+  position: sticky; top: var(--hq-space-md); z-index: 3; display: grid; gap: var(--hq-space-md); align-content: start; min-width: 0;
+  max-height: calc(100dvh - 8rem); overflow: auto; padding: var(--hq-space-md);
+  background: var(--hq-surface-raised); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); box-shadow: var(--hq-shadow-raised);
+}
+/* One header row: eyebrow, tool and status on the left, Close at the far end of the same row. */
+.rh-peek .sw-receipt-head { position: relative; padding-inline-end: 2.5rem; }
+.rh-peek .sw-receipt-head-end { position: absolute; inset-block-start: 0; inset-inline-end: 0; }
+.rh-peek .sw-receipt > .sw-facts > div:last-child { grid-column: 1 / -1; } /* The basis reads on one line, not in half a row. */
+.rh-close { min-width: 28px; padding-inline: var(--hq-space-2xs); }
+.rh-scrim { display: none; }
+.rh-again { display: grid; justify-items: start; gap: var(--hq-space-xs); padding-top: var(--hq-space-sm); border-top: 1px solid var(--hq-border); }
+.rh-again-note { font: var(--hq-type-small); color: var(--hq-text-muted); }
+.rh-peek > .rh-again-note { padding-top: var(--hq-space-sm); border-top: 1px solid var(--hq-border); }
+
+/* Narrow: the receipt covers the list instead of squeezing it, and the rest of the list is dimmed and inert to the pointer. */
+@container rh (max-width: 46rem) {
+  .rh-layout[data-panel] { grid-template-columns: minmax(0, 1fr); }
+  .rh-layout[data-panel] > .rh-list, .rh-layout[data-panel] > .rh-peek, .rh-layout[data-panel] > .rh-scrim { grid-area: 1 / 1; }
+  .rh-scrim { display: block; z-index: 2; border: 0; border-radius: var(--hq-radius-lg); background: color-mix(in srgb, var(--hq-surface) 70%, transparent); cursor: default; }
+  .rh-peek { z-index: 3; justify-self: end; width: min(100%, 30rem); box-shadow: var(--hq-shadow-overlay); }
+  .rh-row { padding-inline: var(--hq-space-sm); }
+}
+
+/* ---------- Reduced motion: no pulse; the glyph and the status word still say what is active ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .rh-glyph::after { animation: none !important; }
+}
+:root[data-hq-motion="reduce"] .rh-glyph::after { animation: none !important; }
