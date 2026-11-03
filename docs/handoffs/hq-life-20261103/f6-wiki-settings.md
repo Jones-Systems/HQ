@@ -26,7 +26,7 @@ All branches are on `origin` (github.com/Jones-Systems/HQ).
 | Branch | Role | Head | Worktree | Handoff |
 | --- | --- | --- | --- | --- |
 | `work/hq-life-wiki-settings-20261103` | Lane branch: docs, evidence, F1 merge, Wiki base | see the commit carrying this file | `~/.t3/worktrees/HQ/work-hq-life-wiki-settings-20261103` | this file |
-| `work/hq-life-settings-20261103` | S1: Settings redesign (base `4cdb7a7`). Complete per its report: root `npm run typecheck` exit 0; `npx vitest run apps/desktop` 58 files / 434 tests pass; 53 after images | `bf0822b` (code and evidence); the handoff file commit is pending (see S1 below) | `~/.t3/worktrees/HQ/work-hq-life-settings-20261103` | [`f6-wiki-settings/hq-life-settings-20261103.md`](f6-wiki-settings/hq-life-settings-20261103.md) on that branch (being written) |
+| `work/hq-life-settings-20261103` | S1: Settings redesign (base `4cdb7a7`). Complete per its report: root `npm run typecheck` exit 0; `npx vitest run apps/desktop` 58 files / 434 tests pass; 53 after images | `6b1ab3c` (its handoff, on top of the code and evidence at `bf0822b`) | `~/.t3/worktrees/HQ/work-hq-life-settings-20261103` | [`f6-wiki-settings/hq-life-settings-20261103.md`](f6-wiki-settings/hq-life-settings-20261103.md) on that branch |
 | `work/hq-life-wiki-w1-20261103` | W1: Wiki chrome, search, home, history (base `d2711c7`). The builder was killed (out of memory) before handing off. The lead committed its on-disk work as one `WIP:` commit (`6e2c14f`, typechecks, tests not run) and wrote its handoff from observation | `b9d2f1f` | `~/.t3/worktrees/HQ/work-hq-life-wiki-w1-20261103` | [`f6-wiki-settings/hq-life-wiki-w1-20261103.md`](f6-wiki-settings/hq-life-wiki-w1-20261103.md) on that branch |
 | `work/hq-life-wiki-w2-20261103` | W2: Wiki reader, links, previews, topics (base `d2711c7`). Code done for every Reader and Topics section. `npm test` 536/539: the 3 failures are W1-owned tests needing selector updates. New-behaviour tests not written; dark and narrow captures not taken | `0273a0a` | `~/.t3/worktrees/HQ/work-hq-life-wiki-w2-20261103` | [`f6-wiki-settings/hq-life-wiki-w2-20261103.md`](f6-wiki-settings/hq-life-wiki-w2-20261103.md) on that branch |
 | `work/hq-life-wiki-w3-20261103` | W3: Wiki reference provider. **Cancelled:** lane B5 owns this | `dbdd5bb` (4 commits, pushed before the cancel took effect) | `~/.t3/worktrees/HQ/work-hq-life-wiki-w3-20261103` | none (cancelled); see "W3" below |
@@ -124,10 +124,14 @@ unreviewed and must not be merged by F6. B5 keeps whichever implementation is fu
 
 ## What's left, in priority order
 
-1. **Confirm S1's handoff file** has landed on `work/hq-life-settings-20261103`. If it hasn't, write it from S1's
-   final report in its thread: [F6 S1 · Settings redesign builder](t3-thread://v1/thread:delegated-task:command%3Amcp%3A2c0b707d-7807-49a5-9abd-096df44c10bc%3Adelegate-task%3Af6-s1-settings-20261103).
-   The W1 and W2 handoffs are pushed.
+1. **Read the three builder handoffs** linked in the table before touching a branch. All three are pushed. S1's
+   own thread is [F6 S1 · Settings redesign builder](t3-thread://v1/thread:delegated-task:command%3Amcp%3A2c0b707d-7807-49a5-9abd-096df44c10bc%3Adelegate-task%3Af6-s1-settings-20261103).
 2. **Review S1** against the Settings design.
+   - Its handoff lists every changed test assertion and its deviations from the design. It also lists
+     recommendations outside its files for the shell lane: the rail's ↻ glyph, a toast on the rail theme button,
+     and a ⌘, shortcut.
+   - In a fresh worktree, run `npm run build:electron` before `npx vitest run apps/desktop`, or five Electron-host
+     tests fail. `catalog-host.test.ts` can time out when the host is loaded; it passed on reruns.
    - Look at the screenshots in `docs/design/settings/evidence/after-20261103/` on its branch.
    - Check every changed test assertion against the rule: never weakened.
    - Send fix rounds with `t3_task_continue`, or start a fresh builder from its handoff.
