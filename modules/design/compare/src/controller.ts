@@ -72,9 +72,10 @@ export interface CompareController {
   dismissError(): void;
   /**
    * Lists the project's views and their versions so a panel can be added for any of them. It only fills
-   * `snapshot.catalog` and `snapshot.versions`; it never changes a pinned panel. Safe to call repeatedly.
+   * `snapshot.catalog` and `snapshot.versions`; it never changes a pinned panel. Reads once however often it is
+   * called; `refresh` reads again in place (a failed refresh keeps the list it had) for a host that knows versions were added.
    */
-  loadCatalog(): Promise<void>;
+  loadCatalog(options?: { readonly refresh?: boolean }): Promise<void>;
   /** Adds a panel pinned to an exact version: its static capture when it has one, else a live preview. */
   addVersionPanel(versionId: VersionId, mode?: PanelSource['kind']): Promise<void>;
   save(): Promise<boolean>;
@@ -157,11 +158,13 @@ export function createCompareController(initial: ComparisonState, deps: CompareD
   };
 
   let catalogLoad: Promise<void> | null = null;
-  const loadCatalog = (): Promise<void> => {
+  const loadCatalog = (options?: { readonly refresh?: boolean }): Promise<void> => {
     if (disposed) return Promise.resolve();
     if (catalogLoad !== null) return catalogLoad;
-    if (snapshot.catalog.status === 'ready') return Promise.resolve();
-    emit({ ...snapshot, catalog: { status: 'loading', views: snapshot.catalog.views } });
+    const refreshing = snapshot.catalog.status === 'ready';
+    if (refreshing && options?.refresh !== true) return Promise.resolve();
+    // A refresh keeps showing the list it has; only a first read (or a retry) reports loading.
+    if (!refreshing) emit({ ...snapshot, catalog: { status: 'loading', views: snapshot.catalog.views } });
     catalogLoad = (async () => {
       let views: readonly ViewSummary[] = [];
       let status: CatalogState['status'] = 'ready';
@@ -172,6 +175,7 @@ export function createCompareController(initial: ComparisonState, deps: CompareD
       } catch { status = 'failed'; }
       catalogLoad = null;
       if (disposed) return;
+      if (refreshing && status === 'failed') return;
       const versions = new Map(snapshot.versions);
       for (const [id, list] of loaded) versions.set(id, list);
       emit({ ...snapshot, versions, catalog: { status, views } });

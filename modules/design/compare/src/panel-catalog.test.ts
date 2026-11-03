@@ -59,6 +59,47 @@ describe('catalog discovery', () => {
   });
 });
 
+describe('catalog refresh', () => {
+  /** A catalog whose views can change under the controller, as they do while someone adds versions in Projects. */
+  function changing() {
+    const real = createFakeCatalog(sampleCatalogData());
+    const state = { fail: false, only: null as string | null };
+    const controller = createCompareController(createComparison(comparisonId('cmp-r'), projectId('sample-project'), []), {
+      catalog: {
+        ...real,
+        async listViews(project, signal) {
+          if (state.fail) throw new Error('offline');
+          const views = await real.listViews(project, signal);
+          return state.only === null ? views : views.filter((view) => view.name === state.only);
+        },
+      },
+    });
+    return { controller, state };
+  }
+
+  it('reads again in place when asked to, without reporting a new load', async () => {
+    const { controller, state } = changing();
+    state.only = 'Home';
+    await controller.loadCatalog();
+    expect(controller.getSnapshot().catalog.views.map((view) => view.name)).toEqual(['Home']);
+    state.only = null;
+    const statuses: string[] = [];
+    controller.subscribe(() => statuses.push(controller.getSnapshot().catalog.status));
+    await controller.loadCatalog({ refresh: true });
+    expect(controller.getSnapshot().catalog.views.map((view) => view.name)).toEqual(['Home', 'Pricing']);
+    expect(statuses).not.toContain('loading');
+  });
+
+  it('keeps the list it had when a refresh fails', async () => {
+    const { controller, state } = changing();
+    await controller.loadCatalog();
+    state.fail = true;
+    await controller.loadCatalog({ refresh: true });
+    expect(controller.getSnapshot().catalog.status).toBe('ready');
+    expect(controller.getSnapshot().catalog.views.map((view) => view.name)).toEqual(['Home', 'Pricing']);
+  });
+});
+
 describe('adding a panel for an exact version', () => {
   it('starts with a baseline, then a candidate, then references, pinned to exact versions', async () => {
     const { controller } = emptyComparison();
