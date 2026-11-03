@@ -69,6 +69,9 @@ function Deck({ client, scope, snapshot, newId, disabled, onSaved, queue }: Quic
   const busy = useRef(false);
   const phaseRef = useRef<Phase>({ kind: 'idle' });
   const unconfirmed = useRef<Unconfirmed | null>(null);
+  // The card last handed back to the owner. Its removal reaches `latest` only after the next commit, so a key that
+  // lands in between must not act on it a second time.
+  const released = useRef<TasteQueueItem | null>(null);
   const recentRef = useListMotion<HTMLUListElement>(recent.map((entry) => entry.key));
 
   function setPhase(value: Phase) { phaseRef.current = value; setPhaseState(value); }
@@ -116,6 +119,7 @@ function Deck({ client, scope, snapshot, newId, disabled, onSaved, queue }: Quic
       ctx.toast.success(`Saved “${item.label}” as ${STAMP_WORDS[value]} · ${value}`, {
         id: TOAST_RATED, meta: `${ctx.scope.kind === 'general' ? 'General taste' : 'Project taste'} · ${waiting} waiting`,
       });
+      released.current = item;
       ctx.queue.onRated(item);
       ctx.onSaved();
       setPhase({ kind: 'idle' });
@@ -141,12 +145,13 @@ function Deck({ client, scope, snapshot, newId, disabled, onSaved, queue }: Quic
   async function act(choice: DeckChoice) {
     const ctx = latest.current;
     const item = ctx.top;
-    if (!item || busy.current || ctx.disabled || phaseRef.current.kind === 'unknown') return;
+    if (!item || item === released.current || busy.current || ctx.disabled || phaseRef.current.kind === 'unknown') return;
     busy.current = true;
     try {
       if (choice.kind === 'skip') {
         await cardRef.current?.flyOff('down');
         setPhase({ kind: 'idle' });
+        released.current = item;
         ctx.queue.onSkipped(item);
         return;
       }
@@ -209,7 +214,8 @@ function Deck({ client, scope, snapshot, newId, disabled, onSaved, queue }: Quic
     const choice = choiceForKey(event);
     if (!choice) return;
     event.preventDefault();
-    void act(choice);
+    // Holding a key must not run through the deck: one press, one card.
+    if (!event.repeat) void act(choice);
   };
 
   // Arrows inside the exact-rating row move along it instead of rating.

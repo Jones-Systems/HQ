@@ -41,8 +41,11 @@ interface Harness {
   readonly view: ReturnType<typeof render>;
 }
 
-/** Mirrors the composed view: the items live in the owner's state, and rated or skipped items leave it. */
-function mount(client: TasteClientPort, initial: readonly TasteQueueItem[], withQueue = true): Harness {
+/**
+ * Mirrors the composed view: the items live in the owner's state, and rated or skipped items leave it. With `keep`
+ * the owner is slow to react and the item stays, as it does for the moment between the call and the next commit.
+ */
+function mount(client: TasteClientPort, initial: readonly TasteQueueItem[], withQueue = true, keep = false): Harness {
   const rated: TasteQueueItem[] = [];
   const skipped: TasteQueueItem[] = [];
   const toasts = createToastStore();
@@ -51,8 +54,8 @@ function mount(client: TasteClientPort, initial: readonly TasteQueueItem[], with
     const drop = (item: TasteQueueItem) => setItems((list) => list.filter((entry) => entry.id !== item.id || entry.kind !== item.kind));
     const value: TasteQueueValue = {
       items,
-      onRated: (item) => { rated.push(item); drop(item); },
-      onSkipped: (item) => { skipped.push(item); drop(item); },
+      onRated: (item) => { rated.push(item); if (!keep) drop(item); },
+      onSkipped: (item) => { skipped.push(item); if (!keep) drop(item); },
       originLabel: (from) => ({ references: 'References', components: 'Components', flows: 'Flows' }[from] ?? ''),
     };
     return <TasteQueueContext value={value}>{children}</TasteQueueContext>;
@@ -186,6 +189,26 @@ describe('QuickRateDeck keyboard', () => {
     expect(screen.getByText('1 waiting')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     await waitFor(() => expect(skipped.length).toBe(3));
+  });
+
+  it('acts once on a card the owner has not removed yet, and never on a held key', async () => {
+    const taste = await service();
+    const submit = vi.spyOn(taste, 'submit');
+    const { rated, skipped } = mount(taste, [PRICING, BUTTON], true, true);
+    await screen.findByText('Project profile');
+    // Auto-repeat of a held key is one press, not a run through the deck.
+    fireEvent.keyDown(deck(), { key: 'ArrowRight', repeat: true });
+    expect(submit).not.toHaveBeenCalled();
+    fireKey('ArrowRight');
+    await waitFor(() => expect(rated).toEqual([PRICING]));
+    // The owner has not caught up: the saved card is still first, and the next key must not rate it again.
+    fireKey('ArrowRight');
+    fireKey('ArrowDown');
+    // Long enough for a second fly-off (240ms) to finish and call the owner, if the deck wrongly started one.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(rated).toEqual([PRICING]);
+    expect(skipped).toEqual([]);
   });
 
   it('keeps keyboard focus in the deck after the last card is rated', async () => {
