@@ -3,8 +3,9 @@
 Authority effect: none. Lane F6 design decisions for app Settings, made by the lane lead under the owner's
 2026-11-03 direction (“design decisions yourself”). Inputs: [flow assessment](../../../modules/wiki/ui/flow-assessment-20261103.md)
 findings SF-1 to SF-7, the [HQ visual system](../hq-visual-system/README.md) (Design area is the visual bar) and the
-shared motion/feedback primitives from lane F1 (`docs/design/hq-visual-system/motion-and-feedback.md` on
-`work/hq-life-system-20261103`, when published). Reference products: Linear and Raycast settings, macOS appearance.
+shared motion and feedback primitives from lane F1 ([motion and feedback](../hq-visual-system/motion-and-feedback.md),
+merged from `work/hq-life-system-20261103` at `284393d`). Reference products: Linear and Raycast settings, macOS
+appearance.
 
 ## Goals
 
@@ -59,18 +60,27 @@ section element ids `settings-social`, `settings-work`, `settings-wiki` so exist
 
 ## Feedback
 
-- **Busy**: the triggering button uses `busy`/`busyLabel` and keeps its width; other mutating controls in the same
-  row disable with the reason “Another action is in progress.”
-- **Inline result** on the row that changed: a short line under the row copy with tone (success/warning/danger) and,
-  for failures, a reason in plain words plus Retry where safe. It replaces today's card-bottom status paragraph.
-- **Toast** for every completed action (success and failure), via the lane F1 toast primitive once merged; until
-  then a settings-local adapter (`settings/feedback.tsx`) with the same call shape, so swapping is one import.
-  Success toasts dismiss after ~4 s; failure toasts stay until dismissed. Examples: “Social address saved · reload
-  HQ to use it”, “BusinessLessons reindexed”, “Couldn't reach Work”.
-- **Indexing**: while any Wiki source is `indexing`, the row shows an indeterminate progress bar and Settings polls
-  `wikiAdmin.status` every 2 s (stops when no source is indexing, the page closes, or after 2 minutes).
-- Full-panel error states are not used: an unavailable bridge shows the panel with its rows and a single inline
-  explanation (“Native Wiki management isn't available in this window.”) and disabled actions with reasons.
+All feedback uses the F1 primitives from `@hq/ui`; Settings adds no toast or notice system of its own.
+
+- **Busy**: run each mutation through `useAsyncAction` (double activation ignored). The triggering `Button` uses
+  `busy`/`busyLabel` ("Checking", "Saving", "Reindexing", "Removing") and keeps its width; other mutating controls in
+  the same row disable with the reason "Another action is in progress."
+- **Inline result** on the row that changed: a `StatusIndicator` (shape + word + mono detail) for the row's ongoing
+  state, and an `InlineNotice variant="bar"` inside the row for a failure, with Retry only where repeating is safe.
+  Wrap the notice in `<Presence show motion="collapse">` so the row grows smoothly. This replaces today's card-bottom
+  status paragraph. Changed rows play `hq-flash` once.
+- **Toasts** (`useToast()`): one per completed action. Success uses `toast.success` (4 s), failures `toast.error` with
+  what was kept and Retry when safe, an unconfirmed outcome `toast.unknown` with Check. Do not toast what the row
+  already shows; a toast is the confirmation for people who looked away. Examples: "Social address saved", meta
+  "Reload HQ to use it"; "BusinessLessons reindexed"; "Couldn't reach Work", description "The saved address was kept."
+- **Indexing**: while any Wiki source is `indexing`, its row shows `StatusIndicator busy label="Indexing"` with
+  `hq-shimmer-text`, and Settings polls `wikiAdmin.status` every 2 s (stops when no source is indexing, the page
+  closes, or after 2 minutes). When indexing finishes the row flashes and a success toast names the repository.
+- **Loading**: first load shows `Skeleton` rows shaped like the rows (`aria-busy` on the panel), never a centred
+  spinner.
+- Full-panel error states are not used once anything has loaded. An unavailable bridge shows the panel with its rows,
+  a single `InlineNotice tone="warning" live="off"` ("Native Wiki management isn't available in this window.") and
+  disabled actions with reasons. `StateView` remains only for a first load that failed with nothing to show.
 
 ## Appearance
 
@@ -84,17 +94,21 @@ section element ids `settings-social`, `settings-work`, `settings-wiki` so exist
 
 ## Motion
 
-Use F1 tokens when merged; until then `--hq-duration-fast/base/slow` and `--hq-ease-standard/exit` (already zeroed
-under `prefers-reduced-motion: reduce`). Category change: content fades/slides 4 px in (`base`), scroll resets to top.
-Disclosures animate height and chevron rotation (`base`). Status chip text changes crossfade (`fast`). No motion may
-delay input or focus; reduced motion removes transforms and animated height.
+F1 tokens only (`--hq-duration-instant/fast/base/slow`, `--hq-ease-standard/enter/exit/spring`,
+`--hq-motion-distance-*`), all zeroed under reduced motion or `<html data-hq-motion="reduce">`. Category change: the
+content region rises in (`hq-enter-rise`, `slow`) and scroll resets to top; the sidebar selection moves without
+delay. Disclosures use `Presence motion="collapse"` (real height) and a chevron rotation (`base`). Row lists that
+change (sources added or removed) use `useListMotion`. Status words change in place without layout shift. No motion
+may delay input or focus; reduced motion removes transforms and animated height but keeps colour feedback such as
+`hq-flash`.
 
 ## Accessibility
 
 - Category list is `nav` with buttons and `aria-current`; content region is labelled by the category heading, which
   receives focus on category change.
 - Every icon-only control has a text label; status never relies on colour; focus rings stay visible on every control.
-- Toast region is polite and never steals focus; failure toasts are also mirrored inline so they are not lost.
+- Toasts come from the shell's single `ToastViewport` (polite, failures assertive, F8 reaches them); they never
+  steal focus, and every failure toast is mirrored inline on its row so it is not lost when the toast is dismissed.
 
 ## Ownership and boundaries
 
