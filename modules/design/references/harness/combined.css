@@ -1,0 +1,14 @@
+@import '../../../../packages/hq-ui/src/tokens/hq-tokens.css';
+@import '../../../../packages/hq-ui/src/components/hq-ui.css';
+
+/* The real shell's aliases; the harness owns only its outer gutter and label. */
+:root {
+  font-family: var(--hq-font-family-sans);
+  --background: var(--hq-surface); --surface: var(--hq-surface-raised); --text: var(--hq-text);
+  --muted: var(--hq-text-muted); --line: var(--hq-border); --selected: var(--hq-surface-selected); --accent: var(--hq-accent-text);
+  color: var(--text); background: var(--background);
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px; }
+.harness-label { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; margin: 0 0 24px; }
+.eyebrow { font-size: 10px; text-transform: uppercase; letter-spacing: 1.7px; color: var(--accent); }

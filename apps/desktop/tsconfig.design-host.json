@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rewriteRelativeImportExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "lib": [
+      "ES2023"
+    ],
+    "types": [
+      "node"
+    ],
+    "rootDir": "../..",
+    "outDir": "dist-electron/design-host"
+  },
+  "files": [
+    "../../modules/design/app/storage/node.ts",
+    "design-host/compat.ts",
+    "../../modules/design/discovery/node/local-directory.ts",
+    "../../modules/design/discovery/src/adapters/gallery-index.ts",
+    "../../modules/design/discovery/src/adapters/jones-projects.ts"
+  ]
+}

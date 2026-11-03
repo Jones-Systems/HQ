@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HQ mockup — Work (illustrative chrome)</title>
+  <link rel="stylesheet" href="_mockup.css">
+  <link rel="stylesheet" href="../tokens/hq-tokens.css">
+  <link rel="stylesheet" href="../components/hq-components.css">
+</head>
+<!-- Illustrative only. Work's planning authority is the existing Manual Planner; statuses, horizons and dates below
+     use its existing axes with fictional items. Nothing here moves, saves or starts anything. -->
+<body data-domain="work" data-crumb="Board" data-save="saving">
+<template id="secnav">
+  <div class="hq-secnav-head"><span class="hq-eyebrow">Work</span><span class="hq-heading">Planning</span></div>
+  <div class="hq-nav-group">
+    <span class="hq-eyebrow">Views</span>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Glance</a>
+    <a class="hq-nav-item" href="#" aria-current="page"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="4.6" height="10" rx="1.2"/><rect x="9.7" y="4" width="4.6" height="16" rx="1.2"/><rect x="15.9" y="4" width="4.6" height="7" rx="1.2"/></svg>Board</a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/></svg>List</a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="1.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Calendar</a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M4 7h9M8 12h10M6 17h8"/></svg>Timeline</a>
+    <a class="hq-nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M5 12.5 9.5 17 19 7.5"/></svg>Review</a>
+  </div>
+  <div class="hq-nav-group">
+    <span class="hq-eyebrow">Horizon</span>
+    <a class="hq-nav-item" href="#">Now<span class="hq-count">4</span></a>
+    <a class="hq-nav-item" href="#">Soon<span class="hq-count">3</span></a>
+    <a class="hq-nav-item" href="#">Later<span class="hq-count">2</span></a>
+    <a class="hq-nav-item" href="#">Someday<span class="hq-count">1</span></a>
+  </div>
+  <div class="hq-secnav-foot"><p class="mock-note">Illustrative. Views and fields follow Manual Planner; Work owns this navigation.</p></div>
+</template>
+
+<template id="main">
+  <div class="hq-page mock-board-page">
+    <div class="hq-page-head">
+      <div>
+        <span class="hq-eyebrow">Board · grouped by status</span>
+        <h1 class="hq-display">Spring launch planning</h1>
+        <span class="hq-meta">10 open · 12 done · 3 dropped</span>
+      </div>
+      <div class="hq-actions">
+        <button class="hq-btn hq-btn--secondary">Horizon: All<svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg></button>
+        <button class="hq-btn hq-btn--primary"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Capture</button>
+      </div>
+    </div>
+
+    <div class="mock-board">
+      <section class="mock-col" aria-label="Inbox">
+        <header class="mock-col-head"><svg viewBox="0 0 24 24"><path d="M4 13h4l1.5 2.5h5L16 13h4M4 13l2.5-7h11L20 13v6H4z"/></svg>Inbox<span class="hq-meta">2</span></header>
+        <article class="hq-card" tabindex="0"><p class="hq-card-title">Ask the printer for paper samples</p>
+          <div class="hq-card-row"><span class="hq-chip">SOON</span></div></article>
+        <article class="hq-card" tabindex="0"><p class="hq-card-title">Sketch shelf-talker sizes</p>
+          <div class="hq-card-row"><span class="hq-chip">SOMEDAY</span></div></article>
+      </section>
+
+      <section class="mock-col" aria-label="Considering">
+        <header class="mock-col-head"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" stroke-dasharray="2.5 2.5"/></svg>Considering<span class="hq-meta">1</span></header>
+        <article class="hq-card" tabindex="0"><p class="hq-card-title">Pop-up stall layout</p>
+          <div class="hq-card-row"><span class="hq-chip">LATER</span></div>
+          <div class="hq-ref hq-ref--other"><span class="hq-ref-top"><b>Design</b><span class="hq-ref-title">Stall layout v2</span></span><span class="hq-ref-meta">Other project · Atlas Weekend Market</span></div></article>
+      </section>
+
+      <section class="mock-col" aria-label="Next">
+        <header class="mock-col-head"><svg viewBox="0 0 24 24"><path d="M5 12h12M13 7l5 5-5 5"/></svg>Next<span class="hq-meta">3</span></header>
+        <article class="hq-card" tabindex="0"><p class="hq-card-title">Write spring menu card copy</p>
+          <div class="hq-card-row"><span class="hq-chip">SOON</span><span class="hq-chip hq-chip--quiet">Target · 24 Oct</span><span class="hq-chip hq-chip--quiet mock-check"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/></svg>2/5</span></div></article>
+        <article class="hq-card is-focus" tabindex="0"><p class="hq-card-title">Choose the hero photo</p>
+          <div class="hq-card-row"><span class="hq-chip">NOW</span></div>
+          <div class="hq-ref"><span class="hq-ref-top"><b>Design</b><span class="hq-ref-title">Landing — hero</span></span><span class="hq-ref-meta">Capture · rev 7c41e2a</span></div></article>
+        <article class="hq-card" tabindex="0"><p class="hq-card-title">Draft the launch announcement</p>
+          <div class="hq-card-row"><span class="hq-chip">SOON</span></div>
+          <div class="hq-ref"><span class="hq-ref-top"><b>Social</b><span class="hq-ref-title">Spring tasting teaser</span></span><span class="hq-ref-meta">Draft · edited 17 Oct</span></div></article>
+      </section>
+
+      <section class="mock-col" aria-label="Active">
+        <header class="mock-col-head"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>Active<span class="hq-meta">2</span></header>
+        <article class="hq-card" tabindex="0" aria-selected="true"><p class="hq-card-title">Tasting-night signage</p>
+          <div class="hq-card-row"><span class="hq-chip">NOW</span><span class="hq-chip hq-chip--quiet">Deadline · 22 Oct</span></div>
+          <div class="hq-ref"><span class="hq-ref-top"><b>Run</b><span class="hq-ref-title">Signage copy pass</span></span><span class="hq-fresh hq-fresh--fresh"><b>Running</b> observed 4 min ago</span></div></article>
+        <article class="hq-card" tabindex="0"><p class="hq-card-title">Refresh landing page copy</p>
+          <div class="hq-card-row"><span class="hq-chip">NOW</span></div>
+          <div class="hq-ref"><span class="hq-ref-top"><b>Run</b><span class="hq-ref-title">Landing copy refresh</span></span><span class="hq-fresh hq-fresh--unknown"><b>Unknown</b> host unreachable 13:20</span></div></article>
+      </section>
+
+      <section class="mock-col" aria-label="On hold">
+        <header class="mock-col-head"><svg viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></svg>On hold<span class="hq-meta">1</span></header>
+        <article class="hq-card" tabindex="0"><p class="hq-card-title">Wholesale price sheet</p>
+          <div class="hq-card-row"><span class="hq-chip">LATER</span><span class="hq-chip hq-chip--quiet">Start · 3 Nov</span></div>
+          <div class="hq-ref hq-ref--missing"><span class="hq-ref-top"><b>Social</b><span class="hq-ref-title">Supplier note</span></span><span class="hq-ref-meta">Target unavailable · snapshot 9 Oct</span></div></article>
+      </section>
+
+      <div class="mock-col-closed">
+        <button class="hq-btn hq-btn--ghost">Done<span class="hq-meta">12</span></button>
+        <button class="hq-btn hq-btn--ghost">Dropped<span class="hq-meta">3</span></button>
+      </div>
+    </div>
+
+    <div class="mock-toast-dock">
+      <div class="hq-toast" role="status">
+        <div>Moved “Tasting-night signage” to Active<span class="hq-meta">Planning change only · no run started</span></div>
+        <button class="hq-btn hq-btn--secondary hq-btn--sm">Undo</button>
+      </div>
+    </div>
+  </div>
+</template>
+<script src="_shell.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+/* Copy of the shell's theme tokens so the section renders standalone; the real shell supplies these. */
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color-scheme: light;
+  --background: #f8f9fb; --surface: #ffffff; --text: #20232a; --muted: #69717e;
+  --line: #e2e5eb; --selected: #e9edf6; --accent: #516aa2;
+  color: var(--text); background: var(--background);
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px; }
+.eyebrow { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; }
