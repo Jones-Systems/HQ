@@ -5,6 +5,7 @@ export {
   createLivePlanner, createPlannerLive, createPlannerLivePort, SETTLED_LIMIT, UNRESOLVED_LIMIT,
   type LedgerView, type PlannerLive,
 } from './adapter';
+export { probePlanner } from './health';
 export {
   bridgeTransport, ENTITY_ID_PATTERN, isServiceResponse, isWorkBridge, REQUEST_ID_PATTERN, WORK_READ_ROUTES, WORK_ROUTES,
   WORK_SERVICE_ROUTES, WORK_WRITE_ROUTES,

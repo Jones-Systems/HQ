@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ServiceConfigTransport } from '@hq/contracts/services';
 import { validateIndexStatus } from '../../../../modules/wiki/contract/src/index';
-import { CHECKING, UNAVAILABLE, checkedServiceStatus, serviceStatus, wikiStatus, type DataSource, type SourceStatus } from '../services/data-source-status';
+import { probePlanner } from '../../../../modules/work/live';
+import { CHECKING, UNAVAILABLE, checkedServiceStatus, plannerHealthStatus, serviceStatus, wikiStatus, type DataSource, type SourceStatus } from '../services/data-source-status';
 const initial: Record<DataSource, SourceStatus> = { social: CHECKING, work: CHECKING, wiki: { text: 'Index not checked', tone: 'neutral' } };
 type Sources = { statuses: Record<DataSource, SourceStatus>; busy: boolean; check: (source: DataSource) => Promise<void>; reload: () => void };
 const Context = createContext<Sources | null>(null);
@@ -55,7 +56,13 @@ export function DataSourcesProvider({ children, config = window.hqServices?.conf
         const configured = serviceStatus(await config?.status(source));
         if (configured.text !== 'Set up · not checked') { if (!timedOut) update(configured); return; }
         if (timedOut) return;
-        const result = source === 'social' ? await window.hqServices?.social.call('workspace', {}) : await window.hqServices?.work.call('version', {});
+        if (source === 'work') {
+          const work = window.hqServices?.work;
+          const status = work ? plannerHealthStatus(await probePlanner(work)) : checkedServiceStatus(false);
+          if (!timedOut) update(status);
+          return;
+        }
+        const result = await window.hqServices?.social.call('workspace', {});
         if (!timedOut) update(checkedServiceStatus(!!result?.ok && result.status >= 200 && result.status < 300));
       }
     } catch { if (!timedOut) update(failure); }
