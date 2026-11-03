@@ -1,5 +1,5 @@
 /**
- * Imports `StoragePort` over the Design document bridge (B3 backend contract, section 4; see BACKEND-CONTRACT.md).
+ * Imports `StoragePort` over the Design document bridge (B3 backend contract, section 7; see BACKEND-CONTRACT.md).
  *
  * The importer talks to a namespaced port: `imports/...` keys and the `imports` stream. The desktop host serves the
  * same records as `design/imports/...` documents and the `design/imports` stream, writes them only through the atomic
@@ -38,13 +38,13 @@ export type ImportsOperation = 'read' | 'apply' | 'undo' | 'resolve' | 'edit' | 
 
 /** Failure contexts of the Imports env, one per operation. The names are listed in BACKEND-CONTRACT.md. */
 export const IMPORTS_CONTEXTS: Readonly<Record<ImportsOperation | 'pick', DesignFailureContext>> = Object.freeze({
-  pick: { section: 'imports', operation: 'imports.pick', action: 'choose files' },
-  read: { section: 'imports', operation: 'imports.read', action: 'read your imports' },
+  pick: { section: 'imports', operation: 'imports.pick', action: 'choose files', write: false },
+  read: { section: 'imports', operation: 'imports.read', action: 'read your imports', write: false },
   apply: { section: 'imports', operation: 'imports.apply', action: 'apply the import', write: true },
   undo: { section: 'imports', operation: 'imports.undo', action: 'undo the import', write: true },
   resolve: { section: 'imports', operation: 'imports.resolve', action: 'resolve the conflict', write: true },
   edit: { section: 'imports', operation: 'imports.edit', action: 'save your edit', write: true },
-  export: { section: 'imports', operation: 'imports.export', action: 'create the backup' },
+  export: { section: 'imports', operation: 'imports.export', action: 'create the backup', write: false },
 });
 
 /** Operations that change project content alongside the imports records they commit. */
@@ -56,7 +56,7 @@ export interface ImportsCommitLink {
    */
   plan(ops: readonly WriteOp[], read: (key: string) => Promise<StoredDocument | null>):
     Promise<{ readonly ops: readonly WriteOp[]; readonly projects: readonly string[] }>;
-  /** Project content may have changed: the batch succeeded, or its outcome is unknown. Readers should re-read. */
+  /** The batch was sent and project content may have changed: it landed, was refused or has an unknown outcome. Readers should re-read. */
   changed(project: string): void;
 }
 
@@ -206,17 +206,16 @@ export function createImportsBridgeStorage(options: ImportsBridgeOptions): Stora
         throw new DesignOperationError(designFailure('too-large', IMPORTS_CONTEXTS[commitOperation(ops)], { reason: 'import-total' }));
       }
       const changed = () => { for (const project of linked.projects) link?.changed(project); };
-      let value: unknown;
       try {
-        value = await call('import.commit', { ops: wire }, 'unknown');
+        const value = await call('import.commit', { ops: wire }, 'unknown');
         if (!isRecord(value) || typeof value.txnId !== 'string') throw new DesignBridgeError('unknown');
       } catch (error) {
-        // An unknown outcome may have written project content: readers re-read instead of trusting a cache.
-        if (error instanceof DesignBridgeError && error.kind === 'unknown') changed();
         if (error instanceof DesignBridgeConflictError) throw new StorageConflictError('Imports changed after they were read');
         throw error;
+      } finally {
+        // Readers re-read after any attempt: it landed, it was refused, or its outcome is unknown.
+        changed();
       }
-      changed();
     },
   };
   return port;

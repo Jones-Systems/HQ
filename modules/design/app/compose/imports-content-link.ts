@@ -1,5 +1,5 @@
 /**
- * Links imported PNG versions into project content (B3 backend contract, section 4).
+ * Links imported PNG versions into project content (B3 backend contract, section 7).
  *
  * An import commit writes imports records. Projects, Gallery, Compare and Annotations read project content, so the
  * same atomic batch also carries the project's content document: a view per imported record and a version per
@@ -29,7 +29,7 @@ export interface ImportsContentLinkOptions {
   readonly clock: ClockPort;
   /** The workspace key of a project's content document (the same key the Projects repository reads and writes). */
   readonly documentKey: (project: string) => string;
-  /** Called with a project whose content the batch changed, after it succeeded or its outcome is unknown. */
+  /** Called with a project whose content the batch tried to change, after any outcome: success, refusal or unknown. */
   readonly notify: (project: string) => void;
 }
 

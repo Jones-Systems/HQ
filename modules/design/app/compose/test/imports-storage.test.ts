@@ -108,7 +108,7 @@ describe('imports storage over the bridge: outcomes', () => {
       assert.ok(error.cause instanceof StorageConflictError);
       return true;
     });
-    assert.deepEqual(changed, [], 'a conflict changed nothing, so nothing is notified');
+    assert.deepEqual(changed, ['p', 'p'], 'each commit that was sent notifies once, even one that lost a race: another writer may have changed content');
     assert.equal(double.commits.length, 3);
   });
 
@@ -126,7 +126,7 @@ describe('imports storage over the bridge: outcomes', () => {
       assert.deepEqual([error.kind, error.outcome, error.reason, error.operation], ['disabled', 'no-effect', 'disabled', 'imports.apply']);
       return true;
     });
-    assert.deepEqual(changed, []);
+    assert.deepEqual(changed, ['p', 'p'], 'a refusal is still an attempt: readers re-read');
   });
 
   it('treats a lost transport on commit as an unknown outcome and tells project readers to re-read', async () => {
@@ -144,7 +144,7 @@ describe('imports storage over the bridge: outcomes', () => {
     assert.deepEqual(changed, ['p1', 'p2']);
   });
 
-  it('treats a malformed success reply as unknown, and a host refusal that touched nothing as no-effect', async () => {
+  it('treats a malformed success reply as unknown, a host refusal as no-effect, and notifies readers after every attempt', async () => {
     const changed: string[] = [];
     const { double, storage } = setup({ plan: async () => ({ ops: [], projects: ['p'] }), changed: (project) => changed.push(project) });
     double.failWith((route) => route === 'import.commit' ? { ok: true, value: { somethingElse: true } } : undefined);
@@ -157,7 +157,7 @@ describe('imports storage over the bridge: outcomes', () => {
     }
     double.failWith((route) => route === 'import.commit' ? { ok: false, kind: 'unknown' } : undefined);
     await assert.rejects(() => storage.commit([doc('imports/records/r', {}), event('import.applied')]), (error) => error instanceof DesignBridgeError && error.kind === 'unknown');
-    assert.deepEqual(changed, ['p'], 'only the unknown outcome notified');
+    assert.deepEqual(changed, ['p', 'p', 'p', 'p'], 'three refusals and one unknown outcome each notified once');
   });
 
   it('notifies the linked projects after a successful batch, and appends the link operations last, keyed as host documents', async () => {
