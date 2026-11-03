@@ -35,10 +35,12 @@ export function bridgeResultValue(result: unknown, uncertain: 'unknown' | 'unava
   if (!plain(result)) throw new DesignBridgeError(uncertain);
   if (result.ok === true && exact(result, ['ok', 'value'])) return result.value;
   if (result.ok === false && (exact(result, ['ok', 'kind']) || exact(result, ['ok', 'kind', 'reason']))) {
-    const reason = Object.hasOwn(result, 'reason') ? result.reason : undefined;
-    if (reason !== undefined && !(DESIGN_BRIDGE_REASONS as readonly unknown[]).includes(reason)) throw new DesignBridgeError(uncertain);
-    // `disabled` is only ever reported before the host touches storage, so it is a definite no-effect refusal.
-    if (reason === 'disabled') throw new DesignBridgeError('unavailable', 'disabled');
+    if (Object.hasOwn(result, 'reason')) {
+      // A reason only qualifies an `unavailable` refusal. `disabled` is reported before the host touches storage,
+      // so it is a definite no-effect. Any other pairing could hide a possible write, so it stays uncertain.
+      if (result.kind !== 'unavailable' || !(DESIGN_BRIDGE_REASONS as readonly unknown[]).includes(result.reason)) throw new DesignBridgeError(uncertain);
+      throw new DesignBridgeError('unavailable', result.reason as DesignBridgeReason);
+    }
     if (result.kind === 'conflict') throw new DesignBridgeConflictError();
     if (result.kind === 'read-only' || result.kind === 'invalid' || result.kind === 'unavailable' || result.kind === 'unknown') throw new DesignBridgeError(result.kind);
   }
