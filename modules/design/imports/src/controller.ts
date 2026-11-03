@@ -96,6 +96,8 @@ export interface ImportsOutcome {
   readonly importId?: ImportId;
   readonly undoable?: boolean;
   readonly checkable?: boolean;
+  /** Set on what Check found: it settles an earlier `unknown`, so that toast is withdrawn. */
+  readonly reconciles?: boolean;
 }
 
 export interface ImportsState {
@@ -415,6 +417,8 @@ export function createImportsController(deps: ImportDeps, project: ProjectId, ca
     async check() {
       const target = unconfirmed;
       if (target === null) { await refreshQuietly(); return; }
+      /** What Check found settles the question, so the "unknown" toast that offered Check can go. */
+      const reconcile = (next: Omit<ImportsOutcome, 'seq' | 'reconciles'>): void => publish({ ...next, reconciles: true });
       begin('check');
       try {
         await refresh();
@@ -428,25 +432,25 @@ export function createImportsController(deps: ImportDeps, project: ProjectId, ca
               status: 'applied', summary: { ...summary, canApply: false }, ...idle,
               applied: { importId: target.importId, importedAt: target.plan.manifest.importedAt, counts: target.plan.manifest.counts, rows: summary.rows },
             });
-            publish({ tone: 'success', where: 'done', title: 'The import had landed', detail: 'HQ found it in the history. Nothing needs repeating.', importId: target.importId, undoable: true });
+            reconcile({ tone: 'success', where: 'done', title: 'The import had landed', detail: 'HQ found it in the history. Nothing needs repeating.', importId: target.importId, undoable: true });
           } else {
             unconfirmed = null;
             plan = target.plan;
             set({ status: 'planned', ...idle });
-            publish({ tone: 'danger', where: 'review', title: 'The import was not applied', detail: 'HQ found no record of it and nothing was written. The preview is still here: apply it again when you are ready.' });
+            reconcile({ tone: 'danger', where: 'review', title: 'The import was not applied', detail: 'HQ found no record of it and nothing was written. The preview is still here: apply it again when you are ready.' });
           }
         } else if (target.action === 'undo') {
           const undone = history.find((entry) => entry.importId === target.importId)?.undone === true;
           unconfirmed = null;
           set({ status: 'idle', ...idle });
-          publish(undone
+          reconcile(undone
             ? { tone: 'success', where: 'history', title: 'The undo had landed', detail: 'HQ found the import marked as undone.', importId: target.importId }
             : { tone: 'danger', where: 'history', title: 'The import was not undone', detail: 'HQ found it still in place. Undo it again when you are ready.', importId: target.importId });
         } else {
           const open = state.conflicts.some((conflict) => conflict.recordId === target.recordId);
           unconfirmed = null;
           set({ status: 'idle', ...idle });
-          publish(open
+          reconcile(open
             ? { tone: 'danger', where: 'conflicts', title: 'The conflict is still open', detail: 'HQ found nothing written. Choose again when you are ready.' }
             : { tone: 'success', where: 'conflicts', title: 'The conflict was resolved', detail: 'HQ found it closed. Nothing needs repeating.' });
         }

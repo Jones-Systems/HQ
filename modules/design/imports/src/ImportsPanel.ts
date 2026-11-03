@@ -135,6 +135,8 @@ export async function copyText(text: string, clipboard: ClipboardLike | undefine
 }
 
 const applyToastId = (importId: string): string => `imports-applied-${importId}`;
+/** One pending question at a time: a second unknown result updates this toast, and Check's answer withdraws it. */
+const UNKNOWN_TOAST_ID = 'imports-unknown-result';
 
 /**
  * Says an outcome as a toast. A success that can be undone offers Undo; an unconfirmed result offers Check, never a
@@ -143,7 +145,9 @@ const applyToastId = (importId: string): string => `imports-applied-${importId}`
 export function announceOutcome(outcome: ImportsOutcome, toast: KitToast, controller: Pick<ImportsController, 'undo' | 'check'>): void {
   // The Undo a toast offered is stale once that import is undone, however it got undone, so it goes away.
   if (outcome.importId !== undefined && outcome.undoable !== true && outcome.tone === 'success') toast.dismiss(applyToastId(outcome.importId));
+  if (outcome.reconciles === true) toast.dismiss(UNKNOWN_TOAST_ID);
   const options: KitToastOptions = {
+    ...(outcome.tone === 'unknown' ? { id: UNKNOWN_TOAST_ID } : {}),
     description: outcome.detail,
     ...(outcome.meta === undefined ? {} : { meta: outcome.meta }),
     ...(outcome.undoable === true && outcome.importId !== undefined
@@ -301,6 +305,7 @@ export function ImportsView({ state, actions, kit = PLAIN_KIT, now = Date.now(),
   const historyOrder = useMemo(() => state.history.map((entry) => entry.importId), [state.history]);
   const timeline = kit.useListMotion<HTMLOListElement>(historyOrder);
   const awaitingCheck = state.outcome?.tone === 'unknown' && state.outcome.checkable === true;
+  const rejected = summary !== null && summary.rows.some((row) => row.kind === 'rejected');
   const appliedEntry = state.applied === null ? undefined : state.history.find((entry) => entry.importId === state.applied?.importId);
   const appliedUndone = appliedEntry?.undone === true;
   const flashId = state.outcome !== null && state.outcome.tone === 'success' ? state.outcome.importId : undefined;
@@ -326,8 +331,9 @@ export function ImportsView({ state, actions, kit = PLAIN_KIT, now = Date.now(),
 
   const reviewPanel = h(kit.Presence, { key: 'review', show: step === 'review', motion: 'rise', as: 'section', className: 'hqd-imports__panel', 'aria-labelledby': 'hqd-imports-review' },
     h('h3', { id: 'hqd-imports-review', tabIndex: -1, 'data-step-heading': 'review' }, 'Review the import'),
-    summary === null ? null : h('p', { className: 'hqd-imports__headline', role: 'status' }, summary.headline),
-    summary === null || summary.detail === '' || summary.rows.some((row) => row.kind === 'rejected') ? null : h('p', { className: 'hqd-imports__detail' }, summary.detail),
+    // A rejection says what is wrong in the notice below, so its words are not repeated here.
+    summary === null || rejected ? null : h('p', { className: 'hqd-imports__headline', role: 'status' }, summary.headline),
+    summary === null || summary.detail === '' || rejected ? null : h('p', { className: 'hqd-imports__detail' }, summary.detail),
     slot('review'),
     summary === null || summary.rows.length === 0 ? null : planRows(summary.rows, PLAN_NOTES, 'Import preview'),
     h(kit.Presence, { show: busyAction === 'apply', motion: 'collapse', className: 'hqd-imports__progress-slot' },
