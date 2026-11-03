@@ -131,14 +131,25 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
     return () => target?.removeAttribute('data-drop-active');
   }, [overKey]);
 
-  // Opening a week or day that holds today puts the now line in view rather than at the grid's 7 a.m. default.
+  // Opening a week or day that holds today puts the now line in view rather than at the grid's 7 a.m. default,
+  // starting early enough that the day's first timed entry is not cut off at the top.
   useLayoutEffect(() => {
     if (agenda || view === 'month') return;
     const rows = body.current?.querySelector<HTMLElement>('.hq-calendar-time-rows');
-    if (rows && calendarRange(anchor, view).includes(today)) {
-      rows.scrollTop = Math.max(0, calendarZonedParts(clock, zone).minute - 150) * CALENDAR_HOUR_HEIGHT / 60;
+    const days = calendarRange(anchor, view);
+    if (rows && days.includes(today)) {
+      const first = Math.min(...active.flatMap((draft) => { const event = draftGridEvent(draft, zone); return event && days.includes(event.day) ? [event.start] : []; }), Infinity);
+      rows.scrollTop = Math.max(0, Math.min(calendarZonedParts(clock, zone).minute - 150, first - 30)) * CALENDAR_HOUR_HEIGHT / 60;
     }
   }, [view, agenda, anchor]);
+
+  // The shared grid knows nothing of channels: each timed entry takes its channel's colour bar from the draft it shows.
+  useLayoutEffect(() => {
+    for (const holder of body.current?.querySelectorAll<HTMLElement>('[data-event-id]') ?? []) {
+      const channel = active.find((draft) => draft.id === holder.dataset.eventId)?.channel;
+      if (channel) holder.dataset.channel = channel;
+    }
+  });
 
   // A moved draft settles into its new place with a spring and a colour wash that says where it landed.
   useLayoutEffect(() => {
@@ -264,8 +275,12 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
     const copy = source.cloneNode(true) as HTMLElement;
     copy.classList.add('cal-chip--lifted');
     copy.removeAttribute('data-dragging');
-    copy.style.setProperty('width', `${rect.width}px`);
-    wrapper.append(copy);
+    // The copy sits in its own chip container at the original width, so it keeps the layout it had in its cell.
+    const frame = document.createElement('div');
+    frame.className = 'cal-chip-item';
+    frame.style.setProperty('width', `${rect.width}px`);
+    frame.append(copy);
+    wrapper.append(frame);
     document.body.append(wrapper);
     try {
       event.dataTransfer.setDragImage(wrapper, event.clientX - rect.left + GHOST_PAD_X, event.clientY - rect.top + GHOST_PAD_Y);

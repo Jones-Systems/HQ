@@ -51,6 +51,13 @@ export function RunHistory({ selectedRunId }: { readonly selectedRunId: string |
     closing.current = false;
     if (shown.current) rowFor(shown.current)?.focus();
   }, [selectedRunId]);
+  // Escape closes the receipt from anywhere on the page, including after a click on its text left nothing focused.
+  useEffect(() => {
+    if (selectedRunId === null) return undefined;
+    const onEscape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); close(); } };
+    document.addEventListener('keydown', onEscape);
+    return () => document.removeEventListener('keydown', onEscape);
+  }, [selectedRunId]);
 
   // Runs that arrive after the first read slide in at the top and wash with colour; the first read is not news.
   const seen = useRef<Set<string> | null>(null);
@@ -103,8 +110,7 @@ export function RunHistory({ selectedRunId }: { readonly selectedRunId: string |
           ? <StateView state="unavailable" title="Run history isn't available" description="The Social service didn't answer. Nothing was resent." action={{ label: 'Try again', onAction: () => void session.load(port) }} />
           : <StateView state="loading" title="Loading run history" />
       ) : (
-        <div className="rh-layout" data-panel={selectedRunId ? 'open' : undefined}
-          onKeyDown={(event) => { if (event.key === 'Escape' && selectedRunId && !event.defaultPrevented) { event.preventDefault(); close(); } }}>
+        <div className="rh-layout" data-panel={selectedRunId ? 'open' : undefined}>
           <div className="rh-list" onKeyDown={onListKey}>
             {runs.length === 0 ? (
               <div className="sx-panel">

@@ -17,7 +17,7 @@
 
 /* ---------- Layout: the list, and the receipt beside it ---------- */
 .rh-layout { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-lg); align-items: start; min-width: 0; }
-.rh-layout[data-panel] { grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem); }
+.rh-layout[data-panel] { grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem); }
 .rh-list { min-width: 0; }
 .rh-timeline { display: grid; gap: var(--hq-space-lg); }
 
@@ -95,7 +95,7 @@
 .rh-peek > .rh-again-note { padding-top: var(--hq-space-sm); border-top: 1px solid var(--hq-border); }
 
 /* Narrow: the receipt covers the list instead of squeezing it, and the rest of the list is dimmed and inert to the pointer. */
-@container rh (max-width: 54rem) {
+@container rh (max-width: 46rem) {
   .rh-layout[data-panel] { grid-template-columns: minmax(0, 1fr); }
   .rh-layout[data-panel] > .rh-list, .rh-layout[data-panel] > .rh-peek, .rh-layout[data-panel] > .rh-scrim { grid-area: 1 / 1; }
   .rh-scrim { display: block; z-index: 2; border: 0; border-radius: var(--hq-radius-lg); background: color-mix(in srgb, var(--hq-surface) 70%, transparent); cursor: default; }

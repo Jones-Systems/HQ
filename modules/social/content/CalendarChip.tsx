@@ -48,12 +48,12 @@ export function CalendarChip({ draft, brandName, zone, disabled, dragging, unkno
         {...handlers}
       >
         <span className="cal-chip-bar" aria-hidden="true" />
-        <span className="cal-chip-text">
-          <span className="cal-chip-title">{draft.title}</span>
-          {time && <span className="cal-chip-time">{time}</span>}
+        <span className="cal-chip-title">{draft.title}</span>
+        {time && slot && <span className="cal-chip-time">{clockLabel(draftGridEvent(draft, zone)!.start)}<span className="cal-chip-length"> · {durationLabel(slot.duration_minutes)}</span></span>}
+        <span className="cal-chip-end">
+          {unknown && <SocialIcon name="alert" className="cal-chip-flag" />}
+          <ChannelBadge channel={draft.channel} />
         </span>
-        {unknown && <SocialIcon name="alert" className="cal-chip-flag" />}
-        <ChannelBadge channel={draft.channel} />
       </button>
     </li>
   );

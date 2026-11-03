@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { useState } from 'react';
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FIXTURE_IDS, recordCalls, resetSocialSessions, type RecordedPort } from '../../core';
@@ -169,6 +169,16 @@ describe('receipt side panel', () => {
     await s.user.keyboard('{Escape}');
     expect(s.destination()).toBe('runs');
     await waitFor(() => expect(document.activeElement).toBe(row(FIXTURE_IDS.failedRun)));
+    await waitFor(() => expect(panel()).toBeNull());
+  });
+
+  it('closes with Escape even when nothing on the page has focus', async () => {
+    const s = setup({ destination: `runs/${FIXTURE_IDS.failedRun}` });
+    await screen.findByRole('complementary', { name: 'Selected receipt' });
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(s.destination()).toBe('runs');
     await waitFor(() => expect(panel()).toBeNull());
   });
 

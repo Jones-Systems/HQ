@@ -283,6 +283,13 @@ describe('Social calendar service-backed timeboxes', () => {
       ? { ...draft, planned_date: '2026-10-20', planning_slot: { start: '09:00', duration_minutes: 30, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } } : draft);
     return seed;
   };
+  it('tints a timed entry with its channel, as the chips are', async () => {
+    const { user } = setup('calendar/2026-10', { features: [FEATURE_HQ_EDITORIAL_TIMEBOX], seed: timedSeed() });
+    await showView(user, 'Day');
+    const holder = await waitFor(() => document.querySelector<HTMLElement>(`[data-event-id="${FIXTURE_IDS.autumnBlend}"]`)!);
+    expect(holder.dataset.channel).toBe('LinkedIn');
+  });
+
   it('cycles grid modes with separate Agenda round trips and no saves', async () => {
     const { recorded, user } = setup('calendar/2026-10');
     const group = await screen.findByRole('group', { name: 'Calendar view' });

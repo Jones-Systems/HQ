@@ -32,23 +32,34 @@
 .cal-chips { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--hq-space-3xs); align-content: start; }
 
 /* ---------- Chips ---------- */
-.cal-chip-item { min-width: 0; }
+.cal-chip-item { min-width: 0; container: calchip / inline-size; }
+/* Wide chips (tray, agenda, week): the title and time on the left, the channel badge at the right. */
 .cal-chip {
-  position: relative; width: 100%; min-width: 0; display: flex; align-items: flex-start; gap: var(--hq-space-xs);
+  position: relative; width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; column-gap: var(--hq-space-xs);
   padding: var(--hq-space-3xs) var(--hq-space-xs) var(--hq-space-3xs) calc(var(--hq-space-xs) + 3px); text-align: start;
   border: 1px solid var(--hq-border); border-radius: var(--hq-radius-sm); background: var(--hq-surface-raised); color: var(--hq-text);
   font: var(--hq-type-small); cursor: grab; touch-action: none; overflow: hidden;
   transition: background var(--hq-duration-fast) var(--hq-ease-standard), border-color var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-base) var(--hq-ease-standard), opacity var(--hq-duration-fast) var(--hq-ease-standard);
 }
 .cal-chip-bar { position: absolute; inset-block: 0; inset-inline-start: 0; width: 3px; background: var(--sx-channel, var(--hq-accent)); }
-.cal-chip-text { display: grid; gap: 0; min-width: 0; flex: 1; }
 .cal-chip-title {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+  grid-column: 1; grid-row: 1; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: break-word;
   font-weight: var(--hq-font-weight-medium); line-height: 1.3;
 }
-.cal-chip-time { color: var(--hq-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cal-chip .sx-channel { margin-top: 1px; }
-.cal-chip-flag { margin-top: 2px; color: var(--hq-warning); }
+.cal-chip-time { grid-column: 1; grid-row: 2; min-width: 0; color: var(--hq-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-chip-end { grid-column: 2; grid-row: 1; display: inline-flex; align-items: center; gap: var(--hq-space-3xs); }
+.cal-chip .sx-channel { height: 16px; padding-inline: 5px; gap: 4px; }
+.cal-chip-flag { color: var(--hq-warning); }
+/* A day cell is narrow: the title takes the full width, and the badge and time share the line under it. */
+@container calchip (max-width: 11.5rem) {
+  .cal-chip { grid-template-columns: auto minmax(0, 1fr); row-gap: 2px; }
+  .cal-chip-title { grid-column: 1 / -1; }
+  .cal-chip-end { grid-column: 1; grid-row: 2; }
+  .cal-chip-time { grid-column: 2; grid-row: 2; align-self: center; }
+  .cal-chip-length { display: none; }
+  /* The colour bar already carries the channel's hue, so the badge keeps only its mark here. */
+  .cal-chip .sx-channel-dot { display: none; }
+}
 .cal-chip:hover { background: var(--hq-surface-hover); border-color: var(--hq-border-strong); }
 .cal-chip:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
 .cal-chip:focus-visible .cal-chip-title { -webkit-line-clamp: unset; line-clamp: unset; }
@@ -60,10 +71,11 @@
 .cal-ghost { position: fixed; top: -1000px; left: -1000px; padding: 16px 28px 44px; pointer-events: none; }
 
 /* ---------- Month ---------- */
-.cal-month { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); overflow: clip; background: var(--hq-surface-raised); }
+/* Below this width the grid scrolls sideways inside its pane, as the time grid does, rather than crushing the chips. */
+.cal-month { width: 100%; min-width: 36rem; border-collapse: separate; border-spacing: 0; table-layout: fixed; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); overflow: clip; background: var(--hq-surface-raised); }
 .cal-month th { padding: var(--hq-space-xs) var(--hq-space-sm); text-align: start; font: var(--hq-type-label); color: var(--hq-text-muted); background: var(--hq-surface-sunken); border-bottom: 1px solid var(--hq-border); }
 .cal-cell {
-  height: 104px; min-width: 0; padding: var(--hq-space-2xs); vertical-align: top; background: var(--hq-surface-raised);
+  height: 96px; min-width: 0; padding: var(--hq-space-2xs); vertical-align: top; background: var(--hq-surface-raised);
   border-inline-start: 1px solid var(--hq-border); border-top: 1px solid var(--hq-border);
   transition: background var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard);
 }
@@ -87,7 +99,7 @@
 .cal-tray[data-drop-active] { background: var(--hq-accent-soft); border-color: var(--hq-accent); border-style: solid; }
 .cal [data-time-day][data-drop-active] { background-color: var(--hq-accent-soft); box-shadow: inset 0 0 0 2px var(--hq-accent); }
 .cal [data-grid-all-day][data-drop-active] { background: var(--hq-accent-soft); box-shadow: inset 0 0 0 2px var(--hq-accent); border-radius: var(--hq-radius-sm); }
-.cal .hq-calendar-all-day .cal-chip-title { -webkit-line-clamp: unset; line-clamp: unset; }
+.cal .hq-calendar-all-day .cal-chip-title { -webkit-line-clamp: 3; line-clamp: 3; }
 
 /* ---------- Agenda ---------- */
 .cal-agenda { display: grid; gap: var(--hq-space-md); align-content: start; }
