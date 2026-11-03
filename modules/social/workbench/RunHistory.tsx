@@ -4,6 +4,7 @@ import { useWorkbench } from './env';
 import { RUN_STATUS_VIEW, formatTime, shortId } from './format';
 import { RunReceipt } from './RunReceipt';
 import { updateWorkbench, workbenchView } from './state';
+import { PageHeader } from '../ui';
 
 /**
  * RR-4: the latest 200 runs, newest first, with times, errors and example labels. Opening a receipt is
@@ -20,11 +21,10 @@ export function RunHistory({ selectedRunId }: { readonly selectedRunId: string |
 
   return (
     <section className="sw-page" aria-labelledby="sw-runs-title">
-      <header className="sw-page-head">
-        <p className="sw-eyebrow">Social · Run history</p>
-        <h1 id="sw-runs-title">Run history</h1>
-        <p>Receipts for the latest 200 runs, newest first. Failed and interrupted runs stay visible; nothing is retried automatically.</p>
-      </header>
+      <PageHeader
+        headingId="sw-runs-title" title="Run history"
+        description="Receipts for the latest 200 runs, newest first. Failed and interrupted runs stay visible; nothing is retried automatically."
+      />
       <div className="sw-toolbar">
         <label className="sw-label" htmlFor="sw-history-tool">Tool</label>
         <select

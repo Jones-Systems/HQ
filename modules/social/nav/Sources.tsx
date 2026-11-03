@@ -1,4 +1,5 @@
 import { StateView, StatusChip } from '@hq/ui';
+import { PageHeader } from '../ui';
 
 export const SOURCES_PROPOSED = 'Proposed — needs the Social service source registry (SOC-6)';
 
@@ -9,10 +10,7 @@ export const SOURCES_PROPOSED = 'Proposed — needs the Social service source re
 export function Sources({ sourceId, navigate }: { readonly sourceId?: string; readonly navigate: (destination: string) => void }) {
   return (
     <div className="sd-page">
-      <header className="sd-page-head">
-        <h1>Sources</h1>
-        <StatusChip tone="neutral" label="Proposed" detail="not built" />
-      </header>
+      <PageHeader title="Sources" actions={<StatusChip tone="neutral" label="Proposed" detail="not built" />} />
       {sourceId && (
         <p className="sd-note" role="note">The source “{sourceId}” can't be shown: there is no source registry yet.</p>
       )}

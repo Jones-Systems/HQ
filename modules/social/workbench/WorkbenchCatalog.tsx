@@ -2,6 +2,7 @@ import { Button, StateView } from '@hq/ui';
 import { workspaceSnapshot } from '../core';
 import { EXAMPLE_NOTICE, TOOL_GUIDES, groupTools } from './catalog';
 import { useWorkbench } from './env';
+import { PageHeader } from '../ui';
 
 /** RR-1: the service's eight tools grouped by delivered category, each with its delivered limit. */
 export function Catalog() {
@@ -9,12 +10,12 @@ export function Catalog() {
   const snapshot = workspaceSnapshot(state.workspace);
   return (
     <section className="sw-page" aria-labelledby="sw-catalog-title">
-      <header className="sw-page-head">
-        <p className="sw-eyebrow">Social · Workbenches</p>
-        <h1 id="sw-catalog-title">Workbenches</h1>
-        <p>Account-free workbenches backed by the native Social tools. Each analyzes material you supply and runs only when you choose Run.</p>
+      <PageHeader
+        headingId="sw-catalog-title" title="Workbenches"
+        description="Account-free workbenches backed by the native Social tools. Each analyzes material you supply and runs only when you choose Run."
+      >
         <p className="sw-note">{EXAMPLE_NOTICE}</p>
-      </header>
+      </PageHeader>
       {!snapshot ? (
         state.workspace.status === 'error'
           ? <StateView state="unavailable" title="The tool catalog isn't available" description="The Social service didn't answer, so its workbench list can't be shown." action={{ label: 'Try again', onAction: () => void session.load(port) }} />

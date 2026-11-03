@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button, StatusChip, type StatusTone } from '@hq/ui';
 import type { Channel } from '../core';
+import { PageHeader } from '../ui';
 
 /** Channels with a platform account behind them; General and Article drafts aren't tied to an account. */
 export const ACCOUNT_CHANNELS: readonly Channel[] = ['X', 'LinkedIn', 'TikTok', 'Instagram', 'Facebook', 'Reddit'];
@@ -28,10 +29,7 @@ export function Channels({ navigate }: { readonly navigate: (destination: string
   const [notice, setNotice] = useState<string | null>(null);
   return (
     <div className="sd-page">
-      <header className="sd-page-head">
-        <h1>Channels & accounts</h1>
-        <StatusChip tone="neutral" label="Later" />
-      </header>
+      <PageHeader title="Channels & accounts" actions={<StatusChip tone="neutral" label="Later" />} />
       <p className="sd-note" role="note">
         What HQ can do for each channel today. Nothing on this page connects an account, collects data, posts or schedules.
       </p>

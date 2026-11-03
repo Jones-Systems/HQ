@@ -7,6 +7,7 @@ import {
 } from '../core';
 import { DELIVERED_LIMITS, startDraftRunId } from '../workbench';
 import { Freshness, clockTime, isOffline, isStale } from './freshness';
+import { PageHeader } from '../ui';
 
 export interface OverviewProps {
   readonly snapshot: WorkspaceSnapshot;
@@ -99,16 +100,15 @@ export function Overview({ snapshot, load, editors, brand, navigate, now, onChec
 
   return (
     <div className="sd-page">
-      <header className="sd-page-head">
-        <h1>Overview</h1>
-        <p className="hq-meta">{brand ? brand.name : 'All brands'}</p>
+      <PageHeader title="Overview" description={brand ? brand.name : 'All brands'}
+        actions={<Button variant="primary" onClick={() => navigate('library/new')}>New draft</Button>}>
         {isStale(load) && (
           <span className="sd-inline" role="status">
             <span>{isOffline(load) ? 'The Social service is unreachable.' : 'The workspace could not be refreshed.'} Showing the last synced data.</span>
             <Button size="sm" variant="secondary" onClick={onCheck}>Check again</Button>
           </span>
         )}
-      </header>
+      </PageHeader>
 
       <section className="sd-capabilities" aria-label="What Social can do here">
         <ul>

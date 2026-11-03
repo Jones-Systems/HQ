@@ -10,6 +10,7 @@ import { RunReceipt } from './RunReceipt';
 import { newDraft, runTool, setAttempt, setDraft, toolDraft, workbenchView, type Attempt, type ToolDraft } from './state';
 import { ToolFormView } from './ToolForms';
 import { UnknownOutcome } from './UnknownOutcome';
+import { PageHeader } from '../ui';
 
 function stringify(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -162,13 +163,14 @@ export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
 
   return (
     <section className="sw-page" aria-labelledby="sw-tool-title">
-      <header className="sw-page-head">
-        <p className="sw-eyebrow">{serviceTool?.category ?? 'Workbench'} · Workbench</p>
-        <h1 id="sw-tool-title">{name}</h1>
-        {serviceTool && <p>{serviceTool.description}</p>}
+      <PageHeader
+        headingId="sw-tool-title" title={name}
+        eyebrow={`${serviceTool?.category ?? 'Workbench'} · Workbench`}
+        {...(serviceTool ? { description: serviceTool.description } : {})}
+      >
         <p className="sw-limit"><b>Limit</b> {guide.limit}</p>
         <p className="sw-note"><b>Covers</b> {guide.recipe}</p>
-      </header>
+      </PageHeader>
       <div className="sw-workbench">
         <section className="sw-panel" aria-labelledby="sw-inputs-title">
           <div className="sw-panel-head">

@@ -82,6 +82,8 @@ describe('Social workspace source selection', () => {
     await overview();
     expect(socialWorkspace().source).toBe('fixture');
     expect(screen.getByText(BANNER)).toBeTruthy();
+    // The visible label is the page header's status pill; the full note is in its panel.
+    expect(screen.getByRole('button', { name: /^Example workspace/u })).toBeTruthy();
   });
 
   it.each<[string, unknown]>([
@@ -103,6 +105,7 @@ describe('Social workspace source selection', () => {
     await overview();
     expect(socialWorkspace().source).toBe('live');
     expect(screen.queryByText(BANNER)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Example workspace/u })).toBeNull();
     expect(stub.callsTo('workspace')).toHaveLength(1);
   });
 

@@ -7,6 +7,7 @@ import {
   FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_REFERENCES, FIXTURE_IDS, FIXTURE_OTHER_PROJECT_ID, FIXTURE_PROJECT_ID,
   recordCalls, resetSocialSessions, socialSession, type FixtureOptions, type RecordedPort,
 } from '../../core';
+import { DELIVERED_LIMITS } from '../../workbench';
 import { createWorkbenchFixture, type WorkbenchFixture } from '../../workbench/fixtures/examples';
 import { ACCOUNT_CHANNELS, NAV_ITEMS, PUBLISHING_NEEDS, SOURCES_PROPOSED, SWITCH_PROJECT_REASON, SocialDomain, parseSocialDestination } from '..';
 
@@ -112,8 +113,11 @@ describe('secondary navigation', () => {
     setup();
     await overview();
     const nav = within(screen.getByRole('navigation', { name: 'Social' }));
-    const names = nav.getAllByRole('button').map((button) => button.textContent);
-    expect(names).toStrictEqual(['Overview', 'SourcesProposed', 'Workbenches', 'Library', 'Calendar', 'Run history', 'Channels & accounts']);
+    // Accessible names stay the page names; icons and counts are decorative (aria-hidden).
+    const names = nav.getAllByRole('button').map((button) => button.querySelector('.sd-nav-label')?.textContent);
+    expect(names).toStrictEqual(['Overview', 'Sources', 'Workbenches', 'Library', 'Calendar', 'Run history', 'Channels & accounts']);
+    expect(nav.getByRole('button', { name: 'Sources Proposed' }).querySelector('.sd-tag')?.textContent).toBe('Proposed');
+    expect(nav.getByRole('button', { name: 'Library' }).querySelector('.sd-nav-count')?.textContent).toBe('4');
     expect(within(nav.getByRole('group', { name: 'Later' })).getByRole('button').textContent).toBe('Channels & accounts');
     expect(NAV_ITEMS.map((item) => item.destination)).toStrictEqual(['overview', 'sources', 'workbenches', 'library', 'calendar', 'runs', 'channels']);
     expect(nav.getByRole('button', { name: 'Overview' }).getAttribute('aria-current')).toBe('page');
@@ -158,7 +162,7 @@ describe('brand switcher', () => {
     const s = setup();
     await overview();
     await s.user.selectOptions(side().getByLabelText('Brand'), FIXTURE_IDS.harbor);
-    expect(screen.getByText('Harbor Lane Bakery', { selector: '.sd-page-head p' })).toBeTruthy();
+    expect(screen.getByText('Harbor Lane Bakery', { selector: '.sx-head-description' })).toBeTruthy();
     const comingUp = within(screen.getByRole('region', { name: 'Coming up' }));
     expect(comingUp.getByText('Sourdough starter open day')).toBeTruthy();
     expect(comingUp.queryByText('Autumn blend tasting notes')).toBeNull();
@@ -348,17 +352,25 @@ describe('Channels & accounts', () => {
     expect(s.destination()).toBe('channels');
     expect(effects(s)).toHaveLength(0);
 
-    // Honesty copy: nothing reads as connected, posted, published, scheduled or live.
+    // Honesty copy: nothing reads as connected, posted, published, scheduled or live. The header's status panel
+    // repeats the delivered limits, the one sentence that names those capabilities, only to deny them.
     const text = document.querySelector('.sd-page')!.textContent!;
-    expect(text).not.toMatch(/\b(connected|posted|published|scheduled|live)\b/iu);
+    expect(text).toContain(DELIVERED_LIMITS);
+    expect(text.replace(DELIVERED_LIMITS, '')).not.toMatch(/\b(connected|posted|published|scheduled|live)\b/iu);
   });
 });
 
 describe('mounted sections', () => {
-  it('mounts the workbench section, with its limits banner, for workbench and run destinations', async () => {
-    setup({ destination: 'workbenches' });
+  it('mounts the workbench section, with its limits in the page header status, for workbench and run destinations', async () => {
+    const s = setup({ destination: 'workbenches' });
     expect(await screen.findByRole('heading', { level: 1, name: 'Workbenches' })).toBeTruthy();
-    expect(screen.getByText('Delivered limits')).toBeTruthy();
+    const status = screen.getByRole('button', { name: /^Example workspace/u });
+    expect(status.getAttribute('aria-expanded')).toBe('false');
+    await s.user.click(status);
+    const panel = within(screen.getByRole('group', { name: 'Social workspace status' }));
+    expect(panel.getByText('Delivered limits')).toBeTruthy();
+    expect(panel.getByText(/^Fictional example workspace/u)).toBeTruthy();
+    expect(effects(s)).toHaveLength(0);
     cleanup();
     resetSocialSessions();
     setup({ destination: 'runs' });

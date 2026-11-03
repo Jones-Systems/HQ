@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { Button } from '@hq/ui';
 import type { WorkspaceSnapshot } from '../core';
+import { SocialIcon } from '../ui';
 import { SWITCH_PROJECT_REASON, type ProjectLink } from './brand';
 
 export interface BrandSwitcherProps {
@@ -23,22 +24,38 @@ function linkLine(link: ProjectLink | null): string | null {
   }
 }
 
+/** Two-letter mark for a brand name: "Larkspur Tea Co." → "LT". */
+export function brandInitials(name: string): string {
+  const words = name.split(/\s+/u).filter((word) => /^[\p{L}\p{N}]/u.test(word) && !/^(co|inc|ltd|llc)\.?$/iu.test(word));
+  const letters = (words.length > 1 ? [words[0]!, words[1]!] : words.slice(0, 1)).map((word) => [...word][0]!.toUpperCase());
+  return letters.join('') || '·';
+}
+
 /** Brand switcher with its linked-project line. Brands are managed from here; there is no brands page. */
 export function BrandSwitcher({ snapshot, value, link, onChoose, onManage }: BrandSwitcherProps) {
   const id = useId();
   const line = linkLine(link);
+  const current = snapshot?.brands.find((brand) => brand.id === value);
   return (
     <div className="sd-brand">
-      <label htmlFor={`${id}-brand`}>Brand</label>
-      <select
-        id={`${id}-brand`} value={snapshot ? value : 'all'} disabled={!snapshot}
-        onChange={(event) => onChoose(event.target.value)} aria-describedby={line ? `${id}-link` : undefined}
-      >
-        <option value="all">{snapshot ? 'All brands' : 'Loading brands…'}</option>
-        {snapshot?.brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
-      </select>
+      <label htmlFor={`${id}-brand`} className="sd-brand-label">Brand</label>
+      <div className="sd-brand-picker">
+        <span className="sd-brand-avatar" aria-hidden="true" data-all={current ? undefined : ''}>
+          {current ? brandInitials(current.name) : <SocialIcon name="brands" />}
+        </span>
+        <select
+          id={`${id}-brand`} value={snapshot ? value : 'all'} disabled={!snapshot}
+          onChange={(event) => onChoose(event.target.value)} aria-describedby={line ? `${id}-link` : undefined}
+        >
+          <option value="all">{snapshot ? 'All brands' : 'Loading brands…'}</option>
+          {snapshot?.brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
+        </select>
+        <SocialIcon name="chevron-down" className="sd-brand-chevron" />
+      </div>
       {line && <p id={`${id}-link`} className="hq-meta">{line}</p>}
-      <Button size="sm" variant="ghost" onClick={onManage} disabled={!snapshot}>Manage brands</Button>
+      <Button size="sm" variant="ghost" className="sd-brand-manage" onClick={onManage} disabled={!snapshot}>
+        <SocialIcon name="brands" />Manage brands
+      </Button>
     </div>
   );
 }

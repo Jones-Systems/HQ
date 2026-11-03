@@ -203,8 +203,9 @@ describe('Social and Work mounted in the T0 shell', () => {
     expect(await screen.findByRole('navigation', { name: 'Design' })).toBeTruthy();
 
     await openSocial();
+    expect(screen.getByRole('button', { name: /^Example workspace/u })).toBeTruthy();
     expect(screen.getByText(/^Fictional example workspace/u)).toBeTruthy();
-    expect(screen.getByText(/^No account connection, posting, live collection or scheduling\./u)).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'What Social can do here' })).getByText(/^No account connection, posting, live collection or scheduling\./u)).toBeTruthy();
 
     await openWork();
     expect(screen.getByText(/^Fictional example planning, kept in memory for this session only\./u)).toBeTruthy();

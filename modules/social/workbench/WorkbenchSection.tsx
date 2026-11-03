@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import type { ProjectContext } from '@hq/contracts';
 import { Button, StateView, StatusChip } from '@hq/ui';
 import { isRunId, isToolId, workspaceSnapshot, type SocialWorkspacePort, type ToolId } from '../core';
+import { useSocialFrame } from '../ui';
 import { DELIVERED_LIMITS } from './catalog';
 import { Catalog } from './WorkbenchCatalog';
 import { WorkbenchEnvironmentProvider, useWorkbench } from './env';
@@ -72,10 +73,13 @@ function SectionBody({ destination }: { readonly destination: string }) {
     if (session.getState().workspace.status === 'idle') void session.load(port);
   }, [port, session]);
 
+  // Inside the Social domain the page header's sync pill carries freshness and the limits; mounted on its own, the
+  // section shows them itself.
+  const framed = useSocialFrame() !== null;
   return (
     <div className="sw-section">
-      <p className="sw-limits" role="note"><b>Delivered limits</b> {DELIVERED_LIMITS}</p>
-      <ServiceStatus />
+      {!framed && <p className="sw-limits" role="note"><b>Delivered limits</b> {DELIVERED_LIMITS}</p>}
+      {!framed && <ServiceStatus />}
       {page === null ? (
         <StateView
           state="unavailable" title="This Social page doesn't exist"

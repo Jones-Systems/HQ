@@ -42,4 +42,4 @@ export function setSocialWorkspacePort(port: SocialWorkspacePort | null, source:
 }
 
 export const EXAMPLE_WORKSPACE_NOTE = 'Fictional example workspace, kept in this window until HQ closes. '
-  + 'No Social service is connected yet, so nothing is sent anywhere and runs stay queued.';
+  + 'No Social service is set up yet, so nothing is sent anywhere and runs stay queued.';
