@@ -320,7 +320,9 @@ export function pageSummary(page: Page, max = SUMMARY_LENGTH): string {
       }
     }
   });
-  return clip(parts.join(' '), max);
+  // List items and quotes arrive as separate blocks: a full stop between them keeps the run-on readable.
+  const sentence = /[.!?:;…)"”’]$/u;
+  return clip(parts.reduce((joined, part) => (joined === '' ? part : `${joined}${sentence.test(joined) ? ' ' : '. '}${part}`), ''), max);
 }
 
 // ---- out-links ----

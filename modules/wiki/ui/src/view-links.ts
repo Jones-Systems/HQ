@@ -2,7 +2,7 @@
 // "Links on this page" (out-links grouped by kind). Both live in the right rail and share the preview store.
 
 import { createElement as h, useState, type ReactElement } from 'react';
-import type { BacklinkResult, OutLink, PageKey } from '../../contract/src/index.ts';
+import type { BacklinkEntry, BacklinkResult, OutLink, PageKey } from '../../contract/src/index.ts';
 import { PageButton } from './common.ts';
 import type { ViewCtx } from './context.ts';
 import { ErrorNotice, Skeleton, type NoticeAction } from './feedback.ts';
@@ -15,8 +15,9 @@ import { BacklinkPreview, LinkPreview, Previewable, warmPage } from './view-prev
 /** Out-link lists stay short until asked: more than this many collapse behind "Show all". */
 export const OUT_LINK_COLLAPSE = 8;
 
-function BacklinkRow(props: { readonly ctx: ViewCtx; readonly current: PageKey; readonly source: PageKey; readonly title: string }): ReactElement {
-  const { ctx, source } = props;
+function BacklinkRow(props: { readonly ctx: ViewCtx; readonly current: PageKey; readonly entry: BacklinkEntry }): ReactElement {
+  const { ctx, entry } = props;
+  const { source } = entry;
   return h(
     'li',
     { className: 'wiki-backlink' },
@@ -25,9 +26,9 @@ function BacklinkRow(props: { readonly ctx: ViewCtx; readonly current: PageKey; 
       kind: 'backlink',
       placement: 'rail',
       warm: warmPage(ctx, source),
-      card: () => h(BacklinkPreview, { ctx, source, title: props.title, current: props.current }),
+      card: () => h(BacklinkPreview, { ctx, entry, current: props.current }),
       children: (anchor: string) =>
-        h('span', { className: `wiki-backlink-row${anchor}` }, h(PageButton, { ctx, pageKey: source, label: props.title }), h('code', { className: 'wiki-path' }, source.path)),
+        h('span', { className: `wiki-backlink-row${anchor}` }, h(PageButton, { ctx, pageKey: source, label: entry.title }), h('code', { className: 'wiki-path' }, source.path)),
     }),
   );
 }
@@ -45,7 +46,7 @@ function BacklinksBody(props: { readonly ctx: ViewCtx; readonly current: PageKey
     h(
       'ul',
       { className: 'wiki-linklist' },
-      result.entries.map((entry) => h(BacklinkRow, { key: pageId(entry.source), ctx, current: props.current, source: entry.source, title: entry.title })),
+      result.entries.map((entry) => h(BacklinkRow, { key: pageId(entry.source), ctx, current: props.current, entry })),
     ),
   );
 }

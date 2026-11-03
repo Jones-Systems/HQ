@@ -5,7 +5,7 @@ import { createElement as h, useEffect, useMemo, useRef, useState, type ReactEle
 import type { Page, PageField, PageKey, RawReason, WikiError } from '../../contract/src/index.ts';
 import type { ViewCtx } from './context.ts';
 import { ErrorNotice, Notice, Skeleton } from './feedback.ts';
-import { describeError, folderParts, namespaceLabel, pageName, shortCommit } from './format.ts';
+import { describeError, folderParts, isOutage, namespaceLabel, pageName, shortCommit } from './format.ts';
 import { useResource } from './load.ts';
 import { useOutageToasts } from './outage.ts';
 import { documentHeadings, sameText, type DocumentHeadings } from './reader-model.ts';
@@ -151,6 +151,7 @@ function ReaderPage(props: { readonly ctx: ViewCtx; readonly pageKey: PageKey })
   const retryPage = useOutageToasts(ctx, page);
   const scope = useRef<HTMLDivElement | null>(null);
   const value = page.value;
+  const alsoDown = value === undefined && page.error !== null && isOutage(page.error) && backlinks.value === undefined && backlinks.error !== null;
 
   const headings = useMemo(() => (value !== undefined && value.content.state === 'parsed' ? documentHeadings(value.content.ast, value.title) : null), [value]);
 
@@ -197,7 +198,8 @@ function ReaderPage(props: { readonly ctx: ViewCtx; readonly pageKey: PageKey })
           'aside',
           { className: 'wiki-rail', 'aria-label': 'Page context' },
           headings === null ? null : h(Outline, { items: headings.outline, scope }),
-          h(BacklinksSection, { ctx, current: pageKey, backlinks }),
+          // When the whole Wiki is unreachable the page's own notice already says so, once.
+          alsoDown ? null : h(BacklinksSection, { ctx, current: pageKey, backlinks }),
           value === undefined ? null : h(OutLinksSection, { ctx, links: value.outLinks }),
         ),
       ),

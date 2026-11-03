@@ -33,6 +33,16 @@
   max-width: 72ch;
 }
 
+.wiki-view .wiki-rail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--hq-space-xl) var(--hq-space-2xl);
+  align-content: start;
+  min-width: 0;
+  padding-top: var(--hq-space-xl);
+  border-top: 1px solid var(--hq-border);
+}
+
 /* With the sidebar, 860 px of reader is a 1100 px window: all three columns. Below that the rail's sections move
    under the article. */
 @container wiki-reader (min-width: 860px) {
@@ -44,23 +54,13 @@
 
   .wiki-view .wiki-rail {
     position: sticky;
-    top: 0;
+    top: var(--hq-space-lg);
     max-height: calc(100vh - 120px);
     overflow-y: auto;
     grid-template-columns: minmax(0, 1fr);
     padding: 0 0 var(--hq-space-lg);
     border-top: 0;
   }
-}
-
-.wiki-view .wiki-rail {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--hq-space-xl) var(--hq-space-2xl);
-  align-content: start;
-  min-width: 0;
-  padding-top: var(--hq-space-xl);
-  border-top: 1px solid var(--hq-border);
 }
 
 .wiki-view .wiki-rail > section,
@@ -106,10 +106,6 @@
 }
 
 /* ---- page header ---- */
-
-.wiki-view .wiki-reader-notice {
-  margin-bottom: var(--hq-space-lg);
-}
 
 .wiki-view .wiki-page-title {
   margin: 0 0 var(--hq-space-sm);
@@ -580,6 +576,7 @@
   padding: 4px 8px;
   border: 0;
   border-left: 2px solid transparent;
+  border-radius: 0;
   background: none;
   color: var(--hq-text-muted);
   font: var(--hq-type-body);
@@ -611,8 +608,10 @@
 .wiki-view .wiki-outlink-row {
   display: grid;
   gap: 1px;
-  padding: 5px 8px;
+  padding: 3px 8px;
   border-radius: var(--hq-radius-md);
+  font: var(--hq-type-body);
+  line-height: 20px;
   transition: background-color var(--hq-duration-fast) var(--hq-ease-standard);
 }
 
@@ -649,6 +648,41 @@
 .wiki-view .wiki-rail-loading {
   display: grid;
   gap: var(--hq-space-sm);
+}
+
+/* ---- notices inside the reader: the actions sit under the text, never squeeze it ---- */
+
+.wiki-view .wiki-reader .wiki-article .wiki-notice,
+.wiki-view .wiki-reader .wiki-rail .wiki-notice {
+  grid-template-columns: auto minmax(0, 1fr);
+  margin-bottom: var(--hq-space-md);
+}
+
+.wiki-view .wiki-reader .wiki-article .wiki-notice-actions,
+.wiki-view .wiki-reader .wiki-rail .wiki-notice-actions {
+  grid-column: 2;
+}
+
+.wiki-view .wiki-reader .wiki-notice-detail,
+.wiki-view .wiki-reader .wiki-notice-message {
+  margin: 0 0 4px;
+}
+
+.wiki-view .wiki-reader .wiki-notice-message {
+  color: var(--hq-text);
+}
+
+.wiki-view .wiki-reader .wiki-notice-body {
+  font: var(--hq-type-body);
+}
+
+/* A bar notice over the whole reader keeps its single line. */
+.wiki-view .wiki-reader > .wiki-notice--bar {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.wiki-view .wiki-reader > .wiki-notice--bar .wiki-notice-actions {
+  grid-column: auto;
 }
 
 /* ---- loading, raw pages ---- */
@@ -689,6 +723,14 @@
 
 .wiki-view .wiki-disambiguation {
   max-width: 72ch;
+}
+
+/* As a view of its own the candidates are the cards: no panel around them. */
+.wiki-view main > .wiki-disambiguation {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
 }
 
 .wiki-view .wiki-disambiguation .wiki-section-title {

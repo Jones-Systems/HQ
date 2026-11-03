@@ -4,12 +4,12 @@
 // sibling of its link, and CSS anchor positioning follows a class toggled on the active link (see wiki-reader.css).
 
 import { createContext, createElement as h, useContext, useEffect, useMemo, useSyncExternalStore, type ReactElement, type ReactNode } from 'react';
-import type { LinkTarget, PageKey } from '../../contract/src/index.ts';
+import type { BacklinkEntry, LinkTarget, PageKey } from '../../contract/src/index.ts';
 import { NamespaceBadge } from './common.ts';
 import type { ViewCtx } from './context.ts';
 import { folderParts, pageName } from './format.ts';
 import { useResource } from './load.ts';
-import { backlinkContext, pageSummary } from './reader-model.ts';
+import { backlinkContext, pageSummary, type BacklinkContext } from './reader-model.ts';
 import { pageResource } from './resources.ts';
 import { Skeleton } from './feedback.ts';
 
@@ -289,26 +289,44 @@ export function LinkPreview(props: { readonly ctx: ViewCtx; readonly target: Lin
   }
 }
 
-/** The sentence or list item in `source` that links to `current`, fetched lazily through the same cache. */
-export function BacklinkPreview(props: { readonly ctx: ViewCtx; readonly source: PageKey; readonly title: string; readonly current: PageKey }): ReactElement {
-  const { ctx, source, current } = props;
-  const page = useResource(pageResource(ctx.service, source), ctx.cache);
+export interface BacklinkContextState {
+  readonly status: 'loading' | 'error' | 'ready';
+  /** The block that links here; null when there is nothing to quote (see `raw`). */
+  readonly context: BacklinkContext | null;
+  /** The source page is shown as plain text, so its links are not marked. */
+  readonly raw: boolean;
+}
+
+/**
+ * Where the page of `entry` links to `current`. This is the one place that knows how: today it reads the source page
+ * through the shared cache and walks its document; a provider that sends the sentence with the backlink could answer
+ * here without the fetch.
+ */
+export function useBacklinkContext(ctx: ViewCtx, entry: BacklinkEntry, current: PageKey): BacklinkContextState {
+  const page = useResource(pageResource(ctx.service, entry.source), ctx.cache);
   const value = page.value;
-  const context = value === undefined || value.content.state !== 'parsed' ? null : backlinkContext(value.content.ast, current);
-  const state = value !== undefined ? 'ready' : page.status === 'error' ? 'error' : 'loading';
+  if (value === undefined) return { status: page.status === 'error' ? 'error' : 'loading', context: null, raw: false };
+  if (value.content.state !== 'parsed') return { status: 'ready', context: null, raw: true };
+  return { status: 'ready', context: backlinkContext(value.content.ast, current), raw: false };
+}
+
+/** The sentence or list item that links to `current`, fetched lazily through the same cache. */
+export function BacklinkPreview(props: { readonly ctx: ViewCtx; readonly entry: BacklinkEntry; readonly current: PageKey }): ReactElement {
+  const { entry } = props;
+  const { status, context, raw } = useBacklinkContext(props.ctx, entry, props.current);
   return h(
     'span',
-    { className: 'wiki-preview-body', 'data-preview-state': state },
-    h(PreviewHead, { title: props.title, pageKey: source }),
-    value === undefined
-      ? page.status === 'error'
+    { className: 'wiki-preview-body', 'data-preview-state': status },
+    h(PreviewHead, { title: entry.title, pageKey: entry.source }),
+    status !== 'ready'
+      ? status === 'error'
         ? h('span', { className: 'wiki-preview-note' }, 'Couldn’t load this page to show where it links here.')
         : h(Skeleton, { shape: 'line', lines: 2 })
       : context === null
         ? h(
             'span',
             { className: 'wiki-preview-note' },
-            value.content.state === 'raw' ? 'This page is shown as plain text, so the link isn’t marked.' : 'The link is not in the page text.',
+            raw ? 'This page is shown as plain text, so the link isn’t marked.' : 'The link is not in the page text.',
           )
         : h(
             'span',

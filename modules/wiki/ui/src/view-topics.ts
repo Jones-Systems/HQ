@@ -2,16 +2,16 @@
 // chevron disclosures that open with a short height animation, and page rows named by their file.
 
 import { createElement as h, useMemo, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
-import { NAMESPACES, pageKeyId, type PageKey, type TopicList, type WikiNamespace } from '../../contract/src/index.ts';
+import { NAMESPACES, pageKeyId, type PageKey, type Topic, type TopicList, type WikiNamespace } from '../../contract/src/index.ts';
 import type { ViewCtx } from './context.ts';
 import { ErrorNotice, Notice, Skeleton } from './feedback.ts';
-import { folderParts, namespaceLabel, pageName } from './format.ts';
+import { folderParts, namespaceLabel } from './format.ts';
 import { Icon } from './icons.ts';
 import { useResource } from './load.ts';
 import { useOutageToasts } from './outage.ts';
 import { recoveryActions } from './recovery.ts';
 import { topicsResource } from './resources.ts';
-import { buildTopicTree, countShown, filterWords, markPieces, showTopics, type ShownTopic, type TopicNode } from './topic-tree.ts';
+import { buildTopicTree, countShown, filterWords, markPieces, showTopics, topicPageLabel, type ShownTopic, type TopicNode } from './topic-tree.ts';
 
 /** Levels of the tree that start open. */
 const DEFAULT_OPEN_DEPTH = 2;
@@ -41,7 +41,7 @@ function Marked(props: { readonly text: string; readonly words: readonly string[
   );
 }
 
-function PageRow(props: { readonly ctx: ViewCtx; readonly pageKey: PageKey; readonly words: readonly string[]; readonly matched: boolean }): ReactElement {
+function PageRow(props: { readonly ctx: ViewCtx; readonly topic: Topic; readonly pageKey: PageKey; readonly words: readonly string[]; readonly matched: boolean }): ReactElement {
   const { ctx, pageKey } = props;
   const folder = folderParts(pageKey.path).join(' / ');
   return h(
@@ -50,7 +50,7 @@ function PageRow(props: { readonly ctx: ViewCtx; readonly pageKey: PageKey; read
     h(
       'button',
       { type: 'button', className: 'wiki-topic-page-button', 'data-target': 'page', onClick: () => ctx.openPage(pageKey) },
-      h('span', { className: 'wiki-page-name' }, h(Marked, { text: pageName(pageKey.path), words: props.words })),
+      h('span', { className: 'wiki-page-name' }, h(Marked, { text: topicPageLabel(props.topic, pageKey), words: props.words })),
       folder === '' ? null : h('span', { className: 'wiki-page-folder' }, h(Marked, { text: folder, words: props.words })),
     ),
   );
@@ -105,7 +105,7 @@ function Node(props: {
               : h(
                   'ul',
                   { className: 'wiki-linklist wiki-topic-pages' },
-                  node.pages.map((key) => h(PageRow, { key: pageKeyId(key), ctx, pageKey: key, words, matched: node.pageMatches.has(pageKeyId(key)) })),
+                  node.pages.map((key) => h(PageRow, { key: pageKeyId(key), ctx, topic, pageKey: key, words, matched: node.pageMatches.has(pageKeyId(key)) })),
                   hidden > 0 ? h('li', { key: '…more', className: 'wiki-muted wiki-topic-more' }, `and ${hidden} more`) : null,
                 ),
             node.children.length === 0

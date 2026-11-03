@@ -60,6 +60,14 @@ const matchesAll = (text: string, words: readonly string[]): boolean => {
 const NO_MATCHES: ReadonlySet<string> = new Set();
 
 /**
+ * How a page of `topic` is named in the tree. The one place that decides: today the name comes from the path; a
+ * provider that sends titles with a topic's pages could be answered here.
+ */
+export function topicPageLabel(_topic: Topic, key: PageKey): string {
+  return pageName(key.path);
+}
+
+/**
  * The tree to show for `query`. A blank filter shows everything. Otherwise a topic stays when its label matches, when
  * one of its previewed pages' names or folders match, or when a descendant stays, so a match never loses its ancestors.
  * Every word of the filter must appear (in the label, or in a page's name and folder).
@@ -76,7 +84,7 @@ export function showTopics(roots: readonly TopicNode[], query: string): readonly
     for (const node of nodes) {
       const labelMatch = matchesAll(node.topic.label, words);
       const matched = new Set<string>();
-      for (const key of node.topic.pages) if (matchesAll(`${pageName(key.path)} ${key.path}`, words)) matched.add(pageKeyId(key));
+      for (const key of node.topic.pages) if (matchesAll(`${topicPageLabel(node.topic, key)} ${key.path}`, words)) matched.add(pageKeyId(key));
       const children = narrow(node.children);
       if (!labelMatch && matched.size === 0 && children.length === 0) continue;
       kept.push({
