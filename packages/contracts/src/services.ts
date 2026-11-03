@@ -43,6 +43,23 @@ export interface WorkServiceTransport {
   call<R extends WorkServiceRoute>(route: R, params: WorkServiceParams[R]): Promise<ServiceResponse>;
 }
 
+export const WORK_LOCAL_ROUTES = ['load', 'save'] as const;
+export type WorkLocalRoute = (typeof WORK_LOCAL_ROUTES)[number];
+export interface WorkLocalParams {
+  readonly load: Record<string, never>;
+  /** `binding` comes from `load`. `expectedRevision` must equal the stored revision (0 when nothing is stored). */
+  readonly save: { readonly binding: string; readonly expectedRevision: number; readonly value: JsonValue };
+}
+export interface WorkLocalValues {
+  readonly load: { readonly binding: string; readonly revision: number; readonly value: JsonValue | null };
+  readonly save: { readonly revision: number };
+}
+export type WorkLocalResult<T> = { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly kind: 'conflict' | 'invalid' | 'too_large' | 'unavailable' };
+export interface WorkLocalTransport {
+  call<R extends WorkLocalRoute>(route: R, params: WorkLocalParams[R]): Promise<WorkLocalResult<WorkLocalValues[R]>>;
+}
+
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 export interface StoredDocument {
   readonly namespace: string;
@@ -87,6 +104,7 @@ export interface HqServices {
   readonly wiki?: Readonly<import('./wiki.js').WikiServiceTransport>;
   readonly social: Readonly<SocialServiceTransport>;
   readonly work: Readonly<WorkServiceTransport>;
+  readonly workLocal?: Readonly<WorkLocalTransport>;
   readonly design: Readonly<DesignServiceTransport>;
   readonly config: Readonly<ServiceConfigTransport>;
 }

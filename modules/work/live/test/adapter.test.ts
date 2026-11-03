@@ -452,7 +452,7 @@ describe('moves: renumbered neighbours and read-back', () => {
 
 describe('no network capability in the renderer', () => {
   it('live production code has no fetch, XHR, socket, Node or CLI access', () => {
-    for (const file of ['adapter.ts', 'transport.ts', 'wire.ts', 'index.ts', 'intent.ts']) {
+    for (const file of ['adapter.ts', 'transport.ts', 'wire.ts', 'index.ts', 'intent.ts', 'durable.ts']) {
       const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
       expect([file, /\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|require\(|from 'node:|hq-cli|child_process/u.test(source)]).toEqual([file, false]);
     }
