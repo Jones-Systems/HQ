@@ -1,0 +1,354 @@
+import { sortByPosition } from '../upstream/manual-planner/ordering.js';
+import { isRequestId, PlannerPortError, type Anchor, type HistoryEntry, type PlannerError, type PlannerPort, type Snapshot, type WriteResult } from '../port';
+import { DEFAULT_SETTINGS, STATUS_IDS, type Item, type PlanningDate, type Settings, type Status } from '../types';
+import { normalizeFields, normalizeSettings, randomEntryId, stripDerived, wallTimeToInstant, type NormalizedFields } from '../validation';
+
+// In-memory PlannerPort standing in for the Planner service (RW-4). It mirrors
+// planning/store.py: revision guards, 409 revision/order conflicts, top-of-status
+// creates, target-only renumbering, and request-ID idempotency with a bounded
+// 2,000-entry replay record (same ID and body replays; a different body is
+// `request_id_reused`). A failed call records nothing and changes nothing.
+// Like the service, an ordinary same-ID send after its record is evicted is
+// applied again. The service's retention-aware replay route is `control.replay`,
+// with the eviction floor that proves "never applied" (requests.replay).
+
+export const MAX_REMEMBERED_REQUESTS = 2_000;
+export const POSITION_STEP = 1024;
+const MAX_HISTORY_PER_ITEM = 200;
+
+export interface FixtureOptions {
+  items?: Item[];
+  settings?: Settings;
+  features?: string[];
+  stateVersion?: number;
+  now?: () => Date;
+  newId?: () => string;
+}
+
+/** Test and preview controls; deliberately not part of the port. */
+export interface FixtureControl {
+  /** Stored records, as the service holds them (no derived date fields). */
+  stored(): Item[];
+  requestRecordCount(): number;
+  hasRequestRecord(requestId: string): boolean;
+  stateVersion(): number;
+  /** The highest state version of any evicted request record; it only rises. */
+  evictedThroughVersion(): number;
+  /** The service's replay route (`POST /api/requests/replay`). Reach it only through a transport, never from the UI. */
+  replay(request: FixtureReplayRequest): Promise<FixtureReplayOutcome>;
+}
+
+/** One write as first sent, in the bridge's typed form. */
+export interface FixtureWriteCall {
+  route: 'create' | 'patch' | 'move' | 'archive' | 'restore' | 'reviewed' | 'settings';
+  params: { requestId: string; id?: string; [key: string]: unknown };
+}
+
+export interface FixtureReplayRequest {
+  mode: 'lookup' | 'resend';
+  requestId: string;
+  original: FixtureWriteCall;
+  sentAfterVersion?: number;
+}
+
+export type FixtureReplayOutcome =
+  | { outcome: 'replayed'; response: WriteResult | { settings: Settings; stateVersion: number } }
+  | { outcome: 'not_applied' }
+  | { outcome: 'applied_now'; response: WriteResult | { settings: Settings; stateVersion: number } };
+
+/** The service's 409 `replay_indeterminate`: no record, and no proof the write never landed. Nothing changed. */
+export class ReplayIndeterminateError extends Error {
+  readonly sentAfterVersion: number | null;
+  readonly evictedThroughVersion: number;
+  constructor(sentAfterVersion: number | null, evictedThroughVersion: number) {
+    super('replay_indeterminate');
+    this.name = 'ReplayIndeterminateError';
+    this.sentAfterVersion = sentAfterVersion;
+    this.evictedThroughVersion = evictedThroughVersion;
+  }
+}
+
+type Recorded = { fingerprint: string; response: unknown };
+
+function fail(error: PlannerError): never {
+  throw new PlannerPortError(error);
+}
+const ENUM_FIELDS = ['title', 'kind', 'status', 'motivation', 'horizon', 'priority', 'area'];
+const clone = <T>(value: T): T => structuredClone(value);
+
+function equal(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => equal(x, b[i]));
+  if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
+    const ka = Object.keys(a);
+    return ka.length === Object.keys(b).length && ka.every((k) => k in b && equal((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+  }
+  return false;
+}
+
+const abbrFormatters = new Map<string, Intl.DateTimeFormat>();
+function zoneAbbr(ms: number, zone: string): string {
+  let fmt = abbrFormatters.get(zone);
+  if (!fmt) abbrFormatters.set(zone, fmt = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'short' }));
+  return fmt.formatToParts(new Date(ms)).find((p) => p.type === 'timeZoneName')?.value ?? '';
+}
+const utcSeconds = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`;
+
+/** Read-only derived fields for a timed entry, as the service adds them on read. */
+export function withDerived(entry: PlanningDate): PlanningDate {
+  if (!entry.time || !entry.tz) return { ...entry };
+  const start = wallTimeToInstant(entry.value, entry.time, entry.tz);
+  if (start === null) return { ...entry };
+  const out: PlanningDate = { ...entry, instant: utcSeconds(start), tz_abbr: zoneAbbr(start, entry.tz) };
+  const end = entry.end_time ? wallTimeToInstant(entry.value, entry.end_time, entry.tz) : null;
+  if (end !== null) out.end_instant = utcSeconds(end);
+  return out;
+}
+
+export function createFixturePlanner(options: FixtureOptions = {}): { port: PlannerPort; control: FixtureControl } {
+  const now = options.now ?? (() => new Date());
+  const newId = options.newId ?? randomEntryId;
+  const features = [...(options.features ?? [])];
+  let settings: Settings = { ...(options.settings ?? DEFAULT_SETTINGS) };
+  let version = options.stateVersion ?? 0;
+  let evictedThrough = 0;
+  const items = new Map<string, Item>();
+  for (const raw of options.items ?? []) items.set(raw.id, { ...clone(raw), dates: raw.dates.map(stripDerived) });
+  const requests = new Map<string, Recorded>();
+  const history = new Map<string, HistoryEntry[]>();
+
+  const stamp = () => now().toISOString();
+  const read = (stored: Item): Item => ({ ...clone(stored), dates: stored.dates.map(withDerived) });
+  const ordered = (list: Iterable<Item>) => sortByPosition([...list]);
+
+  function log(itemId: string, action: string, detail: unknown) {
+    const entries = history.get(itemId) ?? [];
+    entries.push({ at: stamp(), action, detail });
+    history.set(itemId, entries.slice(-MAX_HISTORY_PER_ITEM));
+  }
+
+  function edgePosition(status: Status): number {
+    const positions = [...items.values()].filter((i) => i.status === status).map((i) => i.position);
+    return positions.length ? Math.min(...positions) - POSITION_STEP : POSITION_STEP;
+  }
+
+  function guard(id: string, revision: unknown): Item {
+    if (typeof revision !== 'number' || !Number.isInteger(revision)) fail({ kind: 'invalid', errors: [{ field: 'revision', message: 'A numeric base revision is required.' }] });
+    const current = items.get(id);
+    if (!current) return fail({ kind: 'not_found' });
+    if (current.revision !== revision) fail({ kind: 'revision_conflict', current: read(current) });
+    return current;
+  }
+
+  function checkRequestId(requestId: string) {
+    if (!isRequestId(requestId)) fail({ kind: 'invalid', errors: [{ field: 'requestId', message: 'Malformed X-Request-Id.' }] });
+  }
+
+  function validated(raw: unknown, creating: boolean): NormalizedFields {
+    const result = normalizeFields(raw, { creating, features, newId });
+    return result.ok ? result.value : fail({ kind: 'invalid', errors: result.errors });
+  }
+
+  /** Replay, or apply atomically and record. `apply` must validate before it changes anything. */
+  function mutate<R extends { stateVersion: number }>(requestId: string, fingerprint: string, apply: () => Omit<R, 'stateVersion'>, replayed?: (response: R) => R): R {
+    const record = requests.get(requestId);
+    if (record) {
+      if (record.fingerprint !== fingerprint) fail({ kind: 'request_id_reused' });
+      const response = clone(record.response) as R;
+      return replayed ? replayed(response) : response;
+    }
+    const payload = apply();
+    version += 1;
+    const response = { ...payload, stateVersion: version } as R;
+    requests.set(requestId, { fingerprint, response: clone(response) });
+    while (requests.size > MAX_REMEMBERED_REQUESTS) {
+      const [oldest, evicted] = requests.entries().next().value!;
+      evictedThrough = Math.max(evictedThrough, (evicted.response as { stateVersion: number }).stateVersion);
+      requests.delete(oldest);
+    }
+    return response;
+  }
+
+  const write = (requestId: string, fingerprint: string, apply: () => Omit<WriteResult, 'stateVersion' | 'replayed'>): WriteResult =>
+    mutate<WriteResult>(requestId, fingerprint, () => ({ ...apply(), replayed: false }), (response) => ({ ...response, replayed: true }));
+
+  // The service fingerprints method, path and body bytes; this keys on the same parts.
+  const fingerprintOf = (route: string, body: unknown) => `${route}\n${JSON.stringify(body)}`;
+  /** The method, path and body of a typed write, as the service fingerprints it. Throws for a non-replayable route. */
+  function fingerprintFor(call: FixtureWriteCall): string {
+    const p = call.params as Record<string, unknown> & { id?: string };
+    switch (call.route) {
+      case 'create': return fingerprintOf('POST /api/items', { fields: p.fields });
+      case 'patch': return fingerprintOf(`PATCH /api/items/${p.id}`, { revision: p.revision, patch: p.patch });
+      case 'move': return fingerprintOf(`POST /api/items/${p.id}/move`, { revision: p.revision, status: p.status, ...(p.anchor as object) });
+      case 'archive': case 'restore': case 'reviewed': return fingerprintOf(`POST /api/items/${p.id}/${call.route}`, { revision: p.revision });
+      case 'settings': return fingerprintOf('PUT /api/settings', { settings: p.settings });
+      default: return fail({ kind: 'invalid', errors: [{ field: 'path', message: 'not_replayable' }] });
+    }
+  }
+
+  function dispatch(call: FixtureWriteCall): Promise<WriteResult | { settings: Settings; stateVersion: number }> {
+    const p = call.params as Record<string, never> & { requestId: string; id: string; revision: number };
+    switch (call.route) {
+      case 'create': return port.create(p.fields, p.requestId);
+      case 'patch': return port.patch(p.id, p.revision, p.patch, p.requestId);
+      case 'move': return port.move(p.id, p.revision, p.status, p.anchor, p.requestId);
+      case 'archive': case 'restore': return port.setArchived(p.id, p.revision, call.route === 'archive', p.requestId);
+      case 'reviewed': return port.markReviewed(p.id, p.revision, p.requestId);
+      case 'settings': return port.updateSettings(p.settings, p.requestId);
+    }
+  }
+
+  const port: PlannerPort = {
+    async snapshot(): Promise<Snapshot> {
+      return { items: ordered(items.values()).map(read), settings: { ...settings }, stateVersion: version, observedAt: stamp(), features: [...features] };
+    },
+
+    async version() {
+      return version;
+    },
+
+    async create(fields, requestId) {
+      checkRequestId(requestId);
+      const values = validated(fields, true);
+      return write(requestId, fingerprintFor({ route: 'create', params: { requestId, fields } }), () => {
+        const at = stamp();
+        const status = values.status!;
+        const created: Item = {
+          id: newId(), revision: 1, title: values.title!, kind: values.kind!, status,
+          motivation: values.motivation ?? null, horizon: values.horizon ?? null, priority: values.priority ?? null,
+          area: values.area ?? null, notes: values.notes ?? '', next_steps: values.next_steps ?? [],
+          references: values.references ?? [], dates: values.dates ?? [], position: edgePosition(status),
+          is_example: false, created_at: at, updated_at: at, archived_at: null, reviewed_at: null,
+        };
+        items.set(created.id, created);
+        log(created.id, 'created', { fields: [], changes: { status: [null, status] } });
+        return { item: read(created), changed: [read(created)] };
+      });
+    },
+
+    async patch(id, revision, patch, requestId) {
+      checkRequestId(requestId);
+      const values = validated(patch, false);
+      return write(requestId, fingerprintFor({ route: 'patch', params: { requestId, id, revision, patch } }), () => {
+        const stored = guard(id, revision);
+        // The service compares against the item as read, so a supplied timed
+        // date list always counts as changed (its derived fields differ).
+        const current = read(stored);
+        const fields = (Object.keys(values) as (keyof NormalizedFields)[]).filter((key) => !equal(current[key], values[key]));
+        if (!fields.length) return { item: current, changed: [] };
+        const next: Item = { ...stored, ...clone(values) };
+        if (fields.includes('status')) next.position = edgePosition(values.status!);
+        next.revision += 1;
+        next.updated_at = stamp();
+        items.set(id, next);
+        const changes = Object.fromEntries(fields.filter((key) => ENUM_FIELDS.includes(key)).map((key) => [key, [current[key], values[key]]]));
+        log(id, 'updated', { fields, changes });
+        return { item: read(next), changed: [read(next)] };
+      });
+    },
+
+    async move(id, revision, status, anchor: Anchor, requestId) {
+      checkRequestId(requestId);
+      if (!(STATUS_IDS as readonly string[]).includes(status)) fail({ kind: 'invalid', errors: [{ field: 'status', message: 'Unknown status.' }] });
+      const a = anchor as { after_id?: string; before_id?: string; place?: string };
+      if (a.after_id != null && a.before_id != null) fail({ kind: 'invalid', errors: [{ field: 'body', message: 'Give either after_id or before_id, not both.' }] });
+      if (a.place !== undefined && a.place !== 'top' && a.place !== 'bottom') fail({ kind: 'invalid', errors: [{ field: 'body', message: 'place must be top or bottom.' }] });
+      return write(requestId, fingerprintFor({ route: 'move', params: { requestId, id, revision, status, anchor } }), () => {
+        const stored = guard(id, revision);
+        const ids = ordered([...items.values()].filter((i) => i.status === status && i.id !== id)).map((i) => i.id);
+        const target = a.after_id ?? a.before_id;
+        let index: number;
+        if (target != null) {
+          if (!ids.includes(target)) fail({ kind: 'order_conflict' });
+          index = ids.indexOf(target) + (a.after_id != null ? 1 : 0);
+        } else {
+          index = (a.place ?? 'bottom') === 'top' ? 0 : ids.length;
+        }
+        const oldIds = ordered([...items.values()].filter((i) => i.status === stored.status)).map((i) => i.id);
+        ids.splice(index, 0, id);
+        const renumbered = new Set<string>();
+        ids.forEach((other, i) => {
+          const entry = items.get(other)!;
+          const position = (i + 1) * POSITION_STEP;
+          if (entry.position !== position) renumbered.add(other);
+          items.set(other, { ...entry, position });
+        });
+        if (status === stored.status && equal(oldIds, ids)) {
+          return { item: read(items.get(id)!), changed: [...renumbered].map((other) => read(items.get(other)!)) };
+        }
+        const moved = { ...items.get(id)!, status, revision: stored.revision + 1, updated_at: stamp() };
+        items.set(id, moved);
+        renumbered.add(id);
+        log(id, status !== stored.status ? 'moved' : 'reordered', status !== stored.status
+          ? { fields: ['status'], changes: { status: [stored.status, status] } } : { fields: ['position'], changes: {} });
+        return { item: read(moved), changed: [...renumbered].map((other) => read(items.get(other)!)) };
+      });
+    },
+
+    async setArchived(id, revision, archived, requestId) {
+      checkRequestId(requestId);
+      return write(requestId, fingerprintFor({ route: archived ? 'archive' : 'restore', params: { requestId, id, revision } }), () => {
+        const stored = guard(id, revision);
+        if (Boolean(stored.archived_at) === archived) return { item: read(stored), changed: [] };
+        const at = stamp();
+        const next = { ...stored, archived_at: archived ? at : null, revision: stored.revision + 1, updated_at: at };
+        items.set(id, next);
+        log(id, archived ? 'archived' : 'restored', { fields: ['archived'], changes: {} });
+        return { item: read(next), changed: [read(next)] };
+      });
+    },
+
+    async markReviewed(id, revision, requestId) {
+      checkRequestId(requestId);
+      return write(requestId, fingerprintFor({ route: 'reviewed', params: { requestId, id, revision } }), () => {
+        const stored = guard(id, revision);
+        const next = { ...stored, reviewed_at: stamp(), revision: stored.revision + 1 };
+        items.set(id, next);
+        log(id, 'reviewed', { fields: [], changes: {} });
+        return { item: read(next), changed: [read(next)] };
+      });
+    },
+
+    async history(id) {
+      if (!items.has(id)) fail({ kind: 'not_found' });
+      return clone([...(history.get(id) ?? [])].reverse().slice(0, 100));
+    },
+
+    async updateSettings(next, requestId) {
+      checkRequestId(requestId);
+      return mutate(requestId, fingerprintFor({ route: 'settings', params: { requestId, settings: next } }), () => {
+        const result = normalizeSettings(next, settings);
+        if (!result.ok) fail({ kind: 'invalid', errors: result.errors });
+        else settings = result.value;
+        return { settings: { ...settings } };
+      });
+    },
+  };
+
+  const control: FixtureControl = {
+    stored: () => ordered(items.values()).map(clone),
+    requestRecordCount: () => requests.size,
+    hasRequestRecord: (requestId) => requests.has(requestId),
+    stateVersion: () => version,
+    evictedThroughVersion: () => evictedThrough,
+    async replay({ mode, requestId, original, sentAfterVersion }) {
+      checkRequestId(requestId);
+      if (original.params.requestId !== requestId) fail({ kind: 'invalid', errors: [{ field: 'request_id', message: 'The replayed request ID must match the original.' }] });
+      if (sentAfterVersion !== undefined && (!Number.isInteger(sentAfterVersion) || sentAfterVersion < 0 || sentAfterVersion > version)) {
+        fail({ kind: 'invalid', errors: [{ field: 'sent_after_version', message: 'Must be a whole state version no later than the current one.' }] });
+      }
+      const fingerprint = fingerprintFor(original);
+      const record = requests.get(requestId);
+      if (record) {
+        if (record.fingerprint !== fingerprint) fail({ kind: 'request_id_reused' });
+        return { outcome: 'replayed', response: clone(record.response) as WriteResult };
+      }
+      // Without a record, only a baseline at or above the eviction floor proves the original never committed.
+      if (sentAfterVersion === undefined || evictedThrough > sentAfterVersion) throw new ReplayIndeterminateError(sentAfterVersion ?? null, evictedThrough);
+      if (mode === 'lookup') return { outcome: 'not_applied' };
+      return { outcome: 'applied_now', response: await dispatch(original) };
+    },
+  };
+  return { port, control };
+}

@@ -7,13 +7,33 @@ import base64
 import io
 import json
 import unittest
+from unittest.mock import patch
 
 from support import StoreTestCase
 
-from planning.server import MAX_BODY, REPLAY_MAX_BODY, PlanningApp, is_loopback_host, make_handler
+from planning.server import MAX_BODY, REPLAY_MAX_BODY, PlanningApp, ThreadingHTTPServer, is_loopback_host, make_handler
 
 PORT = 8765
 HOST = f"127.0.0.1:{PORT}"
+
+
+class ServerBinding(unittest.TestCase):
+    def test_bound_address_metadata_does_not_require_reverse_dns(self):
+        for address in (("127.0.0.1", 43210), ("::1", 43211, 0, 0)):
+            with self.subTest(address=address):
+                server = object.__new__(ThreadingHTTPServer)
+                server.server_address = (address[0], 0)
+
+                def bind(instance):
+                    instance.server_address = address
+
+                with patch("socketserver.TCPServer.server_bind", autospec=True, side_effect=bind) as binding, \
+                     patch("socket.getfqdn", side_effect=AssertionError("reverse DNS must not gate startup")):
+                    server.server_bind()
+                binding.assert_called_once_with(server)
+                self.assertEqual(server.server_address, address)
+                self.assertEqual(server.server_name, address[0])
+                self.assertEqual(server.server_port, address[1])
 
 
 class AppTestCase(StoreTestCase):

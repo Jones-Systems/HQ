@@ -1,0 +1,133 @@
+{
+  "captures": [
+    {
+      "label": "light",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "label": "dark",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "label": "system-os-light",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "label": "system-os-dark",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "label": "light-os-dark",
+      "width": 1280,
+      "height": 800
+    }
+  ],
+  "wells": {
+    "captured-img-light": {
+      "identical": true,
+      "digests": {
+        "light": "f5233310f75b",
+        "dark": "f5233310f75b",
+        "system-os-light": "f5233310f75b",
+        "system-os-dark": "f5233310f75b",
+        "light-os-dark": "f5233310f75b"
+      }
+    },
+    "producer-srcdoc-light": {
+      "identical": true,
+      "digests": {
+        "light": "e5b49340da40",
+        "dark": "e5b49340da40",
+        "system-os-light": "e5b49340da40",
+        "system-os-dark": "e5b49340da40",
+        "light-os-dark": "e5b49340da40"
+      }
+    },
+    "export-svg-light": {
+      "identical": true,
+      "digests": {
+        "light": "886d2323df54",
+        "dark": "886d2323df54",
+        "system-os-light": "886d2323df54",
+        "system-os-dark": "886d2323df54",
+        "light-os-dark": "886d2323df54"
+      }
+    },
+    "export-svg-checker-light": {
+      "identical": true,
+      "digests": {
+        "light": "886d2323df54",
+        "dark": "886d2323df54",
+        "system-os-light": "886d2323df54",
+        "system-os-dark": "886d2323df54",
+        "light-os-dark": "886d2323df54"
+      }
+    },
+    "captured-img-dark": {
+      "identical": true,
+      "digests": {
+        "light": "b35b726f9c7f",
+        "dark": "b35b726f9c7f",
+        "system-os-light": "b35b726f9c7f",
+        "system-os-dark": "b35b726f9c7f",
+        "light-os-dark": "b35b726f9c7f"
+      }
+    },
+    "producer-srcdoc-dark": {
+      "identical": true,
+      "digests": {
+        "light": "e23c7f506a17",
+        "dark": "e23c7f506a17",
+        "system-os-light": "e23c7f506a17",
+        "system-os-dark": "e23c7f506a17",
+        "light-os-dark": "e23c7f506a17"
+      }
+    },
+    "export-svg-dark": {
+      "identical": true,
+      "digests": {
+        "light": "4b73b78a84af",
+        "dark": "4b73b78a84af",
+        "system-os-light": "4b73b78a84af",
+        "system-os-dark": "4b73b78a84af",
+        "light-os-dark": "4b73b78a84af"
+      }
+    },
+    "export-svg-checker-dark": {
+      "identical": true,
+      "digests": {
+        "light": "4b73b78a84af",
+        "dark": "4b73b78a84af",
+        "system-os-light": "4b73b78a84af",
+        "system-os-dark": "4b73b78a84af",
+        "light-os-dark": "4b73b78a84af"
+      }
+    }
+  },
+  "controls": {
+    "control-svg": {
+      "identical": false,
+      "digests": {
+        "light": "f87b104a96d3",
+        "dark": "f7633be75114",
+        "system-os-light": "f87b104a96d3",
+        "system-os-dark": "f7633be75114",
+        "light-os-dark": "f87b104a96d3"
+      }
+    },
+    "control-srcdoc": {
+      "identical": false,
+      "digests": {
+        "light": "e5b49340da40",
+        "dark": "e23c7f506a17",
+        "system-os-light": "e5b49340da40",
+        "system-os-dark": "e23c7f506a17",
+        "light-os-dark": "e5b49340da40"
+      }
+    }
+  }
+}

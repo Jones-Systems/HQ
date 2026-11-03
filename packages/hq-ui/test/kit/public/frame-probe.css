@@ -1,0 +1,10 @@
+/* Styles for the fictional producer preview in a same-origin srcdoc iframe. The iframe inherits the page CSP,
+   so this is a 'self' stylesheet rather than an inline <style>. */
+:root { color-scheme: light dark; }
+html, body { margin: 0; height: 100%; }
+body { display: grid; place-items: center; background: #f4f1e6; color: #2c4a7a; font: 600 14px/1 sans-serif; }
+.swatch { width: 56px; height: 40px; border-radius: 6px; background: #2c4a7a; }
+@media (prefers-color-scheme: dark) {
+  body { background: #1b1d24; color: #e8b04c; }
+  .swatch { background: #e8b04c; }
+}

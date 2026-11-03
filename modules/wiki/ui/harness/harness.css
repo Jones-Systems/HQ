@@ -1,0 +1,39 @@
+/* Harness chrome only; the Wiki view's own styles come from ../src/wiki-view.css. */
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+.harness-shell {
+  min-height: 100vh;
+  background: #f6f6f3;
+  font: 13px/1.4 system-ui, sans-serif;
+  color: #1c1f24;
+}
+
+.harness-shell[data-appearance="dark"] {
+  background: #14161a;
+  color: #e8eaee;
+}
+
+.harness-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 8px 20px;
+  border-bottom: 1px dashed #8a8f99;
+}
+
+.harness-bar button {
+  padding: 2px 9px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.harness-bar code {
+  font-family: ui-monospace, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
