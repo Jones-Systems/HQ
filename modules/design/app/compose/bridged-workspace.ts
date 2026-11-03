@@ -1,5 +1,4 @@
 /** Durable section composition. Construction and navigation never seed workspace documents. */
-import type { ProjectContext } from '@hq/contracts';
 import type { WorkspaceDocuments, WorkspaceRecords } from '../storage/index.ts';
 import { createProjectsStorage, createComponentsStorage, createFlowsStorage, createCompareStorage, createAnnotationsStorage, createCanvasStorage, DEVICE_STORAGE_LABEL } from '../storage/index.ts';
 import { ProjectContentRepository } from '../../projects/src/repository.ts';
@@ -38,20 +37,18 @@ import { designFailure, designOperation, DesignOperationError, type DesignFailur
 import { ANNOTATIONS_OPEN, openAnnotationSession } from './annotation-session.ts';
 import type { LoadedContent } from '../../projects/src/repository.ts';
 
-function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
-  const cache = new Map<string, Promise<T>>();
-  return (project: ProjectContext): Promise<T> => {
-    let result = cache.get(project.id);
-    if (!result) { result = build(project); cache.set(project.id, result); }
-    return result;
-  };
-}
-
 /** Operation names are part of the backend contract (BACKEND-CONTRACT.md); views show them in the toast meta line. */
 const PROJECTS_LOAD: DesignFailureContext = { section: 'projects', operation: 'projects.load', action: 'load the project', write: false };
 const FLOWS_LOAD: DesignFailureContext = { section: 'flows', operation: 'flows.load', action: 'load the flows', write: false };
 const COMPARE_LOAD: DesignFailureContext = { section: 'compare', operation: 'compare.load', action: 'open the comparison', write: false };
-const TASTE_LOAD: DesignFailureContext = { section: 'taste', operation: 'taste.load', action: 'open taste', write: false };
+const TASTE_OPEN: DesignFailureContext = { section: 'taste', operation: 'taste.open', action: 'open Taste', write: false };
+
+/**
+ * The failure rule of every per-project accessor that owns a stateful object (controller, client, library, canvas
+ * environment): a healthy value is kept for the session, a failed build is kept only until the next change to the
+ * project or `retry(project.id)`, so a suspended view settles on the failure instead of looping, and recovers.
+ */
+const KEEP = { onChange: 'keep' } as const;
 
 /** Content that cannot be shown as it is stored: a newer format opens read-only, damaged content is left untouched. */
 function unusableContent(loaded: Exclude<LoadedContent, { status: 'ok' }>, context: DesignFailureContext): DesignOperationError {
@@ -71,7 +68,19 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
   const clock = { now: () => new Date().toISOString() };
   const ids = { next: (kind: 'project' | 'view' | 'version') => `${kind}-${globalThis.crypto.randomUUID()}` };
   let discovery: ReturnType<typeof createBridgedDiscovery> | undefined;
-  const discoveryEnv = () => discovery ??= createBridgedDiscovery();
+  let discoveryFailed = false;
+  const discoveryEnv = () => {
+    if (discovery === undefined) {
+      const attempt = createBridgedDiscovery();
+      discovery = attempt;
+      discoveryFailed = false;
+      attempt.then(undefined, () => { if (discovery === attempt) discoveryFailed = true; });
+    }
+    return discovery;
+  };
+  // A failed discovery (the catalog host timing out at startup) is kept while views settle on it, and built again
+  // by the next change or retry, which is what lets Projects load once the host answers. A healthy one stays.
+  contentEvents.subscribeAll(() => { if (discoveryFailed) { discovery = undefined; discoveryFailed = false; } });
   const projectStorage = createProjectsStorage(documents);
   const repository = new ProjectContentRepository(projectStorage, clock);
   const thumbnails = createWorkspaceThumbnailPort(documents);
@@ -82,21 +91,22 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
     return { repository, content: loaded.content, storage: projectStorage, clock, thumbnails, tag: storageTag };
   }, PROJECTS_LOAD));
   // The controller keeps the visible session (selection, filters, scroll), so it refreshes in place instead of being rebuilt.
-  const projectsFor = perProject(async (_project) => {
+  const projectsFor = perProjectRevision(contentEvents, async (_project) => {
     const { readPort } = await discoveryEnv();
     const registry = createProvisionalLocalRegistry({ storage: projectStorage, clock, ids });
     const { controller, ready } = createProjectsSection({ registry: { ...registry, provenance: { kind: 'provisional-local', label: 'Projects saved on this device' } }, storage: projectStorage, thumbnails, catalog: readPort, clock, ids,
       // Edits made in Projects reach every other reader of the project (Annotations, Compare, Taste, Requests).
       onContentChange: (changed) => contentEvents.notify(changed) });
-    await ready;
+    try { await ready; } catch (error) { controller.dispose(); throw error; }
+    // Listening starts once the build succeeded, so a failed build that is rebuilt never leaves a second subscription.
     contentEvents.subscribeAll((changed) => {
       let id: ReturnType<typeof projectId>;
       try { id = projectId(changed); } catch { return; }
       void controller.refreshContent(id).catch(() => undefined);
     });
     return controller;
-  });
-  const componentsFor = perProject(async () => new ComponentLibrary(createComponentsStorage(documents), webCryptoDigest));
+  }, KEEP);
+  const componentsFor = perProjectRevision(contentEvents, async () => new ComponentLibrary(createComponentsStorage(documents), webCryptoDigest), KEEP);
   const flowRepository = createFlowRepository(createFlowsStorage(documents));
   // Preview captures are stored under their capture digest; document-only bridges have no capture images.
   const getBlob = documents.getBlob?.bind(documents);
@@ -118,9 +128,10 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
       storage,
       catalog: createProjectCompareCatalog(repository, projectId(project.id)),
     });
+    // Listening starts once the controller exists, so a failed build that is rebuilt never leaves a second subscription.
     contentEvents.subscribe(project.id, () => { void controller.refreshVersions().catch(() => undefined); });
     return controller;
-  }, COMPARE_LOAD), { onChange: 'keep' });
+  }, COMPARE_LOAD), KEEP);
   const store = createAnnotationsStorage(documents);
   const annotationControllers = new Map<string, Promise<AnnotationController>>();
   const annotationsEnv = () => ({
@@ -128,10 +139,14 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
     controllerFor(version: VersionId) {
       let controller = annotationControllers.get(version);
       if (!controller) {
-        controller = loadAnnotations(store, version).then((loaded) => new AnnotationController(loaded, {
+        const loading = loadAnnotations(store, version).then((loaded) => new AnnotationController(loaded, {
           store, clipboard: new FakeClipboard(), ids: { adapter: 'real', next: () => annotationId(`ann-${globalThis.crypto.randomUUID()}`) },
         }));
-        annotationControllers.set(version, controller);
+        controller = loading;
+        annotationControllers.set(version, loading);
+        // A controller that failed to load is not kept: the next open of that version reads again. The session cache
+        // above holds the failure for the revision, so a suspended view does not loop on it.
+        loading.catch(() => { if (annotationControllers.get(version) === loading) annotationControllers.delete(version); });
       }
       return controller;
     },
@@ -142,7 +157,7 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
     return openAnnotationSession({ content, read: readCapture, controllerFor: (id) => annotationsEnv().controllerFor(id),
       ...(version === undefined ? {} : { version }) });
   }, ANNOTATIONS_OPEN));
-  const canvasFor = perProject(async (project) => {
+  const canvasFor = perProjectRevision(contentEvents, async (project) => {
     const cid = canvasProjectIdFor(project.id);
     if (cid === null) return null;
     const library = await componentsFor(project);
@@ -153,25 +168,35 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
       toSourceProject: (id) => flowProjectId(shellProjectIdFor(id)) });
     // Source failures are reported individually; they do not prevent opening the canvas arrangement.
     const sourceErrors: string[] = [];
+    const startedAt = contentEvents.revision(project.id);
     try { await versions.refresh(cid); } catch { sourceErrors.push('Project views unavailable'); }
-    // The provider tells the registry when it refreshes, so Canvas lists versions saved later without being rebuilt.
-    contentEvents.subscribe(project.id, () => { void versions.refresh(cid).catch(() => undefined); });
     for (const adapter of [components, flows]) {
       const report = await adapter.refresh(cid);
       sourceErrors.push(...report.errors.map((error) => `${adapter.label}: ${error}`));
     }
     const registry = createProviderRegistry();
     for (const provider of [versions, components, flows]) registry.register(provider);
-    return { projectId: cid, canvasId: canvasId(`${cid}-canvas`), storage: createCanvasStorage(documents), registry,
+    const environment = { projectId: cid, canvasId: canvasId(`${cid}-canvas`), storage: createCanvasStorage(documents), registry,
       ids: { next: (kind: string) => `${kind}-${globalThis.crypto.randomUUID()}` }, adapters: [components, flows], sourceErrors };
-  });
+    // The provider tells the registry when it refreshes, so Canvas lists versions saved later without being rebuilt.
+    // Listening starts last, once nothing in the build can fail, so a failed build that is rebuilt never leaves a
+    // second subscription. A change that landed while the build was running is caught up once.
+    const refreshVersions = () => { void versions.refresh(cid).catch(() => undefined); };
+    const changedDuringBuild = contentEvents.revision(project.id) !== startedAt;
+    contentEvents.subscribe(project.id, refreshVersions);
+    if (changedDuringBuild) refreshVersions();
+    return environment;
+  }, KEEP);
   // The client holds the journal's retry state, so it is kept; only a failed build is retried after a change.
   const tasteFor = perProjectRevision(contentEvents, (project) => designOperation(async () => {
     let id: ReturnType<typeof tasteProjectId>;
     try { id = tasteProjectId(project.id); }
-    catch { throw new DesignOperationError(designFailure('invalid', TASTE_LOAD, { reason: 'project-id' })); }
+    catch { throw new DesignOperationError(designFailure('invalid', TASTE_OPEN, { reason: 'project-id' })); }
     return createProjectTasteContribution({ documents, projectId: id, sha256: webCryptoSha256, clock });
-  }, TASTE_LOAD), { onChange: 'keep' });
-  return { bridged: true as const, storageTag, contentEvents, contentFor, projectsFor, componentsFor, flowsFor, compareFor, annotationsEnv,
+  }, TASTE_OPEN), KEEP);
+  // The call behind Try again, Retry and Reload for reads. It marks the project's content as possibly changed: failed
+  // builds (and a failed discovery) are built again on the next read, and healthy stateful values are kept.
+  const retry = (projectId: string): void => contentEvents.notify(projectId);
+  return { bridged: true as const, storageTag, contentEvents, retry, contentFor, projectsFor, componentsFor, flowsFor, compareFor, annotationsEnv,
     annotationSessionFor, canvasFor, discoveryEnv, tasteFor, importsFor };
 }

@@ -9,8 +9,10 @@ import { comparisonKey, serializeComparison } from '../../../compare/src/persist
 import { createCompareStorage } from '../../storage/index.ts';
 import { createDesignWorkspace } from '../workspace.ts';
 import { createBridgedWorkspace } from '../bridged-workspace.ts';
-import { DesignOperationError } from '../errors.ts';
-import { alpha, beta, dataUrl, digestOf, durableFixture, installDesktopCatalog, png, saveVersion, seedRawContent } from './content-fixtures.ts';
+import { createProjectContentEvents } from '../content-events.ts';
+import { createDesignReferenceReads } from '../reference-reads.ts';
+import { classifyDesignError, designFeedback, DesignOperationError } from '../errors.ts';
+import { alpha, beta, dataUrl, digestOf, durableFixture, installDesktopCatalog, png, saveVersion, seedRawContent, type DesktopCatalogControl } from './content-fixtures.ts';
 
 const viewport = { w: 320, h: 640, dpr: 1 };
 let restoreWindow: (() => void) | null = null;
@@ -287,7 +289,7 @@ describe('typed failures from the durable accessors', () => {
     assert.deepEqual([error.kind, error.section, error.operation], ['unavailable', 'flows', 'flows.load']);
   });
 
-  it('taste.load: the client is built once per project and survives content changes (it holds retry state)', async () => {
+  it('taste.open: the client is built once per project and survives content changes (it holds retry state)', async () => {
     const f = durableFixture();
     const first = f.workspace.tasteFor(alpha);
     f.contentEvents.notify(alpha.id);
@@ -295,6 +297,201 @@ describe('typed failures from the durable accessors', () => {
     assert.equal(f.workspace.tasteFor(alpha), first);
     assert.equal((await first).projectId, alpha.id);
     const refused = failure(await f.workspace.tasteFor({ id: ' padded ', name: 'Bad' }).then(() => null, (reason: unknown) => reason));
-    assert.deepEqual([refused.section, refused.operation, refused.kind, refused.reason], ['taste', 'taste.load', 'invalid', 'project-id']);
+    assert.deepEqual([refused.section, refused.operation, refused.kind, refused.reason], ['taste', 'taste.open', 'invalid', 'project-id']);
+  });
+});
+
+describe('a failed build is kept until the next change or retry, then built again', () => {
+  const catalogDown = (): DesktopCatalogControl => ({ down: true, rootsCalls: 0 });
+
+  it('a transient discovery failure keeps the same rejection, with no read loop, until retry; then Projects loads', async () => {
+    const f = durableFixture();
+    const catalog = catalogDown();
+    restoreWindow = installDesktopCatalog(f, catalog);
+    const failed = f.workspace.projectsFor(alpha);
+    await assert.rejects(failed, /Project catalog/u);
+    const asked = catalog.rootsCalls;
+    assert.equal(asked, 1);
+    // A suspended view that renders again gets the same rejected promise, and the host is not asked again.
+    assert.equal(f.workspace.projectsFor(alpha), failed);
+    assert.equal(f.workspace.projectsFor(alpha), failed);
+    assert.equal(f.workspace.discoveryEnv(), f.workspace.discoveryEnv());
+    await assert.rejects(f.workspace.discoveryEnv(), /Project catalog/u);
+    assert.equal(catalog.rootsCalls, asked);
+    // The host answers again. Nothing changes until the owner presses Try again, which calls retry.
+    catalog.down = false;
+    assert.equal(f.workspace.projectsFor(alpha), failed);
+    f.workspace.retry(alpha.id);
+    const controller = await f.workspace.projectsFor(alpha);
+    controller.openProject(projectsProjectId(alpha.id));
+    const ready = await untilProjects(controller, (snapshot) => snapshot.active?.status === 'ready');
+    assert.equal(ready.active?.projectId, projectsProjectId(alpha.id));
+    assert.equal(catalog.rootsCalls, asked + 1, 'discovery was built again once');
+    // Healthy now: the controller and the discovery are kept.
+    f.workspace.retry(alpha.id);
+    assert.equal(await f.workspace.projectsFor(alpha), controller);
+    assert.equal(catalog.rootsCalls, asked + 1);
+  });
+
+  it('a change to the project builds a failed discovery and Projects again, like retry', async () => {
+    const f = durableFixture();
+    const catalog = catalogDown();
+    restoreWindow = installDesktopCatalog(f, catalog);
+    const failed = f.workspace.projectsFor(alpha);
+    await assert.rejects(failed, /Project catalog/u);
+    catalog.down = false;
+    f.contentEvents.notify(alpha.id);
+    assert.ok(await f.workspace.projectsFor(alpha));
+  });
+
+  it('retry does not rebuild a healthy compare or taste value, or a healthy discovery', async () => {
+    const f = durableFixture();
+    const catalog: DesktopCatalogControl = { down: false, rootsCalls: 0 };
+    restoreWindow = installDesktopCatalog(f, catalog);
+    const compare = await f.workspace.compareFor(alpha);
+    const taste = await f.workspace.tasteFor(alpha);
+    const projects = await f.workspace.projectsFor(alpha);
+    const components = await f.workspace.componentsFor(alpha);
+    const canvas = await f.workspace.canvasFor(alpha);
+    f.workspace.retry(alpha.id);
+    f.workspace.retry(alpha.id);
+    assert.equal(await f.workspace.compareFor(alpha), compare, 'its unsaved layout lives in it');
+    assert.equal(await f.workspace.tasteFor(alpha), taste, 'it holds the journal’s retry state');
+    assert.equal(await f.workspace.projectsFor(alpha), projects);
+    assert.equal(await f.workspace.componentsFor(alpha), components);
+    assert.equal(await f.workspace.canvasFor(alpha), canvas);
+    assert.equal(catalog.rootsCalls, 1);
+  });
+
+  it('a failed compare or taste build keeps its rejection until retry, then builds again', async () => {
+    const f = durableFixture();
+    const storage = createCompareStorage(f.documents);
+    const id = comparisonId(`${alpha.id}-compare`);
+    await storage.write(comparisonKey(id), 'not json');
+    const failedCompare = f.workspace.compareFor(alpha);
+    await assert.rejects(failedCompare, DesignOperationError);
+    assert.equal(f.workspace.compareFor(alpha), failedCompare, 'a suspended view settles on the failure');
+    // The owner repairs the layout elsewhere, then presses Try again.
+    await storage.write(comparisonKey(id), serializeComparison(createComparison(id, compareProjectId(alpha.id), [{ id: panelId('repaired'), viewport,
+      source: { kind: 'live-preview', versionId: compareVersionId('v1'), route: '/main', state: '' } }])));
+    assert.equal(f.workspace.compareFor(alpha), failedCompare, 'nothing is read again by itself');
+    f.workspace.retry(alpha.id);
+    const compare = await f.workspace.compareFor(alpha);
+    assert.equal(compare.getSnapshot().comparison.projectId, alpha.id);
+    f.workspace.retry(alpha.id);
+    assert.equal(await f.workspace.compareFor(alpha), compare);
+
+    const padded = { id: ' padded ', name: 'Bad' };
+    const failedTaste = f.workspace.tasteFor(padded);
+    await assert.rejects(failedTaste, DesignOperationError);
+    assert.equal(f.workspace.tasteFor(padded), failedTaste);
+    f.workspace.retry(padded.id);
+    assert.notEqual(f.workspace.tasteFor(padded), failedTaste, 'built again after retry');
+  });
+
+  it('a canvas whose build failed leaves no subscription, and one rebuilt after retry has exactly one', async () => {
+    const f = durableFixture();
+    const real = createProjectContentEvents();
+    let listening = 0;
+    const contentEvents = { ...real, subscribe(project: string, listener: () => void) {
+      listening += 1;
+      const stop = real.subscribe(project, listener);
+      return () => { listening -= 1; stop(); };
+    } };
+    let broken = false;
+    // The canvas storage is created at the very end of a canvas build; it refuses a documents object that is not a workspace.
+    const documents = Object.create(f.documents, { kind: { get: () => (broken ? 'cache' : 'workspace') } });
+    const workspace = createBridgedWorkspace(documents, { contentEvents });
+    await saveVersion({ workspace, contentEvents }, alpha, { id: 'v1' });
+    await workspace.componentsFor(alpha);
+    broken = true;
+    const failed = workspace.canvasFor(alpha);
+    await assert.rejects(failed, /Canvas documents live only/u);
+    assert.equal(listening, 0, 'the failed build did not start listening');
+    assert.equal(workspace.canvasFor(alpha), failed, 'same rejected promise, no loop');
+    broken = false;
+    workspace.retry(alpha.id);
+    const env = (await workspace.canvasFor(alpha))!;
+    assert.equal(listening, 1);
+    workspace.retry(alpha.id);
+    assert.equal(await workspace.canvasFor(alpha), env);
+    assert.equal(listening, 1);
+    const versions = () => env.registry.catalog(env.projectId).flatMap((group) => group.items).filter((item) => item.kind === 'view-version').map((item) => item.ref.revision);
+    assert.deepEqual(versions(), ['v1']);
+    await new Promise<void>((resolve) => {
+      const stop = env.registry.subscribe(() => { if (versions().length === 2) { stop(); resolve(); } });
+      void saveVersion({ workspace, contentEvents }, alpha, { id: 'v2' });
+    });
+  });
+
+  it('a version whose annotations failed to load is read again the next time it is opened', async () => {
+    const f = durableFixture();
+    const digest = f.store(png(1));
+    await saveVersion(f, alpha, { id: 'v1', digest });
+    f.fail((route, params) => (route === 'doc.get' && (params as { key: string }).key.includes('annotations') ? { ok: false, kind: 'unavailable' } : undefined));
+    const env = f.workspace.annotationsEnv();
+    const version = (await f.workspace.contentFor(alpha)).content.versions[0]!.id as Parameters<typeof env.controllerFor>[0];
+    await assert.rejects(env.controllerFor(version));
+    f.fail(null);
+    assert.ok(await env.controllerFor(version));
+  });
+
+  it('the fake workspace accepts retry and changes nothing', async () => {
+    const fake = createDesignWorkspace(null);
+    const before = fake.contentFor(alpha);
+    assert.equal(fake.retry(alpha.id), undefined);
+    assert.equal(fake.contentFor(alpha), before);
+    assert.equal(fake.contentEvents.revision(alpha.id), 0);
+  });
+});
+
+describe('a section boundary shows the typed failure of a rejected accessor', () => {
+  // The documented call (BACKEND-CONTRACT.md, section 10): the boundary classifies what the view threw.
+  const shown = (error: unknown, section: 'projects' | 'taste' = 'projects') => designFeedback(classifyDesignError(error,
+    { section, operation: `${section}.load`, action: 'show this section', write: false }));
+
+  it('keeps projects.load with its reason when contentFor rejects, and offers the recovery for the kind', async () => {
+    const f = durableFixture();
+    await seedRawContent(f, alpha, { schema: 'hq.design.project-content/v9' });
+    const newer = await f.workspace.contentFor(alpha).then(() => null, (reason: unknown) => reason);
+    const feedback = shown(newer, 'taste');
+    assert.equal(feedback.meta, 'projects.load · unsupported-stored-schema', 'the accessor’s own operation survives another section’s boundary');
+    assert.equal(feedback.id, 'design.projects.load.read-only');
+    assert.equal(feedback.status, 'Read-only');
+    assert.equal(feedback.action, undefined, 'nothing safe to retry for a newer format');
+    assert.match(feedback.description ?? '', /newer version of HQ/u);
+
+    const unreachable = durableFixture();
+    unreachable.fail((route) => (route === 'doc.get' ? { ok: false, kind: 'unavailable' } : undefined));
+    const down = await unreachable.workspace.contentFor(alpha).then(() => null, (reason: unknown) => reason);
+    const retryable = shown(down);
+    assert.deepEqual([retryable.meta, retryable.id, retryable.status, retryable.action], ['projects.load', 'design.storage.unavailable', 'Unavailable', { kind: 'retry', label: 'Retry' }]);
+  });
+
+  it('classifies an untyped rejection (no desktop catalog) as an unavailable read of that section', async () => {
+    const f = durableFixture();
+    const error = await f.workspace.projectsFor(alpha).then(() => null, (reason: unknown) => reason);
+    assert.match(String((error as Error).message), /desktop catalog/u);
+    const feedback = shown(error);
+    assert.deepEqual([feedback.meta, feedback.status, feedback.action], ['projects.load', 'Unavailable', { kind: 'retry', label: 'Retry' }]);
+  });
+});
+
+describe('the shell’s reference reads never cache', () => {
+  it('shows content written after an earlier read, with no announcement', async () => {
+    const f = durableFixture();
+    f.fail((route) => (route === 'event.read' ? { ok: true, value: { events: [], status: { state: 'ok' } } } : undefined));
+    const reads = createDesignReferenceReads(f.documents);
+    await saveVersion(f, alpha, { id: 'first' });
+    const revision = f.contentEvents.revision(alpha.id);
+    assert.equal((await reads.read('version', 'first', alpha.id)).status, 'found');
+    assert.equal((await reads.read('version', 'second', alpha.id)).status, 'missing');
+    assert.deepEqual((await reads.list(alpha.id)).map((record) => record.entityId), ['first']);
+    // A writer that does not announce, as a direct repository write or another window would not.
+    await saveVersion(f, alpha, { id: 'second' }, false);
+    assert.equal(f.contentEvents.revision(alpha.id), revision, 'nothing was announced');
+    const second = await reads.read('version', 'second', alpha.id);
+    assert.equal(second.status, 'found');
+    assert.deepEqual((await reads.list(alpha.id)).map((record) => record.entityId).sort(), ['first', 'second']);
   });
 });

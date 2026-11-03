@@ -72,17 +72,24 @@ export async function seedRawContent(fixture: DurableFixture, project: ProjectCo
   fixture.double.documents.set(key, { namespace: 'workspace', key, revision: 1, value: json, valueDigest: await authoringDigest(json), updatedAt: '2026-01-01T00:00:00Z' });
 }
 
+/** What a test can do to the stand-in catalog host: bring it down and up, and see how often it was asked for roots. */
+export interface DesktopCatalogControl { down: boolean; rootsCalls: number }
+
 /**
  * Stands in for the desktop catalog connection that `discoveryEnv()` needs, on top of the document transport.
+ * Pass a control object to make the host unreachable (`down`) and to count `catalog.roots` calls.
  * Returns a restore function; call it in `afterEach`.
  */
-export function installDesktopCatalog(fixture: DurableFixture): () => void {
+export function installDesktopCatalog(fixture: DurableFixture, control: DesktopCatalogControl = { down: false, rootsCalls: 0 }): () => void {
   const original = Object.getOwnPropertyDescriptor(globalThis, 'window');
   let cached: import('@hq/contracts/services').StoredDocument | null = null;
   type Route = import('@hq/contracts/services').DesignServiceRoute;
   const transport = {
     async call(route: Route, params: never) {
-      if (route === 'catalog.roots') return { ok: true, value: [] };
+      if (route === 'catalog.roots') {
+        control.rootsCalls += 1;
+        return control.down ? { ok: false, kind: 'unavailable' } : { ok: true, value: [] };
+      }
       if (route === 'cache.get') return { ok: true, value: cached };
       if (route === 'cache.put') {
         const input = params as { key: string; value: import('@hq/contracts/services').JsonValue };
