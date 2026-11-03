@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { createReferencePort, type ReferenceNotice } from './references';
 import type { ReferenceProvider, ReturnContext } from '@hq/contracts/references';
 import type { ShellState } from './state';
-import { Splitter } from '@hq/ui';
+import { ErrorBoundary, Splitter, ToastViewport } from '@hq/ui';
 import { deactivateDesktopPreview, overlayDesktopPreview, subscribeDesktopProject } from './interactive-runtime';
 import { Connections } from './Connections';
 import { ServiceSettings } from './ServiceSettings';
@@ -138,15 +138,18 @@ function WorkspaceApp({ modules, presentation, referenceProviders }: Presentatio
       {returnFrame && <button hidden={settingsOpen} onClick={goBack}>Back to {returnFrame.context.label}</button>}
       {referenceNotice && <section hidden={settingsOpen} role="status" aria-label="Read-only reference"><strong>{referenceNotice.title}</strong><p>{referenceNotice.message}</p><button onClick={() => setReferenceNotice(null)}>Dismiss reference</button></section>}
       <main hidden={settingsOpen} className={fill ? 'is-fill' : undefined} key={`${projectMountId}:${state.domain}`}>
+        <ErrorBoundary resetKeys={[projectMountId, state.domain, state.destinations[state.domain]]} title={`${DOMAIN_LABELS[state.domain]} stopped working`}>
         <Module context={context} destination={state.destinations[state.domain]} appearance={theme} desktop={window.hqDesktop ?? BROWSER_PORT}
           references={references} {...(returnFrame ? { returnContext: returnFrame.context } : {})}
           navigate={destination => { references.cancelOpen(); setState(previous => navigate(previous, state.domain, destination)); }} />
+        </ErrorBoundary>
       </main>
       {settingsOpen && <ServiceSettings config={window.hqServices?.config} onClose={closeSettings}
         returnLabel={DOMAIN_LABELS[state.domain]} target={settingsTarget} appearance={appearance} onAppearanceChange={setAppearance} palette={palette} dark={theme === 'dark'} />}
       <footer className="context-footer" aria-label="Workspace context"><span>{context.name}</span><span>{DOMAIN_LABELS[state.domain]}</span></footer>
       {!(storageAvailable && palette.saved) && <p className="storage-notice" role="status">Preferences are available for this session. Local storage is unavailable.</p>}
     </div>
+    <ToastViewport />
   </div>;
 }
 

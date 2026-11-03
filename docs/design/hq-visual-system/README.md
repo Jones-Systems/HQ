@@ -18,6 +18,7 @@ The current direction follows Design: cool neutral surfaces, restrained blue sel
 | [`tokens/hq-tokens.css`](tokens/hq-tokens.css) | Generated, implementation-consumable custom properties (`--hq-*`). Do not edit by hand. |
 | [`tokens/contrast-report.md`](tokens/contrast-report.md) | Generated WCAG ratios for 104 role pairs in both modes; all pass. |
 | [`tokens/t0-bridge.css`](tokens/t0-bridge.css) | Maps the T0 shell's current variable names (`--background`, `--surface`, `--accent`, …) to HQ roles. |
+| [`motion-and-feedback.md`](motion-and-feedback.md) | Motion tokens and primitives, toasts, inline notices, status indicators and the rules for replacing full-screen errors. |
 | [`components/hq-components.css`](components/hq-components.css) | Reference styling for every component and state, built only from tokens. Geometry reference, not a runtime package. |
 | [`mockups/`](mockups/) | Rendered pages: `design.html`, `social.html`, `work.html` (illustrative chrome), `states.html` (all states, light and dark side by side), `artwork.html` (artwork invariance). `?theme=light|dark|system`, `&drawer=open`, `&slots=design` (T0's unavailable Social/Work slots). |
 | [`evidence/`](evidence/) | Screenshots, layout JSON and `manifest.json` (SHA-256 of every image plus check results). |
