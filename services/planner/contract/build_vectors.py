@@ -19,7 +19,7 @@ def vectors():
         cases.append({"id": name, "input": deepcopy(refs), "errors": [{"field": "references", "message": message}]})
 
     accept("minimal-hq", [deepcopy(REFERENCE)])
-    for domain in ("social", "work"):
+    for domain in ("social", "work", "wiki"):
         ref = deepcopy(REFERENCE)
         ref["target"]["domain"] = domain
         ref["target"]["returnDestination"]["domain"] = domain
