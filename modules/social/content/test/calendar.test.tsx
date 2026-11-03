@@ -176,6 +176,28 @@ describe('Social calendar navigation and notification lifetime', () => {
     expect(methods(recorded)).toEqual(['snapshot']);
   });
 
+  it('keeps the month grid to one Tab stop that arrow keys, Home and End move through', async () => {
+    const { user, recorded } = setup('calendar/2026-10');
+    const today = await screen.findByRole('button', { name: 'Open week of 20 Oct 2026' });
+    const stops = () => screen.getAllByRole('button', { name: /^Open week of / }).filter((day) => day.tabIndex === 0);
+    expect(stops()).toEqual([today]);
+    today.focus();
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open week of 21 Oct 2026' }));
+    await user.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open week of 28 Oct 2026' }));
+    await user.keyboard('{End}');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open week of 1 Nov 2026' }));
+    await user.keyboard('{Home}');
+    const monday = screen.getByRole('button', { name: 'Open week of 26 Oct 2026' });
+    expect(document.activeElement).toBe(monday);
+    // The stop follows focus, so Tab comes back to the last day used.
+    expect(stops()).toEqual([monday]);
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: /^Calendar view: Week\./ })).toBeTruthy();
+    expect(methods(recorded)).toEqual(['snapshot']);
+  });
+
   it.each(['Enter', ' ', 'assistive click'])('opens an adjacent month day with %s and keeps the exact anchor through routing', async (key) => {
     const { recorded, visited, user } = setup('calendar/2026-10');
     const number = await screen.findByRole('button', { name: 'Open week of 1 Nov 2026' });

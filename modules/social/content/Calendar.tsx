@@ -56,6 +56,9 @@ function slotMessage(slot: PlanningSlot): string {
 
 export function Calendar({ session, port, snapshot, month, brand, onBrandChange, navigate, paused, now = systemNow }: CalendarProps) {
   const id = useId();
+  /** The month grid is one Tab stop; this is the day that holds it, once a day number has had focus. */
+  const [dayStop, setDayStop] = useState<string | null>(null);
+  const monthTable = useRef<HTMLTableElement>(null);
   const toast = useToast();
   const framed = useSocialFrame() !== null;
   const [zone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
@@ -345,6 +348,9 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
     else goTo(shiftCalendarDay(anchor, delta * (view === 'week' ? 7 : 1)));
   }
   const days = calendarRange(anchor, view === 'day' ? 'day' : 'week');
+  const weeks = monthGrid(month, today);
+  const gridDays = weeks.flat().map((day) => day.date);
+  const stop = dayStop && gridDays.includes(dayStop) ? dayStop : gridDays.includes(today) ? today : `${month}-01`;
   const first = view === 'month' ? `${month}-01` : days[0]!;
   const last = view === 'month' ? `${month}-31` : days[days.length - 1]!;
   const inRange = (day: string) => first <= day && day <= last;
@@ -390,6 +396,7 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
     {/* Inside the frame its own bar already says changes are paused; the chips say why in their description. */}
     {paused && !framed && <InlineNotice tone="warning" variant="bar" live="off" title="Moves are paused">{paused}</InlineNotice>}
     {pausedNote && <p id={`${id}-paused`} className="hq-sr-only">{pausedNote}</p>}
+    <p id={`${id}-days`} className="hq-sr-only">Arrow keys move between days. Enter opens that day's week.</p>
     {uncertain.length > 0 && <InlineNotice tone="unknown" variant="bar" title="Some moves are paused">
       Moves for drafts with an unresolved save are paused. Reload and inspect the stored draft before making another change.
     </InlineNotice>}
@@ -402,17 +409,22 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
             <h3>{dateLabel(day)}{day === today && <span className="cal-today-tag">Today</span>}</h3><ul className="cal-chips">{drafts.map(chip)}</ul>
           </section>)}
           {rangeDrafts.length === 0 && <EmptyState icon="calendar" title="No planned drafts in this range.">Plan a draft by dragging it from No date yet onto a day.</EmptyState>}
-        </section> : view === 'month' ? <table className="cal-month" aria-label={`Planned drafts, ${monthLabel(month)}`}>
+        </section> : view === 'month' ? <table ref={monthTable} className="cal-month" aria-label={`Planned drafts, ${monthLabel(month)}`} aria-describedby={`${id}-days`}>
           <thead><tr>{WEEKDAYS.map((day) => <th key={day} scope="col">{day}</th>)}</tr></thead>
-          <tbody>{monthGrid(month, today).map((week) => <tr key={week[0]!.date}>{week.map((day) => {
+          <tbody>{weeks.map((week) => <tr key={week[0]!.date}>{week.map((day) => {
             const items = monthDates.get(day.date) ?? [];
             return <td key={day.date} className="cal-cell" data-drop-date={day.date} data-outside={!day.inMonth || undefined} aria-current={day.isToday ? 'date' : undefined}
               data-drop-active={overKey === `date:${day.date}` || undefined} onDragOver={acceptDrop} onDrop={(event) => drop(event, day.date)}>
               <div className="cal-day-head" title="Double-click to open this week" onDoubleClick={() => openDay(day.date, 'week')}>
-                <button type="button" className="cal-day-number" aria-label={`Open week of ${dateLabel(day.date)}`}
+                <button type="button" className="cal-day-number" aria-label={`Open week of ${dateLabel(day.date)}`} data-day={day.date}
+                  tabIndex={day.date === stop ? 0 : -1} onFocus={() => setDayStop(day.date)}
                   onClick={(event) => { if (event.detail === 0) openDay(day.date, 'week'); }}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDay(day.date, 'week'); }
+                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDay(day.date, 'week'); return; }
+                    const target = dayKeyTarget(event.key, day.date, week[0]!.date, week[week.length - 1]!.date);
+                    if (!target) return;
+                    event.preventDefault();
+                    monthTable.current?.querySelector<HTMLButtonElement>(`button[data-day="${target}"]`)?.focus();
                   }}>{Number(day.date.slice(8))}{day.isToday && <span className="hq-sr-only"> (today)</span>}</button>
               </div>
               {items.length > 0 && <ul className="cal-chips" aria-label={dateLabel(day.date)}>{items.map(chip)}</ul>}
@@ -464,4 +476,17 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
       <FieldError id={`${id}-slot-error`} announce>{dialogError}</FieldError>
     </Dialog>
   </section>;
+}
+
+/** Where an arrow, Home or End key moves from `day` in the month grid; null for any other key. */
+function dayKeyTarget(key: string, day: string, weekStart: string, weekEnd: string): string | null {
+  switch (key) {
+    case 'ArrowLeft': return shiftCalendarDay(day, -1);
+    case 'ArrowRight': return shiftCalendarDay(day, 1);
+    case 'ArrowUp': return shiftCalendarDay(day, -7);
+    case 'ArrowDown': return shiftCalendarDay(day, 7);
+    case 'Home': return weekStart;
+    case 'End': return weekEnd;
+    default: return null;
+  }
 }
