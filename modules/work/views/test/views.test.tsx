@@ -25,6 +25,7 @@ const VIEW_PROOF: Record<string, string[]> = {
   review: ['Gentle prompts. Nothing changes until you choose an action.', 'Sort the Inbox', 'Overdue deadlines', 'Targets that have passed', 'Active but quiet', 'Horizon and date disagree', 'No “why” yet'],
   archive: ['Copy out the old recipe cards', 'Restore'],
   'by-date': ['Today', 'This week', 'Later', 'Undated'],
+  week: ['Plan week'],
 };
 
 describe.each(['light', 'dark'] as const)('views in %s chrome', (theme) => {

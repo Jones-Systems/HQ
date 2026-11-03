@@ -11,6 +11,7 @@ import { isTyping, ViewEnvProvider, type ViewEnv, type ViewLinks } from './env';
 import { GlanceView } from './Glance';
 import { ListView } from './ListView';
 import { NO_RUN_NOTE, PROJECT_NOTE, type PlanningViewId } from './meta';
+import { PlanWeekView } from './PlanWeek';
 import { ReviewView } from './Review';
 import { TimelineView } from './Timeline';
 
@@ -38,6 +39,7 @@ const VIEWS: Record<PlanningViewId, () => ReactNode> = {
   review: () => <ReviewView />,
   archive: () => <ArchiveView />,
   'by-date': () => <ByDateView />,
+  week: () => <PlanWeekView />,
 };
 
 interface ToastState { key: number; message: string; undoId?: string; persistent: boolean }

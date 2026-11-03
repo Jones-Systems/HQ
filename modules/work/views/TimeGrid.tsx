@@ -3,6 +3,7 @@ import { TimeGrid as SharedTimeGrid, type CalendarGridEvent } from '@hq/ui';
 import type { Item, PlanningDate } from '../core';
 import { isPending, useEnv } from './env';
 import { displayedInterval, type GridEntry } from './time-grid';
+import './calendar.css';
 
 interface Props {
   days: readonly string[];

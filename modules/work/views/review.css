@@ -1,0 +1,7 @@
+/* Review and Archive. */
+.wv-review, .wv-archive, .wv-archive-list { display: grid; gap: var(--hq-space-md); }
+.wv-review-section.is-alert { border-color: var(--hq-danger); }
+.wv-review-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--hq-space-sm); border-top: 1px solid var(--hq-border); padding-top: var(--hq-space-2xs); }
+.wv-review-row:first-of-type { border-top: 0; }
+.wv-review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
+.wv-archive-list { gap: 0; background: var(--hq-surface); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); padding: var(--hq-space-sm) var(--hq-space-md); }

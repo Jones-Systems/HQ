@@ -6,6 +6,7 @@ import {
 } from '../core';
 import { isPending, useEnv } from './env';
 import { AreaTag, cx, DateChip, HorizonChip, KindMark, MoreIcon, MotivationPill, StatusMark } from './parts';
+import './by-date.css';
 
 // By date (RV-5, T4; "Lists" is an alias). A read-only board that groups open
 // items by their own dates: Today, This week (bounded by the Planner's

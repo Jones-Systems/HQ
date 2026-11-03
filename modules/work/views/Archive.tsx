@@ -2,6 +2,7 @@ import { Button, StateView } from '@hq/ui';
 import { matchesFilters, STATUS_LABEL } from '../core';
 import { useEnv } from './env';
 import { ago, ItemRow, ViewHint } from './parts';
+import './review.css';
 
 // Archive (RV-4): archived items keep their status, dates and notes, and
 // Restore puts them back where they were. Archiving is not Done, and nothing

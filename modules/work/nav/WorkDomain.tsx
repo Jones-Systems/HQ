@@ -18,6 +18,8 @@ import { useWorkUi, workSession, type WorkUi } from './session';
 import { useCssVars, useRemembered } from '../views/env';
 import { ToolbarCapture } from './ToolbarCapture';
 import { workUndoHandler } from './undo';
+import '../theme';
+import '../board/feedback.css';
 import './nav.css';
 
 /** The honest label on the example Planner: fictional, in memory, for this session only. */

@@ -1,0 +1,41 @@
+/* Timeline. */
+.wv-tl-wrap { display: grid; gap: var(--hq-space-sm); min-width: 0; }
+.wv-tl-nav { display: flex; align-items: center; flex-wrap: wrap; gap: var(--hq-space-sm); }
+.wv-tl-range { font: var(--hq-type-label); color: var(--hq-text-muted); }
+.wv-tl-scroll { overflow-x: auto; min-width: 0; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); background: var(--hq-surface); }
+.wv-tl { min-width: 960px; }
+.wv-tl-row { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(520px, 2.4fr) minmax(180px, .8fr); align-items: center; min-height: 36px; border-bottom: 1px solid var(--hq-border); }
+.wv-tl-header { position: sticky; top: 0; background: var(--hq-surface-raised); }
+.wv-tl-label { display: flex; align-items: center; gap: var(--hq-space-xs); padding: 0 var(--hq-space-sm); min-height: 36px; min-width: 0; cursor: grab; border-radius: var(--hq-radius-xs); }
+.wv-tl-corner { flex-direction: column; align-items: start; justify-content: center; cursor: default; font: var(--hq-type-label); }
+.wv-tl-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.wv-tl-menu { margin-left: auto; flex: none; }
+.wv-tl-track { position: relative; height: 36px; border-inline: 1px solid var(--hq-border); overflow: hidden; }
+.wv-tl.has-today .wv-tl-track:not(.wv-tl-scale)::before { content: ""; position: absolute; inset-block: 0; left: var(--wv-today); width: 1px; background: var(--hq-accent-strong); opacity: .2; pointer-events: none; }
+.wv-tl-scale { height: 48px; }
+.wv-tl-tick, .wv-tl-span, .wv-tl-band, .wv-tl-marker, .wv-tl-today { position: absolute; left: var(--wv-left, 0%); }
+.wv-tl-tick { top: 0; bottom: 0; width: var(--wv-width, 0%); border-inline-start: 1px solid var(--hq-border); font: var(--hq-type-meta); color: var(--hq-text-subtle); padding: var(--hq-space-2xs); white-space: nowrap; }
+.wv-tl-tick.is-year { border-inline-start-color: var(--hq-border-strong); color: var(--hq-text-muted); }
+.wv-tl-today { top: 27px; bottom: 0; width: 2px; background: var(--hq-accent-strong); }
+.wv-tl-today > span { position: absolute; left: 4px; top: 0; font: var(--hq-type-meta); color: var(--hq-accent-text); background: var(--hq-surface-raised); padding-inline: 2px; }
+.wv-tl-lane { border-bottom: 1px solid var(--hq-border-strong); }
+.wv-tl-lane-head { display: flex; align-items: baseline; gap: var(--hq-space-sm); padding: var(--hq-space-xs) var(--hq-space-sm); background: var(--hq-surface-sunken); }
+.wv-tl-empty { padding: var(--hq-space-sm); color: var(--hq-text-subtle); font: var(--hq-type-small); border: 1px solid var(--hq-border); margin: var(--hq-space-xs) var(--hq-space-sm); border-radius: var(--hq-radius-sm); }
+.wv-tl-span { top: 14px; height: 8px; width: var(--wv-width, 0%); border-radius: 4px; background: var(--hq-border-strong); border: 1px solid var(--work-dk-start); }
+.wv-tl-marker { top: 12px; width: 11px; height: 11px; margin-left: -5.5px; border-radius: 50%; background: var(--dk); border: 1.5px solid var(--hq-surface); }
+.wv-tl-marker.wv-dk--deadline { border-radius: 2px; transform: rotate(45deg); }
+.wv-tl-marker.wv-dk--event { border-radius: 2px; }
+.wv-tl-marker.wv-dk--start { border-radius: 0; width: 4px; margin-left: -2px; height: 16px; top: 10px; }
+.wv-tl-band { top: 8px; height: 20px; width: var(--wv-width, 0%); border: 1.5px dashed var(--dk); border-radius: var(--hq-radius-sm); overflow: hidden; }
+.wv-tl-edge { position: absolute; top: 10px; display: inline-flex; align-items: center; gap: 1px; width: 16px; height: 16px; font: var(--hq-type-meta); color: var(--dk); background: var(--hq-surface); }
+.wv-tl-edge.is-after { flex-direction: row-reverse; }
+.wv-tl-edge.is-before { left: var(--hq-space-2xs); }
+.wv-tl-edge.is-after { right: var(--hq-space-2xs); }
+.wv-tl-unscheduled { position: absolute; top: 10px; left: var(--hq-space-sm); font: var(--hq-type-meta); color: var(--hq-text-subtle); }
+.wv-tl-date-text { font: var(--hq-type-meta); color: var(--hq-text-muted); padding: 0 var(--hq-space-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+
+@media (max-width: 760px) {
+  .wv-tl { min-width: 900px; }
+  .wv-tl-row { grid-template-columns: 200px minmax(520px, 1fr) 180px; }
+}

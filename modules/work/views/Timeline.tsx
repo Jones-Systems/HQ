@@ -7,6 +7,7 @@ import {
 import { isPending, useCssVars, useEnv, useRemembered } from './env';
 import { stepHorizon, timelineGeometry, timelineScale, TIMELINE_LANES } from './moves';
 import { cx, KindMark, MoreIcon, MotivationPill, ViewHint } from './parts';
+import './timeline.css';
 
 // Timeline (RV-4): horizon lanes across eight quarters. A row changes horizon
 // by drag to another lane, Alt+↑/↓ to the adjacent lane, or its menu (M). Each

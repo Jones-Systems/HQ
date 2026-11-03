@@ -3,6 +3,7 @@ import {
   formatClock, STATUS_LABEL, UNCONFIRMED_SCOPE_NOTE,
   type UnconfirmedWrite, type WorkState, type WorkStore, type WriteOp,
 } from '../core';
+import './feedback.css';
 
 // Save and freshness state for the Work surfaces (RW-5, RW-9, RX-5). An
 // unconfirmed write is never shown as saved and is never re-sent on its own.

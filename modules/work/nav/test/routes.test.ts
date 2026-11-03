@@ -9,6 +9,7 @@ describe('Work destinations', () => {
     expect(parseWorkDestination('board')).toStrictEqual({ kind: 'page', page: 'board' });
     expect(parseWorkDestination('board/by-date')).toStrictEqual({ kind: 'page', page: 'by-date' });
     expect(parseWorkDestination('lists')).toStrictEqual({ kind: 'page', page: 'by-date' });
+    expect(parseWorkDestination('board/week')).toStrictEqual({ kind: 'page', page: 'week' });
     for (const page of ['glance', 'list', 'timeline', 'review', 'archive', 'settings'] as const) {
       expect(parseWorkDestination(page)).toStrictEqual({ kind: 'page', page });
     }

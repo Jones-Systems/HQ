@@ -12,6 +12,7 @@ import {
 import { TimeGrid } from './TimeGrid';
 import { calendarDays, gridDatePatch } from './time-grid';
 import { cx, DateChip, MotivationPill, KindMark, SectionHead, ViewHint } from './parts';
+import './calendar.css';
 
 // Calendar: month, timed week/day or agenda, a band for coarse dates, the
 // Unscheduled tray and an Outside-this-month list. A day date moves by its

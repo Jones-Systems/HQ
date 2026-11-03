@@ -1,0 +1,167 @@
+/* Work theme: the module's one palette, type scale and shared geometry, layered on the shared HQ tokens. Surfaces,
+   text, borders, accent and focus stay HQ roles, so appearance and dark palettes keep working. Work owns only its
+   domain hues (status, why, date kind; values from docs/design/work/mockups/work-hq.html) and these .wk-* pieces.
+   Every hue is paired with a word or a shape, so no meaning depends on colour alone. Class-scoped, no inline styles
+   (the app CSP forbids them). */
+
+.work-ui, .wv, .wk-overlay {
+  /* Work type scale. Page titles are the only large type; cards and columns read at 13.5px. */
+  --wk-type-page: 600 20px/28px var(--hq-font-family-sans);
+  --wk-type-page-tracking: -0.012em;
+  --wk-type-section: 600 13.5px/20px var(--hq-font-family-sans);
+  --wk-type-card: 600 13.5px/19px var(--hq-font-family-sans);
+  --wk-type-body: 400 13px/20px var(--hq-font-family-sans);
+  --wk-type-meta: 500 11.5px/16px var(--hq-font-family-sans);
+  --wk-type-chip: 600 11.5px/16px var(--hq-font-family-sans);
+  --wk-type-eyebrow: 600 11px/16px var(--hq-font-family-sans);
+  --wk-type-num: 500 11.5px/16px var(--hq-font-family-sans);
+
+  /* Why: Need / Want / Exploring. Text colours meet 4.5:1 on their soft fill in both themes. */
+  --work-why-need: light-dark(#B0441A, #FF9466);
+  --work-why-need-bg: light-dark(#FBEAE2, rgba(255, 148, 102, 0.14));
+  --work-why-want: light-dark(#0B6B62, #4FD1C0);
+  --work-why-want-bg: light-dark(#DFF2EE, rgba(79, 209, 192, 0.13));
+  --work-why-exploring: light-dark(#6A3FC4, #B99BFF);
+  --work-why-exploring-bg: light-dark(#EEE8FB, rgba(185, 155, 255, 0.15));
+
+  /* Status: Planner order. Light Dropped is darkened to keep 3:1 on every HQ surface. */
+  --work-st-inbox: light-dark(#7C828D, #8F96A3);
+  --work-st-considering: light-dark(#B07D14, #E0B04A);
+  --work-st-next: light-dark(#3366D0, #6E9BFF);
+  --work-st-active: light-dark(#1C8F4D, #4CC985);
+  --work-st-on_hold: light-dark(#7F58C9, #AD8BF0);
+  --work-st-done: light-dark(#4F7F66, #7FB69A);
+  --work-st-dropped: light-dark(#80848C, #6F7580);
+
+  /* Date kinds: text colours (4.5:1 on HQ surfaces) with a soft fill for chips. */
+  --work-dk-target: light-dark(#0E6F8A, #4FC3DC);
+  --work-dk-deadline: light-dark(#8D520F, #E3A84F);
+  --work-dk-start: light-dark(#4A760E, #9BD35A);
+  --work-dk-event: light-dark(#7135D6, #B99BFF);
+  --work-dk-target-bg: light-dark(#E2F1F5, rgba(79, 195, 220, 0.13));
+  --work-dk-deadline-bg: light-dark(#F7ECDD, rgba(227, 168, 79, 0.13));
+  --work-dk-start-bg: light-dark(#EAF2DE, rgba(155, 211, 90, 0.12));
+  --work-dk-event-bg: light-dark(#EFE7FC, rgba(185, 155, 255, 0.14));
+
+  /* Geometry and depth. Shadows use light-dark() colours so dark mode gets real depth, not grey haze. */
+  --wk-radius-chip: 6px;
+  --wk-radius-control: 8px;
+  --wk-radius-card: 10px;
+  --wk-radius-col: 14px;
+  --wk-radius-panel: 14px;
+  --wk-card-bg: var(--hq-surface-raised);
+  --wk-card-edge: var(--hq-border);
+  --wk-col-bg: var(--hq-surface-sunken);
+  --wk-dock-bg: var(--hq-surface);
+  --wk-panel-bg: var(--hq-surface-raised);
+  --wk-shadow-card: 0 1px 2px light-dark(rgba(16, 24, 40, 0.07), rgba(0, 0, 0, 0.42)), 0 1px 1px light-dark(rgba(16, 24, 40, 0.04), rgba(0, 0, 0, 0.2));
+  --wk-shadow-lift: 0 6px 18px light-dark(rgba(16, 24, 40, 0.10), rgba(0, 0, 0, 0.42)), 0 1px 3px light-dark(rgba(16, 24, 40, 0.06), rgba(0, 0, 0, 0.3));
+  --wk-shadow-drag: 0 22px 48px light-dark(rgba(16, 24, 40, 0.22), rgba(0, 0, 0, 0.6)), 0 4px 10px light-dark(rgba(16, 24, 40, 0.08), rgba(0, 0, 0, 0.35));
+  --wk-shadow-pop: 0 12px 32px light-dark(rgba(16, 24, 40, 0.16), rgba(0, 0, 0, 0.55)), 0 2px 6px light-dark(rgba(16, 24, 40, 0.06), rgba(0, 0, 0, 0.3));
+  --wk-gutter: 24px;
+}
+@media (max-width: 960px) { .work-ui, .wv { --wk-gutter: 16px; } }
+
+/* ---------------------------------------------------------------- page header */
+.wk-page-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm) var(--hq-space-lg); min-width: 0;
+}
+.wk-page-head-main { display: grid; gap: 2px; min-width: 0; margin-right: auto; }
+.wk-page-head-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm) var(--hq-space-md); min-width: 0; }
+.wk-eyebrow { margin: 0; font: var(--wk-type-eyebrow); letter-spacing: 0.06em; text-transform: uppercase; color: var(--hq-text-subtle); }
+.wk-page-title { margin: 0; font: var(--wk-type-page); letter-spacing: var(--wk-type-page-tracking); color: var(--hq-text); }
+.wk-page-meta { margin: 0; max-width: 72ch; font: var(--wk-type-body); color: var(--hq-text-muted); }
+.wk-page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
+
+/* ---------------------------------------------------------------- segmented navigation */
+.wk-seg {
+  display: inline-flex; align-items: center; gap: 2px; padding: 3px; min-width: 0; max-width: 100%; overflow-x: auto;
+  border-radius: calc(var(--wk-radius-control) + 2px); background: var(--hq-control); box-shadow: inset 0 0 0 1px var(--hq-border);
+  scrollbar-width: none;
+}
+.wk-seg-item {
+  position: relative; display: inline-flex; align-items: center; gap: var(--hq-space-2xs); min-height: 26px; padding: 0 var(--hq-space-md);
+  border: 0; border-radius: var(--wk-radius-control); background: transparent; color: var(--hq-text-muted);
+  font: var(--hq-type-label); font-weight: var(--hq-font-weight-semibold); white-space: nowrap; cursor: pointer;
+  transition: color var(--hq-duration-fast) var(--hq-ease-standard), background-color var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.wk-seg-item:hover { color: var(--hq-text); }
+.wk-seg-item[aria-current="page"], .wk-seg-item[aria-pressed="true"] {
+  color: var(--hq-text); background: var(--hq-surface-raised); box-shadow: var(--wk-shadow-card), inset 0 0 0 1px var(--hq-border);
+}
+
+/* ---------------------------------------------------------------- chips */
+.wk-chip {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 22px; padding: 0 7px; max-width: 100%;
+  border-radius: var(--wk-radius-chip); background: var(--hq-control); color: var(--hq-text-muted);
+  font: var(--wk-type-chip); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wk-chip > svg { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.wk-chip--need { color: var(--work-why-need); background: var(--work-why-need-bg); }
+.wk-chip--want { color: var(--work-why-want); background: var(--work-why-want-bg); }
+.wk-chip--exploring { color: var(--work-why-exploring); background: var(--work-why-exploring-bg); }
+.wk-chip--target { color: var(--work-dk-target); background: var(--work-dk-target-bg); }
+.wk-chip--deadline { color: var(--work-dk-deadline); background: var(--work-dk-deadline-bg); }
+.wk-chip--start { color: var(--work-dk-start); background: var(--work-dk-start-bg); }
+.wk-chip--event { color: var(--work-dk-event); background: var(--work-dk-event-bg); }
+/* Coarse dates (week, month, quarter, year) keep a dashed edge so their precision stays visible. */
+.wk-chip--coarse { background: transparent; box-shadow: inset 0 0 0 1px currentColor; }
+@supports (outline-style: dashed) { .wk-chip--coarse { box-shadow: none; outline: 1px dashed currentColor; outline-offset: -1px; } }
+.wk-chip--overdue { color: var(--hq-danger); background: var(--hq-danger-soft); }
+.wk-chip--passed { color: var(--hq-text-muted); background: var(--hq-control); }
+.wk-chip--high { color: var(--hq-danger); background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hq-danger) 55%, transparent); }
+/* Status chip: a dot (shape varies by status) plus the word. */
+.wk-chip--status { background: var(--hq-surface-raised); color: var(--hq-text); box-shadow: inset 0 0 0 1px var(--hq-border); }
+.wk-dot { --st: var(--work-st-inbox); width: 9px; height: 9px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--st); }
+.wk-dot--inbox { --st: var(--work-st-inbox); }
+.wk-dot--considering { --st: var(--work-st-considering); background: linear-gradient(90deg, var(--st) 50%, transparent 50%); }
+.wk-dot--next { --st: var(--work-st-next); background: radial-gradient(circle, var(--st) 0 1.5px, transparent 1.6px); }
+.wk-dot--active { --st: var(--work-st-active); background: var(--st); }
+.wk-dot--on_hold { --st: var(--work-st-on_hold); border-radius: 1px; box-shadow: inset 3px 0 0 var(--st), inset -3px 0 0 var(--st); }
+.wk-dot--done { --st: var(--work-st-done); border-radius: 2px; background: var(--st); }
+.wk-dot--dropped { --st: var(--work-st-dropped); background: linear-gradient(135deg, transparent 42%, var(--st) 42% 58%, transparent 58%); }
+@media (forced-colors: active) {
+  .wk-chip { outline: 1px solid CanvasText; outline-offset: -1px; }
+  .wk-chip--coarse { outline-style: dashed; }
+  .wk-dot { forced-color-adjust: none; --st: CanvasText; }
+}
+
+/* Area is the Planner's free-text label, never a project: plain, quiet text. */
+.wk-area { font: var(--wk-type-meta); color: var(--hq-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------------------------------------------------------------- small shared pieces */
+.wk-count { font: var(--wk-type-num); font-variant-numeric: tabular-nums; color: var(--hq-text-subtle); }
+.wk-kbd {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 4px;
+  border-radius: 4px; background: var(--hq-surface-raised); box-shadow: inset 0 0 0 1px var(--hq-border-strong), inset 0 -1px 0 var(--hq-border-strong);
+  color: var(--hq-text-muted); font: 500 10.5px/1 var(--hq-font-family-mono);
+}
+.wk-quiet { margin: 0; font: var(--hq-type-small); color: var(--hq-text-subtle); }
+
+/* ---------------------------------------------------------------- module base (from board.css) */
+.work-ui {
+  color: var(--hq-text);
+  font: var(--hq-type-body);
+  box-sizing: border-box;
+}
+.work-ui *, .work-ui *::before, .work-ui *::after { box-sizing: border-box; }
+.work-ui :focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
+
+.work-icon { width: var(--hq-size-icon-md); height: var(--hq-size-icon-md); flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.work-icon--sm { width: var(--hq-size-icon-sm); height: var(--hq-size-icon-sm); }
+
+/* ---------- Shared fields (board, detail, capture) ---------- */
+.work-field { display: grid; gap: var(--hq-space-3xs); min-width: 0; }
+.work-field-label { font: var(--hq-type-meta); font-weight: var(--hq-font-weight-medium); color: var(--hq-text-muted); }
+.work-field-error { margin: 0; font: var(--hq-type-small); color: var(--hq-danger); }
+.work-input {
+  min-height: var(--hq-size-control-md); padding: 0 var(--hq-space-sm); border: 0; border-radius: var(--hq-radius-sm);
+  background: var(--hq-input-bg); color: var(--hq-text); box-shadow: inset 0 0 0 1px var(--hq-input-edge); font: var(--hq-type-body);
+}
+.work-input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--hq-input-edge-invalid); }
+.work-input:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: 0; }
+textarea.work-input { min-height: 140px; padding: var(--hq-space-sm); resize: vertical; }
+
+@media (prefers-reduced-motion: reduce) {
+  .work-ui *, .work-drag-ghost { transition: none !important; animation: none !important; }
+}

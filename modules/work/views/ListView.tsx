@@ -5,6 +5,7 @@ import {
 } from '../core';
 import { isPending, useEnv, useRemembered } from './env';
 import { ago, AreaTag, cx, Dash, DateChip, ExampleBadge, KindMark } from './parts';
+import './list.css';
 
 // List (RV-4): a dense, sortable table with inline Status and Horizon. A
 // status change is a `move` to the top of the new status (RW-7), so its Undo
@@ -122,7 +123,7 @@ export function ListView() {
                     {STATUSES.map((st) => <option key={st.id} value={st.id}>{st.label}</option>)}
                   </select>
                 </td>
-                <td className="wv-col-motivation">{item.motivation ? <span className={`wv-pill wv-pill--${item.motivation}`}>{MOTIVATION_LABEL[item.motivation]}</span> : <Dash />}</td>
+                <td className="wv-col-motivation">{item.motivation ? <span className={`wk-chip wk-chip--${item.motivation}`}>{MOTIVATION_LABEL[item.motivation]}</span> : <Dash />}</td>
                 <td className="wv-col-horizon">
                   <select
                     className="wv-select"

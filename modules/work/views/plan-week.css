@@ -1,0 +1,2 @@
+/* Plan week board. Shared Work roles, chips and page header come from ../theme/work-theme.css. */
+.wv-week { display: grid; gap: var(--hq-space-md); min-width: 0; }

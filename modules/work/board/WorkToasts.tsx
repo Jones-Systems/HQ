@@ -3,6 +3,7 @@ import { Toast, ToastRegion, TOAST_AUTO_DISMISS_MS } from '@hq/ui';
 import type { WorkState, WorkStore } from '../core';
 import { isTyping, undoFromToast, undoLatest } from './actions';
 import { useFeedback, type Feedback } from './feedback';
+import './feedback.css';
 
 /**
  * Work toasts and store notices. A toast offers Undo only while its entry is still on the core undo stack, so an

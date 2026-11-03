@@ -7,6 +7,7 @@ import {
 import { useEnv } from './env';
 import { untouchedDays } from './moves';
 import { cx, DateChip, ItemRow, SectionHead, ViewHint } from './parts';
+import './review.css';
 
 // Review (RV-4): gentle prompts for a periodic look-over. Nothing changes
 // until the owner chooses an action, and each action is one write.

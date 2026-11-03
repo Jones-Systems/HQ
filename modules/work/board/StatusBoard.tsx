@@ -10,6 +10,7 @@ import type { Feedback } from './feedback';
 import { boardColumns, cardKey, describeMove, moveMenuEntries, resolveMove, type BoardColumns, type MoveIntent } from './moves';
 import { ItemChips, KindIcon, stepProgress } from './parts';
 import { SaveState } from './SyncStatus';
+import '../theme';
 import './board.css';
 
 /** RV-7: Planner items carry no project, so Work shows all of them and says so. */
@@ -324,7 +325,7 @@ export function StatusBoard({
                   onClick={() => setCollapsed(isCollapsed ? collapsed.filter((s) => s !== status) : [...collapsed, status])}
                   title={isCollapsed ? `Expand ${label}` : `Collapse ${label}`}
                 >
-                  <span className={`work-st-dot work-st-dot--${status}`} aria-hidden="true" />
+                  <span className={`wk-dot wk-dot--${status}`} aria-hidden="true" />
                   <span className="work-col-name">{label}</span>
                   <span className="work-col-count">{cards.length}{hidden > 0 && <span className="hq-meta"> of {totals[status].length}</span>}</span>
                 </button>

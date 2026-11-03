@@ -3,12 +3,13 @@ import {
   DATE_KIND_LABEL, formatShort, formatValue, HORIZON_LABEL, KIND_META, MOTIVATION_LABEL, plannerToday, PRIORITY_LABEL,
   STATUS_LABEL, dateState, formatDay, type Item, type PlanningDate, type Settings,
 } from '../core';
+import { ArrowUpIcon, DateKindIcon, KindIcon, StatusDot } from '../theme/icons';
 import { isPending, pendingWord, useEnv } from './env';
 
 export type DateState = ReturnType<typeof dateState>;
 
-// Building blocks shared by the views. Every chip carries a word, and colour
-// only reinforces it: status, date kind and date state never rely on colour.
+// Building blocks shared by the views. Chips, marks and hues come from the Work theme, the same family the board
+// uses. Every chip carries a word, and colour only reinforces it: status, date kind and date state never rely on colour.
 
 export function cx(...names: readonly (string | false | null | undefined)[]): string {
   return names.filter(Boolean).join(' ');
@@ -25,10 +26,13 @@ export function DateChip({ entry, state, long = false, inDayGroup = false }: { e
   const prefix = state === 'overdue' ? STATE_WORD.overdue : state === 'passed' && entry.kind === 'target' ? STATE_WORD.passed : '';
   return (
     <span
-      className={cx('wv-date', `wv-dk--${entry.kind}`, `wv-ds--${state}`, entry.precision !== 'day' && 'is-coarse')}
+      className={cx(
+        'wv-date', 'wk-chip', `wk-chip--${entry.kind}`, `wv-dk--${entry.kind}`, `wv-ds--${state}`,
+        (state === 'overdue' || state === 'passed') && `wk-chip--${state}`, entry.precision !== 'day' && 'is-coarse wk-chip--coarse',
+      )}
       title={`${DATE_KIND_LABEL[entry.kind]} · ${formatValue(entry, today)}${entry.note ? ` — ${entry.note}` : ''}`}
     >
-      <span className="wv-dk-shape" aria-hidden="true" />
+      <DateKindIcon kind={entry.kind} />
       {!compact && <span className="wv-sr">{DATE_KIND_LABEL[entry.kind]} </span>}
       {prefix && (state === 'overdue' ? <strong>{prefix}</strong> : <span>{prefix}</span>)}
       {label}
@@ -36,38 +40,42 @@ export function DateChip({ entry, state, long = false, inDayGroup = false }: { e
   );
 }
 
-/** Status word with its module-local role shape. */
+/** Status word with its shape (ring, half, dot, filled, bars, square, slash). */
 export function StatusMark({ status }: { status: Item['status'] }) {
   return (
     <span className={cx('wv-status', `wv-st--${status}`)}>
-      <span className="wv-st-shape" aria-hidden="true" />
+      <StatusDot status={status} />
       {STATUS_LABEL[status]}
     </span>
   );
 }
 
+/** The item kind as the board's line icon, named for assistive tech. Never a square, so it never reads as a checkbox. */
 export function KindMark({ kind }: { kind: Item['kind'] }) {
   const label = KIND_META[kind]?.label ?? kind;
-  return <span className={cx('wv-kind', `wv-kind--${kind}`)} role="img" aria-label={label} title={label} />;
+  return <span className={cx('wv-kind', `wv-kind--${kind}`)} role="img" aria-label={label} title={label}><KindIcon kind={kind} small /></span>;
 }
 
 export function MotivationPill({ motivation }: { motivation: Item['motivation'] }) {
-  return motivation ? <span className={cx('wv-pill', `wv-pill--${motivation}`)}>{MOTIVATION_LABEL[motivation]}</span> : null;
+  return motivation ? <span className={cx('wv-pill', `wv-pill--${motivation}`, 'wk-chip', `wk-chip--${motivation}`)}>{MOTIVATION_LABEL[motivation]}</span> : null;
 }
 
 /** The Planner horizon, labelled as the Planner labels it. Work never relabels a horizon. */
 export function HorizonChip({ horizon }: { horizon: Item['horizon'] }) {
-  return horizon ? <span className={cx('wv-chip', 'wv-horizon', `wv-hz--${horizon}`)} title="Horizon">{HORIZON_LABEL[horizon]}</span> : null;
+  return horizon ? <span className={cx('wv-horizon', `wv-hz--${horizon}`, 'wk-chip')} title="Horizon">{HORIZON_LABEL[horizon]}</span> : null;
 }
 
 export function PriorityMark({ priority }: { priority: Item['priority'] }) {
   if (!priority || priority === 'normal') return null;
-  return <span className={cx('wv-chip', `wv-prio--${priority}`)} title={`${PRIORITY_LABEL[priority]} priority`}>{PRIORITY_LABEL[priority]}</span>;
+  const title = `${PRIORITY_LABEL[priority]} priority`;
+  return priority === 'high'
+    ? <span className={cx('wv-prio--high', 'wk-chip', 'wk-chip--high')} title={title}><ArrowUpIcon />{PRIORITY_LABEL.high}</span>
+    : <span className={cx(`wv-prio--${priority}`, 'wk-quiet')} title={title}>{PRIORITY_LABEL[priority]}</span>;
 }
 
 /** `area` is the Planner's free-text label. It is shown as a label, never as a project. */
 export function AreaTag({ area }: { area: Item['area'] }) {
-  return area ? <span className="wv-chip wv-area" title="Area">{area}</span> : null;
+  return area ? <span className="wv-area wk-area" title="Area">{area}</span> : null;
 }
 
 export function Dash() {
