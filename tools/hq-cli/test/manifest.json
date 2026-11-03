@@ -36,7 +36,7 @@
       "modules": [
         "test/e2e/planner.test.mjs"
       ],
-      "environment": "Explicit opt-in; Node >=22.18 and python3 >=3.9; actual in-tree services/planner; synthetic loopback only; unique package scratch and child cleanup on success/failure/crash/SIGINT/SIGTERM; HQR-A3 regressions are node:test todo until A3 merges"
+      "environment": "Explicit opt-in; Node >=22.18 and python3 >=3.9; actual in-tree services/planner; synthetic loopback only; unique package scratch and child cleanup on success/failure/crash/SIGINT/SIGTERM; the HQR-A3 regressions run as ordinary cases"
     },
     "hq-cli": {
       "command": "npm test",

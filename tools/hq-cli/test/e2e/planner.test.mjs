@@ -110,10 +110,10 @@ test('in-tree service crash mid-test surfaces the child exit, not only a refused
   assert.throws(() => process.kill(servicePid, 0), { code: 'ESRCH' });
 });
 
-// Cross-component regressions for HQR-A3 server fixes. Enable (drop `todo`) after A3 merges.
-const afterA3 = 'Enable after HQR-A3 merges (WHATWG URL ports, read-time date derivation) and the lone-surrogate rejection (A3 validation with an A4 vector)';
+// Cross-component regressions for the HQR-A3 server fixes: WHATWG URL ports, read-time date derivation and
+// lone-surrogate rejection. Each seeds a legacy row directly into the scratch store.
 const legacyRef = { id: 'legacyp1', kind: 'url', label: 'Typo port', url: 'http://example.com:abc/' };
-test('stored legacy URL with a non-numeric port stays readable through the CLI', { skip: optIn, todo: afterA3 }, async () => {
+test('stored legacy URL with a non-numeric port stays readable through the CLI', { skip: optIn }, async () => {
   await withService(async ({ origin }) => {
     const cli = cliFor(origin);
     const [listed] = (await cli(['planner', 'items', 'list'])).data.items;
@@ -123,14 +123,14 @@ test('stored legacy URL with a non-numeric port stays readable through the CLI',
 });
 
 const gapDate = { id: 'gapdate1', kind: 'event', precision: 'day', value: '2030-03-10', time: '02:30', end_time: null, tz: 'America/New_York', note: '' };
-test('snapshot stays readable with a stored DST-gap time', { skip: optIn, todo: afterA3 }, async () => {
+test('snapshot stays readable with a stored DST-gap time', { skip: optIn }, async () => {
   await withService(async ({ origin }) => {
     const [listed] = (await cliFor(origin)(['planner', 'items', 'list'])).data.items;
     assert.deepEqual(listed.dates.map(({ id, value, time, tz }) => ({ id, value, time, tz })), [{ id: gapDate.id, value: gapDate.value, time: gapDate.time, tz: gapDate.tz }]);
   }, { seed: seedRow('dates', [gapDate]) });
 });
 
-test('snapshot stays readable after a lone-surrogate HQ target write attempt', { skip: optIn, todo: afterA3 }, async () => {
+test('snapshot stays readable after a lone-surrogate HQ target write attempt', { skip: optIn }, async () => {
   await withService(async ({ origin, root }) => {
     const cli = cliFor(origin), fields = resolve(root, 'surrogate.json');
     await writeFile(fields, JSON.stringify({ title: 'Surrogate', references: [{ kind: 'hq', target: { ...target, title: 'Broken \ud800 title' } }] }));
