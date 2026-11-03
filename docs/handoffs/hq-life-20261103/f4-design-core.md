@@ -120,9 +120,11 @@ Found during the build:
 1. **Collect the four builder handoffs** (below). Review each branch's screenshots in
    `/tmp/f4-evidence/<view>/after/` against its brief and the assessment. Finish the remaining targets with
    new delegated rounds (pass the original brief, the handoff and the review findings), or do them directly.
-2. **Settle the `workspace.ts` overlap with backend lane B3** before integrating (see
-   [open questions](#open-questions-and-risks)). Agree who rebases, adopt `contentEvents.revision` as the
-   re-read trigger once W1 lands, and send F1 the `ActiveProjectStore` shape (X8).
+2. **Follow the backend B3 agreement** (see [open questions](#open-questions-and-risks)):
+   - Backend B3 rebases; F4 keeps its branch.
+   - Re-read on `contentEvents.revision(project.id)` once W1 is available.
+   - Have new content writers call `contentEvents.notify`.
+   - Send F1 the `ActiveProjectStore` shape (X8).
 3. **Integrate** the builder branches into `work/hq-life-design-core-20261103`, one at a time: projects,
    canvas, compare, requests. Builders were confined to separate cones, so conflicts should only appear where
    a builder edited lead-owned lines in `ProjectsView.tsx`, `CanvasView.tsx`, `CompareView.tsx` or
@@ -158,8 +160,18 @@ Found during the build:
   - Both solve stale project content. F7 suggests one mechanism: backend B3 owns `compose/` wiring under
     #189's frontend contract. Once W1 lands, F4's views re-read on `contentEvents.revision(projectId)`.
     `freshContent`/`readContent` then either moves into backend B3's W3 or stays as a labelled stopgap.
-  - The textual merge is mechanical: return both sets of fields. Still open: agree with backend B3 which side
-    rebases. F4 has not replied to that point; it paused first.
+  - **Resolved (backend B3, 2026-11-03 09:47):** backend B3 resolves the conflict on its side and F4 does not
+    rebase. When backend B3 lands after F4, it keeps `activeProject` (`compose/active-project.ts`,
+    `useDesignProject`) and `readContent(project): Promise<ProjectContent>` with F4's exact signature.
+  - **Freshness:** use backend B3's `workspace.contentEvents` (`notify`, `subscribe`, `revision`), documented
+    in `modules/design/app/compose/BACKEND-CONTRACT.md` on `work/hq-b3-design-errors-20261103` at `3917ee9`.
+    Backend B3's W3, in progress, makes the cached accessors reload on content events and adds
+    `useProjectContentRevision(workspace, projectId)`. For in-place refresh before W3, key `readContent` reads
+    on `contentEvents.revision(project.id)`.
+  - **Their request:** any new project-content writer F4 adds must call `contentEvents.notify(projectId)`
+    after the write, including after an unknown outcome.
+  - Backend B3's compose PRs stack on #179. Ping backend B3 before changing `workspace.ts` again; they will
+    take the resolution.
 - **Two project notions (cross-app finding X8).** The shell footer still shows the shell context while
   Design shows the active project. F7 asked F4 to send F1, which owns the shell's project switcher, the
   `ActiveProjectStore` shape: `current()`, `subscribe(listener)`, `set(project | null)`, nothing durable.
