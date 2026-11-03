@@ -120,16 +120,17 @@ describe('Sources import desk', () => {
     expect(effects(s)).toHaveLength(0);
   });
 
-  it('turns away blank, empty and oversized files with a plain reason that does not repeat the name or echo contents', async () => {
+  it('turns away blank, empty and oversized files with a plain reason that names the file and never echoes its contents', async () => {
     const s = setup();
     for (const [upload, reason] of [
-      [file('   \n', 'blank.json'), 'blank.json is empty: it has no JSON in it.'],
-      [file('', 'zero.json'), 'zero.json is empty.'],
-      [file(`"${'x'.repeat(2_000_001)}"`, 'large.json'), 'large.json is larger than 2 MB. The Social service accepts at most 2,000,000 bytes per run.'],
+      [file('   \n', 'blank.json'), 'This file is empty: it has no JSON in it.'],
+      [file('', 'zero.json'), 'This file is empty.'],
+      [file(`"${'x'.repeat(2_000_001)}"`, 'large.json'), 'This file is larger than 2 MB. The Social service accepts at most 2,000,000 bytes per run.'],
     ] as const) {
       await s.user.upload(chooser(), upload);
       const alert = await screen.findByRole('alert');
       await waitFor(() => expect(alert.textContent).toContain(reason));
+      expect(alert.textContent).toContain(upload.name);
       expect(alert.textContent).toContain('Nothing was saved or sent.');
       expect(alert.textContent).not.toContain('xxxx');
     }

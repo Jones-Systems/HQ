@@ -130,7 +130,7 @@ export function Sources({ sourceId, navigate, projectId, now = systemNow }: Sour
             tone="danger" title={problems.length === 1 ? "Can't import this file" : `Can't import ${problems.length} files`}
             onDismiss={() => setProblems([])}
           >
-            {problems.map((problem) => <span key={problem.name} className="sd-problem-line"><b>{problem.name}</b> {problem.message}</span>)}
+            {problems.map((problem) => <span key={problem.name} className="sd-problem-line"><b>{problem.name}</b>{' '}<span>{problem.message}</span></span>)}
             <span className="sd-problem-line">Nothing was saved or sent.</span>
           </InlineNotice>
         </div>
@@ -155,14 +155,11 @@ export function Sources({ sourceId, navigate, projectId, now = systemNow }: Sour
                     <span className="sx-row-main">
                       <span className="sx-row-title">{item.name}</span>
                       <span className="sx-row-meta">
-                        {item.kind === 'jsonl' ? 'JSON Lines' : 'JSON'}
+                        {item.example ? 'Example data · ' : ''}{item.kind === 'jsonl' ? 'JSON Lines' : 'JSON'}
                         {item.records !== null ? ` · ${item.records.toLocaleString('en-US')} ${item.records === 1 ? 'record' : 'records'}` : ''} · {longTime(item.importedAt)}
                       </span>
                     </span>
-                    <span className="sx-row-side">
-                      {item.example && <span className="sx-tag sx-tag--example">Example data</span>}
-                      <StatusChip tone="success" label="Valid" />
-                    </span>
+                    <span className="sx-row-side"><StatusChip tone="success" label="Valid" /></span>
                   </button>
                 </li>
               ))}

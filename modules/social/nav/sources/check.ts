@@ -22,9 +22,10 @@ export type CheckResult =
   /** `message` names the line and column of a syntax error, without echoing file contents. */
   | { readonly ok: false; readonly name: string; readonly message: string };
 
-/** The failure line shows the file name in bold already, so the message starts after it. */
+/** The failure is shown under the file's name, so the message stands on its own: "This file is empty." */
 function withoutName(message: string, name: string): string {
-  for (const prefix of [`${name}: `, `${name} `]) if (message.startsWith(prefix)) return message.slice(prefix.length);
+  if (message.startsWith(`${name}: `)) return message.slice(name.length + 2);
+  if (message.startsWith(`${name} `)) return `This file ${message.slice(name.length + 1)}`;
   return message;
 }
 
@@ -65,7 +66,7 @@ export async function checkFile(file: File): Promise<CheckResult> {
   const bytes = await file.arrayBuffer();
   const text = new TextDecoder().decode(bytes);
   // Blank text reads as JSON Lines with no rows, which would pass as a valid file with nothing in it.
-  if (text.trim() === '') return { ok: false, name: file.name, message: 'is empty: it has no JSON in it.' };
+  if (text.trim() === '') return { ok: false, name: file.name, message: 'This file is empty: it has no JSON in it.' };
   // A name that isn't .jsonl still counts as JSON Lines when the text isn't one JSON document but parsed line by line.
   const kind: FileKind = /\.(jsonl|ndjson)$/iu.test(file.name) || !parseJsonText(text).ok ? 'jsonl' : 'json';
   const { value } = read.imported;

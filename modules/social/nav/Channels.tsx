@@ -50,14 +50,14 @@ export function Channels({ navigate }: { readonly navigate: (destination: string
       />
 
       <section className="sx-panel sx-panel--sunken sd-why hq-enter-fade" id={whyId} aria-labelledby={`${id}-why-title`}>
-        <h2 id={`${id}-why-title`} className="sd-subhead">Why accounts can't be linked yet</h2>
+        <h2 id={`${id}-why-title`}>Why accounts can't be linked yet</h2>
         <p>
           HQ can't link an account today, and it can't post anything. Account connection, collection and publishing are planned, but each needs
           its own approval: what HQ may access, where credentials are kept, and a confirmation step for every post. Nothing on this page changes any account.
         </p>
       </section>
 
-      <div className="sx-table-wrap sd-matrix-wrap hq-enter-rise">
+      <div className="sx-table-wrap sd-matrix-wrap hq-enter-rise" role="region" aria-label="Channel capability matrix" tabIndex={0}>
         <table className="sx-table sd-matrix">
           <caption className="hq-sr-only">What HQ Social can do for each channel today</caption>
           <thead>
