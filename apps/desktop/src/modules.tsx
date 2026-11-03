@@ -1,13 +1,19 @@
 import type { ComponentType } from 'react';
 import type { DomainId, ModulePort } from '@hq/contracts';
 import { SERVICE_DOMAINS } from './services/domains';
+import { toast } from '@hq/ui';
 import { createWikiDomain, type WikiHostPort, type WikiModulePort } from '@hq/wiki';
 import type { WikiServiceTransport } from '@hq/contracts/wiki';
 import type { WikiService } from '../../../modules/wiki/contract/src/index.ts';
 
 type Assert<T extends true> = T;
 export type WikiCompatibility = [Assert<WikiServiceTransport extends WikiHostPort ? true : false>, Assert<WikiService extends WikiServiceTransport ? true : false>, Assert<ModulePort extends WikiModulePort ? true : false>];
-const wiki = createWikiDomain({ getPort: () => window.hqServices?.wiki ?? null });
+// Wiki host affordances (lane F6): shared toasts, and "open Wiki settings" through the shell's existing event.
+const wiki = createWikiDomain({
+  getPort: () => window.hqServices?.wiki ?? null,
+  toast,
+  openSettings: () => window.dispatchEvent(new CustomEvent('hq-open-settings', { detail: { source: 'wiki' } })),
+});
 
 import { createDesignComposition } from '../../../modules/design/app/index.ts';
 import { desktopPreview, createJonesConnection, selectDesktopProject } from './interactive-runtime';

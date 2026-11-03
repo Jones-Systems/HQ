@@ -1,0 +1,61 @@
+/* Wiki search results page. Scoped under .wiki-view; motion uses the shared duration and easing tokens. */
+
+.wiki-view .wiki-linklist,
+.wiki-view .wiki-candidates,
+.wiki-view .wiki-hits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wiki-view .wiki-hit {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--wiki-border);
+}
+
+.wiki-view .wiki-hit-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.wiki-view .wiki-hit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  color: var(--wiki-muted);
+  font-size: 13px;
+}
+
+.wiki-view .wiki-hit-meta .wiki-ns {
+  margin-left: 0;
+}
+
+.wiki-view .wiki-snippet {
+  margin: 4px 0 0;
+  color: var(--wiki-text);
+}
+
+.wiki-view .wiki-summary {
+  margin: 0 0 6px;
+  color: var(--wiki-muted);
+}
+
+.wiki-view .wiki-alias-matches,
+.wiki-view .wiki-disambiguation {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--wiki-border);
+  border-radius: var(--hq-radius-md);
+  background: var(--wiki-surface);
+}
+
+.wiki-view .wiki-alias-matches .wiki-subtitle {
+  margin-top: 0;
+}
+
+.wiki-view .wiki-alias-match {
+  margin: 4px 0;
+}
+

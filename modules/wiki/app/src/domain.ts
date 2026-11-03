@@ -2,7 +2,7 @@
 // Pure of side effects and of `node:*`, so it loads under the Node test runner; the stylesheet import lives in index.ts.
 
 import { createElement as h, type ComponentType, type ReactElement } from 'react';
-import { createWikiView } from '../../ui/src/index.ts';
+import { createWikiView, type WikiToastPort } from '../../ui/src/index.ts';
 import { createWikiClient } from './client.ts';
 import type { WikiHostPort, WikiModulePort } from './port.ts';
 
@@ -20,15 +20,19 @@ export interface WikiDomainOptions {
    * bridge that appears after load is used. The module never names, discovers or reaches for a global itself.
    */
   readonly getPort: () => WikiHostPort | null;
+  /** The shell's toast API (structural; see `WikiToastPort`). Optional: without it the view reports inline only. */
+  readonly toast?: WikiToastPort | null;
+  /** Asks the shell to open Settings at Data sources › Local Wiki. Optional: without it the action is not offered. */
+  readonly openSettings?: (() => void) | null;
 }
 
 /**
- * Builds the Wiki domain. The view component is created once, so its identity (and therefore the view's in-session
- * history and loaded pages) survives every remount-free re-render; the shell persists the destination it is asked to.
+ * Builds the Wiki domain. The view component is created once, so its session (in-session history, recent pages and
+ * loaded pages) survives re-renders and remounts alike; the shell persists the destination it is asked to.
  * Navigation here only changes what is displayed; it can never start work.
  */
 export function createWikiDomain(options: WikiDomainOptions): WikiDomain {
-  const View = createWikiView(createWikiClient(options.getPort));
+  const View = createWikiView(createWikiClient(options.getPort), { toast: options.toast ?? null, openSettings: options.openSettings ?? null });
 
   function WikiModule(props: WikiModulePort): ReactElement {
     return h(

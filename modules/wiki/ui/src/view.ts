@@ -10,8 +10,9 @@ import {
   type WikiNamespace,
   type WikiService,
 } from '../../contract/src/index.ts';
+import { createWikiCache, type WikiCache } from './cache.ts';
 import { Disambiguation } from './common.ts';
-import type { ViewCtx } from './context.ts';
+import type { ViewCtx, WikiHostAffordances, WikiToastPort } from './context.ts';
 import {
   HOME,
   describeDestination,
@@ -26,6 +27,7 @@ import { HomeView } from './view-home.ts';
 import { ReaderView } from './view-reader.ts';
 import { SearchView } from './view-search.ts';
 import { TopicsView } from './view-topics.ts';
+import { createWikiSession, type WikiSession } from './session.ts';
 
 export interface WikiViewProps {
   /** `home`, `page/<ns>/<path>`, `search?q=…` or `topics/<ns>`. Anything else shows home with a notice. */
@@ -98,11 +100,30 @@ function entryLabel(entry: HistoryEntry): string {
   return entry.ambiguity === undefined ? describeDestination(entry.destination) : `Disambiguation · ${entry.ambiguity.label}`;
 }
 
-function WikiRoot(props: WikiViewProps & { readonly service: WikiService }): ReactElement {
-  const { service } = props;
+interface WikiRuntime {
+  readonly service: WikiService;
+  readonly cache: WikiCache;
+  readonly session: WikiSession;
+  readonly toast: WikiToastPort | null;
+  readonly openSettings: (() => void) | null;
+}
+
+function WikiRoot(props: WikiViewProps & { readonly runtime: WikiRuntime }): ReactElement {
+  const { runtime } = props;
+  const { service, session } = runtime;
   const destination = typeof props.destination === 'string' ? props.destination : '';
-  const [nav, dispatch] = useReducer(navReducer, destination, initialNav);
-  const [repos, setRepos] = useState<readonly WikiNamespace[]>(NAMESPACES);
+  // History lives in the session so switching domains away and back keeps it.
+  const [nav, dispatch] = useReducer(navReducer, destination, (initial: string) => session.nav ?? initialNav(initial));
+  useEffect(() => {
+    session.nav = nav;
+  }, [session, nav]);
+  const [repos, setReposState] = useState<readonly WikiNamespace[]>(() => session.repos);
+  const setRepos = (update: (previous: readonly WikiNamespace[]) => readonly WikiNamespace[]): void =>
+    setReposState((previous) => {
+      const next = update(previous);
+      session.repos = next;
+      return next;
+    });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(() => {
     try { return window.localStorage.getItem('hq.wiki.searchbar.v1') !== 'closed'; } catch { return true; }
@@ -129,13 +150,13 @@ function WikiRoot(props: WikiViewProps & { readonly service: WikiService }): Rea
       // The shell refusing a request must not break in-session navigation.
     }
   };
-  const go = (target: HistoryEntry): void => {
+  const go = (target: HistoryEntry, replace = false): void => {
     request(target);
-    dispatch({ type: 'go', entry: target });
+    dispatch({ type: replace ? 'replace' : 'go', entry: target });
   };
-  const goTo = (target: string | null): void => {
+  const goTo = (target: string | null, replace = false): void => {
     if (target === null) setNotice({ message: 'That link cannot be opened.', index: nav.index });
-    else go({ destination: target });
+    else go({ destination: target }, replace);
   };
   const move = (index: number): void => {
     const target = nav.entries[index];
@@ -146,8 +167,13 @@ function WikiRoot(props: WikiViewProps & { readonly service: WikiService }): Rea
 
   const ctx: ViewCtx = {
     service,
+    cache: runtime.cache,
+    session,
+    toast: runtime.toast,
+    openSettings: runtime.openSettings,
+    openHome: () => go({ destination: HOME }),
     openPage: (key: PageKey) => goTo(pageDestination(key)),
-    openSearch: (query: string) => goTo(searchDestination(query)),
+    openSearch: (query: string, options?: { readonly replace?: boolean }) => goTo(searchDestination(query), options?.replace === true),
     openTopics: (namespace: WikiNamespace) => goTo(topicsDestination(namespace)),
     openAmbiguity: (label, candidates) => go({ destination: entry.destination, ambiguity: { label, candidates } }),
   };
@@ -237,10 +263,44 @@ function WikiRoot(props: WikiViewProps & { readonly service: WikiService }): Rea
   );
 }
 
-/** Builds the Wiki view over an injected, read-only WikiService. */
-export function createWikiView(service: WikiService): ComponentType<WikiViewProps> {
+/** Wraps a host port so a throwing host can never break the view. */
+function guardToast(port: WikiToastPort | null | undefined): WikiToastPort | null {
+  if (port === null || port === undefined) return null;
+  const call = (name: keyof WikiToastPort) => (...args: unknown[]): unknown => {
+    try {
+      return (port[name] as (...a: unknown[]) => unknown).apply(port, args);
+    } catch {
+      return undefined;
+    }
+  };
+  return { info: call('info'), success: call('success'), warning: call('warning'), error: call('error'), dismiss: call('dismiss') };
+}
+
+function guardAction(action: (() => void) | null | undefined): (() => void) | null {
+  if (typeof action !== 'function') return null;
+  return () => {
+    try {
+      action();
+    } catch {
+      // The shell refusing a request must not break the view.
+    }
+  };
+}
+
+/**
+ * Builds the Wiki view over an injected, read-only WikiService and optional host affordances. The response cache and
+ * session state are created here, once, so they outlive remounts of the returned component.
+ */
+export function createWikiView(service: WikiService, affordances: WikiHostAffordances = {}): ComponentType<WikiViewProps> {
+  const runtime: WikiRuntime = {
+    service,
+    cache: createWikiCache(),
+    session: createWikiSession(),
+    toast: guardToast(affordances.toast),
+    openSettings: guardAction(affordances.openSettings),
+  };
   function WikiView(props: WikiViewProps): ReactElement {
-    return h(WikiRoot, { ...props, service });
+    return h(WikiRoot, { ...props, runtime });
   }
   WikiView.displayName = 'WikiView';
   return WikiView;

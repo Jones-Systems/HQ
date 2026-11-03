@@ -1,0 +1,128 @@
+/* Wiki reader: page header, properties, parsed and raw content, links, previews, outline, backlinks and
+   disambiguation. Scoped under .wiki-view; motion uses the shared duration and easing tokens. */
+
+.wiki-view .wiki-raw-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.wiki-view .wiki-link-ambiguous {
+  text-decoration-style: wavy;
+}
+
+.wiki-view .wiki-link-missing {
+  color: var(--wiki-danger);
+  text-decoration: underline dashed;
+  text-underline-offset: 2px;
+  cursor: not-allowed;
+}
+
+.wiki-view .wiki-link-missing::after {
+  content: " (missing)";
+  font-size: 0.8em;
+}
+
+.wiki-view .wiki-outlinks .wiki-link-missing::after {
+  content: none;
+}
+
+.wiki-view .wiki-link-external {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: text;
+}
+
+.wiki-view .wiki-external-url {
+  color: var(--wiki-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
+.wiki-view .wiki-field-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.wiki-view .wiki-raw-note {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--wiki-notice-border);
+  border-radius: var(--hq-radius-md);
+  background: var(--wiki-notice);
+}
+
+.wiki-view .wiki-raw-note p,
+.wiki-view .wiki-raw-note {
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.wiki-view .wiki-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+}
+
+.wiki-view .wiki-crumbs .wiki-ns {
+  margin-left: 0;
+}
+
+.wiki-view .wiki-page-title {
+  margin: 0 0 8px;
+  font: var(--hq-type-display);
+  letter-spacing: var(--hq-type-display-tracking);
+}
+
+.wiki-view .wiki-parsed,
+.wiki-view .wiki-raw {
+  margin: 16px 0;
+  padding: 4px 18px 8px;
+  border: 1px solid var(--wiki-border);
+  border-radius: var(--hq-radius-lg);
+  background: var(--wiki-surface);
+  overflow-wrap: anywhere;
+}
+
+.wiki-view .wiki-raw {
+  padding-top: 14px;
+}
+
+.wiki-view .wiki-parsed blockquote {
+  margin: 10px 0;
+  padding: 2px 14px;
+  border-left: 3px solid var(--wiki-border);
+  color: var(--wiki-muted);
+}
+
+.wiki-view .wiki-table-wrap {
+  overflow-x: auto;
+}
+
+.wiki-view .wiki-table {
+  border-collapse: collapse;
+  margin: 10px 0;
+}
+
+.wiki-view .wiki-table th,
+.wiki-view .wiki-table td {
+  padding: 5px 12px;
+  border: 1px solid var(--wiki-border);
+  text-align: left;
+}
+
+.wiki-view .wiki-table [data-align="right"] {
+  text-align: right;
+}
+
+.wiki-view .wiki-table [data-align="center"] {
+  text-align: center;
+}
+
+.wiki-view .wiki-linklist li,
+.wiki-view .wiki-candidates li {
+  padding: 3px 0;
+}
+

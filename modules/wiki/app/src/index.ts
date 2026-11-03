@@ -6,12 +6,17 @@
  *   // presentation: 'fill'
  *
  * `getPort` returns the preload bridge of iface.wiki-host-ipc.001 (exactly the seven `WikiService` methods) or null.
- * Renderer/Vite only: the two stylesheets are imported as files, so the build emits them as external CSS that works
+ * Renderer/Vite only: the stylesheets are imported as files, so the build emits them as external CSS that works
  * under `style-src 'self'`. Tests import `./domain.ts` instead, which has no stylesheet import.
  *
  * Registered capabilities: none. No transport, filesystem, shell, refresh or home migration is reachable from here.
  */
 import '../../ui/src/wiki-view.css';
+import '../../ui/src/wiki-chrome.css';
+import '../../ui/src/wiki-home.css';
+import '../../ui/src/wiki-reader.css';
+import '../../ui/src/wiki-search.css';
+import '../../ui/src/wiki-topics.css';
 import './wiki-domain.css';
 
 export { createWikiDomain } from './domain.ts';

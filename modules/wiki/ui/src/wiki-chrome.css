@@ -1,0 +1,104 @@
+/* Wiki chrome: sidebar, top bar, search field, history and keyboard affordances. Scoped under .wiki-view and
+   shipped as a file (style-src 'self'); motion uses the shared --hq-duration-* / --hq-ease-* tokens. */
+
+.wiki-view .wiki-header {
+  display: grid;
+  gap: var(--hq-space-md);
+  padding-bottom: var(--hq-space-md);
+  border-bottom: 1px solid var(--wiki-border);
+}
+
+.wiki-view .wiki-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.wiki-view .wiki-title {
+  margin: 0;
+  font: var(--hq-type-title);
+  letter-spacing: var(--hq-type-title-tracking);
+}
+
+.wiki-view .wiki-nav,
+.wiki-view .wiki-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wiki-view .wiki-actions {
+  margin: 10px 0;
+}
+
+.wiki-view .wiki-searchbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.wiki-view .wiki-input {
+  flex: 1 1 280px;
+  min-width: 0;
+  min-height: var(--hq-size-control-md);
+  padding: var(--hq-space-xs) var(--hq-space-sm);
+  border: 1px solid var(--wiki-border);
+  border-radius: var(--hq-radius-md);
+  background: var(--wiki-surface);
+  color: var(--wiki-text);
+  font: inherit;
+}
+
+.wiki-view .wiki-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.wiki-view .wiki-filter legend {
+  float: left;
+  margin-right: 10px;
+  padding: 0;
+  color: var(--wiki-muted);
+  font-size: 13px;
+}
+
+.wiki-view .wiki-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.wiki-view .wiki-field-problem {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--wiki-danger);
+  font-size: 13px;
+}
+
+.wiki-view .wiki-history {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--wiki-border);
+  border-radius: var(--hq-radius-md);
+  background: var(--wiki-surface);
+}
+
+.wiki-view .wiki-history ol {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.wiki-view .wiki-history [aria-current="step"] {
+  font-weight: 650;
+  color: var(--wiki-text);
+}
+
+.wiki-view .wiki-search-toggle { justify-self: end; padding: 2px 8px; }

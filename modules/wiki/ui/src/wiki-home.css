@@ -1,0 +1,42 @@
+/* Wiki home: repositories, set-up state, recent pages and topic entry points. Scoped under .wiki-view. */
+
+.wiki-view [data-index-state="ready"] {
+  color: var(--wiki-ok);
+}
+
+.wiki-view [data-index-state="stale"],
+.wiki-view [data-index-state="building"],
+.wiki-view [data-freshness="stale"],
+.wiki-view [data-freshness="behind"] {
+  color: var(--wiki-warn);
+}
+
+.wiki-view [data-index-state="unavailable"] {
+  color: var(--wiki-danger);
+}
+
+.wiki-view .wiki-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+}
+
+.wiki-view .wiki-card {
+  padding: 14px 16px;
+  border: 1px solid var(--wiki-border);
+  border-radius: var(--hq-radius-lg);
+  background: var(--wiki-surface);
+}
+
+.wiki-view .wiki-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wiki-view .wiki-card-title {
+  margin: 0;
+  font-size: 16px;
+}
+
