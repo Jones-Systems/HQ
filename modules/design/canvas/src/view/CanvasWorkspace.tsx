@@ -72,7 +72,7 @@ export function CanvasWorkspace({ projectId, canvasId, storage, registry, ids, r
       failed.current = true;
       toast.error(status.stage === 'load' ? "Couldn't open the saved layout" : "Couldn't save the canvas", {
         id: SAVE_TOAST, action: { label: 'Retry', onAction: retry },
-        description: status.stage === 'load' ? 'Showing an empty canvas. The saved layout was not changed.' : 'Your layout is kept in this session and saving will be tried again.',
+        description: status.stage === 'load' ? 'Showing an empty canvas. The saved layout was not changed.' : 'Your layout is kept in this session. It saves again with your next change, or press Retry.',
       });
     } else if (failed.current && status.kind === 'saved') {
       failed.current = false;
@@ -94,7 +94,7 @@ export function CanvasWorkspace({ projectId, canvasId, storage, registry, ids, r
     {banner && <div className="hq-canvas-banner">{banner}</div>}
     <div className="hq-canvas-body">
       <CanvasView state={state} dispatch={dispatch} registry={registry} platform={platform} renderers={renderers} settled={status.kind !== 'loading'} />
-      <SecondaryPanel name="canvas-inspector" label="Canvas inspector" initial={280}><Inspector model={model} selection={state.selection} gridSize={arrangement.grid.size} gridSnap={arrangement.grid.snap}
+      <SecondaryPanel name="canvas-inspector" label="Canvas inspector" initial={256}><Inspector model={model} selection={state.selection} gridSize={arrangement.grid.size} gridSnap={arrangement.grid.snap}
         readOnly={state.readOnly} hiddenIds={arrangement.items.filter((item) => item.hidden).map((item) => item.id)} preview={preview} dispatch={dispatch} /></SecondaryPanel>
     </div>
     <div className="hq-canvas-status" data-status={status.kind}><SaveState status={status} retry={retry} /></div>

@@ -64,6 +64,8 @@ const frameVars = (frame: Rect) => ({
 
 /** Frames narrower than this on screen drop the caption, which would not fit. */
 const COMPACT_SCREEN_PX = 140;
+/** Frames smaller than this on screen have no room for text at all: they show the capture, or an empty well. */
+const TINY_SCREEN_PX = { width: 72, height: 56 };
 
 const sentence = (kind: string) => {
   const words = kind.replace(/[-_]+/gu, ' ').trim();
@@ -88,7 +90,8 @@ function ItemContent({ placement, registry, renderers, zoom }: {
   const face = isFace(drawn) ? drawn : { body: drawn };
   const meta = face.meta ?? `${descriptor.intrinsicSize.width}×${descriptor.intrinsicSize.height} · ${PROVENANCE_LABELS[descriptor.provenance]}`;
   const compact = placement.frame.width * zoom < COMPACT_SCREEN_PX || placement.frame.height * zoom < COMPACT_SCREEN_PX * 0.7;
-  return <div className="hq-canvas-card" data-kind={descriptor.kind} data-compact={compact || undefined}>
+  const tiny = placement.frame.width * zoom < TINY_SCREEN_PX.width || placement.frame.height * zoom < TINY_SCREEN_PX.height;
+  return <div className="hq-canvas-card" data-kind={descriptor.kind} data-compact={tiny ? 'tiny' : compact || undefined}>
     <div className="hq-canvas-card-body">
       {face.body ?? <div className="hq-canvas-placeholder"><span>{sentence(descriptor.kind)}</span></div>}
     </div>

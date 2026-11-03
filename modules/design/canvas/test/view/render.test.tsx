@@ -87,12 +87,16 @@ describe('item frames', () => {
     expect(markup).not.toContain('Static capture');
   });
 
-  it('drops the caption of a frame too small on screen to hold it', () => {
-    const { state, registry } = setup(reduceCanvas(createCanvasState(sampleArrangement()), { type: 'camera', camera: { x: 0, y: 0, zoom: 0.25 } }));
-    const markup = html(state, registry);
-    expect(markup).not.toContain('hq-canvas-caption');
-    expect(markup.match(/data-compact="true"/gu)?.length).toBe(3);
-    expect(html(createCanvasState(sampleArrangement()), registry)).not.toContain('data-compact');
+  it('drops the caption of a frame too small on screen to hold it, and marks one with no room for any text', () => {
+    const at = (zoom: number) => setup(reduceCanvas(createCanvasState(sampleArrangement()), { type: 'camera', camera: { x: 0, y: 0, zoom } }));
+    const small = at(0.4);
+    const smallMarkup = html(small.state, small.registry);
+    expect(smallMarkup).not.toContain('hq-canvas-caption');
+    expect(smallMarkup.match(/data-compact="true"/gu)?.length).toBe(2);
+    expect(smallMarkup.match(/data-compact="tiny"/gu)?.length).toBe(1);
+    const far = at(0.25);
+    expect(html(far.state, far.registry).match(/data-compact="tiny"/gu)?.length).toBe(3);
+    expect(html(createCanvasState(sampleArrangement()), small.registry)).not.toContain('data-compact');
   });
 
   it('keeps the title of a missing item on its caption', () => {
