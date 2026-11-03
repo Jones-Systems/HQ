@@ -92,7 +92,7 @@ Lane F7's cross-app assessment (`docs/design/hq-cross-app-flow-assessment-202611
 | F7 finding | What F3 does |
 | --- | --- |
 | **X4.** An unreachable service replaces the whole Social area, and the brand picker hangs at "Loading brands…". | Built in the frame. A failed first read keeps the page frame with an inline notice, *Try again* and, for a configured service, *Open Social settings*. Mid-session, one bar under the page title reads "Offline · last synced … · changes paused". The brand picker says *Brands unavailable*. This extends finding 6. |
-| **X5.** Sample references point at `fixture-project`, not the shell's project, so they read as another project's and never open. | The example seed now uses the project it is shown in. The linked draft is paired with Work example item `ex-cupping-hour`, which F2 adds with a link back. The Overview copy is fixed in lane V1. **Not ours:** both shells' reference providers read only live services, so example links resolve as *unavailable* until F7 adds example-mode providers. |
+| **X5.** Sample references point at `fixture-project`, not the shell's project, so they read as another project's and never open. | The example seed now uses the project it is shown in. The linked draft is paired with Work example item `ex-cupping-hour` (F2 confirmed the IDs). **Pending:** the Work item and its link back belong in `modules/work/core/fixtures/examples.ts`, which lane B1 owns; F2 paused before adding them and recorded this in its handoff (`docs/handoffs/hq-life-20261103/f2-work.md`). The Overview copy is fixed in lane V1. **Not ours:** both shells' reference providers read only live services, so example links resolve as *unavailable* until F7 adds example-mode providers. |
 | **X6.** The Library column stretches, and the editor is clipped at 760 px. | Lane V3. The composer overlays or stacks below about 900 px of content width. |
 | **X13.** Developer text in the editor: serialized reference, paste-JSON field, raw IDs. | Lane V3. Behind an *Advanced* disclosure. |
 
@@ -147,13 +147,17 @@ Each lane keeps its tests green, adds focused tests for new behaviour, and captu
 - **F1 (shell and visual system):** both asks are delivered in `284393d`, which this lane builds on:
   - the font token now resolves to concrete system faces on every host, with no bundled font;
   - motion tokens, `toast` with the shell-mounted viewport, `InlineNotice`, `StatusIndicator`, `Skeleton` and the motion helpers. Social calls them directly; it has no local notice layer.
+
+  F1's paused work after `284393d` replaces `PageTransition` with `navigateWithTransition`. Social never used `PageTransition`, so that change doesn't affect it. F1's handoff also lists a quiet Social check on window focus as later work. It would be a read-only snapshot, like Work's `version` poll. F3 records it as a follow-up and hasn't built it, because a refresh under an open draft needs the composer's merge rules settled first.
 - **B2 (Social backend):** Social needs these from the service, in order of flow impact:
   1. a source registry (file, kind, as-of, digest, used-by-runs);
   2. run input provenance on the run record (input label, as-of, digest) for receipts and *Run again*;
   3. draft states (Idea / Drafting / Ready) and per-channel variants;
   4. brand profile fields.
 
-  Until each lands, the UI labels it *Proposed* or derives it honestly from what exists. B2's target `portErrorNotice(error, action)` helper (WS-D) will replace Social's local error wording once it lands.
+  Until each lands, the UI labels it *Proposed* or derives it honestly from what exists. Until item 2 lands, a receipt offers *Open <tool> workbench* in place of *Run again with same input*. Nothing is resent.
+
+  B2's handoff freezes the adapter contract for F3: the port methods, `PortError` kinds, feature names and bridge routes don't change, and new capability arrives only as additive, feature-gated methods. B2's `portErrorNotice(error, action)` helper exists on `work/hq-backend-social-desktop-20261103` (`93af03f`). It will replace Social's local error wording once it reaches the foundation.
 - **F7 (cross-app navigation):** in example mode, register reference providers that read the same example stores the domains show, so sample links open on first launch (X5).
 
 ## Acceptance for this lane
