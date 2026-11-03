@@ -218,4 +218,24 @@ describe('Social draft references', () => {
     expect(s.references.open).not.toHaveBeenCalled();
     expect(s.navigate).not.toHaveBeenCalled();
   });
+
+  it('shows each link as a title, where it lives and a status in words, with developer text behind a closed Advanced', async () => {
+    const s = setup(undefined, FIXTURE_IDS.steepingThread);
+    render(<SocialContent {...s.props} />);
+    const run = await screen.findByText('Signal inbox · Neighborhood tea', { selector: '.soc-link-title' });
+    const row = run.closest('li')!;
+    expect(row.querySelector('.soc-link-meta')?.textContent).toBe('Run in Social');
+    await waitFor(() => expect(row.querySelector('.hq-status-label')?.textContent ?? '').toMatch(/Up to date|Changed since linked|Not checked yet|Can’t be found|Archived/u));
+    const list = row.closest('ul')!;
+    expect(list.textContent).not.toMatch(/Serialized|JSON|Snapshot|Not resolved|fixture-item-1/u);
+
+    const toggle = screen.getByRole('button', { name: 'Advanced' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    const field = screen.getByLabelText('Serialized HQ reference');
+    expect(field.closest('[hidden]')).not.toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(field.closest('[hidden]')).toBeNull();
+    expect(s.recorded.callsOf('execution')).toEqual([]);
+  });
 });

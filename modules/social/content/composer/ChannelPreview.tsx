@@ -31,8 +31,8 @@ export function ChannelPreview({ fields, brandName }: { readonly fields: Pick<Dr
   return (
     <figure className="soc-preview" data-channel={fields.channel}>
       <figcaption className="soc-preview-head">
-        <ChannelBadge channel={fields.channel} label />
-        <span className="soc-preview-kind">Preview</span>
+        <ChannelBadge channel={fields.channel} />
+        <span className="soc-preview-kind">{fields.channel} preview</span>
         <span className="sx-tag">Not posted</span>
       </figcaption>
       {/* The card repeats the text above it; the ring and checks carry the same facts in words. */}

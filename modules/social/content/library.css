@@ -18,14 +18,14 @@
   font: var(--hq-type-body); color: var(--hq-text);
 }
 .soc-lib-list[hidden] { display: none; }
-.soc-lib-toggle { position: absolute; top: var(--hq-space-sm); left: var(--hq-space-xs); z-index: 2; }
+.soc-lib-toggle { position: absolute; top: var(--hq-space-sm); left: var(--hq-space-sm); z-index: 2; }
 .soc-lib-grid[data-collapsed] .soc-lib-toggle { position: static; }
 .soc-lib-pane { container: soc-pane / inline-size; min-width: 0; padding-left: var(--hq-space-lg); }
 .soc-lib-grid[data-collapsed] .soc-lib-pane { padding-left: var(--hq-space-sm); }
 .soc-lib-empty, .soc-lib-select { min-height: 11rem; align-content: center; }
 
 /* ---------- Head and filters ---------- */
-.soc-lib-head { display: flex; align-items: baseline; gap: var(--hq-space-sm); padding: var(--hq-space-md) var(--hq-space-md) var(--hq-space-sm) 40px; }
+.soc-lib-head { display: flex; align-items: baseline; gap: var(--hq-space-sm); padding: var(--hq-space-md) var(--hq-space-md) var(--hq-space-sm) 48px; }
 .soc-lib-head h2 { margin: 0; font: var(--hq-type-heading); letter-spacing: var(--hq-type-heading-tracking); }
 .soc-lib-head .hq-meta { margin-right: auto; font-variant-numeric: tabular-nums; }
 .soc-lib-head-action { margin-left: auto; }
@@ -48,7 +48,7 @@
 }
 .soc-chipfilter:hover { background: var(--hq-surface-hover); color: var(--hq-text); }
 .soc-chipfilter select {
-  appearance: none; height: 100%; max-width: 11rem; padding: 0 22px 0 10px; border: 0; border-radius: inherit;
+  appearance: none; field-sizing: content; height: 100%; max-width: 11rem; padding: 0 22px 0 10px; border: 0; border-radius: inherit;
   background: transparent; color: inherit; font: inherit; color-scheme: inherit; cursor: pointer; text-overflow: ellipsis;
 }
 .soc-chipfilter select:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
@@ -95,7 +95,7 @@
 .soc-lib-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--hq-warning); box-shadow: 0 0 0 2px var(--hq-warning-soft); }
 
 /* ---------- Narrow content: the list and the composer take turns ---------- */
-@container soc-lib (max-width: 899px) {
+@container soc-lib (max-width: 779px) {
   .soc-lib-grid, .soc-lib-grid[data-collapsed] { grid-template-columns: minmax(0, 1fr); }
   .soc-lib-grid > .hq-splitter, .soc-lib-toggle { display: none; }
   .soc-lib-listwrap { position: static; }

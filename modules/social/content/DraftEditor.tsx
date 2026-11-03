@@ -4,7 +4,7 @@ import {
   CHANNELS, FEATURE_HQ_REFERENCES, FEATURE_HQ_BRAND_PROJECT, LIMITS, MESSAGES, codePoints,
   type Brand, type Channel, type DraftEditor as Editor, type DraftFields, type SocialSession, type SocialWorkspacePort,
 } from '../core';
-import { ChannelBadge, SocialIcon, shortTime } from '../ui';
+import { SocialIcon, shortTime } from '../ui';
 import { errorText, invalidField, reconcileUnknownSave, saveStateOf, type Reconciliation } from './actions';
 import { Checks } from './composer/Checks';
 import { ChannelPreview } from './composer/ChannelPreview';
@@ -196,7 +196,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
           <Button className="soc-cmp-back" size="sm" variant="ghost" aria-label="Back to all drafts" onClick={onBack}><SocialIcon name="chevron-left" />All drafts</Button>
         )}
         <h2 id={`${id}-heading`}>{isNew ? 'New draft' : 'Edit draft'}</h2>
-        <span className="soc-cmp-where"><ChannelBadge channel={fields.channel} label /><span>{brandName}</span></span>
+        <span className="soc-cmp-where">{brandName} · {fields.channel}</span>
       </header>
 
       {origin && (
@@ -214,73 +214,70 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
         </div>
       )}
 
-      <div className="soc-cmp-compose">
-        <fieldset className="soc-cmp-write" disabled={mismatch}>
-          <div className="soc-field soc-field--title">
-            <div className="soc-field-line">
-              <label htmlFor={`${id}-title`}>Title</label>
-              <small id={`${id}-title-hint`} className="soc-field-count">{codePoints(fields.title)} / {LIMITS.title} characters</small>
-            </div>
-            <input
-              id={`${id}-title`} value={fields.title} onChange={(event) => edit({ title: event.target.value })} placeholder="A short title for finding this draft"
-              aria-invalid={field === 'title' || undefined} aria-describedby={describedBy('title')} readOnly={busy}
-            />
-            {field === 'title' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
+      <fieldset className="soc-cmp-compose" disabled={mismatch}>
+        <div className="soc-field soc-field--title">
+          <div className="soc-field-line">
+            <label htmlFor={`${id}-title`}>Title</label>
+            <small id={`${id}-title-hint`} className="soc-field-count">{codePoints(fields.title)} / {LIMITS.title} characters</small>
+          </div>
+          <input
+            id={`${id}-title`} value={fields.title} onChange={(event) => edit({ title: event.target.value })} placeholder="A short title for finding this draft"
+            aria-invalid={field === 'title' || undefined} aria-describedby={describedBy('title')} readOnly={busy}
+          />
+          {field === 'title' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
+        </div>
+
+        <div className="soc-field soc-field--body">
+          <label htmlFor={`${id}-body`}>Body</label>
+          <textarea
+            id={`${id}-body`} rows={5} value={fields.body} onChange={(event) => edit({ body: event.target.value })} placeholder="Write the post…"
+            aria-invalid={field === 'body' || undefined} aria-describedby={describedBy('body')} readOnly={busy}
+          />
+          {field === 'body' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
+          <LimitRing id={`${id}-body-hint`} count={codePoints(fields.body)} limit={limit} channel={fields.channel} />
+        </div>
+
+        <div className="soc-cmp-details">
+          <div className="soc-field">
+            <label htmlFor={`${id}-brand`}>Brand</label>
+            <select id={`${id}-brand`} value={fields.brand_id} onChange={(event) => edit({ brand_id: event.target.value })} aria-invalid={field === 'brand_id' || undefined} aria-describedby={describedBy('brand')} disabled={busy}>
+              {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
+            </select>
+            {field === 'brand_id' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
+            <small id={`${id}-brand-hint`} className="hq-sr-only">Brands come from the Social workspace.</small>
           </div>
 
-          <div className="soc-field soc-field--body">
-            <label htmlFor={`${id}-body`}>Body</label>
-            <textarea
-              id={`${id}-body`} rows={9} value={fields.body} onChange={(event) => edit({ body: event.target.value })} placeholder="Write the post…"
-              aria-invalid={field === 'body' || undefined} aria-describedby={describedBy('body')} readOnly={busy}
-            />
-            {field === 'body' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
-            <LimitRing id={`${id}-body-hint`} count={codePoints(fields.body)} limit={limit} channel={fields.channel} />
+          <div className="soc-field">
+            <label htmlFor={`${id}-channel`}>Channel</label>
+            <select id={`${id}-channel`} value={fields.channel} onChange={(event) => edit({ channel: event.target.value as Channel })} aria-invalid={field === 'channel' || undefined} aria-describedby={describedBy('channel')} disabled={busy}>
+              {CHANNELS.map((channel) => <option key={channel} value={channel}>{channel}</option>)}
+            </select>
+            {field === 'channel' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
+            <small id={`${id}-channel-hint`} className="soc-hint">Nothing is posted to this channel.</small>
           </div>
 
-          <div className="soc-cmp-details">
-            <div className="soc-field">
-              <label htmlFor={`${id}-brand`}>Brand</label>
-              <select id={`${id}-brand`} value={fields.brand_id} onChange={(event) => edit({ brand_id: event.target.value })} aria-invalid={field === 'brand_id' || undefined} aria-describedby={describedBy('brand')} disabled={busy}>
-                {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
-              </select>
-              {field === 'brand_id' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
-              <small id={`${id}-brand-hint`} className="hq-sr-only">Brands come from the Social workspace.</small>
-            </div>
-
-            <div className="soc-field">
-              <label htmlFor={`${id}-channel`}>Channel</label>
-              <select id={`${id}-channel`} value={fields.channel} onChange={(event) => edit({ channel: event.target.value as Channel })} aria-invalid={field === 'channel' || undefined} aria-describedby={describedBy('channel')} disabled={busy}>
-                {CHANNELS.map((channel) => <option key={channel} value={channel}>{channel}</option>)}
-              </select>
-              {field === 'channel' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
-              <small id={`${id}-channel-hint`} className="soc-hint">Nothing is posted to this channel.</small>
-            </div>
-
-            <div className="soc-field soc-field--date">
-              <label htmlFor={`${id}-planned`}>Planned date</label>
-              <span className="soc-inline">
-                <input
-                  id={`${id}-planned`} type="date" value={fields.planned_date} onChange={(event) => edit({ planned_date: event.target.value })}
-                  aria-invalid={field === 'planned_date' || undefined} aria-describedby={describedBy('planned')} readOnly={busy}
-                />
-                {fields.planned_date && <Button size="sm" variant="ghost" onClick={() => edit({ planned_date: '' })} disabled={busy}>Clear date</Button>}
-              </span>
-              {field === 'planned_date' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
-              <small id={`${id}-planned-hint`} className="soc-hint">
-                {fields.planned_date ? `Planned for ${dateLabel(fields.planned_date)}. ` : 'No planned date. '}
-                An editorial planning label only: it never posts, and it is separate from Work's planning dates.
-              </small>
-            </div>
+          <div className="soc-field soc-field--date">
+            <label htmlFor={`${id}-planned`}>Planned date</label>
+            <span className="soc-inline">
+              <input
+                id={`${id}-planned`} type="date" value={fields.planned_date} onChange={(event) => edit({ planned_date: event.target.value })}
+                aria-invalid={field === 'planned_date' || undefined} aria-describedby={describedBy('planned')} readOnly={busy}
+              />
+              {fields.planned_date && <Button size="sm" variant="ghost" onClick={() => edit({ planned_date: '' })} disabled={busy}>Clear date</Button>}
+            </span>
+            {field === 'planned_date' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
+            <small id={`${id}-planned-hint`} className="soc-hint">
+              {fields.planned_date ? `Planned for ${dateLabel(fields.planned_date)}. ` : 'No planned date. '}
+              An editorial planning label only: it never posts, and it is separate from Work's planning dates.
+            </small>
           </div>
-        </fieldset>
-
-        <div className="soc-cmp-side">
+        </div>
+        <div className="soc-cmp-preview">
           <h3 className="soc-side-title">Channel preview</h3>
           <ChannelPreview fields={fields} brandName={brandName} />
-          <Checks checks={checks} headingId={`${id}-checks`} />
         </div>
-      </div>
+        <Checks checks={checks} headingId={`${id}-checks`} />
+      </fieldset>
 
       {references && projectId ? <DraftLinks session={session} port={port} editorKey={editorKey} editor={editor} features={features} projectId={projectId} references={references} paused={paused} /> : (fields.links?.length ?? 0) > 0 && (
         <section className="soc-links" aria-labelledby={`${id}-links`}>

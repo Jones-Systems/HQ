@@ -22,14 +22,23 @@
 .soc-origin-text strong { font-weight: var(--hq-font-weight-semibold); overflow-wrap: anywhere; }
 .soc-origin-text span { font: var(--hq-type-small); color: var(--hq-text-muted); }
 
-/* ---------- Write ---------- */
-.soc-cmp-compose { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-lg); align-items: start; }
-.soc-cmp-write { display: grid; gap: var(--hq-space-lg); min-width: 0; margin: 0; padding: 0; border: 0; }
+/* ---------- Write ----------
+   One column: title, body, the live preview, then brand, channel and date, then the checks. With room, the preview and
+   checks move beside the writing. The fieldset is the grid, so a read-only draft disables every field at once. */
+.soc-cmp-compose {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-lg); align-items: start; min-width: 0; margin: 0; padding: 0; border: 0;
+  grid-template-areas: "title" "body" "preview" "details" "checks";
+}
+.soc-field--title { grid-area: title; }
+.soc-field--body { grid-area: body; }
+.soc-cmp-preview { grid-area: preview; display: grid; gap: var(--hq-space-sm); min-width: 0; }
+.soc-cmp-details { grid-area: details; }
+.soc-checks { grid-area: checks; }
 .soc-cmp .soc-field { gap: var(--hq-space-xs); }
 .soc-field-line { display: flex; align-items: baseline; justify-content: space-between; gap: var(--hq-space-sm); }
 .soc-field-count { font: var(--hq-type-meta); color: var(--hq-text-subtle); font-variant-numeric: tabular-nums; }
 .soc-cmp .soc-field--title input { font: var(--hq-type-title); letter-spacing: var(--hq-type-title-tracking); min-height: 40px; padding: 0 var(--hq-space-md); }
-.soc-cmp .soc-field--body textarea { min-height: 15rem; padding: var(--hq-space-md); font-size: 14px; line-height: 22px; resize: vertical; }
+.soc-cmp .soc-field--body textarea { min-height: 8rem; max-height: 22rem; padding: var(--hq-space-md); font-size: 14px; line-height: 22px; resize: vertical; field-sizing: content; }
 .soc-cmp .soc-field input::placeholder, .soc-cmp .soc-field textarea::placeholder { color: var(--hq-text-subtle); }
 .soc-cmp-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--hq-space-md); }
 .soc-cmp .soc-field--date { grid-column: 1 / -1; }
@@ -50,7 +59,6 @@
 .soc-count[data-state="over"] .soc-count-note { color: var(--hq-text); }
 
 /* ---------- Side: preview and checks ---------- */
-.soc-cmp-side { display: grid; gap: var(--hq-space-md); min-width: 0; }
 .soc-side-title, .soc-checks h3, .soc-links h3 { margin: 0; font: var(--hq-type-heading); letter-spacing: var(--hq-type-heading-tracking); }
 .soc-preview { display: grid; gap: var(--hq-space-xs); margin: 0; min-width: 0; }
 .soc-preview-head { display: flex; align-items: center; gap: var(--hq-space-xs); }
@@ -148,12 +156,14 @@
 .soc-save-status[data-state="failed"] .hq-save, .soc-save-status[data-state="unknown"] .hq-save { color: var(--hq-text); }
 
 /* ---------- Wide pane: the preview sits beside the writing ---------- */
-@container soc-pane (min-width: 760px) {
-  .soc-cmp-compose { grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem); }
-  .soc-cmp-side { position: sticky; top: var(--hq-space-md); }
+@container soc-pane (min-width: 720px) {
+  .soc-cmp-compose {
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
+    grid-template-areas: "title preview" "body preview" "details checks";
+  }
 }
 /* Where the list takes the whole width, the way back to it is part of the composer. */
-@container soc-lib (max-width: 899px) {
+@container soc-lib (max-width: 779px) {
   .soc-cmp-back { display: inline-flex; }
   .soc-cmp { padding: var(--hq-space-md) var(--hq-space-md) 0; }
   .soc-savebar { margin: 0 calc(-1 * var(--hq-space-md)); padding: var(--hq-space-sm) var(--hq-space-md); }
