@@ -5,7 +5,6 @@ import { FEATURE_HQ_REFERENCES, hasFeature, isRunId, type Brand, type Draft, typ
 import { EmptyState, SocialIcon } from '../ui';
 
 const LINK_LIMIT = 6;
-const OPENABLE = ['available', 'changed', 'archived'];
 
 export interface LinkedAcrossHqProps {
   readonly snapshot: WorkspaceSnapshot;
@@ -27,6 +26,28 @@ interface RowState {
 }
 
 const READ_ONLY = 'Another project: read-only. HQ stays in this project.';
+const NO_SERVICE = "Opening needs the HQ reference service, which isn't connected here.";
+const NOT_CHECKED = 'Not checked yet.';
+const RUN_MISSING = "This run isn't in the latest read of the workspace, so it can't be opened from here.";
+
+const AREAS: Readonly<Record<string, string>> = { design: 'Design', work: 'Work', social: 'Social', wiki: 'Wiki' };
+
+/**
+ * Why a resolved link can't be opened, or null when it can. A record that exists in this project opens: that is
+ * *available*, and also one that *changed* since it was linked or was *archived*, because each still resolves to a
+ * record. Anything else says what is known, in a line tied to the disabled Open button.
+ */
+function whyNotOpenable(link: ReferenceEnvelope, resolution: ReferenceResolution, projectId: string | undefined): string | null {
+  const area = AREAS[link.domain] ?? link.domain;
+  if (resolution.status === 'moved' || (resolution.targetProjectId !== undefined && projectId !== undefined && resolution.targetProjectId !== projectId)) return READ_ONLY;
+  switch (resolution.status) {
+    case 'available': case 'changed': case 'archived': return null;
+    case 'unavailable': return `${area} can't be reached, so this can't be opened right now.`;
+    case 'missing': return `${area} no longer has this record, so it can't be opened.`;
+    case 'forbidden': return `HQ isn't allowed to open this ${area} record.`;
+    default: return "Its status couldn't be confirmed, so it can't be opened right now.";
+  }
+}
 
 function titleCase(status: string): string {
   return status[0]!.toUpperCase() + status.slice(1);
@@ -72,29 +93,28 @@ export function LinkedAcrossHq({ snapshot, brand, projectId, references, navigat
     if (projectId !== undefined && link.projectId !== projectId) return { tone: 'info', label: 'Another project', why: READ_ONLY };
     if (isSocialRun(link)) {
       // A Social run is in this workspace's own snapshot: no reference service is needed to read or open it.
-      return runIds.has(link.entityId) ? { tone: 'success', label: 'Available', why: null } : { tone: 'unknown', label: 'Not checked', why: null };
+      return runIds.has(link.entityId) ? { tone: 'success', label: 'Available', why: null } : { tone: 'unknown', label: 'Not checked', why: RUN_MISSING };
     }
+    if (!references) return { tone: 'unknown', label: 'Not checked', why: NO_SERVICE };
     const resolution = resolved[key];
-    const target = resolution?.targetProjectId;
-    if (resolution && (resolution.status === 'moved' || (target !== undefined && projectId !== undefined && target !== projectId))) {
-      return { tone: 'info', label: 'Another project', why: READ_ONLY };
-    }
-    if (!references) return { tone: 'unknown', label: 'Not checked', why: "Opening needs the HQ reference service, which isn't connected here." };
-    return resolution ? { tone: TONES[resolution.status] ?? 'unknown', label: titleCase(resolution.status), why: null } : { tone: 'unknown', label: 'Not checked', why: null };
+    if (!resolution) return { tone: 'unknown', label: 'Not checked', why: NOT_CHECKED };
+    const why = whyNotOpenable(link, resolution, projectId);
+    if (why === READ_ONLY) return { tone: 'info', label: 'Another project', why };
+    return { tone: TONES[resolution.status] ?? 'unknown', label: titleCase(resolution.status), why };
   };
 
   const open = async (item: Item) => {
     const { key, link } = item;
     const say = (note: string) => setNotes((current) => ({ ...current, [key]: note }));
-    if (isSocialRun(link)) { navigate(`runs/${link.entityId}`); return; }
+    if (isSocialRun(link)) { if (runIds.has(link.entityId)) navigate(`runs/${link.entityId}`); return; }
     if (!references) return;
     setOpening(key);
     try {
       // Read the owner's current state right before opening, so a stale or moved record is never opened blindly.
       const resolution = await references.resolve(link);
       setResolved((current) => ({ ...current, [key]: resolution }));
-      if (resolution.status === 'moved' || (resolution.targetProjectId !== undefined && projectId !== undefined && resolution.targetProjectId !== projectId)) say(READ_ONLY);
-      else if (!OPENABLE.includes(resolution.status)) say(`Can't open it: its status is ${resolution.status}. Nothing was changed.`);
+      const why = whyNotOpenable(link, resolution, projectId);
+      if (why) say(why);
       else {
         say('');
         references.open(link, { label: 'Social overview', to: { domain: 'social', destination: 'overview' } });
@@ -131,7 +151,7 @@ export function LinkedAcrossHq({ snapshot, brand, projectId, references, navigat
                 <span className="sx-row-side">
                   <StatusChip tone={state.tone} label={state.label} />
                   <Button
-                    size="sm" variant="secondary" disabled={state.why !== null && !isSocialRun(item.link)} aria-label={`Open ${item.link.title}`}
+                    size="sm" variant="secondary" disabled={state.why !== null} aria-label={`Open ${item.link.title}`}
                     aria-describedby={state.why || note ? whyId : undefined} busy={opening === item.key} busyLabel="Checking" onClick={() => void open(item)}
                   >
                     Open

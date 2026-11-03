@@ -1,11 +1,9 @@
 /**
- * Fictional files for the example workspace's import desk, so every step can be tried without a file on disk.
- * They go through exactly the same check as a file the user chooses. Nothing here is real data.
+ * The fictional file for the example workspace's import desk, so the check can be tried without a file on disk. It goes
+ * through exactly the same check as a file the user chooses. Nothing here is real data.
  */
 
-export type ExampleFileKind = 'valid' | 'broken';
-
-const VALID = {
+const FEED = {
   version: 'https://jsonfeed.org/version/1.1',
   title: 'Fictional neighborhood tea items',
   items: [
@@ -15,20 +13,8 @@ const VALID = {
   ],
 };
 
-/** A missing comma after the first item: the check reports line 5, column 5. */
-const BROKEN = `{
-  "version": "https://jsonfeed.org/version/1.1",
-  "items": [
-    { "id": "example-item-1", "title": "A line that forgets its comma" }
-    { "id": "example-item-2", "title": "So the file stops here" }
-  ]
-}
-`;
+export const EXAMPLE_FILE_NAME = 'example-signal-items.json';
 
-export function exampleFile(kind: ExampleFileKind): File {
-  return kind === 'valid'
-    ? new File([`${JSON.stringify(VALID, null, 2)}\n`], 'example-signal-items.json', { type: 'application/json' })
-    : new File([BROKEN], 'example-broken-feed.json', { type: 'application/json' });
+export function exampleFile(): File {
+  return new File([`${JSON.stringify(FEED, null, 2)}\n`], EXAMPLE_FILE_NAME, { type: 'application/json' });
 }
-
-export const EXAMPLE_FILE_NAMES: readonly string[] = ['example-signal-items.json', 'example-broken-feed.json'];
