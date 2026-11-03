@@ -190,9 +190,13 @@ export async function mutate({ method, path, body, label = 'Change', project = n
   }
 }
 
-/** Pending projection for a board move; returns {rollback, settle}. */
+/**
+ * Pending projection for a board move; returns {rollback, settle}. The server
+ * places an unanchored move at the bottom, while the pinned `projectMove`
+ * defaults to the top, so the bottom is passed explicitly.
+ */
 export function projectBoardMove(id, status, anchors) {
-  const plan = projectMove(state.items, id, status, anchors);
+  const plan = projectMove(state.items, id, status, { ...anchors, place: anchors.place ?? 'bottom' });
   if (!plan) return null;
   const before = new Map();
   const next = state.items.map((it) => {

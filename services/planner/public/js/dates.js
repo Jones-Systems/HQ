@@ -330,3 +330,8 @@ export function shiftMonth(year, month, delta) {
 export function overlaps(a, b) {
   return dayNum(a[0]) <= dayNum(b[1]) && dayNum(b[0]) <= dayNum(a[1]);
 }
+
+/** Default value for a precision when switching an editor, anchored near `iso`. */
+export function defaultValueFor(precision, iso) {
+  return valueContaining(precision, iso);
+}

@@ -85,14 +85,6 @@ test('projected move matches the server rule with hidden cards', () => {
   assert.equal(projectMove(items, 'x', 'next', { after_id: 'zzz' }), null);
 });
 
-test('projected move without an anchor or place lands at the bottom, as on the server', () => {
-  const mk = (id, status, position) => ({ id, status, position, created_at: '2026-01-01T00:00:00.000Z' });
-  const items = [mk('a', 'next', 1), mk('b', 'next', 2), mk('x', 'inbox', 1)];
-  const order = (plan) => [...plan.entries()].sort((p, q) => p[1].position - q[1].position).map(([id]) => id);
-  assert.deepEqual(order(projectMove(items, 'x', 'next', {})), ['a', 'b', 'x']);
-  assert.deepEqual(order(projectMove(items, 'x', 'next', { place: 'top' })), ['x', 'a', 'b']);
-});
-
 test('filters and review buckets', () => {
   const base = { notes: '', next_steps: [], references: [], dates: [], archived_at: null, area: null,
     motivation: null, horizon: null, kind: 'idea', priority: null, updated_at: '2026-01-01T00:00:00.000Z' };
@@ -140,6 +132,25 @@ function seed(items, version) {
   st.state.unconfirmed = [];
   st.state.pendingIds.clear();
 }
+
+// `projectMove` is a pinned copy of Work's upstream file that defaults to the top; the client supplies the bottom.
+test('projected board move without an anchor or place lands at the bottom, as on the server', () => {
+  const mk = (id, status, position) => ({ id, status, position, created_at: '2026-01-01T00:00:00.000Z' });
+  const order = () => st.state.items.filter((it) => it.status === 'next').sort((p, q) => p.position - q.position).map((it) => it.id);
+  const cases = [
+    [{}, ['a', 'b', 'x']],
+    [{ place: 'bottom' }, ['a', 'b', 'x']],
+    [{ place: 'top' }, ['x', 'a', 'b']],
+    [{ after_id: 'a' }, ['a', 'x', 'b']],
+    [{ before_id: 'b' }, ['a', 'x', 'b']],
+  ];
+  for (const [anchors, expected] of cases) {
+    seed([mk('a', 'next', 1), mk('b', 'next', 2), mk('x', 'inbox', 1)], 1);
+    assert.ok(st.projectBoardMove('x', 'next', anchors), JSON.stringify(anchors));
+    assert.deepEqual(order(), expected, JSON.stringify(anchors));
+  }
+  seed([], 1);
+});
 
 test('a snapshot that started before a confirmed write does not roll that write back', async () => {
   mock.timers.enable({ apis: ['setTimeout'] });
