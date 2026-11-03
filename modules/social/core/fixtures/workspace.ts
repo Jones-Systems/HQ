@@ -1,6 +1,7 @@
 import type { ReferenceEnvelope } from '@hq/contracts';
 import { DEFAULT_BRAND_ID, type Brand, type Draft, type RunRecord, type Tool, type ToolId } from '../port';
 import { MESSAGES } from '../validate';
+import { WORKBENCH_OUTPUTS } from './outputs';
 
 /**
  * Fictional Social workspace data. Every brand, draft, run and example here is invented;
@@ -101,7 +102,7 @@ export function fictionalSeed(projectId: string = FIXTURE_PROJECT_ID): FixtureSe
     runs: [
       { record: { id: ids.queuedRun, tool: 'x-studio', status: 'queued', is_example: 0, created_at: '2026-10-19T17:02:00+00:00', finished_at: null, error: null } },
       { record: { id: ids.runningRun, tool: 'social-publisher', status: 'running', is_example: 0, created_at: '2026-10-19T17:01:00+00:00', finished_at: null, error: null } },
-      { record: { id: ids.exampleRun, tool: 'x-intelligence', status: 'succeeded', is_example: 1, created_at: '2026-10-18T10:00:00+00:00', finished_at: '2026-10-18T10:00:04+00:00', error: null }, output: { ok: true, topic: 'Neighborhood tea', clusters: [{ label: 'Cold brew', items: ['fixture-item-1'] }] } },
+      { record: { id: ids.exampleRun, tool: 'x-intelligence', status: 'succeeded', is_example: 1, created_at: '2026-10-18T10:00:00+00:00', finished_at: '2026-10-18T10:00:04+00:00', error: null }, output: structuredClone(WORKBENCH_OUTPUTS['x-intelligence']) },
       { record: { id: ids.failedRun, tool: 'seo-studio', status: 'failed', is_example: 0, created_at: '2026-10-17T12:00:00+00:00', finished_at: '2026-10-17T12:00:02+00:00', error: 'Packet 1 has no sources. Add at least one source and run again.' }, output: { ok: false, error: 'Packet 1 has no sources. Add at least one source and run again.' } },
       { record: { id: ids.interruptedRun, tool: 'reddit-opportunities', status: 'interrupted', is_example: 0, created_at: '2026-10-16T09:00:00+00:00', finished_at: '2026-10-16T09:05:00+00:00', error: MESSAGES.interrupted } },
     ],

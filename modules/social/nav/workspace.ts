@@ -1,6 +1,6 @@
 import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES, type SocialWorkspacePort } from '../core';
 import { createLiveSocialPort, socialServiceBridge } from '../live';
-import { createWorkbenchFixture } from '../workbench/fixtures/examples';
+import { createWorkbenchFixture, disposeWorkbenchFixture } from '../workbench/fixtures/examples';
 
 /**
  * The one Social workspace port behind the domain, chosen once per window. A structurally valid
@@ -21,10 +21,11 @@ let current: SocialWorkspace | null = null;
 /**
  * The fictional example workspace, the one factory every example selection uses (the module default, the
  * shell's unconfigured service and the browser preview). Its brand and sample links point into `projectId`,
- * the HQ project it is shown in, so they read as this project's rather than another's.
+ * the HQ project it is shown in, so they read as this project's rather than another's. Example runs finish here
+ * on a short timer (`simulateExampleRuns`); runs on the user's own input wait.
  */
 export function createExampleWorkspace(projectId?: string): SocialWorkspacePort {
-  return createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX], ...(projectId ? { projectId } : {}) }).port;
+  return createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX], simulateExampleRuns: true, ...(projectId ? { projectId } : {}) }).port;
 }
 
 export function selectSocialWorkspace(scope: unknown = globalThis, projectId?: string): SocialWorkspace {
@@ -44,11 +45,13 @@ export function socialWorkspacePort(): SocialWorkspacePort {
 
 /**
  * Test and evidence harnesses only: replace the module-level port (labelled as `source`, the fixture by
- * default), or pass null so the next use selects again.
+ * default), or pass null so the next use selects again. A replaced fixture port stops its example-run simulation.
  */
 export function setSocialWorkspacePort(port: SocialWorkspacePort | null, source: SocialWorkspaceSource = 'fixture'): void {
+  if (current && current.port !== port) disposeWorkbenchFixture(current.port);
   current = port ? { port, source } : null;
 }
 
 export const EXAMPLE_WORKSPACE_NOTE = 'Fictional example workspace, kept in this window until HQ closes. '
-  + 'No Social service is set up yet, so nothing is sent anywhere and runs stay queued.';
+  + 'No Social service is set up yet, so nothing is sent anywhere. Example runs finish here with fictional results; '
+  + 'runs on your own input wait until a service is set up.';
