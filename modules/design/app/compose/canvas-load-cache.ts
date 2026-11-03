@@ -25,6 +25,10 @@ export interface LoadCache<T> {
   subscribe(listener: () => void): () => void;
   /** Load again whatever failed, for example after the sources refreshed. */
   retryFailed(): void;
+  /**
+   * Stop what is loading and forget what was loaded. The cache stays usable and loads again on the next `want`, which
+   * is what React's development remount (unmount, then mount again, on the same object) relies on.
+   */
   dispose(): void;
 }
 
@@ -32,14 +36,16 @@ export interface LoadCache<T> {
 export function createLoadCache<T>(load: (key: string, signal: AbortSignal) => Promise<T>): LoadCache<T> {
   const states = new Map<string, Loaded<T>>();
   const listeners = new Set<() => void>();
-  const controller = new AbortController();
-  let disposed = false;
+  let controller = new AbortController();
+  // Answers that arrive after a `dispose` belong to an earlier life of the cache and are dropped.
+  let epoch = 0;
   const emit = () => { for (const listener of [...listeners]) listener(); };
   const start = (key: string) => {
+    const mine = epoch;
     states.set(key, LOADING);
     load(key, controller.signal).then(
-      (value) => { if (!disposed) { states.set(key, { status: 'ready', value }); emit(); } },
-      () => { if (!disposed) { states.set(key, FAILED); emit(); } },
+      (value) => { if (mine === epoch) { states.set(key, { status: 'ready', value }); emit(); } },
+      () => { if (mine === epoch) { states.set(key, FAILED); emit(); } },
     );
   };
   return {
@@ -54,7 +60,7 @@ export function createLoadCache<T>(load: (key: string, signal: AbortSignal) => P
       for (const key of failed) start(key);
       if (failed.length > 0) emit();
     },
-    dispose() { disposed = true; controller.abort(); listeners.clear(); },
+    dispose() { epoch += 1; controller.abort(); controller = new AbortController(); states.clear(); },
   };
 }
 
@@ -84,7 +90,7 @@ export function createCaptureCache(options: { readonly readContent: () => Promis
     return { url: await verifiedDataUrl(ref, await options.thumbnails.readThumbnail(ref, signal), THUMBNAIL_LIMIT) };
   });
   // A retry reads the project content again, since a version missing from it may have been added since.
-  return { ...cache, retryFailed() { content = null; cache.retryFailed(); } };
+  return { ...cache, retryFailed() { content = null; cache.retryFailed(); }, dispose() { content = null; cache.dispose(); } };
 }
 
 export interface FlowSummary {

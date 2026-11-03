@@ -73,6 +73,19 @@ describe('load cache', () => {
     assert.equal(notified, 0);
     assert.equal(cache.peek('a').status, 'loading');
   });
+
+  it('loads again after it is disposed, as a development remount on the same object needs', async () => {
+    const signals: AbortSignal[] = [];
+    const cache = createLoadCache<string>(async (key, given) => { signals.push(given); return `loaded ${key}`; });
+    cache.want('a');
+    cache.dispose();
+    cache.want('a');
+    await settled();
+    assert.deepEqual(cache.peek('a'), { status: 'ready', value: 'loaded a' });
+    assert.equal(signals.length, 2, 'the second want loads for real');
+    assert.equal(signals[0]!.aborted, true);
+    assert.equal(signals[1]!.aborted, false, 'a fresh signal for the new life');
+  });
 });
 
 describe('capture thumbnails', () => {
