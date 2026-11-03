@@ -1,8 +1,9 @@
 # Wiki core (`hq.wiki.source/v1` host side)
 
 The host-side implementation behind the accepted `WikiService` contract. Task `task.wiki-core.001`
-(interface `iface.wiki.001`). This directory is the entire write cone: `src/`, `test/`,
-`tsconfig.json` and this README. `scripts/` is reserved and does not exist. The contract
+(interface `iface.wiki.001`). This task's write cone is `src/`, `test/`, `tsconfig.json` and this README;
+`scripts/` is the separate owner-run, aggregates-only validation tool for private sources
+([scripts/README.md](scripts/README.md)). The contract
 (`../contract`) is imported through `../../contract/src/index.ts` and is never edited. There is no UI,
 no React or Electron, no IPC/preload/root seam, no catalog or lockfile change and no new dependency.
 
