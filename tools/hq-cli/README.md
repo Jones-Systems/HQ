@@ -86,6 +86,12 @@ Legacy URL references remain supported without this feature.
 other dates. Kinds are `target`, `deadline`, `start`, `event`; values preserve
 precision: `2026-11-06`, `2026-W45`, `2026-11`, `2026-Q4`, `2026`.
 
+`--planned`, `--due` and `--date` are **create-only**. Dates are a replacement
+array, so `items update` changes them only through the complete `dates` array in
+`--fields-file`, copied from `items get` (its derived `instant`, `end_instant` and
+`tz_abbr` are accepted and ignored). `--tz` sets the zone for wall times that have
+no `~TZ`. On `items move`, `--place` cannot be combined with an anchor.
+
 Only `today`, `tomorrow` and `+Nd` are relative. They resolve once using Planner's
 `settings.default_tz` or explicit `--tz`. Output echoes input, resolved value,
 timezone and today; frozen values go into the request bytes. Weekday names are
@@ -198,9 +204,11 @@ The `hq-cli` union and its read, write, reference and E2E groups are recorded in
 Unit tests inject fetch/time and open no sockets. File fixtures use unique trees
 below `test/` and creating-test teardown; intent-file tests cover atomic visibility
 and cleanup. These source checks do not prove installed behavior, live-service
-compatibility, root workspace CI or deployment.
+compatibility, root workspace CI or deployment. Pull requests run this suite,
+including the E2E, in the `CLI Node tests and synthetic Planner E2E` check
+(`.github/workflows/cli-planner.yml`).
 
-The opt-in E2E requires Python 3 and launches the actual in-tree
+The opt-in E2E requires Python 3.9 or newer and launches the actual in-tree
 `services/planner` on an ephemeral loopback port with a disposable synthetic
 SQLite store. It requires the reference-capable backend; no external source path
 or live endpoint is used. It exercises the five-item planning example with an
