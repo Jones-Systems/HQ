@@ -296,8 +296,13 @@ export function SocialDomain({ context, destination, navigate, port, example = f
             ) : needsWorkspace && !snapshot ? (
               <FirstLoad load={load} onRetry={check} title={SECTION_LABELS[route.section]} example={example} />
             ) : route.section === 'overview' ? (
-              snapshot && <Overview snapshot={snapshot} load={load} editors={state.editors} brand={brand} navigate={navigate} now={now ?? (() => new Date())} onCheck={check} />
-            ) : route.section === 'sources' ? <Sources sourceId={route.sourceId} navigate={navigate} />
+              snapshot && (
+                <Overview
+                  snapshot={snapshot} load={load} editors={state.editors} brand={brand} navigate={navigate} now={now ?? (() => new Date())}
+                  projectId={context.id} {...(references ? { references } : {})}
+                />
+              )
+            ) : route.section === 'sources' ? <Sources sourceId={route.sourceId} navigate={navigate} projectId={context.id} {...(now ? { now } : {})} />
               : route.section === 'channels' ? <Channels navigate={navigate} />
                 : route.section === 'workbenches' || route.section === 'runs' ? (
                   <WorkbenchSection
