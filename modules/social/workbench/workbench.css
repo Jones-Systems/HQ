@@ -239,13 +239,7 @@ textarea.sw-input { resize: vertical; line-height: 1.45; }
 .sw-receipt-title { display: grid; gap: var(--hq-space-3xs); min-width: 0; }
 .sw-section .sw-receipt-title h3 { font: var(--hq-type-title); letter-spacing: var(--hq-type-title-tracking); overflow-wrap: anywhere; }
 .sw-receipt-tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
-.sw-id {
-  display: inline-flex; align-items: center; gap: var(--hq-space-3xs); padding-left: var(--hq-space-sm);
-  border: 1px solid var(--hq-border); border-radius: var(--hq-radius-pill); background: var(--hq-surface-sunken);
-}
-.sw-eyebrow .sw-id { vertical-align: middle; margin-inline-start: var(--hq-space-3xs); }
 .sw-id-text { color: var(--hq-text-muted); }
-.sw-id .sw-id-copied { color: var(--hq-success); }
 .sw-chips-row { display: flex; flex-wrap: wrap; gap: var(--hq-space-xs); }
 .sw-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--hq-space-xs) var(--hq-space-md); margin: 0; }
 .sw-facts div { display: grid; align-content: start; gap: var(--hq-space-3xs); min-width: 0; }

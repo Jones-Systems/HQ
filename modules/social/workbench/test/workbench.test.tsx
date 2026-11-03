@@ -173,12 +173,12 @@ describe('explicit Run', () => {
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(executions(s.recorded)).toHaveLength(1);
 
-    await s.user.click(screen.getByRole('button', { name: 'Run again…' }));
+    await s.user.click(screen.getByRole('button', { name: 'Run Writing studio…' }));
     const dialog = await screen.findByRole('alertdialog');
     await s.user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(executions(s.recorded)).toHaveLength(1);
-    await s.user.click(screen.getByRole('button', { name: 'Run again…' }));
-    await s.user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Run again' }));
+    await s.user.click(screen.getByRole('button', { name: 'Run Writing studio…' }));
+    await s.user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Create another run' }));
     await waitFor(() => expect(executions(s.recorded)).toHaveLength(2));
   });
 

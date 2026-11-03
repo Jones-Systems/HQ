@@ -1,24 +1,22 @@
 import { useState } from 'react';
 import { Button, useToast } from '@hq/ui';
+import { SUCCESS_TOAST_MS, copyText } from './ReceiptId';
 import './run-id.css';
 
 const COPIED_TOAST = 'social-run-id-copied';
 
 /**
  * A receipt's Run ID as one full-width fact: the whole ID on a single selectable line, and a quiet Copy beside it.
- * Copying only touches the clipboard. When the clipboard is not available a short note says so; the ID stays selectable.
+ * It is the receipt's one copy control. Copying only touches the clipboard; when that fails a short note says so and
+ * the ID stays selectable.
  */
 export function RunIdFact({ id }: { readonly id: string }) {
   const toast = useToast();
   const [failed, setFailed] = useState(false);
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(id);
-      setFailed(false);
-      toast.show({ id: COPIED_TOAST, tone: 'success', title: 'Run ID copied' });
-    } catch {
-      setFailed(true);
-    }
+    const copied = await copyText(id);
+    setFailed(!copied);
+    if (copied) toast.show({ id: COPIED_TOAST, tone: 'success', title: 'Run ID copied', meta: id, duration: SUCCESS_TOAST_MS });
   };
   return (
     <div className="sw-fact-wide">

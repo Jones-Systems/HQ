@@ -266,12 +266,18 @@ describe('the receipt panel', () => {
   });
 
   it('says so inline when the clipboard fails, and leaves the ID selectable', async () => {
-    const s = setup({ destination: `runs/${FIXTURE_IDS.failedRun}` });
-    clipboard(async () => { throw new Error('denied'); });
-    await s.user.click(await screen.findByRole('button', { name: 'Copy run ID' }));
-    expect(await screen.findByText(/Couldn't copy it\. Select the ID/u)).toBeTruthy();
-    expect(screen.queryByRole('group', { name: 'Run ID copied' })).toBeNull();
-    expect(document.querySelector('.sw-run-id')?.textContent).toBe(FIXTURE_IDS.failedRun);
+    // Neither the clipboard nor the selection fallback works here.
+    Object.defineProperty(document, 'execCommand', { value: () => false, configurable: true });
+    try {
+      const s = setup({ destination: `runs/${FIXTURE_IDS.failedRun}` });
+      clipboard(async () => { throw new Error('denied'); });
+      await s.user.click(await screen.findByRole('button', { name: 'Copy run ID' }));
+      expect(await screen.findByText(/Couldn't copy it\. Select the ID/u)).toBeTruthy();
+      expect(screen.queryByRole('group', { name: 'Run ID copied' })).toBeNull();
+      expect(document.querySelector('.sw-run-id')?.textContent).toBe(FIXTURE_IDS.failedRun);
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand');
+    }
   });
 
   it('shows a failed run\'s reason once', async () => {

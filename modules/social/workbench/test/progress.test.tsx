@@ -137,7 +137,7 @@ describe('seeded results', () => {
 });
 
 describe('receipt ID', () => {
-  it('shows eight characters with the full ID as its title, and copies the full ID with a Copied toast', async () => {
+  it('shows eight characters with the full ID as its title, and copies the full ID from the one Copy with a toast', async () => {
     const s = setup({ destination: `runs/${FIXTURE_IDS.exampleRun}` });
     const receipt = await screen.findByRole('article');
     const short = FIXTURE_IDS.exampleRun.slice(-8);
@@ -146,13 +146,14 @@ describe('receipt ID', () => {
     expect(code.getAttribute('title')).toBe(FIXTURE_IDS.exampleRun);
     expect(short).toHaveLength(8);
 
-    const copy = within(receipt).getByRole('button', { name: `Copy receipt ID ${short}` });
-    expect(copy.getAttribute('title')).toContain(FIXTURE_IDS.exampleRun);
-    await s.user.click(copy);
+    // One copy control per receipt: the Run ID row's.
+    const copies = within(receipt).getAllByRole('button', { name: /copy/iu });
+    expect(copies.map((button) => button.getAttribute('aria-label'))).toEqual(['Copy run ID']);
+    await s.user.click(copies[0]!);
     // user-event's clipboard stub is the page clipboard here: the full ID, not the short form, was copied.
     expect(await navigator.clipboard.readText()).toBe(FIXTURE_IDS.exampleRun);
-    await waitFor(() => expect(toastStore.getSnapshot().map((toast) => toast.title)).toContain('Copied'));
-    const toast = toastStore.getSnapshot().find((item) => item.title === 'Copied')!;
+    await waitFor(() => expect(toastStore.getSnapshot().map((toast) => toast.title)).toContain('Run ID copied'));
+    const toast = toastStore.getSnapshot().find((item) => item.title === 'Run ID copied')!;
     expect(toast.tone).toBe('success');
     expect(toast.meta).toBe(FIXTURE_IDS.exampleRun);
     expect(toast.duration).toBe(8000);
@@ -167,9 +168,10 @@ describe('receipt ID', () => {
       // After setup(): user-event installs its own clipboard stub, which would otherwise replace this one.
       Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => { throw new Error('denied'); } }, configurable: true });
       const receipt = await screen.findByRole('article');
-      await s.user.click(within(receipt).getByRole('button', { name: /^Copy receipt ID/u }));
-      await waitFor(() => expect(toastStore.getSnapshot().some((toast) => toast.tone === 'danger')).toBe(true));
-      expect(toastStore.getSnapshot().map((toast) => toast.title)).not.toContain('Copied');
+      await s.user.click(within(receipt).getByRole('button', { name: 'Copy run ID' }));
+      // Said at the ID, where it can be selected by hand instead.
+      expect(await within(receipt).findByText(/Couldn't copy it\. Select the ID/u)).toBeTruthy();
+      expect(toastStore.getSnapshot().map((toast) => toast.title)).not.toContain('Run ID copied');
       expect(exec).toHaveBeenCalledWith('copy');
     } finally {
       Reflect.deleteProperty(document, 'execCommand');
@@ -223,7 +225,7 @@ describe('Ctrl/⌘+Enter', () => {
     await clickRun(s, 'x-studio');
     await screen.findByText('Outcome unknown');
     expect(executions(s.recorded)).toHaveLength(1);
-    await s.user.click(screen.getByRole('button', { name: 'Run again…' }));
+    await s.user.click(screen.getByRole('button', { name: 'Run Writing studio…' }));
     const dialog = await screen.findByRole('alertdialog');
     await s.user.keyboard('{Control>}{Enter}{/Control}');
     expect(executions(s.recorded)).toHaveLength(1);

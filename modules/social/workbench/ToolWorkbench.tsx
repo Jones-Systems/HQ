@@ -257,7 +257,8 @@ export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
                   variant="primary" busy={submitting} busyLabel="Sending run" disabled={serviceDown}
                   aria-describedby={serviceDown ? 'sw-run-paused' : undefined} aria-keyshortcuts="Control+Enter Meta+Enter" onClick={run}
                 >
-                  {attempt?.status === 'unknown' ? 'Run again…' : `Run ${name}`}
+                  {/* After an unknown outcome the same Run asks first (the ellipsis); it never suggests running again. */}
+                  {attempt?.status === 'unknown' ? `Run ${name}…` : `Run ${name}`}
                 </Button>
                 {!serviceDown && (
                   <span className="sw-kbd-hint" title="Runs this tool once, the same as the Run button">
@@ -288,7 +289,7 @@ export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
             const pending = confirming;
             setConfirming(null);
             if (pending) void submit(pending.input, pending.isExample);
-          }}>Run again</Button>
+          }}>Create another run</Button>
         </>}
       />
     </section>
