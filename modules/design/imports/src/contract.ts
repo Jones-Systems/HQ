@@ -103,6 +103,11 @@ export interface StoragePort {
   /** Sorted by key (UTF-16 code unit order). */
   listDocuments(namespace: string, prefix?: string): Promise<readonly StoredDocument[]>;
   getBlob(namespace: string, digest: Sha256Digest): Promise<Uint8Array | null>;
+  /**
+   * Optional point lookup: is this blob already stored? When present, planning asks only about the blobs it
+   * would write instead of listing every blob. Adapters whose store cannot list blobs provide this and no more.
+   */
+  hasBlob?(namespace: string, digest: Sha256Digest): Promise<boolean>;
   /** Sorted by digest. */
   listBlobs(namespace: string): Promise<readonly BlobInfo[]>;
   /** Sorted by name. */
