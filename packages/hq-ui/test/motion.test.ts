@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { cleanup, render } from '@testing-library/react';
+import { createElement } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HQ_TOKEN_NAMES } from '../src/tokens';
 import { MOTION_DURATIONS, MOTION_EASINGS } from '../src/motion/motion';
+import { useListMotion } from '../src/motion/useListMotion';
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const json = JSON.parse(read('../src/tokens/hq-tokens.json')) as {
@@ -70,5 +73,80 @@ describe.each(Object.entries(sheets))('%s stylesheet', (_name, css) => {
       if (/hq-shimmer-text|hq-flash/.test(m[1]!)) continue;
       expect(m[1]).toMatch(/var\(--hq-duration-/);
     }
+  });
+});
+
+describe('stylesheet geometry', () => {
+  it('lets an exiting toast slot shrink to nothing so the stack closes up', () => {
+    const exit = rules(sheets.feedback).find(({ selectors }) => selectors.includes('.hq-toast-slot[data-hq-presence="exit"][data-hq-motion="toast"]'));
+    // A flex item keeps its automatic minimum height otherwise, and the height animation would have no effect.
+    expect(exit?.body).toMatch(/min-height:\s*0\b/);
+  });
+});
+
+describe('useListMotion', () => {
+  interface Glide { el: Element; keyframes: Keyframe[]; cancelled: boolean; cancel: () => void }
+  let glides: Glide[];
+  const glideDy = (glide: Glide) => Number(/translate\(0px, (-?[\d.]+)px\)/.exec(String(glide.keyframes[0]?.transform))?.[1] ?? 0);
+
+  beforeEach(() => {
+    glides = [];
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value(this: HTMLElement, keyframes: Keyframe[]) {
+        const glide: Glide = { el: this, keyframes, cancelled: false, cancel: () => { glide.cancelled = true; } };
+        glides.push(glide);
+        return { cancel: glide.cancel, finished: new Promise(() => {}) };
+      },
+    });
+    // Rows are 40px apart in DOM order. A glide that is still running leaves half its offset on the element, like a real one.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function mock(this: HTMLElement) {
+      const index = this.hasAttribute('data-hq-motion-key') ? [...this.parentElement!.children].indexOf(this) : 0;
+      const running = glides.find((glide) => glide.el === this && !glide.cancelled);
+      const top = index * 40 + (running ? glideDy(running) / 2 : 0);
+      return { left: 0, top, right: 0, bottom: top, width: 0, height: 40, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    delete (HTMLElement.prototype as { animate?: unknown }).animate;
+  });
+
+  const List = ({ ids }: { ids: string[] }) => {
+    const ref = useListMotion<HTMLUListElement>(ids);
+    return createElement('ul', { ref }, ids.map((id) => createElement('li', { key: id, 'data-hq-motion-key': id }, id)));
+  };
+
+  it('glides moved items from their old place and fades in new ones', () => {
+    const { rerender } = render(createElement(List, { ids: ['a', 'b', 'c'] }));
+    expect(glides).toHaveLength(0);
+    rerender(createElement(List, { ids: ['c', 'a', 'b', 'd'] }));
+    const byText = (text: string) => glides.filter((glide) => glide.el.textContent === text);
+    expect(byText('c').map(glideDy)).toEqual([80]);
+    expect(byText('a').map(glideDy)).toEqual([-40]);
+    expect(byText('b').map(glideDy)).toEqual([-40]);
+    expect(byText('d')).toHaveLength(1);
+    expect(String(byText('d')[0]!.keyframes[0]!.opacity)).toBe('0');
+  });
+
+  it('stops a glide still running before it measures the next order, so the item does not jump', () => {
+    const { rerender } = render(createElement(List, { ids: ['a', 'b', 'c'] }));
+    rerender(createElement(List, { ids: ['c', 'b', 'a'] }));
+    const first = glides.filter((glide) => glide.el.textContent === 'a');
+    expect(first.map(glideDy)).toEqual([-80]);
+    // 'a' is now half way along its glide (-40px left over). The next reorder starts from where it is drawn: 40px, not 0.
+    rerender(createElement(List, { ids: ['a', 'b', 'c'] }));
+    expect(first[0]!.cancelled).toBe(true);
+    const second = glides.filter((glide) => glide.el.textContent === 'a' && !glide.cancelled);
+    expect(second.map(glideDy)).toEqual([40]);
+  });
+
+  it('does nothing under reduced motion', () => {
+    document.documentElement.setAttribute('data-hq-motion', 'reduce');
+    const { rerender } = render(createElement(List, { ids: ['a', 'b'] }));
+    rerender(createElement(List, { ids: ['b', 'a'] }));
+    document.documentElement.removeAttribute('data-hq-motion');
+    expect(glides).toHaveLength(0);
   });
 });

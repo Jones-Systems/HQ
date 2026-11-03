@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../src';
-import { KitPage, type Appearance } from './KitPage';
+import { KitPage, type Appearance, type KitOnly } from './KitPage';
 import './kit.css';
 
 const params = new URLSearchParams(window.location.search);
@@ -87,7 +87,8 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <KitPage
       initial={theme === 'light' || theme === 'dark' ? theme : 'system' satisfies Appearance}
-      only={only === 'wells' || only === 'primitives' ? only : undefined}
+      only={only === 'wells' || only === 'primitives' || only === 'motion' ? (only satisfies KitOnly) : undefined}
+      reducedMotion={params.get('motion') === 'reduce'}
     />
   </StrictMode>,
 );
