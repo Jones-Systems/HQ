@@ -1,9 +1,9 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ModulePort } from '@hq/contracts';
-import { ToastViewport, type ReferencePort } from '@hq/ui';
+import { ToastViewport, toastStore, type ReferencePort } from '@hq/ui';
 import {
-  FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES, FIXTURE_IDS, FIXTURE_PROJECT_ID, fictionalSeed, socialSession, workspaceSnapshot,
+  DEFAULT_BRAND_ID, FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES, FIXTURE_IDS, FIXTURE_PROJECT_ID, fictionalSeed, socialSession, workspaceSnapshot,
   type Channel, type Draft, type FixtureOptions, type FixtureRun, type FixtureSeed,
 } from '../../core';
 import { createWorkbenchFixture, type WorkbenchFixture } from '../../workbench/fixtures/examples';
@@ -102,6 +102,35 @@ const UNREACHABLE_REFERENCES: ReferencePort = {
   open: () => undefined,
 };
 
+
+const loadExampleButton = () => button(/^Load example$/u);
+const runButton = () => document.querySelector<HTMLButtonElement>('.sw-run .sw-run-row button');
+const lastRunId = (fixture: WorkbenchFixture) => fixture.controls.inspect().runs.at(-1)!.id;
+const labelled = (text: string) => [...document.querySelectorAll('label')].find((item) => item.textContent?.trim().startsWith(text));
+const controlOf = <T extends HTMLElement>(text: string) => {
+  const label = labelled(text);
+  return label ? document.getElementById(label.getAttribute('for') ?? '') as T | null : null;
+};
+
+/** Loads the tool's example and presses Run, as a person would; the run is created by the fixture, not by the harness. */
+async function runExample() {
+  (await until(loadExampleButton)).click();
+  await until(() => document.querySelector('.sw-source:not(.sw-hint)'));
+  (await until(runButton)).click();
+  await until(() => document.querySelector('.sw-stepper'));
+}
+
+/** Brings the results panel to the top of the view, as a person scrolling to a finished run would. */
+const showResultsPanel = () => document.querySelector('.sw-results')?.scrollIntoView({ block: 'start' });
+
+/** Sets a file on a typed import slot the way the browser's file picker would. */
+function chooseFile(input: HTMLInputElement, name: string, text: string) {
+  const data = new DataTransfer();
+  data.items.add(new File([text], name, { type: 'application/json' }));
+  input.files = data.files;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 interface Scenario {
   readonly caption: string;
   readonly destination: string;
@@ -196,6 +225,106 @@ const SCENARIOS: Record<string, Scenario> = {
     },
   },
   workbenches: { caption: 'Workbenches mounted in the domain, with the delivered limits', destination: 'workbenches' },
+  'workbench-tool': {
+    caption: 'A workbench page: the tool rail, the example loaded, nothing run yet', destination: 'workbenches/x-intelligence',
+    drive: async () => { (await until(loadExampleButton)).click(); await until(() => document.querySelector('.sw-source:not(.sw-hint)')); },
+  },
+  'workbench-running': {
+    caption: 'An example run in progress: the stepper at Running', destination: 'workbenches/x-intelligence',
+    drive: async (fixture) => {
+      await runExample();
+      fixture.controls.advanceRuns(undefined, lastRunId(fixture));
+      await until(() => document.querySelector('.sw-stepper [data-step="running"][data-state="active"]'));
+      showResultsPanel();
+    },
+  },
+  'workbench-results': {
+    caption: 'A finished example run: the stepper at Succeeded, summary tiles and the results table, labelled Example data', destination: 'workbenches/x-intelligence',
+    drive: async (fixture) => {
+      await runExample();
+      fixture.settle(lastRunId(fixture));
+      await until(() => document.querySelector('.sw-result .sx-table'));
+      await until(() => toastStore.getSnapshot().length > 0);
+      // The finish toast is covered by its own view; clear it so the receipt reads in full here.
+      toastStore.dismiss();
+      showResultsPanel();
+    },
+  },
+  'workbench-finish-toast': {
+    caption: 'The toast raised when a run finishes while its receipt is open, with View results', destination: 'workbenches/x-intelligence',
+    drive: async (fixture) => {
+      await runExample();
+      fixture.settle(lastRunId(fixture));
+      await until(() => document.querySelector('.sw-result .sx-table'));
+      showResultsPanel();
+    },
+  },
+  'workbench-waits-here': {
+    caption: 'A run on your own input in the example workspace: it waits here, nothing sent, with Set up Social service', destination: 'workbenches/x-studio',
+    drive: async () => {
+      setValue(await until(() => controlOf<HTMLTextAreaElement>('Rough notes')), 'A note about the Saturday cupping hour, in my own words.');
+      (await until(runButton)).click();
+      await until(() => button(/^Set up Social service$/u));
+      showResultsPanel();
+    },
+  },
+  'workbench-validation': {
+    caption: 'Run blocked by validation: a problem summary with focus, and the fields it names', destination: 'workbenches/creator-relationships',
+    drive: async () => { (await until(runButton)).click(); await until(() => document.querySelector('[role="alert"]')); },
+  },
+  'workbench-import-error': {
+    caption: 'A file that is not valid JSON: the error names the file, and focus returns to the slot', destination: 'workbenches/search-visibility',
+    drive: async () => {
+      chooseFile(await until(() => controlOf<HTMLInputElement>('Query panel')), 'panel.json', '{ "queries": [');
+      await until(() => document.querySelector('.hq-field-error'));
+    },
+  },
+  'workbench-unknown': {
+    caption: 'A lost response: the outcome stays Unknown with possible matches and no Run again', destination: 'workbenches/x-studio',
+    drive: async (fixture) => {
+      (await until(loadExampleButton)).click();
+      await until(() => document.querySelector('.sw-source:not(.sw-hint)'));
+      fixture.controls.loseNextSubmitResponse();
+      (await until(runButton)).click();
+      await until(() => document.querySelector('.sw-unknown-outcome'));
+      showResultsPanel();
+    },
+  },
+  'workbench-conflict': {
+    caption: 'Start draft with unsaved text already in the Library composer: the user chooses, nothing is overwritten', destination: 'workbenches/x-intelligence',
+    drive: async (fixture) => {
+      const session = socialSession(CONTEXT.id);
+      session.openEditor('new', null, { title: 'My half-written post', body: 'Notes I have not saved yet.', brand_id: DEFAULT_BRAND_ID, channel: 'X', planned_date: '', archived: 0 });
+      await runExample();
+      fixture.settle(lastRunId(fixture));
+      (await until(() => button(/^Start draft$/u))).click();
+      await until(() => document.querySelector('.sw-start [role="status"], .sw-start [role="alert"]'));
+      document.querySelector('.sw-start')?.scrollIntoView({ block: 'center' });
+    },
+  },
+  'workbench-offline': {
+    caption: 'A finished receipt while the service is unreachable: the frame bar says changes are paused', destination: 'workbenches/x-intelligence',
+    drive: async (fixture) => {
+      await runExample();
+      fixture.settle(lastRunId(fixture));
+      await until(() => document.querySelector('.sw-result .sx-table'));
+      fixture.controls.setUnavailable(true);
+      await socialSession(CONTEXT.id).load(socialWorkspacePort());
+      window.scrollTo({ top: 0 });
+    },
+  },
+  'workbench-offline-run': {
+    caption: 'The same page further down: Run is disabled with its reason, and the finished result stays readable', destination: 'workbenches/x-intelligence',
+    drive: async (fixture) => {
+      await runExample();
+      fixture.settle(lastRunId(fixture));
+      await until(() => document.querySelector('.sw-result .sx-table'));
+      fixture.controls.setUnavailable(true);
+      await socialSession(CONTEXT.id).load(socialWorkspacePort());
+      await until(() => document.querySelector('.sw-run-row button:disabled'));
+      document.querySelector('.sw-run')?.scrollIntoView({ block: 'center' });
+    },
+  },
   runs: { caption: 'Run history mounted in the domain', destination: `runs/${FIXTURE_IDS.failedRun}` },
   'runs-list': { caption: 'Run history, no receipt open', destination: 'runs' },
   'runs-today': {

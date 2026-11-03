@@ -91,7 +91,7 @@ export function StartDraft({ run, toolName, summary }: { readonly run: RunRecord
           <SocialIcon name="library" /><b>Draft started</b> · <button type="button" className="sw-link" onClick={() => library(NEW_DRAFT_KEY)}>Open in Library</button>
         </p>
       ) : (
-        <Button ref={trigger} variant="secondary" onClick={open}><SocialIcon name="sparkle" />{stored ? 'Start another draft' : 'Start draft'}</Button>
+        <Button ref={trigger} size="sm" variant="secondary" onClick={open}><SocialIcon name="sparkle" />{stored ? 'Start another draft' : 'Start draft'}</Button>
       )}
       {stored && (
         <p className="sw-start-status">
@@ -99,7 +99,7 @@ export function StartDraft({ run, toolName, summary }: { readonly run: RunRecord
         </p>
       )}
       {blocked && (
-        <div ref={notice}>
+        <div ref={notice} className="sw-start-notice">
           <InlineNotice
             tone="warning" title="The Library's new draft has unsaved text" live="polite"
             actions={[{ label: 'Open the unsaved draft', onAction: () => { setConfirming(false); library(NEW_DRAFT_KEY); } }, { label: 'Replace it with this result', onAction: replace }]}

@@ -189,7 +189,7 @@ describe('Ctrl/⌘+Enter', () => {
     const s = await ready();
     const run = screen.getByRole('button', { name: `Run ${await toolName(s, 'social-publisher')}` });
     expect(run.getAttribute('aria-keyshortcuts')).toMatch(/Enter/u);
-    expect(document.querySelector('.sw-kbd-hint')!.textContent).toMatch(/^Shortcut: (Ctrl|⌘)↵$/u);
+    expect(document.querySelector('.sw-kbd-hint')!.textContent).toMatch(/^Shortcut: (Ctrl|⌘)Enter$/u);
     expect(executions(s.recorded)).toHaveLength(0);
     await s.user.keyboard('{Control>}{Enter}{/Control}');
     await waitFor(() => expect(executions(s.recorded)).toHaveLength(1));

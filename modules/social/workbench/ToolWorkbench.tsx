@@ -49,10 +49,10 @@ function rejectionText(error: Exclude<PortError, { kind: 'unknown' }>): { title:
   }
 }
 
-/** The platform's run chord: ⌘ Return on a Mac, Ctrl Return elsewhere. Either chord runs the tool on any platform. */
+/** The platform's run chord: ⌘ Enter on a Mac, Ctrl Enter elsewhere (spelled out: the Return arrow is missing from many fonts). Either chord runs the tool on any platform. */
 function chordKeys(): readonly string[] {
   const platform = typeof navigator === 'undefined' ? '' : navigator.platform || navigator.userAgent;
-  return /Mac|iPhone|iPad/u.test(platform) ? ['⌘', '↵'] : ['Ctrl', '↵'];
+  return /Mac|iPhone|iPad/u.test(platform) ? ['⌘', 'Enter'] : ['Ctrl', 'Enter'];
 }
 
 export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {

@@ -246,10 +246,14 @@ textarea.sw-input { resize: vertical; line-height: 1.45; }
 .sw-id .sw-id-copied { color: var(--hq-success); }
 .sw-chips-row { display: flex; flex-wrap: wrap; gap: var(--hq-space-xs); }
 .sw-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--hq-space-xs) var(--hq-space-md); margin: 0; }
-.sw-facts div { display: grid; gap: var(--hq-space-3xs); min-width: 0; }
+.sw-facts div { display: grid; align-content: start; gap: var(--hq-space-3xs); min-width: 0; }
 .sw-facts dt { font: var(--hq-type-small); color: var(--hq-text-subtle); text-transform: capitalize; }
 .sw-facts dd { margin: 0; font: var(--hq-type-small); overflow-wrap: anywhere; }
+/* Start draft and Download sit side by side; the draft's notice and hint take a full row below them. */
 .sw-receipt-actions { align-items: flex-start; }
+.sw-receipt-actions .sw-start { display: contents; }
+.sw-receipt-actions .sw-start-notice { order: 2; flex: 1 0 100%; }
+.sw-receipt-actions .sw-start > .sw-hint { order: 3; flex: 1 0 100%; }
 
 /* Run stepper: shared .sx-stepper, with a flexible connector and a quiet panel. */
 .sw-stepper {
@@ -291,7 +295,7 @@ textarea.sw-input { resize: vertical; line-height: 1.45; }
 .sw-entries { margin: 0; }
 .sx-table th.sw-rowhead {
   position: static; background: none; font: var(--hq-type-body); font-weight: var(--hq-font-weight-medium); color: var(--hq-text);
-  white-space: normal; border-bottom: 1px solid var(--hq-border); vertical-align: top;
+  padding: var(--hq-space-sm) var(--hq-space-md); white-space: normal; border-bottom: 1px solid var(--hq-border); vertical-align: top;
 }
 .sw-entries .sx-table tr:last-child > * { border-bottom: 0; }
 .sw-entries .sx-table td p + p { margin-top: var(--hq-space-3xs); }
