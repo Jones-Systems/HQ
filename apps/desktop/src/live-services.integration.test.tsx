@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createServer } from 'node:http';
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { HqServices } from '@hq/contracts/services';
 import type { ModulePort } from '@hq/contracts';
 import * as Work from '@hq/work';
@@ -12,6 +8,7 @@ import { createServiceDomains, RELOAD_NOTE, selectService } from './services/dom
 import { createServices, sendHttp, type HttpCall, type Transport } from '../electron/services';
 import type { ServiceConfig } from '../electron/service-config';
 import { createLiveSocialPort } from '../../../modules/social/live';
+import { startPlanner } from './test/planner';
 
 let serial = 0;
 const props = (): ModulePort => ({ context: { id: `integration-${++serial}`, name: 'Synthetic integration' }, destination: 'home', appearance: 'light', desktop: { platform: 'browser', versions: { electron: null } }, navigate: vi.fn() });
@@ -111,18 +108,8 @@ describe('synthetic Social wire through the actual main HTTP layer', () => {
 });
 
 it('shell binds the real disposable Planner: live reads, lost write, stable replay and no duplicate mutation', async () => {
-  await mkdir('.t3/live-wiring', { recursive: true });
-  const root = await mkdtemp(join(process.cwd(), '.t3/live-wiring/planner-'));
-  const child = spawn('python3', ['-m', 'planning', '--data', join(root, 'planning.sqlite3'), '--host', '127.0.0.1', '--port', '0'], { cwd: 'services/planner', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
-  let output = ''; let stderr = ''; child.stderr.on('data', b => { stderr += b; });
-  const exited = once(child, 'exit');
+  const planner = await startPlanner(); const url = planner.url;
   try {
-    const url = await new Promise<URL>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`UNKNOWN: Planner startup timed out: ${stderr}`)), 10_000);
-      child.on('error', error => { clearTimeout(timer); reject(new Error(`UNKNOWN: Planner startup: ${error.message}`)); });
-      child.on('exit', code => { clearTimeout(timer); reject(new Error(`UNKNOWN: Planner exited ${code}: ${stderr}`)); });
-      child.stdout.on('data', b => { output += b; const match = /http:\/\/127\.0\.0\.1:\d+\//.exec(output); if (match) { clearTimeout(timer); resolve(new URL(match[0])); } });
-    });
     const calls: HttpCall[] = []; let loseWrite = false; let loseRead = false;
     const transport: Transport = async (endpoint, call) => {
       calls.push(call);
@@ -158,8 +145,5 @@ it('shell binds the real disposable Planner: live reads, lost write, stable repl
     expect(calls.filter(c => c.path === '/api/items')).toHaveLength(2);
     loseRead = true; await expect(port!.snapshot()).rejects.toMatchObject({ error: { kind: 'unavailable' } });
     expect(screen.queryByText(/Fictional example/)).toBeNull();
-  } finally {
-    cleanup(); if (child.exitCode === null) child.kill('SIGTERM'); await exited;
-    await rm(root, { recursive: true, force: true });
-  }
+  } finally { cleanup(); await planner.dispose(); }
 }, 20_000);
