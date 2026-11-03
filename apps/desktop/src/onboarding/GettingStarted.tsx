@@ -50,7 +50,7 @@ function Ring({ done, total }: { done: number; total: number }) {
   const circumference = 2 * Math.PI * 6;
   return <svg className="gs-ring" aria-hidden="true" viewBox="0 0 16 16" fill="none" strokeWidth="2">
     <circle className="gs-ring-track" cx="8" cy="8" r="6" />
-    <circle className="gs-ring-value" cx="8" cy="8" r="6" strokeLinecap="round" transform="rotate(-90 8 8)" strokeDasharray={`${(done / total) * circumference} ${circumference}`} />
+    {done > 0 && <circle className="gs-ring-value" cx="8" cy="8" r="6" strokeLinecap="round" transform="rotate(-90 8 8)" strokeDasharray={`${(done / total) * circumference} ${circumference}`} />}
   </svg>;
 }
 
@@ -105,7 +105,8 @@ export function GettingStarted({ storage, domain, settingsOpen, onNavigate, clas
   }, []);
   const narrow = width !== null && width > 0 && width < ONBOARDING_NARROW_PX;
   const [peek, setPeek] = useState(false);
-  useEffect(() => { if (!narrow) setPeek(false); }, [narrow]);
+  // Crossing the narrow threshold in either direction forgets an earlier request to open the card.
+  useEffect(() => { setPeek(false); }, [narrow]);
   const shown = onboarding.state === 'hidden' ? 'hidden' : narrow && !peek ? 'collapsed' : onboarding.state;
   const shownRef = useRef(shown); shownRef.current = shown;
 
@@ -174,7 +175,8 @@ export function GettingStarted({ storage, domain, settingsOpen, onNavigate, clas
     const back = cameFrom.current?.isConnected ? cameFrom.current : null;
     setCelebrating(false);
     setOnboarding(previous => setPanelState(previous, 'hidden'));
-    toast.show({ id: TOAST_ID, title: `Getting started hidden — reopen it from ${shortcut} › Show getting started`, action: { label: 'Undo', onAction: expand } });
+    // `info`, not `neutral`: same life and guidance, and F1's toast lays out an action beside a glyph.
+    toast.show({ id: TOAST_ID, tone: 'info', title: `Getting started hidden — reopen it from ${shortcut} › Show getting started`, action: { label: 'Undo', onAction: expand } });
     back?.focus();
   };
   useEffect(() => {

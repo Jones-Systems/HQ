@@ -59,7 +59,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
-  vi.useRealTimers(); vi.restoreAllMocks();
+  vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals();
   toastStore.dismiss();
   document.documentElement.removeAttribute('data-hq-motion');
   delete (window as { hqServices?: unknown }).hqServices;
@@ -230,6 +230,22 @@ describe('hide, collapse and reopen', () => {
     fireEvent.keyDown(within(panel).getByRole('button', { name: 'Connect Social' }), { key: 'Escape' });
     await waitFor(() => expect(card()).toBeNull());
     expect(view.storage.state().state).toBe('collapsed');
+  });
+
+  it('forgets an earlier request to open the card when the workspace crosses the narrow threshold', async () => {
+    let width = 1200; let remeasure = () => {};
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({ width, height: 400, x: 0, y: 0, top: 0, left: 0, right: width, bottom: 400, toJSON: () => ({}) }));
+    vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { remeasure = callback; } observe() {} disconnect() {} });
+    const view = mount({ storage: memory({ state: 'collapsed' }) });
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: /^Getting started · 0\/5$/ }));
+    expect(await findCard()).toBeTruthy();
+    width = 600; act(() => remeasure());
+    await waitFor(() => expect(card()).toBeNull());
+    expect(screen.getByRole('button', { name: /^Getting started · 0\/5$/ })).toBeTruthy();
+    expect(view.storage.state().state).toBe('open');
+    width = 1200; act(() => remeasure());
+    expect(await findCard()).toBeTruthy();
   });
 });
 

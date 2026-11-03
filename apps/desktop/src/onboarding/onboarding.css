@@ -32,7 +32,7 @@
 .gs-domains, .gs-checklist { margin: 0; padding: 0; list-style: none; }
 
 /* Domains: icon, name, live status, one-line purpose. The status drops under the name when it is too long to sit beside it. */
-.gs-domain { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 0 10px; padding: var(--hq-space-xs) 0; }
+.gs-domain { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 0 10px; padding: 5px 0; }
 .gs-domain-icon { width: 18px; height: 18px; margin-top: 1px; color: var(--hq-text-muted); }
 .gs-domain-text { display: grid; gap: var(--hq-space-3xs); min-width: 0; }
 .gs-domain-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--hq-space-sm); }
@@ -43,7 +43,7 @@
 /* Checklist: the whole row is the button's hit area; the check sits in the first column. */
 .gs-item {
   position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr); column-gap: 10px; align-items: start;
-  margin-inline: calc(-1 * var(--hq-space-xs)); padding: var(--hq-space-xs); border-radius: var(--hq-radius-md);
+  margin-inline: calc(-1 * var(--hq-space-xs)); padding: 5px var(--hq-space-xs); border-radius: var(--hq-radius-md);
   transition: background-color var(--hq-duration-fast) var(--hq-ease-standard);
 }
 .gs-item:hover { background: var(--hq-surface-hover); }
