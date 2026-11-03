@@ -7,7 +7,7 @@ import {
 import { ChannelBadge, EmptyState, SocialIcon, useSocialFrame } from '../ui';
 import { changeDraft, errorText } from './actions';
 import { DraftEditor } from './DraftEditor';
-import { DEFAULT_FILTERS, NEW_DRAFT_KEY, contentDestination, dateLabel, filterDrafts, isLibraryFilters, shortDateLabel, type LibraryFilters } from './model';
+import { DEFAULT_FILTERS, NEW_DRAFT_KEY, contentDestination, dateLabel, filterDrafts, isLibraryFilters, rowDateLabel, type LibraryFilters } from './model';
 import './library.css';
 
 export interface LibraryProps {
@@ -228,7 +228,7 @@ export function Library({ session, state, port, snapshot, draftId, navigate, pau
                         <span className="soc-lib-meta">
                           <span className="soc-lib-brand">{brandName(item.brand_id)}</span>
                           {item.planned_date
-                            ? <span className="soc-lib-date" title={`Planned ${dateLabel(item.planned_date)}`}><SocialIcon name="calendar" /><span className="hq-sr-only">Planned </span>{shortDateLabel(item.planned_date)}</span>
+                            ? <span className="soc-lib-date" title={`Planned ${dateLabel(item.planned_date)}`}><SocialIcon name="calendar" /><span className="hq-sr-only">Planned </span>{rowDateLabel(item.planned_date)}</span>
                             : <span className="soc-lib-nodate">No date yet</span>}
                         </span>
                       </button>
