@@ -6,6 +6,7 @@ import { defineConfig } from 'vite';
  * fakes on loopback and is not part of the product, the checks or the Electron shell.
  */
 export default defineConfig({
+  cacheDir: fileURLToPath(new URL('../../../../.t3/cache/design-requests-harness', import.meta.url)),
   root: fileURLToPath(new URL('.', import.meta.url)),
   server: { host: '127.0.0.1', port: 5179, strictPort: true },
 });

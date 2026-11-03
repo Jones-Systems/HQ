@@ -6,6 +6,7 @@ import { defineConfig } from 'vite';
  * fixtures only, on loopback, for rendered isolation and UI evidence.
  */
 export default defineConfig({
+  cacheDir: fileURLToPath(new URL('../../../../.t3/cache/design-components-harness', import.meta.url)),
   root: fileURLToPath(new URL('.', import.meta.url)),
   server: { host: '127.0.0.1', port: 5194, strictPort: true },
   preview: { host: '127.0.0.1', port: 5194, strictPort: true },

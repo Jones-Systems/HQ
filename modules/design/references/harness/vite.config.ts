@@ -7,6 +7,7 @@ import { defineConfig } from 'vite';
  * Run from the repository root: node_modules/.bin/vite --config modules/design/references/harness/vite.config.ts
  */
 export default defineConfig({
+  cacheDir: fileURLToPath(new URL('../../../../.t3/cache/design-references-harness', import.meta.url)),
   root: fileURLToPath(new URL('.', import.meta.url)),
   define: { __HQD_CANDIDATE__: JSON.stringify(process.env.HQD_PREVIEW_CANDIDATE ?? 'unrecorded') },
   build: { rollupOptions: { input: { graph: fileURLToPath(new URL('./index.html', import.meta.url)), combined: fileURLToPath(new URL('./combined.html', import.meta.url)) } } },
