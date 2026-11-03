@@ -41,7 +41,7 @@ export function createServiceDomains(getServices: () => Services | undefined, ex
     const services = getServices();
     const selection = await selectService(services, 'social');
     const port = selection === 'live' ? createLiveSocialPort(services!.social)
-      : selection === 'example' ? (examples?.social?.() ?? createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port) : null;
+      : selection === 'example' ? (examples?.social?.() ?? createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX], simulateExampleRuns: true }).port) : null;
     return { selection, port };
   }
   function Social(props: ModulePort) {

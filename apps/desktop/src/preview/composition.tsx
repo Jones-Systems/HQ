@@ -25,7 +25,7 @@ export function seed(entry: PreviewEntry) {
     planner: () => entry === 'empty'
       ? createFixturePlanner({ items: [], settings: { ...EXAMPLE_SETTINGS } }).port
       : examplePlanner(),
-    social: () => createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port,
+    social: () => createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX], simulateExampleRuns: true }).port,
   };
 }
 
