@@ -139,7 +139,7 @@ it('actual forwarded export port strips unexpected paths and bytes before return
 
 it('registered providers read fresh source revisions, preserve source bytes and expose Design support limits', async () => {
   const f = fixture(); expect(MODULES.work).toBe(SERVICE_DOMAINS.Work);
-  expect(REFERENCE_PROVIDERS.map(p => p.domain)).toEqual(['design', 'social', 'work']);
+  expect(REFERENCE_PROVIDERS.map(p => p.domain)).toEqual(['design', 'social', 'work', 'wiki']);
   const work = REFERENCE_PROVIDERS.find(p => p.domain === 'work')!;
   const social = REFERENCE_PROVIDERS.find(p => p.domain === 'social')!;
   const before = JSON.stringify((await f.planner.port.snapshot()).items);
