@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
+import { constants as osConstants } from 'node:os';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
-import { gzipSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, writeFile, access, appendFile } from 'node:fs/promises';
+import { mkdir, readFile, access } from 'node:fs/promises';
 import { resolve, join, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -13,6 +13,7 @@ import { observeFileChooser } from './chooser.mjs';
 import { createSyntheticTls } from './tls.mjs';
 import { createImageFixture, scaledImageCaptures } from './images.mjs';
 import { heldCaptureContainment } from './containment.mjs';
+import { openPreviewEvidence, TraceStorageHeld } from './evidence.mjs';
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const args = process.argv.slice(2);
@@ -23,14 +24,13 @@ if (!evidenceParent || !isAbsolute(evidenceParent) || !relative(repo, resolve(ev
 if (process.platform !== 'darwin') throw Error('This runner qualifies the native macOS route only');
 const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
 const digest = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-await mkdir(evidenceParent, { recursive: true });
-const evidence = await mkdtemp(join(evidenceParent, 'evidence-'));
-const runtime = await createRuntime(join(evidenceParent, 'scratch'));
+const scratchParent = join(repo, '.t3/preview-acceptance-scratch');
+let evidence, evidenceRun, runtime, expectedTeardown = false;
 const report = { schema: 'hq-preview-native/v1', head: git('rev-parse', 'HEAD'), branch: git('branch', '--show-current'), dirty: git('status', '--short'), platform: process.platform, architecture: process.arch, node: process.version, invocation: process.argv, evidence, rows: [], outcome: 'unmeasured', networkClaim: 'Normal browser network reach; literal URL filtering is hygiene only.' };
 report.windowArrangement = { requested: keepTestWindowVisible };
 let log = '', main, shell, child, endpoint, cancelled, arrangedWindow;
 const electronModule = "process.getBuiltinModule('module').createRequire(process.cwd()+'/package.json')('electron')";
-let evidenceWrites = Promise.resolve(), stopNative;
+let stopNative;
 const nativeStopped = new Promise(resolve => { stopNative = resolve; });
 class Unmeasured extends Error {}
 class EnvironmentOccluded extends Unmeasured {}
@@ -38,16 +38,14 @@ class NativeStopped extends Error {}
 class PlannedStop extends Error {}
 let stopForOcclusion;
 const environmentStopped = new Promise(resolve => { stopForOcclusion = resolve; });
-const persist = (name, text) => {
-  evidenceWrites = evidenceWrites.then(() => appendFile(join(evidence, name), text)).catch(error => { report.evidenceError = error.stack; });
-  return evidenceWrites;
-};
+const persist = (name, text) => evidenceRun ? evidenceRun.append(name, text) : Promise.resolve(false);
 const emit = event => {
   const entry = { at: new Date().toISOString(), ...event };
   console.log(JSON.stringify(entry));
   return persist('events.jsonl', JSON.stringify(entry) + '\n');
 };
 function assertNative() {
+  if (report.evidenceError) throw new NativeStopped('Required evidence unavailable');
   if (cancelled) throw new NativeStopped(`Cancelled: ${cancelled}`);
   if (child?.launchError || child?.exitCode != null || child?.signalCode != null) throw new NativeStopped(`Native child stopped: ${JSON.stringify(report.nativeExit ?? { error: child.launchError?.message, code: child.exitCode, signal: child.signalCode })}`);
 }
@@ -69,8 +67,9 @@ const check = async (id, scenario, fn) => {
     const observed = await Promise.race([nativeCall(fn), environmentStopped.then(error => { throw error; })]);
     row = { id, scenario, outcome: 'passed', observed };
   } catch (error) {
+    if (!(error instanceof Unmeasured) && !(error instanceof TraceStorageHeld)) evidenceRun.observeOutcome({code:1,signal:null});
     stopped = error instanceof NativeStopped || error instanceof EnvironmentOccluded ? error : null;
-    row = { id, scenario, outcome: error instanceof Unmeasured ? 'unmeasured' : 'failed', error: error.stack, observed: error.observed };
+    row = { id, scenario, outcome: error instanceof Unmeasured || error instanceof TraceStorageHeld ? 'unmeasured' : 'failed', error: error.stack, observed: error.observed };
   } finally {
     rowDepth--;
     try {
@@ -99,6 +98,7 @@ const check = async (id, scenario, fn) => {
     }
     for (const [id, cdp] of previewConnections) if (!connectionsBefore.has(id)) { cdp.close(); previewConnections.delete(id); }
   }
+  if (row.outcome === 'failed') evidenceRun.observeOutcome({ code: 1, signal: null });
   report.rows.push(row); await persist('rows.jsonl', JSON.stringify(row) + '\n');
   await emit({ type: 'row-end', id, scenario, outcome: row.outcome });
   if (stopped) throw stopped;
@@ -172,9 +172,19 @@ async function click(cdp, x = 80, y = 80) {
   await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
 }
-const cancel = signal => { cancelled = signal; stopNative(new NativeStopped(`Cancelled: ${signal}`)); void emit({type:'cancelled',signal}); };
+const cancel = signal => { cancelled ??= signal; report.cancelled = cancelled; evidenceRun?.observeOutcome({ code: null, signal }); stopNative(new NativeStopped(`Cancelled: ${signal}`)); void emit({type:'cancelled',signal}); };
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => cancel(signal));
 try {
+  evidenceRun = await openPreviewEvidence({ worktree: repo, parent: evidenceParent, scratchParent, report,
+    stopProducer: async () => {
+      expectedTeardown = true;
+      stopNative(new NativeStopped('Required evidence unavailable'));
+      if (child) await runtime.stop(child);
+    } });
+  evidence = report.evidence = evidenceRun.directory;
+  if (cancelled) {evidenceRun.observeOutcome({code:null,signal:cancelled});throw new NativeStopped(`Cancelled: ${cancelled}`);}
+  runtime = await createRuntime(scratchParent);
+  if (cancelled) throw new NativeStopped(`Cancelled: ${cancelled}`);
   canaries = await createNetworkCanaries(runtime);
   origin = await runtime.listen(createServer((req, res) => {
     if (req.url.startsWith('/redirect')) { res.writeHead(302, { Location: canaries.alias + '/redirected' + new URL(req.url, 'http://fixture').search }); res.end(); }
@@ -191,8 +201,8 @@ try {
   const electronBinary=option('--electron-binary') ?? join(repo, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
   report.electronBinary=electronBinary;
   child = runtime.spawn(electronBinary, ['--host-resolver-rules=MAP hq-qualification.test 127.0.0.1', '--inspect=0', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', join(repo, 'apps/desktop/dist-electron/main.js')], { cwd: repo, env, stdio: ['ignore', 'ignore', 'pipe'] });
-  child.once('error', error => { report.nativeExit={pid:child.pid,error:error.message};stopNative(new NativeStopped(error.message));void emit({type:'native-error',...report.nativeExit}); });
-  child.once('exit', (code, signal) => { report.nativeExit={pid:child.pid,code,signal};stopNative(new NativeStopped(`Electron exited: code=${code}, signal=${signal}`));void emit({type:'native-exit',...report.nativeExit}); });
+  child.once('error', error => { evidenceRun.observeChildExit({pid:child.pid,error:error.message},expectedTeardown);stopNative(new NativeStopped(error.message));void emit({type:'native-error',...report.nativeExit}); });
+  child.once('exit', (code, signal) => { evidenceRun.observeChildExit({pid:child.pid,code,signal},expectedTeardown);stopNative(new NativeStopped(`Electron exited: code=${code}, signal=${signal}`));void emit({type:'native-exit',...report.nativeExit}); });
   child.stderr.on('data', bytes => { void persist('native.log',String(bytes)); log = (log + bytes).slice(-256000); endpoint = /DevTools listening on (ws:\/\/\S+)/.exec(log)?.[1]; inspector = /Debugger listening on (ws:\/\/\S+)/.exec(log)?.[1]; });
   await emit({type:'native-start',pid:child.pid,binary:electronBinary});
   await until(() => { if (child.exitCode !== null || child.launchError) throw Error('Native launch failed: ' + (child.launchError?.message ?? `exit=${child.exitCode}`) + '\n' + log); return endpoint && inspector; }, 'Electron debug endpoints');
@@ -247,7 +257,7 @@ try {
         for (const [stage, operation] of [
           ['agent-resolve', () => api('resolve',{sessionId:session.sessionId,generation:session.generation,requests:[{kind:'element',path:'#target'}]}).then(value)],
           ['host-capture', () => capture(session).then(value)],
-          ['direct-screenshot', async () => {const shot=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{x:0,y:0,width:1280,height:800,scale:1}});const bytes=Buffer.from(shot.data,'base64');await writeFile(join(evidence,phase+'.png'),bytes);return {digest:digest(bytes),width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20)};}],
+          ['direct-screenshot', async () => {const shot=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{x:0,y:0,width:1280,height:800,scale:1}});const bytes=Buffer.from(shot.data,'base64');await evidenceRun.write(phase+'.png',bytes);return {digest:digest(bytes),width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20)};}],
         ]) {
           await emit({type:'capture-diagnostic-stage-start',phase,stage});
           try { const observed=await operation();await emit({type:'capture-diagnostic-stage-end',phase,stage,outcome:'passed',observed}); }
@@ -313,7 +323,7 @@ try {
         assert.equal(bytes.readUInt32BE(16), viewport.w * viewport.dpr);
         assert.equal(bytes.readUInt32BE(20), viewport.h * viewport.dpr);
         digests.push(record.captureDigest);
-        if (i === 0) await writeFile(join(evidence, `static-${viewport.w}-${viewport.dpr}.png`), bytes);
+        if (i === 0) await evidenceRun.write(`static-${viewport.w}-${viewport.dpr}.png`, bytes);
       }
       assert.equal(new Set(digests).size, 1); return digests;
     }, viewport));
@@ -325,7 +335,7 @@ try {
       const encoded = image.split(',')[1];
       const bytes = Buffer.from(encoded, 'base64');
       assert.equal(digest(bytes), record.captureDigest);
-      await writeFile(join(evidence, name + '.png'), bytes);
+      await evidenceRun.write(name + '.png', bytes);
       return shell.evaluate(`(async()=>{const bytes=Uint8Array.from(atob(${JSON.stringify(encoded)}),c=>c.charCodeAt(0));const bitmap=await createImageBitmap(new Blob([bytes],{type:'image/png'}));try{const canvas=new OffscreenCanvas(bitmap.width,bitmap.height);const context=canvas.getContext('2d');context.drawImage(bitmap,0,0);return {width:bitmap.width,height:bitmap.height,top:Array.from(context.getImageData(10,10,1,1).data),next:Array.from(context.getImageData(10,110,1,1).data)}}finally{bitmap.close()}})()`);
     };
     const initial = value(await capture(session));
@@ -383,7 +393,7 @@ try {
         await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
         const after = await geometry();
         assert.deepEqual(after, before, 'Host capture preserves responsive geometry and emits no resize, media, or attribute mutations');
-        await writeFile(join(evidence, `responsive-${dpr}-scroll-${scroll}.png`), bytes);
+        await evidenceRun.write(`responsive-${dpr}-scroll-${scroll}.png`, bytes);
         captures.push({ record, before, after, pixels });
       }
       assert.notEqual(captures[0].record.captureDigest, captures[1].record.captureDigest);
@@ -424,7 +434,7 @@ try {
   });
   if (report.hooksAvailable) await check('Q-PV4', 'Held scaled capture stays inside the fitted frame', async () => {
     const { session, cdp } = await open({ w: 1024, h: 720, dpr: 1 }, imageOrigin + '/images?kind=img&decoding=async');
-    const { sessionId } = session, traceFile = join(runtime.root, 'tmp', 'containment-trace.json');
+    const { sessionId } = session;
     const owned = `globalThis.__hqPreviewQualification.sessions().find(s=>s.sessionId===${JSON.stringify(sessionId)})`;
     const settingsButton = show => shell.evaluate(show ? `(()=>{const b=document.querySelector('button[title="Settings"]');b?.click();return !!b})()` : `(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Back to'));b?.click();return !!b})()`);
     try {
@@ -449,12 +459,10 @@ try {
         contentSize: () => main.evaluate(`(()=>{const {BrowserWindow}=${electronModule};const {width,height}=BrowserWindow.getAllWindows()[0].getContentBounds();return {width,height}})()`),
         // CopyFromSurface at the widget's current size; it does not resize the widget or reset metrics.
         widget: async () => { const bytes = Buffer.from(await main.evaluate(`(async()=>{const {webContents}=${electronModule};return (await webContents.fromId(${owned}.webContentsId).capturePage()).toPNG().toString('base64')})()`), 'base64'); return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }; },
-        traceStart: categories => main.evaluate(`${electronModule}.contentTracing.startRecording(${JSON.stringify({ included_categories: categories })}).then(()=>true)`),
-        traceStop: async () => {
-          const text = await readFile(await main.evaluate(`${electronModule}.contentTracing.stopRecording(${JSON.stringify(traceFile)})`), 'utf8');
-          await writeFile(join(evidence, 'containment-trace.json.gz'), gzipSync(text));
-          return JSON.parse(text);
-        },
+        // Refuse before contentTracing can start its unbounded raw-file spill.
+        // The unchanged containment oracle remains unmeasured, never waived.
+        traceStart: () => evidenceRun.refuseRawTrace(),
+        traceStop: () => evidenceRun.refuseRawTrace(),
         delay, until,
       }));
     } finally { if (!cancelled && !child.launchError && child.exitCode === null && child.signalCode === null) await api('close', { sessionId }); cdp.close(); }
@@ -790,39 +798,48 @@ try {
     finally { await api('close', { sessionId: p.session.sessionId }); p.cdp.close(); }
   }); else unmeasured('PUBLIC-HTTPS', 'Public website smoke', 'No --public-url supplied');
   unmeasured('PACKAGED-SWITCH', 'Packaged build ignores qualification switch', 'Parent performs after staging packaged candidate');
-} catch (error) {if(error instanceof EnvironmentOccluded){report.environmentStop=error.observed;report.plannedStop=error.message;}else if(error instanceof PlannedStop)report.plannedStop=error.message;else report.error=error.stack;report.remainingScenarios='unmeasured: runner stopped before executing remaining scenarios';}
+} catch (error) {if(error instanceof EnvironmentOccluded){report.environmentStop=error.observed;report.plannedStop=error.message;}else if(error instanceof PlannedStop)report.plannedStop=error.message;else {report.error=error.stack;evidenceRun?.observeOutcome({code:1,signal:null});}report.remainingScenarios='unmeasured: runner stopped before executing remaining scenarios';}
 finally {
   if (cancelled) report.cancelled = cancelled;
-  if (arrangedWindow) {
-    try {
-      if (child.launchError || child.exitCode !== null || child.signalCode !== null) {
-        report.windowArrangement.restore = {skipped:'native process already exited',id:arrangedWindow.id};
-      } else {
-        const state = await main.evaluate(`(()=>{const w=${electronModule}.BrowserWindow.fromId(${arrangedWindow.id});if(!w||w.isDestroyed())return {id:${arrangedWindow.id},skipped:'owned window no longer exists'};w.setAlwaysOnTop(${JSON.stringify(arrangedWindow.initialAlwaysOnTop)});return {id:w.id,alwaysOnTop:w.isAlwaysOnTop()}})()`);
-        report.windowArrangement.restore = state;
-        if (!state.skipped) assert.equal(state.alwaysOnTop, arrangedWindow.initialAlwaysOnTop, 'Owned test window stacking restored');
+  const cleanup = async () => {
+    if (arrangedWindow) {
+      try {
+        if (child.launchError || child.exitCode !== null || child.signalCode !== null) {
+          report.windowArrangement.restore = {skipped:'native process already exited',id:arrangedWindow.id};
+        } else {
+          const state = await main.evaluate(`(()=>{const w=${electronModule}.BrowserWindow.fromId(${arrangedWindow.id});if(!w||w.isDestroyed())return {id:${arrangedWindow.id},skipped:'owned window no longer exists'};w.setAlwaysOnTop(${JSON.stringify(arrangedWindow.initialAlwaysOnTop)});return {id:w.id,alwaysOnTop:w.isAlwaysOnTop()}})()`);
+          report.windowArrangement.restore = state;
+          if (!state.skipped) assert.equal(state.alwaysOnTop, arrangedWindow.initialAlwaysOnTop, 'Owned test window stacking restored');
+        }
+        await emit({type:'test-window-restored',...report.windowArrangement.restore});
+      } catch (error) {
+        report.windowArrangement.restoreError = error.stack;
+        await emit({type:'test-window-restore-failed',error:error.stack});
       }
-      await emit({type:'test-window-restored',...report.windowArrangement.restore});
-    } catch (error) {
-      report.windowArrangement.restoreError = error.stack;
-      await emit({type:'test-window-restore-failed',error:error.stack});
     }
-  }
-  await evidenceWrites;
-  await runtime.close().then(() => { report.cleanup = 'passed'; }, error => { report.cleanup = 'failed'; report.cleanupError = error.stack; });
-  try {await access(runtime.root);report.cleanup='failed';report.cleanupError='Owned scratch root survived cleanup';}catch(error){if(error.code!=='ENOENT'){report.cleanup='failed';report.cleanupError=error.stack;}}
-  if(child?.pid){try{process.kill(-child.pid,0);report.cleanup='failed';report.cleanupError='Owned process group survived cleanup';}catch(error){if(error.code!=='ESRCH'){report.cleanup='failed';report.cleanupError=error.stack;}}}
-  await evidenceWrites;
-  report.pickQualified = false;
-  report.runnerDigest = digest(await readFile(fileURLToPath(import.meta.url)));
-  report.harness={};for(const path of ['tests/acceptance/preview/run.mjs','tests/acceptance/preview/images.mjs','tests/acceptance/preview/containment.mjs','tests/acceptance/preview/network.mjs','tests/acceptance/preview/chooser.mjs','tests/acceptance/preview/tls.mjs','tests/acceptance/preview/packaged.mjs','tests/check-groups.toml'])report.harness[path]=digest(await readFile(join(repo,path)));
-  for (const id of ['Q-PV0','Q-PV1','Q-PV2','Q-PV3','Q-PV3h','Q-PV4','Q-PV5','Q-PV6','Q-PV6d','Q-PV6a','Q-PV6h','Q-PV7','Q-PV8','Q-PV9','Q-PV10','PUBLIC-HTTPS','PACKAGED-SWITCH']) {
-    if (!report.rows.some(row => row.id === id)) unmeasured(id, 'Required matrix row', 'Run stopped before this row');
-  }
-  report.outcome = report.error || report.cancelled || report.evidenceError || report.windowArrangement.restoreError || report.cleanup !== 'passed' || report.rows.some(r => r.outcome === 'failed') ? 'failed' : report.rows.some(r => r.outcome === 'unmeasured') ? 'partial' : 'passed';
-  report.endHead = git('rev-parse', 'HEAD');
-  if (report.endHead !== report.head) { report.outcome = 'failed'; report.identityError = 'HEAD changed during run'; }
-  await writeFile(join(evidence, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+    await evidenceRun?.drain();
+    expectedTeardown = true;
+    await runtime?.close().then(() => { report.cleanup = 'passed'; }, error => { report.cleanup = 'failed'; report.cleanupError = error.stack; });
+    if (runtime) try {await access(runtime.root);report.cleanup='failed';report.cleanupError='Owned scratch root survived cleanup';}catch(error){if(error.code!=='ENOENT'){report.cleanup='failed';report.cleanupError=error.stack;}}
+    if(child?.pid){try{process.kill(-child.pid,0);report.cleanup='failed';report.cleanupError='Owned process group survived cleanup';}catch(error){if(error.code!=='ESRCH'){report.cleanup='failed';report.cleanupError=error.stack;}}}
+    await evidenceRun?.drain();
+  };
+  const verify = async () => {
+    report.pickQualified = false;
+    report.runnerDigest = digest(await readFile(fileURLToPath(import.meta.url)));
+    report.harness={};for(const path of ['tests/acceptance/preview/run.mjs','tests/acceptance/preview/images.mjs','tests/acceptance/preview/containment.mjs','tests/acceptance/preview/network.mjs','tests/acceptance/preview/chooser.mjs','tests/acceptance/preview/tls.mjs','tests/acceptance/preview/packaged.mjs','tests/check-groups.toml'])report.harness[path]=digest(await readFile(join(repo,path)));
+    for (const id of ['Q-PV0','Q-PV1','Q-PV2','Q-PV3','Q-PV3h','Q-PV4','Q-PV5','Q-PV6','Q-PV6d','Q-PV6a','Q-PV6h','Q-PV7','Q-PV8','Q-PV9','Q-PV10','PUBLIC-HTTPS','PACKAGED-SWITCH']) {
+      if (!report.rows.some(row => row.id === id)) unmeasured(id, 'Required matrix row', 'Run stopped before this row');
+    }
+    report.outcome = report.error || report.cancelled || report.evidenceError || report.windowArrangement.restoreError || report.cleanup !== 'passed' || report.rows.some(r => r.outcome === 'failed') ? 'failed' : report.rows.some(r => r.outcome === 'unmeasured') ? 'partial' : 'passed';
+    report.endHead = git('rev-parse', 'HEAD');
+    if (report.endHead !== report.head) { report.outcome = 'failed'; report.identityError = 'HEAD changed during run'; }
+  };
+  const outcome = () => ({code: report.outcome === 'passed' ? 0 : report.outcome === 'partial' ? 2 : 1, signal: null});
+  let final;
+  if (evidenceRun) final = await evidenceRun.finalize({cleanup,verify,outcome});
+  else {await cleanup();try {await verify();} catch(error){report.verificationError=error.stack;}report.outcome='failed';}
+
   console.log(JSON.stringify({ evidence, outcome: report.outcome, rows: report.rows.map(({ id, scenario, outcome }) => ({ id, scenario, outcome })), error: report.error, cleanup: report.cleanup }));
-  process.exitCode = report.outcome === 'passed' ? 0 : report.outcome === 'partial' ? 2 : 1;
+  process.exitCode = final?.signal ? 128 + (osConstants.signals[final.signal] ?? 1) : final?.code ?? 1;
 }
