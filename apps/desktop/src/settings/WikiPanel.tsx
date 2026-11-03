@@ -173,7 +173,7 @@ export function WikiPanel({ headingId, admin, selected }: { headingId: string; a
 
     {admin && load === 'failed' ? <StateView state="unavailable" title="Local Wiki settings are unavailable" description="HQ could not read the Wiki configuration. Nothing was changed."
       action={{ label: 'Try again', onAction: () => void refresh() }} /> : <>
-      {admin && nothingSetUp && <Panel className="settings-guide" aria-label="Set up Local Wiki">
+      {admin && nothingSetUp && <Panel className="settings-guide" role="group" aria-label="Set up Local Wiki">
         <div className="settings-guide-body">
           <h3>Set up your first repository</h3>
           <ol>
