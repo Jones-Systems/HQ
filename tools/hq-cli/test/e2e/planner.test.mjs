@@ -77,6 +77,12 @@ test('in-tree Planner: five-item owner example, discovery, separate dates, repla
     const listed = await cli(['planner', 'items', 'list']);
     assert.deepEqual(listed.data.items.find(i => i.id === linked.data.item.id).references, read.data.item.references);
     assert.equal(listed.data.items.some(i => i.title === 'Never sent'), false);
+    const wikiTarget = { ...target, domain: 'wiki', kind: 'page', entityId: 'page01', title: 'Synthetic wiki page', returnDestination: { domain: 'wiki', destination: 'page/page01' } };
+    const wikiFields = await save('wiki-reference.json', { title: 'Wiki linked', references: [{ kind: 'hq', label: 'Wiki link', target: wikiTarget }] });
+    const wikiLinked = await cli(['planner', 'items', 'create', '--fields-file', wikiFields]);
+    assert.deepEqual(wikiLinked.data.item.references[0].target, wikiTarget);
+    const wikiRead = await cli(['planner', 'items', 'get', wikiLinked.data.item.id]);
+    assert.deepEqual(wikiRead.data.item.references, wikiLinked.data.item.references);
   });
   await assert.rejects(access(ownedRoot), { code: 'ENOENT' });
   assert.throws(() => process.kill(servicePid, 0), { code: 'ESRCH' });
