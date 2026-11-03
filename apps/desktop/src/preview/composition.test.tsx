@@ -89,7 +89,9 @@ it.each(['default', 'empty'] as const)('mounts the shared shell with %s fixtures
   expect(splitter.getAttribute('aria-valuenow')).toBe('64');
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
   expect(screen.getByRole('region', { name: 'Settings page' })).toBeTruthy();
-  expect(screen.getAllByText('Service configuration is unavailable in this window.')).toHaveLength(2);
+  fireEvent.click(within(screen.getByRole('navigation', { name: 'Settings categories' })).getByRole('button', { name: 'Social & Work' }));
+  expect(screen.getAllByText('Service configuration is unavailable in this window.').length).toBeGreaterThanOrEqual(1);
+  for (const name of ['Check connection for Social', 'Check connection for Work']) expect(screen.getByRole('button', { name }).getAttribute('aria-disabled')).toBe('true');
   expect(window.hqServices).toBeUndefined(); expect(window.hqDesktop).toBeUndefined();
 });
 
