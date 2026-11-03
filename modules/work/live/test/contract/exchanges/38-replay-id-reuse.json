@@ -1,0 +1,33 @@
+{
+  "schema": "hq.planner.exchange/v1",
+  "request": {
+    "method": "POST",
+    "path": "/api/requests/replay",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-Planning-Request": "1"
+    },
+    "body_utf8": "{\"mode\":\"lookup\",\"request_id\":\"contract-create\",\"method\":\"POST\",\"path\":\"/api/items\",\"body_b64\":\"eyJmaWVsZHMiOnsidGl0bGUiOiJEaWZmZXJlbnQifX0=\",\"sent_after_version\":0}"
+  },
+  "response": {
+    "status": 422,
+    "headers": {
+      "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Length": "101"
+    },
+    "body": {
+      "error": "request_id_reused",
+      "message": "This request id was already used for a different change."
+    }
+  }
+}

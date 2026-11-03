@@ -162,6 +162,98 @@ describe('golden recovery mapping through the replay route', () => {
   });
 });
 
+describe('refusals and edge answers (exchanges 28-38)', () => {
+  const create = exchange('03-create');
+  const errorsOf = (ex: Exchange) => (ex.response.body as { errors: unknown }).errors;
+  /** A lost create under `contract-create`, then the one recovery answer. */
+  async function recovered(answerEx: Exchange) {
+    const t = strictTransport([{ exchange: exchange('01-version') }, { route: 'create', respond: LOST }, { route: 'replay', respond: answer(answerEx) }]);
+    const { port, recovery } = createPlannerLive(t.transport);
+    await port.version();
+    await failure(port.create(fieldsOf(create) as never, 'contract-create'));
+    return failure(recovery.check('contract-create'));
+  }
+
+  it('28-29: a missing item is the recorded 404; a write maps it to not_found and frees its ID', async () => {
+    const read = exchange('28-item-not-found');
+    expect(encodeCall('item', { id: 'missing001' })).toEqual({ method: read.request.method, path: read.request.path, body: '', requestIdHeader: null });
+    expect(read.response.status).toBe(404);
+    expect(decodeItemBody(read.response.body)).toBeNull();
+    const t = strictTransport([{ exchange: exchange('01-version') }, { exchange: exchange('29-mutation-not-found') }]);
+    const { port, ledger } = createPlannerLive(t.transport);
+    await port.version();
+    expect(await failure(port.setArchived('missing001', 1, true, 'contract-missing'))).toEqual({ kind: 'not_found' });
+    expect(ledger.unresolved()).toEqual([]);
+    expect(t.remaining()).toBe(0);
+  });
+
+  it('30: Work refuses the invalid HQ target locally with the service\'s own errors, and maps the service saying so', async () => {
+    const ex = exchange('30-reference-target-validation');
+    // parseReference rejects a version-2 target before anything is sent, so the recorded request bytes are not reproduced.
+    const local = strictTransport([{ exchange: exchange('01-version') }]);
+    const refusing = createPlannerLive(local.transport);
+    await refusing.port.version();
+    expect(await failure(refusing.port.create(fieldsOf(ex) as never, 'contract-target'))).toEqual({ kind: 'invalid', errors: errorsOf(ex) });
+    expect(local.remaining()).toBe(0);
+    const t = strictTransport([{ exchange: exchange('01-version') }, { route: 'create', respond: answer(ex) }]);
+    const { port, ledger } = createPlannerLive(t.transport);
+    await port.version();
+    expect(await failure(port.create(fieldsOf(create) as never, 'contract-target'))).toEqual({ kind: 'invalid', errors: errorsOf(ex) });
+    expect(ledger.unresolved()).toEqual([]);
+  });
+
+  it('31: a settings value out of range is sent as recorded and the 400 maps to invalid', async () => {
+    const ex = exchange('31-settings-validation');
+    const t = strictTransport([{ exchange: exchange('01-version') }, { exchange: ex }]);
+    const { port, ledger } = createPlannerLive(t.transport);
+    await port.version();
+    expect(await failure(port.updateSettings({ stale_days: 0 } as Settings, 'contract-bad-settings'))).toEqual({ kind: 'invalid', errors: errorsOf(ex) });
+    expect(ledger.unresolved()).toEqual([]);
+    expect(t.remaining()).toBe(0);
+  });
+
+  // Exchanges 32 and 33 refuse the same patch, for a missing X-Planning-Request header and a wrong content type. The
+  // recorded bytes and X-Request-Id are reproduced; the headers a bridge adds are not part of the typed call.
+  it.each([
+    ['32-missing-planning-header', { kind: 'unavailable' }],
+    ['33-unsupported-media-type', { kind: 'invalid', errors: [{ field: 'body', message: 'Send application/json.' }] }],
+  ])('%s: a refused patch is a no-effect failure and frees its ID', async (name, expected) => {
+    const t = strictTransport([{ exchange: exchange('01-version') }, { exchange: exchange(name) }]);
+    const { port, ledger } = createPlannerLive(t.transport);
+    await port.version();
+    expect(await failure(port.patch(ID, 6, { title: 'Refused' }, 'contract-refused'))).toEqual(expected);
+    expect(ledger.unresolved()).toEqual([]);
+    expect(t.remaining()).toBe(0);
+  });
+
+  it('34: a refused Host on a read is unavailable', async () => {
+    const t = strictTransport([{ exchange: exchange('34-bad-host') }]);
+    const { port } = createPlannerLive(t.transport);
+    expect(await failure(port.version())).toEqual({ kind: 'unavailable' });
+    expect(t.remaining()).toBe(0);
+  });
+
+  it('35: a body over the limit maps to invalid with no effect', async () => {
+    // The recorded request declares a length without sending a body, which a typed create cannot produce.
+    const t = strictTransport([{ exchange: exchange('01-version') }, { route: 'create', respond: answer(exchange('35-body-too-large')) }]);
+    const { port, ledger } = createPlannerLive(t.transport);
+    await port.version();
+    expect(await failure(port.create(fieldsOf(create) as never, 'contract-large'))).toEqual({ kind: 'invalid', errors: [{ field: 'body', message: 'Request body is too large.' }] });
+    expect(ledger.unresolved()).toEqual([]);
+  });
+
+  it('36-38: replay refusals map without sending anything else, and the encoder reproduces the recorded envelopes', async () => {
+    const original = { route: 'create', params: { requestId: 'contract-create', fields: fieldsOf(create) } } as unknown as WorkMutationCall;
+    const different = { route: 'create', params: { requestId: 'contract-create', fields: { title: 'Different' } } } as unknown as WorkMutationCall;
+    expect(encodeCall('replay', { mode: 'lookup', requestId: 'contract-create', original, sentAfterVersion: 99 }).body).toBe(exchange('37-replay-unobserved-version').request.body_utf8);
+    expect(encodeCall('replay', { mode: 'lookup', requestId: 'contract-create', original: different, sentAfterVersion: 0 }).body).toBe(exchange('38-replay-id-reuse').request.body_utf8);
+    // Work only replays its own mutations, so a GET target (36) cannot be sent; the answer still maps as a refused lookup.
+    expect(await recovered(exchange('36-replay-not-replayable'))).toEqual({ kind: 'unavailable' });
+    expect(await recovered(exchange('37-replay-unobserved-version'))).toEqual({ kind: 'unavailable' });
+    expect(await recovered(exchange('38-replay-id-reuse'))).toEqual({ kind: 'request_id_reused' });
+  });
+});
+
 describe('the closed route list', () => {
   const WORK_PATHS = [
     /^GET \/api\/state$/u, /^GET \/api\/version$/u, /^GET \/api\/items\/[A-Za-z0-9_-]+$/u, /^GET \/api\/items\/[A-Za-z0-9_-]+\/history$/u,
@@ -169,13 +261,16 @@ describe('the closed route list', () => {
     /^PUT \/api\/settings$/u, /^POST \/api\/requests\/replay$/u,
   ];
   const isWorkPath = (method: string, path: string) => WORK_PATHS.some((p) => p.test(`${method} ${path}`));
-  const BATCH_OR_TRANSFER = ['15-batch-dry-run', '16-batch', '18-import-validation', '27-export'];
+  const BATCH_OR_TRANSFER = [
+    '15-batch-dry-run', '16-batch', '18-import-validation', '27-export',
+    '39-import-confirmation-required', '40-import-merge', '41-examples', '42-examples-present',
+  ];
 
   it('has exactly the eleven Work routes plus replay', () => {
     expect(WORK_ROUTES).toEqual(['state', 'version', 'item', 'history', 'create', 'patch', 'move', 'archive', 'restore', 'reviewed', 'settings', 'replay']);
   });
 
-  it('cannot reach batch, import or export, and covers every other recorded exchange', () => {
+  it('cannot reach batch, import, export or examples, and covers every other recorded exchange', () => {
     for (const name of exchangeNames()) {
       const { method, path } = exchange(name).request;
       expect([name, isWorkPath(method, path)]).toEqual([name, !BATCH_OR_TRANSFER.includes(name)]);

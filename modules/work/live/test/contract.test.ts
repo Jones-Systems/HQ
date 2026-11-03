@@ -7,8 +7,8 @@ import { CONTRACT } from './support';
 
 // Integrity of the pinned public Planner contract copies, and the shared reference vectors run against Work.
 
-/** SHA-256 of the upstream SHA256SUMS file itself, as copied from 523104b (identical blob at 67594ade). */
-const SUMS_SHA256 = 'dafe2da70363b4db60b9bc5d5466a6c77097369f896fbbb7c1ac56f1c5c7733b';
+/** SHA-256 of the upstream SHA256SUMS file itself, as copied from b3597e9 (the 42-exchange contract). */
+const SUMS_SHA256 = 'd755b558250b2255e836fbd6a9fff4b1f60db4e5da3e9ce80ee86795afe42fd8';
 const UPSTREAM = new URL('../../../../services/planner/contract/', import.meta.url);
 
 const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');

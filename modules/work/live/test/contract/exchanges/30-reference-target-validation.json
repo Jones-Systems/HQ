@@ -1,0 +1,40 @@
+{
+  "schema": "hq.planner.exchange/v1",
+  "request": {
+    "method": "POST",
+    "path": "/api/items",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-Planning-Request": "1",
+      "X-Request-Id": "contract-target"
+    },
+    "body_utf8": "{\"fields\":{\"title\":\"Invalid\",\"references\":[{\"id\":\"ref001\",\"kind\":\"hq\",\"label\":\"Example design\",\"target\":{\"version\":2,\"domain\":\"design\",\"projectId\":\"project-example\",\"kind\":\"artifact\",\"entityId\":\"artifact-example\",\"title\":\"Example design\",\"returnDestination\":{\"domain\":\"design\",\"destination\":\"artifact/example\"}}}]}}"
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Length": "148"
+    },
+    "body": {
+      "error": "invalid",
+      "message": "Some fields are invalid.",
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    }
+  }
+}
