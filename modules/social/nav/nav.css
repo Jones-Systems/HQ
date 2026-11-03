@@ -91,12 +91,6 @@
   display: inline-block; padding: 0 var(--hq-space-xs); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-pill);
   font: var(--hq-type-small); font-weight: var(--hq-font-weight-semibold); color: var(--hq-text-muted); white-space: nowrap;
 }
-.sd-example {
-  margin: 0; padding: var(--hq-space-sm) var(--hq-space-md); border-radius: var(--hq-radius-md); font: var(--hq-type-small); color: var(--hq-text);
-  justify-self: start; padding: var(--hq-space-xs) var(--hq-space-sm); background: var(--hq-surface-sunken); border: 1px solid var(--hq-border); color: var(--hq-text-muted); }
-.sd-example summary { cursor: pointer; font: var(--hq-type-small); }
-.sd-example p { margin: var(--hq-space-xs) 0 0; max-width: 60ch; }
-.sd-example summary:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 2px; }
 
 .sd-banner {
   display: grid; gap: var(--hq-space-xs); padding: var(--hq-space-md) var(--hq-space-lg); border-radius: var(--hq-radius-lg);
@@ -108,6 +102,33 @@
 .sd-inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
 
 /* Page rules for Overview, Sources and Channels & accounts live in pages.css. */
+
+/*
+ * Narrow windows: the sidebar becomes an icon rail so pages keep their width (cross-app finding X6). Page and brand
+ * names stay as accessible names and tooltips; counts, tags and the footnote return when the window widens. The
+ * splitter only shows while the sidebar is hidden, so it can always be brought back.
+ */
+@media (max-width: 999px) {
+  .sd-domain { grid-template-columns: 56px 0 minmax(0, 1fr); }
+  .sd-domain:has(> .sd-side[hidden]) { grid-template-columns: 0 8px minmax(0, 1fr); }
+  .sd-domain:not(:has(> .sd-side[hidden])) > .sd-divider { display: none; }
+  .sd-side { align-items: stretch; gap: var(--hq-space-md); padding: var(--hq-space-md) var(--hq-space-2xs); }
+  .sd-brand { justify-items: center; padding: 0; }
+  .sd-brand-label, .sd-brand p, .sd-brand-chevron { display: none; }
+  .sd-brand-picker { padding: 2px; }
+  .sd-brand select { position: absolute; inset: 0; padding: 0; opacity: 0; }
+  .sd-brand .hq-btn.sd-brand-manage { justify-self: center; margin: 0; }
+  .sd-brand-manage-label, .sd-nav-label {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .sd-nav-item { position: relative; justify-content: center; padding: 0; }
+  .sd-nav-count, .sd-nav .sd-tag { display: none; }
+  .sd-nav-live, .sd-nav-dirty { position: absolute; top: 6px; right: 8px; }
+  /* "Later" stays the group's accessible name; on the rail it reads as a divider. */
+  .sd-group { height: 1px; margin: var(--hq-space-xs) var(--hq-space-xs); padding: 0; overflow: hidden; color: transparent; background: var(--hq-border); }
+  .sd-side-foot { display: none; }
+}
+
 @media (max-width: 600px) {
   .sd-side { padding: var(--hq-space-xs); }
   .sd-main { padding: var(--hq-space-sm); }

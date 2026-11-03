@@ -109,14 +109,26 @@ describe('secondary navigation', () => {
     expect(effects(s)).toHaveLength(0);
   });
 
-  it('lists the T3 pages in order, with Sources proposed and Channels & accounts under Later', async () => {
+  it('opens a new section at its top, wherever the last one was scrolled to', async () => {
+    const s = setup();
+    await overview();
+    const main = document.querySelector('.sd-main') as HTMLElement;
+    main.scrollTop = 240;
+    expect(main.scrollTop).toBe(240);
+    await s.user.click(side().getByRole('button', { name: 'Sources' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Sources' })).toBeTruthy();
+    expect(main.scrollTop).toBe(0);
+  });
+
+  it('lists the T3 pages in order, with Channels & accounts under Later', async () => {
     setup();
     await overview();
     const nav = within(screen.getByRole('navigation', { name: 'Social' }));
     // Accessible names stay the page names; icons and counts are decorative (aria-hidden).
     const names = nav.getAllByRole('button').map((button) => button.querySelector('.sd-nav-label')?.textContent);
     expect(names).toStrictEqual(['Overview', 'Sources', 'Workbenches', 'Library', 'Calendar', 'Run history', 'Channels & accounts']);
-    expect(nav.getByRole('button', { name: 'Sources Proposed' }).querySelector('.sd-tag')?.textContent).toBe('Proposed');
+    // Sources is a working import desk now; only its saved-source registry is proposed, and the page says so.
+    expect(nav.getByRole('button', { name: 'Sources' }).querySelector('.sd-tag')).toBeNull();
     expect(nav.getByRole('button', { name: 'Library' }).querySelector('.sd-nav-count')?.textContent).toBe('4');
     expect(within(nav.getByRole('group', { name: 'Later' })).getByRole('button').textContent).toBe('Channels & accounts');
     expect(NAV_ITEMS.map((item) => item.destination)).toStrictEqual(['overview', 'sources', 'workbenches', 'library', 'calendar', 'runs', 'channels']);
