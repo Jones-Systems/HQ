@@ -79,16 +79,20 @@ function installCleanup(): void {
 }
 
 export class FieldnotesInstance {
+  readonly port: number;
+  private readonly environment: FieldnotesEnvironment;
+  private readonly scratch: string;
+  private readonly dataDir: string;
   private child: ChildProcess | undefined;
   private exited = false;
   private output = '';
 
-  private constructor(
-    private readonly environment: FieldnotesEnvironment,
-    readonly port: number,
-    private readonly scratch: string,
-    private readonly dataDir: string,
-  ) {}
+  private constructor(environment: FieldnotesEnvironment, port: number, scratch: string, dataDir: string) {
+    this.environment = environment;
+    this.port = port;
+    this.scratch = scratch;
+    this.dataDir = dataDir;
+  }
 
   /** The loopback origin. A restart keeps it, so the desktop's cached token origin stays the same. */
   get url(): URL { return new URL(`http://127.0.0.1:${this.port}/`); }

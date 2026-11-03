@@ -296,7 +296,8 @@ describe(`Fieldnotes ${revision.slice(0, 9)} [${features.join(', ') || 'no featu
 
     it('runs queued or running at the restart are interrupted, never retried, and summarize as failed', async () => {
       expect(shared.backlog.length, 'the queue check must leave a backlog').toBeGreaterThan(1);
-      const runs = await Promise.all(shared.backlog.map((id) => port.run(id)));
+      const runs: RunRecord[] = [];
+      for (const id of shared.backlog) runs.push(await port.run(id));
       expect(runs.filter((run) => ACTIVE_RUN_STATUSES.includes(run.status))).toEqual([]);
       const interrupted = runs.filter((run) => run.status === 'interrupted');
       expect(interrupted.length).toBeGreaterThan(0);

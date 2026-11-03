@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
-import { readEnvironment } from './fieldnotes';
+import { readEnvironment } from './fieldnotes.ts';
 
 // Fail before anything starts when the opt-in variables are missing or wrong.
 readEnvironment();
