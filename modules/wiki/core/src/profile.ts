@@ -95,6 +95,11 @@ function fieldNameList(value: unknown, path: string): WikiResult<readonly string
   return ok(Object.freeze([...(value as string[])]));
 }
 
+/** The page field-name rule: a short plain identifier that is not a prototype key. */
+export function isFieldName(name: unknown): name is string {
+  return fieldNameError(name, '$') === null;
+}
+
 function fieldNameError(name: unknown, path: string) {
   if (typeof name !== 'string') return invalid('wrong-type', 'field name must be a string', path);
   if (name.length === 0 || name.length > 64 || !FIELD_NAME.test(name) || RESERVED_FIELD_NAMES.includes(name)) {
@@ -217,8 +222,11 @@ export function validateSourceProfile(value: unknown): WikiResult<SourceProfile>
   );
 }
 
-/** Version of the parsing/indexing rules; bumping it makes older snapshots rebuild. */
-export const INDEX_RULES_VERSION = 1;
+/**
+ * Version of the parsing/indexing rules; bumping it makes older snapshots rebuild.
+ * 2: snapshot pages carry `linkOrigins` (backlink provenance); 1: initial rules.
+ */
+export const INDEX_RULES_VERSION = 2;
 
 /** Stable key of everything in a profile (and the rules version) that changes the index content. */
 export function profileIndexKey(profile: SourceProfile): string {
