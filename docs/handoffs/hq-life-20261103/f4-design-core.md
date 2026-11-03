@@ -2,7 +2,7 @@
 
 Lane F4 makes the HQ Design module's core views alive and complete: Projects (the project gallery and a
 project's Overview/Gallery screen), Canvas, Compare, and the Requests / Returned / Runs handoff. The lead was
-Opus 5.5, with four Sonnet 5.5 builders. Work paused at the owner's request on 2026-11-03, relayed by the
+Opus 5.5, with four Sonnet 5.5 builders (F4-B1 to F4-B4; not the backend lanes B1 to B3). Work paused at the owner's request on 2026-11-03, relayed by the
 HQ coordinator. No PR is open. Nothing was merged, deployed or installed.
 
 ## Where it stands
@@ -14,10 +14,10 @@ HQ coordinator. No PR is open. Nothing was merged, deployed or installed.
 | Foundation: Design-scoped active project | **Done** (`c194b43`). |
 | SVG chevrons for secondary panel toggles (cross-app finding X14) | **Done** (`acced90`). |
 | Section loading skeleton, in-place Try again, section fade-in | **Done** (`d90f846`). |
-| B1 Projects gallery + project overview | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
-| B2 Canvas | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
-| B3 Compare | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
-| B4 Requests, Returned and Runs | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
+| F4 builder B1: Projects gallery + project overview | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
+| F4 builder B2: Canvas | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
+| F4 builder B3: Compare | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
+| F4 builder B4: Requests, Returned and Runs | **Paused mid-build.** See [builder handoffs](#builder-handoffs). |
 | Lead review of builder screenshots, fix rounds | **Not started.** |
 | Integration of builder branches into the lane branch | **Not started.** |
 | After evidence, UI-map entry, full checks, PR against `work/hq-foundation` | **Not started.** |
@@ -120,25 +120,28 @@ Found during the build:
 1. **Collect the four builder handoffs** (below). Review each branch's screenshots in
    `/tmp/f4-evidence/<view>/after/` against its brief and the assessment. Finish the remaining targets with
    new delegated rounds (pass the original brief, the handoff and the review findings), or do them directly.
-2. **Integrate** the builder branches into `work/hq-life-design-core-20261103`, one at a time: projects,
+2. **Settle the `workspace.ts` overlap with backend lane B3** before integrating (see
+   [open questions](#open-questions-and-risks)). Agree who rebases, adopt `contentEvents.revision` as the
+   re-read trigger once W1 lands, and send F1 the `ActiveProjectStore` shape (X8).
+3. **Integrate** the builder branches into `work/hq-life-design-core-20261103`, one at a time: projects,
    canvas, compare, requests. Builders were confined to separate cones, so conflicts should only appear where
    a builder edited lead-owned lines in `ProjectsView.tsx`, `CanvasView.tsx`, `CompareView.tsx` or
    `closure-views.tsx`.
-3. **Run checks:** `npm run build:electron`, then `node_modules/.bin/vitest run`, `npm run typecheck`, and
+4. **Run checks:** `npm run build:electron`, then `node_modules/.bin/vitest run`, `npm run typecheck`, and
    the design-sections rows for every touched cone (app, app-sections, ui, projects, canvas, compare,
    requests, annotations). The commands are in `.github/workflows/design-sections.yml` `HQD_INVENTORY`.
-4. **After evidence:** 1440×900 light and dark, 1280×800, 1024×768, and reduced motion, using
+5. **After evidence:** 1440×900 light and dark, 1280×800, 1024×768, and reduced motion, using
    `/tmp/f4-tools/cdp.mjs` scenarios. Curate into `evidence/design-core-20261103/after/` and update the
    evidence README.
-5. **UI map:** add `docs/ui-map/design-core.md` (entry points, states, journeys, evidence state) and an
+6. **UI map:** add `docs/ui-map/design-core.md` (entry points, states, journeys, evidence state) and an
    index row in `docs/ui-map/README.md`.
-6. **Open one non-draft PR** against `work/hq-foundation` with before/after screenshots, then link and watch
+7. **Open one non-draft PR** against `work/hq-foundation` with before/after screenshots, then link and watch
    it. Do not merge. Note two things in it:
    - F5's PR edits adjacent hunks: `fake-workspace.ts` `discoveryEnv` (beside F4's `projectsFor`) and
      `closure-views.tsx` imports.
    - #179 replaces the desktop compare catalog and thumbnails; recheck Compare for the active project after
      it lands.
-7. **Follow-ups for other owners:**
+8. **Follow-ups for other owners:**
    - Design chrome: inspector closed by default.
    - Shell-owned ⌘K (F7 X2).
    - F5's Sources views may opt into `useDesignProject`; F5 listed this as a follow-up.
@@ -146,6 +149,21 @@ Found during the build:
 
 ## Open questions and risks
 
+- **Known conflict with backend lane B3** (from F7's merge-tree scan of 14 lane branches; this was the only
+  conflicting pair). Backend lane B3 is the Design backend, not F4's Compare builder.
+  - Both sides edit `modules/design/app/compose/workspace.ts`. F4's `c194b43` and `d90f846` add
+    `activeProject` and `readContent`. Backend B3's W1 (`3917ee9`, branch `work/hq-b3-design-errors-20261103`)
+    adds `contentEvents` to the same return statement and threads it into `createInteractiveWorkspace` and
+    `createBridgedWorkspace`.
+  - Both solve stale project content. F7 suggests one mechanism: backend B3 owns `compose/` wiring under
+    #189's frontend contract. Once W1 lands, F4's views re-read on `contentEvents.revision(projectId)`.
+    `freshContent`/`readContent` then either moves into backend B3's W3 or stays as a labelled stopgap.
+  - The textual merge is mechanical: return both sets of fields. Still open: agree with backend B3 which side
+    rebases. F4 has not replied to that point; it paused first.
+- **Two project notions (cross-app finding X8).** The shell footer still shows the shell context while
+  Design shows the active project. F7 asked F4 to send F1, which owns the shell's project switcher, the
+  `ActiveProjectStore` shape: `current()`, `subscribe(listener)`, `set(project | null)`, nothing durable.
+  Then the shell can show or adopt it. Not sent yet because of the pause. HQR-1 activation stays owner-held.
 - The owner should review the active-project scope, the navigation mapping and swipe-only Compare.
 - Builder output has not been reviewed by the lead yet; quality is unknown until it is.
 - Merge order with F5 and #179 may produce small conflicts in shared compose files.
@@ -172,7 +190,7 @@ Each builder was told to commit its work (prefix `WIP:`), push, and write a hand
 
 | Builder | Branch | Handoff on that branch | Status at pause |
 | --- | --- | --- | --- |
-| B1 Projects | `work/hq-life-design-core-projects-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-projects-20261103.md` | awaiting reply |
-| B2 Canvas | `work/hq-life-design-core-canvas-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-canvas-20261103.md` | awaiting reply |
-| B3 Compare | `work/hq-life-design-core-compare-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-compare-20261103.md` | awaiting reply |
-| B4 Requests, Returned, Runs | `work/hq-life-design-core-requests-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-requests-20261103.md` | awaiting reply |
+| F4-B1 Projects | `work/hq-life-design-core-projects-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-projects-20261103.md` | awaiting reply |
+| F4-B2 Canvas | `work/hq-life-design-core-canvas-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-canvas-20261103.md` | awaiting reply |
+| F4-B3 Compare | `work/hq-life-design-core-compare-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-compare-20261103.md` | awaiting reply |
+| F4-B4 Requests, Returned, Runs | `work/hq-life-design-core-requests-20261103` | `docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-requests-20261103.md` | awaiting reply |
