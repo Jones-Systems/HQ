@@ -105,6 +105,10 @@
   .rh-peek { z-index: 3; justify-self: end; width: min(100%, 30rem); box-shadow: var(--hq-shadow-overlay); }
   .rh-row { padding-inline: var(--hq-space-sm); }
 }
+/* When only a sliver of list would show beside it, the receipt takes the full width rather than leave clipped rows. */
+@container rh (max-width: 34rem) {
+  .rh-peek { width: 100%; }
+}
 
 /* ---------- Reduced motion: no pulse; the glyph and the status word still say what is active ---------- */
 @media (prefers-reduced-motion: reduce) {
