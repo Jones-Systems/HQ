@@ -10,9 +10,9 @@ import { classifyDesignError, designFeedback, type DesignFailureContext, type De
 
 /** Operation names, stable for tests and the toast meta line. */
 export const TASTE_OPERATIONS = {
-  load: { section: 'taste', operation: 'taste.load', action: 'load your taste ratings' },
+  load: { section: 'taste', operation: 'taste.load', action: 'load your taste ratings', write: false },
   save: { section: 'taste', operation: 'taste.save', action: 'save to your taste journal', write: true },
-  export: { section: 'taste', operation: 'taste.export', action: 'export your taste profile' },
+  export: { section: 'taste', operation: 'taste.export', action: 'export your taste profile', write: false },
 } as const satisfies Readonly<Record<string, DesignFailureContext>>;
 export type TasteOperation = keyof typeof TASTE_OPERATIONS;
 

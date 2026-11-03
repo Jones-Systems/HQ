@@ -28,8 +28,8 @@ const B = projectId('project-b');
 // Deterministic capture IDs repeat across projects: the same digest names a version in each.
 const SHARED = 'capture-0123456789abcdef';
 const SAVE: DesignFailureContext = { section: 'taste', operation: 'taste.save', action: 'save to your taste journal', write: true };
-const LOAD: DesignFailureContext = { section: 'taste', operation: 'taste.load', action: 'load your taste ratings' };
-const EXPORT: DesignFailureContext = { section: 'taste', operation: 'taste.export', action: 'export your taste profile' };
+const LOAD: DesignFailureContext = { section: 'taste', operation: 'taste.load', action: 'load your taste ratings', write: false };
+const EXPORT: DesignFailureContext = { section: 'taste', operation: 'taste.export', action: 'export your taste profile', write: false };
 const GENERAL: TasteScope = { kind: 'general' };
 const SCHEMA = 'hq.design.taste-journal/v1';
 

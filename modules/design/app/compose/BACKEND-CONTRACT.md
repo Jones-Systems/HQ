@@ -22,18 +22,21 @@ if (!result.ok) show(designFeedback(result.failure));
 - `section` is one of `DESIGN_SECTIONS`.
 - `operation` is `<section>.<verb>`. It is stable and appears in the toast meta line.
 - `action` is a lowercase imperative phrase. It fills the message template.
-- `write: true` marks an operation that writes. A lost or unrecognised failure during a write is `unknown`
-  (it may have happened). During a read it is `unavailable` (reading changes nothing).
+- `write` is required. A lost or unrecognised failure during a write (`write: true`) is `unknown`, because it
+  may have happened. During a read (`write: false`) it is `unavailable`, because reading changes nothing.
+  An abort during a write is `unknown` too; only an aborted read is `cancelled`.
 
 `toDesignOperationError` wraps any rejection as a `DesignOperationError` (an `Error` that is also a
 `DesignFailure`, with the original as `cause`) for code that must keep throwing.
-`classifyDesignError` passes an existing `DesignFailure` through unchanged.
+`classifyDesignError` passes a well-formed `DesignFailure` through unchanged. Well-formed means that only
+`unknown` carries an unknown effect, and that an unknown effect only offers `check`. Anything else that
+claims a possible effect is classified as `unknown`.
 
 | kind | outcome | recovery | tone | meaning |
 | --- | --- | --- | --- | --- |
 | `conflict` | no effect | reload | danger | Another window or writer changed it first. |
 | `invalid` | no effect | none | danger | The backend refused the input. |
-| `read-only` | no effect | none | warning | Saved by a newer HQ. It opens read-only. |
+| `read-only` | no effect | none | warning | It opens read-only here, for example because a newer HQ saved it. |
 | `unavailable` | no effect | retry | danger | Storage could not be reached. Nothing changed. |
 | `disabled` | no effect | none | info | The feature is off in this build. |
 | `not-found` | no effect | reload | warning | It no longer exists. |
@@ -49,17 +52,38 @@ Rules for views:
   control, or both.
 - Offer exactly the `action` that `designFeedback` returns. `Retry` appears only when repeating cannot
   duplicate an effect. An `unknown` outcome offers `Check` (read back, then decide), never a blind retry.
+  `designFeedback` enforces this even for a hand-built failure.
 - `persistent: true` (danger, unknown) stays until dismissed. Other notices may auto-dismiss.
 - Show `meta` (`operation` or `operation · reason`) in the mono provenance line. It is not user prose.
 
 ### Mapping to the shared feedback primitives
 
-`designFeedback(failure)` returns `{ tone, title, description?, meta, inline, action?, persistent }`.
+`designFeedback(failure)` returns `{ id, tone, title, description?, meta, inline, status, action?, persistent }`.
 
-- Toasts (`@hq/ui`): pass `tone`, `title`, `description` directly. The shared tones include `unknown`.
+- Toasts (`@hq/ui`): pass `id`, `tone`, `title` and `description` directly. The shared tones include `unknown`.
+  A toast with the same `id` replaces the earlier one. A storage outage uses `design.storage.unavailable` in
+  every section, so five sections failing at once show one toast. Every other failure uses
+  `design.<operation>.<kind>`.
 - Inline state: `inline` is `failed` or `unknown`, matching the `failed` / `unknown` states of the inline
-  status indicators.
+  status indicators. `status` is the word beside the control.
 - A view kit whose tone set lacks `unknown` shows it as `warning` and keeps the `unknown` inline state.
+
+The words match the rest of HQ. An unconfirmed write reads "not confirmed yet", offers **Check** and is marked
+**Unconfirmed**, as in Work. A storage outage is **Unavailable**, as in the shell's service status.
+
+| kind | status word |
+| --- | --- |
+| `conflict` | Changed elsewhere |
+| `invalid` | Refused |
+| `read-only` | Read-only |
+| `unavailable` | Unavailable |
+| `disabled` | Off in this build |
+| `not-found` | Missing |
+| `too-large` | Too large |
+| `cancelled` | Stopped |
+| `stale` | Out of date |
+| `corrupt` | Damaged |
+| `unknown` | Unconfirmed |
 
 ### Section errors
 
@@ -69,19 +93,26 @@ New section errors must set `this.name` and either be added to `classifyDesignEr
 
 | name | kind |
 | --- | --- |
-| `StoreError` with `code: 'conflict'` (bridge), `StorageConflictError`, `CanvasWriteConflictError`, `FreezeConflictError`, `ProposalConflictError`, `IntegrityError` with `reason: 'exists'` | conflict |
-| `ContentError`, `VersionMutationError`, `InvalidIdError`, `ValidationError`, `CanonicalJsonError`, `CanonicalizationError`, `NonCanonicalBytesError`, storage scope errors | invalid |
-| `ReadOnlyContentError`, `ReadOnlyRequestError`, `UnsupportedSchemaError`, `reason: 'unsupported-stored-schema'` | read-only |
-| `TasteConflictError` | conflict |
-| `TasteInvalidInputError` | invalid |
-| `TasteReadOnlyError` (reason `unsupported-stored-schema` or `store-read-only`) | read-only |
-| `TasteJournalFaultError` (reason is the journal's fail-closed reason) | corrupt |
-| `TasteUnavailableError`, `SourceUnavailableError` | unavailable |
+| `StoreError` with `code: 'conflict'` (bridge), `StorageConflictError`, `CanvasWriteConflictError`, `FreezeConflictError`, `IntegrityError` with `reason: 'exists'` | conflict |
+| `ContentError`, `VersionMutationError`, `InvalidIdError`, `ValidationError`, `CanonicalJsonError`, `CanonicalizationError`, `NonCanonicalBytesError`, `DispatchTransitionError`, `NamespaceClassError`, `OutboxRecordError`, storage scope errors | invalid |
+| `SendBlockedError`, `FreezeBlockedError` (reason `blocked`; the description is the store's own reasons), `ExportProjectionError` (reason `blocked`) | invalid |
+| `ReadOnlyContentError`, `ReadOnlyRequestError` | read-only |
+| `UnsupportedSchemaError` (reason `unsupported-schema`), `reason: 'unsupported-stored-schema'`: saved by a newer HQ | read-only |
+| `ExportDisabledError`, `DesignBridgeError` with `reason: 'disabled'` | disabled |
+| `TasteUnavailableError` | unavailable |
+| `SourceUnavailableError` (reason `source-offline`: the source, not storage, is unreachable) | unavailable |
 | `PreviewError` with `reason: 'too-large'` | too-large |
-| `AbortError`, `PreviewError` with `reason: 'aborted'` | cancelled |
+| `PreviewError` with `reason: 'aborted'`, `AbortError` during a read | cancelled |
 | `StaleDraftError`, `TasteProjectBindingError` (reason `project-binding`) | stale |
 | `reason: 'corrupt-stored-record'`, `IntegrityError` with `reason: 'mismatch'` | corrupt |
-| `OutcomeUnknownError` | unknown |
+| `OutcomeUnknownError`, `AbortError` during a write | unknown |
+| `TasteConflictError` | conflict |
+| `TasteInvalidInputError` | invalid |
+| `TasteReadOnlyError` (reason `unsupported-stored-schema`: saved by a newer HQ; reason `store-read-only`: neutral wording) | read-only |
+| `TasteJournalFaultError` (reason is the journal's fail-closed reason) | corrupt |
+
+`DesignBridgeError` is also recognised by its name, in case a second bundle chunk carries its own copy of
+the class.
 
 ## 2. Bridge envelopes (`bridge-documents.ts`)
 
@@ -89,12 +120,18 @@ The desktop host answers every `hq:svc:design` call with exactly one of:
 
 - `{ ok: true, value }`
 - `{ ok: false, kind }` where `kind` is `conflict`, `invalid`, `read-only`, `unavailable` or `unknown`
-- `{ ok: false, kind, reason }` where `reason` is one of `DESIGN_BRIDGE_REASONS` (today only `disabled`)
+- `{ ok: false, kind: 'unavailable', reason }` where `reason` is one of `DESIGN_BRIDGE_REASONS` (today only
+  `disabled`)
 
 `bridgeResultValue` turns a refusal into `DesignBridgeConflictError` (name `StoreError`, `code: 'conflict'`)
 or `DesignBridgeError(kind, reason)`. A `disabled` refusal is a definite no-effect even on a write route, so
-it classifies as `disabled`, not `unknown`. Any other shape, an unknown reason, or a transport rejection is
-`unknown` on write routes and `unavailable` on read routes.
+it classifies as `disabled`, not `unknown`. These are `unknown` on write routes and `unavailable` on read
+routes:
+
+- any other shape;
+- an unknown reason;
+- a reason paired with any kind other than `unavailable`;
+- a transport rejection.
 
 ## 2a. Taste (`taste.*`)
 
@@ -121,6 +158,11 @@ What rejects, and how it classifies:
 | Save lost the revision compare-and-set (host `conflict`) | `TasteConflictError` | conflict |
 | Host refused the save as invalid, read-only or unavailable | `TasteInvalidInputError`, `TasteReadOnlyError` (`store-read-only`), `TasteUnavailableError` | invalid, read-only, unavailable |
 | Export options malformed, or an ID that is not a valid identifier | `TasteInvalidInputError` | invalid |
+
+Wording follows section 1. Only `TasteReadOnlyError` with reason `unsupported-stored-schema` says the journal was saved
+by a newer HQ; `store-read-only` keeps the neutral read-only sentence. A save that rejects for a reason this table does
+not list classifies as `unknown` (Check), and an unlisted read failure as `unavailable` (Retry); `taste.load`, whose
+unavailable failure carries no reason, shares the toast id `design.storage.unavailable`.
 
 A save whose outcome is unknown (transport lost, no typed refusal) does not reject. It resolves
 `{ status: 'fail-closed', reason: 'sync-failed' }`, which `TastePanel` shows as unconfirmed with an idempotent Retry of
@@ -149,13 +191,53 @@ Journals saved before qualification stay readable and are never rewritten:
 Both workspace kinds (`bridged` and the labelled in-memory `fake`) expose `workspace.contentEvents`, one
 `ProjectContentEvents` per composition:
 
-- `subscribe(projectId, listener)` returns an idempotent unsubscribe.
+- `subscribe(projectId, listener)` returns an idempotent unsubscribe. Each call is its own subscription,
+  even for the same function.
 - `revision(projectId)` is a per-project counter that starts at 0. Use it as a cache key when a view
   memoises project content.
 - `notify(projectId)` is for writers. It carries no data and never writes or dispatches.
 
-Writers notify after a durable project-content write succeeds, and also after an unknown outcome, so readers
-re-read instead of trusting a cache. Today live capture acceptance (`interactive-workspace.ts`) notifies.
-Further producers (Imports linking, Projects edits) notify as they land, and are listed here when they do.
+Writers notify after any attempt to write project content, whether it succeeded, failed or has an unknown
+outcome. Readers then re-read instead of trusting a cache; a spurious notification only costs one re-read.
+Today live capture acceptance (`interactive-workspace.ts`) notifies. Further producers (Imports linking,
+Projects edits) notify as they land, and are listed here when they do.
 
-A listener that throws is isolated. Other listeners still run.
+A listener that throws, or returns a promise that rejects, is isolated. Other listeners still run. A listener
+removed during a notification is not called afterwards.
+
+The shell's reference reads (`designReferenceReads`, used by search and reference pickers) do not cache.
+Each read loads the stored content again.
+
+## 4. Destinations for deep links
+
+A Design destination is `<nav>/<section>`, for example `requests/imports`. The section ids are stable. The
+`nav` placement comes from each section's `design-module.ts` and is provisional until the owner reviews it,
+so shared surfaces should build destinations from the descriptor (`nav`, `id`) rather than hard-code them.
+
+| Section | Destination today |
+| --- | --- |
+| Projects | `projects/projects` |
+| Discovery | `projects/discovery` |
+| References | `resources/references` |
+| Components | `resources/components` |
+| Flows | `resources/flows` |
+| Canvas | `review/canvas` |
+| Compare | `review/compare` |
+| Annotations | `review/annotations` |
+| Taste | `review/taste` |
+| Requests | `requests/requests` |
+| Imports | `requests/imports` |
+| Runs | `runs/connector` |
+
+## 5. Capabilities in this build
+
+*Planned with the Imports workstream.* A read-only host query will report which Design features this build has
+enabled: Imports storage, the file picker and export, plus the held ones (generation sources, the component
+runner). Shared surfaces such as the palette can then hide or label commands that would only fail with
+`disabled`. Until it lands, a `disabled` failure is the signal.
+
+## 6. Current project
+
+Until the owner-held project identity cutover (HQR-1 / D3), Design keeps its own project list. The shell's
+context does not choose a Design project, and the project opened in Design scopes only Design's sections.
+Shared surfaces should not promise cross-module project scoping for Design yet.

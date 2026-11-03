@@ -84,12 +84,32 @@ describe('reportTasteFailures', () => {
     await assert.rejects(lost.wrapped.submit(command));
     const [, saved] = lost.reports[0]!;
     assert.deepEqual([saved?.tone, saved?.inline, saved?.action?.label, saved?.persistent], ['unknown', 'unknown', 'Check', true]);
-    assert.equal(saved?.title, 'Save to your taste journal: result not confirmed');
+    assert.deepEqual([saved?.title, saved?.status, saved?.id], ['Save to your taste journal: not confirmed yet', 'Unconfirmed', 'design.taste.save.unknown']);
 
     const unread = harness(() => new Error('socket hang up'));
     await assert.rejects(unread.wrapped.snapshot(PROJECT));
     const [, loaded] = unread.reports[0]!;
-    assert.deepEqual([loaded?.tone, loaded?.inline, loaded?.action?.label], ['danger', 'failed', 'Retry']);
+    assert.deepEqual([loaded?.tone, loaded?.inline, loaded?.action?.label, loaded?.status, loaded?.id],
+      ['danger', 'failed', 'Retry', 'Unavailable', 'design.storage.unavailable']);
+  });
+
+  it('reports an abort as unconfirmed for a save and as stopped for a read', async () => {
+    const abort = new DOMException('stopped', 'AbortError');
+    const save = harness(() => abort);
+    await assert.rejects(save.wrapped.submit(command));
+    assert.deepEqual([save.reports[0]![1]?.tone, save.reports[0]![1]?.action?.label], ['unknown', 'Check']);
+    const read = harness(() => abort);
+    await assert.rejects(read.wrapped.snapshot(PROJECT));
+    assert.deepEqual([read.reports[0]![1]?.tone, read.reports[0]![1]?.status, read.reports[0]![1]?.action], ['info', 'Stopped', undefined]);
+  });
+
+  it('says a journal was saved by a newer HQ only for that reason', async () => {
+    const newer = harness(() => new TasteReadOnlyError('unsupported-stored-schema'));
+    await assert.rejects(newer.wrapped.snapshot(PROJECT));
+    assert.equal(newer.reports[0]![1]?.description, 'It was saved by a newer version of HQ, so it opens read-only. Nothing was changed.');
+    const locked = harness(() => new TasteReadOnlyError('store-read-only'));
+    await assert.rejects(locked.wrapped.submit(command));
+    assert.equal(locked.reports[0]![1]?.description, 'It is open read-only here, so nothing was changed.');
   });
 
   it('reports the failure and then the recovery in order, so a later success clears only its own operation', async () => {

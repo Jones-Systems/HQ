@@ -289,7 +289,7 @@ describe('Taste production composition', () => {
     await screen.findByText('Taste is unavailable right now.');
     const notice = await screen.findByRole('alert');
     expect(notice.textContent).toContain('Couldn\'t load your taste ratings');
-    expect(notice.textContent).toContain('Design storage is not available right now. Nothing was changed.');
+    expect(notice.textContent).toContain('Design storage is unavailable right now. Nothing was changed.');
     expect(notice.textContent).toContain('taste.load');
     double.failWith(() => undefined);
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
@@ -308,7 +308,7 @@ describe('Taste production composition', () => {
     await renderReady(view(workspace));
     fireEvent.change(await screen.findByLabelText('Version to rate'), { target: { value: FIRST } });
     await screen.findByText('Taste is unavailable right now.');
-    const notice = await screen.findByText(/saved by a newer version of HQ, so it is open read-only/);
+    const notice = await screen.findByText(/saved by a newer version of HQ, so it opens read-only/);
     expect(notice.closest('div')?.textContent).toContain('taste.load · unsupported-stored-schema');
     expect(screen.queryByRole('button', { name: /Retry|Reload|Check/ })).toBeNull();
     expect(screen.queryByText('Project profile')).toBeNull();
