@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ToastStoreProvider, ToastViewport, createToastStore } from '@hq/ui';
 import { FIXTURE_IDS, recordCalls, resetSocialSessions, type RecordedPort } from '../../core';
 import { createWorkbenchFixture, type WorkbenchFixture } from '../fixtures/examples';
 import type { Visibility } from '../polling';
@@ -36,13 +37,19 @@ function setup({ destination = 'runs', visible = true }: { destination?: string;
   const fixture = createWorkbenchFixture({ clock: NOW });
   const recorded = recordCalls(fixture.port);
   const visibleControl = visibilityControl(visible);
+  const store = createToastStore();
   let current = destination;
   let go: (next: string) => void = () => {};
   function Shell() {
     const [where, setWhere] = useState(destination);
     current = where;
     go = (next) => act(() => setWhere(next));
-    return <WorkbenchSection port={recorded.port} context={CONTEXT} destination={where} navigate={(next) => setWhere(next)} clock={NOW} visibility={visibleControl.visibility} pollIntervalMs={10} />;
+    return (
+      <ToastStoreProvider store={store}>
+        <WorkbenchSection port={recorded.port} context={CONTEXT} destination={where} navigate={(next) => setWhere(next)} clock={NOW} visibility={visibleControl.visibility} pollIntervalMs={10} />
+        <ToastViewport hotkey={null} />
+      </ToastStoreProvider>
+    );
   }
   render(<Shell />);
   return { fixture, recorded, user: userEvent.setup(), destination: () => current, go: (next) => go(next), visible: visibleControl };
@@ -221,27 +228,89 @@ describe('receipt side panel', () => {
   });
 });
 
+describe('the receipt panel', () => {
+  const clipboard = (writeText: (text: string) => Promise<void>) => Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+  it('keeps one header row: eyebrow, tool and status on the left, an icon Close at the far end, and no empty band above', async () => {
+    setup({ destination: `runs/${FIXTURE_IDS.failedRun}` });
+    const side = await screen.findByRole('complementary', { name: 'Selected receipt' });
+    const head = side.querySelector('.sw-receipt-head')!;
+    expect(head.querySelector('.sw-eyebrow')?.textContent).toMatch(/^Run receipt · /u);
+    expect(head.querySelector('h3')?.textContent).toBe('SEO workbench');
+    const close = within(head as HTMLElement).getByRole('button', { name: 'Close receipt' });
+    expect(close.textContent).toBe('');
+    expect(close.closest('.sw-receipt-head-end')).toBeTruthy();
+    expect(side.querySelector('.rh-peek-bar')).toBeNull();
+    expect(side.firstElementChild).toBe(side.querySelector('article'));
+  });
+
+  it('gives the Run ID a full-width row of its own, selectable whole, with a quiet Copy', async () => {
+    setup({ destination: `runs/${FIXTURE_IDS.failedRun}` });
+    const side = await screen.findByRole('complementary', { name: 'Selected receipt' });
+    const wide = side.querySelector('.sw-fact-wide')!;
+    expect(wide.querySelector('.sw-run-id')?.textContent).toBe(FIXTURE_IDS.failedRun);
+    expect(within(wide as HTMLElement).getByRole('button', { name: 'Copy run ID' })).toBeTruthy();
+    const css = readFileSync('modules/social/workbench/run-id.css', 'utf8');
+    expect(css).toMatch(/\.sw-facts > \.sw-fact-wide \{ grid-column: 1 \/ -1; \}/u);
+    expect(css).toMatch(/\.sw-run-id \{[^}]*user-select: all/u);
+  });
+
+  it('copies the full ID and says so with a toast', async () => {
+    const writeText = vi.fn(async () => undefined);
+    const s = setup({ destination: `runs/${FIXTURE_IDS.failedRun}` });
+    clipboard(writeText); // after setup: user-event installs its own clipboard stub when it is set up
+    await s.user.click(await screen.findByRole('button', { name: 'Copy run ID' }));
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(FIXTURE_IDS.failedRun);
+    expect(await screen.findByRole('group', { name: 'Run ID copied' })).toBeTruthy();
+    expect(executions(s.recorded)).toHaveLength(0);
+  });
+
+  it('says so inline when the clipboard fails, and leaves the ID selectable', async () => {
+    const s = setup({ destination: `runs/${FIXTURE_IDS.failedRun}` });
+    clipboard(async () => { throw new Error('denied'); });
+    await s.user.click(await screen.findByRole('button', { name: 'Copy run ID' }));
+    expect(await screen.findByText(/Couldn't copy it\. Select the ID/u)).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Run ID copied' })).toBeNull();
+    expect(document.querySelector('.sw-run-id')?.textContent).toBe(FIXTURE_IDS.failedRun);
+  });
+
+  it('shows a failed run\'s reason once', async () => {
+    setup({ destination: `runs/${FIXTURE_IDS.failedRun}` });
+    const side = await screen.findByRole('complementary', { name: 'Selected receipt' });
+    await within(side).findByText('The tool reported an error');
+    const reason = 'Packet 1 has no sources. Add at least one source and run again.';
+    // The raw result JSON, closed by default, holds the same text; what is shown is the receipt without it.
+    const shown = side.cloneNode(true) as HTMLElement;
+    shown.querySelector('details')?.remove();
+    expect(shown.textContent!.split(reason)).toHaveLength(2);
+  });
+});
+
 describe('running a run again', () => {
-  it('keeps "Run again with same input" explicit: unavailable, with its reason, and no call', async () => {
+  it('has no Run again button: the receipt leads to the workbench with one honest line, and makes no call', async () => {
     const s = setup({ destination: `runs/${FIXTURE_IDS.failedRun}` });
     const side = await screen.findByRole('complementary', { name: 'Selected receipt' });
-    const again = within(side).getByRole('button', { name: 'Run again with same input' }) as HTMLButtonElement;
-    expect(again.disabled).toBe(true);
-    const reason = document.getElementById(again.getAttribute('aria-describedby')!)!;
-    expect(reason.textContent).toMatch(/doesn't keep what a run was given/u);
-    await s.user.click(again);
+    expect(within(side).queryByRole('button', { name: /run again/iu })).toBeNull();
+    expect(within(side).getByText('To run it again, open the workbench, check the input and choose Run. HQ never resends a run on its own.')).toBeTruthy();
+    expect(within(side).getByRole('button', { name: 'Open SEO workbench' })).toBeTruthy();
     expect(executions(s.recorded)).toHaveLength(0);
   });
 
   it('leads to the workbench by navigation only; the Run there is its own explicit action', async () => {
     const s = setup({ destination: `runs/${FIXTURE_IDS.failedRun}` });
     const side = await screen.findByRole('complementary', { name: 'Selected receipt' });
-    await s.user.click(within(side).getByRole('button', { name: /^Open SEO/ }));
+    await s.user.click(within(side).getByRole('button', { name: 'Open SEO workbench' }));
     expect(s.destination()).toBe('workbenches/seo-studio');
     expect(executions(s.recorded)).toHaveLength(0);
   });
 
-  it('never offers it for an Unknown run or one still active', async () => {
+  it('names a tool that is not called a workbench as one', async () => {
+    setup({ destination: `runs/${FIXTURE_IDS.exampleRun}` });
+    const side = await screen.findByRole('complementary', { name: 'Selected receipt' });
+    expect(within(side).getByRole('button', { name: 'Open Signal inbox workbench' })).toBeTruthy();
+  });
+
+  it('never points an Unknown run, or one still active, at a second run', async () => {
     const s = setup();
     await listed();
     s.fixture.controls.setUnavailable(true);
@@ -249,15 +318,15 @@ describe('running a run again', () => {
     await waitFor(() => expect(within(timeline()).getAllByText('Unknown')).toHaveLength(2));
     await s.user.click(row(FIXTURE_IDS.runningRun));
     const side = await screen.findByRole('complementary', { name: 'Selected receipt' });
-    expect(within(side).queryByRole('button', { name: 'Run again with same input' })).toBeNull();
+    expect(within(side).queryByRole('button', { name: /^Open .* workbench$/u })).toBeNull();
     expect(within(side).getByText(/Don't start it again until the status is known\. Use Check again/u)).toBeTruthy();
     expect(executions(s.recorded)).toHaveLength(0);
   });
 
-  it('does not offer it while the run is still active', async () => {
+  it('does not offer the workbench while the run is still active', async () => {
     setup({ destination: `runs/${FIXTURE_IDS.queuedRun}` });
     const side = await screen.findByRole('complementary', { name: 'Selected receipt' });
-    expect(within(side).queryByRole('button', { name: 'Run again with same input' })).toBeNull();
+    expect(within(side).queryByRole('button', { name: /^Open .* workbench$/u })).toBeNull();
   });
 
   it('never claims anything is scheduled, published or connected', async () => {

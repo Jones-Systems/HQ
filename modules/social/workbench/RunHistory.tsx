@@ -167,12 +167,14 @@ export function RunHistory({ selectedRunId }: { readonly selectedRunId: string |
             <>
               {selectedRunId && <button type="button" className="rh-scrim" tabIndex={-1} aria-hidden="true" onClick={close} />}
               <aside ref={panel.ref} {...panel.props} className="rh-peek" aria-label="Selected receipt" inert={selectedRunId ? undefined : true}>
-                <div className="rh-peek-bar">
-                  <Button size="sm" variant="ghost" onClick={close} aria-label="Close receipt" title="Close receipt (Esc)"><SocialIcon name="close" />Close</Button>
-                </div>
-                {shown.current && <RunReceipt key={shown.current} runId={shown.current} readNow initial={panelRun} />}
+                {shown.current && (
+                  <RunReceipt
+                    key={shown.current} runId={shown.current} readNow initial={panelRun}
+                    headerEnd={<Button size="sm" variant="ghost" className="rh-close" onClick={close} aria-label="Close receipt" title="Close receipt (Esc)"><SocialIcon name="close" /></Button>}
+                  />
+                )}
                 {panelRun && (
-                  <RunAgain
+                  <ReceiptAction
                     run={panelRun} status={observed(panelRun)} toolName={toolName(panelRun.tool)}
                     onOpenTool={() => navigate(`workbenches/${panelRun.tool}`)}
                   />
@@ -187,26 +189,21 @@ export function RunHistory({ selectedRunId }: { readonly selectedRunId: string |
 }
 
 /**
- * What can follow a receipt. A finished run can be run again only from its workbench, as its own explicit Run. The
- * service does not return what a run was given yet, so HQ cannot send "the same input" itself, and the receipt says
- * so. A run whose status is unknown, or that is still active, never offers a second run.
+ * What can follow a receipt: the workbench it came from. HQ never sends a run on its own and the service does not
+ * return what a run was given, so running it again is a choice made in the workbench, with the input checked there.
+ * A run whose status is unknown, or that is still active, never points at a second run.
  */
-function RunAgain({ run, status, toolName, onOpenTool }: {
+function ReceiptAction({ run, status, toolName, onOpenTool }: {
   readonly run: RunRecord; readonly status: ObservedRunStatus; readonly toolName: string; readonly onOpenTool: () => void;
 }) {
   if (status === 'unknown') {
-    return <p className="rh-again-note" id={`rh-again-${run.id}`}>Don't start it again until the status is known. Use Check again on the receipt, or Refresh the list.</p>;
+    return <p className="rh-again-note">Don't start it again until the status is known. Use Check again on the receipt, or Refresh the list.</p>;
   }
   if (isActiveRun(run)) return null;
   return (
-    <section className="rh-again" aria-label="Run again">
-      <div className="rh-again-actions">
-        <Button size="sm" variant="secondary" disabled aria-describedby={`rh-again-${run.id}`}>Run again with same input</Button>
-        <Button size="sm" variant="secondary" onClick={onOpenTool}>Open {toolName}<SocialIcon name="arrow-right" /></Button>
-      </div>
-      <p className="rh-again-note" id={`rh-again-${run.id}`}>
-        The Social service doesn't keep what a run was given, so HQ can't send the same input again. Open {toolName}, check the input, and choose Run: it creates one new run and nothing retries on its own.
-      </p>
+    <section className="rh-again" aria-label="Open the workbench">
+      <Button size="sm" variant="secondary" onClick={onOpenTool}>Open {/workbench$/iu.test(toolName) ? toolName : `${toolName} workbench`}<SocialIcon name="arrow-right" /></Button>
+      <p className="rh-again-note">To run it again, open the workbench, check the input and choose Run. HQ never resends a run on its own.</p>
     </section>
   );
 }

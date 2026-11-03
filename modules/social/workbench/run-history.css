@@ -87,10 +87,12 @@
   max-height: calc(100dvh - 8rem); overflow: auto; padding: var(--hq-space-md);
   background: var(--hq-surface-raised); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); box-shadow: var(--hq-shadow-raised);
 }
-.rh-peek-bar { display: flex; justify-content: flex-end; }
+/* One header row: eyebrow, tool and status on the left, Close at the far end of the same row. */
+.rh-peek .sw-receipt-head { position: relative; padding-inline-end: 2.5rem; }
+.rh-peek .sw-receipt-head-end { position: absolute; inset-block-start: 0; inset-inline-end: 0; }
+.rh-close { min-width: 28px; padding-inline: var(--hq-space-2xs); }
 .rh-scrim { display: none; }
-.rh-again { display: grid; gap: var(--hq-space-xs); padding-top: var(--hq-space-sm); border-top: 1px solid var(--hq-border); }
-.rh-again-actions { display: flex; flex-wrap: wrap; gap: var(--hq-space-xs); }
+.rh-again { display: grid; justify-items: start; gap: var(--hq-space-xs); padding-top: var(--hq-space-sm); border-top: 1px solid var(--hq-border); }
 .rh-again-note { font: var(--hq-type-small); color: var(--hq-text-muted); }
 .rh-peek > .rh-again-note { padding-top: var(--hq-space-sm); border-top: 1px solid var(--hq-border); }
 

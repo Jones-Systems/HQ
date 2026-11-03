@@ -28,7 +28,8 @@
 /* ---------- Layout ---------- */
 .cal-body { display: grid; grid-template-columns: minmax(0, 1fr) 8px var(--cal-tray-width, 240px); align-items: stretch; min-width: 0; }
 .cal-body[data-tray-collapsed] { grid-template-columns: minmax(0, 1fr) 8px 48px; }
-.cal-main { min-width: 0; overflow: auto; }
+/* The calendar region is the container: its own width, not the window's, decides when month chips go compact. */
+.cal-main { min-width: 0; overflow: auto; container: calmain / inline-size; }
 .cal-chips { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--hq-space-3xs); align-content: start; }
 
 /* ---------- Chips ---------- */
@@ -43,7 +44,9 @@
 }
 .cal-chip-bar { position: absolute; inset-block: 0; inset-inline-start: 0; width: 3px; background: var(--sx-channel, var(--hq-accent)); }
 .cal-chip-title {
-  grid-column: 1; grid-row: 1; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: break-word;
+  grid-column: 1; grid-row: 1; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  /* Words break at word boundaries, hyphenated when the language allows; only a word wider than the chip is split. */
+  overflow-wrap: break-word; word-break: normal; hyphens: auto;
   font-weight: var(--hq-font-weight-medium); line-height: 1.3;
 }
 .cal-chip-time { grid-column: 1; grid-row: 2; min-width: 0; color: var(--hq-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -60,6 +63,18 @@
   /* The colour bar already carries the channel's hue, so the badge keeps only its mark here. */
   .cal-chip .sx-channel-dot { display: none; }
 }
+/* In a narrow calendar region the month cells set --cal-compact (below): a chip is then one line, the channel's colour bar and the
+   title with an ellipsis. The badge and time are hidden visually; they stay in the chip's accessible name and tooltip. */
+@container calchip style(--cal-compact: 1) {
+  .cal-chip { display: block; padding-block: 2px; padding-inline: calc(var(--hq-space-xs) + 3px) var(--hq-space-2xs); }
+  .cal-chip-title { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: unset; line-clamp: unset; hyphens: none; line-height: 1.5; }
+  .cal-chip-time, .cal-chip .sx-channel { display: none; }
+  .cal-chip-end { display: block; position: absolute; inset-block-start: 3px; inset-inline-end: 3px; }
+  .cal-chip-flag { display: block; background: var(--hq-surface-raised); }
+}
+/* The tray has room: chips there breathe, with the badge at the top right and the title clamped to two lines. */
+.cal-tray .cal-chips { gap: var(--hq-space-xs); }
+.cal-tray .cal-chip { padding: var(--hq-space-xs) var(--hq-space-sm) var(--hq-space-xs) calc(var(--hq-space-sm) + 3px); }
 .cal-chip:hover { background: var(--hq-surface-hover); border-color: var(--hq-border-strong); }
 .cal-chip:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
 .cal-chip:focus-visible .cal-chip-title { -webkit-line-clamp: unset; line-clamp: unset; }
@@ -71,8 +86,7 @@
 .cal-ghost { position: fixed; top: -1000px; left: -1000px; padding: 16px 28px 44px; pointer-events: none; }
 
 /* ---------- Month ---------- */
-/* Below this width the grid scrolls sideways inside its pane, as the time grid does, rather than crushing the chips. */
-.cal-month { width: 100%; min-width: 36rem; border-collapse: separate; border-spacing: 0; table-layout: fixed; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); overflow: clip; background: var(--hq-surface-raised); }
+.cal-month { width: 100%; min-width: 0; border-collapse: separate; border-spacing: 0; table-layout: fixed; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); overflow: clip; background: var(--hq-surface-raised); }
 .cal-month th { padding: var(--hq-space-xs) var(--hq-space-sm); text-align: start; font: var(--hq-type-label); color: var(--hq-text-muted); background: var(--hq-surface-sunken); border-bottom: 1px solid var(--hq-border); }
 .cal-cell {
   height: 96px; min-width: 0; padding: var(--hq-space-2xs); vertical-align: top; background: var(--hq-surface-raised);
@@ -93,6 +107,12 @@
 /* Today: a filled marker, not only a colour change. */
 .cal-cell[aria-current="date"] .cal-day-number { background: var(--hq-accent); color: var(--hq-on-accent); font-weight: var(--hq-font-weight-semibold); }
 .cal-cell .cal-chips { margin-top: var(--hq-space-2xs); }
+/* A narrow calendar region (under about 640px): all seven columns still fit, and their chips go compact (see Chips). */
+@container calmain (max-width: 40rem) {
+  .cal-cell { --cal-compact: 1; height: 76px; padding: var(--hq-space-3xs); }
+  .cal-month th { padding-inline: var(--hq-space-2xs); overflow: hidden; text-overflow: ellipsis; }
+  .cal-cell .cal-chips { margin-top: var(--hq-space-3xs); }
+}
 
 /* ---------- Drop targets ---------- */
 .cal-cell[data-drop-active] { background: var(--hq-accent-soft); box-shadow: inset 0 0 0 2px var(--hq-accent); }
@@ -147,7 +167,6 @@
   .cal-body, .cal-body[data-tray-collapsed] { grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-md); }
   .cal-body > .hq-splitter { display: none; }
   .cal-bar-end { margin-inline-start: 0; justify-content: flex-start; }
-  .cal-cell { height: 84px; }
 }
 
 /* ---------- Reduced motion: no lift, tilt or settle movement; colour and state feedback stays ---------- */

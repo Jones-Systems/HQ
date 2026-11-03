@@ -6,8 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToastStoreProvider, ToastViewport, createToastStore } from '@hq/ui';
 import {
   FEATURE_HQ_EDITORIAL_TIMEBOX, FIXTURE_IDS, PortFailure, createFixtureWorkspace, fictionalSeed, recordCalls, resetSocialSessions, socialSession, workspaceSnapshot,
-  type Draft, type FixtureOptions, type RecordedPort,
+  type Draft, type FixtureOptions, type RecordedPort, type WorkspaceLoad,
 } from '../../core';
+import { SocialFrameContext, type SocialFrame } from '../../ui';
 import { SocialContent } from '..';
 import { changeDraft } from '../actions';
 
@@ -20,7 +21,10 @@ afterEach(() => {
 const NOW = () => new Date('2026-10-20T12:00:00Z');
 
 /** The shell mounts the toast viewport; a section mounted on its own needs one, on a store of its own. */
-function setup(destination = 'library', options: FixtureOptions = {}) {
+/** What the Social domain provides to its pages; a section mounted on its own has none. */
+const FRAME: SocialFrame = { load: { status: 'idle' } as WorkspaceLoad, example: true, onCheck: () => undefined, limits: 'Fixture limits.', exampleNote: 'Example workspace.' };
+
+function setup(destination = 'library', options: FixtureOptions = {}, frame: SocialFrame | null = null) {
   const fixture = createFixtureWorkspace(options);
   const recorded = recordCalls(fixture.port);
   const visited: string[] = [];
@@ -29,10 +33,10 @@ function setup(destination = 'library', options: FixtureOptions = {}) {
   function Host({ initial }: { initial: string }) {
     const [current, setCurrent] = useState(initial);
     go = (next) => act(() => setCurrent(next));
-    return <ToastStoreProvider store={store}>
+    return <SocialFrameContext.Provider value={frame}><ToastStoreProvider store={store}>
       <SocialContent port={recorded.port} projectId="fixture-project" destination={current} now={NOW} navigate={(next) => { visited.push(next); setCurrent(next); }} />
       <ToastViewport hotkey={null} />
-    </ToastStoreProvider>;
+    </ToastStoreProvider></SocialFrameContext.Provider>;
   }
   const view = render(<Host initial={destination} />);
   return { ...fixture, recorded, visited, view, go: (next: string) => go(next), Host, user: userEvent.setup() };
@@ -502,7 +506,7 @@ describe('Social calendar: now, chips and drag feedback', () => {
   it('shows a chip as a channel bar, a readable title and the channel badge, with the full title on hover', async () => {
     setup('calendar/2026-10');
     const chip = await chipOf(/^Autumn blend tasting notes/);
-    expect(chip.getAttribute('title')).toBe('Autumn blend tasting notes');
+    expect(chip.getAttribute('title')).toBe('Autumn blend tasting notes · LinkedIn');
     expect(chip.getAttribute('data-channel')).toBe('LinkedIn');
     expect(chip.querySelector('.cal-chip-bar')).toBeTruthy();
     expect(chip.querySelector('.cal-chip-title')?.textContent).toBe('Autumn blend tasting notes');
@@ -609,6 +613,58 @@ describe('Social calendar: now, chips and drag feedback', () => {
     expectNoExecution(recorded);
   });
 
+  it('puts the channel and time in the tooltip of a timed chip, since a compact chip hides them', async () => {
+    const seed = fictionalSeed();
+    seed.content = seed.content.map((draft) => draft.id === FIXTURE_IDS.autumnBlend
+      ? { ...draft, planned_date: '2026-10-20', planning_slot: { start: '09:00', duration_minutes: 30, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } } : draft);
+    setup('calendar/2026-10', { features: [FEATURE_HQ_EDITORIAL_TIMEBOX], seed });
+    const chip = await chipOf(/^Autumn blend tasting notes/);
+    expect(chip.getAttribute('title')).toMatch(/^Autumn blend tasting notes · LinkedIn · 9:00 a\.m\. · 30 min$/u);
+    expect(chip.getAttribute('aria-label')).toMatch(/LinkedIn.*9:00 a\.m\., 30 min/u);
+  });
+
+  describe('while the Social service is unreachable', () => {
+    async function goOffline(frame: SocialFrame | null) {
+      const s = setup('calendar/2026-10', {}, frame);
+      await screen.findByRole('heading', { name: 'October 2026' });
+      s.controls.setUnavailable(true);
+      await act(async () => { await socialSession('fixture-project').load(s.recorded.port); });
+      return s;
+    }
+
+    it('keeps its own "Moves are paused" bar when mounted on its own', async () => {
+      await goOffline(null);
+      expect(await screen.findByText('Moves are paused')).toBeTruthy();
+      expect((await chipOf(/^Autumn blend tasting notes/)).disabled).toBe(true);
+    });
+
+    it('adds no second bar inside the frame, whose bar already says changes are paused; chips stay disabled and say why', async () => {
+      const s = await goOffline(FRAME);
+      const chip = await chipOf(/^Autumn blend tasting notes/);
+      await waitFor(() => expect(chip.disabled).toBe(true));
+      expect(screen.queryByText('Moves are paused')).toBeNull();
+      expect(chip.getAttribute('draggable')).toBe('false');
+      expect(chip.title).toMatch(/Moves are paused while the Social service is unreachable\.$/u);
+      const note = document.getElementById(chip.getAttribute('aria-describedby')!)!;
+      expect(note.textContent).toBe('Moves are paused while the Social service is unreachable.');
+      s.recorded.clear();
+      fireEvent.click(chip);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(methods(s.recorded)).toEqual([]);
+    });
+
+    it('still shows the unknown-save bar inside the frame, a different reason', async () => {
+      const { controls, user } = setup('calendar/2026-10', {}, FRAME);
+      await screen.findByRole('heading', { name: 'October 2026' });
+      controls.failNext('saveDraft', { kind: 'unknown', attemptedAt: NOW().toISOString() });
+      controls.failNext('snapshot', { kind: 'unavailable' });
+      await user.click(await chipOf(/^Autumn blend tasting notes/));
+      fireEvent.change(await screen.findByLabelText('Planned date'), { target: { value: '2026-10-28' } });
+      await user.click(screen.getByRole('button', { name: 'Move to date' }));
+      expect(await screen.findByText('Some moves are paused')).toBeTruthy();
+    });
+  });
+
   it('shows a No date yet tray without a stray arrow, with its count and a labelled collapse control', async () => {
     const { user } = setup('calendar/2026-10');
     const tray = await screen.findByRole('complementary', { name: 'No date yet' });
@@ -649,6 +705,21 @@ describe('calendar stylesheet', () => {
   it('drops the lifted tilt under reduced motion', () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.cal-chip--lifted \{ transform: none; \}/u);
     expect(css).toMatch(/:root\[data-hq-motion="reduce"\] \.cal-chip--lifted \{ transform: none; \}/u);
+  });
+  it('goes compact from the calendar region\'s own width, not the window\'s, and never scrolls the month sideways', () => {
+    expect(css).toMatch(/\.cal-main \{[^}]*container: calmain \/ inline-size/u);
+    expect(css).toMatch(/@container calmain \(max-width: 40rem\) \{[^}]*\.cal-cell \{ --cal-compact: 1;/u);
+    expect(css).toMatch(/@container calchip style\(--cal-compact: 1\)/u);
+    expect(css).not.toMatch(/\.cal-month \{[^}]*min-width: [1-9]/u);
+    expect(css).toMatch(/\.cal-month \{[^}]*table-layout: fixed/u);
+  });
+  it('breaks chip titles at word boundaries, hyphenated, in two lines', () => {
+    expect(css).toMatch(/\.cal-chip-title \{[^}]*-webkit-line-clamp: 2[^}]*overflow-wrap: break-word; word-break: normal; hyphens: auto/u);
+    expect(css.match(/\.cal-chip-title \{[^}]*\}/u)![0]).not.toMatch(/overflow-wrap: anywhere|word-break: break-all/u);
+  });
+  it('gives tray chips air: six pixels above and below, eight at the side, six between', () => {
+    expect(css).toMatch(/\.cal-tray \.cal-chips \{ gap: var\(--hq-space-xs\); \}/u);
+    expect(css).toMatch(/\.cal-tray \.cal-chip \{ padding: var\(--hq-space-xs\) var\(--hq-space-sm\)/u);
   });
   it('keeps Agenda and the view cycle apart with the small spacing token', () => {
     expect(css).toMatch(/\.cal-views \{[^}]*gap: var\(--hq-space-sm\)/u);

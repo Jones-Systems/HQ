@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, StateView, StatusChip } from '@hq/ui';
 import { isActiveRun, portErrorOf, workspaceSnapshot, type ObservedRunStatus, type PortError, type RunRecord } from '../core';
 import { useWorkbench } from './env';
 import { RUN_STATUS_VIEW, formatTime, shortId } from './format';
 import { watchRun } from './polling';
 import { summarizeRun, type ResultSummary } from './results';
+import { RunIdFact } from './RunId';
 import { StartDraft } from './StartDraft';
 
 interface Observation {
@@ -27,11 +28,13 @@ function downloadReceipt(run: RunRecord): void {
  * One run's receipt (RR-4). Its status is read with `run(id)` while the run is active and the page is
  * visible; reads stop when the run finishes, the page hides or the receipt closes.
  */
-export function RunReceipt({ runId, initial, readNow = false }: {
+export function RunReceipt({ runId, initial, readNow = false, headerEnd }: {
   readonly runId: string;
   readonly initial?: RunRecord | null;
   /** Read the run at once instead of after one interval, for a record taken from an older list. */
   readonly readNow?: boolean;
+  /** A control for the header's far end, for example Close in a side panel. */
+  readonly headerEnd?: ReactNode;
 }) {
   const { port, session, state, visibility, pollIntervalMs } = useWorkbench();
   const [observation, setObservation] = useState<Observation>({ run: initial ?? null, readError: null });
@@ -89,9 +92,10 @@ export function RunReceipt({ runId, initial, readNow = false }: {
           <StatusChip tone={view.tone} label={view.label} />
           {run.is_example === 1 && <StatusChip tone="neutral" label="Example data" detail="synthetic" />}
         </div>
+        {headerEnd && <div className="sw-receipt-head-end">{headerEnd}</div>}
       </header>
       <dl className="sw-facts">
-        <div><dt>Run ID</dt><dd className="sw-mono">{run.id}</dd></div>
+        <RunIdFact id={run.id} />
         <div><dt>Created</dt><dd>{formatTime(run.created_at)}</dd></div>
         <div><dt>Finished</dt><dd>{formatTime(run.finished_at)}</dd></div>
         <div><dt>Basis</dt><dd>{run.is_example ? 'Example input · synthetic, not evidence' : 'Material you supplied'} · local Social service, network off</dd></div>
@@ -103,7 +107,8 @@ export function RunReceipt({ runId, initial, readNow = false }: {
         </div>
       )}
       {!unknown && isActiveRun(run) && <p className="sw-note" role="status">Working through the local queue. The status is checked every few seconds while this page is visible.</p>}
-      {run.error && <p className="sw-error" role="alert">{run.error}</p>}
+      {/* A tool-reported error is shown once, in the result summary below. */}
+      {run.error && summary?.error !== run.error && <p className="sw-error" role="alert">{run.error}</p>}
       {summary && <ResultView summary={summary} />}
       {(run.output !== undefined || !isActiveRun(run)) && (
         <div className="sw-actions">

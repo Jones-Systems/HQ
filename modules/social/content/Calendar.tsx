@@ -4,7 +4,7 @@ import {
   fieldErrorProps, useToast, CALENDAR_HOUR_HEIGHT, type CalendarGridEvent,
 } from '@hq/ui';
 import { checkSlot, FEATURE_HQ_EDITORIAL_TIMEBOX, SLOT_MESSAGES, zonedSlotParts, type Draft, type PlanningSlot, type SocialSession, type SocialWorkspacePort, type WorkspaceSnapshot } from '../core';
-import { EmptyState, SocialIcon } from '../ui';
+import { EmptyState, SocialIcon, useSocialFrame } from '../ui';
 import { changeDraft, errorText } from './actions';
 import { CalendarChip, type CalendarChipHandlers } from './CalendarChip';
 import { calendarRange, clockLabel, draftGridEvent, durationLabel, gridPlanning, shiftCalendarDay } from './calendar-time';
@@ -57,6 +57,7 @@ function slotMessage(slot: PlanningSlot): string {
 export function Calendar({ session, port, snapshot, month, brand, onBrandChange, navigate, paused, now = systemNow }: CalendarProps) {
   const id = useId();
   const toast = useToast();
+  const framed = useSocialFrame() !== null;
   const [zone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
   const [clock, setClock] = useState(now);
   const today = zonedSlotParts(clock.getTime(), zone).date;
@@ -279,6 +280,8 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
     const frame = document.createElement('div');
     frame.className = 'cal-chip-item';
     frame.style.setProperty('width', `${rect.width}px`);
+    // A compact chip (narrow calendar region) is lifted as the same single line.
+    if (getComputedStyle(source).getPropertyValue('--cal-compact').trim() === '1') frame.style.setProperty('--cal-compact', '1');
     frame.append(copy);
     wrapper.append(frame);
     document.body.append(wrapper);
@@ -305,8 +308,10 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
     },
     onDragEnd: () => { setDragging(null); setOverKey(null); },
   });
+  const pausedNote = paused && framed ? 'Moves are paused while the Social service is unreachable.' : undefined;
   const chip = (draft: Draft) => <CalendarChip key={draft.id} draft={draft} brandName={brandName(draft.brand_id)} zone={zone}
-    disabled={disabled(draft)} dragging={dragging === draft.id} unknown={uncertain.includes(draft.id)} handlers={chipHandlers(draft)} />;
+    disabled={disabled(draft)} dragging={dragging === draft.id} unknown={uncertain.includes(draft.id)} handlers={chipHandlers(draft)}
+    {...(pausedNote ? { paused: { id: `${id}-paused`, text: pausedNote } } : {})} />;
   const acceptDrop = (event: ReactDragEvent) => { if (event.dataTransfer?.types.includes(DRAG_TYPE)) event.preventDefault(); };
   const drop = (event: ReactDragEvent, day: string, minute?: number) => {
     event.preventDefault();
@@ -382,7 +387,9 @@ export function Calendar({ session, port, snapshot, month, brand, onBrandChange,
     <p className="cal-note" role="note">{CALENDAR_NOTE}</p>
     {nudge}
     {!supported && <InlineNotice tone="info" variant="bar" live="off" title="Time grid is read-only">{SLOT_MESSAGES.unsupported}. Date-only planning remains available.</InlineNotice>}
-    {paused && <InlineNotice tone="warning" variant="bar" live="off" title="Moves are paused">{paused}</InlineNotice>}
+    {/* Inside the frame its own bar already says changes are paused; the chips say why in their description. */}
+    {paused && !framed && <InlineNotice tone="warning" variant="bar" live="off" title="Moves are paused">{paused}</InlineNotice>}
+    {pausedNote && <p id={`${id}-paused`} className="hq-sr-only">{pausedNote}</p>}
     {uncertain.length > 0 && <InlineNotice tone="unknown" variant="bar" title="Some moves are paused">
       Moves for drafts with an unresolved save are paused. Reload and inspect the stored draft before making another change.
     </InlineNotice>}
