@@ -127,6 +127,47 @@
       ]
     },
     {
+      "id": "domain-wiki",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "optional-provenance",
       "input": [
         {

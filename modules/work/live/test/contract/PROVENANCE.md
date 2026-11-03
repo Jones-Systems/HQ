@@ -3,17 +3,18 @@
 These are byte-identical copies of the public, synthetic Planner wire contract. Work's live-adapter tests use them; nothing in production imports them.
 
 - **Source:** `services/planner/contract/` in Jones-Systems/HQ.
-- **Copied from:** commit `523104b` (the HQ Planner service and agent CLI line).
-- **Identity check:** every file below has the same Git blob at `523104b` and at `67594ade`. This was checked with `git rev-parse <commit>:services/planner/contract/<file>` before copying, with `git archive 523104b` used for the copy.
+- **Copied from:** commit `3ca226e4061405064ea8547ce8b1d9df35ae9e36` on branch `work/hq-planner-wiki-references-20261103` (the Planner accepts Wiki references). This re-pin replaces the earlier copy from `523104b` (the HQ Planner service and agent CLI line).
+- **Identity check:** every file below has the same Git blob at `3ca226e` and in `services/planner/contract/` of this checkout. This was checked with `git rev-parse 3ca226e:services/planner/contract/<file>` and `git hash-object` on each copy, and the two changed files were copied with `cp`.
+- **Changes from the earlier copy:** `reference-vectors.json` gained the `domain-wiki` accept case, and `SHA256SUMS` changed only on that file's line. The 27 exchanges are unchanged: their Git blobs equal the earlier pin (`523104b`, identical blobs at `67594ade`).
 - **Not copied:** the generator, the vector builder, the README and any service code. There is no backend merge.
-- **`SHA256SUMS`:** the upstream file, unchanged. It covers every other file here. Its own SHA-256 is `dafe2da70363b4db60b9bc5d5466a6c77097369f896fbbb7c1ac56f1c5c7733b`.
+- **`SHA256SUMS`:** the upstream file, unchanged. It covers every other file here. Its own SHA-256 is `bbab7ca3bb311fa850ca490416f186a11a55314e28ce9500ec5c160cc785279c`.
 
 `contract.test.ts` recomputes each file's SHA-256 and Git blob, and checks both against this table and `SHA256SUMS`. If `services/planner/contract/` is present in the checkout, the test also fails on any byte drift from it. When that directory is absent, the comparison is reported as `unavailable`, never as passed.
 
 | File | Git blob | Bytes |
 | --- | --- | --- |
-| `SHA256SUMS` | `41a4e19903676574b5082e29cb838451a4824775` | 2666 |
-| `reference-vectors.json` | `73d4da4b924c79f6b493b2af4ff2d54ca3691f23` | 55165 |
+| `SHA256SUMS` | `95e1aae497d2d03b673e2245b1efea32e3250df8` | 2666 |
+| `reference-vectors.json` | `a5033a70d3ee564c5a1f96d411b9f9f9c56b0046` | 56229 |
 | `exchanges/01-version.json` | `cc1c659cba20735dfe6c533972e439446b1ab310` | 1216 |
 | `exchanges/02-state-empty.json` | `b31a4782b1cc7a25bde24c1b27315d87ff2a79e0` | 1403 |
 | `exchanges/03-create.json` | `0132bceee68ddccaf94f96a02d5a8f64772961e7` | 3295 |
