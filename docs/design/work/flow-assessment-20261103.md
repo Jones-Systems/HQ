@@ -160,7 +160,8 @@ Work adopts F1's shared primitives:
 | Saving | `StatusIndicator` in the Work top bar shows Saving…, Saved · 10:42 or Unconfirmed · Check. Cards show their own Saving… or Unconfirmed badge. |
 | Write failed or refused | Roll back in place and `toast.error` saying what was kept. A refused move shakes the card once. |
 | Unknown outcome | `toast.unknown` with **Check**, never a blind retry, plus the card's Unconfirmed badge. |
-| Offline with a snapshot | Top-bar `StatusIndicator tone="danger" label="Offline"`. The content stays readable and writes pause. Captures become drafts with a compact bar. |
+| Offline with a snapshot | Top-bar `StatusIndicator tone="danger" label="Offline"`, and the content stays readable. In live mode with device durability (lane B1's offline queue), an edit that finds the Planner unavailable is **kept on this device** and sent on reconnect. An outcome `failed` + `unavailable` that carries `queued` is reported as kept ("Kept on this device · sends when the Planner is back"), never as a rollback. Queued edits show as "N changes queued on this device" with Send now. Without durability (the example Planner, tests, and today's store), writes pause. Captures are never queued: offline, they become HQ drafts with a compact bar. |
+| Queued edit conflicts or is rejected | `InlineNotice` on the card or row: "Changed in the Planner while offline" with Keep mine and Discard, or the Planner's reason with Discard. |
 | Conflict | `InlineNotice` on the affected surface (detail notes, card). No stacked page banners. |
 | First load, nothing cached | `StateView`, unchanged. Loading uses `Skeleton` shaped like the board or list. |
 
@@ -174,7 +175,7 @@ Moving a card never starts work: the port has no execution member, and toasts sa
 - Field undo is compare-and-swap.
 - By date stays read-only.
 
-Weekly plan lists and HQ cross-links stay **Proposed**. Store, adapter and service code (`modules/work/core`, `modules/work/live`, `services/planner`) belongs to lane B1. F2 uses the store API as it is.
+Weekly plan lists and HQ cross-links stay **Proposed**. Store, adapter and service code (`modules/work/core`, `modules/work/live`, `services/planner`) belongs to lane B1. F2 uses the store API as it is. B1's additive store contract (`connection`, `queued`, `durable`, and the offline and queued save states) is specified in `docs/engineering-specs/backend-assessment-planner-20261103.md`. Work's indicators adopt it once that code lands.
 
 ## Build slices
 
