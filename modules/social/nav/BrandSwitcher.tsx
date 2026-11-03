@@ -11,6 +11,8 @@ export interface BrandSwitcherProps {
   readonly link: ProjectLink | null;
   readonly onChoose: (brand: string) => void;
   readonly onManage: () => void;
+  /** The workspace read failed. Without a snapshot the list says so instead of loading forever. */
+  readonly unavailable?: boolean;
 }
 
 function linkLine(link: ProjectLink | null): string | null {
@@ -32,7 +34,7 @@ export function brandInitials(name: string): string {
 }
 
 /** Brand switcher with its linked-project line. Brands are managed from here; there is no brands page. */
-export function BrandSwitcher({ snapshot, value, link, onChoose, onManage }: BrandSwitcherProps) {
+export function BrandSwitcher({ snapshot, value, link, onChoose, onManage, unavailable = false }: BrandSwitcherProps) {
   const id = useId();
   const line = linkLine(link);
   const current = snapshot?.brands.find((brand) => brand.id === value);
@@ -47,14 +49,14 @@ export function BrandSwitcher({ snapshot, value, link, onChoose, onManage }: Bra
           id={`${id}-brand`} value={snapshot ? value : 'all'} disabled={!snapshot}
           onChange={(event) => onChoose(event.target.value)} aria-describedby={line ? `${id}-link` : undefined}
         >
-          <option value="all">{snapshot ? 'All brands' : 'Loading brands…'}</option>
+          <option value="all">{snapshot ? 'All brands' : unavailable ? 'Brands unavailable' : 'Loading brands…'}</option>
           {snapshot?.brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
         </select>
         <SocialIcon name="chevron-down" className="sd-brand-chevron" />
       </div>
       {line && <p id={`${id}-link`} className="hq-meta">{line}</p>}
       <Button size="sm" variant="ghost" className="sd-brand-manage" onClick={onManage} disabled={!snapshot}>
-        <SocialIcon name="brands" />Manage brands
+        <SocialIcon name="sliders" /><span className="sd-brand-manage-label">Manage brands</span>
       </Button>
     </div>
   );

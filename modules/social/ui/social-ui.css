@@ -12,6 +12,8 @@
 .sx-head-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--hq-space-sm) var(--hq-space-lg); }
 .sx-head-text { display: grid; gap: var(--hq-space-2xs); min-width: min(100%, 18rem); flex: 1 1 22rem; }
 .sx-head-text h1 { margin: 0; font: var(--hq-type-display); letter-spacing: var(--hq-type-display-tracking); color: var(--hq-text); overflow-wrap: anywhere; }
+/* Focus lands here only from script after a page change; the page itself shows where you are. */
+.sx-head-text h1:focus { outline: none; }
 .sx-head-eyebrow { margin: 0; font: var(--hq-type-label); color: var(--hq-text-subtle); }
 .sx-head-eyebrow a, .sx-head-eyebrow button { font: inherit; color: inherit; }
 .sx-head-description { margin: 0; max-width: 72ch; font: var(--hq-type-body); color: var(--hq-text-muted); }
@@ -40,7 +42,7 @@
 .sx-sync-chevron { width: 14px; height: 14px; transition: transform var(--hq-duration-base) var(--hq-ease-standard); }
 .sx-sync-pill[aria-expanded="true"] .sx-sync-chevron { transform: rotate(180deg); }
 .sx-sync-panel {
-  position: absolute; z-index: var(--hq-z-popover); top: calc(100% + var(--hq-space-xs)); right: 0;
+  position: absolute; z-index: var(--hq-z-popover); top: calc(100% + var(--hq-space-xs)); right: var(--sx-sync-offset, 0px);
   display: grid; gap: var(--hq-space-sm); width: min(22rem, 80vw); padding: var(--hq-space-md);
   background: var(--hq-surface-overlay); color: var(--hq-text); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg);
   box-shadow: var(--hq-shadow-overlay); font: var(--hq-type-small);

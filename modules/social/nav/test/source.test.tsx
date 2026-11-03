@@ -126,11 +126,15 @@ describe('Social workspace source selection', () => {
     const call = vi.fn<SocialServiceTransport['call']>(async () => ({ ok: false, kind: 'unavailable' }) satisfies ServiceResponse);
     installBridge({ call });
     const { user } = mount();
-    expect(await screen.findByText('The Social service is unreachable')).toBeTruthy();
+    const notice = await screen.findByRole('status');
+    expect(within(notice).getByText('The Social service is unreachable')).toBeTruthy();
+    // A configured live service that can't be reached points at its settings.
+    expect(within(notice).getByRole('button', { name: 'Open Social settings' })).toBeTruthy();
     expect(screen.queryByText(BANNER)).toBeNull();
     expect(screen.queryByText('Larkspur Tea Co.')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByText('The Social service is unreachable')).toBeTruthy();
+    await user.click(within(notice).getByRole('button', { name: 'Try again' }));
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2));
+    expect(within(await screen.findByRole('status')).getByText('The Social service is unreachable')).toBeTruthy();
     expect(socialWorkspace().source).toBe('live');
     expect(call.mock.calls.map(([route]) => route)).toEqual(['workspace', 'workspace']);
     expect(screen.queryByText(BANNER)).toBeNull();
