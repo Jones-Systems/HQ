@@ -23,18 +23,21 @@ if (!result.ok) show(designFeedback(result.failure));
 - `section` is one of `DESIGN_SECTIONS`.
 - `operation` is `<section>.<verb>`. It is stable and appears in the toast meta line.
 - `action` is a lowercase imperative phrase. It fills the message template.
-- `write: true` marks an operation that writes. A lost or unrecognised failure during a write is `unknown`
-  (it may have happened). During a read it is `unavailable` (reading changes nothing).
+- `write` is required. A lost or unrecognised failure during a write (`write: true`) is `unknown`, because it
+  may have happened. During a read (`write: false`) it is `unavailable`, because reading changes nothing.
+  An abort during a write is `unknown` too; only an aborted read is `cancelled`.
 
 `toDesignOperationError` wraps any rejection as a `DesignOperationError` (an `Error` that is also a
 `DesignFailure`, with the original as `cause`) for code that must keep throwing.
-`classifyDesignError` passes an existing `DesignFailure` through unchanged.
+`classifyDesignError` passes a well-formed `DesignFailure` through unchanged. Well-formed means that only
+`unknown` carries an unknown effect, and that an unknown effect only offers `check`. Anything else that
+claims a possible effect is classified as `unknown`.
 
 | kind | outcome | recovery | tone | meaning |
 | --- | --- | --- | --- | --- |
 | `conflict` | no effect | reload | danger | Another window or writer changed it first. |
 | `invalid` | no effect | none | danger | The backend refused the input. |
-| `read-only` | no effect | none | warning | Saved by a newer HQ. It opens read-only. |
+| `read-only` | no effect | none | warning | It opens read-only here, for example because a newer HQ saved it. |
 | `unavailable` | no effect | retry | danger | Storage could not be reached. Nothing changed. |
 | `disabled` | no effect | none | info | The feature is off in this build. |
 | `not-found` | no effect | reload | warning | It no longer exists. |
@@ -50,17 +53,38 @@ Rules for views:
   control, or both.
 - Offer exactly the `action` that `designFeedback` returns. `Retry` appears only when repeating cannot
   duplicate an effect. An `unknown` outcome offers `Check` (read back, then decide), never a blind retry.
+  `designFeedback` enforces this even for a hand-built failure.
 - `persistent: true` (danger, unknown) stays until dismissed. Other notices may auto-dismiss.
 - Show `meta` (`operation` or `operation · reason`) in the mono provenance line. It is not user prose.
 
 ### Mapping to the shared feedback primitives
 
-`designFeedback(failure)` returns `{ tone, title, description?, meta, inline, action?, persistent }`.
+`designFeedback(failure)` returns `{ id, tone, title, description?, meta, inline, status, action?, persistent }`.
 
-- Toasts (`@hq/ui`): pass `tone`, `title`, `description` directly. The shared tones include `unknown`.
+- Toasts (`@hq/ui`): pass `id`, `tone`, `title` and `description` directly. The shared tones include `unknown`.
+  A toast with the same `id` replaces the earlier one. A storage outage uses `design.storage.unavailable` in
+  every section, so five sections failing at once show one toast. Every other failure uses
+  `design.<operation>.<kind>`.
 - Inline state: `inline` is `failed` or `unknown`, matching the `failed` / `unknown` states of the inline
-  status indicators.
+  status indicators. `status` is the word beside the control.
 - A view kit whose tone set lacks `unknown` shows it as `warning` and keeps the `unknown` inline state.
+
+The words match the rest of HQ. An unconfirmed write reads "not confirmed yet", offers **Check** and is marked
+**Unconfirmed**, as in Work. A storage outage is **Unavailable**, as in the shell's service status.
+
+| kind | status word |
+| --- | --- |
+| `conflict` | Changed elsewhere |
+| `invalid` | Refused |
+| `read-only` | Read-only |
+| `unavailable` | Unavailable |
+| `disabled` | Off in this build |
+| `not-found` | Missing |
+| `too-large` | Too large |
+| `cancelled` | Stopped |
+| `stale` | Out of date |
+| `corrupt` | Damaged |
+| `unknown` | Unconfirmed |
 
 ### Section errors
 
@@ -70,15 +94,22 @@ New section errors must set `this.name` and either be added to `classifyDesignEr
 
 | name | kind |
 | --- | --- |
-| `StoreError` with `code: 'conflict'` (bridge), `StorageConflictError`, `CanvasWriteConflictError`, `FreezeConflictError`, `ProposalConflictError`, `IntegrityError` with `reason: 'exists'` | conflict |
-| `ContentError`, `VersionMutationError`, `InvalidIdError`, `ValidationError`, `CanonicalJsonError`, `CanonicalizationError`, `NonCanonicalBytesError`, storage scope errors | invalid |
-| `ReadOnlyContentError`, `ReadOnlyRequestError`, `UnsupportedSchemaError`, `reason: 'unsupported-stored-schema'` | read-only |
-| `TasteUnavailableError`, `SourceUnavailableError` | unavailable |
+| `StoreError` with `code: 'conflict'` (bridge), `StorageConflictError`, `CanvasWriteConflictError`, `FreezeConflictError`, `IntegrityError` with `reason: 'exists'` | conflict |
+| `ContentError`, `VersionMutationError`, `InvalidIdError`, `ValidationError`, `CanonicalJsonError`, `CanonicalizationError`, `NonCanonicalBytesError`, `DispatchTransitionError`, `NamespaceClassError`, `OutboxRecordError`, storage scope errors | invalid |
+| `SendBlockedError`, `FreezeBlockedError` (reason `blocked`; the description is the store's own reasons), `ExportProjectionError` (reason `blocked`) | invalid |
+| `ReadOnlyContentError`, `ReadOnlyRequestError` | read-only |
+| `UnsupportedSchemaError` (reason `unsupported-schema`), `reason: 'unsupported-stored-schema'`: saved by a newer HQ | read-only |
+| `ExportDisabledError`, `DesignBridgeError` with `reason: 'disabled'` | disabled |
+| `TasteUnavailableError` | unavailable |
+| `SourceUnavailableError` (reason `source-offline`: the source, not storage, is unreachable) | unavailable |
 | `PreviewError` with `reason: 'too-large'` | too-large |
-| `AbortError`, `PreviewError` with `reason: 'aborted'` | cancelled |
+| `PreviewError` with `reason: 'aborted'`, `AbortError` during a read | cancelled |
 | `StaleDraftError`, `TasteProjectBindingError` (reason `project-binding`) | stale |
 | `reason: 'corrupt-stored-record'`, `IntegrityError` with `reason: 'mismatch'` | corrupt |
-| `OutcomeUnknownError` | unknown |
+| `OutcomeUnknownError`, `AbortError` during a write | unknown |
+
+`DesignBridgeError` is also recognised by its name, in case a second bundle chunk carries its own copy of
+the class.
 
 ## 2. Bridge envelopes (`bridge-documents.ts`)
 
@@ -86,48 +117,94 @@ The desktop host answers every `hq:svc:design` call with exactly one of:
 
 - `{ ok: true, value }`
 - `{ ok: false, kind }` where `kind` is `conflict`, `invalid`, `read-only`, `unavailable` or `unknown`
-- `{ ok: false, kind, reason }` where `reason` is one of `DESIGN_BRIDGE_REASONS` (today only `disabled`)
+- `{ ok: false, kind: 'unavailable', reason }` where `reason` is one of `DESIGN_BRIDGE_REASONS` (today only
+  `disabled`)
 
 `bridgeResultValue` turns a refusal into `DesignBridgeConflictError` (name `StoreError`, `code: 'conflict'`)
 or `DesignBridgeError(kind, reason)`. A `disabled` refusal is a definite no-effect even on a write route, so
-it classifies as `disabled`, not `unknown`. Any other shape, an unknown reason, or a transport rejection is
-`unknown` on write routes and `unavailable` on read routes.
+it classifies as `disabled`, not `unknown`. These are `unknown` on write routes and `unavailable` on read
+routes:
+
+- any other shape;
+- an unknown reason;
+- a reason paired with any kind other than `unavailable`;
+- a transport rejection.
 
 ## 3. Project content events (`content-events.ts`)
 
 Both workspace kinds (`bridged` and the labelled in-memory `fake`) expose `workspace.contentEvents`, one
 `ProjectContentEvents` per composition:
 
-- `subscribe(projectId, listener)` returns an idempotent unsubscribe.
-- `subscribeAll(listener)` hears every project's changes and is told which project changed. The Projects
-  controller uses it, because its gallery shows every project.
-- `revision(projectId)` is a per-project counter that starts at 0. It is the cache key of the accessors in §4.
+- `subscribe(projectId, listener)` returns an idempotent unsubscribe. Each call is its own subscription,
+  even for the same function.
+- `subscribeAll(listener)` hears every project's changes and is told which project changed. It follows the
+  same rules as `subscribe`. The Projects controller uses it, because its gallery shows every project.
+- `revision(projectId)` is a per-project counter that starts at 0. Use it as a cache key when a view
+  memoises project content; the accessors in §7 do.
 - `notify(projectId)` is for writers. It carries no data and never writes or dispatches.
 
-Writers notify after a durable project-content write succeeds, and also after a failed write whose outcome may
-be unknown, so readers re-read instead of trusting a cache. A write refused before anything was sent does not
-notify. A listener that throws is isolated. Other listeners still run.
-
+Writers notify after any attempt to write project content, whether it succeeded, failed or has an unknown
+outcome. Readers then re-read instead of trusting a cache; a spurious notification only costs one re-read.
 Who notifies today:
 
 | writer | when |
 | --- | --- |
-| live capture acceptance (`interactive-workspace.ts`) | after the version is saved, and after a failed save (not for a stale capture, which is refused before saving) |
-| adding a screen to the saved interactive flow | after the flow is saved, and after a failed save |
-| Projects edits (`onContentChange` port of the Projects controller, wired in `bridged-workspace.ts`) | after each edit, and after a failed one; not after a refusal (conflict or read-only) |
+| live capture acceptance (`interactive-workspace.ts`) | after any attempt to save the version, including a failed save. A stale capture is refused before saving and does not notify |
+| adding a screen to the saved interactive flow | after any attempt to save the flow, including a failed save |
+| Projects edits (`onContentChange` port of the Projects controller, wired in `bridged-workspace.ts`) | after any attempt to edit, including a refused or failed one |
 | Imports linking | when it lands (it calls `contentEvents.notify`; this table lists it then) |
 
 A writer that does not notify is not seen until something else does. The fake workspace's fixtures never
 change, so its revision stays 0 unless a test notifies.
 
-## 4. Fresh content in views
+A listener that throws, or returns a promise that rejects, is isolated. Other listeners still run. A listener
+removed during a notification is not called afterwards.
+
+The shell's reference reads (`designReferenceReads`, used by search and reference pickers) do not cache.
+Each read loads the stored content again.
+
+## 4. Destinations for deep links
+
+A Design destination is `<nav>/<section>`, for example `requests/imports`. The section ids are stable. The
+`nav` placement comes from each section's `design-module.ts` and is provisional until the owner reviews it,
+so shared surfaces should build destinations from the descriptor (`nav`, `id`) rather than hard-code them.
+
+| Section | Destination today |
+| --- | --- |
+| Projects | `projects/projects` |
+| Discovery | `projects/discovery` |
+| References | `resources/references` |
+| Components | `resources/components` |
+| Flows | `resources/flows` |
+| Canvas | `review/canvas` |
+| Compare | `review/compare` |
+| Annotations | `review/annotations` |
+| Taste | `review/taste` |
+| Requests | `requests/requests` |
+| Imports | `requests/imports` |
+| Runs | `runs/connector` |
+
+## 5. Capabilities in this build
+
+*Planned with the Imports workstream.* A read-only host query will report which Design features this build has
+enabled: Imports storage, the file picker and export, plus the held ones (generation sources, the component
+runner). Shared surfaces such as the palette can then hide or label commands that would only fail with
+`disabled`. Until it lands, a `disabled` failure is the signal.
+
+## 6. Current project
+
+Until the owner-held project identity cutover (HQR-1 / D3), Design keeps its own project list. The shell's
+context does not choose a Design project, and the project opened in Design scopes only Design's sections.
+Shared surfaces should not promise cross-module project scoping for Design yet.
+
+## 7. Fresh content in views
 
 The bridged accessors used to be memoised for the whole session. Now each follows the project's content:
 
 | accessor | returns | after a change to that project |
 | --- | --- | --- |
 | `contentFor(project, read?)` | `{ repository, content, thumbnails, ... }` snapshot | a new snapshot (new promise) |
-| `annotationSessionFor(project, read?)` | annotation session (§5) | a new session; one annotation controller per version is kept, so unsaved marks survive |
+| `annotationSessionFor(project, read?)` | annotation session (§8) | a new session; one annotation controller per version is kept, so unsaved marks survive |
 | `flowsFor(project, read?)` | the project's saved flows | a new list (new promise) |
 | `compareFor(project)` | the `CompareController` | the same controller. It re-reads the version lists its pickers show (`refreshVersions()`); pinned panels and an unsaved layout are untouched |
 | `tasteFor(project)` | the Taste client | the same client (it holds the journal's retry state) |
@@ -136,9 +213,9 @@ The bridged accessors used to be memoised for the whole session. Now each follow
 
 Only the project that changed is affected. Another project's change reads nothing. While nothing changes an
 accessor returns the same promise, so React `use()` does not loop. A failed build is cached for the revision
-too, and the next change retries it (§7).
+too, and the next change retries it (§10).
 
-`read` is `{ revision?, selection? }`. `selection` picks one of several values (§5). `revision` is what the
+`read` is `{ revision?, selection? }`. `selection` picks one of several values (§8). `revision` is what the
 view is showing, from the hook below. A request for an older revision is answered with the newest value that
 already resolved, so a refresh in the background never puts a mounted view back into its loading state.
 
@@ -157,7 +234,7 @@ const { content } = use(workspace.contentFor(context, { revision }));
   update themselves and the view already subscribes to them.
 - Works in both workspaces. The fake accepts and ignores `read`.
 
-## 5. Annotation version selection
+## 8. Annotation version selection
 
 ```tsx
 const session = use(workspace.annotationSessionFor(context, { revision, selection: versionId }));
@@ -176,7 +253,7 @@ const session = use(workspace.annotationSessionFor(context, { revision, selectio
 - `frame.route` is the path and search, `frame.state` the hash, like a live frame.
 - An unknown id rejects as `not-found`; a version without a capture rejects as `invalid` (reason `no-capture`).
 
-## 6. Captured-version thumbnails
+## 9. Captured-version thumbnails
 
 A live capture saved by `acceptCapture` gets a Projects `thumbnail` (so Projects and Gallery show it) only
 when its stored PNG qualifies:
@@ -191,7 +268,10 @@ The host's `CaptureRecord` has no byte size, so the size is read from the stored
 saved without a thumbnail. One is never faked. A version that already exists keeps its fields, as versions are
 immutable. Resolution goes through `thumbnail-port.ts`, which reads the same blob by the same digest.
 
-## 7. Operation names added by the durable accessors
+## 10. Operation names added by the durable accessors
+
+Every operation here except `captures.accept` is a read (`write: false`), so an unrecognised failure is
+`unavailable` with Retry, never `unknown`. `captures.accept` is a write (`write: true`).
 
 | operation | section | rejects from | typical failures |
 | --- | --- | --- | --- |
@@ -211,10 +291,10 @@ read rebuilds.
 (a `DesignFailure`, or null) beside the `error` sentence, and clears both together. An `unknown` failure also
 sets `held`: further preview actions wait until the owner reopens, and none is retried blindly.
 
-## 8. Compare and the capture receipts
+## 11. Compare and the capture receipts
 
 `compare-catalog.ts` re-reads the project repository on every `listViews`, `listVersions` and `getVersion`
-call, so it never goes stale; the Compare controller's own cached lists are refreshed as in §4. It still
+call, so it never goes stale; the Compare controller's own cached lists are refreshed as in §7. It still
 returns `captures: []`. Project content does not keep the provenance, time and extent that a static capture
 needs, and full-extent capture with its HQR-2 receipts is owner-held. Nothing here fabricates a capture
 receipt. A digest or a thumbnail alone is not one.

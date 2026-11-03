@@ -48,10 +48,10 @@ function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
 }
 
 /** Operation names are part of the backend contract (BACKEND-CONTRACT.md); views show them in the toast meta line. */
-const PROJECTS_LOAD: DesignFailureContext = { section: 'projects', operation: 'projects.load', action: 'load the project' };
-const FLOWS_LOAD: DesignFailureContext = { section: 'flows', operation: 'flows.load', action: 'load the flows' };
-const COMPARE_LOAD: DesignFailureContext = { section: 'compare', operation: 'compare.load', action: 'open the comparison' };
-const TASTE_LOAD: DesignFailureContext = { section: 'taste', operation: 'taste.load', action: 'open taste' };
+const PROJECTS_LOAD: DesignFailureContext = { section: 'projects', operation: 'projects.load', action: 'load the project', write: false };
+const FLOWS_LOAD: DesignFailureContext = { section: 'flows', operation: 'flows.load', action: 'load the flows', write: false };
+const COMPARE_LOAD: DesignFailureContext = { section: 'compare', operation: 'compare.load', action: 'open the comparison', write: false };
+const TASTE_LOAD: DesignFailureContext = { section: 'taste', operation: 'taste.load', action: 'open taste', write: false };
 
 /** Content that cannot be shown as it is stored: a newer format opens read-only, damaged content is left untouched. */
 function unusableContent(loaded: Exclude<LoadedContent, { status: 'ok' }>, context: DesignFailureContext): DesignOperationError {

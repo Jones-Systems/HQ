@@ -141,7 +141,7 @@ describe('Projects reports its own content writes', () => {
     assert.equal(controller.getSnapshot().edit.status, 'idle');
   });
 
-  test('does not announce a refused edit, and reloads what the other writer saved', async () => {
+  test('announces a refused edit too, and reloads what the other writer saved', async () => {
     const { controller, seeded, changed, addOutside } = await setup();
     const A = seeded.projectIds[0]!;
     controller.openProject(A);
@@ -149,11 +149,11 @@ describe('Projects reports its own content writes', () => {
     await addOutside(A, 'outside-4');
     const result = await controller.addView('Pricing', 'page');
     assert.equal(result.ok, false, 'the cached revision was stale');
-    assert.deepEqual(changed, []);
+    assert.deepEqual(changed, [A], 'a conflict means another writer changed the project, so readers re-read');
     assert.equal(viewIds(controller)?.includes('outside-4'), true);
     const retry = await controller.addView('Pricing', 'page');
     assert.equal(retry.ok, true);
-    assert.deepEqual(changed, [A]);
+    assert.deepEqual(changed, [A, A]);
   });
 
   test('a failing listener cannot turn a saved edit into a failed one', async () => {

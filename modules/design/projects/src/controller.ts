@@ -18,7 +18,7 @@ import {
 import { buildGalleryItems, queryGallery, type GalleryFilters, type GalleryGroup } from './gallery.ts';
 import { randomIdFactory, versionId, viewId, type IdFactory, type ProjectId, type SourceProjectId, type VersionId, type ViewId } from './ids.ts';
 import { createThumbnailLoader, LazyLoader, type Priority, type ThumbnailLoader } from './loader.ts';
-import { ProjectContentRepository, ReadOnlyContentError } from './repository.ts';
+import { ProjectContentRepository } from './repository.ts';
 import {
   INITIAL_SESSION, parseDestination, reduceSession, toDestination,
   type DetailFilters, type SessionAction, type SessionState,
@@ -48,8 +48,9 @@ export interface ProjectsPorts {
   /** Reports the opaque shell destination after local navigation. Never dispatches work. */
   readonly onDestination?: (destination: string) => void;
   /**
-   * Reports a content write made through this controller, after it committed and also after a failure whose
-   * outcome may be unknown, so other readers of the project re-read. Never called for a refused write.
+   * Reports an attempt to write content through this controller, after it committed and also after a refused
+   * or failed one (a conflict means another writer changed the project), so other readers of the project
+   * re-read. A spurious call only costs one re-read.
    */
   readonly onContentChange?: (project: ProjectId) => void;
 }
@@ -293,7 +294,6 @@ export class ProjectsController {
   async #edit(project: ProjectId, change: (content: ProjectContent, now: string) => ProjectContent): Promise<EditResult> {
     const cached = this.#content.get(project);
     this.#set({ edit: { status: 'saving' } });
-    let refused = false;
     try {
       const result = await this.#repository.update(project, change, cached ? { revision: cached.revision } : undefined);
       // Sequenced after the write commits, so any read that overlapped it is older and cannot replace it.
@@ -301,7 +301,6 @@ export class ProjectsController {
       this.#set({ edit: { status: 'idle' } });
       return { ok: true };
     } catch (error) {
-      refused = error instanceof StorageConflictError || error instanceof ReadOnlyContentError;
       this.#set({ edit: { status: 'error', message: message(error) } });
       if (error instanceof StorageConflictError) {
         // The cached revision is stale; reload so the next edit applies to the stored revision.
@@ -310,7 +309,7 @@ export class ProjectsController {
       }
       return { ok: false, error: message(error) };
     } finally {
-      if (!refused) { try { this.#ports.onContentChange?.(project); } catch { /* A reader's failure must not turn a saved edit into a failed one. */ } }
+      try { this.#ports.onContentChange?.(project); } catch { /* A reader's failure must not turn a saved edit into a failed one. */ }
     }
   }
 

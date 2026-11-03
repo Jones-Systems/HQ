@@ -15,7 +15,7 @@ import type { AnnotationController } from '../../annotations/src/controller.ts';
 import { designFailure, DesignOperationError, type DesignFailureContext } from './errors.ts';
 import { readCapture, type CaptureReader } from './flow-captures.ts';
 
-export const ANNOTATIONS_OPEN: DesignFailureContext = { section: 'annotations', operation: 'annotations.open', action: 'open annotations' };
+export const ANNOTATIONS_OPEN: DesignFailureContext = { section: 'annotations', operation: 'annotations.open', action: 'open annotations', write: false };
 
 /** Read at most this many of the newest captures when choosing the default; a long run of unstored ones stops here. */
 const MAX_DEFAULT_PROBES = 20;

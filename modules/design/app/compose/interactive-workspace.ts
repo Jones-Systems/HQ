@@ -158,7 +158,7 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
     // The host stored the PNG under its digest before it returned the record. Its size is not in the record, so the
     // thumbnail is described from the stored bytes, and only when they qualify; otherwise the version has none.
     const thumbnail = await captureThumbnailRef(records ? (digest) => records.getBlob(digest) : null, capture.captureDigest);
-    // Readers re-read after success and after a failure whose outcome may be unknown.
+    // Readers re-read after any attempt: success, a definite failure (their cache may be stale) or an unknown outcome.
     try {
       await repository.update(projectId(project.id), (content, now) => {
         if (content.versions.some((version) => version.id === savedVersion)) return content;
