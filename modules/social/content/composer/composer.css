@@ -11,6 +11,8 @@
 .soc-cmp-head h2 { margin: 0; font: var(--hq-type-title); letter-spacing: var(--hq-type-title-tracking); }
 .soc-cmp-where { display: inline-flex; align-items: center; gap: var(--hq-space-xs); margin-left: auto; font: var(--hq-type-small); color: var(--hq-text-muted); }
 .soc-cmp-back { display: none; margin-left: calc(-1 * var(--hq-space-sm)); }
+.soc-cmp-close { margin-right: calc(-1 * var(--hq-space-xs)); color: var(--hq-text-subtle); }
+.soc-cmp-close:hover { color: var(--hq-text); }
 
 /* Where the draft came from: prominent, because the source is the reason it exists. */
 .soc-origin {
@@ -138,16 +140,21 @@
 .soc-link-raw { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--hq-space-2xs); overflow-wrap: anywhere; color: var(--hq-text-muted); }
 
 /* ---------- Sticky save bar ---------- */
+/* Sticky at the foot of the scroll area, so Save is always in reach. Chromium insets a sticky edge by the scroller's
+   padding, so inside the Social frame's scroller (.sd-main, which pads its foot by --hq-space-3xl) the offset is
+   negative by that much and the bar sits flush with the window edge. Elsewhere it sticks to the plain edge. */
 .soc-savebar {
   position: sticky; bottom: 0; z-index: var(--hq-z-sticky); display: grid; gap: var(--hq-space-sm);
   margin: 0 calc(-1 * var(--hq-space-lg)); padding: var(--hq-space-sm) var(--hq-space-lg);
   background: var(--hq-surface-raised); border-top: 1px solid var(--hq-border); border-radius: 0 0 var(--hq-radius-lg) var(--hq-radius-lg);
 }
+.sd-main .soc-savebar { bottom: calc(-1 * var(--hq-space-3xl)); }
+@media (max-width: 600px) { .sd-main .soc-savebar { bottom: calc(-1 * var(--hq-space-sm)); } }
 .soc-savebar-notices { display: grid; gap: var(--hq-space-xs); max-height: 40vh; overflow: auto; }
 .soc-savebar-notices > * { margin: 0; animation: hq-rise-in var(--hq-duration-slow) var(--hq-ease-enter) both; }
 .soc-savebar-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm) var(--hq-space-md); }
 .soc-savebar-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); margin-left: auto; }
-.soc-kbd { padding: 1px var(--hq-space-xs); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-xs); color: var(--hq-text-subtle); font: var(--hq-type-meta); white-space: nowrap; }
+.soc-kbd { margin-left: var(--hq-space-xs); padding: 0 var(--hq-space-xs); border: 1px solid currentColor; border-radius: var(--hq-radius-xs); font: var(--hq-type-meta); white-space: nowrap; opacity: 0.8; }
 .soc-save-status { display: inline-flex; align-items: center; min-height: var(--hq-size-control-sm); padding: 0 var(--hq-space-sm); border-radius: var(--hq-radius-pill); }
 .soc-save-status .hq-save { font: var(--hq-type-label); }
 .soc-save-status[data-state="saved"] .hq-save { color: var(--hq-success); }

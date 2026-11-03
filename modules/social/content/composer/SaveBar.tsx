@@ -42,21 +42,17 @@ export function SaveStatus({ state, savedAt, onRetry, onCheck }: SaveStatusProps
  * The composer's sticky bar. Notices that belong to saving (a conflict, a service error) sit on top of it, where the
  * eye already is after pressing Save; the state and the actions sit below.
  */
-export function SaveBar({ notices, status, actions, hint }: {
+export function SaveBar({ notices, status, actions }: {
   readonly notices?: ReactNode;
   readonly status: ReactNode;
   readonly actions: ReactNode;
-  readonly hint?: string;
 }) {
   return (
     <div className="soc-savebar">
       {notices && <div className="soc-savebar-notices">{notices}</div>}
       <div className="soc-savebar-row">
         {status}
-        <span className="soc-savebar-actions">
-          {actions}
-          {hint && <kbd className="soc-kbd" aria-hidden="true">{hint}</kbd>}
-        </span>
+        <span className="soc-savebar-actions">{actions}</span>
       </div>
     </div>
   );

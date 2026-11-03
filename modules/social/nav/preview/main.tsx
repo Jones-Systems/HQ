@@ -172,7 +172,7 @@ const SCENARIOS: Record<string, Scenario> = {
     drive: async () => {
       const text = await until(composerBody);
       setValue(text, `${text.value} Bring a friend.`);
-      (await until(() => button(/^Save$/u))).click();
+      (await until(() => button(/^Save draft/u))).click();
       await until(() => [...document.querySelectorAll('.soc-save-status')].find((node) => /Saved v2/u.test(node.textContent ?? '')));
     },
   },
@@ -183,7 +183,7 @@ const SCENARIOS: Record<string, Scenario> = {
       const text = await until(composerBody);
       setValue(text, `${text.value} Bring a friend.`);
       holdSaves = true;
-      (await until(() => button(/^Save$/u))).click();
+      (await until(() => button(/^Save draft/u))).click();
     },
   },
   'library-conflict': {
@@ -191,7 +191,7 @@ const SCENARIOS: Record<string, Scenario> = {
     drive: async (fixture) => {
       setValue(await until(composerBody), 'My rewrite: four cups, and the fourth is a surprise.');
       fixture.controls.editElsewhere(FIXTURE_IDS.autumnBlend, { body: 'Their rewrite from another window.' });
-      (await until(() => button(/^Save$/u))).click();
+      (await until(() => button(/^Save draft/u))).click();
       await until(() => button(/^Save mine as a copy$/u));
     },
   },
@@ -199,7 +199,7 @@ const SCENARIOS: Record<string, Scenario> = {
     caption: 'Validation: the service message sits on the field, focus moves to it and the text is kept', destination: 'library/new',
     drive: async () => {
       setValue(await until(composerBody), 'A body without a title yet.');
-      (await until(() => button(/^Save$/u))).click();
+      (await until(() => button(/^Save draft/u))).click();
       await until(() => document.querySelector('.hq-field-error'));
     },
   },

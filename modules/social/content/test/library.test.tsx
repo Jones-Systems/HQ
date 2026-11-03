@@ -111,10 +111,10 @@ describe('Library: composer', () => {
     expect(figure()).toBe(card);
     expect(card.querySelector('.soc-post-body')?.textContent).toContain('October? #tea');
     expect(card.querySelector('.soc-post-token')?.textContent).toBe('#tea');
-    await user.selectOptions(screen.getByLabelText('Channel'), 'General');
+    await user.selectOptions(within(screen.getByRole('region', { name: 'Edit draft' })).getByLabelText('Channel'), 'General');
     expect(figure()).toBe(card);
     expect(card.dataset.channel).toBe('General');
-    expect(screen.getByText(/No length guide for General/)).toBeTruthy();
+    expect(document.querySelector('.soc-count')?.textContent).toContain('No length guide for General');
   });
 
   it('calls the length guide illustrative, marks the overflow in the preview, and never blocks the save', async () => {
@@ -129,7 +129,7 @@ describe('Library: composer', () => {
     expect(document.querySelector('.soc-count')?.getAttribute('data-state')).toBe('over');
     expect(screen.getByText(/20 over the illustrative 280-character limit/)).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.steepingThread)?.version).toBe(2));
   });
 
@@ -142,7 +142,7 @@ describe('Library: composer', () => {
     await user.type(screen.getByLabelText('Body'), ' Bring a friend.');
     expect(screen.getByText('Unsaved changes', { selector: '[role="status"]' })).toBeTruthy();
     hold = true;
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(await screen.findByText('Saving…', { selector: '[role="status"]' })).toBeTruthy();
     hold = false;
     await act(async () => release());
@@ -165,7 +165,7 @@ describe('Library: composer', () => {
     const { user } = setup('library/new');
     await screen.findByRole('heading', { name: 'New draft' });
     await user.type(screen.getByLabelText('Body'), 'Text without a title');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     const alerts = await screen.findAllByRole('alert');
     expect(alerts).toHaveLength(1);
     expect(alerts[0]!.textContent).toContain('Title must be text');
@@ -179,7 +179,7 @@ describe('Library: composer', () => {
     const body = screen.getByLabelText('Body') as HTMLTextAreaElement;
     await user.type(body, ' Mine.');
     controls.editElsewhere(FIXTURE_IDS.autumnBlend, { body: 'Theirs' });
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     const notice = (await screen.findByText('Changed elsewhere.')).closest('.soc-savebar')!;
     expect(within(notice as HTMLElement).getByRole('button', { name: 'Load their version' })).toBeTruthy();
     expect(within(notice as HTMLElement).getByRole('button', { name: 'Save mine as a copy' })).toBeTruthy();

@@ -189,6 +189,9 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
     </>
   );
 
+  // A clean, saved draft closes at once; anything else asks before its text is dropped.
+  const close = () => (status === 'editing' && !isNew && saveStateOf(editor) === 'saved' ? onClose() : setConfirm('discard'));
+
   return (
     <section className="soc-cmp" aria-labelledby={`${id}-heading`} onKeyDown={onKeyDown}>
       <header className="soc-cmp-head">
@@ -197,6 +200,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
         )}
         <h2 id={`${id}-heading`}>{isNew ? 'New draft' : 'Edit draft'}</h2>
         <span className="soc-cmp-where">{brandName} · {fields.channel}</span>
+        <Button className="soc-cmp-close" size="sm" variant="ghost" aria-label="Close" title="Close this draft" disabled={busy} onClick={close}><SocialIcon name="close" /></Button>
       </header>
 
       {origin && (
@@ -299,7 +303,6 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
 
       <SaveBar
         notices={notices}
-        hint={shortcutHint()}
         status={(
           <SaveStatus
             state={saveStateOf(editor)}
@@ -310,16 +313,13 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
         )}
         actions={(
           <>
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => (status === 'editing' && !isNew && saveStateOf(editor) === 'saved' ? onClose() : setConfirm('discard'))}>
-              Close
-            </Button>
             {!isNew && (
-              <Button variant="secondary" size="sm" onClick={() => void toggleArchive()} disabled={Boolean(paused)}>
+              <Button variant="ghost" onClick={() => void toggleArchive()} disabled={Boolean(paused)}>
                 {fields.archived === 1 ? 'Restore' : 'Archive'}
               </Button>
             )}
-            <Button variant="primary" size="sm" busy={busy} busyLabel="Saving…" onClick={() => void save()} disabled={saveDisabled} aria-keyshortcuts="Control+S Meta+S" title="Save the draft to the library. It is never posted.">
-              Save
+            <Button variant="primary" busy={busy} busyLabel="Saving…" onClick={() => void save()} disabled={saveDisabled} aria-keyshortcuts="Control+S Meta+S" title="Save the draft to the library. It is never posted.">
+              Save draft<kbd className="soc-kbd" aria-hidden="true">{shortcutHint()}</kbd>
             </Button>
           </>
         )}

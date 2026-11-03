@@ -66,11 +66,17 @@ export function Library({ session, state, port, snapshot, draftId, navigate, pau
   const list = useRef<HTMLElement>(null);
   const dragWidth = useRef<number | null>(null);
   const restore = useRef<HTMLButtonElement>(null);
+  const hide = useRef<HTMLButtonElement>(null);
   const [listSize, setListSize] = useState(readListSize);
   const collapsed = listSize.width === 0;
+  const wasCollapsed = useRef(collapsed);
   useLayoutEffect(() => {
     layout.current?.style.setProperty('--soc-list-width', `${listSize.width}px`);
-    if (collapsed && list.current?.contains(list.current.ownerDocument.activeElement)) restore.current?.focus();
+    const active = list.current?.ownerDocument.activeElement;
+    if (collapsed && list.current?.contains(active ?? null)) restore.current?.focus();
+    // The Show button unmounts as the list returns; focus follows to the Hide button that replaces it.
+    else if (!collapsed && wasCollapsed.current && (!active || active === active.ownerDocument.body)) hide.current?.focus();
+    wasCollapsed.current = collapsed;
     try { localStorage.setItem(LIST_KEY, JSON.stringify(listSize)); }
     catch { /* The current mount still remembers its layout. */ }
   }, [listSize, collapsed]);
@@ -152,16 +158,23 @@ export function Library({ session, state, port, snapshot, draftId, navigate, pau
     }} onPointerUpCapture={finishListDrag} onPointerCancelCapture={finishListDrag}>
       <div className="soc-lib-grid" data-detail={draftId ? 'open' : 'list'} data-collapsed={collapsed || undefined}>
         <div className="soc-lib-listwrap">
-          <Button className="soc-lib-toggle" ref={restore} size="sm" variant="ghost" aria-label={collapsed ? 'Show draft list' : 'Hide draft list'}
-            title={collapsed ? 'Show draft list' : 'Hide draft list'} aria-expanded={!collapsed} aria-controls={`${id}-list`} onClick={toggleList}>
-            <SocialIcon name={collapsed ? 'chevron-right' : 'chevron-left'} />
-          </Button>
+          {/* With the list collapsed, the way back is the one control left in its column. */}
+          {collapsed && (
+            <Button className="soc-lib-toggle" ref={restore} size="sm" variant="ghost" aria-label="Show draft list" title="Show draft list"
+              aria-expanded={false} aria-controls={`${id}-list`} onClick={toggleList}>
+              <SocialIcon name="chevron-right" />
+            </Button>
+          )}
           <section className="soc-lib-list" ref={list} id={`${id}-list`} hidden={collapsed} aria-labelledby={`${id}-heading`}>
             <header className="soc-lib-head">
               {/* Inside the Social frame the page header owns the title and the one primary New draft. */}
               <h2 id={`${id}-heading`}>{framed ? 'Drafts' : 'Library'}</h2>
               <span className="hq-meta">{drafts.length === snapshot.content.length ? `${drafts.length}` : `${drafts.length} of ${snapshot.content.length}`}</span>
               {!framed && <span className="soc-lib-head-action">{newDraft}</span>}
+              <Button className="soc-lib-toggle" ref={hide} size="sm" variant="ghost" aria-label="Hide draft list" title="Hide draft list"
+                aria-expanded aria-controls={`${id}-list`} onClick={toggleList}>
+                <SocialIcon name="chevron-left" />
+              </Button>
             </header>
             <div className="soc-lib-filters" role="group" aria-label="Filter drafts">
               <label className="soc-lib-search">

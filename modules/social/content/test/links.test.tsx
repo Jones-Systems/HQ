@@ -73,7 +73,7 @@ describe('Social draft references', () => {
     s.session.openEditor(source, stored, { ...stored, links: [envelope] });
     const view = render(<SocialContent {...s.props} />);
     await screen.findByText(UNSAVED_LINKS);
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('cannot save links yet'));
     expect(s.recorded.calls().filter((call) => call.method === 'saveDraft')).toEqual([]);
     expect(s.session.getState().editors[source]?.fields.links).toEqual([envelope]);
@@ -142,7 +142,7 @@ describe('Social draft references', () => {
     const s = setup(['hq-references-v1', FEATURE_HQ_BRAND_PROJECT], FIXTURE_IDS.openDay);
     render(<SocialContent {...s.props} />);
     await screen.findByText('Another project: this draft is read-only. The project has not changed.');
-    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save draft' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Link to…' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.drop(screen.getByRole('region', { name: 'Draft links' }), { dataTransfer: { getData: () => JSON.stringify(envelope) } });
     expect(s.recorded.calls().filter((call) => call.method === 'saveDraft')).toEqual([]);

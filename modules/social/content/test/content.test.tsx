@@ -80,12 +80,12 @@ describe('Social content: states', () => {
     await act(() => socialSession('fixture-project').load(recorded.port));
     expect(await screen.findByText('Offline')).toBeTruthy();
     expect(screen.getByText(/showing data last synced/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save draft' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByLabelText('Body') as HTMLTextAreaElement).value).toMatch(/ kept$/u);
     controls.setUnavailable(false);
     await user.click(screen.getByRole('button', { name: 'Check again' }));
     await waitFor(() => expect(screen.queryByText('Offline')).toBeNull());
-    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Save draft' }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
 
@@ -98,7 +98,7 @@ describe('Social content: library and editor', () => {
     await user.type(screen.getByLabelText('Title'), '  Cupping hour invitation  ');
     await user.type(screen.getByLabelText('Body'), 'Bring a mug.');
     recorded.clear();
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(visited.at(-1)).toMatch(/^library\/[0-9a-f]{32}$/u));
     expect(methods(recorded)).toEqual(['saveDraft']);
     expect(await screen.findByRole('heading', { name: 'Edit draft' })).toBeTruthy();
@@ -112,7 +112,7 @@ describe('Social content: library and editor', () => {
     const { user } = setup('library/new');
     await screen.findByRole('heading', { name: 'New draft' });
     await user.type(screen.getByLabelText('Body'), 'Text without a title');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Title must be text, 1–200 characters');
     expect(screen.getByLabelText('Title').getAttribute('aria-invalid')).toBe('true');
@@ -126,7 +126,7 @@ describe('Social content: library and editor', () => {
     await screen.findByRole('heading', { name: 'Edit draft' });
     await user.type(screen.getByLabelText('Body'), ' Bring a friend.');
     hold = true;
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(await screen.findAllByText('Saving…')).not.toHaveLength(0);
     expect((screen.getByLabelText('Body') as HTMLTextAreaElement).readOnly).toBe(true);
     hold = false;
@@ -142,7 +142,7 @@ describe('Social content: library and editor', () => {
     await user.type(body, 'My rewrite');
     const theirs = controls.editElsewhere(FIXTURE_IDS.autumnBlend, { body: 'Their rewrite' });
     recorded.clear();
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(await screen.findByText('Changed elsewhere.')).toBeTruthy();
     expect((screen.getByLabelText('Body') as HTMLTextAreaElement).value).toBe('My rewrite');
     expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.autumnBlend)).toEqual(theirs);
@@ -162,7 +162,7 @@ describe('Social content: library and editor', () => {
     await screen.findByRole('heading', { name: 'Edit draft' });
     await user.type(screen.getByLabelText('Body'), ' mine');
     controls.editElsewhere(FIXTURE_IDS.openDay, { body: 'Theirs' });
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     await user.click(await screen.findByRole('button', { name: 'Load their version' }));
     const dialog = await screen.findByRole('alertdialog');
     await user.click(within(dialog).getByRole('button', { name: 'Load their version' }));
@@ -175,7 +175,7 @@ describe('Social content: library and editor', () => {
     await screen.findByRole('heading', { name: 'Edit draft' });
     await user.type(screen.getByLabelText('Body'), ' mine');
     controls.editElsewhere(FIXTURE_IDS.openDay, { body: 'Theirs' });
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     await user.click(await screen.findByRole('button', { name: 'Load their version' }));
     controls.setUnavailable(true);
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Load their version' }));
@@ -232,7 +232,7 @@ describe('Social content: library and editor', () => {
     await user.type(screen.getByLabelText('Body'), ' extra');
     controls.failNext('saveDraft', { kind: 'unknown', attemptedAt: '2026-10-20T12:00:00Z' });
     recorded.clear();
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(await screen.findByText('Save result unknown')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Check' }));
     expect(await screen.findByText(/the save did not happen/)).toBeTruthy();
@@ -246,15 +246,15 @@ describe('Social content: library and editor', () => {
     await user.type(screen.getByLabelText('Body'), ' extra');
     controls.failNext('saveDraft', { kind: 'unknown', attemptedAt: '2026-10-20T12:00:00Z' });
     recorded.clear();
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(await screen.findByText('Save result unknown')).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     await user.click(screen.getByLabelText('Body'));
     await user.keyboard('{Control>}s{/Control}');
     expect(methods(recorded)).toEqual(['saveDraft']);
     await user.click(screen.getByRole('button', { name: 'Check' }));
     expect(await screen.findByText(/the save did not happen/)).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(methods(recorded)).toEqual(['saveDraft', 'snapshot', 'saveDraft']));
   });
 
@@ -287,7 +287,7 @@ describe('Social content: library and editor', () => {
     await screen.findByRole('heading', { name: 'New draft' });
     expect(screen.getByText('Linked across HQ')).toBeTruthy();
     expect(screen.getByText('Not saved')).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     expect((await screen.findByRole('alert')).textContent).toContain('cannot save links yet');
     expect(recorded.calls().filter((call) => call.outcome === 'ok').map((call) => call.method)).toEqual(['snapshot']);
   });

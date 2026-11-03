@@ -18,17 +18,19 @@
   font: var(--hq-type-body); color: var(--hq-text);
 }
 .soc-lib-list[hidden] { display: none; }
-.soc-lib-toggle { position: absolute; top: var(--hq-space-sm); left: var(--hq-space-sm); z-index: 2; }
-.soc-lib-grid[data-collapsed] .soc-lib-toggle { position: static; }
+.soc-lib-head .soc-lib-toggle { flex: none; margin-right: calc(-1 * var(--hq-space-xs)); color: var(--hq-text-subtle); }
+.soc-lib-head .soc-lib-toggle:hover { color: var(--hq-text); }
+.soc-lib-listwrap > .soc-lib-toggle { margin-top: var(--hq-space-sm); }
 .soc-lib-pane { container: soc-pane / inline-size; min-width: 0; padding-left: var(--hq-space-lg); }
 .soc-lib-grid[data-collapsed] .soc-lib-pane { padding-left: var(--hq-space-sm); }
 .soc-lib-empty, .soc-lib-select { min-height: 11rem; align-content: center; }
 
 /* ---------- Head and filters ---------- */
-.soc-lib-head { display: flex; align-items: baseline; gap: var(--hq-space-sm); padding: var(--hq-space-md) var(--hq-space-md) var(--hq-space-sm) 48px; }
+.soc-lib-head { display: flex; align-items: center; gap: var(--hq-space-sm); padding: var(--hq-space-md) var(--hq-space-md) var(--hq-space-sm) var(--hq-space-md); }
 .soc-lib-head h2 { margin: 0; font: var(--hq-type-heading); letter-spacing: var(--hq-type-heading-tracking); }
 .soc-lib-head .hq-meta { margin-right: auto; font-variant-numeric: tabular-nums; }
 .soc-lib-head-action { margin-left: auto; }
+.soc-lib-head-action + .soc-lib-toggle { margin-left: 0; }
 .soc-lib-filters { display: grid; gap: var(--hq-space-sm); padding: 0 var(--hq-space-md) var(--hq-space-sm); }
 .soc-lib-search { position: relative; display: flex; align-items: center; }
 .soc-lib-search .sx-icon { position: absolute; left: var(--hq-space-sm); color: var(--hq-text-subtle); pointer-events: none; }
@@ -100,7 +102,6 @@
   .soc-lib-grid > .hq-splitter, .soc-lib-toggle { display: none; }
   .soc-lib-listwrap { position: static; }
   .soc-lib-list, .soc-lib-list[hidden] { display: grid; max-height: none; }
-  .soc-lib-head { padding-left: var(--hq-space-md); }
   .soc-lib-pane, .soc-lib-grid[data-collapsed] .soc-lib-pane { padding-left: 0; }
   .soc-lib-grid[data-detail="open"] .soc-lib-listwrap { display: none; }
   .soc-lib-grid[data-detail="list"] .soc-lib-pane { display: none; }
