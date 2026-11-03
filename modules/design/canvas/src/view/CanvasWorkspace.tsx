@@ -1,17 +1,13 @@
 import { SecondaryBar, SecondaryPanel } from '../../../ui/src/secondary-panels.tsx';
-import { useEffect, useMemo, useReducer, useState, type Dispatch } from 'react';
-import {
-  artboardId, canvasItemId, type CanvasId, type CanvasItemDescriptor, type CanvasStoragePort, type IdPort, type ProjectId, type Size,
-} from '../contract.ts';
-import { ARTBOARD_PRESETS } from '../arrangement.ts';
-import {
-  redoAvailable, serializeSession, undoAvailable, visibleArrangement, type CanvasAction, type CanvasSession, type CanvasState,
-} from '../controller.ts';
-import { screenToWorld } from '../geometry.ts';
+import { useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
+import { StatusIndicator, useToast } from '@hq/ui';
+import type { CanvasId, CanvasStoragePort, IdPort, ProjectId } from '../contract.ts';
+import { serializeSession, visibleArrangement, type CanvasSession } from '../controller.ts';
 import { inspect } from '../inspector.ts';
 import type { ProviderRegistry } from '../providers.ts';
-import { CanvasView, detectPlatform, type CanvasItemRenderer } from './CanvasView.tsx';
+import { CanvasView, detectPlatform, faceBody, type CanvasItemRenderer } from './CanvasView.tsx';
 import { Inspector } from './Inspector.tsx';
+import { Toolbar } from './Toolbar.tsx';
 import { useCanvasDocument, type SaveStatus } from './useCanvasDocument.ts';
 
 export interface CanvasWorkspaceProps {
@@ -21,14 +17,12 @@ export interface CanvasWorkspaceProps {
   readonly registry: ProviderRegistry;
   readonly ids: IdPort;
   readonly renderers?: Readonly<Record<string, CanvasItemRenderer>>;
+  /** Problems with where items come from. Shown above the canvas, which keeps drawing what loaded. */
+  readonly banner?: ReactNode;
   /** Restored camera/selection after a domain switch (keep-alive). */
   readonly session?: CanvasSession;
   readonly onSessionChange?: (session: CanvasSession) => void;
 }
-
-const STATUS_TEXT: Record<SaveStatus['kind'], string> = {
-  loading: 'Loading…', saved: 'Saved', pending: 'Saving…', 'read-only': 'Read-only', conflict: 'Not saved: changed elsewhere', error: 'Not saved',
-};
 
 /** Re-render when providers register, unregister or report changes. */
 function useRegistryVersion(registry: ProviderRegistry): number {
@@ -37,62 +31,30 @@ function useRegistryVersion(registry: ProviderRegistry): number {
   return version;
 }
 
-function Toolbar({ state, dispatch, registry, projectId, ids }: {
-  state: CanvasState; dispatch: Dispatch<CanvasAction>; registry: ProviderRegistry; projectId: ProjectId; ids: IdPort;
-}) {
-  const [adding, setAdding] = useState(false);
-  const center = screenToWorld(state.camera, { x: state.viewport.width / 2, y: state.viewport.height / 2 });
-  const place = (descriptor: CanvasItemDescriptor) => {
-    const size = descriptor.intrinsicSize;
-    dispatch({ type: 'edit', edit: {
-      kind: 'add-placement', id: canvasItemId(ids.next('item')), ref: descriptor.ref,
-      frame: { x: Math.round(center.x - size.width / 2), y: Math.round(center.y - size.height / 2), width: size.width, height: size.height },
-    } });
-    setAdding(false);
-  };
-  const addArtboard = (name: string, size: Size) => dispatch({ type: 'edit', edit: {
-    kind: 'add-artboard', id: artboardId(ids.next('artboard')), name,
-    frame: { x: Math.round(center.x - size.width / 2), y: Math.round(center.y - size.height / 2), width: size.width, height: size.height },
-  } });
-  const catalog = adding ? registry.catalog(projectId) : [];
-  return <div className="hq-canvas-toolbar" role="toolbar" aria-label="Canvas tools">
-    <button type="button" disabled={!undoAvailable(state)} onClick={() => dispatch({ type: 'undo' })}>Undo</button>
-    <button type="button" disabled={!redoAvailable(state)} onClick={() => dispatch({ type: 'redo' })}>Redo</button>
-    <span className="hq-canvas-toolbar-gap" />
-    <button type="button" disabled={state.readOnly} aria-expanded={adding} onClick={() => setAdding((open) => !open)}>Add item</button>
-    <select aria-label="Add artboard" disabled={state.readOnly} value="" onChange={(event) => {
-      const preset = ARTBOARD_PRESETS.find((candidate) => candidate.name === event.target.value);
-      if (preset) addArtboard(preset.name, preset.size);
-    }}>
-      <option value="">Add artboard…</option>
-      {ARTBOARD_PRESETS.map((preset) => <option key={preset.name} value={preset.name}>{preset.name} {preset.size.width}×{preset.size.height}</option>)}
-    </select>
-    <span className="hq-canvas-toolbar-gap" />
-    <button type="button" aria-label="Zoom out" onClick={() => dispatch({ type: 'zoom-at', anchor: { x: state.viewport.width / 2, y: state.viewport.height / 2 }, factor: 1 / 1.25 })}>−</button>
-    <button type="button" aria-label="Reset zoom to 100%" onClick={() => dispatch({ type: 'zoom-to', zoom: 1 })}>{Math.round(state.camera.zoom * 100)}%</button>
-    <button type="button" aria-label="Zoom in" onClick={() => dispatch({ type: 'zoom-at', anchor: { x: state.viewport.width / 2, y: state.viewport.height / 2 }, factor: 1.25 })}>+</button>
-    <button type="button" onClick={() => dispatch({ type: 'fit', target: 'all' })}>Fit all</button>
-    <button type="button" disabled={state.selection.length === 0} onClick={() => dispatch({ type: 'fit', target: 'selection' })}>Fit selection</button>
-    {adding && <div className="hq-canvas-picker" role="dialog" aria-label="Add item">
-      {catalog.length === 0 && <p>No providers offer items for this project.</p>}
-      {catalog.map(({ provider, items }) => <section key={provider.id}>
-        <h3>{provider.label}</h3>
-        {items.length === 0 ? <p>No items.</p> : <ul>{items.map((item) => <li key={`${item.ref.entityId}@${item.ref.revision}`}>
-          <button type="button" onClick={() => place(item)}>{item.title} <small>{item.ref.revision}</small></button>
-        </li>)}</ul>}
-      </section>)}
-    </div>}
-  </div>;
+const SAVE_TOAST = 'design-canvas-save';
+
+/** The save state in words and a shape: Saving, Saved, or what stopped it. Offers Retry only where repeating is safe. */
+function SaveState({ status, retry }: { status: SaveStatus; retry: () => void }) {
+  switch (status.kind) {
+    case 'loading': return <StatusIndicator tone="neutral" busy label="Opening" />;
+    case 'pending': return <StatusIndicator tone="neutral" busy label="Saving" />;
+    case 'saved': return <StatusIndicator tone="success" label="Saved" />;
+    case 'read-only': return <StatusIndicator tone="warning" label="Read-only" detail={status.message} />;
+    case 'conflict': return <StatusIndicator tone="danger" label="Couldn't save" detail="changed elsewhere" />;
+    case 'error': return <StatusIndicator tone="danger" label={status.stage === 'load' ? "Couldn't open" : "Couldn't save"}
+      detail={status.stage === 'load' ? 'showing an empty canvas' : 'kept in this session'} action={{ label: 'Retry', onAction: retry }} />;
+  }
 }
 
 /**
  * Canvas workspace: toolbar, surface, inspector and save status. Root mounts
  * this with injected storage, providers and ids; it imports no other section.
  */
-export function CanvasWorkspace({ projectId, canvasId, storage, registry, ids, renderers, session, onSessionChange }: CanvasWorkspaceProps) {
-  const { state, dispatch, status } = useCanvasDocument(storage, canvasId, projectId, session);
+export function CanvasWorkspace({ projectId, canvasId, storage, registry, ids, renderers, banner, session, onSessionChange }: CanvasWorkspaceProps) {
+  const { state, dispatch, status, retry } = useCanvasDocument(storage, canvasId, projectId, session);
   const registryVersion = useRegistryVersion(registry);
   const platform = useMemo(detectPlatform, []);
+  const toast = useToast();
   const arrangement = visibleArrangement(state);
   const model = useMemo(() => inspect(arrangement, state.selection, registry), [arrangement, state.selection, registry, registryVersion]);
 
@@ -100,15 +62,41 @@ export function CanvasWorkspace({ projectId, canvasId, storage, registry, ids, r
     if (status.kind !== 'loading') onSessionChange?.(serializeSession(state));
   }, [state.camera, state.selection, state.focusId, status.kind]);
 
+  // A failed write is a one-off event as well as a state: say what was kept, and clear the toast once it saves.
+  const failed = useRef(false);
+  useEffect(() => {
+    if (status.kind === 'conflict') {
+      failed.current = true;
+      toast.error("Couldn't save the canvas", { id: SAVE_TOAST, description: 'It changed somewhere else. Your changes are kept in this session but were not saved.' });
+    } else if (status.kind === 'error') {
+      failed.current = true;
+      toast.error(status.stage === 'load' ? "Couldn't open the saved layout" : "Couldn't save the canvas", {
+        id: SAVE_TOAST, action: { label: 'Retry', onAction: retry },
+        description: status.stage === 'load' ? 'Showing an empty canvas. The saved layout was not changed.' : 'Your layout is kept in this session and saving will be tried again.',
+      });
+    } else if (failed.current && status.kind === 'saved') {
+      failed.current = false;
+      toast.dismiss(SAVE_TOAST);
+    }
+  }, [status.kind, toast, retry]);
+
+  // The selected item's capture, drawn small by the same renderer as its frame.
+  const preview = useMemo(() => {
+    if (model.kind !== 'item') return null;
+    const placement = arrangement.items.find((item) => item.id === model.id);
+    const description = placement ? registry.describe(placement.ref) : null;
+    const renderer = placement ? renderers?.[placement.ref.providerId] : undefined;
+    return placement && description?.status === 'ready' && renderer ? faceBody(renderer(description.descriptor, placement)) : null;
+  }, [model, arrangement, registry, renderers, registryVersion]);
+
   return <div className="hq-canvas-workspace">
-    <SecondaryBar name="canvas-tools" label="Canvas tools"><Toolbar state={state} dispatch={dispatch} registry={registry} projectId={projectId} ids={ids} /></SecondaryBar>
+    <SecondaryBar name="canvas-tools" label="Canvas tools"><Toolbar state={state} dispatch={dispatch} registry={registry} projectId={projectId} ids={ids} platform={platform} /></SecondaryBar>
+    {banner && <div className="hq-canvas-banner">{banner}</div>}
     <div className="hq-canvas-body">
-      <CanvasView state={state} dispatch={dispatch} registry={registry} platform={platform} renderers={renderers} />
+      <CanvasView state={state} dispatch={dispatch} registry={registry} platform={platform} renderers={renderers} settled={status.kind !== 'loading'} />
       <SecondaryPanel name="canvas-inspector" label="Canvas inspector" initial={280}><Inspector model={model} selection={state.selection} gridSize={arrangement.grid.size} gridSnap={arrangement.grid.snap}
-        readOnly={state.readOnly} hiddenIds={arrangement.items.filter((item) => item.hidden).map((item) => item.id)} dispatch={dispatch} /></SecondaryPanel>
+        readOnly={state.readOnly} hiddenIds={arrangement.items.filter((item) => item.hidden).map((item) => item.id)} preview={preview} dispatch={dispatch} /></SecondaryPanel>
     </div>
-    <p className="hq-canvas-status" role="status" data-status={status.kind}>
-      {STATUS_TEXT[status.kind]}{status.kind === 'read-only' || status.kind === 'error' ? ` — ${status.message}` : ''}
-    </p>
+    <div className="hq-canvas-status" data-status={status.kind}><SaveState status={status} retry={retry} /></div>
   </div>;
 }

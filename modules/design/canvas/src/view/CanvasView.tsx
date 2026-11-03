@@ -1,13 +1,28 @@
-import { useEffect, useLayoutEffect, useRef, type Dispatch, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  isValidElement, useCallback, useEffect, useLayoutEffect, useRef, useState,
+  type CSSProperties, type Dispatch, type ReactNode, type PointerEvent as ReactPointerEvent,
+} from 'react';
+import { MOTION_DURATIONS, useReducedMotion } from '@hq/ui';
 import type { CanvasItemDescriptor, NodeId, Placement, Rect } from '../contract.ts';
 import { handlesKey, visibleArrangement, type CanvasAction, type CanvasState } from '../controller.ts';
 import { worldToScreen } from '../geometry.ts';
-import type { Platform } from '../input.ts';
+import { keyCommand, type Platform } from '../input.ts';
 import { fallbackTitle, PROVENANCE_LABELS } from '../inspector.ts';
 import type { ProviderRegistry } from '../providers.ts';
+import { cameraStyle, useCameraMotion } from './camera-motion.ts';
+
+/**
+ * What a renderer draws inside the frame: a node for the body alone, or a body with the caption's second line. The
+ * frame adds the title and the caption strip, so a renderer never draws over its own capture.
+ */
+export interface CanvasItemFace {
+  readonly body: ReactNode;
+  /** Replaces the caption's second line. The default is the item's size and provenance. */
+  readonly meta?: string;
+}
 
 /** Renders a provider item's content inside its placement frame (world units, before zoom). */
-export type CanvasItemRenderer = (descriptor: CanvasItemDescriptor, placement: Placement) => ReactNode;
+export type CanvasItemRenderer = (descriptor: CanvasItemDescriptor, placement: Placement) => ReactNode | CanvasItemFace;
 
 export interface CanvasViewProps {
   readonly state: CanvasState;
@@ -17,12 +32,23 @@ export interface CanvasViewProps {
   /** Optional per-provider renderers supplied by root. Missing renderers show a labelled card. */
   readonly renderers?: Readonly<Record<string, CanvasItemRenderer>>;
   readonly label?: string;
+  /**
+   * The document has loaded, so items added from now on scale in and removed items scale out. Items present when it
+   * loads appear without moving. Default true.
+   */
+  readonly settled?: boolean;
 }
 
 export function detectPlatform(): Platform {
   const nav = typeof navigator === 'undefined' ? undefined : navigator;
   return nav && /Mac|iPhone|iPad/u.test(nav.platform || nav.userAgent) ? 'mac' : 'other';
 }
+
+const isFace = (value: ReactNode | CanvasItemFace): value is CanvasItemFace =>
+  typeof value === 'object' && value !== null && !isValidElement(value) && !Array.isArray(value) && 'body' in value;
+
+/** The body of a renderer's output, for callers that draw it outside the frame, such as the inspector's preview. */
+export const faceBody = (drawn: ReactNode | CanvasItemFace): ReactNode => (isFace(drawn) ? drawn.body : drawn);
 
 function screenRect(state: CanvasState, frame: Rect): Rect {
   const origin = worldToScreen(state.camera, frame);
@@ -31,23 +57,45 @@ function screenRect(state: CanvasState, frame: Rect): Rect {
 
 const px = (rect: Rect) => ({ left: rect.x, top: rect.y, width: rect.width, height: rect.height });
 
-function ItemContent({ placement, registry, renderers }: { placement: Placement; registry: ProviderRegistry; renderers: Readonly<Record<string, CanvasItemRenderer>> }) {
+/** A frame in world units for the overlay. CSS turns these and the camera into screen positions, so it follows a camera move. */
+const frameVars = (frame: Rect) => ({
+  '--hq-fx': String(frame.x), '--hq-fy': String(frame.y), '--hq-fw': String(frame.width), '--hq-fh': String(frame.height),
+}) as CSSProperties;
+
+/** Frames narrower than this on screen drop the caption, which would not fit. */
+const COMPACT_SCREEN_PX = 140;
+
+const sentence = (kind: string) => {
+  const words = kind.replace(/[-_]+/gu, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+function ItemContent({ placement, registry, renderers, zoom }: {
+  placement: Placement; registry: ProviderRegistry; renderers: Readonly<Record<string, CanvasItemRenderer>>; zoom: number;
+}) {
   const description = registry.describe(placement.ref);
   if (description.status !== 'ready') {
     const reason = description.status === 'missing-provider' ? 'Provider not available'
       : description.status === 'missing-item' ? 'Revision not found' : description.message;
     return <div className="hq-canvas-card is-missing">
-      <strong>{fallbackTitle(placement.ref)}</strong>
-      <span>{reason}</span>
+      <div className="hq-canvas-card-body"><div className="hq-canvas-placeholder"><span>{reason}</span></div></div>
+      <div className="hq-canvas-caption"><strong title={fallbackTitle(placement.ref)}>{fallbackTitle(placement.ref)}</strong></div>
     </div>;
   }
-  const renderer = renderers[placement.ref.providerId];
-  if (renderer) return <>{renderer(description.descriptor, placement)}</>;
   const { descriptor } = description;
-  return <div className="hq-canvas-card">
-    <strong>{descriptor.title}</strong>
-    <span>{descriptor.kind} · {descriptor.ref.revision}</span>
-    <span className="hq-canvas-provenance" data-provenance={descriptor.provenance}>{PROVENANCE_LABELS[descriptor.provenance]}</span>
+  const renderer = renderers[placement.ref.providerId];
+  const drawn = renderer ? renderer(descriptor, placement) : null;
+  const face = isFace(drawn) ? drawn : { body: drawn };
+  const meta = face.meta ?? `${descriptor.intrinsicSize.width}×${descriptor.intrinsicSize.height} · ${PROVENANCE_LABELS[descriptor.provenance]}`;
+  const compact = placement.frame.width * zoom < COMPACT_SCREEN_PX || placement.frame.height * zoom < COMPACT_SCREEN_PX * 0.7;
+  return <div className="hq-canvas-card" data-kind={descriptor.kind} data-compact={compact || undefined}>
+    <div className="hq-canvas-card-body">
+      {face.body ?? <div className="hq-canvas-placeholder"><span>{sentence(descriptor.kind)}</span></div>}
+    </div>
+    {!compact && <div className="hq-canvas-caption">
+      <strong title={descriptor.title}>{descriptor.title}</strong>
+      <span title={meta}>{meta}</span>
+    </div>}
   </div>;
 }
 
@@ -56,17 +104,35 @@ function nodeLabel(registry: ProviderRegistry, placement: Placement): string {
   return description.status === 'ready' ? description.descriptor.title : fallbackTitle(placement.ref);
 }
 
+/** Removed items stay on screen until their exit animation ends. Never created under reduced motion. */
+function Ghost({ item, onDone, children }: { item: Placement; onDone: (id: string) => void; children: ReactNode }) {
+  useEffect(() => {
+    const timer = setTimeout(() => onDone(item.id), MOTION_DURATIONS.slow + 80);
+    return () => clearTimeout(timer);
+  }, [item.id, onDone]);
+  return <div className="hq-canvas-item" aria-hidden="true" data-hq-presence="exit" data-hq-motion="scale" style={px(item.frame)}
+    onAnimationEnd={(event) => { if (event.target === event.currentTarget) onDone(item.id); }}>{children}</div>;
+}
+
 /**
  * The infinite canvas surface. All behavior lives in the pure reducer; this
  * component translates DOM input into actions and renders the camera.
  */
-export function CanvasView({ state, dispatch, registry, platform, renderers = {}, label = 'Design canvas' }: CanvasViewProps) {
+export function CanvasView({ state, dispatch, registry, platform, renderers = {}, label = 'Design canvas', settled = true }: CanvasViewProps) {
   const root = useRef<HTMLDivElement>(null);
   const spaceHeld = useRef(false);
+  const noSnap = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
   const arrangement = visibleArrangement(state);
   const { camera } = state;
+  const { settle } = useCameraMotion(root, camera, state.cameraEase, state.viewport);
+
+  // Direct input starts from the camera the page shows, so a wheel or drag in the middle of an eased move does not jump.
+  const settleCamera = useCallback(() => {
+    const live = settle();
+    if (live) dispatch({ type: 'camera', camera: live });
+  }, [settle, dispatch]);
 
   useLayoutEffect(() => {
     const element = root.current;
@@ -85,6 +151,7 @@ export function CanvasView({ state, dispatch, registry, platform, renderers = {}
     if (!element) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
+      settleCamera();
       const bounds = element.getBoundingClientRect();
       dispatch({
         type: 'wheel', anchor: { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
@@ -93,7 +160,7 @@ export function CanvasView({ state, dispatch, registry, platform, renderers = {}
     };
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
-  }, [dispatch]);
+  }, [dispatch, settleCamera]);
 
   // Keep DOM focus on the node that holds canvas focus.
   useEffect(() => {
@@ -102,6 +169,40 @@ export function CanvasView({ state, dispatch, registry, platform, renderers = {}
     const target = state.focusId ? element.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(state.focusId)}"]`) : element;
     if (target && document.activeElement !== target) target.focus({ preventScroll: true });
   }, [state.focusId]);
+
+  // Items added after the document loaded scale in, and removed ones scale out. Items already there never move on load.
+  const reducedMotion = useReducedMotion();
+  const animateRef = useRef(false);
+  const animate = animateRef.current;
+  useEffect(() => { animateRef.current = settled; });
+  const visibleItems = arrangement.items.filter((item) => !item.hidden);
+  const previousItems = useRef<readonly Placement[]>(visibleItems);
+  const [ghosts, setGhosts] = useState<readonly Placement[]>([]);
+  useLayoutEffect(() => {
+    const now = new Set<string>(visibleItems.map((item) => item.id));
+    const gone = animate && !reducedMotion ? previousItems.current.filter((item) => !now.has(item.id)) : [];
+    previousItems.current = visibleItems;
+    setGhosts((current) => {
+      const kept = current.filter((ghost) => !now.has(ghost.id));
+      const added = gone.filter((item) => !kept.some((ghost) => ghost.id === item.id));
+      return added.length === 0 && kept.length === current.length ? current : [...kept, ...added];
+    });
+  });
+  const dropGhost = useCallback((id: string) => setGhosts((current) => current.filter((ghost) => ghost.id !== id)), []);
+
+  // After a real drag ends, the frames of what moved settle once more so the move reads as finished.
+  const moving = state.gesture?.kind === 'move';
+  const [dropped, setDropped] = useState<{ readonly tick: number; readonly ids: readonly string[] }>({ tick: 0, ids: [] });
+  const drag = useRef<{ ids: readonly string[]; moved: boolean } | null>(null);
+  useEffect(() => {
+    if (state.gesture?.kind === 'move') {
+      drag.current = { ids: state.gesture.ids, moved: (drag.current?.moved ?? false) || state.preview !== null };
+      return;
+    }
+    const finished = drag.current;
+    drag.current = null;
+    if (finished?.moved) setDropped((current) => ({ tick: current.tick + 1, ids: finished.ids }));
+  }, [state.gesture, state.preview]);
 
   const point = (event: { clientX: number; clientY: number }) => {
     const bounds = root.current!.getBoundingClientRect();
@@ -116,13 +217,16 @@ export function CanvasView({ state, dispatch, registry, platform, renderers = {}
     event.currentTarget.setPointerCapture(event.pointerId);
     if (event.button === 1) event.preventDefault();
     if (!pan && target === null) root.current?.focus({ preventScroll: true });
+    settleCamera();
     dispatch({ type: 'pointer-down', point: point(event), target, toggle: event.shiftKey || (platform === 'mac' ? event.metaKey : event.ctrlKey), pan });
   };
 
   const selected = new Set<string>(state.selection);
+  const draggingIds = new Set<string>(state.gesture?.kind === 'move' ? state.gesture.ids : []);
   const marquee = state.gesture?.kind === 'marquee' ? state.gesture : null;
   const gridStep = arrangement.grid.size * camera.zoom;
   const showGrid = gridStep >= 6;
+  const snapping = moving && arrangement.grid.snap && !noSnap.current;
 
   return <div
     ref={root}
@@ -132,12 +236,14 @@ export function CanvasView({ state, dispatch, registry, platform, renderers = {}
     aria-roledescription="canvas"
     aria-label={`${label}${state.readOnly ? ' (read-only)' : ''}`}
     data-gesture={state.gesture?.kind ?? undefined}
-    style={showGrid ? {
-      backgroundSize: `${gridStep}px ${gridStep}px`,
-      backgroundPosition: `${-camera.x * camera.zoom}px ${-camera.y * camera.zoom}px`,
-    } : { backgroundImage: 'none' }}
+    data-grid={showGrid ? 'on' : 'off'}
+    data-snap={snapping || undefined}
+    style={cameraStyle(camera, { '--hq-canvas-grid': String(arrangement.grid.size) })}
     onPointerDown={onPointerDown}
-    onPointerMove={(event) => { if (stateRef.current.gesture) dispatch({ type: 'pointer-move', point: point(event), noSnap: platform === 'mac' ? event.metaKey : event.ctrlKey }); }}
+    onPointerMove={(event) => {
+      noSnap.current = platform === 'mac' ? event.metaKey : event.ctrlKey;
+      if (stateRef.current.gesture) dispatch({ type: 'pointer-move', point: point(event), noSnap: noSnap.current });
+    }}
     onPointerUp={() => dispatch({ type: 'pointer-up' })}
     onPointerCancel={() => dispatch({ type: 'pointer-cancel' })}
     onLostPointerCapture={() => { if (stateRef.current.gesture) dispatch({ type: 'pointer-up' }); }}
@@ -155,31 +261,34 @@ export function CanvasView({ state, dispatch, registry, platform, renderers = {}
         return;
       }
       event.preventDefault();
+      // Zoom, fit and focus steps ease from where the camera is; every other key (panning, nudging) acts on what is shown.
+      const command = keyCommand(input, platform, stateRef.current.selection.length > 0);
+      if (command && command.kind !== 'zoom-step' && command.kind !== 'zoom-reset' && command.kind !== 'fit' && command.kind !== 'focus-step') settleCamera();
       dispatch({ type: 'key', input, platform });
     }}
     onKeyUp={(event) => { if (event.key === ' ') spaceHeld.current = false; }}
     onBlur={() => { spaceHeld.current = false; }}
   >
-    <div className="hq-canvas-world" style={{ transform: `translate(${-camera.x * camera.zoom}px, ${-camera.y * camera.zoom}px) scale(${camera.zoom})` }}>
+    <div className="hq-canvas-world">
       {arrangement.artboards.map((board) => <div
         key={board.id} className="hq-canvas-artboard" data-node-id={board.id} data-selected={selected.has(board.id) || undefined}
         role="group" aria-label={`Artboard ${board.name}`} tabIndex={state.focusId === board.id ? 0 : -1}
         style={px(board.frame)} />)}
-      {arrangement.items.filter((item) => !item.hidden).map((item) => <div
-        key={item.id} className="hq-canvas-item" data-node-id={item.id} data-selected={selected.has(item.id) || undefined}
-        data-locked={item.locked || undefined} role="button" aria-pressed={selected.has(item.id)}
-        aria-label={nodeLabel(registry, item)} tabIndex={state.focusId === item.id ? 0 : -1} style={px(item.frame)}>
-        <ItemContent placement={item} registry={registry} renderers={renderers} />
-      </div>)}
+      {visibleItems.map((item) => <ItemShell key={item.id} enter={animate} item={item} selected={selected.has(item.id)} dragging={draggingIds.has(item.id)}
+        label={nodeLabel(registry, item)} tabIndex={state.focusId === item.id ? 0 : -1}>
+        <ItemContent placement={item} registry={registry} renderers={renderers} zoom={camera.zoom} />
+      </ItemShell>)}
+      {ghosts.map((item) => <Ghost key={`gone:${item.id}`} item={item} onDone={dropGhost}>
+        <ItemContent placement={item} registry={registry} renderers={renderers} zoom={camera.zoom} />
+      </Ghost>)}
     </div>
     <div className="hq-canvas-overlay" aria-hidden="true">
-      {arrangement.artboards.map((board) => {
-        const rect = screenRect(state, board.frame);
-        return <span key={board.id} className="hq-canvas-artboard-name" style={{ left: rect.x, top: rect.y - 20 }}>{board.name}</span>;
-      })}
+      {arrangement.artboards.map((board) => <span key={board.id} className="hq-canvas-artboard-name" style={frameVars(board.frame)}>{board.name}</span>)}
       {state.selection.map((id) => {
         const node = arrangement.items.find((item) => item.id === id) ?? arrangement.artboards.find((board) => board.id === id);
-        return node ? <div key={id} className="hq-canvas-selection" style={px(screenRect(state, node.frame))} /> : null;
+        const settling = dropped.ids.includes(id);
+        return node ? <div key={settling ? `${id}:${dropped.tick}` : id} className="hq-canvas-selection" data-appear={settling ? 'settle' : 'select'}
+          data-dragging={draggingIds.has(id) || undefined} style={frameVars(node.frame)} /> : null;
       })}
       {state.guides.map((guide, index) => {
         const start = worldToScreen(camera, guide.axis === 'x' ? { x: guide.at, y: guide.from } : { x: guide.from, y: guide.at });
@@ -192,5 +301,17 @@ export function CanvasView({ state, dispatch, registry, platform, renderers = {}
         width: Math.abs(marquee.current.x - marquee.origin.x), height: Math.abs(marquee.current.y - marquee.origin.y),
       }))} />}
     </div>
+  </div>;
+}
+
+/** One placed item. `enter` is read once, when the item first mounts, so it never replays on later renders. */
+function ItemShell({ item, selected, dragging, label, tabIndex, enter, children }: {
+  item: Placement; selected: boolean; dragging: boolean; label: string; tabIndex: 0 | -1; enter: boolean; children: ReactNode;
+}) {
+  const [entering] = useState(enter);
+  return <div className={entering ? 'hq-canvas-item hq-enter-scale' : 'hq-canvas-item'} data-node-id={item.id} data-selected={selected || undefined}
+    data-locked={item.locked || undefined} data-dragging={dragging || undefined} role="button" aria-pressed={selected}
+    aria-label={label} tabIndex={tabIndex} style={px(item.frame)}>
+    {children}
   </div>;
 }
