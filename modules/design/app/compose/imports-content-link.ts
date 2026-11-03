@@ -1,5 +1,5 @@
 /**
- * Links imported PNG versions into project content (B3 backend contract, section 7).
+ * Links imported PNG versions into project content (B3 backend contract, section 12).
  *
  * An import commit writes imports records. Projects, Gallery, Compare and Annotations read project content, so the
  * same atomic batch also carries the project's content document: a view per imported record and a version per

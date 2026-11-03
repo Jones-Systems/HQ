@@ -1,5 +1,5 @@
 /**
- * The durable Imports environment (B3 backend contract, section 7): real picker, the real local store through
+ * The durable Imports environment (B3 backend contract, section 12): real picker, the real local store through
  * the document bridge, and project-content linking in the same atomic commit.
  *
  * It exposes the controller's `deps` and `capabilities` and nothing more. `saveBundle` stays undefined: the bridge

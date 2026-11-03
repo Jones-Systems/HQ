@@ -1,5 +1,5 @@
 /**
- * The durable Imports `pickSource` (B3 backend contract, section 7).
+ * The durable Imports `pickSource` (B3 backend contract, section 12).
  *
  * `import.pick` opens the native PNG picker. The dialog tells the owner the files are imported as their own work,
  * and that statement is why the source's rights basis is `owned`. The source is an `hq.files` v1 source with:

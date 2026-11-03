@@ -4,8 +4,9 @@ Owner: lane B3 (Design backend). Readers: lanes rebuilding Design views (F4 core
 Status: stable from 2026-11-03. Changes are additive. A breaking change gets a new name and a note here.
 
 This page covers what a Design view can rely on when it calls the backend: how failures arrive, how to show
-them, and how to learn that a project's content changed. Section ports stay where they are documented today
-(for example `projects/src/contract.ts`, `imports/src/contract.ts`). This contract sits on top of them.
+them, how to learn that a project's content changed, and how to keep a view current. Section ports stay where
+they are documented today (for example `projects/src/contract.ts`, `imports/src/contract.ts`). This contract
+sits on top of them.
 
 ## 1. Typed failures (`errors.ts`)
 
@@ -124,7 +125,7 @@ and views read `failure.operation` and `failure.kind`, never the message.
 | `imports.undo` | yes | The atomic commit that undoes an import. |
 | `imports.resolve` | yes | The atomic commit that takes the incoming file or keeps the current one. |
 | `imports.edit` | yes | The atomic commit that saves an owner edit of an imported record. |
-| `imports.export` | no | Backup or export. Always `disabled` in this build (section 7). |
+| `imports.export` | no | Backup or export. Always `disabled` in this build (section 12). |
 
 A commit is named by the event it appends to the `imports` stream: `import.applied` is `imports.apply`,
 `import.undone` is `imports.undo`, `conflict.resolved` is `imports.resolve`. A batch with no event is an owner
@@ -156,20 +157,25 @@ Both workspace kinds (`bridged` and the labelled in-memory `fake`) expose `works
 
 - `subscribe(projectId, listener)` returns an idempotent unsubscribe. Each call is its own subscription,
   even for the same function.
+- `subscribeAll(listener)` hears every project's changes and is told which project changed. It follows the
+  same rules as `subscribe`. The Projects controller uses it, because its gallery shows every project.
 - `revision(projectId)` is a per-project counter that starts at 0. Use it as a cache key when a view
-  memoises project content.
+  memoises project content; the accessors in §7 do.
 - `notify(projectId)` is for writers. It carries no data and never writes or dispatches.
 
 Writers notify after any attempt to write project content, whether it succeeded, failed or has an unknown
 outcome. Readers then re-read instead of trusting a cache; a spurious notification only costs one re-read.
-Producers today:
+Who notifies today:
 
-| producer | notifies |
+| writer | when |
 | --- | --- |
-| Live capture acceptance (`interactive-workspace.ts`) | After the capture write is attempted, whatever the outcome. |
-| Imports linking (`imports-content-link.ts`, section 7) | After an imports commit that carries linked versions is sent, whatever the outcome. |
+| live capture acceptance (`interactive-workspace.ts`) | after any attempt to save the version, including a failed save. A stale capture is refused before saving and does not notify |
+| adding a screen to the saved interactive flow | after any attempt to save the flow, including a failed save |
+| Projects edits (`onContentChange` port of the Projects controller, wired in `bridged-workspace.ts`) | after any attempt to edit, including a refused or failed one |
+| Imports linking (`imports-content-link.ts`) | after an imports commit that carries linked versions is sent, whatever the outcome (section 12) |
 
-Further producers (Projects edits) notify as they land, and are listed here when they do.
+A writer that does not notify is not seen until something else does. The fake workspace's fixtures never
+change, so its revision stays 0 unless a test notifies.
 
 A listener that throws, or returns a promise that rejects, is isolated. Other listeners still run. A listener
 removed during a notification is not called afterwards.
@@ -211,7 +217,109 @@ Until the owner-held project identity cutover (HQR-1 / D3), Design keeps its own
 context does not choose a Design project, and the project opened in Design scopes only Design's sections.
 Shared surfaces should not promise cross-module project scoping for Design yet.
 
-## 7. Imports on the durable store (`imports-env.ts`)
+## 7. Fresh content in views
+
+The bridged accessors used to be memoised for the whole session. Now each follows the project's content:
+
+| accessor | returns | after a change to that project |
+| --- | --- | --- |
+| `contentFor(project, read?)` | `{ repository, content, thumbnails, ... }` snapshot | a new snapshot (new promise) |
+| `annotationSessionFor(project, read?)` | annotation session (§8) | a new session; one annotation controller per version is kept, so unsaved marks survive |
+| `flowsFor(project, read?)` | the project's saved flows | a new list (new promise) |
+| `compareFor(project)` | the `CompareController` | the same controller. It re-reads the version lists its pickers show (`refreshVersions()`); pinned panels and an unsaved layout are untouched |
+| `tasteFor(project)` | the Taste client | the same client (it holds the journal's retry state) |
+| `projectsFor(project)` | the `ProjectsController` | the same controller. It re-reads the open project and every project it already showed (`refreshContent(id)`); selection, filters and scroll stay |
+| `canvasFor(project)` | the canvas environment | the same environment. The project-versions provider refreshes, so the registry lists new versions |
+
+Only the project that changed is affected. Another project's change reads nothing. While nothing changes an
+accessor returns the same promise, so React `use()` does not loop. A failed build is cached for the revision
+too, and the next change retries it (§10).
+
+`read` is `{ revision?, selection? }`. `selection` picks one of several values (§8). `revision` is what the
+view is showing, from the hook below. A request for an older revision is answered with the newest value that
+already resolved, so a refresh in the background never puts a mounted view back into its loading state.
+
+### `useProjectContentRevision` (`content-revision.ts`)
+
+```tsx
+const revision = useProjectContentRevision(workspace, context.id);
+const { content } = use(workspace.contentFor(context, { revision }));
+```
+
+- It re-renders the view when that project's content changes, and not for other projects.
+- The returned revision is deferred (`useDeferredValue`). The new content renders in the background and the
+  screen keeps the old content until it is ready. A live preview beside the content therefore stays put.
+- Leaving out `{ revision }` is correct but shows the loading state while it reloads.
+- Views that read only `compareFor`, `tasteFor`, `projectsFor` or `canvasFor` need no hook: those objects
+  update themselves and the view already subscribes to them.
+- Works in both workspaces. The fake accepts and ignores `read`.
+
+## 8. Annotation version selection
+
+```tsx
+const session = use(workspace.annotationSessionFor(context, { revision, selection: versionId }));
+// session: { target: { version, frame, thumbnailUrl, captureUrl }, controller, choices, selection } | null
+```
+
+- `selection` is an explicit version id. Leave it out for the default.
+- Default: the newest version that has a stored capture image, else the newest version that names a capture
+  by digest. This is a screen default only. It never says which version is current, based on which, or what a
+  mark belongs to. Marks always carry the exact version id, and `basedOn` is never followed.
+- `choices` lists the versions that can be annotated (they name a capture), newest first, for a picker.
+- `target.captureUrl` is the stored capture as a `data:` URL, read by exact digest, re-hashed and checked to be
+  a PNG. It is `null` when the bytes are not stored on this device. `target.thumbnailUrl` is `null` here.
+- `target.frame.captureDigest` is never empty. A version without a capture digest is not offered, because an
+  annotation anchor requires one. `null` means no version can be annotated.
+- `frame.route` is the path and search, `frame.state` the hash, like a live frame.
+- An unknown id rejects as `not-found`; a version without a capture rejects as `invalid` (reason `no-capture`).
+
+## 9. Captured-version thumbnails
+
+A live capture saved by `acceptCapture` gets a Projects `thumbnail` (so Projects and Gallery show it) only
+when its stored PNG qualifies:
+
+- the bytes are stored under the capture digest and hash to it;
+- they are a PNG (signature and header checked; `w` and `h` come from the header);
+- they are at most `DEFAULT_LIMITS.maxThumbnailBytes` (2 MiB) and the media type is in
+  `THUMBNAIL_MEDIA_TYPES`.
+
+The host's `CaptureRecord` has no byte size, so the size is read from the stored bytes
+(`capture-thumbnail.ts`). If the size is unknown, the bytes are missing, or they are too large, the version is
+saved without a thumbnail. One is never faked. A version that already exists keeps its fields, as versions are
+immutable. Resolution goes through `thumbnail-port.ts`, which reads the same blob by the same digest.
+
+## 10. Operation names added by the durable accessors
+
+Every operation here except `captures.accept` is a read (`write: false`), so an unrecognised failure is
+`unavailable` with Retry, never `unknown`. `captures.accept` is a write (`write: true`).
+
+| operation | section | rejects from | typical failures |
+| --- | --- | --- | --- |
+| `projects.load` | projects | `contentFor`, and anything that waits on it | `unavailable`; `read-only` (newer format, reason `unsupported-stored-schema`); `corrupt` (reason `invalid-content`) |
+| `flows.load` | flows | `flowsFor` | `unavailable` |
+| `compare.load` | compare | `compareFor` | `read-only`; `corrupt` (reason `wrong-project` or `invalid-comparison`); `unavailable` |
+| `taste.load` | taste | `tasteFor` | `invalid` (reason `project-id`) |
+| `annotations.open` | annotations | `annotationSessionFor` | `not-found` (reason `version`); `invalid` (reason `no-capture`). A content load failure keeps `projects.load` |
+| `captures.accept` | captures | live capture and pick events | `stale` (the page changed), `unavailable`, `conflict`, `read-only`, `invalid`, `unknown` |
+
+Each rejection is a `DesignOperationError` with the original as `cause`. A failed accessor stays failed for
+that revision, so a suspended view does not re-read in a loop. To retry after a `reload` or `retry` action,
+call `workspace.contentEvents.notify(project.id)`: it only marks the content as possibly changed, and the next
+read rebuilds.
+
+`captures.accept` is not a promise the view awaits. `workspace.interactive.snapshot()` carries `failure`
+(a `DesignFailure`, or null) beside the `error` sentence, and clears both together. An `unknown` failure also
+sets `held`: further preview actions wait until the owner reopens, and none is retried blindly.
+
+## 11. Compare and the capture receipts
+
+`compare-catalog.ts` re-reads the project repository on every `listViews`, `listVersions` and `getVersion`
+call, so it never goes stale; the Compare controller's own cached lists are refreshed as in §7. It still
+returns `captures: []`. Project content does not keep the provenance, time and extent that a static capture
+needs, and full-extent capture with its HQR-2 receipts is owner-held. Nothing here fabricates a capture
+receipt. A digest or a thumbnail alone is not one.
+
+## 12. Imports on the durable store (`imports-env.ts`)
 
 In a bridged workspace, `workspace.importsFor(project)` returns the durable Imports env. It is on by default.
 In the in-memory fake workspace it stays the labelled synthetic env. Bridged mode never shows synthetic data.

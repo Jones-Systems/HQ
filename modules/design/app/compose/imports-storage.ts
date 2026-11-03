@@ -1,5 +1,5 @@
 /**
- * Imports `StoragePort` over the Design document bridge (B3 backend contract, section 7; see BACKEND-CONTRACT.md).
+ * Imports `StoragePort` over the Design document bridge (B3 backend contract, section 12; see BACKEND-CONTRACT.md).
  *
  * The importer talks to a namespaced port: `imports/...` keys and the `imports` stream. The desktop host serves the
  * same records as `design/imports/...` documents and the `design/imports` stream, writes them only through the atomic

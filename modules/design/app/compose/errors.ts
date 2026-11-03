@@ -217,6 +217,12 @@ export async function attemptDesign<T>(run: () => Promise<T>, context: DesignFai
   catch (error) { return { ok: false, failure: classifyDesignError(error, context) }; }
 }
 
+/** Runs a backend call and rethrows any rejection as a `DesignOperationError`, for builders that must stay promise-shaped. */
+export async function designOperation<T>(run: () => Promise<T>, context: DesignFailureContext): Promise<T> {
+  try { return await run(); }
+  catch (error) { throw toDesignOperationError(error, context); }
+}
+
 /** Tones of the shared `@hq/ui` feedback primitives (toast, InlineNotice, StatusIndicator). */
 export type DesignFeedbackTone = 'danger' | 'unknown' | 'warning' | 'info';
 /** Inline indicator state beside the control that failed. */
