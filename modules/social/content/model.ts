@@ -63,6 +63,11 @@ export function filterDrafts(drafts: readonly Draft[], filters: LibraryFilters):
     && (!query || draft.title.toLocaleLowerCase().includes(query) || draft.body.toLocaleLowerCase().includes(query)));
 }
 
+/** "24 Oct": a planned date for a crowded Library row. The full date, with its year, stays in the row's title text. */
+export function rowDateLabel(date: string): string {
+  return dateLabel(date).replace(/\s\d+$/u, '');
+}
+
 // ── Calendar ───────────────────────────────────────────────────────────────────
 
 export interface CalendarDay {
