@@ -127,6 +127,10 @@ Each builder is a T3 delegated task (Claude Sonnet 5.5, effort xhigh) in its own
 6. **Capture evidence.** Before: rebuild the browser preview at `0cd50ab`, or use the scratch shots. After: 1440×900 light and dark and 760×600 for every view and key state. Commit them under a docs evidence folder (synthetic data only).
 7. **Open the PR** against `work/hq-foundation` with before and after screenshots, then link and watch it. F7 asked to review it.
 8. **Coordinate F7-X5** (the sample card paired with a Social draft) with B1 and F3.
+   - **F3's proposal**, which F2 confirmed by message and has not implemented. F3 has done its side (`work/hq-life-social-20261103` @ `d6b11c2`): the Social example seed now uses the active HQ project, and draft `d0000000000000000000000000000002` ("Steeping times thread") links to the Work item `ex-cupping-hour` ("Plan the cupping hour").
+   - **The Work side still needs that example item.** It should fit the Larkspur Tea Co. story. Kind, status and dates are Work's choice. It needs the back-reference `{ version: 1, domain: 'social', projectId: <active project>, kind: 'draft', entityId: 'd0000000000000000000000000000002', title: 'Steeping times thread', returnDestination: { domain: 'work', destination: 'item/ex-cupping-hour' } }`.
+   - **Ownership.** The item belongs in `modules/work/core/fixtures/examples.ts`, which is B1's. The project id would come from the shell (`apps/desktop/src/services/domains.tsx`), mirroring F3's `examples.social(projectId)`; merge the adjacent hunks, don't rewrite them.
+   - **Caveat from F3.** The reference providers read only live services, so sample links resolve as unavailable until F7 decides on example-mode providers.
 
 ## Open questions and risks
 
