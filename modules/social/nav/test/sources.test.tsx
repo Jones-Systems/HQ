@@ -10,7 +10,7 @@ import {
 import { createWorkbenchFixture } from '../../workbench/fixtures/examples';
 import { toolDraft, workbenchView } from '../../workbench/state';
 import { NOT_SAVED } from '../sources/ImportDetail';
-import { EXAMPLE_FILE_NAMES } from '../sources/examples';
+import { EXAMPLE_FILE_NAME } from '../sources/examples';
 import { SOURCES_PROPOSED, SocialDomain } from '..';
 
 const NOW = () => new Date('2026-10-20T12:00:00Z');
@@ -168,20 +168,31 @@ describe('Sources import desk', () => {
     expect(zone.hasAttribute('data-dragging')).toBe(false);
   });
 
-  it('offers the fictional example files in the example workspace only', async () => {
+  it('reports a broken file dropped on the drop zone with its line and column, and keeps nothing', async () => {
     const s = setup();
-    expect(EXAMPLE_FILE_NAMES).toStrictEqual(['example-signal-items.json', 'example-broken-feed.json']);
+    const zone = screen.getByRole('region', { name: 'Drop a file to check it' });
+    fireEvent.drop(zone, { dataTransfer: { types: ['Files'], files: [file('{\n  "items": [\n    { "id": "a" }\n    { "id": "b" }\n  ]\n}\n', 'dropped-broken.json')] } });
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toMatch(/dropped-broken\.json/u);
+    expect(alert.textContent).toMatch(/line 4, column 5/iu);
+    await waitFor(() => expect(alert.closest('.sd-problem')).toBe(document.activeElement));
+    expect(screen.queryByRole('heading', { level: 2, name: 'This session' })).toBeNull();
+    expect(effects(s)).toHaveLength(0);
+  });
+
+  it('offers one fictional example in the example workspace only, and no broken-file button in either', async () => {
+    const s = setup();
+    expect(EXAMPLE_FILE_NAME).toBe('example-signal-items.json');
+    expect(screen.queryByRole('button', { name: /broken/iu })).toBeNull();
     await s.user.click(screen.getByRole('button', { name: 'Use fictional example' }));
     expect(await screen.findByRole('heading', { level: 2, name: 'example-signal-items.json' })).toBeTruthy();
     expect(screen.getByText('Example data', { selector: '.sd-detail .sx-tag' })).toBeTruthy();
-    await s.user.click(screen.getByRole('button', { name: 'Try a broken file' }));
-    expect((await screen.findByRole('alert')).textContent).toMatch(/line 5, column 5/iu);
     cleanup();
     resetSocialSessions();
 
     setup({ example: false });
     expect(screen.queryByRole('button', { name: 'Use fictional example' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Try a broken file' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /broken/iu })).toBeNull();
   });
 
   it('lists places a bare list could go as the user’s choice, not as a recognized match', async () => {

@@ -6,8 +6,8 @@ export interface DropZoneProps {
   /** A check is running. */
   readonly busy: boolean;
   readonly onFiles: (files: readonly File[]) => void;
-  /** Fictional files, offered in the example workspace only. */
-  readonly examples?: { readonly onValid: () => void; readonly onBroken: () => void };
+  /** Loads the fictional example file; offered in the example workspace only. */
+  readonly onExample?: () => void;
 }
 
 function carriesFiles(event: DragEvent): boolean {
@@ -15,7 +15,7 @@ function carriesFiles(event: DragEvent): boolean {
 }
 
 /** Where a file is dropped or chosen. The drop zone reacts while a file is dragged over it. */
-export function DropZone({ busy, onFiles, examples }: DropZoneProps) {
+export function DropZone({ busy, onFiles, onExample }: DropZoneProps) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -41,12 +41,7 @@ export function DropZone({ busy, onFiles, examples }: DropZoneProps) {
         <Button variant="primary" busy={busy} busyLabel="Checking" onClick={() => input.current?.click()}>
           <SocialIcon name="file" />Choose file…
         </Button>
-        {examples && (
-          <>
-            <Button size="sm" variant="ghost" disabled={busy} onClick={examples.onValid}>Use fictional example</Button>
-            <Button size="sm" variant="ghost" disabled={busy} onClick={examples.onBroken}>Try a broken file</Button>
-          </>
-        )}
+        {onExample && <Button size="sm" variant="ghost" disabled={busy} onClick={onExample}>Use fictional example</Button>}
       </div>
       <input
         ref={input} className="sd-file" type="file" multiple tabIndex={-1} aria-label="Choose JSON or JSON Lines files to check"

@@ -1,6 +1,7 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ModulePort } from '@hq/contracts';
+import type { ReferencePort } from '@hq/ui';
 import {
   FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_REFERENCES, FIXTURE_IDS, FIXTURE_PROJECT_ID, socialSession, workspaceSnapshot, type FixtureOptions,
 } from '../../core';
@@ -47,12 +48,31 @@ function setValue(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectEl
 const brandSelect = () => document.querySelector<HTMLSelectElement>('.sd-brand select:not([disabled])');
 const chooseBrand = async (brandId: string) => setValue(await until(brandSelect), brandId, 'change');
 
+/** A missing comma after the first item: the check reports line 5, column 5. */
+const BROKEN_FEED = `{
+  "version": "https://jsonfeed.org/version/1.1",
+  "items": [
+    { "id": "example-item-1", "title": "A line that forgets its comma" }
+    { "id": "example-item-2", "title": "So the file stops here" }
+  ]
+}
+`;
+
+/** Reads every link as unreachable, as the shell does while its reference providers have no live service to read. */
+const UNREACHABLE_REFERENCES: ReferencePort = {
+  find: async () => [],
+  resolve: async () => ({ status: 'unavailable', observedAt: '2026-10-20T12:00:00Z' }),
+  open: () => undefined,
+};
+
 interface Scenario {
   readonly caption: string;
   readonly destination: string;
   readonly options?: FixtureOptions;
   /** The domain's clock, when the view needs a different day from the default. */
   readonly now?: () => Date;
+  /** A reference service, for views that show what Open does; the others run without one, as a standalone mount does. */
+  readonly references?: ReferencePort;
   readonly drive?: (fixture: WorkbenchFixture) => Promise<void>;
 }
 
@@ -90,11 +110,19 @@ const SCENARIOS: Record<string, Scenario> = {
     },
   },
   'sources-error': {
-    caption: 'Sources: a broken file, the error named by line and column, focus on the message', destination: 'sources',
+    caption: 'Sources: a broken file dropped on the desk, the error named by line and column, focus on the message', destination: 'sources',
     drive: async () => {
-      (await until(() => button(/^Try a broken file$/u))).click();
+      // The product has no broken-file button: the harness drops a file with a missing comma, as a person would.
+      const zone = await until(() => document.querySelector('.sd-drop'));
+      const data = new DataTransfer();
+      data.items.add(new File([BROKEN_FEED], 'example-broken-feed.json', { type: 'application/json' }));
+      zone.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
       await until(() => document.querySelector('.sd-problem'));
     },
+  },
+  'overview-links': {
+    caption: 'Overview: a link whose owner can\'t be reached keeps Open disabled, with the reason beside it', destination: 'home',
+    references: UNREACHABLE_REFERENCES,
   },
   'sources-dragging': {
     caption: 'Sources: a file held over the drop zone', destination: 'sources',
@@ -149,7 +177,7 @@ function Page() {
   return (
     <main className="preview" data-view={view}>
       <p className="preview-caption">Fictional fixture · {theme} · {scenario.caption}</p>
-      <SocialDomain {...port} port={socialWorkspacePort()} example now={scenario.now ?? NOW} />
+      <SocialDomain {...port} port={socialWorkspacePort()} example now={scenario.now ?? NOW} {...(scenario.references ? { references: scenario.references } : {})} />
     </main>
   );
 }

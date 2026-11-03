@@ -104,10 +104,7 @@ export function Sources({ sourceId, navigate, projectId, now = systemNow }: Sour
     navigate(`workbenches/${fit.tool}`);
   };
 
-  const examples = frame?.example ? {
-    onValid: () => void check([exampleFile('valid')], true),
-    onBroken: () => void check([exampleFile('broken')], true),
-  } : undefined;
+  const onExample = frame?.example ? () => void check([exampleFile()], true) : undefined;
   const registry = snapshot && hasFeature(snapshot, FEATURE_HQ_SOURCES)
     ? "Proposed — the service advertises hq-sources-v1, but HQ can't read a source registry yet"
     : SOURCES_PROPOSED;
@@ -122,7 +119,7 @@ export function Sources({ sourceId, navigate, projectId, now = systemNow }: Sour
         {sourceId && <p className="sd-header-note" role="note">The source “{sourceId}” can't be shown: there is no source registry yet.</p>}
       </PageHeader>
 
-      <DropZone busy={checking} onFiles={(files) => void check(files)} {...(examples ? { examples } : {})} />
+      <DropZone busy={checking} onFiles={(files) => void check(files)} {...(onExample ? { onExample } : {})} />
 
       {problems.length > 0 && (
         <div className="sd-problem hq-enter-rise" tabIndex={-1} ref={problemRef}>
