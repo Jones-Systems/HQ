@@ -8,7 +8,7 @@ export type SocialIconName =
   | 'overview' | 'sources' | 'workbenches' | 'library' | 'calendar' | 'runs' | 'channels'
   | 'plus' | 'play' | 'check' | 'close' | 'alert' | 'info' | 'clock' | 'search' | 'chevron-down' | 'chevron-right'
   | 'chevron-left' | 'copy' | 'upload' | 'file' | 'refresh' | 'undo' | 'arrow-right' | 'link' | 'sparkle' | 'brands'
-  | 'offline' | 'grip';
+  | 'offline' | 'grip' | 'sliders';
 
 const PATHS: Record<SocialIconName, ReactElement> = {
   overview: <><path d="M3 7.2 8 3l5 4.2V13a.6.6 0 0 1-.6.6H9.6V10H6.4v3.6H3.6A.6.6 0 0 1 3 13Z" /></>,
@@ -39,6 +39,7 @@ const PATHS: Record<SocialIconName, ReactElement> = {
   sparkle: <><path d="M8 2.5 9.3 6.7 13.5 8 9.3 9.3 8 13.5 6.7 9.3 2.5 8 6.7 6.7Z" /></>,
   brands: <><rect x="2.5" y="2.5" width="5" height="5" rx="1.2" /><rect x="8.5" y="2.5" width="5" height="5" rx="1.2" /><rect x="2.5" y="8.5" width="5" height="5" rx="1.2" /><rect x="8.5" y="8.5" width="5" height="5" rx="1.2" /></>,
   offline: <><path d="M2.5 2.5l11 11" /><path d="M5.2 8.6a4 4 0 0 1 2-1M3 6.4a7 7 0 0 1 2.6-1.5M13 6.4a7 7 0 0 0-4.1-1.9M10.9 8.7a4 4 0 0 0-.7-.6M8 12h.01" /></>,
+  sliders: <><path d="M2.5 4.5h4M9.5 4.5h4M2.5 11.5h7M12.5 11.5h1" /><circle cx="8" cy="4.5" r="1.5" /><circle cx="11" cy="11.5" r="1.5" /></>,
   grip: <><circle cx="6" cy="4.5" r=".9" /><circle cx="10" cy="4.5" r=".9" /><circle cx="6" cy="8" r=".9" /><circle cx="10" cy="8" r=".9" /><circle cx="6" cy="11.5" r=".9" /><circle cx="10" cy="11.5" r=".9" /></>,
 };
 

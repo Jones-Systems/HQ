@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Button } from '@hq/ui';
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Button, InlineNotice } from '@hq/ui';
 import { workspaceSnapshot, type WorkspaceLoad, type WorkspaceSnapshot } from '../core';
 import { SocialIcon } from './icons';
 
@@ -38,6 +38,14 @@ export function longTime(iso: string): string {
 
 export type SyncTone = 'example' | 'synced' | 'refreshing' | 'connecting' | 'offline' | 'stale';
 
+/** The box of the nearest ancestor that clips its overflow (the page's scroll area), else the viewport. */
+function clipBox(element: HTMLElement): DOMRect {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    if (getComputedStyle(node).overflowX !== 'visible') return node.getBoundingClientRect();
+  }
+  return document.documentElement.getBoundingClientRect();
+}
+
 /** The one-word state of the workspace read, and the time it refers to. Never reads as current when it isn't. */
 export function syncState(load: WorkspaceLoad, example: boolean): { readonly tone: SyncTone; readonly label: string; readonly snapshot?: WorkspaceSnapshot } {
   const snapshot = workspaceSnapshot(load);
@@ -64,6 +72,20 @@ export function SyncPill() {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+
+  // The panel opens leftward from the pill. When the header wraps in a narrow window the pill sits at the left, so
+  // shift the panel right just enough to stay inside the page area instead of being clipped by it.
+  useLayoutEffect(() => {
+    const element = panel.current;
+    if (!open || !element) return;
+    element.style.removeProperty('--sx-sync-offset');
+    const box = element.getBoundingClientRect();
+    const area = clipBox(element);
+    const gap = 8;
+    const shift = Math.min(area.left + gap - box.left, area.right - gap - box.right);
+    if (shift > 0) element.style.setProperty('--sx-sync-offset', `${-shift}px`);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -93,7 +115,7 @@ export function SyncPill() {
       </button>
       {/* Always in the DOM so `aria-controls` resolves; hidden until opened. */}
       {(
-        <div className="sx-sync-panel" id={`${id}-panel`} role="group" aria-label="Social workspace status" hidden={!open}>
+        <div className="sx-sync-panel" ref={panel} id={`${id}-panel`} role="group" aria-label="Social workspace status" hidden={!open}>
           <p className="sx-sync-title">
             {state.tone === 'offline' ? 'The Social service is unreachable'
               : state.tone === 'stale' ? 'The workspace could not be refreshed'
@@ -101,9 +123,10 @@ export function SyncPill() {
                   : state.tone === 'synced' ? 'Synced with the Social service' : 'Reading the Social workspace…'}
           </p>
           {state.snapshot && <p className="hq-meta">Data as of {longTime(state.snapshot.observedAt)}</p>}
-          {(state.tone === 'offline' || state.tone === 'stale') && (
+          {state.tone === 'offline' && (
             <p>Saving, calendar moves and runs pause until it answers. Your text is kept. Checking again never resends a run.</p>
           )}
+          {state.tone === 'stale' && <p>Showing the last synced data. Checking again only reads; it never resends a run.</p>}
           {frame.example && <p>{frame.exampleNote}</p>}
           <p className="sx-sync-limits"><b>Delivered limits</b> {frame.limits}</p>
           <Button size="sm" variant="secondary" busy={busy} busyLabel="Checking…" onClick={frame.onCheck}>
@@ -112,6 +135,35 @@ export function SyncPill() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Under the page title while the service is unreachable or a refresh failed: one compact bar saying what is shown
+ * and what is paused, as Work does offline. The domain's toast announces the change once; this bar stays, and it
+ * holds through a re-check instead of flickering away while the read runs. Nothing shows before a first snapshot.
+ */
+function FrameNotice() {
+  const frame = useSocialFrame();
+  const state = frame ? syncState(frame.load, frame.example) : null;
+  const failing = state?.snapshot && (state.tone === 'offline' || state.tone === 'stale')
+    ? { tone: state.tone, at: state.snapshot.observedAt } : null;
+  const checking = state?.tone === 'refreshing';
+  const [held, setHeld] = useState<typeof failing>(null);
+  useEffect(() => {
+    if (failing) setHeld({ tone: failing.tone, at: failing.at });
+    else if (!checking) setHeld(null);
+  }, [failing?.tone, failing?.at, checking]);
+
+  const shown = failing ?? (checking ? held : null);
+  if (!frame || !shown) return null;
+  const at = shortTime(shown.at);
+  return (
+    <InlineNotice
+      className="sx-head-notice" tone="warning" variant="bar" live="off"
+      title={shown.tone === 'offline' ? `Offline · last synced ${at} · changes paused` : `Not refreshed · showing data from ${at}`}
+      actions={[{ label: 'Check again', onAction: frame.onCheck, busy: checking, busyLabel: 'Checking…' }]}
+    />
   );
 }
 
@@ -146,6 +198,7 @@ export function PageHeader({ title, description, eyebrow, actions, children, hea
           <SyncPill />
         </div>
       </div>
+      <FrameNotice />
       {children}
     </header>
   );

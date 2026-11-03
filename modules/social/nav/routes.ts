@@ -29,7 +29,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: readonly NavItem[] = [
   { section: 'overview', label: 'Overview', destination: 'overview', group: 'main' },
-  { section: 'sources', label: 'Sources', destination: 'sources', group: 'main', tag: 'Proposed' },
+  { section: 'sources', label: 'Sources', destination: 'sources', group: 'main' },
   { section: 'workbenches', label: 'Workbenches', destination: 'workbenches', group: 'main' },
   { section: 'library', label: 'Library', destination: 'library', group: 'main' },
   { section: 'calendar', label: 'Calendar', destination: 'calendar', group: 'main' },
