@@ -42,7 +42,7 @@ Work paused on the owner's request.
    - The receipt keeps one copy control: the Run ID row.
    - After an unknown outcome the form button reads "Run <tool>…", not "Run again…", and the dialog action reads "Create another run".
    - It updates `progress.test.tsx`, `run-history.test.tsx` and `workbench.test.tsx` to match.
-3. **After captures and the PR.** The capture scenarios are written and dry-run (see the last section). Nothing is captured from the integrated head yet, and no PR exists.
+3. **After captures and the PR.** The capture scenarios are written and dry-run; they are in [`f3-social/scratch/scenarios/`](f3-social/scratch/scenarios/). Nothing is captured from the integrated head yet, and no PR exists.
 
 **Not started:**
 
@@ -125,7 +125,7 @@ The lane is built on F1's primitives at `284393d`. `origin/work/hq-foundation` w
 2. **Walk the whole flow in the dev preview** in light and dark, at 760 px and with reduced motion: Overview → Sources (*Use fictional example*) → open in a workbench → Run → *Start draft* → Library *Save draft* → plan on the Calendar → Run history receipt.
 3. **Take the after captures** from the integrated head with the saved scenarios (see the last section). Commit a curated before/after set under `docs/design/social/flow-assessment-20261103/`, following the repo's `docs/**` evidence convention, and update the assessment with the final status.
 4. **Open the PR** from `work/hq-life-social-20261103` into `work/hq-foundation`.
-   - The body should cover the top findings, what was built, the checks and the before/after table. A draft exists only in `/tmp`.
+   - The body should cover the top findings, what was built, the checks and the before/after table. A draft is in [`f3-social/scratch/pr-body.md`](f3-social/scratch/pr-body.md).
    - End the body with the Claude Code line.
    - Link and watch the PR.
    - Tell lane F7, which asked to review it.
@@ -163,14 +163,18 @@ The lane is built on F1's primitives at `284393d`. `origin/work/hq-foundation` w
 
 **The lane lead's thread** holds the review history: screenshot comparisons against the mockups and the fix-round briefs.
 
-**`/tmp/hq-f3-scratch/` on the build host.** Expect it to be lost.
+**Copied into the repo** at [`f3-social/scratch/`](f3-social/scratch/), because `/tmp` on the build host is RAM-backed:
 
-- **Before captures:** `before/` holds 18 PNGs at 1280 × 800, light and dark, all pages, taken from the lane base in the desktop preview with Liberation Sans.
-- **Builder captures:** `v1/after*`, `v2/after`, `v3/after` and `v4/after*`, with each builder's scenario files.
-- **Lead captures:** `lead/after/` (frame at 760) and `lead/dry760*/` (a dry run of the integrated head).
-- **Capture tool:** `cdp-capture.mjs`, run as `FONT=host node cdp-capture.mjs <scenario.mjs> <outDir>`. It is a headless Chromium driver over CDP; each scenario sets `url`, `width`/`height` and `shots`, and each shot sets `theme`, `reducedMotion` and steps. PR #191 (headless dev-preview launcher and capture) may replace it.
-- **Dev server config:** `vite.preview-dev.config.mjs`, run as `HQ_ROOT=<worktree> HQ_PORT=5310 npx vite --config …`. It serves the desktop browser preview with `strictPort`.
-- **Scenarios for the after captures:** `lead/after-1280.scenario.mjs` and `lead/after-760.scenario.mjs`. They hide the preview harness's own overlay.
-- **Drafts:** `lead/pr-body.md` (PR body skeleton) and `BRIEF-COMMON.md` (the builder brief: honesty copy rules, motion tokens, ports and CPU rule).
+- **Before captures:** [`scratch/before/`](f3-social/scratch/before/) holds 18 PNGs at 1280 × 800, light and dark, all pages, taken from the lane base in the desktop preview with Liberation Sans.
+- **Capture tool:** [`scratch/cdp-capture.mjs`](f3-social/scratch/cdp-capture.mjs), run as `FONT=host node cdp-capture.mjs <scenario.mjs> <outDir>`. It is a headless Chromium driver over CDP; each scenario sets `url`, `width`/`height` and `shots`, and each shot sets `theme`, `reducedMotion` and steps. PR #191 (headless dev-preview launcher and capture) may replace it.
+- **Dev server config:** [`scratch/vite.preview-dev.config.mjs`](f3-social/scratch/vite.preview-dev.config.mjs), run as `HQ_ROOT=<worktree> HQ_PORT=5310 npx vite --config …`. It serves the desktop browser preview with `strictPort`.
+- **Scenarios:** [`scratch/scenarios/`](f3-social/scratch/scenarios/) has `before.scenario.mjs` and the after captures' `after-1280.scenario.mjs` and `after-760.scenario.mjs`. The after scenarios hide the preview harness's own overlay.
+- **PR body draft:** [`scratch/pr-body.md`](f3-social/scratch/pr-body.md).
+
+**Left in `/tmp/hq-f3-scratch/` and expected to be lost.** None of it was over the size limit; these were left out because they are superseded or regenerable:
+
+- builder captures `v1/after*`, `v2/after`, `v3/after` and `v4/after*`, and their scenario files. They are superseded once the after captures are taken from the integrated head; each builder handoff lists what they showed.
+- lead captures `lead/after/` (frame at 760) and `lead/dry760*/` (a dry run of the integrated head);
+- `BRIEF-COMMON.md`, the builder brief (honesty copy rules, motion tokens, ports and CPU rule). Its rules are restated in the [flow assessment](../../design/social/flow-assessment-20261103.md).
 
 **Servers and tabs.** No F3 dev servers are running, and no preview tabs are open.
