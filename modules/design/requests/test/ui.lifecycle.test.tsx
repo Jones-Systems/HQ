@@ -75,14 +75,18 @@ describe('lifecycle markup', () => {
     const html = renderToStaticMarkup(<RequestsView session={session} CompareSlot={CompareSlotFake} dispatch={e.connector.dispatch} now={NOW} newId={newId} />);
     const send = getByRole(markup(html), 'button', { name: 'Send packet #1…' }) as HTMLButtonElement;
     expect(send.type).toBe('button');
-    expect(send.disabled).toBe(false);
+    expect(send.getAttribute('aria-disabled')).toBeNull();
     expect(html).not.toContain('Why sending is unavailable');
     expect(e.connector.sends).toHaveLength(0);
     const noDestination = env();
     const draft = await readyDraft(noDestination);
     await draft.session.freeze();
     const blocked = markup(renderToStaticMarkup(<RequestsView session={draft.session} CompareSlot={CompareSlotFake} dispatch={noDestination.connector.dispatch} now={NOW} newId={newId} />));
-    expect((getByRole(blocked, 'button', { name: 'Send packet #1…' }) as HTMLButtonElement).disabled).toBe(true);
+    // Unavailable sending stays focusable and explains itself; activation is refused rather than the button removed.
+    const blockedSend = getByRole(blocked, 'button', { name: 'Send packet #1…' }) as HTMLButtonElement;
+    expect(blockedSend.getAttribute('aria-disabled')).toBe('true');
+    expect(blockedSend.disabled).toBe(false);
+    expect(blockedSend.getAttribute('aria-describedby')).toBeTruthy();
     expect(getByRole(blocked, 'list', { name: 'Why sending is unavailable' }).textContent).toMatch(/destination/i);
     expect(noDestination.connector.sends).toHaveLength(0);
   });
@@ -94,7 +98,7 @@ describe('lifecycle markup', () => {
     const html = renderToStaticMarkup(<RequestsView session={session} CompareSlot={CompareSlotFake} dispatch={e.connector.dispatch} now={NOW} newId={newId} />);
     const send = getByRole(markup(html), 'button', { name: 'Send packet #1…' }) as HTMLButtonElement;
     expect(send.type).toBe('button');
-    expect(send.disabled).toBe(true);
+    expect(send.getAttribute('aria-disabled')).toBe('true');
     expect(html).toContain('Delivery is unknown. Reconcile with the connector; do not resend.');
     expect(html).toContain('data-handoff="unknown"');
     expect(e.connector.sends).toHaveLength(1);
