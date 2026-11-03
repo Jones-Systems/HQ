@@ -101,6 +101,19 @@ for (const key of Object.keys(expected)) test(`exact ${key} graph, single live l
   await f.cleaned(rows);
 });
 
+test('a trailing-separator worktree preserves tool custody and canonical launch paths', async t => {
+  const f = await fixture(t);
+  const result = await f.run('test', [], { worktree: f.worktree + path.sep }).running;
+  assert.equal(result.code, 0); assert.equal(result.signal, null);
+  const rows = await f.records();
+  assert.deepEqual(rows.map(row => [row.tool, ...row.args]), expected.test);
+  for (const row of rows) {
+    assert.equal(row.driver, path.join(f.bin, row.tool));
+    assert.equal(row.cache, path.join(f.worktree, '.t3/cache/npm'));
+  }
+  await f.cleaned(rows);
+});
+
 for (const driver of [undefined, 'relative/npm', 'missing', 'directory']) test(`build refuses ${driver ?? 'absent'} npm driver before allocation`, async t => {
   const f = await fixture(t);
   const npm_execpath = driver === 'missing' ? path.join(f.root, 'missing') : driver === 'directory' ? f.bin : driver;

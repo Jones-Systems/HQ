@@ -55,7 +55,9 @@ argument grammar accepts Vite `--mode`, `--logLevel` and `--sourcemap`; Vitest
 `--reporter` (the built-in stdout reporters), `--testNamePattern`/`-t`,
 `--passWithNoTests`, `--no-file-parallelism` and `--silent`. Unknown arguments,
 including output/config/root/cache routing, watch and coverage options, refuse
-before allocation or launch. Accepted argument vectors are forwarded unchanged.
+before allocation or launch. Accepted argument vectors are forwarded unchanged. This is narrower than npm's
+append semantics: positional Vitest filters and other unlisted arguments refuse;
+no current CI caller forwards them.
 
 TypeScript, Vite and Vitest resolve exclusively through this worktree's
 `node_modules/.bin`, using module identity rather than the caller's working

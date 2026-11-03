@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { contains, inspectStorage, requireAdmission, resolveDestination, settings } from './admission.mjs';
 import { withStorageInvocation } from './launcher.mjs';
 
-const moduleWorktree = fileURLToPath(new URL('../../', import.meta.url));
+const moduleWorktree = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const graphs = {
   build: [{ tool: 'npm', args: ['run', 'typecheck'] },
     { tool: 'vite', args: ['build', '--config', 'apps/desktop/vite.config.ts'] }, { task: 'build:electron' }],
@@ -51,7 +51,7 @@ export async function runStorageCommand(key, args = [], {
     observation({ phase: 'npm-driver', driver });
   }
   const root = await resolveDestination(worktree, { mustExist: true });
-  worktree = root.path;
+  worktree = path.resolve(root.path);
   const bins = new Map();
   for (const { tool } of leaves(key)) {
     if (tool === 'npm' || bins.has(tool)) continue;
