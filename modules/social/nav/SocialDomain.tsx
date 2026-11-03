@@ -175,6 +175,7 @@ export function SocialDomain({ context, destination, navigate, port, example = f
   const { state, session } = useSocialSession(context.id);
   const id = useId();
   const domain = useRef<HTMLDivElement>(null);
+  const main = useRef<HTMLDivElement>(null);
   const [sidebar, setSidebar] = useState(readSidebar);
   useEffect(() => {
     // CSSOM property assignment supports the shell CSP without injecting a style element.
@@ -214,6 +215,28 @@ export function SocialDomain({ context, destination, navigate, port, example = f
     if (section) rememberSection(session, section, destination);
   }, [session, section, destination]);
 
+  // A new section starts at its top, wherever the last one was scrolled to (pages within a section keep theirs). When
+  // the control that changed it left with the old page, focus lands on the new page's heading, not the document.
+  const shownSection = useRef(section);
+  useEffect(() => {
+    if (shownSection.current === section) return;
+    shownSection.current = section;
+    const area = main.current;
+    if (!area) return;
+    area.scrollTop = 0;
+    let frame = 0;
+    let tries = 0;
+    const land = () => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active.isConnected) return;
+      const heading = area.querySelector<HTMLElement>('h1[tabindex]');
+      if (heading) heading.focus({ preventScroll: true });
+      else if (++tries < 30) frame = requestAnimationFrame(land);
+    };
+    land();
+    return () => cancelAnimationFrame(frame);
+  }, [section]);
+
   // N starts a new draft from anywhere in Social, unless the user is typing.
   useEffect(() => {
     const root = domain.current;
@@ -238,7 +261,7 @@ export function SocialDomain({ context, destination, navigate, port, example = f
         const extra = counts[item.section];
         return (
           <li key={item.section}>
-            <button type="button" className="sd-nav-item" aria-current={item.section === section ? 'page' : undefined} onClick={() => open(item)}>
+            <button type="button" className="sd-nav-item" title={item.label} aria-current={item.section === section ? 'page' : undefined} onClick={() => open(item)}>
               <SocialIcon name={NAV_ICONS[item.section]} className="sd-nav-icon" />
               <span className="sd-nav-label">{item.label}</span>
               {item.tag && <span className="sd-tag">{item.tag}</span>}
@@ -283,7 +306,7 @@ export function SocialDomain({ context, destination, navigate, port, example = f
             onResize={resizeSidebar} onToggle={toggleSidebar} />
         </div>
 
-        <div className="sd-main" aria-busy={needsWorkspace && !snapshot ? true : undefined}>
+        <div className="sd-main" ref={main} aria-busy={needsWorkspace && !snapshot ? true : undefined}>
           {returnContext && <p className="sd-return" role="note"><SocialIcon name="link" />Reference opened from {returnContext.label}.</p>}
           {link && <ProjectMismatchBanner link={link} projectName={context.name} />}
           <div className="sd-view hq-enter-rise" key={section ?? 'missing'}>
@@ -296,8 +319,13 @@ export function SocialDomain({ context, destination, navigate, port, example = f
             ) : needsWorkspace && !snapshot ? (
               <FirstLoad load={load} onRetry={check} title={SECTION_LABELS[route.section]} example={example} />
             ) : route.section === 'overview' ? (
-              snapshot && <Overview snapshot={snapshot} load={load} editors={state.editors} brand={brand} navigate={navigate} now={now ?? (() => new Date())} onCheck={check} />
-            ) : route.section === 'sources' ? <Sources sourceId={route.sourceId} navigate={navigate} />
+              snapshot && (
+                <Overview
+                  snapshot={snapshot} load={load} editors={state.editors} brand={brand} navigate={navigate} now={now ?? (() => new Date())}
+                  projectId={context.id} {...(references ? { references } : {})}
+                />
+              )
+            ) : route.section === 'sources' ? <Sources sourceId={route.sourceId} navigate={navigate} projectId={context.id} {...(now ? { now } : {})} />
               : route.section === 'channels' ? <Channels navigate={navigate} />
                 : route.section === 'workbenches' || route.section === 'runs' ? (
                   <WorkbenchSection

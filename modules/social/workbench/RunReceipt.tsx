@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, InlineNotice, StateView, prefersReducedMotion, useToast } from '@hq/ui';
 import { isActiveRun, portErrorOf, workspaceSnapshot, type ObservedRunStatus, type PortError, type RunRecord } from '../core';
 import { SocialIcon } from '../ui';
@@ -8,6 +8,7 @@ import { watchRun } from './polling';
 import { ReceiptId, SUCCESS_TOAST_MS } from './ReceiptId';
 import { ResultView } from './ResultView';
 import { summarizeRun } from './results';
+import { RunIdFact } from './RunId';
 import { RunStepper } from './RunStepper';
 import { WAITS_HERE, WAITS_HERE_DETAIL, openSocialSetup } from './setup';
 import { StartDraft } from './StartDraft';
@@ -37,11 +38,13 @@ const ACTIVE_NOTE = { queued: 'Queued: waiting its turn in the local queue.', ru
  * visible; reads stop when the run finishes, the page hides or the receipt closes. A run that finishes while
  * the receipt is open raises one toast, with a way to jump to its results; a receipt opened on a finished run raises none.
  */
-export function RunReceipt({ runId, initial, readNow = false }: {
+export function RunReceipt({ runId, initial, readNow = false, headerEnd }: {
   readonly runId: string;
   readonly initial?: RunRecord | null;
   /** Read the run at once instead of after one interval, for a record taken from an older list. */
   readonly readNow?: boolean;
+  /** A control for the header's far end, for example Close in a side panel. */
+  readonly headerEnd?: ReactNode;
 }) {
   const { port, session, state, visibility, pollIntervalMs, example } = useWorkbench();
   const toast = useToast();
@@ -131,6 +134,7 @@ export function RunReceipt({ runId, initial, readNow = false }: {
           {run.is_example === 1 && <span className="sx-tag sx-tag--example" title="Fictional sample input, not evidence about your brand">Example data</span>}
           <ReceiptId id={run.id} />
         </div>
+        {headerEnd && <div className="sw-receipt-head-end">{headerEnd}</div>}
       </header>
       <RunStepper status={status} lastSeen={run.status} />
       {unknown && (
@@ -150,6 +154,7 @@ export function RunReceipt({ runId, initial, readNow = false }: {
       )}
       {run.error && run.error !== summary?.error && <p className="sw-error">{run.error}</p>}
       <dl className="sw-facts">
+        <RunIdFact id={run.id} />
         <div><dt>Created</dt><dd>{formatTime(run.created_at)}</dd></div>
         <div><dt>Finished</dt><dd>{formatTime(run.finished_at)}</dd></div>
         <div><dt>Basis</dt><dd>{run.is_example ? 'Example input · synthetic, not evidence' : 'Material you supplied'} · local Social service, network off</dd></div>

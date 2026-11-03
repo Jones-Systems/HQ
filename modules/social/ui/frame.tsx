@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, InlineNotice } from '@hq/ui';
 import { workspaceSnapshot, type WorkspaceLoad, type WorkspaceSnapshot } from '../core';
 import { SocialIcon } from './icons';
@@ -38,6 +38,14 @@ export function longTime(iso: string): string {
 
 export type SyncTone = 'example' | 'synced' | 'refreshing' | 'connecting' | 'offline' | 'stale';
 
+/** The box of the nearest ancestor that clips its overflow (the page's scroll area), else the viewport. */
+function clipBox(element: HTMLElement): DOMRect {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    if (getComputedStyle(node).overflowX !== 'visible') return node.getBoundingClientRect();
+  }
+  return document.documentElement.getBoundingClientRect();
+}
+
 /** The one-word state of the workspace read, and the time it refers to. Never reads as current when it isn't. */
 export function syncState(load: WorkspaceLoad, example: boolean): { readonly tone: SyncTone; readonly label: string; readonly snapshot?: WorkspaceSnapshot } {
   const snapshot = workspaceSnapshot(load);
@@ -64,6 +72,20 @@ export function SyncPill() {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+
+  // The panel opens leftward from the pill. When the header wraps in a narrow window the pill sits at the left, so
+  // shift the panel right just enough to stay inside the page area instead of being clipped by it.
+  useLayoutEffect(() => {
+    const element = panel.current;
+    if (!open || !element) return;
+    element.style.removeProperty('--sx-sync-offset');
+    const box = element.getBoundingClientRect();
+    const area = clipBox(element);
+    const gap = 8;
+    const shift = Math.min(area.left + gap - box.left, area.right - gap - box.right);
+    if (shift > 0) element.style.setProperty('--sx-sync-offset', `${-shift}px`);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -93,7 +115,7 @@ export function SyncPill() {
       </button>
       {/* Always in the DOM so `aria-controls` resolves; hidden until opened. */}
       {(
-        <div className="sx-sync-panel" id={`${id}-panel`} role="group" aria-label="Social workspace status" hidden={!open}>
+        <div className="sx-sync-panel" ref={panel} id={`${id}-panel`} role="group" aria-label="Social workspace status" hidden={!open}>
           <p className="sx-sync-title">
             {state.tone === 'offline' ? 'The Social service is unreachable'
               : state.tone === 'stale' ? 'The workspace could not be refreshed'
@@ -168,7 +190,8 @@ export function PageHeader({ title, description, eyebrow, actions, children, hea
       <div className="sx-head-row">
         <div className="sx-head-text">
           {eyebrow && <p className="sx-head-eyebrow">{eyebrow}</p>}
-          <h1 id={headingId}>{title}</h1>
+          {/* Focusable only from script: the domain lands focus here when a page change takes the focused control away. */}
+          <h1 id={headingId} tabIndex={-1}>{title}</h1>
           {description && <p className="sx-head-description">{description}</p>}
         </div>
         <div className="sx-head-actions">

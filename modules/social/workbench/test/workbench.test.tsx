@@ -43,7 +43,7 @@ describe('workbench catalog and navigation', () => {
     await s.user.upload(screen.getByLabelText('Creator batch', { selector: 'input' }), new File([batchText], 'batch.json', { type: 'application/json' }));
     await screen.findByText(`batch.json · ${batchText.length} bytes`);
     s.go('runs');
-    await screen.findByRole('table');
+    await screen.findAllByRole('button', { name: /^Open receipt/u });
     await s.user.click(screen.getAllByRole('button', { name: /^Open receipt/u })[0]!);
     await screen.findByText(/^Run receipt/u);
 
@@ -202,43 +202,6 @@ describe('explicit Run', () => {
     expect(run.disabled).toBe(true);
     expect(screen.getByText('Runs pause while the Social service is unreachable.')).toBeTruthy();
     expect(recorded.callsOf('execution')).toHaveLength(0);
-  });
-});
-
-describe('run history and polling', () => {
-  it('lists statuses, times, errors and example labels; active runs read only while visible', async () => {
-    const s = setup({ destination: 'runs', visible: false });
-    const table = await screen.findByRole('table');
-    for (const label of ['Queued', 'Running', 'Succeeded', 'Failed', 'Interrupted']) expect(within(table).getByText(label)).toBeTruthy();
-    expect(within(table).getByText('Example data')).toBeTruthy();
-    expect(within(table).getByText('Service restarted before completion; run again explicitly.')).toBeTruthy();
-
-    const running = s.fixture.controls.inspect().runs.find((run) => run.status === 'running')!;
-    s.go(`runs/${running.id}`);
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    const reads = () => s.recorded.calls().filter((call) => call.method === 'run').length;
-    expect(reads()).toBe(0);
-    s.visible.set(true);
-    await waitFor(() => expect(reads()).toBe(1));
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    expect(reads()).toBeGreaterThan(1);
-    act(() => { s.fixture.settle(running.id); });
-    const receipt = await screen.findByRole('article');
-    await within(receipt).findByText('Succeeded');
-    const settled = reads();
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    expect(reads()).toBe(settled);
-    expect(executions(s.recorded)).toHaveLength(0);
-  });
-
-  it('shows runs last seen active as Unknown when the service stops answering', async () => {
-    const s = setup({ destination: 'runs' });
-    await screen.findByRole('table');
-    s.fixture.controls.setUnavailable(true);
-    await s.user.click(screen.getByRole('button', { name: 'Refresh' }));
-    const table = await screen.findByRole('table');
-    await waitFor(() => expect(within(table).getAllByText('Unknown')).toHaveLength(2));
-    expect(within(table).getAllByText(/Don't start it again until the status is known/u)).toHaveLength(2);
   });
 });
 

@@ -56,7 +56,7 @@ export function BrandSwitcher({ snapshot, value, link, onChoose, onManage, unava
       </div>
       {line && <p id={`${id}-link`} className="hq-meta">{line}</p>}
       <Button size="sm" variant="ghost" className="sd-brand-manage" onClick={onManage} disabled={!snapshot}>
-        <SocialIcon name="brands" />Manage brands
+        <SocialIcon name="sliders" /><span className="sd-brand-manage-label">Manage brands</span>
       </Button>
     </div>
   );
