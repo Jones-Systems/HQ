@@ -133,7 +133,7 @@ describe('Library: composer', () => {
     await waitFor(() => expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.steepingThread)?.version).toBe(2));
   });
 
-  it('walks the save bar from Unsaved through Saving… to Saved with the version and time, and raises an 8 s toast that never says posted', async () => {
+  it('walks the save bar from Unsaved through Saving… to Saved with the version and time, with no toast over its buttons', async () => {
     let release: () => void = () => undefined;
     let hold = false;
     const { user } = setup(`library/${FIXTURE_IDS.openDay}`, { delay: () => (hold ? new Promise<void>((resolve) => { release = resolve; }) : Promise.resolve()) });
@@ -147,8 +147,27 @@ describe('Library: composer', () => {
     hold = false;
     await act(async () => release());
     expect(await screen.findByText(/Saved v2 · /)).toBeTruthy();
+    // The bar says it in place; a toast would sit over Archive and Save draft.
+    expect(toastStore.getSnapshot().find((record) => record.id === `social-draft-saved:${FIXTURE_IDS.openDay}`)).toBeUndefined();
+  });
+
+  it('reports a save that finishes after its editor closed in a toast that never says posted', async () => {
+    let release: () => void = () => undefined;
+    let hold = false;
+    const { user } = setup(`library/${FIXTURE_IDS.openDay}`, { delay: () => (hold ? new Promise<void>((resolve) => { release = resolve; }) : Promise.resolve()) });
+    await screen.findByRole('heading', { name: 'Edit draft' });
+    await user.type(screen.getByLabelText('Body'), ' Bring a friend.');
+    hold = true;
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    expect(await screen.findByText('Saving…', { selector: '[role="status"]' })).toBeTruthy();
+    hold = false;
+    // Opening another draft closes this editor while its save is still out.
+    await user.click(screen.getByRole('button', { name: /^Autumn blend tasting notes/ }));
+    await screen.findByDisplayValue('Autumn blend tasting notes');
+    await act(async () => release());
+    await waitFor(() => expect(toastStore.getSnapshot().find((record) => record.id === `social-draft-saved:${FIXTURE_IDS.openDay}`)).toBeTruthy());
     const saved = toastStore.getSnapshot().find((record) => record.id === `social-draft-saved:${FIXTURE_IDS.openDay}`);
-    expect(saved).toMatchObject({ tone: 'success', duration: 8000, title: 'Saved “Sourdough starter open day”', meta: 'Version 2 · nothing was posted' });
+    expect(saved).toMatchObject({ tone: 'success', title: 'Saved “Sourdough starter open day”', meta: 'Version 2 · nothing was posted' });
     expect(`${saved?.title} ${saved?.meta}`).not.toMatch(/scheduled|published|live|connected/iu);
   });
 

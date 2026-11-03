@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Button, Dialog, FieldError, InlineNotice, StatusChip, useToast, type ReferencePort } from '@hq/ui';
 import {
   CHANNELS, FEATURE_HQ_REFERENCES, FEATURE_HQ_BRAND_PROJECT, LIMITS, MESSAGES, codePoints,
@@ -53,6 +53,11 @@ function shortcutHint(): string {
 export function DraftEditor({ session, port, editorKey, editor, brands, features, paused, onSaved, onClose, onOpenDraft, onBack, projectId, references }: DraftEditorProps) {
   const id = useId();
   const toast = useToast();
+  const shown = useRef(true);
+  useEffect(() => {
+    shown.current = true;
+    return () => { shown.current = false; };
+  }, []);
   const [linkError, setLinkError] = useState('');
   const brandProject = features.includes(FEATURE_HQ_BRAND_PROJECT) ? brands.find((brand) => brand.id === editor.fields.brand_id)?.project_id : undefined;
   const mismatch = Boolean(references && projectId && brandProject && projectId !== brandProject);
@@ -90,8 +95,9 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
     setReconciliation(null);
     const saved = await session.saveEditor(referenceSavePort(port, features), editorKey);
     if (saved) {
-      // The bar already says Saved; the toast is for the outcome that outlives a glance away, and it never says posted.
-      toast.show({ id: `social-draft-saved:${saved.id}`, tone: 'success', title: `Saved “${saved.title}”`, meta: `Version ${saved.version} · nothing was posted`, duration: 8000 });
+      // The save bar says Saved in place, so a toast would only cover its buttons. One appears only when the editor
+      // closed before the save finished and nothing on screen would otherwise say how it ended. It never says posted.
+      if (!shown.current) toast.show({ id: `social-draft-saved:${saved.id}`, tone: 'success', title: `Saved “${saved.title}”`, meta: `Version ${saved.version} · nothing was posted` });
       onSaved?.(saved.id);
     }
     return saved;
