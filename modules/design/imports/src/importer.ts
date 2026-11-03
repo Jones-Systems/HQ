@@ -154,6 +154,7 @@ export class StoredSchemaError extends Error {
   readonly reason: 'unsupported-stored-schema' | 'corrupt-stored-record';
   constructor(reason: 'unsupported-stored-schema' | 'corrupt-stored-record', message: string) {
     super(message);
+    this.name = 'StoredSchemaError';
     this.reason = reason;
   }
 }
