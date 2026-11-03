@@ -80,6 +80,9 @@
 .sd-first-load .sx-panel { gap: var(--hq-space-sm); }
 .sd-loading-text { color: var(--hq-text-muted); }
 .sd-first-load-title { margin: 0; font: var(--hq-type-display); letter-spacing: var(--hq-type-display-tracking); color: var(--hq-text-subtle); }
+/* A failed first read keeps the page's shape, still and faded: nothing is loading, so nothing shimmers. */
+.sd-first-load[data-failed] .sd-first-load-grid { opacity: 0.55; }
+.sd-first-load[data-failed] .hq-skeleton::after { animation: none; display: none; }
 
 @media (prefers-reduced-motion: reduce) { .sd-nav-live { animation: none; } }
 :root[data-hq-motion="reduce"] .sd-nav-live { animation: none; }

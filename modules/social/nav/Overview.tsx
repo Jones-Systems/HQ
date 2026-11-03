@@ -5,7 +5,7 @@ import { isActiveRun, isRunId, type Brand, type DraftEditor, type RunRecord, typ
 import { ChannelBadge, EmptyState, PageHeader, SocialIcon, useSocialFrame, type SocialIconName } from '../ui';
 import { DELIVERED_LIMITS } from '../workbench';
 import { brandInitials } from './BrandSwitcher';
-import { Freshness, isOffline, isStale } from './freshness';
+import { Freshness, isOffline } from './freshness';
 import { LinkedAcrossHq } from './LinkedAcrossHq';
 import {
   ATTENTION_LIMIT, attentionItems, dateParts, LIST_LIMIT, nextUp, plannedLabel, relativeDay, unsavedLabel, whenLabel, type AttentionItem,
@@ -20,8 +20,6 @@ export interface OverviewProps {
   readonly brand: Brand | null;
   readonly navigate: (destination: string) => void;
   readonly now: () => Date;
-  /** Reads the workspace again; a read never resends a run or a save. */
-  readonly onCheck: () => void;
   /** The active HQ project. Links into any other project are read-only. */
   readonly projectId?: string;
   /** The shell's reference service, used by *Open* in Linked across HQ. */
@@ -66,10 +64,11 @@ const ATTENTION_ICONS: { readonly [K in AttentionItem['kind']]: { readonly icon:
 
 /**
  * Overview (RC-6): the selected brand, what Social can do here, what is next, what needs attention, recent research
- * and links across HQ. The sync pill in the page header carries freshness and the example-workspace note, so the
- * page repeats neither; mounted on its own it shows one freshness line itself.
+ * and links across HQ. The page header's sync pill carries freshness and the example-workspace note, and the frame's
+ * bar under the title says what is paused while the service is unreachable, so the page repeats none of them;
+ * mounted on its own it shows one freshness line itself.
  */
-export function Overview({ snapshot, load, editors, brand, navigate, now, onCheck, projectId, references }: OverviewProps) {
+export function Overview({ snapshot, load, editors, brand, navigate, now, projectId, references }: OverviewProps) {
   const id = useId();
   const framed = useSocialFrame() !== null;
   const offline = isOffline(load);
@@ -118,17 +117,7 @@ export function Overview({ snapshot, load, editors, brand, navigate, now, onChec
         }
         actions={<Button variant="primary" onClick={() => navigate('library/new')}><SocialIcon name="plus" />New draft</Button>}
       >
-        {!framed && (
-          <span className="sd-inline">
-            {isStale(load) && (
-              <>
-                <span role="status">{offline ? 'The Social service is unreachable.' : 'The workspace could not be refreshed.'} Showing the last synced data.</span>
-                <Button size="sm" variant="secondary" onClick={onCheck}>Check again</Button>
-              </>
-            )}
-            <Freshness load={load} snapshot={snapshot} />
-          </span>
-        )}
+        {!framed && <span className="sd-inline"><Freshness load={load} snapshot={snapshot} /></span>}
       </PageHeader>
 
       <div className="sx-grid sx-grid--2 sd-overview-grid hq-stagger">

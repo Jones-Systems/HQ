@@ -18,14 +18,23 @@ export interface SocialWorkspace {
 
 let current: SocialWorkspace | null = null;
 
-export function selectSocialWorkspace(scope: unknown = globalThis): SocialWorkspace {
-  const bridge = socialServiceBridge(scope);
-  return bridge ? { port: createLiveSocialPort(bridge), source: 'live' }
-    : { port: createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port, source: 'fixture' };
+/**
+ * The fictional example workspace, the one factory every example selection uses (the module default, the
+ * shell's unconfigured service and the browser preview). Its brand and sample links point into `projectId`,
+ * the HQ project it is shown in, so they read as this project's rather than another's.
+ */
+export function createExampleWorkspace(projectId?: string): SocialWorkspacePort {
+  return createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX], ...(projectId ? { projectId } : {}) }).port;
 }
 
-export function socialWorkspace(): SocialWorkspace {
-  current ??= selectSocialWorkspace();
+export function selectSocialWorkspace(scope: unknown = globalThis, projectId?: string): SocialWorkspace {
+  const bridge = socialServiceBridge(scope);
+  return bridge ? { port: createLiveSocialPort(bridge), source: 'live' } : { port: createExampleWorkspace(projectId), source: 'fixture' };
+}
+
+/** `projectId` only shapes a first, example selection; the choice then holds for the window. */
+export function socialWorkspace(projectId?: string): SocialWorkspace {
+  current ??= selectSocialWorkspace(globalThis, projectId);
   return current;
 }
 

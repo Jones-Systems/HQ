@@ -29,7 +29,7 @@ interface Setup {
   readonly remount: () => void;
 }
 
-function setup({ destination = 'home', features, delay }: { destination?: string; features?: string[]; delay?: FixtureOptions['delay'] } = {}): Setup {
+function setup({ destination = 'home', features, delay, example = true }: { destination?: string; features?: string[]; delay?: FixtureOptions['delay']; example?: boolean } = {}): Setup {
   const fixture = createWorkbenchFixture({ ...(features ? { features } : {}), ...(delay ? { delay } : {}), clock: NOW });
   const recorded = recordCalls(fixture.port);
   const navigate = vi.fn<(destination: string) => void>();
@@ -45,7 +45,7 @@ function setup({ destination = 'home', features, delay }: { destination?: string
       navigate: (next) => { navigate(next); setWhere(next); },
     };
     // A new key remounts the domain, as the shell does on every domain switch.
-    return <SocialDomain key={generation} {...port} port={recorded.port} example now={NOW} />;
+    return <SocialDomain key={generation} {...port} port={recorded.port} example={example} now={NOW} />;
   }
   render(<Shell />);
   return { fixture, recorded, navigate, user: userEvent.setup(), destination: () => current, remount: () => bump() };
@@ -355,8 +355,9 @@ describe('Overview', () => {
     await overview();
     s.fixture.controls.setUnavailable(true);
     await act(() => socialSession(CONTEXT.id).load(s.recorded.port));
-    // The page keeps its data; the header's sync pill says Offline with the last synced time, once, and opens to Check again.
-    const pill = screen.getByRole('button', { name: /^Offline · last synced / });
+    // The page keeps its data and adds no stale line of its own: the frame says Offline once, in the pill and the bar under the title.
+    expect(screen.getByRole('button', { name: /^Offline · last synced / })).toBeTruthy();
+    expect(screen.queryByText(/The Social service is unreachable\. Showing the last synced data\./u)).toBeNull();
     expect(screen.getByRole('region', { name: 'Needs attention' })).toBeTruthy();
     expect(screen.queryAllByText(/^As of /u)).toHaveLength(0);
     const attention = within(screen.getByRole('region', { name: 'Needs attention' }));
@@ -365,10 +366,12 @@ describe('Overview', () => {
     // Unknown is the last tier: failed and interrupted runs come first.
     expect(attention.getAllByRole('listitem').map((item) => item.querySelector('.hq-status-label')?.textContent)).toStrictEqual(['Failed', 'Interrupted', 'Unknown', 'Unknown']);
     s.fixture.controls.setUnavailable(false);
-    await s.user.click(pill);
-    await s.user.click(within(screen.getByRole('group', { name: 'Social workspace status' })).getByRole('button', { name: 'Check again' }));
+    // The frame's bar under the title says what is paused and holds Check again; the pill keeps the limits.
+    const bar = screen.getByText(/^Offline · last synced .+ · changes paused$/u).closest('.hq-notice') as HTMLElement;
+    await s.user.click(within(bar).getByRole('button', { name: 'Check again' }));
     expect(await screen.findByRole('button', { name: /^Example workspace/u })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Offline/u })).toBeNull();
+    expect(screen.queryByText(/changes paused/u)).toBeNull();
     expect(s.recorded.callsOf('execution')).toHaveLength(0);
   });
 
@@ -380,16 +383,88 @@ describe('Overview', () => {
     expect(links.getByText(/needs Social service support \(hq-references-v1\)/u)).toBeTruthy();
   });
 
-  it('shows loading, then an error with Try again, before any snapshot', async () => {
+  it('shows loading, then the page frame with an inline error and Try again, before any snapshot', async () => {
     let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let gate = new Promise<void>((resolve) => { release = resolve; });
     const s = setup({ delay: () => gate });
     expect(screen.getByText('Loading the Social workspace…')).toBeTruthy();
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+    expect(side().getByRole('option', { name: 'Loading brands…' })).toBeTruthy();
     s.fixture.controls.failNext('snapshot', { kind: 'unavailable' });
     await act(async () => release());
-    expect(await screen.findByText('The Social service is unreachable')).toBeTruthy();
-    await s.user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    // No full-screen error: the page keeps its header, the sidebar and the sync pill; the failure is inline.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy();
+    const notice = screen.getByRole('status');
+    expect(within(notice).getByText('The Social service is unreachable')).toBeTruthy();
+    expect(within(notice).getByText(/^Nothing was changed\./u)).toBeTruthy();
+    // The example workspace has no settings to fix.
+    expect(within(notice).queryByRole('button', { name: 'Open Social settings' })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Offline/u })).toBeTruthy();
+    expect(side().getByRole('option', { name: 'Brands unavailable' })).toBeTruthy();
+    expect(side().getByRole('button', { name: 'Overview' }).getAttribute('aria-current')).toBe('page');
+
+    // Try again holds the failure in place (busy) instead of flipping back to the loading shape.
+    gate = new Promise<void>((resolve) => { release = resolve; });
+    await s.user.click(within(notice).getByRole('button', { name: 'Try again' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy();
+    expect(screen.queryByText('Loading the Social workspace…')).toBeNull();
+    await act(async () => release());
     expect(await overview()).toBeTruthy();
+    expect(screen.queryByText('The Social service is unreachable')).toBeNull();
+    expect(s.recorded.callsOf('execution')).toHaveLength(0);
+  });
+
+  it('offers Social settings when a configured service is unreachable before any snapshot', async () => {
+    const opened = vi.fn<(source: unknown) => void>();
+    const listener = (event: Event) => opened((event as CustomEvent).detail?.source);
+    window.addEventListener('hq-open-settings', listener);
+    try {
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const s = setup({ delay: () => gate, example: false });
+      s.fixture.controls.failNext('snapshot', { kind: 'unavailable' });
+      await act(async () => release());
+      const notice = await screen.findByRole('status');
+      await s.user.click(within(notice).getByRole('button', { name: 'Open Social settings' }));
+      expect(opened).toHaveBeenCalledWith('social');
+      expect(effects(s)).toHaveLength(0);
+    } finally {
+      window.removeEventListener('hq-open-settings', listener);
+    }
+  });
+
+  it('keeps the page and adds one offline bar under the title while the service is unreachable', async () => {
+    const s = setup({ destination: 'library' });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Library' })).toBeTruthy();
+    expect(screen.queryByText(/changes paused$/u)).toBeNull();
+    s.fixture.controls.setUnavailable(true);
+    await act(() => socialSession(CONTEXT.id).load(s.recorded.port));
+
+    // The page and its data stay; one bar says what is shown and what is paused, with Check again beside it.
+    expect(screen.getByRole('heading', { level: 1, name: 'Library' })).toBeTruthy();
+    const bar = screen.getByText(/^Offline · last synced .+ · changes paused$/u).closest('.hq-notice') as HTMLElement;
+    expect(bar).toBeTruthy();
+    expect(bar.getAttribute('role')).toBeNull(); // The domain's toast announces the change; the bar doesn't repeat it.
+    expect(screen.getAllByText('Autumn blend tasting notes').length).toBeGreaterThan(0);
+
+    s.fixture.controls.setUnavailable(false);
+    await s.user.click(within(bar).getByRole('button', { name: 'Check again' }));
+    await vi.waitFor(() => expect(screen.queryByText(/changes paused$/u)).toBeNull());
+    expect(s.recorded.callsOf('execution')).toHaveLength(0);
+  });
+
+  it('says a failed refresh shows older data without claiming changes are paused', async () => {
+    const s = setup({ destination: 'library' });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Library' })).toBeTruthy();
+    s.fixture.controls.failNext('snapshot', { kind: 'forbidden' });
+    await act(() => socialSession(CONTEXT.id).load(s.recorded.port));
+    expect(screen.getByText(/^Not refreshed · showing data from /u)).toBeTruthy();
+    await s.user.click(screen.getByRole('button', { name: /^Not refreshed/u }));
+    const status = within(screen.getByRole('group', { name: 'Social workspace status' }));
+    expect(status.getByText('The workspace could not be refreshed')).toBeTruthy();
+    expect(status.queryByText(/pause/u)).toBeNull();
+    expect(effects(s)).toHaveLength(0);
   });
 });
 
