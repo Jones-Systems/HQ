@@ -57,6 +57,42 @@ The hash chain detects edits, removals and reordering inside the file. It
 cannot detect a complete rewrite with recomputed hashes; anchoring the exported
 `journalHead` elsewhere is a root/owner decision.
 
+### Schema and versioning rules
+
+- The durable document is `{schema: 'hq.design.taste-journal/v1', jsonl}` and every record is `v: 1`. Neither
+  changed when subject IDs became project-qualified (below): the event shapes are the same and every older
+  record is still valid.
+- A document whose schema is a later `hq.design.taste-journal/vN` (N > 1) is **read-only** here: reads, saves and
+  exports reject with `TasteReadOnlyError` and the document is left as stored. A schema that is not of that form is
+  unusable (`TasteUnavailableError`), never read-only and never replaced.
+- A record that is not `v: 1`, or any other fault, fails the journal closed: the verified prefix stays readable,
+  saves are refused, and nothing is rewritten.
+- A build older than subject qualification reads a journal that holds qualified IDs normally unless an ID is over
+  160 characters, which that build fails closed on (read-only, nothing lost).
+
+## Subject identity and older journals
+
+Version IDs are unique only inside their project: deterministic `capture-<digest>` IDs and imported IDs repeat
+across projects. A Design version is therefore rated under a **project-qualified subject ID**,
+`pv1:<project length>:<project><version>` (`qualifySubjectId`, `projectVersionSubject`). The length prefix makes
+the pair unambiguous, so two different (project, version) pairs never share an ID. A qualified ID is at most
+328 characters; plain IDs stay at 160. `TasteSubject.versionId` keeps the plain version ID.
+
+- A project-bound client (`createProjectTasteContribution`) qualifies a plain version subject on write, and rejects
+  a subject (or a note or counterevidence target) qualified for another project with `project-mismatch`.
+- Rating slots and the distinct-subject count use one identity, `subjectKey(scope, subject)`: a qualified ID is
+  itself; a plain version ID inside a project scope is that project's version; every other plain ID is itself.
+
+Journals saved before this change are never rewritten. How their entries read:
+
+| Stored entry | Reads as |
+| --- | --- |
+| Project scope, plain version ID | That project's version. The bound client shows it under the qualified ID, so the rating is found and can be re-rated from the same version. |
+| General scope, plain version ID | **Unattributed.** Nothing records which project it came from, and the same ID may name a version in several. It stays as stored, counts in general taste as its own subject, and matches no project's version, so it never merges with another project's rating. A new general rating of the same version is a new rating, not a re-rating of it. |
+| Any scope, other subject kinds (reference, component, flow, other) | Unchanged. These are shared across projects. |
+
+Notes and counterevidence refer to a subject by ID only and are carried as written.
+
 ## Taste semantics
 
 - **Scopes.** General taste and each project's taste are separate. A project
@@ -102,9 +138,13 @@ panel in the HQ shell remains root's integration step (owner disposition C1).
   `exportProfile` over a typed channel. Validate inbound values with
   `parseTasteCommand` / `parseExportOptions`.
 - Renderer: mount `TastePanel` with a `TasteClientPort` adapter, the
-  current `ProjectId` (or null) and a `TasteSubject` bound to an exact version.
+  current `ProjectId` (or null) and a `TasteSubject` bound to an exact version
+  (`projectVersionSubject(projectId, versionId, label)`, never a bare version ID).
 - A thrown `submit` is shown as unknown and offers a retry of the identical
-  command; the journal's idempotency makes that safe.
+  command; the journal's idempotency makes that safe. The project-bound client
+  throws typed errors (`errors.ts`) only where it can prove nothing was written
+  (a lost compare-and-set, a refusal, an unreadable journal); the Design
+  composition classifies them by name (`app/compose/BACKEND-CONTRACT.md`, section 2a).
 
 ## Checks
 

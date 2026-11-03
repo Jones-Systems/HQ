@@ -9,7 +9,9 @@ import { StorageConflictError } from '../../../projects/src/contract.ts';
 import { ReadOnlyContentError } from '../../../projects/src/repository.ts';
 import { ContentError } from '../../../projects/src/content.ts';
 import { IntegrityError } from '../../../components/src/workspace/library.ts';
-import { TasteProjectBindingError, TasteUnavailableError } from '../../../taste/src/project-service.ts';
+import {
+  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteProjectBindingError, TasteReadOnlyError, TasteUnavailableError,
+} from '../../../taste/src/project-service.ts';
 import { SourceUnavailableError } from '../../../discovery/src/contract.ts';
 import { PreviewError } from '../../../discovery/src/previews.ts';
 import { OutcomeUnknownError, StaleDraftError, FreezeConflictError } from '../../../requests/src/store.ts';
@@ -39,6 +41,11 @@ describe('classifyDesignError', () => {
       [new StaleDraftError('stale'), 'stale'],
       [new TasteProjectBindingError(), 'stale'],
       [new TasteUnavailableError(), 'unavailable'],
+      [new TasteConflictError(), 'conflict'],
+      [new TasteInvalidInputError('Invalid export options'), 'invalid'],
+      [new TasteReadOnlyError('unsupported-stored-schema'), 'read-only'],
+      [new TasteReadOnlyError('store-read-only'), 'read-only'],
+      [new TasteJournalFaultError('incomplete-tail'), 'corrupt'],
       [new SourceUnavailableError(), 'unavailable'],
       [new PreviewError('too-large', 'big'), 'too-large'],
       [new PreviewError('aborted', 'stop'), 'cancelled'],
@@ -49,6 +56,21 @@ describe('classifyDesignError', () => {
       [{ name: 'StoreError', code: 'conflict' }, 'conflict'],
     ];
     for (const [error, kind] of cases) assert.equal(classifyDesignError(error, write).kind, kind, String((error as Error).name));
+  });
+
+  it('classifies every Taste failure, keeping the machine reason for the meta line', () => {
+    const context = { section: 'taste', operation: 'taste.save', action: 'save to your taste journal', write: true } as const;
+    const taste = (error: unknown) => { const { kind, outcome, reason } = classifyDesignError(error, context); return [kind, outcome, reason]; };
+    assert.deepEqual(taste(new TasteConflictError()), ['conflict', 'no-effect', undefined]);
+    assert.deepEqual(taste(new TasteInvalidInputError('x')), ['invalid', 'no-effect', undefined]);
+    assert.deepEqual(taste(new TasteProjectBindingError()), ['stale', 'no-effect', 'project-binding']);
+    assert.deepEqual(taste(new TasteUnavailableError()), ['unavailable', 'no-effect', undefined]);
+    assert.deepEqual(taste(new TasteReadOnlyError('unsupported-stored-schema')), ['read-only', 'no-effect', 'unsupported-stored-schema']);
+    assert.deepEqual(taste(new TasteReadOnlyError('store-read-only')), ['read-only', 'no-effect', 'store-read-only']);
+    assert.deepEqual(taste(new TasteJournalFaultError('hash-mismatch')), ['corrupt', 'no-effect', 'hash-mismatch']);
+    // A fault is not "unavailable" even though it extends that class; an unrecognised write failure stays an unknown effect.
+    assert.deepEqual(taste(new Error('socket hang up')), ['unknown', 'unknown-effect', undefined]);
+    assert.equal(designFeedback(classifyDesignError(new TasteReadOnlyError('unsupported-stored-schema'), context)).meta, 'taste.save · unsupported-stored-schema');
   });
 
   it('keeps the bridge reason and treats a disabled refusal as a definite no-effect', () => {

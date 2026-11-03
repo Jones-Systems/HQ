@@ -9,6 +9,7 @@ import type { DesignSectionProps } from '../../../ui/contract.ts';
 import { addVersion, addView, createProjectContent } from '../../../projects/src/content.ts';
 import { projectId, versionId, viewId } from '../../../projects/src/ids.ts';
 import { contentKey } from '../../../projects/src/repository.ts';
+import { qualifySubjectId } from '../../../taste/src/contract.ts';
 import { TASTE_DOCUMENT_KEY } from '../../../taste/src/project-service.ts';
 import { createBridgeWorkspaceDocuments } from '../bridge-documents.ts';
 import { createDesignWorkspace, type DesignWorkspace } from '../workspace.ts';
@@ -64,6 +65,10 @@ async function renderReady(ui: Parameters<typeof render>[0]) {
   return mounted;
 }
 
+const overall = (value: number) => screen.getByRole('radio', { name: new RegExp(`^Overall: ${value}, `) }) as HTMLInputElement;
+const journalReads = (double: ReturnType<typeof createTransportDouble>) => double.calls.filter(({ route, params }) => route === 'doc.get' && 'key' in params
+  && params.key === TASTE_DOCUMENT_KEY).length;
+
 async function choose(id = FIRST) {
   fireEvent.change(await screen.findByLabelText('Version to rate'), { target: { value: id } });
   await screen.findByText('Project profile');
@@ -89,7 +94,8 @@ describe('Taste production composition', () => {
     const stored = double.documents.get(TASTE_DOCUMENT_KEY)!;
     const record = JSON.parse((stored.value as { jsonl: string }).jsonl.trim());
     expect(record.payload.scope).toEqual({ kind: 'project', projectId: A.id });
-    expect(record.payload.subject).toEqual({ id: SECOND, kind: 'version', label: 'Saved landing v2', versionId: SECOND });
+    // Version IDs repeat across projects, so the stored subject is qualified with the selected project.
+    expect(record.payload.subject).toEqual({ id: qualifySubjectId(A.id, SECOND), kind: 'version', label: 'Saved landing v2', versionId: SECOND });
     expect(double.calls.filter(({ route }) => route === 'doc.put')).toHaveLength(1);
     expect(double.calls.filter(({ route, params }) => route === 'doc.get' && 'key' in params
       && params.key.startsWith('design/taste/')).every(({ params }) => 'key' in params && params.key === TASTE_DOCUMENT_KEY)).toBe(true);
@@ -203,6 +209,111 @@ describe('Taste production composition', () => {
     expect(attempts[1].clientEventId).toBe(attempts[0].clientEventId);
     expect(attempts[1].payload).toEqual(attempts[0].payload);
     await waitFor(() => expect((screen.getByRole('button', { name: 'Retry' }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it('keeps the general ratings of a version ID that two projects reuse apart', async () => {
+    const { double, workspace, seed } = harness();
+    await seed(A);
+    await seed(B);
+    const mounted = await renderReady(view(workspace));
+    await choose(SECOND);
+    fireEvent.click(screen.getByLabelText('General taste'));
+    fireEvent.click(screen.getByRole('radio', { name: 'Overall: 5, Love' }));
+    await screen.findByText('Saved.');
+    await waitFor(() => expect(overall(5).checked).toBe(true));
+    await act(async () => { mounted.rerender(view(workspace, B)); });
+    await choose(SECOND);
+    fireEvent.click(screen.getByLabelText('General taste'));
+    // Project A’s rating belongs to A’s version, not to this one that shares its ID.
+    expect([1, 2, 3, 4, 5].some((value) => overall(value).checked)).toBe(false);
+    fireEvent.click(overall(1));
+    await screen.findByText('Saved.');
+    await waitFor(() => expect(overall(1).checked).toBe(true));
+    expect(screen.queryByText(/Re-rated/)).toBeNull();
+    expect(await screen.findByText('Limited sample: 2 rated subjects, fewer than 5')).toBeTruthy();
+    const records = (double.documents.get(TASTE_DOCUMENT_KEY)!.value as { jsonl: string }).jsonl.trim().split('\n')
+      .map((line) => JSON.parse(line) as { payload: { scope: unknown; subject: { id: string; versionId: string } } });
+    expect(records.map((record) => record.payload.subject.id)).toEqual([qualifySubjectId(A.id, SECOND), qualifySubjectId(B.id, SECOND)]);
+    expect(records.map((record) => record.payload.subject.versionId)).toEqual([SECOND, SECOND]);
+    expect(records.map((record) => record.payload.scope)).toEqual([{ kind: 'general' }, { kind: 'general' }]);
+  });
+
+  it('shows the typed conflict beside the panel when a save loses the revision check, and reads again on Reload', async () => {
+    const { double, workspace, seed } = harness();
+    await seed(A);
+    await renderReady(view(workspace));
+    await choose();
+    double.failWith((route) => route === 'doc.put' ? { ok: false, kind: 'conflict' } : undefined);
+    fireEvent.click(overall(4));
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toContain('Couldn\'t save to your taste journal');
+    expect(notice.textContent).toContain('It changed in another window. Reload to see the latest version, then try again.');
+    expect(notice.textContent).toContain('taste.save');
+    // The panel keeps its own message, and nothing was written or retried by itself.
+    await screen.findByText('The save may or may not have reached the journal. Retrying sends the same entry and cannot duplicate it.');
+    expect(double.calls.filter(({ route }) => route === 'doc.put')).toHaveLength(1);
+    expect(double.documents.has(TASTE_DOCUMENT_KEY)).toBe(false);
+    double.failWith(() => undefined);
+    const reads = journalReads(double);
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    await screen.findByText('Project profile');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(journalReads(double)).toBeGreaterThan(reads);
+    expect(double.calls.filter(({ route }) => route === 'doc.put')).toHaveLength(1);
+  });
+
+  it('clears the save notice once the same command is replayed and saved', async () => {
+    const { double, workspace, seed } = harness();
+    await seed(A);
+    await renderReady(view(workspace));
+    await choose();
+    double.failWith((route) => route === 'doc.put' ? { ok: false, kind: 'conflict' } : undefined);
+    fireEvent.click(overall(4));
+    await screen.findByText('taste.save');
+    double.failWith(() => undefined);
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Retry' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByText('taste.save')).toBeNull());
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(double.calls.filter(({ route }) => route === 'doc.put')).toHaveLength(2);
+    expect(double.documents.get(TASTE_DOCUMENT_KEY)?.revision).toBe(1);
+  });
+
+  it('reports a failed journal read as unavailable and recovers when Retry reads it again', async () => {
+    const { double, workspace, seed } = harness();
+    await seed(A);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    double.failWith((route, params) => route === 'doc.get' && 'key' in params && params.key === TASTE_DOCUMENT_KEY ? { ok: false, kind: 'unavailable' } : undefined);
+    await renderReady(view(workspace));
+    fireEvent.change(await screen.findByLabelText('Version to rate'), { target: { value: FIRST } });
+    await screen.findByText('Taste is unavailable right now.');
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toContain('Couldn\'t load your taste ratings');
+    expect(notice.textContent).toContain('Design storage is not available right now. Nothing was changed.');
+    expect(notice.textContent).toContain('taste.load');
+    double.failWith(() => undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await screen.findByText('Project profile');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(double.calls.filter(({ route }) => route === 'doc.put')).toHaveLength(0);
+  });
+
+  it('opens a journal saved by a newer HQ read-only, explains why, and never writes', async () => {
+    const { double, workspace, seed } = harness();
+    await seed(A);
+    const value = { schema: 'hq.design.taste-journal/v2', jsonl: '', future: true } as JsonValue;
+    double.documents.set(TASTE_DOCUMENT_KEY, { namespace: 'workspace', key: TASTE_DOCUMENT_KEY, revision: 1, value,
+      valueDigest: await authoringDigest(value), updatedAt: NOW });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await renderReady(view(workspace));
+    fireEvent.change(await screen.findByLabelText('Version to rate'), { target: { value: FIRST } });
+    await screen.findByText('Taste is unavailable right now.');
+    const notice = await screen.findByText(/saved by a newer version of HQ, so it is open read-only/);
+    expect(notice.closest('div')?.textContent).toContain('taste.load · unsupported-stored-schema');
+    expect(screen.queryByRole('button', { name: /Retry|Reload|Check/ })).toBeNull();
+    expect(screen.queryByText('Project profile')).toBeNull();
+    expect(double.calls.filter(({ route }) => route === 'doc.put')).toHaveLength(0);
+    expect(double.documents.get(TASTE_DOCUMENT_KEY)?.value).toEqual(value);
   });
 
   it('retains the labelled in-memory preview when documents are null', async () => {

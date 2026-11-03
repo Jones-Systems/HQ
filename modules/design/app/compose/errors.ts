@@ -148,9 +148,11 @@ export function classifyDesignError(error: unknown, context: DesignFailureContex
     return failure(error.kind, error.reason);
   }
   if (named(error, 'AbortError') || (record(error) && error.name === 'PreviewError' && error.reason === 'aborted')) return failure('cancelled');
-  if (named(error, 'StorageConflictError', 'CanvasWriteConflictError', 'FreezeConflictError', 'ProposalConflictError')) return failure('conflict');
+  if (named(error, 'StorageConflictError', 'CanvasWriteConflictError', 'FreezeConflictError', 'ProposalConflictError', 'TasteConflictError')) return failure('conflict');
   if (record(error) && error.code === 'conflict') return failure('conflict');
   if (named(error, 'ReadOnlyContentError', 'ReadOnlyRequestError')) return failure('read-only');
+  if (named(error, 'TasteReadOnlyError')) return failure('read-only', record(error) && typeof error.reason === 'string' ? error.reason : undefined);
+  if (named(error, 'TasteJournalFaultError')) return failure('corrupt', record(error) && typeof error.reason === 'string' ? error.reason : undefined);
   if (named(error, 'OutcomeUnknownError')) return failure('unknown');
   if (named(error, 'StaleDraftError')) return failure('stale');
   if (named(error, 'TasteProjectBindingError')) return failure('stale', 'project-binding');
@@ -159,7 +161,8 @@ export function classifyDesignError(error: unknown, context: DesignFailureContex
   if (record(error) && typeof error.reason === 'string' && (error.reason === 'corrupt-stored-record')) return failure('corrupt', error.reason);
   if (record(error) && error.name === 'PreviewError' && error.reason === 'too-large') return failure('too-large');
   if (named(error, 'ContentError', 'VersionMutationError', 'InvalidIdError', 'ValidationError', 'SectionStorageScopeError', 'CanvasScopeError',
-    'RequestsStorageScopeError', 'DiscoveryCacheScopeError', 'CanonicalJsonError', 'CanonicalizationError', 'NonCanonicalBytesError')) return failure('invalid');
+    'RequestsStorageScopeError', 'DiscoveryCacheScopeError', 'CanonicalJsonError', 'CanonicalizationError', 'NonCanonicalBytesError',
+    'TasteInvalidInputError')) return failure('invalid');
   if (named(error, 'UnsupportedSchemaError')) return failure('read-only');
   if (named(error, 'IntegrityError')) return failure(record(error) && error.reason === 'exists' ? 'conflict' : 'corrupt');
   return failure(context.write ? 'unknown' : 'unavailable');
