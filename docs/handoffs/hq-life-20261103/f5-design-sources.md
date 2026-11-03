@@ -8,24 +8,28 @@ Authority effect: none. This is a handoff record. It grants nothing and changes 
 ## Status
 
 - **Done:** the Sources flow assessment, the Components family decision and the shared Taste handoff seam, built on lane F1's primitives. All are pushed on the lane branch.
-- **In progress:** six builders each committed a first pass of one view on its own sub-branch. The lead has not reviewed any of them yet.
+- **Built, not yet reviewed:** all six views. Each builder reports its brief implemented on its own pushed sub-branch, with six screenshots and a handoff. The one exception is Flows, whose root `npm run typecheck` fails (see [Builder results](#builder-results)). The lead has reviewed none of them yet.
 - **Not started:** review and fix rounds, integration into the lane branch, after screenshots, the full check run and the PR to `work/hq-foundation`.
 
 ## Branches, worktrees and SHAs
 
 Each worktree is `~/.t3/worktrees/HQ/<branch>`, with the branch's `/` replaced by `-`. The lane branch holds this
-file; its head is the commit that adds or last updates it. Builder heads are the last commits seen before the pause.
-Each builder's handoff gives its final pushed head.
+file; its head is the commit that adds or last updates it. The builder heads are their pushed heads after the
+pause. "Code head" is the last code commit; the WIP commits after it add only screenshots and the handoff.
+Copies of the builder handoffs sit beside this file, in [`f5-design-sources/`](f5-design-sources/).
 
-| Branch | Head before pause | Builds on | State | Handoff |
-| --- | --- | --- | --- | --- |
-| `work/hq-life-design-sources-20261103` (lane) | `4104a6b` | `work/hq-foundation` `0cd50ab`, merged with F1 `284393d` | Pushed: assessment, families mockup, handoff seam | this file |
-| `work/hq-life-design-sources-references-20261103` | `4cd4259` (3 commits) | lane `f5d6bc8` | First pass committed | pending |
-| `work/hq-life-design-sources-imports-20261103` | `373a185` (2 commits) | lane `f5d6bc8` | First pass committed | pending |
-| `work/hq-life-design-sources-taste-20261103` | `6346fd9` (3 commits) | lane `f5d6bc8` | First pass committed | pending |
-| `work/hq-life-design-sources-flows-20261103` | `583d0a0` (1 commit) | lane `f5d6bc8` | First pass committed | pending |
-| `work/hq-life-design-sources-discovery-20261103` | `cc0b202` (1 commit) | lane `f5d6bc8` | First pass committed | pending |
-| `work/hq-life-design-sources-components-20261103` | `1d2d473` (1 commit) | lane `4104a6b` | First pass committed | pending |
+| Branch | Pushed head | Code head | Builds on | Builder's own checks | Handoff |
+| --- | --- | --- | --- | --- | --- |
+| `work/hq-life-design-sources-20261103` (lane) | this commit | `4104a6b` | `work/hq-foundation` `0cd50ab`, merged with F1 `284393d` | handoff seam 2/2, app `tsc` pass | this file |
+| `work/hq-life-design-sources-references-20261103` | `1f4d5b0` | `4cd4259` | lane `f5d6bc8` | all listed checks pass, `npm run typecheck` pass | [References](f5-design-sources/hq-life-design-sources-references-20261103.md) |
+| `work/hq-life-design-sources-imports-20261103` | `ea2824a` | `373a185` | lane `f5d6bc8` | all listed checks pass, `npm run typecheck` pass | [Imports](f5-design-sources/hq-life-design-sources-imports-20261103.md) |
+| `work/hq-life-design-sources-taste-20261103` | `8d3db74` | `6346fd9` | lane `f5d6bc8` | all listed checks pass, `npm run typecheck` pass; merges cleanly with #168 and #179 | [Taste](f5-design-sources/hq-life-design-sources-taste-20261103.md) |
+| `work/hq-life-design-sources-flows-20261103` | `c47bb5a` | `583d0a0` | lane `f5d6bc8` | section checks pass; **`npm run typecheck` fails** | [Flows](f5-design-sources/hq-life-design-sources-flows-20261103.md) |
+| `work/hq-life-design-sources-discovery-20261103` | `cc0b202` | `cc0b202` | lane `f5d6bc8` | all listed checks pass, `npm run typecheck` pass | pending (see [Builder results](#builder-results)) |
+| `work/hq-life-design-sources-components-20261103` | `6b4bc02` | `1d2d473` | lane `4104a6b` | all listed checks pass, `npm run typecheck` pass | [Components](f5-design-sources/hq-life-design-sources-components-20261103.md) |
+
+No builder ran the root `npm test` (the Electron build and vitest). Every check and screenshot so far is the
+builder's own evidence.
 
 PRs: F5 has opened none. Related work:
 
@@ -57,9 +61,42 @@ Full list and the journey walkthrough: [Sources flow assessment](../../design/hq
 4. The correct component hold renders as overlapping debug text, and no variant is selected.
 5. Discovery previews are blank, and nothing leads from a discovered project to saving or rating it.
 
+## Builder results
+
+What each builder reported, plus the lead's notes. None of it has been reviewed yet.
+
+- **References.** It reports every brief item done: a multi-file import queue, a drop overlay, a card grid with roving focus, a lightbox, collections chips, **Rate taste**, and a cross-link to Imports.
+  - **Needs sign-off:** one existing assertion in `preview-lifecycle.render.test.tsx` changed, from one scroll to no scroll, because details now open in a lightbox.
+  - **Stale doc:** `docs/ui-map/references.md`, which is outside the lane's paths.
+  - **F1 gap:** `Dialog` is not safe to render on the server, and `container-type` traps fixed-position dialogs.
+- **Imports.** It reports Choose, Review and Done steps with apply progress, a toast with **Undo**, a history timeline, export choices as radio cards, and a cross-link to References.
+  - The panel takes F1's primitives through an injected "kit" prop, because a section's `.ts` view cannot import `@hq/ui` under `node --test`.
+  - **Outcomes:** a write that fails in an unexpected way reports an unknown outcome with **Check**, and never "nothing changed".
+- **Taste.** It reports a container layout, segmented 1–5 rows and a **Waiting to rate** deck fed by `tasteQueue` through the new `TasteSourcesView.tsx`. `TasteView.tsx` is untouched.
+  - **Merges:** with #168 at `13cbbd1` and #179 at `c83294b`, both clean.
+  - **Semantic overlap with #168:** #168 hides the form when a reload fails, which hides the new inline notice too. Decide which behaviour to keep after #168 lands.
+  - **Gaps:** there is no capture at 572px. The deck's single-key shortcuts need an accessibility review.
+- **Flows.** It reports a filmstrip, directional step transitions, a map beside the player at 900px and wider with the traversed edge drawn, version chips and **Rate this flow**.
+  - **Root `npm run typecheck` fails:** `findLastIndex` at `modules/design/flows/src/player.ts:88` is not in the root config's ES2022 lib.
+  - **Lead's reading:** this branch probably caused it. `presentation.ts` now imports types from `player.ts`, which brings that file into the root program, and the other five builders started from the same base and pass. This is not verified. Fix it inside F5's paths, by dropping that import or replacing the call. Changing the shared root `lib` is not this lane's call.
+  - **Unstyled harness:** the preview harness does not import `flows.css`.
+- **Discovery.** Its handoff is pending. From its final report:
+  - **Previews:** `data:` URLs for PNG, JPEG and WebP, accepted only when the bytes match the file signature.
+  - **Grid:** virtualised, with roving focus.
+  - **Filters and refresh:** source filter chips; refresh with busy state, a result toast, and on failure a Retry toast plus a notice on the affected source.
+  - **Explore deck:** skip, or save for Taste.
+  - **Other:** **Link to project…** shows only when a handler exists. A details drawer was added. The header now says when the catalog is up to date.
+  - **Left alone:** the doc comment on `DiscoveryEnv.service` in `fake-workspace.ts` is stale, and the preview harness still passes a dead `onRequestLink`.
+- **Components.** It reports the A+C blend built: a variant strip whose **Base** tile is preselected and whose highlight glides, a held blueprint stage with backdrop and width presets, controls with constraint hints, a token swatch grid, and a Motion proxy.
+  - **The hold is enforced by structure:** tests use a source guarded by a `Proxy`, which fails on any read of markup, styles or script, and assert that no element in the stage host chain carries a transform.
+  - **Shell finding for F1:** a button rule in `apps/desktop/src/styles.css`, lines 13–17, gives every button `min-height: 30px` and padding, which distorts small controls.
+- **Across builders:**
+  - Imports, Flows and Discovery each inject `@hq/ui` primitives through a local kit, with a plain fallback for node tests. A Node-safe entry point in `@hq/ui` would remove the duplication; that is for F1.
+  - The dev server logs a `/favicon.ico` 404 in every capture.
+
 ## What's left, in priority order
 
-1. **Read the six builder handoffs** (pending; they are linked below once written).
+1. **Read the builder handoffs** (linked below) and [Builder results](#builder-results). Fix the Flows root typecheck before integrating.
 2. **Review each builder branch.** Look at its screenshots at 572px and 1280px, in light, dark and reduced motion. Check the diff for: owned paths only; no `style` attributes and no `blob:` images (CSP); no fading or filtering of preserved content; the Components hold intact, with no transform on the stage host; `TasteView.tsx` untouched; and each new test file claimed by exactly one row of `.github/workflows/design-sections.yml`. Check that Discovery's fake adapter stays example-only and labelled. Send fix rounds as new `delegate_task` rounds: the view's brief from [`f5-design-sources/briefs/`](f5-design-sources/briefs/) plus the findings, a new `clientRequestId`, and Sonnet 5.5 at `xhigh`.
 3. **Integrate into the lane branch.** Merge each reviewed sub-branch with `--no-ff`. Owned paths do not overlap, so conflicts between builders are not expected. Then confirm Taste still merges cleanly with #168: `git merge-tree --write-tree HEAD origin/work/hq-taste-production-mount-20261026-r1`.
 4. **After screenshots.** Start the renderer with `npx vite --config apps/desktop/vite.config.ts --port 5281 --strictPort`, then run the capture script (appendix). Walk the journey: import a reference, **Rate taste**, the Taste deck, Components, Flows, then Discovery's **Explore**. Capture light, dark, wide and reduced motion. Commit a curated set to `docs/design/hq-visual-system/evidence/sources-20261103/after/` and add the results to the assessment.
@@ -95,8 +132,16 @@ Full list and the journey walkthrough: [Sources flow assessment](../../design/hq
 
 ## Builder handoffs
 
-Pending. Each builder writes `docs/handoffs/hq-life-20261103/f5-design-sources/hq-life-design-sources-<view>-20261103.md`
-on its own branch.
+Each builder committed its handoff on its own branch, at
+`docs/handoffs/hq-life-20261103/f5-design-sources/hq-life-design-sources-<view>-20261103.md`. The copies here are identical.
+Each branch also holds six screenshots in `docs/design/hq-visual-system/evidence/sources-20261103/wip/<view>/`.
+
+- [References](f5-design-sources/hq-life-design-sources-references-20261103.md): pushed head `1f4d5b0`
+- [Imports](f5-design-sources/hq-life-design-sources-imports-20261103.md): pushed head `ea2824a`
+- [Taste](f5-design-sources/hq-life-design-sources-taste-20261103.md): pushed head `8d3db74`
+- [Flows](f5-design-sources/hq-life-design-sources-flows-20261103.md): pushed head `c47bb5a`
+- [Components](f5-design-sources/hq-life-design-sources-components-20261103.md): pushed head `6b4bc02`
+- Discovery: pending. Its stop message arrived after it had filed its final report, so it was asked again, for the handoff only. Its code is pushed at `cc0b202` and its worktree is clean.
 
 ## Appendix: capture script
 
