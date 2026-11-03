@@ -187,29 +187,30 @@ The shell has no transitions. A domain switch is a hard remount (the React key c
 
 | Finding | Owner | Note |
 | --- | --- | --- |
-| X1 welcome/checklist | F7 | New shell files; single mount point |
+| X1 welcome/checklist | F7 builds, F1 mounts | `apps/desktop/src/onboarding/`, props-only |
 | X1 Projects empty state, "Cached" on first launch | F4/F5 | Design Projects view |
-| X2 global palette and search | F7 | Shell yields to Design's handled ⌘K |
+| X2 global palette and search | F7 builds, F1 mounts | `apps/desktop/src/navigation/`; yields to Design's handled ⌘K; F1's top bar dispatches `hq-open-command-palette` |
 | X2 one palette | F4 + F7 | Needs agreement; no contract change proposed yet |
-| X3 one status store, header pill, transition toasts | F1 + F6 | `services/domains.tsx`, `settings/DataSources.tsx` |
+| X3 one status store, header pill, transition toasts | F1 | F1's `services/observed-status.ts`; F6 keeps consuming `useDataSources()` |
 | X4 Social and Wiki inline errors and set-up empty state | F3, F6 | Adopt F1 `InlineNotice` |
 | X5 sample references in the active project | F2, F3 | Sample data only |
-| X5 Back pill, Alt+←, read-only notice | F7 | Shell return frame |
+| X5 Back pill and Alt+← / ⌘[ | F7 builds `ReturnPill`, F1 places it in the top bar | |
+| X5 read-only reference notice | F1 | `InlineNotice` bar |
 | X6 rail auto-compact | F1 | |
 | X6 detail panels at narrow widths | F2, F3 | |
-| X7 global shortcuts | F7 | |
+| X7 global shortcuts (⌘/Ctrl+1–4, ⌘/Ctrl+,) and window title (X12) | F7 builds hooks, F1 mounts | |
 | X7 skip link, roving rail | F1 | |
-| X8 project semantics in the switcher | F1 | Needs an owner decision on scope |
-| X9 Wiki reference provider | F6 | Registry is in the shell's `reference-providers.ts` |
+| X8 project semantics in the switcher | F1 | Shows scope only where a domain consumes it |
+| X9 Wiki reference provider | F6 | `modules/wiki/app/src`, plus one registration line in `reference-providers.ts` |
 | X10 shell and domain transitions | F1 | |
 | X11, X12, X13–X16 | as listed | |
 
 ## F7 fixes in flight
 
-Each builder works on its own worktree from `work/hq-foundation`, adds new files under `apps/desktop/src/`, and keeps its change to `PresentationShell.tsx` to a mount point, so it merges cleanly with F1's shell work. The F7 integration pass merges every lane branch and reports conflicts.
+Each builder works on its own worktree from F1's primitives branch (`work/hq-life-system-20261103`). It adds props-only components under `apps/desktop/src/navigation/` or `onboarding/` and makes no change to `PresentationShell.tsx`. F1 is restructuring that file and mounts the components there. Real-app evidence comes from separate `…-mounted` branches. The F7 integration pass merges every lane branch and reports conflicts.
 
 - **F7-B1, global command palette and search:** Ctrl/⌘K in every domain. Commands for domains and sections, Settings categories, appearance and the welcome. Search across Design, Social and Work through the reference providers, opened through reference navigation.
 - **F7-B2, first-run welcome and getting started:** dismissible and reopenable. It reads the data-source state and links to each set-up step.
-- **F7-B3, cross-module navigation:** the Back pill with Alt+← (⌘[ on Mac), the read-only reference notice, ⌘/Ctrl+1–4 and ⌘/Ctrl+,, and a document title that tracks the location.
+- **F7-B1, also:** `ReturnPill` with Alt+← (⌘[ on Mac), `useShellShortcuts` (⌘/Ctrl+1–4, ⌘/Ctrl+,) and `useDocumentTitle`. F1 owns the read-only reference notice and, through F1's own builder, the service-status store (X3).
 
 Their PRs, review verdicts for the other lanes' PRs, and the integration result will be appended here.
