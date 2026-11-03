@@ -79,8 +79,47 @@ export interface ServiceConfigTransport {
   set(input: ServiceConfigInput): Promise<ServiceConfigStatus>;
   status(domain: ServiceDomain): Promise<ServiceConfigStatus>;
 }
+export const GENERATION_SOURCE_ROUTES = ['snapshot', 'serving'] as const;
+export type GenerationSourceRoute = (typeof GENERATION_SOURCE_ROUTES)[number];
+export interface GenerationSourceSnapshot {
+  readonly sourceId: string;
+  readonly ownerState: 'active' | 'removed';
+  readonly issuance: { readonly state: 'issued' | 'not_issued' | 'held'; readonly reason: 'issued' | 'not_issued' | 'binding_scope_changed' };
+  readonly served: { readonly bindingRevision: string } | null;
+  readonly accepted: { readonly bindingRevision: string };
+}
+export interface GenerationSourceIdentity {
+  readonly rootId: string;
+  /** Decimal strings preserve counters beyond JavaScript's safe integer range. */
+  readonly epoch: string;
+  readonly sequence: string;
+  readonly manifestSha256: string;
+}
+export interface GenerationSourceBinding { readonly bindingRevision: string; readonly origin: string }
+export type GenerationSourceServing =
+  | { readonly status: 'unavailable'; readonly reason: 'source_unknown' | 'source_removed' | 'not_issued' | 'binding_scope_changed' | 'application_pending' }
+  | { readonly status: 'empty' }
+  | { readonly status: 'held'; readonly reason: string; readonly lastGood: GenerationSourceIdentity | null }
+  | { readonly status: 'pending' | 'current'; readonly generation: GenerationSourceIdentity; readonly served: GenerationSourceBinding; readonly accepted: GenerationSourceBinding };
+export type GenerationSourcesResult<T> = { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly kind: 'invalid' }
+  | { readonly ok: false; readonly kind: 'unavailable'; readonly reason?: 'disabled' | 'record_invalid' | 'record_conflict' | 'record_unavailable' | 'record_uncertain'
+    | 'invalid_publisher' | 'publisher_exists' | 'publisher_unregistered' | 'source_unknown'
+    | 'source_id_collision' | 'store_root_changed' | 'store_root_collision' | 'writer_exists' | 'writer_closed' };
+export interface GenerationSourcesParams {
+  readonly snapshot: Record<string, never>;
+  readonly serving: { readonly sourceId: string };
+}
+export interface GenerationSourcesValues {
+  readonly snapshot: readonly GenerationSourceSnapshot[];
+  readonly serving: GenerationSourceServing;
+}
+export interface GenerationSourcesTransport {
+  call<R extends GenerationSourceRoute>(route: R, params: GenerationSourcesParams[R]): Promise<GenerationSourcesResult<GenerationSourcesValues[R]>>;
+}
 export interface HqServices {
   readonly sources?: Readonly<import('./catalog.js').SourceTransport>;
+  readonly generationSources?: Readonly<GenerationSourcesTransport>;
   readonly jonesCode?: Readonly<import('./jones-code.js').JonesTransport>;
   readonly preview?: Readonly<import('./preview.js').PreviewTransport>;
   readonly wikiAdmin?: Readonly<import('./wiki-admin.js').WikiAdminTransport>;
