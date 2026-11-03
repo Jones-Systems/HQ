@@ -1,0 +1,7 @@
+body { margin: 0; background: var(--hq-canvas); color: var(--hq-text); font-family: var(--hq-font-ui); }
+main { max-width: 800px; margin: 64px auto; padding: 24px; }
+main h1 { font-size: 24px; }
+main > p { line-height: 1.6; }
+.fixture-controls { display: flex; gap: 24px; padding: 16px 0; }
+.fixture-controls select { padding: 6px; margin-left: 8px; }
+.work-export { margin: 16px 0; }

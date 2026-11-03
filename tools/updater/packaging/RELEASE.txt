@@ -1,0 +1,10 @@
+HQ macOS ad-hoc development preview packages for Apple silicon and Intel.
+
+Each architecture has an archive, exact-source manifest and Sigstore JSON
+attestation binding both subjects to this workflow/tag/source/run. Read
+INSTALL.txt and authenticate the archive and manifest before executing any
+bundled runtime. The app is strictly verified with an ad-hoc code signature;
+Developer ID signing and Apple notarization are not claimed.
+
+Updates preserve the externally pinned profile paths and are installed only
+on an accepted next launch. Installation never requires quitting Jones Code.

@@ -1,0 +1,86 @@
+HQ per-user installation and recovery
+
+Authenticate the downloaded archive and its provenance from the fixed
+Jones-Systems/HQ release before executing any bundled program. Follow the
+release's independent SHA-256 and Sigstore attestation verification procedure.
+A verifier shipped inside a download cannot authenticate its own first execution.
+Ad-hoc development previews check package consistency; they do not claim
+Developer ID or notarization. Production receipts require Team 2CUPSQS986,
+identifier org.jones-systems.hq.local, hardened runtime, a secure timestamp and
+a validated stapled notarization ticket. Source support alone does not prove
+that a release passed those checks. Native qualification remains a release gate.
+
+After independent verification, use the release's Install HQ launcher, or run:
+
+ELECTRON_RUN_AS_NODE=1 "<verified HQ.app>/Contents/MacOS/HQ" \
+  "<verified HQ.app>/Contents/Resources/app/tools/updater/installer.cjs" \
+  fresh --channel preview
+
+The default target is the absent per-user Applications/HQ.app. An explicit
+--target must be an absolute absent .app path under your home directory. Fresh
+installation creates a unique HQ profile binding and update cache. It does not
+adopt an existing profile. The installer prints its exact target, external record
+and recovery state directory. Keep those files. It exits before the retained
+candidate helper replaces the target or starts HQ. No system Node or Python,
+sudo, service restart, app quit or process kill is part of this flow.
+
+Existing-target adoption is separate. An authorized operator supplies JSON with
+exact record, candidate and expectedLegacy fields, using the shared installation
+schema. The legacy source identity consists only of the SHA-256 values of
+Contents/Resources/app/local-bootstrap.cjs, package.json and
+apps/desktop/dist-electron/main.js. Supply the already established userData and
+sessionData paths; do not enumerate or inspect a profile to guess them. The
+legacy package must retain name hq, productName HQ and the recorded bundle ID.
+The new release is independently verified again and must match the accepted
+candidate. Invoke the same verified runtime/script with:
+
+adopt --input "<exact operator metadata.json>"
+
+Legacy profile compatibility remains unknown. If the new app opens the profile
+and does not become healthy, automatic recovery holds both bundles. Recovery
+never copies, restores or removes profile files. Ad-hoc app changes can prompt
+macOS to request Keychain permission; no credential continuity is promised.
+A native identity mismatch or a headless prompt is a hold.
+
+Settings > Updates schedules an exact verified build for the next launch. It
+does not quit HQ, interrupt editors or stop remote work. The scheduled update
+can be cancelled before activation. Health requires main initialization and the
+renderer shell acknowledgement. Domain operations start after durable health.
+
+Run recovery from an independently authenticated bundle outside the target, or
+from the retained verified candidate runtime. Use the same script with:
+
+inspect --target "<exact HQ.app>"
+reconcile --target "<exact HQ.app>" --operation <reported operationId> --sequence <reported sequence>
+
+Inspect is read-only and reports the exact operation and sequence. Reconcile
+checks those values and observed bundle/process identities before continuing.
+A live process timeout or missing process evidence holds; it never kills or
+renames a live app. A committed installation is never automatically downgraded.
+A dead compatible failed candidate may restore only its retained prior binary.
+A dead legacy adoption can restore the prior bundle only before profile-opened.
+Unknown rename or launch effects require inspection, never a blind retry.
+
+Recovery bundles and helper runtimes are deliberately retained. Each admitted
+bundle is bounded to 3 GiB and each archive to 1 GiB. Transaction history is
+limited to two prior operations plus the active operation; further installations
+hold for exact operator retention maintenance rather than recursively cleaning
+arbitrary directories. No broad cleanup command is provided. Never delete the
+record, cache or retained bundle while recovery is pending.
+
+Portable tests run in the repository Node engine range ^22.22.2 || ^24.15.0 ||
+>=26 using the hq-updates-transaction group in tests/check-groups.toml. They use
+synthetic data and injected native/process adapters.
+They do not establish macOS installation, code-signing, Gatekeeper, Keychain or
+real-profile behavior. The synthetic native harness uses a separate application
+identity and profile, never the production HQ credentials or a running Jones app.
+
+The macOS process adapter uses the bundled process-inventory helper. It obtains
+executable-vnode paths with proc_pidpath and birth, parent and boot metadata with
+sysctl, without reading command arguments, environment or open files. It repeats
+identity observations and holds on incomplete or ambiguous live-process evidence.
+Only proved vanished or zombie processes and the metadata-identified kernel
+process are omitted. The caller excludes only its exact completed inventory child.
+Apple exposes these interfaces in SDK headers but does not promise them as stable
+public APIs. Native qualification must demonstrate complete evidence on the target
+host; portable tests do not establish that capability.

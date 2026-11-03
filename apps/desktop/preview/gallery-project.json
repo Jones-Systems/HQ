@@ -1,0 +1,7 @@
+{
+  "schema": "gallery-project/v1",
+  "id": "hq-browser-preview",
+  "name": "HQ browser preview",
+  "summary": "Synthetic Work and Social examples in the HQ shell. Memory-only browser infrastructure pilot; native desktop and live services are unavailable.",
+  "source": { "type": "collection", "directory": "content" }
+}

@@ -1,0 +1,13 @@
+/* Bridge from the T0 bootstrap shell's variable names (apps/desktop/src/styles.css on work/hq-foundation at 33dfe44)
+   to HQ visual-system roles. Proposed for the foundation owner: load hq-tokens.css, then this file, and remove the
+   T0 :root/[data-theme] palette blocks so these aliases are the only definitions. T0's existing
+   <html data-theme="light|dark"> write already selects the scheme hq-tokens.css expects. */
+:root {
+  --background: var(--hq-surface);
+  --surface: var(--hq-nav);
+  --text: var(--hq-text);
+  --muted: var(--hq-text-muted);
+  --line: var(--hq-border);
+  --selected: var(--hq-surface-selected);
+  --accent: var(--hq-accent-text);
+}

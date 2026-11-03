@@ -1,0 +1,33 @@
+{
+  "data": "synthetic",
+  "source_commit": "2db32ffe80abfec28d1b549211707ec031815509",
+  "viewport_css_pixels": [
+    1280,
+    800
+  ],
+  "device_scale_factor": 2,
+  "captures": {
+    "light-saved.png": "Explicit JSON click; Planner status 200; saved; one call.",
+    "dark-error.png": "Explicit Markdown click; Planner status 503; error; two cumulative calls."
+  },
+  "source_sha256": {
+    "modules/work/export/WorkExport.tsx": "a06f0d25bc07bafd03a6a979b2525ef9b671fcfcf0daf9cf6ccfa123b62d9738",
+    "modules/work/export/export.css": "2475fc4d1ef5fc538c5868bd38a4fc02a32f914a80bef698cc3c20fa66da0f6a",
+    "modules/work/export/index.ts": "231106ba46c7debff68c1563a8aeb14ce2124bea3b90c7ed6b57381f0ef8065c",
+    "modules/work/export/port.ts": "ea8de1717cd36e7d41d55cba84b885ca0698b2fc6f22c6acee0e1e83c7f5fbfa",
+    "modules/work/export/test/export.test.tsx": "0464f5972b658b5d991a5a23871dac7d45f086594abafbb59859690f4800153c",
+    "modules/work/export/test/port.test.ts": "db63d40afff908008c126e23104fec1b78909616e1875c1f14a7c1cc461872dc",
+    "modules/work/export/test/preview/index.html": "935f724ea2eb53afb21e1f033bd630b634451b715d16ad3590822de9bebc3531",
+    "modules/work/export/test/preview/main.tsx": "fb3a5157b49f54cb41bce227bf7ce5a8b1d81efdc2f8d3316ff2302bf8ff95da",
+    "modules/work/export/test/preview/preview.css": "3d2ad3c05cc76d3a82357673ba5c9b0f2b7c4e3ef0b18d386f593bfd777490e4",
+    "modules/work/export/test/preview/vite.config.ts": "f123fa446a66c676a62c93d0a6d12819993371e6d3371b5f1af64f87664cfef2"
+  },
+  "capture_sha256": {
+    "dark-error.png": "7d0eb961fb51439f4cde5f3bbeef990029506968feaa9a5dc2e42df4e6a771a0",
+    "light-saved.png": "f509b55393544fc6071976382c7b592c8a96527d5f0ca3fd5e9454e22e3e0a2a"
+  },
+  "preview_assets": [
+    "index-Bb7Uu-wY.css",
+    "index-CQ-r1EIv.js"
+  ]
+}

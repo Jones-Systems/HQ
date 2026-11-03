@@ -1,0 +1,20 @@
+/* Quick capture and HQ drafts. Tokens only; the Dialog shell comes from @hq/ui. */
+
+.work-capture { width: min(520px, 100%); }
+.work-capture-form { display: grid; gap: var(--hq-space-md); }
+.work-capture-row { display: flex; flex-wrap: wrap; gap: var(--hq-space-md); }
+.work-capture-date { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
+.work-capture-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--hq-space-sm); }
+.work-capture-actions { display: inline-flex; gap: var(--hq-space-sm); margin-left: auto; }
+
+.work-suggestion {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm); padding: var(--hq-space-sm) var(--hq-space-md);
+  border-radius: var(--hq-radius-md); background: var(--hq-info-soft); box-shadow: inset 0 0 0 1px var(--hq-info); font: var(--hq-type-small);
+}
+
+.work-drafts { display: grid; gap: var(--hq-space-xs); padding: var(--hq-space-sm) var(--hq-space-md); border-radius: var(--hq-radius-md); background: var(--hq-warning-soft); box-shadow: inset 0 0 0 1px var(--hq-warning); }
+.work-drafts-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm); }
+.work-drafts-head > .hq-btn { margin-left: auto; }
+.work-drafts-list { display: grid; gap: var(--hq-space-2xs); margin: 0; padding: 0; list-style: none; }
+.work-draft { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm); }
+.work-draft-title { font: var(--hq-type-label); font-weight: var(--hq-font-weight-semibold); }
