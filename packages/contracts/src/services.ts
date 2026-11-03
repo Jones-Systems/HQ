@@ -54,7 +54,7 @@ export interface StoredDocument {
 }
 export type DesignStorageResult<T> = { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly kind: 'conflict' | 'invalid' | 'read-only' | 'unavailable' | 'unknown'; readonly reason?: 'disabled' };
-export const DESIGN_SERVICE_ROUTES = ['doc.get', 'doc.put', 'doc.list', 'cache.get', 'cache.put', 'blob.put', 'blob.get', 'blob.has', 'event.append', 'event.read', 'import.commit', 'import.status', 'import.repair', 'storage.diagnostics', 'export.preview', 'export.save', 'catalog.roots', 'catalog.chooseRoot', 'catalog.forget', 'catalog.snapshot', 'catalog.preview', 'import.pick'] as const;
+export const DESIGN_SERVICE_ROUTES = ['doc.get', 'doc.put', 'doc.list', 'cache.get', 'cache.put', 'blob.put', 'blob.get', 'blob.has', 'event.append', 'event.read', 'import.commit', 'import.status', 'import.repair', 'storage.diagnostics', 'export.preview', 'export.save', 'catalog.roots', 'catalog.chooseRoot', 'catalog.forget', 'catalog.snapshot', 'catalog.preview', 'import.pick', 'design.capabilities'] as const;
 export type DesignServiceRoute = (typeof DESIGN_SERVICE_ROUTES)[number];
 export type ImportPickResult = { readonly status: 'canceled' }
   | { readonly status: 'rejected'; readonly reason: 'unavailable' | 'invalid-selection' | 'too-many-files' | 'not-regular-file' | 'file-too-large' | 'total-too-large' | 'invalid-png' | 'file-changed' | 'read-limit' }
