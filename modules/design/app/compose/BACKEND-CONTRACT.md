@@ -54,12 +54,32 @@ Rules for views:
 
 ### Mapping to the shared feedback primitives
 
-`designFeedback(failure)` returns `{ tone, title, description?, meta, inline, action?, persistent }`.
+`designFeedback(failure)` returns `{ id, tone, title, description?, meta, inline, status, action?, persistent }`.
 
-- Toasts (`@hq/ui`): pass `tone`, `title`, `description` directly. The shared tones include `unknown`.
+- Toasts (`@hq/ui`): pass `id`, `tone`, `title` and `description` directly. The shared tones include `unknown`.
+  A toast with the same `id` replaces the earlier one. A storage outage uses `design.storage.unavailable` in
+  every section, so five sections failing at once show one toast. Every other failure uses
+  `design.<operation>.<kind>`.
 - Inline state: `inline` is `failed` or `unknown`, matching the `failed` / `unknown` states of the inline
-  status indicators.
+  status indicators. `status` is the word beside the control.
 - A view kit whose tone set lacks `unknown` shows it as `warning` and keeps the `unknown` inline state.
+
+The words match the rest of HQ. An unconfirmed write reads "not confirmed yet", offers **Check** and is marked
+**Unconfirmed**, as in Work. A storage outage is **Unavailable**, as in the shell's service status.
+
+| kind | status word |
+| --- | --- |
+| `conflict` | Changed elsewhere |
+| `invalid` | Refused |
+| `read-only` | Read-only |
+| `unavailable` | Unavailable |
+| `disabled` | Off in this build |
+| `not-found` | Missing |
+| `too-large` | Too large |
+| `cancelled` | Stopped |
+| `stale` | Out of date |
+| `corrupt` | Damaged |
+| `unknown` | Unconfirmed |
 
 ### Section errors
 
@@ -72,7 +92,8 @@ New section errors must set `this.name` and either be added to `classifyDesignEr
 | `StoreError` with `code: 'conflict'` (bridge), `StorageConflictError`, `CanvasWriteConflictError`, `FreezeConflictError`, `ProposalConflictError`, `IntegrityError` with `reason: 'exists'` | conflict |
 | `ContentError`, `VersionMutationError`, `InvalidIdError`, `ValidationError`, `CanonicalJsonError`, `CanonicalizationError`, `NonCanonicalBytesError`, storage scope errors | invalid |
 | `ReadOnlyContentError`, `ReadOnlyRequestError`, `UnsupportedSchemaError`, `reason: 'unsupported-stored-schema'` | read-only |
-| `TasteUnavailableError`, `SourceUnavailableError` | unavailable |
+| `TasteUnavailableError` | unavailable |
+| `SourceUnavailableError` (reason `source-offline`: the source, not storage, is unreachable) | unavailable |
 | `PreviewError` with `reason: 'too-large'` | too-large |
 | `AbortError`, `PreviewError` with `reason: 'aborted'` | cancelled |
 | `StaleDraftError`, `TasteProjectBindingError` (reason `project-binding`) | stale |
@@ -107,3 +128,40 @@ re-read instead of trusting a cache. Today live capture acceptance (`interactive
 Further producers (Imports linking, Projects edits) notify as they land, and are listed here when they do.
 
 A listener that throws is isolated. Other listeners still run.
+
+The shell's reference reads (`designReferenceReads`, used by search and reference pickers) do not cache.
+Each read loads the stored content again.
+
+## 4. Destinations for deep links
+
+A Design destination is `<nav>/<section>`, for example `requests/imports`. The section ids are stable. The
+`nav` placement comes from each section's `design-module.ts` and is provisional until the owner reviews it,
+so shared surfaces should build destinations from the descriptor (`nav`, `id`) rather than hard-code them.
+
+| Section | Destination today |
+| --- | --- |
+| Projects | `projects/projects` |
+| Discovery | `projects/discovery` |
+| References | `resources/references` |
+| Components | `resources/components` |
+| Flows | `resources/flows` |
+| Canvas | `review/canvas` |
+| Compare | `review/compare` |
+| Annotations | `review/annotations` |
+| Taste | `review/taste` |
+| Requests | `requests/requests` |
+| Imports | `requests/imports` |
+| Runs | `runs/connector` |
+
+## 5. Capabilities in this build
+
+*Planned with the Imports workstream.* A read-only host query will report which Design features this build has
+enabled: Imports storage, the file picker and export, plus the held ones (generation sources, the component
+runner). Shared surfaces such as the palette can then hide or label commands that would only fail with
+`disabled`. Until it lands, a `disabled` failure is the signal.
+
+## 6. Current project
+
+Until the owner-held project identity cutover (HQR-1 / D3), Design keeps its own project list. The shell's
+context does not choose a Design project, and the project opened in Design scopes only Design's sections.
+Shared surfaces should not promise cross-module project scoping for Design yet.

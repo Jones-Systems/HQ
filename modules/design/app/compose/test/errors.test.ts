@@ -94,14 +94,34 @@ describe('designFeedback', () => {
   it('maps failures to the shared toast tones with safe actions only', () => {
     const feedback = (kind: (typeof DESIGN_FAILURE_KINDS)[number]) => designFeedback(designFailure(kind, write));
     assert.deepEqual(feedback('unknown'), {
-      tone: 'unknown', title: 'Save the project: result not confirmed', description: 'HQ could not confirm whether this finished. Check before trying again.',
-      meta: 'projects.save', inline: 'unknown', action: { kind: 'check', label: 'Check' }, persistent: true,
+      id: 'design.projects.save.unknown', tone: 'unknown', title: 'Save the project: not confirmed yet',
+      description: "HQ couldn't confirm whether this finished. Check before trying again.",
+      meta: 'projects.save', inline: 'unknown', status: 'Unconfirmed', action: { kind: 'check', label: 'Check' }, persistent: true,
     });
     assert.deepEqual([feedback('conflict').tone, feedback('conflict').action?.label, feedback('conflict').inline], ['danger', 'Reload', 'failed']);
     assert.deepEqual([feedback('unavailable').tone, feedback('unavailable').action?.label], ['danger', 'Retry']);
     assert.deepEqual([feedback('disabled').tone, feedback('disabled').action, feedback('disabled').persistent], ['info', undefined, false]);
     assert.deepEqual([feedback('read-only').tone, feedback('stale').action?.label], ['warning', 'Choose again']);
     assert.equal(designFeedback(designFailure('disabled', write, { reason: 'disabled' })).meta, 'projects.save · disabled');
+  });
+
+  it('gives storage outages one shared toast id and every other failure its own', () => {
+    const compare: DesignFailureContext = { section: 'compare', operation: 'compare.load', action: 'load the comparison' };
+    assert.equal(designFeedback(designFailure('unavailable', read)).id, 'design.storage.unavailable');
+    assert.equal(designFeedback(designFailure('unavailable', compare)).id, 'design.storage.unavailable');
+    assert.equal(designFeedback(designFailure('conflict', write)).id, 'design.projects.save.conflict');
+    assert.equal(designFeedback(designFailure('unknown', compare)).id, 'design.compare.load.unknown');
+    assert.deepEqual([designFeedback(designFailure('unavailable', read)).status, designFeedback(designFailure('disabled', write)).status],
+      ['Unavailable', 'Off in this build']);
+  });
+
+  it('says when a source, not storage, is unreachable', () => {
+    const discovery: DesignFailureContext = { section: 'discovery', operation: 'discovery.refresh', action: 'refresh the catalog' };
+    const offline = classifyDesignError(new SourceUnavailableError(), discovery);
+    assert.deepEqual([offline.kind, offline.reason, offline.description], ['unavailable', 'source-offline', "The source can't be reached right now. Nothing was changed."]);
+    assert.equal(designFeedback(offline).id, 'design.discovery.refresh.unavailable');
+    // Inherited object keys are not reasons.
+    assert.equal(designFailure('unavailable', read, { reason: 'toString' }).description, 'Design storage is unavailable right now. Nothing was changed.');
   });
 });
 
