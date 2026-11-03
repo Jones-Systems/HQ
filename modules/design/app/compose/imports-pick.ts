@@ -1,8 +1,10 @@
 /**
  * The durable Imports `pickSource` (B3 backend contract, section 12).
  *
- * `import.pick` opens the native PNG picker. The dialog tells the owner the files are imported as their own work,
- * and that statement is why the source's rights basis is `owned`. The source is an `hq.files` v1 source with:
+ * `import.pick` opens the native PNG picker. The dialog tells the owner to choose only files they made and that HQ
+ * records them as the owner, and that statement is why the source's rights basis is `owned`. It is the only basis
+ * recorded here: `licensed`, `permission` and `public-domain` need a choice in the Imports UI first.
+ * The source is an `hq.files` v1 source with:
  *  - one stable source ID for local file imports, and
  *  - item keys that are the normalized file names,
  * so picking the same files again changes nothing, a changed file under the same name is an update, and a changed
@@ -17,7 +19,7 @@ import { IMPORTS_CONTEXTS } from './imports-storage.ts';
 
 /** Local file imports share one source per project, so the same file name is the same item every time. */
 export const LOCAL_FILES_SOURCE_ID = 'src-local-png-files';
-/** Neutral holder text: the native dialog's wording is the owner's explicit statement. */
+/** Neutral holder text: the native dialog's wording ("HQ records you as their owner") is the owner's explicit statement. */
 export const LOCAL_FILES_RIGHTS = Object.freeze({ basis: 'owned', holder: 'Owner' } as const);
 
 export type PickedPng = { readonly name: string; readonly mediaType: 'image/png'; readonly bytes: Uint8Array };
