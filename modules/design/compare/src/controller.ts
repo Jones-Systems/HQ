@@ -5,13 +5,13 @@
  */
 import type {
   CaptureImagePort, CompareStoragePort, ContentSize, PreviewCapability, PreviewQualification,
-  PreviewSession, ScrollPosition, StaticCapture, VersionCatalogPort, VersionSummary,
+  PreviewSession, ScrollPosition, StaticCapture, VersionCatalogPort, VersionSummary, ViewSummary,
 } from './contract.ts';
 import { panelId as toPanelId, type ComparisonId, type PanelId, type VersionId, type ViewId } from './ids.ts';
 import * as model from './model.ts';
 import type { CompareError, ComparisonState, ContentMetrics, Outcome, Panel, PanelRole, PanelSource } from './model.ts';
 import { comparisonKey, parseComparison, serializeComparison } from './persist.ts';
-import { presetById } from './presets.ts';
+import { presetById, sameViewport } from './presets.ts';
 
 export type PanelStatus = 'loading' | 'ready' | 'failed' | 'unavailable' | 'stale';
 
@@ -29,10 +29,17 @@ export interface PanelRuntime {
 
 export type ControllerError = CompareError | 'unknown-version' | 'save-failed' | 'disposed';
 
+/** What the catalog offers for this project, read on demand by `loadCatalog`. Never read for a pinned panel. */
+export interface CatalogState {
+  readonly status: 'idle' | 'loading' | 'ready' | 'failed';
+  readonly views: readonly ViewSummary[];
+}
+
 export interface CompareSnapshot {
   readonly comparison: ComparisonState;
   readonly runtime: ReadonlyMap<PanelId, PanelRuntime>;
   readonly versions: ReadonlyMap<ViewId, readonly VersionSummary[]>;
+  readonly catalog: CatalogState;
   readonly preview: { readonly qualification: PreviewQualification; readonly label: string } | null;
   readonly dirty: boolean;
   readonly lastError: ControllerError | null;
@@ -61,6 +68,15 @@ export interface CompareController {
   addPanel(fromId: PanelId): void;
   removePanel(id: PanelId): void;
   movePanel(id: PanelId, toIndex: number): void;
+  /** Clears the last error so a notice about it can be dismissed. Changes nothing else. */
+  dismissError(): void;
+  /**
+   * Lists the project's views and their versions so a panel can be added for any of them. It only fills
+   * `snapshot.catalog` and `snapshot.versions`; it never changes a pinned panel. Safe to call repeatedly.
+   */
+  loadCatalog(): Promise<void>;
+  /** Adds a panel pinned to an exact version: its static capture when it has one, else a live preview. */
+  addVersionPanel(versionId: VersionId, mode?: PanelSource['kind']): Promise<void>;
   save(): Promise<boolean>;
   dispose(): void;
 }
@@ -105,7 +121,7 @@ export function createCompareController(initial: ComparisonState, deps: CompareD
   let saving: Promise<boolean> = Promise.resolve(true);
   const preview = deps.preview ?? null;
   let snapshot: CompareSnapshot = {
-    comparison: initial, runtime: new Map(), versions: new Map(),
+    comparison: initial, runtime: new Map(), versions: new Map(), catalog: { status: 'idle', views: [] },
     preview: preview === null ? null : { qualification: preview.qualification, label: preview.label },
     dirty: false, lastError: null,
   };
@@ -138,6 +154,29 @@ export function createCompareController(initial: ComparisonState, deps: CompareD
       versions.set(viewId, list);
       emit({ ...snapshot, versions });
     } catch { /* Choices stay unavailable; the pinned panel is unaffected. */ }
+  };
+
+  let catalogLoad: Promise<void> | null = null;
+  const loadCatalog = (): Promise<void> => {
+    if (disposed) return Promise.resolve();
+    if (catalogLoad !== null) return catalogLoad;
+    if (snapshot.catalog.status === 'ready') return Promise.resolve();
+    emit({ ...snapshot, catalog: { status: 'loading', views: snapshot.catalog.views } });
+    catalogLoad = (async () => {
+      let views: readonly ViewSummary[] = [];
+      let status: CatalogState['status'] = 'ready';
+      const loaded = new Map<ViewId, readonly VersionSummary[]>();
+      try {
+        views = await deps.catalog.listViews(snapshot.comparison.projectId);
+        for (const view of views) loaded.set(view.viewId, await deps.catalog.listVersions(view.viewId));
+      } catch { status = 'failed'; }
+      catalogLoad = null;
+      if (disposed) return;
+      const versions = new Map(snapshot.versions);
+      for (const [id, list] of loaded) versions.set(id, list);
+      emit({ ...snapshot, versions, catalog: { status, views } });
+    })();
+    return catalogLoad;
   };
 
   const failed = (version: VersionSummary | null, error: string): PanelRuntime => ({ ...LOADING, status: 'failed', version, error });
@@ -287,6 +326,29 @@ export function createCompareController(initial: ComparisonState, deps: CompareD
       commit(model.addPanel(snapshot.comparison, { id: nextPanelId(), role: 'candidate', source: from.source, viewport: from.viewport, width: from.width }));
     },
     removePanel: (id) => commit(model.removePanel(snapshot.comparison, id)),
+    dismissError() { if (!disposed && snapshot.lastError !== null) emit({ ...snapshot, lastError: null }); },
+    loadCatalog,
+    async addVersionPanel(versionId, mode) {
+      let version: VersionSummary | null = null;
+      try { version = await deps.catalog.getVersion(versionId); } catch { version = null; }
+      if (disposed) return;
+      if (version === null || version.versionId !== versionId) { emit({ ...snapshot, lastError: 'unknown-version' }); return; }
+      const panels = snapshot.comparison.panels;
+      const near = panels[panels.length - 1];
+      const kind = mode ?? (version.captures.length > 0 || preview === null ? 'static-capture' : 'live-preview');
+      let source: PanelSource;
+      let viewport = near?.viewport ?? presetById('phone')!.viewport;
+      if (kind === 'live-preview') source = model.liveSource(version);
+      else {
+        if (version.captures.some((item) => item.versionId !== version.versionId)) { commit({ ok: false, state: snapshot.comparison, reason: 'capture-version-mismatch' }); return; }
+        const capture = version.captures.find((item) => near !== undefined && sameViewport(item.viewport, near.viewport)) ?? version.captures[0];
+        if (capture === undefined) { commit({ ok: false, state: snapshot.comparison, reason: 'no-capture' }); return; }
+        source = model.staticSource(capture);
+        viewport = capture.viewport;
+      }
+      const role: PanelRole = panels.some((panel) => panel.role === 'baseline') ? (panels.some((panel) => panel.role === 'candidate') ? 'reference' : 'candidate') : 'baseline';
+      commit(model.addPanel(snapshot.comparison, { id: nextPanelId(), role, source, viewport, width: near?.width }));
+    },
     movePanel: (id, toIndex) => commit(model.movePanel(snapshot.comparison, id, toIndex)),
     save() {
       const storage = deps.storage ?? null;
