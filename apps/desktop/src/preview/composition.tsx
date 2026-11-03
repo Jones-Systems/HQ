@@ -4,8 +4,7 @@ import { EXAMPLE_SETTINGS } from '../../../../modules/work/core/fixtures/example
 import { createSocialReferenceProvider } from '../../../../modules/social/references';
 import { createLiveSocialPort } from '../../../../modules/social/live';
 import { bridgeTransport, createPlannerLive } from '../../../../modules/work/live';
-import { createWorkbenchFixture } from '../../../../modules/social/workbench/fixtures/examples';
-import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES } from '../../../../modules/social/core';
+import { createExampleWorkspace } from '../../../../modules/social/nav';
 import type { ComponentType } from 'react';
 import type { DomainId, ModulePort } from '@hq/contracts';
 import type { ReferenceProvider } from '@hq/contracts/references';
@@ -25,7 +24,7 @@ export function seed(entry: PreviewEntry) {
     planner: () => entry === 'empty'
       ? createFixturePlanner({ items: [], settings: { ...EXAMPLE_SETTINGS } }).port
       : examplePlanner(),
-    social: () => createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX], simulateExampleRuns: true }).port,
+    social: (projectId: string) => createExampleWorkspace(projectId),
   };
 }
 

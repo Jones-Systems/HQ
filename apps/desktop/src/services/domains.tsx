@@ -3,15 +3,13 @@ import type { ModulePort } from '@hq/contracts';
 import type { HqServices, ServiceDomain } from '@hq/contracts/services';
 import { createWorkExportClient } from './work-export';
 import { WorkModule, setWorkSessionPort, examplePlanner } from '@hq/work';
-import { SocialDomain } from '../../../../modules/social/nav';
+import { SocialDomain, createExampleWorkspace } from '../../../../modules/social/nav';
 import { createLiveSocialPort } from '../../../../modules/social/live';
-import { createWorkbenchFixture } from '../../../../modules/social/workbench/fixtures/examples';
-import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES } from '../../../../modules/social/core';
 import { bridgeTransport, createPlannerLive } from '../../../../modules/work/live';
 import { serviceStatus } from './data-source-status';
 
 type Services = Pick<HqServices, 'social' | 'work'> & { config: Pick<HqServices['config'], 'status'> };
-type Examples = { planner?: () => import('../../../../modules/work/core/port').PlannerPort; social?: () => import('../../../../modules/social/core/port').SocialWorkspacePort };
+type Examples = { planner?: () => import('../../../../modules/work/core/port').PlannerPort; social?: (projectId: string) => import('../../../../modules/social/core/port').SocialWorkspacePort };
 
 type Selection = 'live' | 'example' | 'unavailable';
 export const RELOAD_NOTE = 'Endpoint changes apply after HQ reloads.';
@@ -37,16 +35,17 @@ export function createServiceDomains(getServices: () => Services | undefined, ex
   let socialChoice: ReturnType<typeof chooseSocial> | undefined;
   let workChoice: Promise<Selection> | undefined;
   let workExport: ReturnType<typeof createWorkExportClient> | undefined;
-  async function chooseSocial() {
+  /** `projectId` is the project the example workspace is first shown in; its sample links point there. */
+  async function chooseSocial(projectId: string) {
     const services = getServices();
     const selection = await selectService(services, 'social');
     const port = selection === 'live' ? createLiveSocialPort(services!.social)
-      : selection === 'example' ? (examples?.social?.() ?? createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX], simulateExampleRuns: true }).port) : null;
+      : selection === 'example' ? (examples?.social?.(projectId) ?? createExampleWorkspace(projectId)) : null;
     return { selection, port };
   }
   function Social(props: ModulePort) {
     const [choice, setChoice] = useState<Awaited<ReturnType<typeof chooseSocial>> | null>(null);
-    useEffect(() => { let mounted = true; socialChoice ??= chooseSocial(); void socialChoice.then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
+    useEffect(() => { let mounted = true; socialChoice ??= chooseSocial(props.context.id); void socialChoice.then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
     return choice ? <Surface domain="Social" selection={choice.selection}>{choice.port && <SocialDomain {...props} port={choice.port} example={choice.selection === 'example'} />}</Surface> : <p role="status">Checking Social configuration…</p>;
   }
   async function chooseWork(): Promise<Selection> {
