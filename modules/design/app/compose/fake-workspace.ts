@@ -108,14 +108,53 @@ export interface ProjectContentEnv {
   readonly clock: ReturnType<typeof createProjectsClock>;
   readonly repository: ProjectContentRepository;
   readonly content: ProjectContent;
+  /** True when this composition seeded the synthetic example content; false for a project created in Projects. */
+  readonly example: boolean;
+}
+
+interface SharedProjects {
+  readonly storage: ReturnType<typeof createSpyStorage>;
+  readonly thumbnails: ReturnType<typeof createFakeThumbnailPort>;
+  readonly clock: ReturnType<typeof createProjectsClock>;
+  readonly repository: ProjectContentRepository;
+}
+
+let shared: SharedProjects | null = null;
+/** One in-memory project store for every example project, so a project created in Projects keeps its own content elsewhere. */
+function sharedProjects(): SharedProjects {
+  if (shared === null) {
+    const storage = createSpyStorage();
+    const clock = createProjectsClock();
+    shared = { storage, thumbnails: createFakeThumbnailPort(), clock, repository: new ProjectContentRepository(storage, clock) };
+  }
+  return shared;
+}
+
+function registeredIds(storage: SharedProjects['storage']): readonly { readonly id: string }[] {
+  const raw = storage.raw('workspace', PROVISIONAL_REGISTRY_KEY);
+  if (raw === undefined) return [];
+  try {
+    const document: unknown = JSON.parse(raw);
+    const projects = typeof document === 'object' && document !== null ? (document as { projects?: unknown }).projects : undefined;
+    return Array.isArray(projects) ? projects.filter((item): item is { id: string } => typeof item?.id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** A project listed in the example registry before its content was first read was created in Projects: it gets no seed. */
+function createdInProjects(id: string): boolean {
+  return registeredIds(sharedProjects().storage).some((item) => item.id === id);
 }
 
 /** Two desktop views with versions, and two mobile screens. All synthetic, each bound to a synthetic capture digest. */
 export const contentFor = perProject(async (project): Promise<ProjectContentEnv> => {
-  const storage = createSpyStorage();
-  const thumbnails = createFakeThumbnailPort();
-  const clock = createProjectsClock();
-  const repository = new ProjectContentRepository(storage, clock);
+  const { storage, thumbnails, clock, repository } = sharedProjects();
+  if (createdInProjects(project.id)) {
+    const loaded = await repository.load(project.id as ProjectContent['projectId']);
+    if (loaded.status !== 'ok') throw new Error(`Project content unavailable: ${loaded.status}`);
+    return { tag: FAKE_TAG, storage, thumbnails, clock, repository, content: loaded.content, example: false };
+  }
   let seed = 10;
   const capture = async (route: string, viewport: { w: number; h: number; dpr: number }, revision: string) => {
     const thumbnail = await previewRefFor(syntheticPng(seed), 'image/png', 32, 20);
@@ -147,7 +186,7 @@ export const contentFor = perProject(async (project): Promise<ProjectContentEnv>
     }
     return next;
   });
-  return { tag: FAKE_TAG, storage, thumbnails, clock, repository, content };
+  return { tag: FAKE_TAG, storage, thumbnails, clock, repository, content, example: true };
 });
 
 // ---------------------------------------------------------- discovery (T15) -> projects
@@ -197,9 +236,12 @@ export function discoveryEnv(): Promise<DiscoveryEnv> {
 export const projectsFor = perProject(async (project) => {
   const env = await contentFor(project);
   const { readPort } = await discoveryEnv();
-  env.storage.seed('workspace', PROVISIONAL_REGISTRY_KEY, {
-    schema: PROVISIONAL_REGISTRY_SCHEMA, projects: [{ id: project.id, name: project.name, createdAt: env.clock.now() }],
-  });
+  const listed = registeredIds(env.storage);
+  if (!listed.some((item) => item.id === project.id)) {
+    env.storage.seed('workspace', PROVISIONAL_REGISTRY_KEY, {
+      schema: PROVISIONAL_REGISTRY_SCHEMA, projects: [...listed, { id: project.id, name: project.name, createdAt: env.clock.now() }],
+    });
+  }
   const ids = sequentialIds(`compose-${project.id}`);
   const registry = createProvisionalLocalRegistry({ storage: env.storage, clock: env.clock, ids });
   const { controller, ready } = createProjectsSection({ registry, storage: env.storage, thumbnails: env.thumbnails, catalog: readPort, clock: env.clock, ids });
@@ -211,6 +253,7 @@ export const projectsFor = perProject(async (project) => {
 
 export const componentsFor = perProject(async (project) => {
   const library = new ComponentLibrary(createComponentsStorage(), webCryptoDigest);
+  if (!(await contentFor(project)).example) return library;
   const button = await library.saveSource(SYNTHETIC_BUTTON);
   await library.saveVariants(button, { componentId: button.componentId, sourceRevision: 1, variants: SYNTHETIC_BUTTON_VARIANTS });
   const card = await library.saveSource(SYNTHETIC_CARD);
@@ -235,6 +278,7 @@ export interface FlowsEnv {
 
 export const flowsFor = perProject(async (project): Promise<FlowsEnv> => {
   const env = await contentFor(project);
+  if (!env.example) throw new Error('The synthetic checkout flow exists only for the example project');
   const version = (view: string) => env.content.versions.find((item) => item.viewId === `${project.id}-${view}`)!;
   const screen = (id: string, title: string, view: string) => {
     const bound = version(view);
@@ -275,14 +319,15 @@ export const canvasFor = perProject(async (project): Promise<CanvasEnv | null> =
   if (cid === null) return null;
   const env = await contentFor(project);
   const library = await componentsFor(project);
-  const flows = await flowsFor(project);
+  const flows = env.example ? await flowsFor(project) : null;
   const versions: ProjectVersionsProvider = createProjectVersionsProvider({ repository: env.repository, storageTag: FAKE_TAG, toContentProject: shellProjectIdFor });
   const components = createCanvasProviderAdapter({
     source: createComponentsCanvasProvider({ library, digest: webCryptoDigest, designSystemId: null }),
     label: 'Components', tag: SYNTHETIC_TAG, toSourceProject: (id): ComponentsProjectId => componentsBrandId('ProjectId', shellProjectIdFor(id)),
   });
   const flowsAdapter = createCanvasProviderAdapter({
-    source: createFlowCanvasProvider(flows.repository), label: 'Flows', tag: FAKE_TAG, toSourceProject: (id) => flowsProjectId(shellProjectIdFor(id)),
+    source: createFlowCanvasProvider(flows?.repository ?? createFlowRepository(createFakeFlowStorage())), label: 'Flows', tag: FAKE_TAG,
+    toSourceProject: (id) => flowsProjectId(shellProjectIdFor(id)),
   });
   await versions.refresh(cid);
   await components.refresh(cid);
@@ -293,11 +338,12 @@ export const canvasFor = perProject(async (project): Promise<CanvasEnv | null> =
   const canvas = canvasId(`${cid}-canvas`);
   let arrangement = emptyArrangement(canvas, cid);
   arrangement = addArtboard(arrangement, { id: artboardId('board-main'), name: 'Overview', frame: { x: 40, y: 40, width: 1400, height: 760 } });
-  const picked: CanvasItemDescriptor[] = [
+  // A project created in Projects opens with its own versions laid out; only the example adds a flow map and a component.
+  const picked: CanvasItemDescriptor[] = env.example ? [
     ...versions.list(cid).slice(0, 3),
     ...flowsAdapter.list(cid).filter((item) => item.kind === 'flow-map'),
     ...components.list(cid).slice(0, 1),
-  ];
+  ] : versions.list(cid).slice(0, 6);
   picked.forEach((item, index) => {
     arrangement = addPlacement(arrangement, {
       id: canvasItemId(`item-${index + 1}`), ref: item.ref,
@@ -319,6 +365,15 @@ const compareControllers = new Map<string, CompareController>();
 export function compareFor(project: ProjectContext): CompareController {
   const existing = compareControllers.get(project.id);
   if (existing) return existing;
+  if (createdInProjects(project.id)) {
+    // The sample catalog belongs to the example project; a project created in Projects starts with no panels.
+    const empty = createCompareController(createComparison(comparisonId(`${project.id}-compare`), compareProjectId(project.id), []), {
+      catalog: { async listViews() { return []; }, async getVersion() { return null; }, async listVersions() { return []; } },
+      preview: createFakePreview({ pages: () => 1 }), captures: createFakeCaptureImages(), storage: createFakeCompareStorage(),
+    });
+    compareControllers.set(project.id, empty);
+    return empty;
+  }
   const data = sampleCatalogData();
   const version = (id: string) => {
     const found = data.versions.find((item) => item.versionId === id);
@@ -372,10 +427,11 @@ export interface AnnotationTarget {
   readonly thumbnailUrl: string | null;
 }
 
-/** The project's first home version, with the route, viewport and capture digest it is pinned to. */
-export const annotationTargetFor = perProject(async (project): Promise<AnnotationTarget> => {
+/** The project's first home version (else its first version), with the route, viewport and capture digest it is pinned to. */
+export const annotationTargetFor = perProject(async (project): Promise<AnnotationTarget | null> => {
   const env = await contentFor(project);
-  const version = env.content.versions.find((item) => item.viewId === `${project.id}-home`)!;
+  const version = env.content.versions.find((item) => item.viewId === `${project.id}-home`) ?? env.content.versions[0];
+  if (!version) return null;
   const ref = version.thumbnail;
   const thumbnailUrl = ref ? await verifiedDataUrl(ref, await env.thumbnails.readThumbnail(ref, new AbortController().signal), 2 * 1024 * 1024) : null;
   const id = annotationVersionId(version.id);
@@ -389,6 +445,7 @@ export const annotationTargetFor = perProject(async (project): Promise<Annotatio
 /** The target plus its controller with the frame already set, memoised so React can suspend on one promise. */
 export const annotationSessionFor = perProject(async (project) => {
   const target = await annotationTargetFor(project);
+  if (target === null) return null;
   const controller = await annotationsEnv().controllerFor(target.version);
   controller.setFrame(target.frame);
   return { target, controller };
