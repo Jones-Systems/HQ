@@ -241,6 +241,7 @@ textarea.sw-input { resize: vertical; line-height: 1.45; }
   display: inline-flex; align-items: center; gap: var(--hq-space-3xs); padding-left: var(--hq-space-sm);
   border: 1px solid var(--hq-border); border-radius: var(--hq-radius-pill); background: var(--hq-surface-sunken);
 }
+.sw-eyebrow .sw-id { vertical-align: middle; margin-inline-start: var(--hq-space-3xs); }
 .sw-id-text { color: var(--hq-text-muted); }
 .sw-id .sw-id-copied { color: var(--hq-success); }
 .sw-chips-row { display: flex; flex-wrap: wrap; gap: var(--hq-space-xs); }

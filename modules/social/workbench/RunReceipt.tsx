@@ -127,13 +127,14 @@ export function RunReceipt({ runId, initial, readNow = false, headerEnd }: {
     <article className="sw-receipt" aria-labelledby={`sw-receipt-${run.id}`} ref={article}>
       <header className="sw-receipt-head">
         <div className="sw-receipt-title">
-          <p className="sw-eyebrow">Run receipt</p>
+          <p className="sw-eyebrow">Run receipt · <ReceiptId id={run.id} /></p>
           <h3 id={`sw-receipt-${run.id}`}>{name}</h3>
         </div>
-        <div className="sw-receipt-tags">
-          {run.is_example === 1 && <span className="sx-tag sx-tag--example" title="Fictional sample input, not evidence about your brand">Example data</span>}
-          <ReceiptId id={run.id} />
-        </div>
+        {run.is_example === 1 && (
+          <div className="sw-receipt-tags">
+            <span className="sx-tag sx-tag--example" title="Fictional sample input, not evidence about your brand">Example data</span>
+          </div>
+        )}
         {headerEnd && <div className="sw-receipt-head-end">{headerEnd}</div>}
       </header>
       <RunStepper status={status} lastSeen={run.status} />
