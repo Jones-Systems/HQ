@@ -32,6 +32,67 @@ opened, so a FIFO cannot block), opened with `O_NOFOLLOW`, at most **256 KiB**.
 | 2 | Invalid arguments or input file. One fixed line on stderr, nothing on stdout. |
 | 3 | At least one source is unavailable (missing directory, wrong remote or ref, empty root, Git failure). The aggregates of the other namespaces are still printed. |
 
+### Example
+
+The table for the app's synthetic corpus (`bl` and `appdev`, two queries; timings vary from run to run):
+
+```text
+wiki source validation (aggregates only), report v1, index rules v1
+sources unavailable: 0, peak rss bytes: 99405824
+metric                                                      bl      appdev
+ref                                                 configured  configured
+state                                                    ready       ready
+pages                                                        9           4
+raw.total                                                    1           0
+raw.ratePct                                              11.11           0
+raw.byReason.frontmatter-unsupported                         1           0
+skipped.symlinks                                             1           0
+skipped.submodules                                           1           0
+links.targets.page                                           6           5
+links.targets.missing                                        2           1
+links.targets.external                                       1           0
+links.internalResolutionPct                                 75       83.33
+missingShapes.md-path-not-found                              1           0
+missingShapes.title-like                                     1           1
+topics.count                                                 8           1
+topics.candidates                                            8           1
+backlinks.edges                                              6           5
+backlinks.pagesWithInbound                                   4           4
+backlinks.orphanPages                                        5           0
+sample.pages                                                 9           4
+sample.getPage.ok                                            9           4
+sample.getPage.parsed                                        8           4
+sample.getPage.rawByReason.frontmatter-unsupported           1           0
+sample.getBacklinks.ok                                       9           4
+sample.getBacklinks.withBacklinks                            4           4
+sample.getBacklinks.total                                    6           5
+sample.resolveAlias.ok                                       9           4
+sample.resolveAlias.resolved                                 9           4
+sample.resolveAlias.resolvedToSelf                           9           4
+search.queries[0].ok                                       yes         yes
+search.queries[0].ms                                      1.35        0.23
+search.queries[0].hits                                       1           1
+search.queries[1].ok                                       yes         yes
+search.queries[1].ms                                      0.04        0.08
+timing.refreshMs                                        184.95       84.68
+timing.listSourcesMs                                      0.15        0.04
+timing.indexStatusMs                                      0.78        0.04
+timing.listTopicsMs                                       1.04        0.06
+timing.getPageMs.p50                                     12.82          19
+timing.getPageMs.p95                                     23.63       70.88
+timing.getPageMs.max                                     23.63       70.88
+timing.getBacklinksMs.p50                                 0.06        0.04
+timing.getBacklinksMs.p95                                 0.32        0.07
+timing.getBacklinksMs.max                                 0.32        0.07
+timing.resolveAliasMs.p50                                 0.03        0.02
+timing.resolveAliasMs.p95                                 0.17        0.03
+timing.resolveAliasMs.max                                 0.17        0.03
+gitProcesses.refresh                                        14           9
+gitProcesses.sampling                                        9           4
+snapshotBytes                                             7256        3200
+rows that are zero for every namespace are omitted; --json lists all of them
+```
+
 ## What is measured, per namespace
 
 `state`; `pages`; `raw` (total, rate %, by reason `frontmatter-unsupported` / `markdown-unsupported` /
