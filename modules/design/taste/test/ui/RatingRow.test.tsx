@@ -88,6 +88,29 @@ describe('RatingRow segmented control', () => {
     expect(onRate).not.toHaveBeenCalled();
   });
 
+  it('puts focus back on the chosen step once the save has finished, and never takes it from somewhere else', () => {
+    const ui = (disabled: boolean) => <><RatingRow slot={slot(null)} name="n" disabled={disabled} onRate={() => undefined} labels={LIKING_LABELS} />
+      <button type="button">Elsewhere</button></>;
+    const { rerender } = render(ui(false));
+    const four = radios()[3]!;
+    four.focus();
+    fireEvent.click(four);
+    // Saving disables the row, and the browser drops focus from a control that becomes disabled.
+    rerender(ui(true));
+    four.blur();
+    rerender(ui(false));
+    expect(document.activeElement).toBe(four);
+
+    const five = radios()[4]!;
+    five.focus();
+    fireEvent.click(five);
+    rerender(ui(true));
+    five.blur();
+    screen.getByRole('button', { name: 'Elsewhere' }).focus();
+    rerender(ui(false));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Elsewhere' }));
+  });
+
   it('is disabled as a whole row, through its fieldset', () => {
     render(<RatingRow slot={slot(null)} name="n" disabled onRate={() => undefined} labels={LIKING_LABELS} />);
     expect((document.querySelector('fieldset.taste-row') as HTMLFieldSetElement).disabled).toBe(true);

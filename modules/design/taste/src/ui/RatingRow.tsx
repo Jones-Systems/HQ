@@ -28,6 +28,7 @@ export function RatingRow({ slot, name, disabled, onRate, labels, anchors }: {
   const [seated, setSeated] = useState(current !== null);
   const [saved, setSaved] = useState(false);
   const seen = useRef({ name, confirmed });
+  const refocus = useRef<RatingValue | null>(null);
 
   useEffect(() => { if (current !== null) setSeated(true); }, [current]);
 
@@ -47,6 +48,17 @@ export function RatingRow({ slot, name, disabled, onRate, labels, anchors }: {
     const timer = setTimeout(() => setSaved(false), SAVED_VISIBLE_MS);
     return () => clearTimeout(timer);
   }, [name, confirmed]);
+
+  // Saving disables every row for a moment, which drops focus to the page. Put it back on the step that was chosen,
+  // unless focus was moved somewhere on purpose in the meantime.
+  useEffect(() => {
+    if (disabled || refocus.current === null) return;
+    const value = refocus.current;
+    refocus.current = null;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    scaleRef.current?.querySelector<HTMLInputElement>(`input[value="${value}"]`)?.focus();
+  }, [disabled]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const inputs = [...(scaleRef.current?.querySelectorAll<HTMLInputElement>('input[type="radio"]') ?? [])];
@@ -75,7 +87,7 @@ export function RatingRow({ slot, name, disabled, onRate, labels, anchors }: {
           title={labels?.[value]}>
           <input type="radio" name={name} value={value} checked={current === value}
             aria-label={labels ? `${slot.label}: ${value}, ${labels[value]}` : `${slot.label}: ${value} of 5`}
-            onChange={() => onRate(value)} />
+            onChange={() => { refocus.current = value; onRate(value); }} />
           <span aria-hidden="true">{value}</span>
         </label>)}
       </div>
