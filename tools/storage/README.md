@@ -23,13 +23,17 @@ compare, components, references, requests, taste and ui use separate
 Vite config uses `.t3/cache/design-preview`. Each resolves from its own config
 URL. The Design matrix consumes these configs without a workflow change.
 
-**Uncovered:** `modules/design/app/vitest.config.ts` (the separate PR168
-candidate) and the eight Vite configs under
+The eight Vite configs under
 `modules/design/{canvas/harness,compare/demo,components/harness,projects/harness,references/harness,requests/harness,taste/preview,ui/harness}/`
-retain their default cache placement. Covering those requires a separate scope
-release. Existing caches are not moved or removed. The new
-locations persist with the worktree, without automatic eviction, byte limits
-or producer admission. This is cache placement, not full Stage B coverage.
+use separate `.t3/cache/design-<section>-<harness|demo|preview>` destinations,
+resolved from each config's URL. Their dev servers remain unadmitted producers:
+this is placement only, with no admission, quota or cleanup.
+
+**Uncovered:** `modules/design/app/vitest.config.ts` (the separate PR168
+candidate) retains its default cache placement and requires its owner's separate
+handoff. Existing caches are not moved or removed. The new locations persist
+with the worktree, without automatic eviction, byte limits or producer admission.
+This is cache placement, not full Stage B coverage.
 
 `tools/storage/test/cache-config.test.mjs` evaluates the allocated config expressions
 using Node's type erasure without installing or starting Vite or a server. It

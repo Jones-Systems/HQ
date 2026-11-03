@@ -21,6 +21,14 @@ const configs = [
   ['modules/design/taste/vitest.config.ts', 'design-taste'],
   ['modules/design/ui/vitest.config.ts', 'design-ui'],
   ['modules/design/preview/vite.config.ts', 'design-preview'],
+  ['modules/design/canvas/harness/vite.config.ts', 'design-canvas-harness'],
+  ['modules/design/compare/demo/vite.config.ts', 'design-compare-demo'],
+  ['modules/design/components/harness/vite.config.ts', 'design-components-harness'],
+  ['modules/design/projects/harness/vite.config.ts', 'design-projects-harness'],
+  ['modules/design/references/harness/vite.config.ts', 'design-references-harness'],
+  ['modules/design/requests/harness/vite.config.ts', 'design-requests-harness'],
+  ['modules/design/taste/preview/vite.config.ts', 'design-taste-preview'],
+  ['modules/design/ui/harness/vite.config.ts', 'design-ui-harness'],
 ];
 
 // Evaluate the actual config expressions without installing or starting Vite. Its
@@ -69,8 +77,13 @@ it('follows the config checkout rather than the invocation cwd, including spaces
   assert.equal(destinations.size, configs.length * 2);
 });
 
+it('keeps all allocated cache destinations as non-nested siblings', () => {
+  const parent = join(fileURLToPath(repository), '.t3', 'cache');
+  for (const [path] of configs) {
+    const config = readConfig(path, repository, '/unrelated');
+    assert.equal(dirname(config.cacheDir), parent);
+  }
+});
+
 // UNCOVERED: modules/design/app/vitest.config.ts (the separate PR168 candidate).
-// These eight Vite configs also retain their default cache placement:
-// modules/design/{canvas/harness,compare/demo,components/harness,projects/harness,
-// references/harness,requests/harness,taste/preview,ui/harness}/vite.config.ts.
 // No workflow/matrix is changed; no cache migration, deletion or quota is tested.
