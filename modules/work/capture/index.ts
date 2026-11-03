@@ -2,5 +2,6 @@
 
 export { createDraftStore, DRAFT_LABEL, DRAFT_SCOPE_NOTE, sharedDraftStore, useDrafts, type DraftStore, type HqDraft, type SendSummary } from './drafts';
 export { DraftsPanel, useCaptureShortcut } from './DraftsPanel';
+export { CAPTURE_TARGET_ATTRIBUTE, captureTarget, landCapture } from './landing';
 export { CAPTURE_FOOTER, QuickCapture, type QuickCaptureProps } from './QuickCapture';
 export { suggestDate, type DateSuggestion } from './suggest';
