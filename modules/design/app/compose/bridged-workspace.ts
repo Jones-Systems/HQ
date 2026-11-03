@@ -17,7 +17,7 @@ import { createCompareController, loadComparison } from '../../compare/src/contr
 import { comparisonId, projectId as compareProjectId } from '../../compare/src/ids.ts';
 import { createComparison } from '../../compare/src/model.ts';
 import { AnnotationController, loadAnnotations } from '../../annotations/src/controller.ts';
-import { annotationId, versionId as annotationVersionId } from '../../annotations/src/contract.ts';
+import { annotationId } from '../../annotations/src/contract.ts';
 import type { VersionId } from '../../annotations/src/contract.ts';
 import { FakeClipboard } from '../../annotations/src/fakes.ts';
 import { createProjectTasteContribution } from '../../taste/src/project-service.ts';
@@ -33,6 +33,10 @@ import { createWorkspaceThumbnailPort } from './thumbnail-port.ts';
 import { createProjectCompareCatalog } from './compare-catalog.ts';
 import type { EvidenceTag } from './labels.ts';
 import { createProjectContentEvents, type ProjectContentEvents } from './content-events.ts';
+import { perProjectRevision } from './revision-cache.ts';
+import { designFailure, designOperation, DesignOperationError, type DesignFailureContext } from './errors.ts';
+import { ANNOTATIONS_OPEN, openAnnotationSession } from './annotation-session.ts';
+import type { LoadedContent } from '../../projects/src/repository.ts';
 
 function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
   const cache = new Map<string, Promise<T>>();
@@ -41,6 +45,19 @@ function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
     if (!result) { result = build(project); cache.set(project.id, result); }
     return result;
   };
+}
+
+/** Operation names are part of the backend contract (BACKEND-CONTRACT.md); views show them in the toast meta line. */
+const PROJECTS_LOAD: DesignFailureContext = { section: 'projects', operation: 'projects.load', action: 'load the project' };
+const FLOWS_LOAD: DesignFailureContext = { section: 'flows', operation: 'flows.load', action: 'load the flows' };
+const COMPARE_LOAD: DesignFailureContext = { section: 'compare', operation: 'compare.load', action: 'open the comparison' };
+const TASTE_LOAD: DesignFailureContext = { section: 'taste', operation: 'taste.load', action: 'open taste' };
+
+/** Content that cannot be shown as it is stored: a newer format opens read-only, damaged content is left untouched. */
+function unusableContent(loaded: Exclude<LoadedContent, { status: 'ok' }>, context: DesignFailureContext): DesignOperationError {
+  return new DesignOperationError(loaded.status === 'unsupported-schema'
+    ? designFailure('read-only', context, { reason: 'unsupported-stored-schema' })
+    : designFailure('corrupt', context, { reason: 'invalid-content' }));
 }
 
 export interface BridgedWorkspaceOptions {
@@ -58,16 +75,25 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
   const projectStorage = createProjectsStorage(documents);
   const repository = new ProjectContentRepository(projectStorage, clock);
   const thumbnails = createWorkspaceThumbnailPort(documents);
-  const contentFor = perProject(async (project) => {
+  // Snapshot of the project's content. A change to the project (a capture, an import, an edit) builds a new one.
+  const contentFor = perProjectRevision(contentEvents, (project) => designOperation(async () => {
     const loaded = await repository.load(projectId(project.id));
-    if (loaded.status !== 'ok') throw new Error(`Project content unavailable: ${loaded.status}`);
+    if (loaded.status !== 'ok') throw unusableContent(loaded, PROJECTS_LOAD);
     return { repository, content: loaded.content, storage: projectStorage, clock, thumbnails, tag: storageTag };
-  });
+  }, PROJECTS_LOAD));
+  // The controller keeps the visible session (selection, filters, scroll), so it refreshes in place instead of being rebuilt.
   const projectsFor = perProject(async (_project) => {
     const { readPort } = await discoveryEnv();
     const registry = createProvisionalLocalRegistry({ storage: projectStorage, clock, ids });
-    const { controller, ready } = createProjectsSection({ registry: { ...registry, provenance: { kind: 'provisional-local', label: 'Projects saved on this device' } }, storage: projectStorage, thumbnails, catalog: readPort, clock, ids });
+    const { controller, ready } = createProjectsSection({ registry: { ...registry, provenance: { kind: 'provisional-local', label: 'Projects saved on this device' } }, storage: projectStorage, thumbnails, catalog: readPort, clock, ids,
+      // Edits made in Projects reach every other reader of the project (Annotations, Compare, Taste, Requests).
+      onContentChange: (changed) => contentEvents.notify(changed) });
     await ready;
+    contentEvents.subscribeAll((changed) => {
+      let id: ReturnType<typeof projectId>;
+      try { id = projectId(changed); } catch { return; }
+      void controller.refreshContent(id).catch(() => undefined);
+    });
     return controller;
   });
   const componentsFor = perProject(async () => new ComponentLibrary(createComponentsStorage(documents), webCryptoDigest));
@@ -75,18 +101,26 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
   // Preview captures are stored under their capture digest; document-only bridges have no capture images.
   const getBlob = documents.getBlob?.bind(documents);
   const readCapture = getBlob ? (digest: string) => getBlob(digest) : null;
-  const flowsFor = perProject(async (project) => ({ repository: flowRepository, flows: await flowRepository.listForProject(flowProjectId(project.id)), readCapture }));
-  const compareFor = perProject(async (project) => {
+  const flowsFor = perProjectRevision(contentEvents, (project) => designOperation(async () => (
+    { repository: flowRepository, flows: await flowRepository.listForProject(flowProjectId(project.id)), readCapture }), FLOWS_LOAD));
+  // The controller owns unsaved layout state, so it stays and re-reads its version lists when the project changes.
+  const compareFor = perProjectRevision(contentEvents, (project) => designOperation(async () => {
     const storage = createCompareStorage(documents);
     const id = comparisonId(`${project.id}-compare`);
     const loaded = await loadComparison(storage, id);
-    if (loaded.status !== 'ok' && loaded.status !== 'missing') throw new Error(`Comparison unavailable: ${loaded.status}`);
-    if (loaded.status === 'ok' && loaded.state.projectId !== project.id) throw new Error('Comparison belongs to another project');
-    return createCompareController(loaded.status === 'ok' ? loaded.state : createComparison(id, compareProjectId(project.id), []), {
+    if (loaded.status === 'unsupported-version') throw new DesignOperationError(designFailure('read-only', COMPARE_LOAD, { reason: 'unsupported-stored-schema' }));
+    if (loaded.status === 'invalid') throw new DesignOperationError(designFailure('corrupt', COMPARE_LOAD, { reason: 'invalid-comparison' }));
+    if (loaded.status === 'ok' && loaded.state.projectId !== project.id) {
+      throw new DesignOperationError(designFailure('corrupt', COMPARE_LOAD, { reason: 'wrong-project',
+        message: "Couldn't open the comparison: it belongs to another project", description: 'The saved layout names a different project. HQ did not use or change it.' }));
+    }
+    const controller = createCompareController(loaded.status === 'ok' ? loaded.state : createComparison(id, compareProjectId(project.id), []), {
       storage,
       catalog: createProjectCompareCatalog(repository, projectId(project.id)),
     });
-  });
+    contentEvents.subscribe(project.id, () => { void controller.refreshVersions().catch(() => undefined); });
+    return controller;
+  }, COMPARE_LOAD), { onChange: 'keep' });
   const store = createAnnotationsStorage(documents);
   const annotationControllers = new Map<string, Promise<AnnotationController>>();
   const annotationsEnv = () => ({
@@ -102,19 +136,12 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
       return controller;
     },
   });
-  const annotationSessionFor = perProject(async (project) => {
+  // `{ selection }` is a version id: an explicit choice. Without it the screen opens on the newest stored capture.
+  const annotationSessionFor = perProjectRevision(contentEvents, (project, version) => designOperation(async () => {
     const { content } = await contentFor(project);
-    const version = content.versions[0];
-    if (!version) return null;
-    const id = annotationVersionId(version.id);
-    const target = { version: id, thumbnailUrl: null, frame: {
-      versionId: id, route: version.capture.route, state: 'default', viewport: version.capture.viewport,
-      scroll: { x: 0, y: 0 }, captureDigest: version.capture.captureDigest ?? '',
-    } };
-    const controller = await annotationsEnv().controllerFor(id);
-    controller.setFrame(target.frame);
-    return { target, controller };
-  });
+    return openAnnotationSession({ content, read: readCapture, controllerFor: (id) => annotationsEnv().controllerFor(id),
+      ...(version === undefined ? {} : { version }) });
+  }, ANNOTATIONS_OPEN));
   const canvasFor = perProject(async (project) => {
     const cid = canvasProjectIdFor(project.id);
     if (cid === null) return null;
@@ -127,6 +154,8 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
     // Source failures are reported individually; they do not prevent opening the canvas arrangement.
     const sourceErrors: string[] = [];
     try { await versions.refresh(cid); } catch { sourceErrors.push('Project views unavailable'); }
+    // The provider tells the registry when it refreshes, so Canvas lists versions saved later without being rebuilt.
+    contentEvents.subscribe(project.id, () => { void versions.refresh(cid).catch(() => undefined); });
     for (const adapter of [components, flows]) {
       const report = await adapter.refresh(cid);
       sourceErrors.push(...report.errors.map((error) => `${adapter.label}: ${error}`));
@@ -136,9 +165,13 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
     return { projectId: cid, canvasId: canvasId(`${cid}-canvas`), storage: createCanvasStorage(documents), registry,
       ids: { next: (kind: string) => `${kind}-${globalThis.crypto.randomUUID()}` }, adapters: [components, flows], sourceErrors };
   });
-  const tasteFor = perProject(async (project) => createProjectTasteContribution({
-    documents, projectId: tasteProjectId(project.id), sha256: webCryptoSha256, clock,
-  }));
+  // The client holds the journal's retry state, so it is kept; only a failed build is retried after a change.
+  const tasteFor = perProjectRevision(contentEvents, (project) => designOperation(async () => {
+    let id: ReturnType<typeof tasteProjectId>;
+    try { id = tasteProjectId(project.id); }
+    catch { throw new DesignOperationError(designFailure('invalid', TASTE_LOAD, { reason: 'project-id' })); }
+    return createProjectTasteContribution({ documents, projectId: id, sha256: webCryptoSha256, clock });
+  }, TASTE_LOAD), { onChange: 'keep' });
   return { bridged: true as const, storageTag, contentEvents, contentFor, projectsFor, componentsFor, flowsFor, compareFor, annotationsEnv,
     annotationSessionFor, canvasFor, discoveryEnv, tasteFor, importsFor };
 }

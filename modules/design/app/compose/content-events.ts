@@ -11,12 +11,15 @@ export interface ProjectContentEvents {
   notify(projectId: string): void;
   /** Listens for one project's changes. Returns an idempotent unsubscribe. */
   subscribe(projectId: string, listener: () => void): () => void;
+  /** Listens for every project's changes (for example a gallery that shows all projects). Returns an idempotent unsubscribe. */
+  subscribeAll(listener: (projectId: string) => void): () => void;
   /** Monotonic per-project change counter; starts at 0. Usable as a React `use()` cache key. */
   revision(projectId: string): number;
 }
 
 export function createProjectContentEvents(): ProjectContentEvents {
   const listeners = new Map<string, Set<() => void>>();
+  const everyProject = new Set<(projectId: string) => void>();
   const revisions = new Map<string, number>();
   return {
     notify(projectId) {
@@ -24,6 +27,13 @@ export function createProjectContentEvents(): ProjectContentEvents {
       for (const listener of [...(listeners.get(projectId) ?? [])]) {
         try { listener(); } catch { /* One failing reader must not block the others. */ }
       }
+      for (const listener of [...everyProject]) {
+        try { listener(projectId); } catch { /* Same isolation for readers of every project. */ }
+      }
+    },
+    subscribeAll(listener) {
+      everyProject.add(listener);
+      return () => { everyProject.delete(listener); };
     },
     subscribe(projectId, listener) {
       let set = listeners.get(projectId);

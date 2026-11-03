@@ -27,3 +27,19 @@ it('unsubscribes idempotently and isolates a failing listener', () => {
   assert.equal(calls, 1);
   assert.equal(events.revision('a'), 2);
 });
+
+it('tells every-project listeners which project changed, isolates their failures, and unsubscribes idempotently', () => {
+  const events = createProjectContentEvents();
+  const seen: string[] = [];
+  events.subscribeAll(() => { throw new Error('reader failed'); });
+  const stop = events.subscribeAll((projectId) => seen.push(projectId));
+  events.subscribe('a', () => seen.push('only-a'));
+  events.notify('a');
+  events.notify('b');
+  assert.deepEqual(seen, ['only-a', 'a', 'b']);
+  stop();
+  stop();
+  events.notify('b');
+  assert.deepEqual(seen, ['only-a', 'a', 'b']);
+  assert.equal(events.revision('b'), 2);
+});

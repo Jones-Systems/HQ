@@ -18,7 +18,7 @@ import {
 import { buildGalleryItems, queryGallery, type GalleryFilters, type GalleryGroup } from './gallery.ts';
 import { randomIdFactory, versionId, viewId, type IdFactory, type ProjectId, type SourceProjectId, type VersionId, type ViewId } from './ids.ts';
 import { createThumbnailLoader, LazyLoader, type Priority, type ThumbnailLoader } from './loader.ts';
-import { ProjectContentRepository } from './repository.ts';
+import { ProjectContentRepository, ReadOnlyContentError } from './repository.ts';
 import {
   INITIAL_SESSION, parseDestination, reduceSession, toDestination,
   type DetailFilters, type SessionAction, type SessionState,
@@ -47,6 +47,11 @@ export interface ProjectsPorts {
   readonly initialSession?: SessionState;
   /** Reports the opaque shell destination after local navigation. Never dispatches work. */
   readonly onDestination?: (destination: string) => void;
+  /**
+   * Reports a content write made through this controller, after it committed and also after a failure whose
+   * outcome may be unknown, so other readers of the project re-read. Never called for a refused write.
+   */
+  readonly onContentChange?: (project: ProjectId) => void;
 }
 
 export type ActiveProject =
@@ -222,6 +227,11 @@ export class ProjectsController {
   #remember(content: ProjectContent, revision: string | null, seq: number): void {
     const existing = this.#content.get(content.projectId);
     if (existing && existing.seq > seq) return;
+    // The same stored revision is the same document: keep the snapshot and its identity, publish nothing.
+    if (existing && existing.revision !== null && existing.revision === revision) {
+      this.#content.set(content.projectId, { ...existing, seq });
+      return;
+    }
     this.#content.set(content.projectId, { content, revision, seq });
     this.#unavailable.delete(content.projectId);
     const summaries = new Map(this.#snapshot.summaries);
@@ -248,6 +258,21 @@ export class ProjectsController {
     return run;
   }
 
+  /**
+   * Re-reads one project after a write made outside this controller (a live capture, an import). A project
+   * this controller has not shown yet is left alone: its next open reads it fresh. If the read fails, the last
+   * good content stays on screen.
+   */
+  async refreshContent(project: ProjectId): Promise<void> {
+    if (this.#disposed) return;
+    if (!this.#content.has(project) && !this.#unavailable.has(project) && this.#activeProject() !== project) return;
+    // A read already in flight may have started before the write, so wait for it and read again.
+    const pending = this.#inflight.get(project);
+    if (pending) await pending;
+    if (this.#disposed) return;
+    await this.#load(project);
+  }
+
   /** Lazily loads one gallery tile's summary; bounded and cancellable like thumbnails. */
   requestSummary(project: ProjectId, priority: Priority): () => void {
     if (this.#snapshot.summaries.has(project)) return () => {};
@@ -268,6 +293,7 @@ export class ProjectsController {
   async #edit(project: ProjectId, change: (content: ProjectContent, now: string) => ProjectContent): Promise<EditResult> {
     const cached = this.#content.get(project);
     this.#set({ edit: { status: 'saving' } });
+    let refused = false;
     try {
       const result = await this.#repository.update(project, change, cached ? { revision: cached.revision } : undefined);
       // Sequenced after the write commits, so any read that overlapped it is older and cannot replace it.
@@ -275,6 +301,7 @@ export class ProjectsController {
       this.#set({ edit: { status: 'idle' } });
       return { ok: true };
     } catch (error) {
+      refused = error instanceof StorageConflictError || error instanceof ReadOnlyContentError;
       this.#set({ edit: { status: 'error', message: message(error) } });
       if (error instanceof StorageConflictError) {
         // The cached revision is stale; reload so the next edit applies to the stored revision.
@@ -282,6 +309,8 @@ export class ProjectsController {
         await this.#load(project);
       }
       return { ok: false, error: message(error) };
+    } finally {
+      if (!refused) { try { this.#ports.onContentChange?.(project); } catch { /* A reader's failure must not turn a saved edit into a failed one. */ } }
     }
   }
 

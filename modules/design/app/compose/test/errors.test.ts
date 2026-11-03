@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createBridgeWorkspaceDocuments, DesignBridgeConflictError, DesignBridgeError, bridgeResultValue } from '../bridge-documents.ts';
 import {
-  attemptDesign, classifyDesignError, DESIGN_FAILURE_KINDS, designFailure, designFeedback, DesignOperationError, isDesignFailure,
+  attemptDesign, classifyDesignError, DESIGN_FAILURE_KINDS, designFailure, designFeedback, designOperation, DesignOperationError, isDesignFailure,
   toDesignOperationError, type DesignFailureContext,
 } from '../errors.ts';
 import { StorageConflictError } from '../../../projects/src/contract.ts';
@@ -111,6 +111,24 @@ describe('attemptDesign', () => {
     const failed = await attemptDesign(async () => { throw new DesignBridgeConflictError(); }, write);
     assert.equal(failed.ok, false);
     assert.equal(!failed.ok && failed.failure.kind, 'conflict');
+  });
+});
+
+describe('designOperation', () => {
+  it('resolves values and rethrows any rejection as a classifiable DesignOperationError with the original as cause', async () => {
+    assert.equal(await designOperation(async () => 7, read), 7);
+    const original = new StorageConflictError('design/projects/x');
+    await assert.rejects(designOperation(async () => { throw original; }, read), (error: unknown) =>
+      error instanceof DesignOperationError && error.kind === 'conflict' && error.operation === 'projects.load' && error.cause === original);
+    await assert.rejects(designOperation(async () => { throw new Error('lost'); }, write), (error: unknown) =>
+      error instanceof DesignOperationError && error.kind === 'unknown' && error.outcome === 'unknown-effect');
+    await assert.rejects(designOperation(async () => { throw new Error('lost'); }, read), (error: unknown) =>
+      error instanceof DesignOperationError && error.kind === 'unavailable' && error.outcome === 'no-effect');
+  });
+
+  it('does not wrap a failure twice', async () => {
+    const typed = new DesignOperationError(designFailure('stale', read));
+    await assert.rejects(designOperation(async () => { throw typed; }, write), (error: unknown) => error === typed);
   });
 });
 

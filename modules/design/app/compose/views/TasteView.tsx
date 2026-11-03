@@ -7,6 +7,7 @@ import { PREVIEW_PROJECT, PREVIEW_SUBJECT } from '../../../taste/preview/fake-cl
 import { FAKE_TAG, SYNTHETIC_TAG } from '../labels.ts';
 import type { DesignWorkspace } from '../workspace.ts';
 import { useDesignWorkspace } from '../workspace-context.tsx';
+import { useProjectContentRevision } from '../content-revision.ts';
 import { SectionFrame } from './SectionFrame.tsx';
 import { withSectionErrorBoundary } from './SectionErrorBoundary.tsx';
 
@@ -28,7 +29,8 @@ function PreviewTaste({ workspace }: { workspace: Extract<DesignWorkspace, { bri
 function BridgedTaste({ context, workspace }: {
   context: DesignSectionProps['context']; workspace: Extract<DesignWorkspace, { bridged: true }>;
 }) {
-  const { content } = use(workspace.contentFor(context));
+  const revision = useProjectContentRevision(workspace, context.id);
+  const { content } = use(workspace.contentFor(context, { revision }));
   const { client } = use(workspace.tasteFor(context));
   return <SectionFrame lane="T7 taste" entry="taste/src/ui › TastePanel" tags={[workspace.storageTag]}>
     <TasteSelection key={context.id} context={context} content={content} client={client} />
