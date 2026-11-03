@@ -8,6 +8,7 @@ import { Connections } from './Connections';
 import { ServiceSettings } from './ServiceSettings';
 import { usePalette } from './appearance/usePalette';
 import { DataSourcesProvider } from './settings/DataSources';
+import { GettingStarted } from './onboarding';
 import type { DataSource } from './services/data-source-status';
 import { DOMAIN_IDS, parseProjectContext, type Appearance, type DesktopPort, type DomainId, type ModulePort } from '@hq/contracts';
 import { DOMAIN_LABELS, type ModulePresentation } from './domain-metadata';
@@ -87,6 +88,7 @@ function WorkspaceApp({ modules, presentation, referenceProviders }: Presentatio
     if (returnFrame) setState(returnFrame.state);
     setReturnFrame(null); setReferenceNotice(null);
   };
+  const goTo = (domain: DomainId, destination?: string) => { settingsOpener.current = null; setSettingsOpen(false); references.cancelOpen(); setReturnFrame(null); setReferenceNotice(null); setState(previous => navigate(previous, domain, destination)); };
   useEffect(() => { if (state.domain !== 'design') void deactivateDesktopPreview(); }, [state.domain]);
   const fill = presentation[state.domain] === 'fill';
 
@@ -144,6 +146,7 @@ function WorkspaceApp({ modules, presentation, referenceProviders }: Presentatio
           navigate={destination => { references.cancelOpen(); setState(previous => navigate(previous, state.domain, destination)); }} />
         </ErrorBoundary>
       </main>
+      <GettingStarted storage={storage} domain={state.domain} settingsOpen={settingsOpen} onNavigate={goTo} />
       {settingsOpen && <ServiceSettings config={window.hqServices?.config} onClose={closeSettings}
         returnLabel={DOMAIN_LABELS[state.domain]} target={settingsTarget} appearance={appearance} onAppearanceChange={setAppearance} palette={palette} dark={theme === 'dark'} />}
       <footer className="context-footer" aria-label="Workspace context"><span>{context.name}</span><span>{DOMAIN_LABELS[state.domain]}</span></footer>
