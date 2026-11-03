@@ -103,7 +103,7 @@ describe('Social content: library and editor', () => {
     expect(methods(recorded)).toEqual(['saveDraft']);
     expect(await screen.findByRole('heading', { name: 'Edit draft' })).toBeTruthy();
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Cupping hour invitation');
-    expect(screen.getByText(/Saved · version 1/)).toBeTruthy();
+    expect(screen.getByText(/Saved v1/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /^Cupping hour invitation/ })).toBeTruthy();
     expectNoExecution(recorded);
   });
@@ -131,7 +131,7 @@ describe('Social content: library and editor', () => {
     expect((screen.getByLabelText('Body') as HTMLTextAreaElement).readOnly).toBe(true);
     hold = false;
     await act(async () => release());
-    expect(await screen.findByText(/Saved · version 2/)).toBeTruthy();
+    expect(await screen.findByText(/Saved v2/)).toBeTruthy();
   });
 
   it('handles a version conflict without overwriting, then saves mine as a copy', async () => {
@@ -193,7 +193,7 @@ describe('Social content: library and editor', () => {
     expect(controls.inspect().content.find((draft) => draft.id === FIXTURE_IDS.openDay)).toMatchObject({ archived: 1, version: 2 });
     expect(screen.queryByRole('button', { name: /Sourdough starter open day/ })).toBeNull();
 
-    await user.selectOptions(screen.getByLabelText('Show'), 'archived');
+    await user.click(screen.getByRole('button', { name: 'Archived' }));
     await user.click(screen.getByRole('button', { name: 'Close' }));
     await user.click(await screen.findByRole('button', { name: 'Actions for Sourdough starter open day' }));
     await user.click(screen.getByRole('menuitem', { name: 'Restore' }));
