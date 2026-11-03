@@ -130,7 +130,7 @@ export function memoryPersistence(initial?: unknown) {
       }
     },
   };
-  return { persistence, saves, control, document: () => stored, last: () => saves[saves.length - 1] };
+  return { persistence, saves, control, document: () => stored, set: (value: unknown) => void (stored = value), last: () => saves[saves.length - 1] };
 }
 
 /** Lets pending promise callbacks and timers run, for background flushes and saves. */
@@ -142,6 +142,10 @@ export interface SetupOptions {
   titles?: string[];
   /** Pass a recovery that records intents, as the live adapter would. */
   recovery?: boolean;
+  /** Leave the first `load()` to the test. */
+  load?: boolean;
+  /** Wraps the port the store reads, for example to hide an item from snapshots. */
+  wrap?: (port: PlannerPort) => PlannerPort;
 }
 
 /** The store over a network over faults over the fixture Planner, with three items in Next: A, B, C. */
@@ -155,10 +159,10 @@ export async function setup(options: SetupOptions = {}) {
   const faulty = withFaults(net.port);
   const stub = stubRecovery();
   if (options.recovery) net.recordWrites((requestId) => stub.record(requestId, fixture.control.stateVersion()));
-  const store = createWorkStore(faulty.port, {
+  const store = createWorkStore(options.wrap ? options.wrap(faulty.port) : faulty.port, {
     now, newRequestId: counter('req-', 8), offlineQueue: true, ...(options.recovery ? { recovery: stub.recovery } : {}), ...options.store,
   });
-  await store.load();
+  if (options.load !== false) await store.load();
   const byTitle = (title: string) => store.getState().confirmed!.items.find((i) => i.title === title)!;
   const shown = (title: string) => store.getState().items.find((i) => i.title === title)!;
   const stored = (title: string) => fixture.control.stored().find((i) => i.title === title)!;
