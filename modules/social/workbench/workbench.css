@@ -73,13 +73,15 @@
   .sw-rail-group { display: flex; align-items: center; gap: var(--hq-space-xs); flex: none; }
   .sw-rail .sx-list { display: flex; gap: var(--hq-space-3xs); }
   .sw-rail-item { white-space: nowrap; width: auto; }
+  /* On the overview the cards below already list every tool; the strip only helps on a tool page. */
+  .sw-rail--hub { display: none; }
 }
 
 /* ---------- Catalog overview ---------- */
 .sw-hub { gap: var(--hq-space-xl); }
 .sw-group { display: grid; gap: var(--hq-space-sm); }
 .sw-group-title { font: var(--hq-type-eyebrow); letter-spacing: var(--hq-type-eyebrow-tracking); text-transform: uppercase; color: var(--hq-text-subtle); }
-.sw-section .sw-group-title { font: var(--hq-type-eyebrow); }
+.sw-section .sw-group-title { font: var(--hq-type-eyebrow); color: var(--hq-text-subtle); }
 .sw-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));

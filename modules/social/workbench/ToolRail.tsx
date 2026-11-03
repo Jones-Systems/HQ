@@ -12,9 +12,10 @@ export function ToolRail({ selected }: { readonly selected: ToolId | null }) {
   const { state, navigate } = useWorkbench();
   const id = useId();
   const snapshot = workspaceSnapshot(state.workspace);
-  if (!snapshot) return <nav className="sw-rail" aria-label="Workbenches" />;
+  const className = selected === null ? 'sw-rail sw-rail--hub' : 'sw-rail';
+  if (!snapshot) return <nav className={className} aria-label="Workbenches" />;
   return (
-    <nav className="sw-rail" aria-label="Workbenches">
+    <nav className={className} aria-label="Workbenches">
       {groupTools(snapshot.tools).map((group) => (
         <div key={group.category} className="sw-rail-group" role="group" aria-labelledby={`${id}-${group.category}`}>
           <p className="sw-rail-label" id={`${id}-${group.category}`}>{group.category}</p>
