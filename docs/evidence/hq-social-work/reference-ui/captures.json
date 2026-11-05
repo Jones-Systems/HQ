@@ -1,0 +1,41 @@
+{
+  "schema": "hq-reference-ui-captures/v1",
+  "sourceCommit": "3e2bffbd1ecc65836f27b127c50b720921a23640",
+  "captures": [
+    {
+      "file": "dark-picker.png",
+      "sha256": "5906bab025b814c6d67efa9c1048b6df4db9fdf2ebf3c39ca386f2c6335686c6",
+      "bytes": 203577,
+      "width": 1280,
+      "height": 1500
+    },
+    {
+      "file": "dark-statuses.png",
+      "sha256": "7d4ae19065a6f7b3ac7971908f9f70d0b5152de5a428ab1b6c5a49ca967c48db",
+      "bytes": 192385,
+      "width": 1280,
+      "height": 1500
+    },
+    {
+      "file": "dark-update-undo.png",
+      "sha256": "69942cfd75064e3e70b8eb38643e93a6b6b9ea38369a69a0107cb44dde60f2b7",
+      "bytes": 188832,
+      "width": 1280,
+      "height": 1500
+    },
+    {
+      "file": "light-picker.png",
+      "sha256": "39124f3c315ac8e1cbe76eeb360c851281d5790758b7382a391a848ef749b3be",
+      "bytes": 216993,
+      "width": 1280,
+      "height": 1500
+    },
+    {
+      "file": "light-statuses.png",
+      "sha256": "c8b6b855b30986a21d09571837e1277c068f89ea36633056d1dd96ec38dd570e",
+      "bytes": 190876,
+      "width": 1280,
+      "height": 1500
+    }
+  ]
+}

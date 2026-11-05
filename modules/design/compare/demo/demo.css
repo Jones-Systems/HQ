@@ -1,0 +1,7 @@
+/* Demo-only stand-in for the shell's theme tokens. */
+:root { font-family: system-ui, sans-serif; color-scheme: light; --background: #f8f9fb; --surface: #ffffff; --text: #20232a; --muted: #69717e; --line: #e2e5eb; --selected: #e9edf6; --accent: #516aa2; color: var(--text); background: var(--background); }
+:root[data-theme="dark"] { color-scheme: dark; --background: #17191d; --surface: #1d2025; --text: #eceef2; --muted: #a2a9b5; --line: #30353d; --selected: #2b3446; --accent: #a2b8ee; }
+body { margin: 0; padding: 24px; }
+button, select { font: inherit; color: inherit; }
+select { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; }
+.demo-banner { font-size: 12px; color: var(--muted); margin: 0 0 16px; }

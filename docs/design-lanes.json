@@ -1,0 +1,114 @@
+[
+  {
+    "id": "T2",
+    "legacy": "HQD-01 projects",
+    "scope": "modules/design/projects/",
+    "outcome": "**Project content:** views (several per project), versions per view, thumbnails, gallery grid with filters and collapse, project switcher. Keyed by HQ `ProjectId`, with a local provisional registry adapter labelled as such.",
+    "acceptance": "Switching project A→B→A restores selection, filters and scroll. Switching never changes or submits drafts (spy on the StoragePort shows zero writes to draft namespaces). Adding a version keeps earlier versions immutable. Gallery renders 500 synthetic projects with lazy thumbnails, measured (no budget is promised).",
+    "integration": "Shared project registry from the HQ foundation (root adapter)."
+  },
+  {
+    "id": "T3",
+    "legacy": "HQD-02 canvas",
+    "scope": "modules/design/canvas/",
+    "outcome": "**Infinite canvas:** pan and zoom (wheel, trackpad, keyboard), artboards, selection and multi-select, arrange, snap, and an inspector of useful properties. Items come from registered `CanvasItemProvider`s.",
+    "acceptance": "Moving an item changes only the arrangement record, never the version or source bytes. Zoom keeps the point under the cursor fixed (browser-mode geometry). Keyboard pan and focus work. Undo/redo of arrangement. Arrangement round-trips through StoragePort unchanged.",
+    "integration": "Providers from HQD-09 and HQD-10, and project views from HQD-01, wired by root."
+  },
+  {
+    "id": "T4",
+    "legacy": "HQD-03 compare",
+    "scope": "modules/design/compare/",
+    "outcome": "**Side-by-side comparison** of N versions or views at once. Each panel sizes independently, with an optional synced scroll. Device/viewport presets. Uses `PreviewCapability` (fake) and static captures.",
+    "acceptance": "Resizing panel 1 leaves the widths of panels 2..N unchanged. Synced scroll maps by ratio, and turning it off unlinks the panels. A static capture and a live preview are labelled differently. Choosing a version is bound to `VersionId`, not \"latest\".",
+    "integration": "Real preview from root's S2 work. Overlays from HQD-04."
+  },
+  {
+    "id": "T5",
+    "legacy": "HQD-04 annotations",
+    "scope": "modules/design/annotations/",
+    "outcome": "**Annotations:** Pick element and Cite selected text as separate controls, plus ink, box, arrow, label, eraser, undo/redo, stable reference letters, Revisit, Copy export. Includes `src/preview-agent/`, a pure DOM script that root bundles into the preview preload.",
+    "acceptance": "Pick never produces a text citation and Cite never produces an element pick. Letters stay stable after deleting B (A, C stay A, C, and the next new one is D, unless the spec decides otherwise). Anchors survive a re-render at a different `dpr` and scroll (browser mode). Undo/redo is symmetric for every tool. Copy export contains the letters, quotes and notes but no local paths.",
+    "integration": "Root injects the agent and checks geometry in Electron (S2)."
+  },
+  {
+    "id": "T6",
+    "legacy": "HQD-05 requests",
+    "scope": "modules/design/requests/",
+    "outcome": "**Request lifecycle:** draft, then clarify, then freeze, then review.\n• Drafts autosave and are privacy-labelled.\n• Attachments are explicitly selected.\n• Freeze produces an immutable `hq.design.decision-packet/v1` (digest, lineage, supersedes).\n• Review screen for the returned candidate: claim levels, before/after through the compare slot, accept / revise / defer as appended events.",
+    "acceptance": "Restart mid-edit: the draft comes back byte-identical (fake StoragePort with crash injection). Freeze is atomic, saving the packet and clearing the draft. A later edit creates a new linked packet and leaves the old one unchanged. Privacy/export output contains no unsent drafts and no unselected images. Freezing never triggers dispatch (connector spy shows zero calls). Revise creates a linked new draft and keeps the original evidence.",
+    "integration": "Evidence from HQD-11. Annotation refs from HQD-04 (types only)."
+  },
+  {
+    "id": "T7",
+    "legacy": "HQD-06 taste",
+    "scope": "modules/design/taste/",
+    "outcome": "**Taste, clean-room.**\n• Main side: an append-only JSONL journal with a hash chain, fsync before acknowledging, single-writer lock, `clientEventId` idempotency, conflict on a changed payload, and a fail-closed state after a partial write.\n• General and project scopes kept separate. Liking kept separate from descriptive judgments. Overall and per-aspect ratings, re-ratings that supersede, notes, counterevidence, sample-limit labels, profile export.\n• UI ships behind a flag that is off.",
+    "acceptance": "A tampered link fails validation with no truncation. Replaying the same `clientEventId` with the same payload is a no-op, and with a different payload is a conflict. A partial write puts the journal in the fail-closed state. Project ratings never feed the general profile unless the user explicitly chooses to. A profile from fewer than N ratings shows its sample-limit label. Imported examples never count as owner judgments.",
+    "integration": "Owner disposition C1 before the UI is switched on. Differential conformance against the old engine only after the public-safety approval or an owner decision."
+  },
+  {
+    "id": "T8",
+    "legacy": "HQD-07 references",
+    "scope": "modules/design/references/",
+    "outcome": "**Reference library** for websites and native apps: collections, stable IDs, provenance (source URL or app, capture time, kind = screenshot / recording / web prototype / native), rights or permitted-asset flags, search and tags, \"use in project\" links.",
+    "acceptance": "Re-importing the same reference keeps its ID. A screenshot is never labelled native execution. An asset without a permitted flag is excluded from any export marked publishable. Deleting a collection tombstones and never deletes the referenced blobs.",
+    "integration": "References imported by HQD-12."
+  },
+  {
+    "id": "T9",
+    "legacy": "HQD-08 store",
+    "scope": "packages/design-store/",
+    "outcome": "**Durable `StoragePort` implementation** (Node only): atomic temp-file, fsync and rename; append-only events with projections; content-addressed blobs; a snapshot before each migration and automatic restore if it fails. File-based for now; SQLite decided after S2.",
+    "acceptance": "Kill during commit (fault injection) leaves either the old state or the new state, never a mix. A blob with a mismatched digest is rejected. A failed migration restores the snapshot exactly. A store with an unknown future schema opens read-only and is not modified.",
+    "integration": "Root wires it to main and IPC."
+  },
+  {
+    "id": "T10",
+    "legacy": "HQD-09 components",
+    "scope": "modules/design/components/",
+    "outcome": "**Components and motion:** runnable component sandbox (sandboxed iframe, srcdoc, no Node), props and variants panel, design tokens and design-system grouping, motion study player (timeline, easing parameters, scrub, replay). Supplies a `CanvasItemProvider`.",
+    "acceptance": "A sandboxed component cannot reach `window.parent` or the APIs exposed by preload. Changing a variant does not change the stored source. Motion scrub is deterministic for a given time `t`. A sample product built from a component has no import of review or annotation code (removability scan).",
+    "integration": "Placement on the canvas through HQD-02."
+  },
+  {
+    "id": "T11",
+    "legacy": "HQD-10 flows",
+    "scope": "modules/design/flows/",
+    "outcome": "**Clickable prototypes:** screens, hotspots and transitions, declared routes and states, flow map view, prototype player. Supplies a `CanvasItemProvider`.",
+    "acceptance": "A hotspot goes to the declared target. A broken target is reported, not silently dropped. The flow map and the player agree on every edge. Each player step is labelled as a web approximation and never as native evidence.",
+    "integration": "Canvas embedding through HQD-02."
+  },
+  {
+    "id": "T12",
+    "legacy": "HQD-11 connector",
+    "scope": "modules/design/connector/",
+    "outcome": "**Destination, dispatch and evidence:**\n• Destination model `hq.design.host-catalog/v1` (endpoint, mode, identity, freshness, status).\n• Dispatch state machine `dispatch/v1` and an outbox, read-only reconciliation, and intake of returned evidence `result-evidence/v1`.\n• Transport is a port with a labelled fake receiver; the UI shows \"not qualified\" for real Jones.\n• New-thread controls are disabled and show the reason.",
+    "acceptance": "`submitting` is persisted before any transport call. A double click or a restart produces exactly one handoff. A fault-injected unknown is never sent again, and no new attempt is allowed. Reconciliation makes zero transport sends. A new attempt only follows an authoritative no-effect result plus fresh confirmation. An identity mismatch blocks sending. No host or model fallback. Evidence whose packet digest does not match is rejected.",
+    "integration": "S1 and a public-safe statement of the wire contract before a real adapter (follow-on HQD-11b). U1 before new threads."
+  },
+  {
+    "id": "T13",
+    "legacy": "HQD-12 imports",
+    "scope": "modules/design/imports/",
+    "outcome": "**Import and export:** an `hq.design.import/v1` framework (source kind and version, digest, mapping version, counts, conflicts). Imports permitted design files (PNG, recordings, HTML bundles, URLs) as View versions with provenance and rights. An `hq.design.bundle/v1` backup and restore across StoragePort namespaces. A private draft-backup kind that is chosen separately.",
+    "acceptance": "Repeating the same import changes nothing. A changed source for an owner-edited record produces a conflict, never an overwrite. Undo tombstones only untouched records. An unsupported future version is rejected with no writes. Bundle round-trip is lossless. A publishable export excludes drafts.",
+    "integration": "S3 public-safe format notes before legacy-format adapters (follow-on HQD-12b)."
+  },
+  {
+    "id": "T14",
+    "legacy": "HQD-13 ui",
+    "scope": "modules/design/ui/",
+    "outcome": "**Design's own chrome:** module registry (the renderer glob), sub-navigation (Projects, Resources, Review, Requests, Runs), resizable workspace panels, keyboard and focus model, command palette, theme tokens taken from `ShellContextPort`, state kept across domain switches (keep-alive plus serialize/restore), and the `DesignDomain` descriptor handed to the HQ shell.",
+    "acceptance": "A stub module added under `modules/design/*` appears with no registry edit. Switching Design→Social→Design with the shell fake restores the draft, canvas viewport and selection. Dark tokens recolor the chrome but never captures or previews (pixel and DOM style assertions). Every navigation target is reachable by keyboard. Switching project context requires an explicit action.",
+    "integration": "HQ shell adapter (root together with HQ shell owner)."
+  },
+  {
+    "id": "T15",
+    "legacy": "HQD-14 discovery",
+    "scope": "modules/design/discovery/",
+    "outcome": "Laptop-led remote project catalog and local cache: stable source identity, cached metadata first paint, background bounded refresh, on-demand preview/assets, stale/offline state, explicit source enrollment and labelled source adapters. The laptop owns editable Design workspace; no two-way sync is required.",
+    "acceptance": "Warm-cache catalog renders without waiting for network. Partial source failure preserves cached records with freshness and per-source error. Stable host/repository/project identities never merge by title. Context changes ignore stale in-flight results and cancel work. Concurrent requests for the same digest coalesce; preview fetching is bounded and lazy. Cold source refresh has timeout and returns partial results.",
+    "integration": "Projects consumes catalog snapshots; durable store persists cache separately from editable Design records. Real remote source access waits for a qualified source adapter/enrollment; execution remains connector-owned."
+  }
+]

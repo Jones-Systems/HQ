@@ -1,0 +1,15 @@
+/* Harness-only frame: a stand-in for the shell and Social navigation, built from --hq-* roles. */
+html, body { margin: 0; background: var(--hq-canvas); color: var(--hq-text); font: var(--hq-type-body); }
+.harness { display: grid; grid-template-columns: 13rem minmax(0, 1fr); min-height: 100vh; }
+.harness-side { display: grid; align-content: start; gap: var(--hq-space-md); padding: var(--hq-space-lg) var(--hq-space-md); background: var(--hq-nav); border-right: 1px solid var(--hq-border); }
+.harness-title { margin: 0; font: var(--hq-type-heading); }
+.harness-side nav { display: grid; gap: var(--hq-space-3xs); }
+.harness-nav-link { padding: var(--hq-space-xs) var(--hq-space-sm); border-radius: var(--hq-radius-md); color: var(--hq-nav-item-fg); text-decoration: none; font: var(--hq-type-small); }
+.harness-nav-link[aria-current="page"] { background: var(--hq-nav-item-bg-selected); color: var(--hq-nav-item-fg-selected); font-weight: var(--hq-font-weight-medium); }
+.harness-nav-link:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
+.harness-controls { display: grid; gap: var(--hq-space-xs); justify-items: start; margin-top: var(--hq-space-lg); padding-top: var(--hq-space-md); border-top: 1px dashed var(--hq-border-strong); }
+.harness-label { margin: 0; font: var(--hq-type-meta); color: var(--hq-text-subtle); }
+.harness-counts { display: grid; grid-template-columns: repeat(3, auto); gap: var(--hq-space-xs); margin: 0; font: var(--hq-type-meta); }
+.harness-counts dt { color: var(--hq-text-subtle); }
+.harness-counts dd { margin: 0; font: var(--hq-type-meta); }
+.harness-main { padding: var(--hq-space-xl); min-width: 0; }

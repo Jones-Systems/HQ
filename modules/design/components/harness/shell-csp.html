@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      The HQ shell CSP from apps/desktop/index.html with the shell's own
+      development transformation (inline styles and the loopback HMR socket).
+      srcdoc frames inherit this policy, so this page shows how the sandbox
+      behaves inside the shell as it is today.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws://127.0.0.1:5194; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'" />
+    <title>T10 components harness under the shell CSP (synthetic)</title>
+  </head>
+  <body data-harness="shell-csp">
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>
