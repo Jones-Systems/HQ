@@ -1,9 +1,11 @@
 // Client state. The server is the authority: a change counts as saved only
 // after the server confirms it. Drag moves show a visibly *pending* projection
 // that is rolled back on rejection; a lost response leaves the change marked
-// "unconfirmed" and it is re-sent with the same request id once reachable.
+// "unconfirmed" and it is re-sent once reachable through the replay route,
+// quoting its request id, exact body bytes and the state version read before
+// the first send, so it is never applied twice.
 
-import { api, ApiError, NetworkError } from './api.js';
+import { api, ApiError, NetworkError, isReplayable } from './api.js';
 import { resolveZone, todayISO } from './dates.js';
 import { uid } from './dom.js';
 import { projectMove } from './ordering.js';
@@ -79,13 +81,23 @@ function setConnection(value) {
   }
 }
 
+// Counts confirmed writes, so a snapshot read across one can be recognised.
+let writeSeq = 0;
+
 export async function load({ quiet = false } = {}) {
   if (!quiet && state.phase !== 'ready') {
     state.phase = 'loading';
     notify();
   }
+  const seq = writeSeq;
   try {
     const snapshot = await api.state();
+    if (state.phase === 'ready' && (writeSeq !== seq || state.inFlight > 0)) {
+      // The snapshot may predate a write confirmed meanwhile; read again once idle.
+      setConnection('online');
+      scheduleRefresh();
+      return;
+    }
     setItems(snapshot.items);
     state.settings = snapshot.settings;
     state.version = snapshot.state_version;
@@ -104,6 +116,7 @@ export async function load({ quiet = false } = {}) {
 }
 
 function applyResult(result) {
+  writeSeq += 1;
   if (result && result.item) upsert(result.item);
   if (result && result.settings) state.settings = result.settings;
   if (result && typeof result.state_version === 'number') {
@@ -118,22 +131,39 @@ let refreshTimer = null;
 function scheduleRefresh() {
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => {
-    if (state.inFlight === 0 && state.unconfirmed.length === 0) load({ quiet: true });
+    // Unconfirmed changes reload once they are settled (retryUnconfirmed).
+    if (state.unconfirmed.length) return;
+    if (state.inFlight > 0) scheduleRefresh();
+    else load({ quiet: true });
   }, 250);
 }
 
+/** First send goes through the normal route; any later one through replay. */
+function send(entry, resend) {
+  return resend && isReplayable(entry.method, entry.path)
+    ? api.resend(entry)
+    : api.sendText(entry.method, entry.path, entry.bodyText, entry.requestId);
+}
+
+export const INDETERMINATE_MESSAGE = 'The server can no longer tell whether this change was saved. '
+  + 'The latest state has been loaded; check it before trying again.';
+
 /**
  * Send one mutation. `project` may apply a pending local projection and must
- * return a function that undoes it.
+ * return a function that undoes it. `resend` marks a request id that may have
+ * been sent before (with `bodyText` and `sentAfterVersion` from that first
+ * send); `onRejected` hears a definite server refusal.
  */
 export async function mutate({ method, path, body, label = 'Change', project = null, requestId = uid(),
-  onConfirmed = null }) {
+  onConfirmed = null, onRejected = null, bodyText = JSON.stringify(body || {}),
+  sentAfterVersion = state.version, resend = false }) {
   if (state.connection === 'offline') throw new OfflineError();
   const restore = project ? project() : null;
+  const entry = { requestId, method, path, bodyText, sentAfterVersion, label, restore, onConfirmed, onRejected };
   state.inFlight += 1;
   notify();
   try {
-    const result = await api.send(method, path, body, requestId);
+    const result = await send(entry, resend);
     applyResult(result);
     state.lastSavedAt = new Date();
     state.lastError = null;
@@ -142,15 +172,16 @@ export async function mutate({ method, path, body, label = 'Change', project = n
     return result;
   } catch (err) {
     if (err instanceof NetworkError) {
-      state.unconfirmed.push({ requestId, method, path, body, label, restore, onConfirmed });
+      state.unconfirmed.push(entry);
       setConnection('offline');
       throw err;
     }
     if (restore) restore.rollback();
     if (err instanceof ApiError) {
       if (err.code === 'revision_conflict' && err.payload.current) upsert(err.payload.current);
-      if (err.code === 'order_conflict' || err.code === 'not_found') scheduleRefresh();
+      if (['order_conflict', 'not_found', 'replay_indeterminate'].includes(err.code)) scheduleRefresh();
     }
+    if (onRejected) onRejected(err);
     state.lastError = err.message;
     throw err;
   } finally {
@@ -210,13 +241,23 @@ export function projectPatch(id, patch) {
   };
 }
 
-/** Re-send unconfirmed changes with their original request ids. */
-export async function retryUnconfirmed() {
+let retrying = null;
+
+/**
+ * Re-send unconfirmed changes in order, through the replay route where the
+ * server offers one. Overlapping calls share one pass.
+ */
+export function retryUnconfirmed() {
+  if (!retrying) retrying = drainUnconfirmed().finally(() => { retrying = null; });
+  return retrying;
+}
+
+async function drainUnconfirmed() {
   const failures = [];
   while (state.unconfirmed.length) {
     const entry = state.unconfirmed[0];
     try {
-      const result = await api.send(entry.method, entry.path, entry.body, entry.requestId);
+      const result = await send(entry, true);
       applyResult(result);
       if (entry.restore) entry.restore.settle();
       if (entry.onConfirmed) entry.onConfirmed(result);
@@ -228,9 +269,12 @@ export async function retryUnconfirmed() {
         return failures;
       }
       if (entry.restore) entry.restore.rollback();
-      failures.push({ label: entry.label, message: err.message });
+      if (entry.onRejected) entry.onRejected(err);
+      const indeterminate = err instanceof ApiError && err.code === 'replay_indeterminate';
+      failures.push({ label: entry.label, message: indeterminate ? INDETERMINATE_MESSAGE : err.message, indeterminate });
     }
-    state.unconfirmed.shift();
+    const index = state.unconfirmed.indexOf(entry);
+    if (index >= 0) state.unconfirmed.splice(index, 1);
   }
   setConnection('online');
   await load({ quiet: true });
@@ -248,8 +292,8 @@ export async function checkServer() {
     const wasOffline = state.connection === 'offline';
     if (wasOffline) {
       setConnection('online');
-      const failures = state.unconfirmed.length ? await retryUnconfirmed() : [];
-      if (!state.unconfirmed.length) await load({ quiet: true });
+      // Re-sends anything unconfirmed, then reloads once.
+      const failures = await retryUnconfirmed();
       onReconnect(failures);
     } else if (version !== state.version && state.inFlight === 0 && state.unconfirmed.length === 0) {
       await load({ quiet: true });
@@ -306,11 +350,30 @@ export function discardDraft(localId) {
   notify();
 }
 
+function updateDraft(localId, changes) {
+  state.drafts = state.drafts.map((d) => (d.localId === localId ? { ...d, ...changes } : d));
+  writeDrafts();
+}
+
+/**
+ * Send a draft. The first send records its bytes and base version on the
+ * device, so a send whose answer was lost (even across a reload) is repeated
+ * only through the replay route.
+ */
 export async function sendDraft(draft) {
+  if (state.connection === 'offline') throw new OfflineError();
+  const current = state.drafts.find((d) => d.localId === draft.localId) || draft;
+  const resend = Boolean(current.sent);
+  const sent = current.sent || { version: state.version, body: JSON.stringify({ fields: current.fields }) };
+  if (!resend) updateDraft(current.localId, { sent });
   return mutate({
-    method: 'POST', path: '/api/items', body: { fields: draft.fields },
-    label: `Draft “${draft.fields.title}”`, requestId: draft.requestId,
-    onConfirmed: () => discardDraft(draft.localId),
+    method: 'POST', path: '/api/items', bodyText: sent.body, sentAfterVersion: sent.version, resend,
+    label: `Draft “${current.fields.title}”`, requestId: current.requestId,
+    onConfirmed: () => discardDraft(current.localId),
+    // A refusal means it was not stored. After an indeterminate answer the
+    // owner reconciles, so a later send is a new request.
+    onRejected: (err) => updateDraft(current.localId, ['replay_indeterminate', 'request_id_reused'].includes(err.code)
+      ? { sent: null, requestId: uid() } : { sent: null }),
   });
 }
 
@@ -318,6 +381,9 @@ export function getItem(id) {
   return state.byId.get(id) || null;
 }
 
+const ITEM_PATH = /^\/api\/items\/([^/]+)/;
+
 export function isPending(id) {
-  return state.pendingIds.has(id) || state.unconfirmed.some((u) => u.path.includes(`/${id}`));
+  const segment = encodeURIComponent(id);
+  return state.pendingIds.has(id) || state.unconfirmed.some((u) => ITEM_PATH.exec(u.path)?.[1] === segment);
 }

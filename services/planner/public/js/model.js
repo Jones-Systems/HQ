@@ -64,10 +64,6 @@ export function stepProgress(item) {
   return { total, done: item.next_steps.filter((s) => s.done).length };
 }
 
-export function nextStep(item) {
-  return item.next_steps.find((s) => !s.done) || null;
-}
-
 /** Stable hue for an owner-defined area name. */
 export function areaHue(area) {
   let h = 0;

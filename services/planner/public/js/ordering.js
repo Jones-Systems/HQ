@@ -51,7 +51,7 @@ export function projectMove(items, id, status, anchors) {
     index = ids.indexOf(anchors.before_id);
     if (index < 0) return null;
   } else {
-    index = anchors.place === 'bottom' ? ids.length : 0;
+    index = anchors.place === 'top' ? 0 : ids.length; // the server defaults to bottom
   }
   ids.splice(index, 0, id);
   const out = new Map();
