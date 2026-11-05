@@ -130,7 +130,7 @@ F and C are independent after B1 acceptance; C's runtime reference tests require
 - Weekday names are rejected with a pointer to `hq planner now`. Reading "Friday" out of natural language is the calling agent's job.
 - Resolved values are fixed into the request body before it is sent.
 
-**Batch spec (`hq.planner.batch-create/v1`):** `{board:"planner:main", items:[{client_key?, title, status?, kind?, area?, horizon?, priority?, motivation?, notes?, dates:[{kind,value,...}]}]}`, up to 50 items.
+**Batch spec (`hq.planner.batch-create/v1`):** `{schema:"hq.planner.batch-create/v1", board:"planner:main", items:[{client_key?, title, status?, kind?, area?, horizon?, priority?, motivation?, notes?, next_steps?, references?, dates?:[{kind,value,...}]}]}`, 1 to 50 items.
 
 - **Atomic mode (default):** requires the `items.batch_create` feature.
   1. Validate the shape locally.
@@ -201,7 +201,7 @@ Native Node ≥22.18 strips supported TypeScript syntax; no runtime/dev dependen
 
 #### CLI replay contract
 
-- **Every write reads `/api/version` first** to get V. For an atomic batch, the dry-run response can supply it instead. If that read fails, the CLI exits 6 and sends nothing. V goes into the replay document.
+- **Every write reads `/api/version` first** to get V. For an atomic batch, the commit then binds V to the dry-run response's `state_version`. If the version read fails, the CLI exits 6 and sends nothing. V goes into the replay document.
 - **Replay document `hq.planner.replay/v1`:** `{request_id, method, path, body_b64, sent_after_version, planner_url, created_at}`.
 - **`--intent-file PATH` (optional):** written atomically (temp file, then rename) before the first send and updated after each item. This covers a crashed CLI process. The caller owns the path.
 - **On unknown outcome:** exit 7 with the replay document. The CLI never resends on its own.
@@ -212,7 +212,7 @@ Native Node ≥22.18 strips supported TypeScript syntax; no runtime/dev dependen
 |---|---|---|
 | Has `requests.replay` | any | `--check` uses `lookup`; the default uses `resend`. `replayed` → exit 0, effect `replayed`. `applied_now` → exit 0, effect `applied`. `not_applied` → exit 0, effect `none`. `replay_indeterminate` → exit 7 with readback guidance. |
 | Old service | PATCH, move, archive, restore, reviewed | Resend the exact bytes with the same ID through the normal route. This is safe because the revision guard makes a second apply impossible. A 409 `revision_conflict` → exit 4 with `current` and the note "possibly already applied". |
-| Old service | create, batch, settings | `replay_unsupported`, exit 7, no write. The output includes readback guidance (`items list` by title and an `updated` window, `items get`). |
+| Old service | create, batch, settings; any route with `--check` | `replay_unsupported`, exit 7, no write. The output includes readback guidance (`items list`, inspecting titles and `updated_at`; `items get`; `settings get` for settings). |
 
 **Sequential batch resume (`--resume-from PRIOR_RESULT`):** the prior result carries the resolved spec, `request_id`, per-item statuses and `sent_after_version` V0. Items marked `created` or `replayed` are skipped and reported with their IDs. For the rest:
 - **New service:** each remaining item goes through `resend` with its own ID `<rid>-<i>` and V0. The run stops at the first `replay_indeterminate` and exits 7.
@@ -238,7 +238,7 @@ Advertise `hq-references-v1` on version/state only with working persistence. CLI
 <!-- codex-section:begin id="spec.hq-agent-cli#iface.wire-contract.001" -->
 ## Wire Exchanges And Shared Vectors
 
-Service `contract/reference-vectors.json` owns synthetic accept/reject cases. `contract/exchanges/*.json` records synthetic state/version/create/patch/move/archive/restore/reviewed/settings/batch/replay, revision/order409, validation/request_id_reused422, and X-Replayed behavior. A stdlib generator captures exchanges from a disposable actual service; drift regeneration is a failing check. Preserve native error status codes and include the accepted validation and request-ID-reuse cases in the exchange contract.
+Service `contract/reference-vectors.json` owns synthetic accept/reject cases. `contract/exchanges/*.json` records synthetic state/version/create/patch/move/archive/restore/reviewed/settings/batch/replay, revision/order409, field validation400, import validation/request_id_reused422, and X-Replayed behavior. A stdlib generator captures exchanges from a disposable actual service; drift regeneration is a failing check. Preserve native error status codes and include the accepted validation and request-ID-reuse cases in the exchange contract.
 
 Work live test copies pin exchange SHA-256 values. Integrity skips explicitly when the service tree is absent; it fails on drift when present. Future final candidate evidence must identify exact service/adapter/exchange hashes. Shared vectors/exchanges are contracts, not a shared runtime package or synthetic QA history import.
 <!-- codex-section:end id="spec.hq-agent-cli#iface.wire-contract.001" -->
@@ -280,7 +280,7 @@ R2 follows R1, deletes only the old app executable planning/public/tests directo
 <!-- codex-section:begin id="spec.hq-agent-cli#ctx.check-catalog.001" -->
 ## Projection Check Catalog
 
-`docs/planning-evidence/hq-agent-cli/projection-catalog.toml` is private-free proposal/projection input, SHA-256 `5fe6644e9f99408509588dc450ab257af829a795a080300584fbf1c852f287f3`. Groups: planner-service,hq-cli,work-live,repository-integrity. It uses actual codex.v3-check-groups/v1 group keys summary,covers,direct_surfaces,tests. It does not write HQ tests/check-groups.toml, change CI, register package discovery or qualify a test runner.
+`docs/planning-evidence/hq-agent-cli/projection-catalog.toml` is private-free proposal/projection input, SHA-256 `5474ded6a63bc587924c6a7f52ade056c815fabca33729a1bf71646faa2e885c`. It and `projection.json` are a historical snapshot pinned to `source_revision` `88c93a1` and are not maintained; the live check groups are `tools/hq-cli/test/manifest.json` and `services/planner/tests/check-groups.json`. Groups: planner-service,hq-cli,work-live,repository-integrity. It uses actual codex.v3-check-groups/v1 group keys summary,covers,direct_surfaces,tests. It does not write HQ tests/check-groups.toml, change CI, register package discovery or qualify a test runner.
 
 The released AffectedCheckCatalogBinding fixes manifest_path to the logical tests/check-groups.toml name; projection binding uses that required logical name and the actual proposal bytes' digest/evidence_ref. This is a projection-only logical binding, not a claim the canonical file exists or is adopted. The released Codex-V3 run_checks parser accepts only tests/test_*.py modules and nonempty arrays; mixed Python/Node HQ checks and not-yet-authored Work modules are not executable through it. The work-live tests list starts with the existing Work conformance module; D adds its real new module paths to the group contract in the same change. Explicit commands below own execution. Do not fill unresolved paths with invented modules.
 
