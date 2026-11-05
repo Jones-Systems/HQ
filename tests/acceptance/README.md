@@ -334,37 +334,119 @@ child must not exist:
 node tests/acceptance/fixtures/remote-gallery.mjs --write-corpus "$owned_run_root/gallery"
 ```
 
-This exporter creates files only. `fixtures/host-gallery.mjs --serve
-<owned-scratch-parent> <new-report-file>` reuses that corpus on a separate Linux
-host, listens only on loopback, and reports its hostname, PID/PGID, random run ID,
-HTTP origin and control origin. Its separate synthetic control listener exposes
-remote disk digests, a request ledger and fault modes. The caller must own both
-listeners and keep them on loopback behind its forwards. Closing the controller's
-stdin or sending SIGINT/SIGTERM preserves the remote report and removes the exact
-new scratch tree. A 120-second lifetime bound fails closed.
+This exporter creates files only. The host fixture now uses
+`fixtures/host-gallery.mjs --serve <owned-scratch-parent>
+<existing-evidence-parent>`. Before `createRuntime`, its evidence adapter inspects
+the actual receiving filesystem and custody through Stage A, requires capacity,
+and opens one standalone unique retained run with a real preallocated closure.
+The evidence parent must already exist and be disjoint from scratch. The fixture
+keeps its loopback-only gallery/control listeners, ledger/digest assertions,
+120-second lifetime and signal/EOF cleanup. After cleanup and writer close it
+announces `hq-gallery-closed/v1` facts naming the actual immutable `report.json`
+and `.closure.json`, their byte lengths and SHA-256 hashes. Consumers validate
+those facts and identities; there is no fallback to a caller-selected report.
+A closed fact is data, never write authority. The Node closure retains the
+unchanged Stage A reservation; the separate Python closure described below is
+64 KiB.
 
-After the two hosts, SSH route and task scratch are explicitly authorized, the
-following command runs only SSH orchestration on its invoking machine. The app,
-telemetry and all native checks run on the app host. It transfers only the three
-fixture modules into new external scratch, without touching the app checkout:
+The cross-host qualifier requires **already-present, pinned non-main checkouts**
+on both receivers and the invoking machine. A bounded external startup document
+on stdin supplies `qualification`, `manifest`, `fixtureRepo`,
+`fixtureEvidenceParent`, `relayEvidenceParent`, `localRepo`, `localNode`, and
+`localScratchParent`. The manifest has schema `hq-gallery-source/v1`, exact
+candidate `head`, and `files`, mapping every `.mjs`/`.py` beneath
+`tests/acceptance` and `tools/storage` to its exact SHA-256. It is immutable input
+outside that source closure, not a tracked generated file or a permission token.
+Each receiver validates the complete repository-relative graph and source HEAD
+before allocation and again for each attempt. Missing/stale layouts, an
+incomplete graph, unsafe paths or unknown capacity refuse before parent creation
+or runtime startup. This slice performs **no source staging, copy, bootstrap,
+provisioning or checkout repair**.
+
+The two existing evidence parents, the existing explicitly owned **local witness
+parent**, and new exact scratch must be disjoint. No evidence parent is created.
+After those prerequisites and actual local admission, the outer qualifier
+exclusively preallocates a 64 KiB terminal slot under `--witness-parent` before
+any native execution. That slot precharges one ordinary file and 64 KiB of the
+same qualification's limits, with no refund. The Python receiver independently
+owns its own parent lock/run/closure in its own process; it never borrows or
+serializes the Node writer's lock. All observations remain subject to unchanged
+Stage A per-host policy. A remote admission observation does not reserve local
+capacity.
+
+Only after the host routes, native run and exact scratch are separately
+authorized may the existing qualifier execute:
 
 ```sh
 python3 tests/acceptance/qualify-host-gallery.py \
   --app-host <ssh-app-alias> --fixture-host <ssh-fixture-alias> \
-  --app-repo <bound-non-main-worktree> --node <pinned-node-executable> \
-  --owned-root <new-absolute-directory-with-existing-parent-on-both-hosts> \
-  --telemetry <app-host-collect_work_capacity.py> --runs 4
+  --app-repo <pinned-non-main-checkout> --node <pinned-node-executable> \
+  --owned-root <new-absolute-scratch-with-existing-owned-parent-on-both-hosts> \
+  --witness-parent <existing-owned-local-parent> \
+  --telemetry <app-host-collect_work_capacity.py> --runs 4 \
+  < qualified-startup.json
 ```
 
-This relay route is useful when the app host cannot authenticate directly to the
-fixture host. No credentials are copied. The relay owns local SSH children and
-remote control processes, captures PID/PGID, uses ephemeral loopback ports,
-compares all acceptance `.mjs` hashes and HEAD before each native invocation,
-and takes fresh same-host admission before starting one serial app process.
-An occupied forward port or first failure ends that attempt; no retry or timeout
-extension hides it. `--runs 1` selects a single initial qualification. Evidence is
-saved under `<owned-root>/evidence` on both hosts; only its exact `work` child is
-removed. Host loss/SIGKILL still require explicit recovery, as above.
+The native command, per-attempt deadline, first-failure stop and build-consistency
+checks remain the same. `--runs 1` selects one attempt; at most four execute.
+The existing app receiver is launched once, without forwarding options, through
+the existing SSH `start` route. It retains evidence ownership through the finite
+attempt loop and report finalization. The separate fixture, tunnel and relay
+remain captured cleanup subjects. Continuing stdin carries only predetermined
+sequenced/hash-bound evidence slots and a finalization manifest, with bounded
+acknowledgements; it cannot select commands, signal targets, remove paths,
+launch attempts or transport lock authority.
+
+The actual native `Popen` starts with `stdout=PIPE` and merged stderr before any
+disk sink. The sink reads and writes incrementally: 8 MiB combined native output
+per attempt, 64 KiB chunks/control-line buffers, 1 MiB JSON documents, and one
+synchronous pending sink write. There is no spill-then-truncate/compress or final
+whole-log read. Segmented protocol frames are at most 64 KiB and each assembled
+document remains at most 1 MiB. Relay ordinary files total at most 64 files and
+64 MiB including the prepaid witness, leaving the receiver at most 63 files and
+64 MiB minus 64 KiB. Its additional 64 KiB closure is physically preallocated
+before artifacts. Every relay ordinary log/fact/report write counts, with any
+stricter Stage A bound prevailing. Limits are provisional, unmeasured,
+cooperating-producer limits, not external free-space reservations or quotas.
+
+Cleanup evidence has three ordered phases:
+
+1. **A:** finish/stop/drain the captured native producer, close fixture/forwards,
+   and independently check their PID **and group** absence and closed listeners
+   while the receiver owner is explicitly alive. PID reuse, a surviving group or
+   unknown cessation holds removal.
+2. **B:** deliver bounded A facts; the receiver drains writes, publishes
+   `relay-report.json` once, finalizes its reserved closure, releases ownership
+   and exits. `relay-report-before-cleanup.json` is separate immutable preliminary
+   evidence. The closed report explicitly leaves owner exit and terminal success
+   unobserved; it cannot assert its own future absence.
+3. **C:** the already-running outer qualifier reaps the transport, independently
+   checks receiver PID/group absence and closed bundle hashes/paths, then removes
+   eligible exact-owned scratch and checks absence/source again. It fills and
+   closes the prepaid terminal witness once and validates readback. The witness
+   binds the source/run, immutable report/closure hashes and sizes, captured owner
+   identities, exit/absence observations, cleanup and every failure. The binding
+   is one-way: witness to closed bundle. It asserts receiver cleanup, never the
+   witness author's future exit. A valid bundle alone is not terminal success.
+
+Refusal, cancellation, EOF, malformed/truncated transport, writer/close/unlock or
+witness failure cannot pass. An original first producer nonzero or observed
+signal remains primary; later evidence/cleanup failures additionally prevent
+success. Accepted writes drain and existing cleanup/readbacks are attempted;
+unknown cessation retains scratch. No reopen, replacement run/report, stale-lock
+eviction, historical overwrite, deletion or eviction is provided. Host loss or
+SIGKILL requires separate recovery; it is not a passed cleanup observation.
+
+`fixtures/host-gallery-evidence.test.mjs` and `host-gallery-evidence.test.mjs`
+cover the actual adapters, Python owner/sink/protocol and qualifier seams using
+fake producer/transport/cleanup ports and tiny exact-owned synthetic fixtures.
+They do not execute an app, Electron, SSH or native attempt. The existing fixture
+test retains all three success/failure/SIGTERM outcome and peer-survival oracles.
+This new cross-host behavior is runtime-unqualified. CDP memory, unrelated
+stdout, fixture-internal corpus writes, scratch occupancy after admission, raw
+trace/Q-PV4 and other producers remain outside these cooperating-write bounds.
+There is no sandbox, global disk/memory quota, full Stage B or native/installed
+acceptance claim.
 
 For an already owned fixture/forward, pass an explicit binding to the existing
 runner. It includes `schema: "hq-gallery-forward/v1"`, the fixture's `host`,
