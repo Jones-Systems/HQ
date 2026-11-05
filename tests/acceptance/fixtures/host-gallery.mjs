@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { hostname } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRuntime } from '../runtime.mjs';
 import { galleryBytes, sha256, startGallery } from './remote-gallery.mjs';
+import { openHostEvidence, worktree } from './host-gallery-evidence.mjs';
 
 async function processGroupId() {
   let value;
@@ -28,15 +28,16 @@ async function processGroupId() {
 
 // This control listener belongs only to the synthetic fixture, never HQ.
 export async function serveHostGallery(parent, evidence, input = process.stdin) {
-  const runtime = await createRuntime(parent);
-  const report = { schema: 'hq-gallery-host/v1', runId: randomUUID(), host: hostname(), pid: process.pid,
-    root: runtime.root };
-  let gallery, finish, watchdog;
+  const source = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: worktree, encoding: 'utf8', timeout: 5000, maxBuffer: 1024 }).trim();
+  const writer = await openHostEvidence({ parent: evidence, scratchParent: parent, source });
+  const report = { schema: 'hq-gallery-host/v1', runId: writer.runId, source, host: hostname(), pid: process.pid };
+  let runtime, gallery, finish, watchdog;
   const done = new Promise(resolve => { finish = resolve; });
   const cancel = () => finish('signal');
   const eof = () => finish('controller-closed');
   let mode = 'normal';
   try {
+    runtime = await createRuntime(parent); report.root = runtime.root;
     process.on('SIGTERM', cancel); process.on('SIGINT', cancel);
     input.once('end', eof); input.resume();
     watchdog = setTimeout(() => finish('lifetime-exceeded'), 120000);
@@ -70,9 +71,12 @@ export async function serveHostGallery(parent, evidence, input = process.stdin) 
       report.ledger = gallery.ledger;
       try { report.finalDigests = await gallery.diskDigests(); } catch (error) { report.digestError = error.message; }
     }
-    try { report.cleanup = await runtime.close(); } catch (error) { report.cleanupError = error.message; }
-    await writeFile(evidence, JSON.stringify(report, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
-    console.log(JSON.stringify({ event: 'closed', ...report }));
+    try { report.cleanup = await runtime?.close(); } catch (error) { report.cleanupError = error.message; }
+    try {
+      const bundle = await writer.close(report);
+      if (bundle.result.code || bundle.result.incomplete) report.evidenceError = 'Host evidence incomplete';
+      console.log(JSON.stringify({ event: 'closed', ...bundle }));
+    } catch (error) { report.evidenceError = String(error.message); throw error; }
   }
   return report;
 }
@@ -109,7 +113,7 @@ export async function bindHostGallery(path) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  if (process.argv.length !== 5 || process.argv[2] !== '--serve') throw new Error('Usage: host-gallery.mjs --serve <owned-scratch-parent> <new-report-file>');
+  if (process.argv.length !== 5 || process.argv[2] !== '--serve') throw new Error('Usage: host-gallery.mjs --serve <owned-scratch-parent> <existing-evidence-parent>');
   const report = await serveHostGallery(resolve(process.argv[3]), resolve(process.argv[4]));
-  if (report.error || report.cleanupError || report.digestError) process.exitCode = 1;
+  if (report.error || report.cleanupError || report.digestError || report.evidenceError) process.exitCode = 1;
 }
