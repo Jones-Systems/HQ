@@ -244,13 +244,13 @@ write their own TypeScript with parity tests.
 
 | ID | Gap | Holds | Owner |
 | --- | --- | --- | --- |
-| GW-1 | The bridge (`iface.service-bridge.001`) is unapproved (D-2) and unbuilt. HQ cannot reach the Planner at all yet. | Live adapter only | Owner, root |
+| GW-1 | Closed. The closed main-process bridge and the Work live adapter are on `work/hq-foundation` (`spec.hq-agent-cli` E). | — | — |
 | GW-2 | `ModulePort` has no storage member (T1 G-3). Undo, drafts and unconfirmed writes are lost on restart. | P-4, P-5 persistence | Root |
 | GW-3 | D-1 (import or re-implement the pure modules) is undecided. | WRK-P speed, not correctness | Owner |
 | GW-4 | D-3 and D-4 are undecided. Weekly plan and Linked across HQ stay mock-only. | Those two features | Owner, root |
 | GW-5 | "This week" boundary: ISO (T1) or Planner `week_start` (Q-3). | By date grouping | Owner, T1 |
 | GW-6 | Project scope: Planner items have no project (Q-2). | Project chip behavior | Owner |
-| GW-7 | Nothing here was run against a real Planner service. The fixture mirrors the cited source. Live verification needs a task-owned scratch Planner with synthetic data (T1's RX-4). | Live acceptance | WRK-P |
+| GW-7 | Closed in part. The root Vitest run drives a disposable Planner with synthetic data through the real bridge; `spec.hq-backend-planner-assessment-20261103` extends that to every Work route (G6). | Full live acceptance | B1 |
 
 ## Recommendations for T1
 

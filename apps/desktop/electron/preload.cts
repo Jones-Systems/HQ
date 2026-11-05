@@ -24,6 +24,7 @@ const services: import('@hq/contracts/services').HqServices = Object.freeze({
   }),
   social: Object.freeze<import('@hq/contracts/services').SocialServiceTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:social', route, params) }),
   work: Object.freeze<import('@hq/contracts/services').WorkServiceTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:work', route, params) }),
+  workLocal: Object.freeze<import('@hq/contracts/services').WorkLocalTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:work-local', route, params) }),
   design: Object.freeze<import('@hq/contracts/services').DesignServiceTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:design', route, params) }),
   config: Object.freeze<import('@hq/contracts/services').ServiceConfigTransport>({
     set: (input) => ipcRenderer.invoke('hq:svc:config', 'set', input),
