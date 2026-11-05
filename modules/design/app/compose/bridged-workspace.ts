@@ -20,11 +20,14 @@ import { AnnotationController, loadAnnotations } from '../../annotations/src/con
 import { annotationId, versionId as annotationVersionId } from '../../annotations/src/contract.ts';
 import type { VersionId } from '../../annotations/src/contract.ts';
 import { FakeClipboard } from '../../annotations/src/fakes.ts';
+import { createProjectTasteContribution } from '../../taste/src/project-service.ts';
+import { projectId as tasteProjectId } from '../../taste/src/contract.ts';
+import { webCryptoSha256 } from '../../taste/src/web-digest.ts';
 import { canvasId } from '../../canvas/src/contract.ts';
 import { createProviderRegistry } from '../../canvas/src/providers.ts';
 import { createCanvasProviderAdapter } from './canvas-adapter.ts';
 import { createProjectVersionsProvider } from './project-versions.ts';
-import { canvasProjectIdFor, shellProjectIdFor, tasteEnv, importsFor } from './fake-workspace.ts';
+import { canvasProjectIdFor, shellProjectIdFor, importsFor } from './fake-workspace.ts';
 import { createBridgedDiscovery } from './bridged-discovery.ts';
 import type { EvidenceTag } from './labels.ts';
 
@@ -124,6 +127,9 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
     return { projectId: cid, canvasId: canvasId(`${cid}-canvas`), storage: createCanvasStorage(documents), registry,
       ids: { next: (kind: string) => `${kind}-${globalThis.crypto.randomUUID()}` }, adapters: [components, flows], sourceErrors };
   });
+  const tasteFor = perProject(async (project) => createProjectTasteContribution({
+    documents, projectId: tasteProjectId(project.id), sha256: webCryptoSha256, clock,
+  }));
   return { bridged: true as const, storageTag, contentFor, projectsFor, componentsFor, flowsFor, compareFor, annotationsEnv,
-    annotationSessionFor, canvasFor, discoveryEnv, tasteEnv, importsFor };
+    annotationSessionFor, canvasFor, discoveryEnv, tasteFor, importsFor };
 }

@@ -12,6 +12,7 @@ import { artboardId } from '../../../canvas/src/contract.ts';
 import { emptyArrangement } from '../../../canvas/src/arrangement.ts';
 import { createCanvasState, reduceCanvas } from '../../../canvas/src/controller.ts';
 import { loadArrangement, saveArrangement } from '../../../canvas/src/codec.ts';
+import { TASTE_DOCUMENT_KEY } from '../../../taste/src/project-service.ts';
 
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 afterEach(() => {
@@ -41,6 +42,7 @@ function setup() {
   };
   Object.defineProperty(globalThis, 'window', { configurable: true, value: { hqServices: { design: nativeTransport } } });
   const workspace = createDesignWorkspace(createBridgeWorkspaceDocuments(double.transport));
+  assert.equal(double.calls.filter(({ route }) => route === 'doc.put').length, 0);
   assert.equal(workspace.bridged, true);
   if (!workspace.bridged) throw new Error('Expected bridge');
   return { double, workspace };
@@ -55,7 +57,7 @@ it('null injection preserves all existing fake functions and labels', async () =
   }
 });
 
-it('all six sections use F1 roots; navigation and reads never put documents', async () => {
+it('durable sections use F1 roots; navigation and reads never put documents', async () => {
   const { double, workspace } = setup();
   assert.equal(workspace.storageTag.text, 'Saved on this device');
   await workspace.projectsFor(project);
@@ -75,7 +77,22 @@ it('all six sections use F1 roots; navigation and reads never put documents', as
   assert.equal(discovery.tag.status, 'cached');
   assert.deepEqual(discovery.readPort.current(), []);
   assert.equal(double.calls.some(({ route }) => route === 'catalog.snapshot'), false);
-  assert.equal(workspace.tasteEnv, fake.tasteEnv);
+  assert.equal(typeof workspace.tasteFor, 'function');
+  assert.equal('tasteEnv' in workspace, false);
+  const beforeTaste = double.calls.length;
+  const taste = await workspace.tasteFor(project);
+  assert.equal(taste.projectId, project.id);
+  assert.equal(double.calls.length, beforeTaste, 'constructing a project client performs no I/O');
+  assert.equal(await workspace.tasteFor({ ...project, name: 'Renamed project' }), taste);
+  const otherTaste = await workspace.tasteFor({ id: 'other-project', name: 'Other project' });
+  assert.notEqual(otherTaste.client, taste.client);
+  assert.equal(double.calls.length, beforeTaste, 'project navigation performs no I/O');
+  await taste.client.snapshot(taste.projectId);
+  await otherTaste.client.snapshot(otherTaste.projectId);
+  assert.deepEqual(double.calls.slice(beforeTaste), [
+    { route: 'doc.get', params: { key: TASTE_DOCUMENT_KEY } },
+    { route: 'doc.get', params: { key: TASTE_DOCUMENT_KEY } },
+  ]);
   assert.equal(workspace.importsFor, fake.importsFor);
   for (const root of ['design/projects/', 'design/components/', 'design/flows/', 'design/compare/', 'design/annotations/', 'design.canvas.arrangement.v1/']) {
     assert.ok(double.calls.some(({ params }) => ('key' in params ? params.key : 'prefix' in params ? params.prefix : '').startsWith(root)), root);
