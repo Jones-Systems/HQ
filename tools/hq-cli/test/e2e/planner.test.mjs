@@ -7,12 +7,26 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { conforms } from '../../src/schema.ts';
 import { schemas } from '../../src/commands.ts';
-import { withService } from './service.mjs';
+import { withService, plannerRoot } from './service.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const exec = promisify(execFile);
 const optIn = process.env.HQ_CLI_E2E === '1' ? false : 'Set HQ_CLI_E2E=1 to run the in-tree synthetic Planner E2E';
 const instant = '2030-01-02T12:00:00Z';
+// One CLI invocation as a subprocess; `expectOk` false returns failures for inspection.
+const cliFor = origin => async (args, frozen = true, expectOk = true) => {
+  const launch = frozen ? [resolve(here, 'driver.mjs'), instant] : [resolve(here, '../../bin/hq')];
+  const { stdout } = await exec(process.execPath, [...launch, '--planner-url', origin, ...args], { env: { ...process.env, HQ_PLANNER_URL: origin }, timeout: 15000, maxBuffer: 4 * 1024 * 1024 }).catch(error => { if (expectOk || typeof error.stdout !== 'string') throw error; return error; });
+  const lines = stdout.trim().split('\n'); assert.equal(lines.length, 1, stdout);
+  const result = JSON.parse(lines[0]); assert.equal(result.schema, 'hq.cli.result/v1'); if (expectOk) assert.equal(result.ok, true, stdout);
+  assert.equal(conforms(schemas().find(c => c.id === result.command).output, result), true, result.command);
+  return result;
+};
+// Store a row the current validator would refuse, as a legacy or pre-upgrade record.
+const seedRow = (column, value) => async data => {
+  const script = 'import sys\nfrom planning.store import Store\nstore = Store(sys.argv[1])\n_, created, _ = store.create_item({"title": "Seeded legacy row"})\nstore._conn.execute(f"UPDATE items SET {sys.argv[2]} = ? WHERE id = ?", (sys.argv[3], created["item"]["id"]))\nstore.close()';
+  await exec('python3', ['-c', script, data, column, JSON.stringify(value)], { cwd: plannerRoot, env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' }, timeout: 15000 });
+};
 const target = { version: 1, domain: 'work', projectId: 'synthetic-project', kind: 'item', entityId: 'target01', title: 'Synthetic target', returnDestination: { domain: 'work', destination: 'item/target01' }, sourceRevision: '4', workspaceId: 'synthetic-workspace' };
 
 test('in-tree Planner: five-item owner example, discovery, separate dates, replay and HQ references', { skip: optIn }, async () => {
@@ -20,14 +34,7 @@ test('in-tree Planner: five-item owner example, discovery, separate dates, repla
   await withService(async ({ origin, root, pid }) => {
     ownedRoot = root; servicePid = pid;
     const save = async (name, value) => { const path = resolve(root, name); await writeFile(path, JSON.stringify(value)); return path; };
-    const cli = async (args, frozen = true) => {
-      const launch = frozen ? [resolve(here, 'driver.mjs'), instant] : [resolve(here, '../../bin/hq')];
-      const { stdout } = await exec(process.execPath, [...launch, '--planner-url', origin, ...args], { env: { ...process.env, HQ_PLANNER_URL: origin }, timeout: 15000, maxBuffer: 4 * 1024 * 1024 });
-      const lines = stdout.trim().split('\n'); assert.equal(lines.length, 1, stdout);
-      const result = JSON.parse(lines[0]); assert.equal(result.schema, 'hq.cli.result/v1'); assert.equal(result.ok, true, stdout);
-      assert.equal(conforms(schemas().find(c => c.id === result.command).output, result), true, result.command);
-      return result;
-    };
+    const cli = cliFor(origin);
     const status = await cli(['planner', 'status']);
     assert.ok(status.data.features.includes('items.batch_create')); assert.ok(status.data.features.includes('requests.replay'));
     assert.ok(status.data.features.includes('hq-references-v1'), 'The accepted HQ references backend must be integrated before qualifying this E2E');
@@ -87,6 +94,51 @@ test('in-tree service cleanup preserves deliberate failure and removes its child
   await assert.rejects(withService(async ({ root, pid }) => { ownedRoot = root; servicePid = pid; throw Error('deliberate synthetic failure'); }), /deliberate synthetic failure/);
   await assert.rejects(access(ownedRoot), { code: 'ENOENT' });
   assert.throws(() => process.kill(servicePid, 0), { code: 'ESRCH' });
+});
+
+test('in-tree service crash mid-test surfaces the child exit, not only a refused request', { skip: optIn }, async () => {
+  let ownedRoot, servicePid;
+  const failure = await withService(async ({ origin, root, pid }) => {
+    ownedRoot = root; servicePid = pid;
+    process.kill(pid, 'SIGKILL');
+    for (let attempt = 0; attempt < 100; attempt++) await fetch(`${origin}/api/version`, { signal: AbortSignal.timeout(1000) });
+    throw Error('Killed service kept answering');
+  }).then(() => assert.fail('withService resolved after its service was killed'), error => error);
+  assert.ok(failure instanceof AggregateError, String(failure));
+  assert.match(failure.message, /exited unexpectedly \(SIGKILL\)/);
+  await assert.rejects(access(ownedRoot), { code: 'ENOENT' });
+  assert.throws(() => process.kill(servicePid, 0), { code: 'ESRCH' });
+});
+
+// Cross-component regressions for HQR-A3 server fixes. Enable (drop `todo`) after A3 merges.
+const afterA3 = 'Enable after HQR-A3 merges (WHATWG URL ports, read-time date derivation) and the lone-surrogate rejection (A3 validation with an A4 vector)';
+const legacyRef = { id: 'legacyp1', kind: 'url', label: 'Typo port', url: 'http://example.com:abc/' };
+test('stored legacy URL with a non-numeric port stays readable through the CLI', { skip: optIn, todo: afterA3 }, async () => {
+  await withService(async ({ origin }) => {
+    const cli = cliFor(origin);
+    const [listed] = (await cli(['planner', 'items', 'list'])).data.items;
+    assert.deepEqual(listed.references, [legacyRef]);
+    assert.deepEqual((await cli(['planner', 'items', 'get', listed.id])).data.item.references, [legacyRef]);
+  }, { seed: seedRow('refs', [legacyRef]) });
+});
+
+const gapDate = { id: 'gapdate1', kind: 'event', precision: 'day', value: '2030-03-10', time: '02:30', end_time: null, tz: 'America/New_York', note: '' };
+test('snapshot stays readable with a stored DST-gap time', { skip: optIn, todo: afterA3 }, async () => {
+  await withService(async ({ origin }) => {
+    const [listed] = (await cliFor(origin)(['planner', 'items', 'list'])).data.items;
+    assert.deepEqual(listed.dates.map(({ id, value, time, tz }) => ({ id, value, time, tz })), [{ id: gapDate.id, value: gapDate.value, time: gapDate.time, tz: gapDate.tz }]);
+  }, { seed: seedRow('dates', [gapDate]) });
+});
+
+test('snapshot stays readable after a lone-surrogate HQ target write attempt', { skip: optIn, todo: afterA3 }, async () => {
+  await withService(async ({ origin, root }) => {
+    const cli = cliFor(origin), fields = resolve(root, 'surrogate.json');
+    await writeFile(fields, JSON.stringify({ title: 'Surrogate', references: [{ kind: 'hq', target: { ...target, title: 'Broken \ud800 title' } }] }));
+    const attempt = await cli(['planner', 'items', 'create', '--fields-file', fields], true, false);
+    assert.ok(attempt.ok || attempt.error.code === 'validation_error', JSON.stringify(attempt.error));
+    assert.equal((await fetch(`${origin}/api/state`)).status, 200);
+    await cli(['planner', 'items', 'list']);
+  });
 });
 
 for (const signal of ['SIGINT', 'SIGTERM']) test(`in-tree service ${signal} cancellation cleans its exact scratch and child`, { skip: optIn }, async () => {
