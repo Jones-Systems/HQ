@@ -461,7 +461,7 @@ def outer(args, config):
         if ready.get('event') != 'ready':
             raise ValueError('fixture readiness')
         # Capture actual remote session/birth, not just the SSH client PID.
-        observed = remote(args.fixture_host, boot(config['fixtureRepo'], "import runpy,json; m=runpy.run_path(" + repr(str(Path(config['fixtureRepo']) / 'tests/acceptance/qualify-host-gallery.py')) + "); print(json.dumps(m['identity'](" + str(ready['pid']) + ")))"))
+        observed = remote(args.fixture_host, boot(config['fixtureRepo'], "import runpy,json; m=runpy.run_path(" + repr(str(Path(config['fixtureRepo']) / 'tests/acceptance/qualify-host-gallery.py')) + "); print(json.dumps(m['identity'](" + str(ready['pid']) + ")))", config['manifest']))
         if observed['pgid'] != ready['pgid']:
             raise ValueError('fixture identity changed')
         capture(args.fixture_host, observed, 'fixture')
