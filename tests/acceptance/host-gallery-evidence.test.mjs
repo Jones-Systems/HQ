@@ -251,13 +251,13 @@ class Relay(unittest.TestCase):
   def collect(child,**kw):
    calls.append(('reap',child.pid)); child.returncode=0; return h.encoded(node_bundle) if child is children[0] else b''
   def remote(host,code,*argv,payload=None,**kw):
-   if "m['identity']" in code: return fixture_identity
    if 'validate_node_bundle' in code: return {'identity':{k:ready[k] for k in ['runId','host','pid','pgid']}}
    if 'validate_bundle' in code:
     calls.append(('validate-bundle',host)); return {'validated':True,'status':'failed' if failed_bundle else 'closed','primary':7 if failed_bundle else 0}
    if 'shutil.rmtree' in code: calls.append(('scratch-remove',host)); return {'scratchAbsent':args.owned_root}
    if "m['absent']" in code:
     calls.append(('absence',payload)); return {'absent':payload['identities'],'portsClosed':payload['ports'],'ownerAlive':payload['alive'] is not None}
+   if "m['identity']" in code: return fixture_identity
    if 'p.mkdir(mode=0o700)' in code: calls.append(('reserve-remote',host)); return {'dev':1,'ino':2}
    if 'socket.socket' in code: return [6001,6002]
    calls.append(('preflight',host)); return {'admitted':True,'source':'source'}
@@ -267,7 +267,7 @@ class Relay(unittest.TestCase):
   return result,calls,witness,emitted
  def test_actual_outer_A_B_exit_absence_witness_order(self):
   result,calls,witness,emitted=self.exercise_outer()
-  self.assertEqual(result,0); self.assertEqual(witness['terminal'],'passed')
+  self.assertEqual(result,0,witness.get('failures')); self.assertEqual(witness['terminal'],'passed')
   self.assertEqual(witness['bundle']['report']['sha256'],'report'); self.assertTrue(witness['ownerAbsent'])
   owner_reap=next(i for i,c in enumerate(calls) if c==('reap',204))
   owner_absence=next(i for i,c in enumerate(calls) if c[0]=='absence' and any(p['pid']==304 for p in c[1]['identities']))
@@ -284,7 +284,7 @@ class Relay(unittest.TestCase):
     self.assertNotEqual(result,0); self.assertEqual(witness['terminal'],'incomplete')
  def test_original_nonzero_stays_primary_while_cleanup_and_witness_run(self):
   result,calls,witness,_=self.exercise_outer(failed_bundle=True)
-  self.assertEqual(result,7); self.assertEqual(witness['primary'],7); self.assertEqual(witness['terminal'],'incomplete')
+  self.assertEqual(result,7,witness.get('failures')); self.assertEqual(witness['primary'],7); self.assertEqual(witness['terminal'],'incomplete')
   self.assertEqual(sum(c[0]=='scratch-remove' for c in calls),2)
 
 

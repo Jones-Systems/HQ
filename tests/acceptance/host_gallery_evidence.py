@@ -191,7 +191,8 @@ class Owner:
         self.artifact = min(DOCUMENT, self.policy['artifactBytes'])
         self.reserve_fd = None
         try:
-            write_all(self.lock_fd, encoded({'pid': self.pid, 'nonce': uuid.uuid4().hex}))
+            self.lock_bytes = encoded({'pid': self.pid, 'nonce': uuid.uuid4().hex})
+            write_all(self.lock_fd, self.lock_bytes)
             validate(plan, facts)
             self.run.mkdir(mode=0o700)
             self.run_id = private_stat(self.run.stat(), True)
@@ -215,6 +216,8 @@ class Owner:
         try:
             if directory(self.parent) != self.parent_id or private_stat(self.lock.lstat()) != self.lock_id:
                 raise ValueError('lock changed')
+            if os.pread(self.lock_fd, len(self.lock_bytes) + 1, 0) != self.lock_bytes:
+                raise ValueError('lock content changed')
             os.unlink(self.lock)
         finally:
             os.close(self.lock_fd)
