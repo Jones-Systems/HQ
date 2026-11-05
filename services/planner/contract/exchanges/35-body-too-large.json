@@ -1,0 +1,36 @@
+{
+  "schema": "hq.planner.exchange/v1",
+  "request": {
+    "method": "POST",
+    "path": "/api/items",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-Planning-Request": "1",
+      "X-Request-Id": "contract-large",
+      "Content-Length": "262145"
+    },
+    "body_utf8": ""
+  },
+  "response": {
+    "status": 413,
+    "headers": {
+      "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Length": "63",
+      "Connection": "close"
+    },
+    "body": {
+      "error": "too_large",
+      "message": "Request body is too large."
+    }
+  }
+}

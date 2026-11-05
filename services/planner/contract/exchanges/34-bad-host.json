@@ -1,0 +1,31 @@
+{
+  "schema": "hq.planner.exchange/v1",
+  "request": {
+    "method": "GET",
+    "path": "/api/version",
+    "headers": {
+      "Host": "planner.invalid",
+      "Accept": "application/json"
+    },
+    "body_utf8": ""
+  },
+  "response": {
+    "status": 421,
+    "headers": {
+      "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Length": "61"
+    },
+    "body": {
+      "error": "bad_host",
+      "message": "Unrecognized Host header."
+    }
+  }
+}
