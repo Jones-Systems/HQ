@@ -7,6 +7,26 @@ coverage, installed runtime protection or native qualification. Repository
 ownership remains in [AGENTS.md](../../AGENTS.md); the integration campaign is
 [HQ integration parallel execution](../../docs/engineering-specs/hq-integration-parallel-execution.md).
 
+## Scoped cache placement
+
+The desktop Vite config, preview-agent Vite config and root Vitest config set
+their cache destinations to `.t3/cache/vite-desktop`,
+`.t3/cache/vite-preview-agent` and `.t3/cache/vitest-root` in their own worktree.
+Paths resolve from each config's URL, independently of the invocation's working
+directory. The root Vitest projects inherit its cache destination. `.t3/` is
+already ignored. Compiled outputs and their replacement behavior are unchanged.
+
+Module-local `modules/design/*/vitest.config.ts` files, including the app config,
+and the `design-sections.yml` matrix remain outside this slice; their caches
+keep their default locations. Existing caches are not moved or removed. The new
+locations persist with the worktree, without automatic eviction, byte limits
+or producer admission. This is cache placement, not full Stage B coverage.
+
+`tools/storage/test/cache-config.test.mjs` evaluates the three config expressions
+without installing or starting Vite. It checks isolated namespaces and checkout
+relocation, including spaces in paths and unrelated working directories. The
+required hosted typecheck/build/tests exercise the actual Vite/Vitest APIs.
+
 ## Policy and accounting
 
 All settings are provisional and unmeasured. Never lower a production reserve
@@ -156,7 +176,7 @@ not a production configuration mechanism; no environment variable lowers
 defaults. Tests admit their temporary filesystem before allocation and remove
 their exact fixture roots. No dependencies, compiler or browser are needed.
 
-Stage B remains uncovered: producer routing and Vite/Vitest cache placement;
+Stage B remains uncovered: producer routing and module-local Design caches;
 the byte-accounting evidence writer, closure preallocation, pending-write and
 artifact bounds, screenshots and bounded trace collection; check registration
 and campaign amendments. The per-run/ordinary/closure/artifact settings above
