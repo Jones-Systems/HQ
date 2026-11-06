@@ -810,6 +810,75 @@ No new state or basis literal is added.
 - compatibility exports unchanged.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.resolve-unknown.001" -->
 
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#iface.qpv4-trace-probe.001" -->
+## Q-PV4 Diagnostic Trace Probe Contract
+
+**Owner and authority.** T1 is the sole writer of the seven probe paths; the workflow and `tests/acceptance/preview/trace-probe-reference.json` stay under T2 shared-CI/manifest custody. This contract is diagnostic only: it decides no Q-PV4 result and authorizes no execution, acquisition, label, upload or production adapter. `refuseRawTrace()` and the Q-PV4 hold are unchanged. A probe outcome is never a Q-PV4 pass. Running the probe requires a separate exact owner envelope.
+
+**Frozen inputs.** `heldCaptureContainment`, all product assertions, `run.mjs`, `containment.mjs`, `images.mjs`, `runtime.mjs`, both evidence writers, Stage A, `package.json`, the lockfile, existing workflows and check groups. The driver reproduces the `run.mjs` Q-PV4 port object key for key; only `traceStart`, `traceStop` and `browserPid` (the PID captured at `traceStart`) differ.
+
+**Producer.** One dedicated browser-target CDP connection sends only `Tracing.start` with `tracingBackend: "chrome"`, `transferMode: "ReturnAsStream"` and a base64 closed config. It never sends `Tracing.end` or `IO.*`; any tracing or stream event on it is nonpassing. Electron launches with the preview argv plus `--enable-features=TracingServiceInProcess`. The closed config has:
+- one 4096 KiB DISCARD buffer;
+- one `track_event` source with `"*"` disabled, only `disabled-by-default-viz.quads` enabled, and producer filter `org.chromium-<browserPid>`;
+- `duration_ms` 40000;
+- `write_into_file`, `file_write_period_ms` 1000, `flush_timeout_ms` 5000, `data_source_stop_timeout_ms` 5000;
+- an absent absolute `output_path` inside the owned runtime root;
+- `max_file_size_bytes` 16777216 (normal) or 4096 (tiny).
+No other field is set. The two cases run serially, one launch each, and differ only in the cap.
+
+**Lifecycle.** The start acknowledgement must arrive within 5 s, and the workload must end within 38 s of the request. `traceStop` never throws. Its steps, in order:
+1. wait until acknowledgement + 52 s;
+2. hash the raw file and run the terminal query while Electron is alive;
+3. close the connection;
+4. run frozen `stop`, then prove the group and descendants have ceased;
+5. re-verify identity and hash, then set mode 0600;
+6. check for secondary files;
+7. rename on the same filesystem into the retained run;
+8. convert.
+Uncertain cessation keeps the scratch, skips frozen `close`, and stops the probe. The first original failure is primary.
+
+**Storage.** An independent owner precharges 114 MiB + 4096 ordinary bytes (raw 16 MiB + 4096, JSON 2×32 MiB, tools 24 MiB, logs 8 MiB, facts 2 MiB) and writes 8 MiB of real closure: at most 256 artifacts, each at most 32 MiB. The raw file is charged before start and moved, never copied. The producer's 0644 mode is accepted only inside the 0700 runtime root. Frozen Stage A admission (30 GiB + 10 GiB) and an owned setup scratch apply before install.
+
+**Reference.** Upstream v57.2 mac-arm64 `traceconv` and `trace_processor_shell`, at the manifest's URLs, sizes, hashes and provenance nonclaim. Each is hash-verified and confirmed thin arm64 Mach-O before it runs. They run serially on absolute local paths, with private empty HOME/TMPDIR and bounded pipes: JSON ≤ 32 MiB, query output ≤ 64 MiB, stderr ≤ 1 MiB. There is no custom decoder and no new dependency. The manifest fixes the exact queries, the four schema pins and all budgets.
+
+**Predicates.** Normal terminal completeness requires all of:
+- ordered lifecycle metadata;
+- disabled − started ≥ 39.5 s;
+- exactly one successful final flush;
+- zero flush, loss, discard, overwrite and ABI stats, and no nonzero `data_loss` or `error` stat;
+- raw size below the cap;
+- the closed config lines;
+- a clean CDP ledger;
+- proven cessation and identity.
+
+Snapshot results are reported separately:
+- `SUBSET_EXPORT_CONSISTENT`: browser-PID `LayerTreeHostImpl:snapshot` multisets per integer-µs bucket, and exact `active_tree.layers` leaf multisets, between trace_processor and the converted JSON, under the exporter's integer-µs timestamps and 16-significant-digit reals;
+- `REAL_EXACTNESS`;
+- `TS_PRECISION`;
+- `FULL_FIDELITY`, which is `FAILED` or `UNPROVED` and never PASS here: empty containers, nulls, nanosecond timestamps and 17-digit reals are not observable or not preserved through these references.
+
+Tiny `TRUNCATION` is `INCONCLUSIVE_TRUNCATION_UNPROVEN`, `NOT_ADMITTED`, `UNEXPECTED_COMPLETE` or `NONPASSING`, never PASS, because the file cannot carry positive cap evidence. The best overall result is `MEASURED_PARTIAL`. `DIAGNOSTIC_SUCCESS` is not attainable under this contract.
+
+**Gates.**
+- G0, before setup: hosted arm64 runner, image and macOS facts; a GUI display; the capacity floor.
+- G1, after setup-node: Node 24.19.0, arm64, Stage A.
+- G2, inside each launch: Electron 44.9.0 / Chromium 152.0.7977.167, unpackaged arm64, PID binding, frozen drawable sentinel, window focus.
+A missing fact stops at its gate as inconclusive. The upload is all-or-none of four closed-schema files.
+
+**Budget.** The job anchors on its `Runner.Worker` start minus 30 s and reserves 180 s for closure and upload inside the 15-minute limit. Each setup step, the driver and each case are refused when their maximum duration would breach that reserve. A refusal is an inconclusive stop, never an extension.
+
+**Nonclaims.** No result claims complete faithful capture, positive cap truncation, Q-PV4, a production route, or native or merge authority. Results reflect in-process tracing-service placement. Open residuals:
+- an out-of-band early-close observation for truncation;
+- a producer-encoding-preserving reference for full fidelity.
+Each needs its own allocation.
+
+**Change control.** T1 may propose changes to this section. A change takes effect only through the custody that allocated the affected item:
+- root's T7 allocation for probe source and contract values;
+- T2 custody for the workflow and manifest;
+- a new exact C envelope for any operational effect.
+This section grants no standing authority to change any bound, deadline, native argv or launch flag, accepted predicate or result class, held source, or approval envelope.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.qpv4-trace-probe.001" -->
+
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.test-plan.001" -->
 ## Test Plan
 

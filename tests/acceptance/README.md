@@ -515,3 +515,68 @@ fixtures or captures, nor prove source-to-build provenance. Build the exact
 clean candidate immediately before native acceptance, retain its compiled
 files, and keep them quiescent during both execution and verification.
 A matching subset of T7 rows never upgrades overall T7 acceptance or HQ-07.
+
+### Diagnostic Q-PV4 source checkpoint
+
+`preview/trace-probe.mjs` is a standalone diagnostic core. It leaves the production
+runner's `refuseRawTrace()` and the complete containment oracle unchanged. Its
+best result is `MEASURED_PARTIAL`; it exits nonzero even then. `FULL_FIDELITY` is
+`FAILED` or `UNPROVED`, and tiny-case `TRUNCATION` never passes. No diagnostic
+success, production route, Q-PV4 pass or native acceptance follows from source CI.
+
+The planned native workflow and its structure tests are held pending the shared-CI
+custodian's staged G0/G1/G2 amendment. The core can be checked with the existing
+portable test discovery on GitHub; it needs no CI, dependency or lockfile edit.
+Do not invoke the native diagnostic from a laptop or VPS. Any future invocation
+requires the separate exact operational envelope, a proved Apple Silicon hosted
+macOS runner, pinned Node 24.19.0, the locked app build, an existing private owned
+evidence parent, and the workflow's approved event head/base and budget anchor.
+Its source CLI shape is:
+
+```text
+node tests/acceptance/preview/trace-probe.mjs run --evidence EXISTING_PRIVATE_PARENT --job-end EPOCH_SECONDS --head APPROVED_HEAD
+```
+
+This command is not a setup or permission mechanism. `--job-end` must come from
+the allocated Runner.Worker anchor, not an invented extension. The 30 s
+service/worker gap and 15 s transition allowances are unproved native feasibility
+conditions. The hard job limit is 15 minutes, reserving 180 s for closure/upload.
+The driver needs at least six integer timeout minutes; each serial case needs
+260 s remaining. A refusal never extends a bound or triggers another case.
+
+The process-local storage owner admits actual receiving filesystems before any
+new run or scratch parent. It precharges 114 MiB + 4096 ordinary bytes and
+preallocates a real 8 MiB closure, under the unchanged Stage A reserve/peak and
+per-artifact limits. Raw slots, decoded JSON, both pinned tools, logs, and facts
+share that accounting. Evidence and runtime scratch are disjoint on the same
+filesystem. Raw files are charged before start, accepted at 0644 only in the
+owned 0700 runtime root, then made 0600 after cessation and moved without copying.
+No retained file is overwritten or deleted, and an existing parent lock refuses
+without eviction. Pipe chunks are at most 64 KiB with one pending sink write;
+JSON is at most 32 MiB, query memory 64 MiB, text/stderr 1 MiB each, and Electron
+output 1 MiB in memory. These provisional limits are unmeasured; they are not a
+global quota, memory sandbox, or reservation of external free space.
+
+The closed reference manifest pins exactly two v57.2 mac-arm64 Perfetto tools by
+the 9c7 prebuilt manifests, not by a proved 9c7 build, reproducible build or
+independent build attestation. Acquisition, tool execution and uploads remain
+unapproved. There is no package-manager, source-build, signing or PATH fallback.
+The diagnostic uses `ReturnAsStream` only as the protobuf start-format flag;
+it sends no `Tracing.end` or `IO.*` request. The disclosed in-process tracing
+service flag is diagnostic-only and also needs the later operational envelope.
+
+The unchanged native oracle consumes the upstream JSON export. Subset comparison
+uses exact event multisets per integer-microsecond bucket and exact leaf values,
+with explicit 16-significant-digit rounding disclosure. Empty containers, nulls,
+nanosecond timestamps and 17-digit reals are unobservable or not preserved through
+these references. R-F requires a separately allocated producer-encoding-preserving
+reference. Tiny files and missing terminal markers are consistency facts only;
+positive cap evidence needs the separately allocated R-T early-close observation.
+Neither R-T's proposed lsof command nor an R-F decoder is implemented here.
+
+Cessation is independently checked before frozen runtime cleanup. Unknown group
+or descendant absence retains scratch, prevents the next case and blocks cleanup;
+writer/converter/cleanup failures prevent apparent success. Original producer
+failure or cancellation remains primary. Closure retains bounded refusal facts.
+Runtime/native capability, complete trace containment, public sanitized upload,
+production capture, other producers and full Stage B qualification remain open.
