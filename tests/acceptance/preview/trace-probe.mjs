@@ -98,7 +98,7 @@ export function createTraceLifecycle(p) {
     try{
       if(!state.initial)throw Error('raw-snapshot-unavailable');
       const after=await p.snapshot();if(!sameSnapshot(state.initial,after))throw Error('post-snapshot-mutation');
-      await p.privateMode();facts.secondary=await p.secondaryFiles(state.request);
+      await p.privateMode(state.initial);facts.secondary=await p.secondaryFiles(state.request);
       if(facts.secondary.length)throw Error('secondary-file');
       facts.retained=await p.rename(state.initial);facts.renameRecorded=true;
       trace=await p.convert();if(!Array.isArray(trace?.traceEvents))throw Error('reference-json-shape');
@@ -264,7 +264,7 @@ async function nativeCase({caseName,storage,tools,deadline,signal,repo=WORKTREE}
       query:async phase=>parseQuery(await runReference({runtime,storage,tools,kind:'query',raw:phase==='Q1'?outputPath:retained,sql:REFERENCE.queries[phase],
         name:`${caseName}-${phase}`,milliseconds:phase==='Q1'?20000:30000,signal,lifecycle:toolLifecycle,producer:phase==='Q1'}),phase),
       stop,proveCessation:async captured=>await proveCessation(child.pid,captured)&&[...toolSubjects.values()].every(s=>s.absent),
-      privateMode:async()=>{const fd=await fs.open(outputPath,(await import('node:fs')).constants.O_RDWR|(await import('node:fs')).constants.O_NOFOLLOW);try{await fd.chmod(0o600);}finally{await fd.close();}},
+      privateMode:async initial=>{const fd=await fs.open(outputPath,(await import('node:fs')).constants.O_RDWR|(await import('node:fs')).constants.O_NOFOLLOW);try{const s=await fd.stat({bigint:true});if(String(s.dev)!==initial.dev||String(s.ino)!==initial.ino||Number(s.size)!==initial.size)throw Error('post-snapshot-mutation');await fd.chmod(0o600);}finally{await fd.close();}},
       secondaryFiles:async at=>[...(await fs.readdir(traceDir)).filter(n=>n!==`${caseName}.pftrace`).map(name=>({name})),...await newFiles(path.join(runtime.root,'tmp'),at)],
       rename:async initial=>{retained=await storage.retainRaw(outputPath,caseName,initial,runtime.root);return retained;},
       convert:async()=>converted=await runReference({runtime,storage,tools,kind:'json',raw:retained,name:caseName,milliseconds:30000,signal,lifecycle:toolLifecycle}),

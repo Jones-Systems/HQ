@@ -81,7 +81,7 @@ export async function openProbeStorage({ worktree, parent, scratchParent }, { te
   await writeAll(lock, Buffer.from(JSON.stringify({ nonce, pid: process.pid })));
   let directory, closure, closed = false, busy = false, closePromise, primary;
   const files = new Map(), counters = new Map(Object.entries(SLOTS).map(([k,v]) => [k, boundedCounter(v)]));
-  const failures = [];
+  const failures = [], rawReservations = new Set();
   const observe = error => { const reason = typeof error === 'string' ? error : error?.message ?? 'unknown'; failures.push(reason.slice(0, 160)); primary ??= reason; };
   async function unlock() {
     try {
@@ -156,7 +156,7 @@ export async function openProbeStorage({ worktree, parent, scratchParent }, { te
         if (!root.isDirectory() || root.uid !== BigInt(process.getuid()) || (root.mode & 0o077n) || String(root.dev) !== evidence.dev) throw Error('raw-root');
         const current = await snapshotFile(source, { limit: cap, dev: evidence.dev, producer: true });
         if (!sameSnapshot(initial, current)) throw Error('post-snapshot-mutation');
-        checkName(name); counters.get(name).add(cap);
+        checkName(name); if (!rawReservations.has(caseName)) throw Error('raw-not-precharged');
         const fd = await fs.open(source, constants.O_RDWR | nofollow);
         try { if (identity(await fd.stat({ bigint: true })) !== `${initial.dev}:${initial.ino}`) throw Error('raw-changed'); await fd.chmod(0o600); }
         finally { await fd.close(); }
@@ -168,7 +168,7 @@ export async function openProbeStorage({ worktree, parent, scratchParent }, { te
       });
     },
     // Precharging a cap is not a file allocation or a reservation of free space.
-    rawCharge(caseName) { if (closed || !['normal','tiny'].includes(caseName)) throw Error('raw-charge'); return SLOTS[`${caseName}.pftrace`]; },
+    rawCharge(caseName) { if (closed || !['normal','tiny'].includes(caseName) || rawReservations.has(caseName)) throw Error('raw-charge'); const bytes = SLOTS[`${caseName}.pftrace`]; counters.get(`${caseName}.pftrace`).add(bytes); rawReservations.add(caseName); return bytes; },
     close(outcome = 'INCOMPLETE') {
       return closePromise ??= (async () => {
         if (busy) throw Error('pending-write-at-close'); closed = true;

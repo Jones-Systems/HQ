@@ -165,7 +165,7 @@ test('producer raw retains same inode only inside owned root and counts cap',asy
   const f=await fixture(t),w=await f.open(),root=path.join(f.scratchParent,'owned');await fs.mkdir(root,{mode:0o700});
   const raw=path.join(root,'normal.pftrace');await fs.writeFile(raw,'synthetic',{mode:0o644});const initial=await snapshotFile(raw,{limit:16777216,dev:w.dev,producer:true});
   await assert.rejects(snapshotFile(raw,{limit:16777216,dev:w.dev}));
-  const moved=await w.retainRaw(raw,'normal',initial,root),after=await snapshotFile(moved,{limit:16777216,dev:w.dev});assert.equal(sameSnapshot(initial,after),true);assert.equal(after.mode,0o600);await assert.rejects(fs.access(raw));await w.close();
+  w.rawCharge('normal');const moved=await w.retainRaw(raw,'normal',initial,root),after=await snapshotFile(moved,{limit:16777216,dev:w.dev});assert.equal(sameSnapshot(initial,after),true);assert.equal(after.mode,0o600);await assert.rejects(fs.access(raw));await w.close();
 });
 test('frozen source, port order and original refusal are unchanged',async()=>{
   await verifyFrozen();const source=await fs.readFile(new URL('./run.mjs',import.meta.url),'utf8');
