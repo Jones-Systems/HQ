@@ -75,7 +75,7 @@ export function createTraceLifecycle(p) {
       facts.browserPid=state.pid;facts.identities=await p.identities();
       await p.precharge();await p.rawAbsentSameDevice();
       const config=encodeTraceConfig({browserPid:state.pid,outputPath:p.outputPath,caseName:p.caseName});facts.configSha256=sha256(config);
-      state.connection=await p.connection(method=>{if(method.startsWith('Tracing.')||method.startsWith('IO.')){facts.ledger.push(method);fail('unexpected-cdp-event');}});
+      state.connection=await p.connection(method=>{if(method.startsWith('Tracing.')||method.startsWith('IO.')){if(!facts.ledger.length){facts.ledger.push(method.slice(0,128));fail('unexpected-cdp-event');}}});
       state.request=p.now();facts.tRequest=state.request;
       await bounded(()=>state.connection.send('Tracing.start',{tracingBackend:'chrome',transferMode:'ReturnAsStream',perfettoConfig:config.toString('base64')}),5000,'start-timeout');
       state.ack=p.now();facts.tAck=state.ack;facts.started=true;
@@ -342,6 +342,7 @@ export async function runProbe({repo=WORKTREE,parent,jobEnd,expectedHead},{runCa
     assert.deepEqual(await buildIdentity(repo),build,'build-drift');
     Object.assign(result,classifyTiny({admitted:!!tiny&&!tiny.TRUNCATION,normalComplete:!!normal?.terminal?.complete,terminalComplete:!!tiny?.terminal?.complete,
       size:tiny?.facts?.raw?.size??0,rows:tiny?.facts?.Q1,text:tiny?.text,clean:tiny?.facts?.reasons.length===0}));
+    result.primary??=normal?.terminal?.reasons?.[0]??normal?.subset?.reasons?.[0]??(result.TRUNCATION==='UNEXPECTED_COMPLETE'?'tiny-unexpected-complete':undefined);
     result.FULL_FIDELITY=normal?.subset?.FULL_FIDELITY??'FAILED';result.outcome=outcomeFor(normal,{...tiny,TRUNCATION:result.TRUNCATION});
     if(controller.signal.aborted){result.signal=['SIGINT','SIGTERM'].includes(controller.signal.reason?.message)?controller.signal.reason.message:undefined;throw controller.signal.reason;}
     if(git('rev-parse','HEAD')!==expectedHead||git('status','--short'))throw Error('source-changed');
