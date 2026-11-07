@@ -524,9 +524,10 @@ best result is `MEASURED_PARTIAL`; it exits nonzero even then. `FULL_FIDELITY` i
 `FAILED` or `UNPROVED`, and tiny-case `TRUNCATION` never passes. No diagnostic
 success, production route, Q-PV4 pass or native acceptance follows from source CI.
 
-The planned native workflow and its structure tests are held pending the shared-CI
-custodian's staged G0/G1/G2 amendment. The core can be checked with the existing
-portable test discovery on GitHub; it needs no CI, dependency or lockfile edit.
+The shared-CI custodian accepted staged G0/G1/G2. The workflow's final upload
+integration remains held pending its separate verified-upload/directory amendment
+(T2-A2). The core uses existing portable test discovery on GitHub; no dependency
+or lockfile edit is needed.
 Do not invoke the native diagnostic from a laptop or VPS. Any future invocation
 requires the separate exact operational envelope, a proved Apple Silicon hosted
 macOS runner, pinned Node 24.19.0, the locked app build, an existing private owned
@@ -534,7 +535,7 @@ evidence parent, and the workflow's approved event head/base and budget anchor.
 Its source CLI shape is:
 
 ```text
-node tests/acceptance/preview/trace-probe.mjs run --evidence EXISTING_PRIVATE_PARENT --job-end EPOCH_SECONDS --head APPROVED_HEAD
+node tests/acceptance/preview/trace-probe.mjs run --evidence EXISTING_PRIVATE_PARENT --publication PUBLIC_DIRECTORY --binding-json EXPECTED_BINDING_JSON --job-end EPOCH_SECONDS --head APPROVED_HEAD
 ```
 
 This command is not a setup or permission mechanism. `--job-end` must come from
@@ -556,6 +557,49 @@ without eviction. Pipe chunks are at most 64 KiB with one pending sink write;
 JSON is at most 32 MiB, query memory 64 MiB, text/stderr 1 MiB each, and Electron
 output 1 MiB in memory. These provisional limits are unmeasured; they are not a
 global quota, memory sandbox, or reservation of external free space.
+
+Sanitized publication uses that same process-local owner and lock. Admission
+validates a closed immutable repository/PR/run/attempt/event/actor/head/base/source
+binding and hashes its canonical encoding. The required publication selector is
+`EXISTING_PRIVATE_PARENT/public-<binding SHA-256>`; it grants no authority and
+must be absent, private, disjoint from scratch and on the admitted filesystem.
+No parent is provisioned by this selector.
+
+Before the first lock write, the existing 2 MiB facts allowance is split into
+2,060,288 bytes for ordinary facts, 16,384 bytes for the four public files
+(4,096 each), 16,384 bytes for one private receipt and 4,096 bytes for the lock.
+Seven artifact positions are reserved, leaving 249 ordinary positions. There is
+no extra allowance, reclaimed failed reservation or second writer. Failed partial
+files retain their charges. The aggregate 114 MiB + 4096 ordinary and 8 MiB
+closure limits are unchanged.
+
+`close(outcome, {projectClosed, signal})` bars ordinary writes synchronously and
+memoizes its first terminal promise. It validates the actual retained report,
+seals and hashes the immutable closure while retaining ownership, then projects
+exactly four closed-schema files from those validated bytes. It checks every
+public capacity before any public file, writes one exclusive private staging
+directory and one flat private receipt, then atomically renames that same inode.
+There is no copy, overwrite, second receipt or completion marker. The receipt
+binds report/closure/file identities and hashes, not future outcome upgrades.
+Only verified durable publication permits lock release. Unknown rename, late
+close or unlock retains evidence/custody and never triggers a retry. A parent
+lock or ambiguous state always refuses recovery.
+
+The later closure step can invoke only this read-only command:
+
+```text
+node tests/acceptance/preview/trace-probe.mjs verify-publication --evidence EXISTING_PRIVATE_PARENT --publication PUBLIC_DIRECTORY --binding-json EXPECTED_BINDING_JSON
+```
+
+It verifies expected binding, no outstanding lock, private ownership, identities,
+exact hashes/inventory, four exact public filenames and projection-byte equality.
+It neither opens an owner nor writes, repairs, evicts, finalizes or emits workflow
+outputs. Exit zero means publication verified, never diagnostic success. Complete
+post-crash publication may verify; incomplete or unknown publication cannot.
+The workflow's positive output/upload guard and exact directory binding still
+require T2-A2; a present directory alone is not an upload authorization. Private
+receipt, run, staging, raw/decoded trace and full closure remain outside the four
+sanitized upload files. Native/public-upload authority remains separate.
 
 The closed reference manifest pins exactly two v57.2 mac-arm64 Perfetto tools by
 the 9c7 prebuilt manifests, not by a proved 9c7 build, reproducible build or

@@ -10,7 +10,7 @@ import { createRuntime, connect, until } from '../runtime.mjs';
 import { heldCaptureContainment } from './containment.mjs';
 import { createImageFixture } from './images.mjs';
 import { inspectStorage, requireAdmission } from '../../../tools/storage/admission.mjs';
-import { openProbeStorage, LIMITS, snapshotFile, sameSnapshot, absent, sha256, readBounded } from './trace-probe-storage.mjs';
+import { openProbeStorage, LIMITS, snapshotFile, sameSnapshot, absent, sha256, readBounded, publicationBinding, verifyPublication } from './trace-probe-storage.mjs';
 import { REFERENCE, validateReference, acquireReference, runReference, parseQuery, terminalPredicate, compareSubset, classifyTiny, thinArm64 } from './trace-probe-reference.mjs';
 
 export const WORKTREE = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)));
@@ -323,7 +323,9 @@ async function buildIdentity(repo) {
     result[name]=(await snapshotFile(path.join(repo,name),{limit:256*1024**2,producer:true})).sha256;
   return result;
 }
-export async function runProbe({repo=WORKTREE,parent,jobEnd,expectedHead},{runCase=nativeCase,acquire=acquireReference}={}) {
+export async function runProbe({repo=WORKTREE,parent,jobEnd,expectedHead,binding:inputBinding,publicDirectory},{runCase=nativeCase,acquire=acquireReference}={}) {
+  const binding=publicationBinding(inputBinding);
+  if(binding.head!==expectedHead)throw Error('publication-source-identity');
   if(process.platform!=='darwin'||process.arch!=='arm64'||process.version!=='v24.19.0')throw Error('G1-platform');
   const git=(...a)=>execFileSync('git',a,{cwd:repo,encoding:'utf8',maxBuffer:1024**2}).trim();
   if(!/^[a-f0-9]{40}$/.test(expectedHead??'')||git('rev-parse','HEAD')!==expectedHead||git('status','--short'))throw Error('source-identity');
@@ -331,9 +333,9 @@ export async function runProbe({repo=WORKTREE,parent,jobEnd,expectedHead},{runCa
   const budget=driverBudget(jobEnd,Date.now()/1000),controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(Error('budget:driver')),Math.max(0,budget.deadline*1000-Date.now()));
   const handlers=new Map(['SIGINT','SIGTERM'].map(s=>[s,()=>controller.abort(Error(s))]));for(const [s,h]of handlers)process.on(s,h);
-  let storage,result={schema:'hq-qpv4-diagnostic/v1',head:expectedHead,outcome:'INCONCLUSIVE',FULL_FIDELITY:'UNPROVED',TRUNCATION:'NOT_ADMITTED',residuals:['R-T','R-F']};
+  let storage,result={schema:'hq-qpv4-diagnostic/v1',head:expectedHead,binding,outcome:'INCONCLUSIVE',FULL_FIDELITY:'UNPROVED',TRUNCATION:'NOT_ADMITTED',residuals:['R-T','R-F']};
   try{
-    storage=await openProbeStorage({worktree:repo,parent,scratchParent:path.join(repo,'.t3/preview-acceptance-scratch')});
+    storage=await openProbeStorage({worktree:repo,parent,scratchParent:path.join(repo,'.t3/preview-acceptance-scratch'),publication:{binding,publicDirectory}});
     const build=await buildIdentity(repo);result.build=build;
     const tools=await acquire(storage,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(60000)])});
     result.cases=await serialCases({deadline:budget.deadline,now:()=>Date.now()/1000,run:async caseName=>{await verifyFrozen(repo);assert.deepEqual(await buildIdentity(repo),build,'build-drift');return runCase({caseName,storage,tools,deadline:budget.deadline,signal:controller.signal,repo});}});
@@ -350,18 +352,36 @@ export async function runProbe({repo=WORKTREE,parent,jobEnd,expectedHead},{runCa
     await storage.write('report.json',json(result));
   }catch(e){result.primary??=e.message;result.outcome='NONPASSING';storage?.observe(e);}
   finally{
-    if(storage){try{result.closure=await storage.close(result.outcome);}catch(e){result.closeFailure=e.message;result.outcome='NONPASSING';}}
+    if(storage){try{
+      result.publication=await storage.close(result.outcome,{projectClosed:sanitizedBundle,signal:controller.signal});
+      result.closure=result.publication.closure;
+      if(result.publication.state!=='PUBLISHED'){result.primary??=result.publication.reason;result.outcome='NONPASSING';}
+    }catch(e){result.primary??=e.message;result.closeFailure=e.message;result.outcome='NONPASSING';}}
+    if(controller.signal.aborted){
+      const observed=controller.signal.reason?.message;
+      if(['SIGINT','SIGTERM'].includes(observed))result.signal=observed;
+      result.primary??=observed??'cancelled';result.outcome='NONPASSING';
+    }
     clearTimeout(timer);for(const [s,h]of handlers)process.off(s,h);
   }
   return result;
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
-  const argv=process.argv.slice(2),get=key=>argv[argv.indexOf(key)+1];
-  if(argv[0]!=='run'||!argv.includes('--evidence')||!argv.includes('--job-end')||!argv.includes('--head'))throw Error('usage: trace-probe.mjs run --evidence EXISTING_PRIVATE_PARENT --job-end EPOCH_SECONDS --head SHA');
-  const result=await runProbe({parent:get('--evidence'),jobEnd:Number(get('--job-end')),expectedHead:get('--head')});
-  console.log(json({outcome:result.outcome,primary:result.primary,FULL_FIDELITY:result.FULL_FIDELITY,TRUNCATION:result.TRUNCATION}));
-  // An open residual is incomplete, even when measurements are useful.
-  process.exitCode=result.signal==='SIGINT'?130:result.signal==='SIGTERM'?143:1;
+  const [mode,...argv]=process.argv.slice(2),args={};
+  const allowed=mode==='verify-publication'?['--evidence','--publication','--binding-json']:mode==='run'?['--evidence','--publication','--binding-json','--job-end','--head']:[];
+  if(!allowed.length||argv.length!==allowed.length*2)throw Error('probe-arguments');
+  for(let i=0;i<argv.length;i+=2){if(!allowed.includes(argv[i])||Object.hasOwn(args,argv[i])||!argv[i+1])throw Error('probe-arguments');args[argv[i]]=argv[i+1];}
+  if(Buffer.byteLength(args['--binding-json'])>4096)throw Error('publication-binding-limit');
+  const binding=publicationBinding(JSON.parse(args['--binding-json']));
+  if(mode==='verify-publication'){
+    await verifyPublication({parent:args['--evidence'],publicDirectory:args['--publication'],expectedBinding:binding});
+    console.log('publication-verified');
+  }else{
+    const result=await runProbe({parent:args['--evidence'],publicDirectory:args['--publication'],binding,jobEnd:Number(args['--job-end']),expectedHead:args['--head']});
+    console.log(json({outcome:result.outcome,primary:result.primary,FULL_FIDELITY:result.FULL_FIDELITY,TRUNCATION:result.TRUNCATION,publication:result.publication?.state}));
+    // A verified publication never upgrades the diagnostic outcome.
+    process.exitCode=result.signal==='SIGINT'?130:result.signal==='SIGTERM'?143:1;
+  }
 }
 
 // Pure, closed-schema projection for the later separately allocated closure/

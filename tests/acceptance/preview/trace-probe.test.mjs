@@ -9,7 +9,8 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createTestContext, LOCK_NAME } from '../../../tools/storage/admission.mjs';
 import { POLICY } from '../../../tools/storage/policy.mjs';
-import { LIMITS,SLOTS,boundedCounter,openProbeStorage,snapshotFile,sameSnapshot,readBounded,sha256 } from './trace-probe-storage.mjs';
+import { LIMITS,SLOTS,boundedCounter,openProbeStorage,snapshotFile,sameSnapshot,readBounded,sha256,
+  PUBLICATION,PUBLIC_FILES,canonical,publicationBinding,bindingDigest,publicationDirectory,verifyPublication } from './trace-probe-storage.mjs';
 import { REFERENCE,validateReference,thinArm64,collectPipe,parseQuery,terminalPredicate,compareSubset,classifyTiny,runReference } from './trace-probe-reference.mjs';
 import { WORKTREE,PORT_KEYS,FROZEN,blobHash,verifyFrozen,encodeTraceConfig,parseElapsed,budgetAnchor,setupBudget,driverBudget,admitCase,
   createTraceLifecycle,executeCase,serialCases,descendants,identitiesAbsent,outcomeFor } from './trace-probe.mjs';
@@ -215,4 +216,133 @@ test('actual reference runner uses exact argv/env and fake owned lifecycle witho
   const output=await runReference({runtime,storage:w,tools:{trace_processor_shell:'/fake/processor'},kind:'query',raw,sql:'fixed SQL',name:'normal-Q1',milliseconds:1000,lifecycle});
   assert.equal(output,'query-output');assert.deepEqual(call.argv,['--full-sort','-Q','fixed SQL',raw]);assert.equal(call.options.shell,false);
   assert.deepEqual(Object.keys(call.options.env).sort(),['HOME','PATH','TMPDIR']);assert.equal(call.options.env.PATH,'/usr/bin:/bin');assert.equal(stopped,1);await w.close();
+});
+
+const invocation = () => ({repository:'Jones-Systems/HQ',repositoryId:1426280211,pr:194,runId:'12345',attempt:1,
+  event:'pull_request',action:'labeled',label:'hq-qpv4-trace-probe',headRepositoryId:1426280211,baseRepositoryId:1426280211,
+  draft:false,head:'a'.repeat(40),base:'b'.repeat(40),actor:'example-owner',sourceHead:'a'.repeat(40)});
+async function publishing(t, {boundary,available}={}) {
+  const f=await fixture(t,available),binding=publicationBinding(invocation()),publicDirectory=publicationDirectory(f.parent,binding);
+  const open=()=>openProbeStorage({...f,publication:{binding,publicDirectory}},{testContext:f.testContext,boundary});
+  const report={schema:'hq-qpv4-diagnostic/v1',head:binding.head,binding,outcome:'NONPASSING',FULL_FIDELITY:'UNPROVED',TRUNCATION:'NOT_ADMITTED'};
+  return {...f,binding,publicDirectory,report,open,verify:()=>verifyPublication({parent:f.parent,publicDirectory,expectedBinding:binding})};
+}
+const projection=async(...args)=>(await import('./trace-probe.mjs')).sanitizedBundle(...args);
+const finish=async(w,report,options={})=>{await w.write('report.json',canonical(report));return w.close(report.outcome,{projectClosed:projection,...options});};
+async function treeFacts(root) {
+  const rows=[];
+  async function visit(name){const s=await fs.lstat(name,{bigint:true});rows.push([path.relative(root,name),String(s.ino),String(s.size),String(s.mode),String(s.mtimeNs)]);if(s.isDirectory())for(const c of (await fs.readdir(name)).sort())await visit(path.join(name,c));}
+  await visit(root);return rows;
+}
+test('publication binding is closed, copied, canonical and invocation-specific',()=>{
+  const input=invocation(),b=publicationBinding(input);input.actor='changed';assert.equal(b.actor,'example-owner');assert.ok(Object.isFrozen(b));
+  assert.equal(bindingDigest(b),bindingDigest(Object.fromEntries(Object.entries(b).reverse())));
+  for(const patch of [{attempt:2},{draft:true},{headRepositoryId:1},{event:'push'},{sourceHead:'c'.repeat(40)},{runId:12345},{unknown:'x'}])assert.throws(()=>publicationBinding({...b,...patch}));
+  assert.equal(PUBLICATION.facts+PUBLICATION.public+PUBLICATION.receipt+PUBLICATION.lock,SLOTS.facts);
+  assert.equal(PUBLICATION.ordinaryArtifacts+7,LIMITS.artifacts);
+});
+test('same owner reserves before lock, seals before projection and atomically publishes exactly four files',async t=>{
+  const calls=[],f=await publishing(t,{boundary:async p=>{calls.push(p);}}),w=await f.open();
+  const result=await finish(w,f.report);assert.equal(result.state,'PUBLISHED');assert.equal(w.state,'PUBLISHED');
+  assert.ok(calls.indexOf('reserved')<calls.indexOf('lock-write'));
+  assert.ok(calls.indexOf('closure-close')<calls.indexOf('public-report.json-create'));
+  assert.ok(calls.indexOf('receipt-close')<calls.indexOf('rename'));
+  assert.ok(calls.indexOf('parent-sync')<calls.indexOf('lock-close'));
+  assert.deepEqual((await fs.readdir(f.publicDirectory)).sort(),[...PUBLIC_FILES].sort());
+  const before=await treeFacts(f.parent);assert.deepEqual(await f.verify(),{state:'VERIFIED'});assert.deepEqual(await treeFacts(f.parent),before);
+  await assert.rejects(w.write('late','x'),/writer-closed/);
+  assert.equal(JSON.parse(await fs.readFile(path.join(f.publicDirectory,'report.json'),'utf8')).outcome,'NONPASSING');
+});
+test('publication facts and ordinary artifact reservations enforce exact boundaries',async t=>{
+  const f=await publishing(t),w=await f.open();
+  await w.write('at-facts',Buffer.alloc(PUBLICATION.facts));await assert.rejects(w.write('over-facts','x'),/byte-limit/);
+  const result=await w.close('NONPASSING',{projectClosed:projection});assert.equal(result.state,'UNPUBLISHED');
+  const g=await publishing(t),v=await g.open();
+  for(let i=0;i<PUBLICATION.ordinaryArtifacts;i++)await v.write(`empty-${i}`,Buffer.alloc(0));
+  await assert.rejects(v.write('one-more',''),/artifact-limit/);await v.close('NONPASSING',{projectClosed:projection});
+});
+test('publication preflight refuses existing consumption, low capacity and unknown capacity without writes',async t=>{
+  for(const available of [1,NaN]){const f=await publishing(t,{available});await assert.rejects(f.open());assert.deepEqual(await fs.readdir(f.parent),[]);}
+  const f=await publishing(t),existing=path.join(f.parent,'prior-run');await fs.mkdir(existing,{mode:0o700});
+  const tinyPolicy=createTestContext({policy:{evidenceRuns:1},measureFilesystem:async r=>({id:r.dev,type:'fixture',blockBytes:4096,availableBytes:100*1024**3})});
+  await assert.rejects(openProbeStorage({...f,publication:{binding:f.binding,publicDirectory:f.publicDirectory}},{testContext:tinyPolicy}));
+  assert.deepEqual(await fs.readdir(f.parent),['prior-run']);
+});
+test('missing, incomplete, binding-mismatched and outcome-mismatched report cannot publish',async t=>{
+  for(const change of ['missing','partial','binding','outcome']){
+    const f=await publishing(t),w=await f.open();
+    if(change==='partial'){async function* b(){yield Buffer.from('{');throw Error('original-producer-failure');}await assert.rejects(w.stream('report.json',b(),'facts',100));}
+    else if(change!=='missing')await w.write('report.json',canonical({...f.report,...(change==='binding'?{binding:{...f.binding,actor:'other'}}:{outcome:'MEASURED_PARTIAL'})}));
+    const r=await w.close('NONPASSING',{projectClosed:projection});assert.notEqual(r.state,'PUBLISHED');await assert.rejects(f.verify());
+    assert.equal((await fs.readdir(f.parent)).some(n=>n.startsWith('public-')),false);
+  }
+});
+test('all public schemas and capacities are checked before the first public file',async t=>{
+  for(const mutate of [v=>({...v,extra:{}}),v=>({...v,'report.json':{...v['report.json'],private:'x'}}),v=>({...v,'report.json':{x:'x'.repeat(PUBLICATION.file)}})]){
+    const calls=[],f=await publishing(t,{boundary:async p=>calls.push(p)}),w=await f.open();
+    const r=await finish(w,f.report,{projectClosed:async(...a)=>mutate(await projection(...a))});assert.notEqual(r.state,'PUBLISHED');
+    assert.equal(calls.some(p=>p.startsWith('public-')),false);await assert.rejects(f.verify());
+  }
+});
+test('existing empty destination, receipt, symlink and outside namespace refuse without overwrite',async t=>{
+  for(const kind of ['empty','receipt','symlink','outside']){
+    const f=await publishing(t);
+    if(kind==='empty')await fs.mkdir(f.publicDirectory,{mode:0o700});
+    if(kind==='receipt')await fs.writeFile(path.join(f.parent,`.publication-${bindingDigest(f.binding)}.json`),'prior',{mode:0o600});
+    if(kind==='symlink')await fs.symlink(f.root,f.publicDirectory);
+    const before=await treeFacts(f.parent);
+    await assert.rejects(kind==='outside'?openProbeStorage({...f,publication:{binding:f.binding,publicDirectory:path.join(f.root,'elsewhere')}},{testContext:f.testContext}):f.open());
+    assert.deepEqual(await treeFacts(f.parent),before);
+  }
+});
+test('publication boundary failures never produce a verified ambiguous or partial bundle',async t=>{
+  const points=['closure-write','closure-sync','closure-close','stage-create','stage-sync','receipt-create','receipt-write','receipt-sync','receipt-close',
+    ...PUBLIC_FILES.flatMap(n=>[`public-${n}-create`,`public-${n}-write`,`public-${n}-sync`,`public-${n}-close`]),'rename','renamed','parent-sync','committed-readback','lock-close','lock-unlink'];
+  for(const target of points){await t.test(target,async t=>{
+    let hits=0;const f=await publishing(t,{boundary:async p=>{if(p===target){hits++;throw Error(`fixture-${target}`);}}}),w=await f.open();
+    await w.write('report.json',canonical(f.report));const promise=w.close('NONPASSING',{projectClosed:projection});assert.equal(w.close('NONPASSING',{projectClosed:projection}),promise);
+    const r=await promise;assert.notEqual(r.state,'PUBLISHED');assert.equal(hits,1);await assert.rejects(f.verify());
+    if(['rename','renamed','parent-sync','committed-readback','lock-close','lock-unlink'].includes(target)){assert.equal(r.state,'UNKNOWN');await fs.access(path.join(f.parent,LOCK_NAME));}
+  });}
+});
+test('cancel before commit prevents publication; a completed commit is not replayed after a signal',async t=>{
+  const cancelled=new AbortController();cancelled.abort(Error('SIGTERM'));const f=await publishing(t),w=await f.open();
+  const r=await finish(w,f.report,{signal:cancelled.signal});assert.equal(r.state,'UNPUBLISHED');assert.equal(r.reason,'cancelled');await assert.rejects(f.verify());
+  const late=new AbortController(),g=await publishing(t,{boundary:async p=>{if(p==='committed-readback')late.abort(Error('SIGTERM'));}}),v=await g.open();
+  const completed=await finish(v,g.report,{signal:late.signal});assert.equal(completed.state,'PUBLISHED');assert.equal(late.signal.reason.message,'SIGTERM');assert.deepEqual(await g.verify(),{state:'VERIFIED'});
+});
+test('busy close bars new writes synchronously and late sink completion cannot revive publication',async t=>{
+  const f=await publishing(t),w=await f.open();let release;const gate=new Promise(r=>{release=r;});
+  async function* input(){await gate;yield Buffer.from('x');}
+  const sink=w.stream('slow',input(),'facts',1);const closed=w.close('NONPASSING',{projectClosed:projection});
+  assert.equal(w.close('NONPASSING',{projectClosed:projection}),closed);await assert.rejects(w.write('late','x'));
+  assert.equal((await closed).state,'UNKNOWN');release();await sink;assert.equal(w.state,'UNKNOWN');await assert.rejects(f.verify());
+});
+test('read-only post-crash verification rejects byte, identity, link, source and inventory substitution',async t=>{
+  for(const kind of ['bytes','inode','symlink','hardlink','binding','extra','lock','closure','receipt']){await t.test(kind,async t=>{
+    const f=await publishing(t),w=await f.open();assert.equal((await finish(w,f.report)).state,'PUBLISHED');
+    const name=path.join(f.publicDirectory,'report.json'),body=await fs.readFile(name);
+    if(kind==='bytes')await fs.writeFile(name,'{}',{mode:0o600});
+    if(kind==='inode'){await fs.rename(name,path.join(f.root,'old'));await fs.writeFile(name,body,{mode:0o600});}
+    if(kind==='symlink'){await fs.rename(name,path.join(f.root,'old'));await fs.symlink(path.join(f.root,'old'),name);}
+    if(kind==='hardlink')await fs.link(name,path.join(f.root,'alias'));
+    if(kind==='extra')await fs.writeFile(path.join(f.publicDirectory,'extra'),'x',{mode:0o600});
+    if(kind==='lock')await fs.writeFile(path.join(f.parent,LOCK_NAME),'unknown',{mode:0o600});
+    if(kind==='closure')await fs.writeFile(path.join(w.directory,'.closure.json'),'{}',{mode:0o600});
+    if(kind==='receipt')await fs.writeFile(path.join(f.parent,`.publication-${bindingDigest(f.binding)}.json`),'{}',{mode:0o600});
+    const before=await treeFacts(f.parent);
+    await assert.rejects(kind==='binding'?verifyPublication({parent:f.parent,publicDirectory:f.publicDirectory,expectedBinding:{...f.binding,runId:'999'}}):f.verify());
+    assert.deepEqual(await treeFacts(f.parent),before);
+  });}
+});
+test('publication verifier CLI is a read-only entrypoint and emits no workflow capability',async()=>{
+  const source=await fs.readFile(new URL('./trace-probe.mjs',import.meta.url),'utf8');
+  const branch=source.slice(source.indexOf("if(mode==='verify-publication')"),source.indexOf('}else{',source.indexOf("if(mode==='verify-publication')")));
+  assert.match(branch,/await verifyPublication/);assert.doesNotMatch(branch,/openProbeStorage|writeFile|mkdir|GITHUB_OUTPUT|unlink|rename/);
+});
+
+test('publication failure remains secondary to the original observed failure',async t=>{
+  const f=await publishing(t,{boundary:async p=>{if(p==='receipt-write')throw Error('publication-later');}}),w=await f.open();
+  w.observe(Error('original-signal'));const result=await finish(w,f.report);assert.notEqual(result.state,'PUBLISHED');assert.equal(w.primary,'original-signal');
+  const closed=JSON.parse(await fs.readFile(path.join(w.directory,'.closure.json'),'utf8'));assert.equal(closed.primary,'original-signal');assert.equal(closed.outcome,'NONPASSING');
 });
