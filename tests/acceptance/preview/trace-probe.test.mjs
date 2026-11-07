@@ -390,6 +390,9 @@ test('workflow orders G0 G1 exclusive parent setup and driver under the existing
   assert.match(byId('refusal').run,/git rev-parse HEAD/);assert.match(byId('refusal').run,/QPV4_ATTEMPT.*== 1/);
   assert.match(byId('refusal').run,/Runner\.Worker/);assert.match(byId('refusal').run,/worker_age - 30 \+ 900/);
   assert.match(byId('g0').run,/60 \+ 120 \+ 180 <= QPV4_END/);
+  assert.doesNotMatch(source.slice(0,source.indexOf('    steps:')),/\$\{\{\s*runner\./);
+  for(const [key,context] of [['NAME','name'],['ENVIRONMENT','environment'],['OS','os'],['ARCH','arch']])
+    assert.ok(byId('g0').text.includes('          QPV4_RUNNER_'+key+': ${{ runner.'+context+' }}'));
   for(const fact of ['github-hosted','ARM64','ImageOS','ImageVersion','sw_vers','uname -m','hw.optional.arm64','sysctl.proc_translated','NSScreen','backingScaleFactor','GITHUB_WORKSPACE','RUNNER_TEMP','RUNNER_TOOL_CACHE','42949672960'])assert.ok(byId('g0').run.includes(fact),fact);
   assert.match(steps[3].text,/node-version: '24\.19\.0'/);
   for(const fact of ['process.version','v24.19.0','process.arch','arm64','thinArm64','requireAdmission(await inspectStorage'])assert.ok(byId('g1').run.includes(fact),fact);

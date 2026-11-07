@@ -32,10 +32,6 @@ jobs:
       QPV4_ACTOR: ${{ github.event.sender.login }}
       QPV4_RUN_ID: ${{ github.run_id }}
       QPV4_ATTEMPT: ${{ github.run_attempt }}
-      QPV4_RUNNER_NAME: ${{ runner.name }}
-      QPV4_RUNNER_ENVIRONMENT: ${{ runner.environment }}
-      QPV4_RUNNER_OS: ${{ runner.os }}
-      QPV4_RUNNER_ARCH: ${{ runner.arch }}
     steps:
       - name: Check out exact event head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -66,6 +62,11 @@ jobs:
           printf 'head=%s base=%s base_ref=%s label_actor=%s run=%s attempt=%s\n' "$QPV4_HEAD" "$QPV4_BASE" "$QPV4_BASE_REF" "$QPV4_ACTOR" "$QPV4_RUN_ID" "$QPV4_ATTEMPT"
       - name: G0 prove hosted platform display and receiving capacity
         id: g0
+        env:
+          QPV4_RUNNER_NAME: ${{ runner.name }}
+          QPV4_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          QPV4_RUNNER_OS: ${{ runner.os }}
+          QPV4_RUNNER_ARCH: ${{ runner.arch }}
         timeout-minutes: 1
         shell: bash
         run: |
