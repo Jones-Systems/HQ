@@ -346,3 +346,89 @@ test('publication failure remains secondary to the original observed failure',as
   w.observe(Error('original-signal'));const result=await finish(w,f.report);assert.notEqual(result.state,'PUBLISHED');assert.equal(w.primary,'original-signal');
   const closed=JSON.parse(await fs.readFile(path.join(w.directory,'.closure.json'),'utf8'));assert.equal(closed.primary,'original-signal');assert.equal(closed.outcome,'NONPASSING');
 });
+
+test('V2 actual verifier requires one exact public entry of any matching type without repair',async t=>{
+  for(const kind of ['valid','extra-directory','extra-file','extra-symlink','malformed-name','wrong-U']){await t.test(kind,async t=>{
+    const f=await publishing(t),w=await f.open();assert.equal((await finish(w,f.report)).state,'PUBLISHED');
+    const extra=path.join(f.parent,kind==='malformed-name'?'public-':'public-other');
+    if(kind==='extra-directory')await fs.mkdir(extra,{mode:0o700});
+    if(kind==='extra-file'||kind==='malformed-name')await fs.writeFile(extra,'x',{mode:0o600});
+    if(kind==='extra-symlink')await fs.symlink(f.publicDirectory,extra);
+    if(kind==='wrong-U')await fs.rename(f.publicDirectory,extra);
+    const before=await treeFacts(f.parent);
+    if(kind==='valid')assert.deepEqual(await f.verify(),{state:'VERIFIED'});else await assert.rejects(f.verify());
+    assert.deepEqual(await treeFacts(f.parent),before);
+  });}
+});
+function workflowSteps(source) {
+  return source.split(/^      - name: /m).slice(1).map(text=>({
+    name:text.split('\n')[0],text,id:/^        id: ([a-z0-9-]+)$/m.exec(text)?.[1],
+    run:/^        run: \|\n((?: {10}[^\n]*\n|\n)*)/m.exec(text)?.[1]??''
+  }));
+}
+// Resolve from the real repository root; this suite reads YAML, never executes it.
+const workflowText=()=>fs.readFile(path.join(WORKTREE,'.github/workflows/hq-qpv4-trace-probe.yml'),'utf8');
+test('workflow has one label-only same-repository non-draft job and least privilege',async()=>{
+  const source=await workflowText();
+  assert.equal(source.slice(source.indexOf('on:\n'),source.indexOf('permissions:\n')).trim(),'on:\n  pull_request:\n    types: [labeled]');
+  assert.equal(source.slice(source.indexOf('permissions:\n'),source.indexOf('concurrency:\n')).trim(),'permissions:\n  contents: read');
+  assert.deepEqual([...source.slice(source.indexOf('\njobs:\n')).matchAll(/^  ([a-z0-9-]+):$/gm)].map(x=>x[1]),['trace-probe']);
+  assert.match(source,/if: \$\{\{ github\.event\.label\.name == 'hq-qpv4-trace-probe' && !github\.event\.pull_request\.draft && github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}/);
+  assert.match(source,/runs-on: macos-15\n    timeout-minutes: 15/);
+  assert.match(source,/group: hq-qpv4-trace-probe-\$\{\{ github\.event\.pull_request\.number \}\}\n  cancel-in-progress: false/);
+  assert.doesNotMatch(source,/secrets\.|GITHUB_TOKEN|pull_request_target|workflow_dispatch|schedule:|push:|matrix:|macos-15-(?:large|xlarge)|contains\(/);
+  assert.deepEqual([...source.matchAll(/uses: ([^\s]+)/g)].map(x=>x[1]),[
+    'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+    'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1',
+    'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a']);
+});
+test('workflow orders G0 G1 exclusive parent setup and driver under the existing budgets',async()=>{
+  const source=await workflowText(),steps=workflowSteps(source),byId=id=>steps.find(x=>x.id===id);
+  assert.equal(steps.length,12);
+  assert.deepEqual(steps.filter(x=>x.id).map(x=>x.id),['refusal','g0','g1','evidence-parent','build','driver','closure']);
+  assert.match(steps[0].text,/ref: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/);assert.match(steps[0].text,/persist-credentials: false/);
+  assert.match(byId('refusal').run,/git rev-parse HEAD/);assert.match(byId('refusal').run,/QPV4_ATTEMPT.*== 1/);
+  assert.match(byId('refusal').run,/Runner\.Worker/);assert.match(byId('refusal').run,/worker_age - 30 \+ 900/);
+  assert.match(byId('g0').run,/60 \+ 120 \+ 180 <= QPV4_END/);
+  for(const fact of ['github-hosted','ARM64','ImageOS','ImageVersion','sw_vers','uname -m','hw.optional.arm64','sysctl.proc_translated','NSScreen','backingScaleFactor','GITHUB_WORKSPACE','RUNNER_TEMP','RUNNER_TOOL_CACHE','42949672960'])assert.ok(byId('g0').run.includes(fact),fact);
+  assert.match(steps[3].text,/node-version: '24\.19\.0'/);
+  for(const fact of ['process.version','v24.19.0','process.arch','arm64','thinArm64','requireAdmission(await inspectStorage'])assert.ok(byId('g1').run.includes(fact),fact);
+  assert.ok(byId('g1').run.indexOf('requireAdmission')<byId('g1').run.indexOf('await fs.mkdir'));
+  const parent=byId('evidence-parent').run;
+  assert.match(parent,/Date\.now\(\)\/1000\+60\+180>end/);assert.match(parent,/budget:evidence-parent/);
+  assert.ok(parent.indexOf('requireAdmission(await inspectStorage')<parent.indexOf('await fs.mkdir(evidence'));
+  assert.match(parent,/target\.exists,false/);assert.match(parent,/target\.dev,runtime\.dev/);
+  assert.equal((source.match(/await fs\.mkdir\(evidence,\{mode:0o700\}\)/g)??[]).length,1);
+  assert.doesNotMatch(parent,/recursive:true|mkdir -p|rm\(|unlink|repair/);
+  assert.match(steps[6].run,/npm ci --ignore-scripts --no-audit --no-fund/);assert.match(steps[6].text,/ELECTRON_SKIP_BINARY_DOWNLOAD: '1'/);
+  assert.match(steps[7].run,/node node_modules\/electron\/install\.js/);
+  assert.match(byId('build').run,/npm run build/);assert.match(byId('build').run,/driverBudget/);assert.match(byId('build').run,/driver_minutes=/);
+  assert.match(byId('driver').text,/timeout-minutes: \$\{\{ fromJSON\(steps\.build\.outputs\.driver_minutes\) \}\}/);
+  assert.deepEqual(steps.map(s=>/^        timeout-minutes: (.+)$/m.exec(s.text)?.[1]),['1','1','1','2','1','1','4','2','4','${{ fromJSON(steps.build.outputs.driver_minutes) }}','1','1']);
+});
+test('V3 workflow treats every event input as env data and invokes only the frozen driver',async()=>{
+  const source=await workflowText(),steps=workflowSteps(source);
+  for(const step of steps)assert.doesNotMatch(step.run,/\$\{\{\s*github\.event(?:\.|\s)/,step.name);
+  for(const env of ['QPV4_HEAD','QPV4_BASE','QPV4_ACTOR','QPV4_LABEL','QPV4_BASE_REF','QPV4_REPOSITORY'])assert.match(source,new RegExp('^      '+env+': \\$\\{\\{','m'));
+  for(const id of ['driver','closure']){
+    const run=steps.find(x=>x.id===id).run;assert.match(run,/publicationBinding\(/);assert.match(run,/publicationDirectory\(parent,binding\)/);
+    assert.match(run,/runId:e\.QPV4_RUN_ID/);assert.match(run,/head:e\.QPV4_HEAD,base:e\.QPV4_BASE,actor:e\.QPV4_ACTOR,sourceHead:e\.QPV4_HEAD/);
+  }
+  const driver=steps.find(x=>x.id==='driver').run;assert.match(driver,/await runProbe\(\{parent,publicDirectory,binding,jobEnd:Number\(e\.QPV4_END\),expectedHead:binding\.head\}\)/);
+  assert.match(driver,/r\.signal==='SIGINT'\?130:r\.signal==='SIGTERM'\?143:1/);
+  assert.doesNotMatch(source,/\beval\b|\bnpx\b|\bbrew\b|\bpip\b|\bcurl\b|\bwget\b|fetch\(|Tracing\.start|Tracing\.end|IO\./);
+});
+test('A2 upload requires positive read-only verification and exactly four nonrecursive public globs',async()=>{
+  const source=await workflowText(),steps=workflowSteps(source),closure=steps.find(x=>x.id==='closure'),upload=steps.at(-1);
+  assert.match(closure.text,/if: \$\{\{ always\(\) && steps\.g1\.outcome == 'success' \}\}/);
+  assert.match(closure.run,/'verify-publication','--evidence',parent,'--publication',publicDirectory,'--binding-json',JSON\.stringify\(binding\)/);
+  assert.match(closure.run,/shell:false/);assert.match(closure.run,/maxBuffer:65536,timeout:45000/);
+  assert.match(closure.run,/if\(verified\.error\|\|verified\.signal\|\|verified\.status!==0\)/);
+  assert.match(closure.run,/else await fs\.appendFile\(e\.GITHUB_OUTPUT,'publication_verified=true\\n'\)/);
+  assert.equal((closure.run.match(/appendFile/g)??[]).length,1);assert.doesNotMatch(closure.run,/mkdir|writeFile|unlink|rename|openProbeStorage|runProbe|publication_verified=false/);
+  assert.match(upload.text,/if: \$\{\{ always\(\) && steps\.closure\.outcome == 'success' && steps\.closure\.outputs\.publication_verified == 'true' \}\}/);
+  const paths=[...upload.text.matchAll(/^            (.+)$/gm)].map(x=>x[1]);
+  assert.deepEqual(paths,PUBLIC_FILES.map(n=>'${{ runner.temp }}/hq-qpv4-evidence/public-*/'+n));
+  assert.match(upload.text,/if-no-files-found: ignore/);assert.match(upload.text,/include-hidden-files: false/);assert.match(upload.text,/retention-days: 7/);
+  assert.doesNotMatch(upload.text,/\*\*|\.publication-|\.closure\.json|pftrace|\.log/);
+});

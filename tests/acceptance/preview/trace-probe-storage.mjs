@@ -78,6 +78,8 @@ export async function verifyPublication({ parent, publicDirectory, expectedBindi
   await resolveDestination(parent, { mustExist: true });
   const parentId = await privateDirectory(parent);
   await absent(path.join(parent, LOCK_NAME));
+  const publicEntries = (await fs.readdir(parent)).filter(name => name.startsWith('public-'));
+  assert.deepEqual(publicEntries, [path.basename(publicDirectory)], 'publication-exact-destination');
   const receiptPath = path.join(parent, receiptName(digest));
   const receiptSnapshot = await snapshotFile(receiptPath, { limit: PUBLICATION.receipt, dev: parentId.dev });
   const receipt = JSON.parse(await recordedBytes(receiptPath, receiptSnapshot, PUBLICATION.receipt));

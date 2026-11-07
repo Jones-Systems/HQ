@@ -524,10 +524,10 @@ best result is `MEASURED_PARTIAL`; it exits nonzero even then. `FULL_FIDELITY` i
 `FAILED` or `UNPROVED`, and tiny-case `TRUNCATION` never passes. No diagnostic
 success, production route, Q-PV4 pass or native acceptance follows from source CI.
 
-The shared-CI custodian accepted staged G0/G1/G2. The workflow's final upload
-integration remains held pending its separate verified-upload/directory amendment
-(T2-A2). The core uses existing portable test discovery on GitHub; no dependency
-or lockfile edit is needed.
+The label-only `hq-qpv4-trace-probe.yml` workflow implements the accepted staged
+G0/G1/G2 and verified-upload conditions. Source publication carries no label and
+does not run that diagnostic workflow. The core and static workflow assertions
+use existing portable test discovery; no dependency or lockfile edit is needed.
 Do not invoke the native diagnostic from a laptop or VPS. Any future invocation
 requires the separate exact operational envelope, a proved Apple Silicon hosted
 macOS runner, pinned Node 24.19.0, the locked app build, an existing private owned
@@ -563,7 +563,11 @@ validates a closed immutable repository/PR/run/attempt/event/actor/head/base/sou
 binding and hashes its canonical encoding. The required publication selector is
 `EXISTING_PRIVATE_PARENT/public-<binding SHA-256>`; it grants no authority and
 must be absent, private, disjoint from scratch and on the admitted filesystem.
-No parent is provisioned by this selector.
+The selector itself provisions nothing. After G1 and fresh Stage A admission,
+one workflow step exclusively creates `${RUNNER_TEMP}/hq-qpv4-evidence` at mode
+0700, failing on any existing entry. Before allocation it checks actual receiving
+filesystem/custody and the same filesystem as runtime scratch. Its one-minute
+maximum must fit `now + 60 + 180 <= END`; no time allowance is added.
 
 Before the first lock write, the existing 2 MiB facts allowance is split into
 2,060,288 bytes for ordinary facts, 16,384 bytes for the four public files
@@ -596,8 +600,15 @@ exact hashes/inventory, four exact public filenames and projection-byte equality
 It neither opens an owner nor writes, repairs, evicts, finalizes or emits workflow
 outputs. Exit zero means publication verified, never diagnostic success. Complete
 post-crash publication may verify; incomplete or unknown publication cannot.
-The workflow's positive output/upload guard and exact directory binding still
-require T2-A2; a present directory alone is not an upload authorization. Private
+The verifier additionally requires exactly one parent entry beginning `public-`,
+of any type, and that it is the expected directory. Extra, malformed, mismatched
+or unsafe matching entries refuse without repair. The closure wrapper derives
+that directory with the helper's canonical digest, passes the expected event
+binding through env data and the read-only CLI, and emits only fixed
+`publication_verified=true` after exit zero. Upload requires that positive output
+and successful closure; a present directory alone is insufficient. Exactly four
+nonrecursive `public-*` filename globs select the verified directory. Event fields
+are never interpolated as code in `run` bodies. Private
 receipt, run, staging, raw/decoded trace and full closure remain outside the four
 sanitized upload files. Native/public-upload authority remains separate.
 
@@ -624,3 +635,11 @@ writer/converter/cleanup failures prevent apparent success. Original producer
 failure or cancellation remains primary. Closure retains bounded refusal facts.
 Runtime/native capability, complete trace containment, public sanitized upload,
 production capture, other producers and full Stage B qualification remain open.
+
+On ephemeral hosted runners, the private parent, run, receipt, raw/decoded traces
+and owned setup/runtime scratch last only for the job lifetime and disappear
+with the runner. Only the VERIFIED four-file sanitized artifact can be durable
+under the separate C authorization. Failed publication leaves no durable uploaded
+evidence bundle; ordinary job logs and source CI do not substitute for it. No
+public upload, acquisition, native diagnostic build/run, label or merge follows
+from this source workflow. VERIFIED means publication verification only.
