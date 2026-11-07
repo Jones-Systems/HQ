@@ -1,0 +1,251 @@
+name: Q-PV4 diagnostic trace feasibility
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hq-qpv4-trace-probe-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  trace-probe:
+    if: ${{ github.event.label.name == 'hq-qpv4-trace-probe' && !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      QPV4_REPOSITORY: ${{ github.repository }}
+      QPV4_REPOSITORY_ID: ${{ github.repository_id }}
+      QPV4_PR: ${{ github.event.pull_request.number }}
+      QPV4_HEAD_REPOSITORY_ID: ${{ github.event.pull_request.head.repo.id }}
+      QPV4_BASE_REPOSITORY_ID: ${{ github.event.pull_request.base.repo.id }}
+      QPV4_HEAD: ${{ github.event.pull_request.head.sha }}
+      QPV4_BASE: ${{ github.event.pull_request.base.sha }}
+      QPV4_BASE_REF: ${{ github.event.pull_request.base.ref }}
+      QPV4_DRAFT: ${{ github.event.pull_request.draft }}
+      QPV4_EVENT: ${{ github.event_name }}
+      QPV4_ACTION: ${{ github.event.action }}
+      QPV4_LABEL: ${{ github.event.label.name }}
+      QPV4_ACTOR: ${{ github.event.sender.login }}
+      QPV4_RUN_ID: ${{ github.run_id }}
+      QPV4_ATTEMPT: ${{ github.run_attempt }}
+    steps:
+      - name: Check out exact event head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Refuse changed head or repeat and anchor the budget
+        id: refusal
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$QPV4_ATTEMPT" == 1 ]]
+          [[ "$QPV4_HEAD" =~ ^[a-f0-9]{40}$ && "$QPV4_BASE" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$QPV4_ACTOR" =~ ^[A-Za-z0-9-]{1,39}$ && "$QPV4_BASE_REF" =~ ^[A-Za-z0-9._/-]{1,255}$ ]]
+          [[ "$(git rev-parse HEAD)" == "$QPV4_HEAD" ]]
+          read -r worker_command < <(/bin/ps -o comm= -p "$PPID")
+          [[ "${worker_command##*/}" == Runner.Worker ]] || { echo 'STOP budget-anchor'; exit 1; }
+          read -r elapsed < <(/bin/ps -o etime= -p "$PPID")
+          [[ "$elapsed" =~ ^(([0-9]+)-)?(([0-9]+):)?([0-9]+):([0-9]+)$ ]] || { echo 'STOP budget-anchor'; exit 1; }
+          d=${BASH_REMATCH[2]:-0}; h=${BASH_REMATCH[4]:-0}; m=${BASH_REMATCH[5]}; s=${BASH_REMATCH[6]}
+          [[ ${#d} -le 4 && ${#h} -le 3 && ${#m} -le 2 && ${#s} -le 2 ]]
+          (( 10#$m < 60 && 10#$s < 60 )) || { echo 'STOP budget-anchor'; exit 1; }
+          worker_age=$((10#$d * 86400 + 10#$h * 3600 + 10#$m * 60 + 10#$s))
+          end=$(($(date +%s) - worker_age - 30 + 900))
+          printf 'QPV4_END=%s\n' "$end" >> "$GITHUB_ENV"
+          printf 'head=%s base=%s base_ref=%s label_actor=%s run=%s attempt=%s\n' "$QPV4_HEAD" "$QPV4_BASE" "$QPV4_BASE_REF" "$QPV4_ACTOR" "$QPV4_RUN_ID" "$QPV4_ATTEMPT"
+      - name: G0 prove hosted platform display and receiving capacity
+        id: g0
+        env:
+          QPV4_RUNNER_NAME: ${{ runner.name }}
+          QPV4_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          QPV4_RUNNER_OS: ${{ runner.os }}
+          QPV4_RUNNER_ARCH: ${{ runner.arch }}
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          (( $(date +%s) + 60 + 120 + 180 <= QPV4_END )) || { echo 'STOP budget:g0'; exit 1; }
+          [[ "$QPV4_RUNNER_ENVIRONMENT" == github-hosted && "$QPV4_RUNNER_OS" == macOS && "$QPV4_RUNNER_ARCH" == ARM64 ]]
+          [[ -n "$QPV4_RUNNER_NAME" && -n "$ImageOS" && -n "$ImageVersion" ]]
+          printf 'runner=%s image=%s version=%s\n' "$QPV4_RUNNER_NAME" "$ImageOS" "$ImageVersion"
+          /usr/bin/sw_vers -productVersion
+          /usr/bin/sw_vers -buildVersion
+          [[ "$(/usr/bin/uname -m)" == arm64 ]]
+          [[ "$(/usr/sbin/sysctl -n hw.optional.arm64)" == 1 ]]
+          [[ "$(/usr/sbin/sysctl -n sysctl.proc_translated)" == 0 ]]
+          /usr/bin/osascript -l JavaScript <<'JXA'
+          ObjC.import('AppKit');
+          const screens = $.NSScreen.screens;
+          if (Number(screens.count) < 1) throw Error('G0-display');
+          let visible = false;
+          for (let i = 0; i < Number(screens.count); i++) {
+            const s = screens.objectAtIndex(i), f = s.frame;
+            if (Number(s.backingScaleFactor) > 0 && f.size.width > 0 && f.size.height > 0) visible = true;
+          }
+          if (!visible) throw Error('G0-display');
+          JSON.stringify({screens: Number(screens.count), positiveScaleAndFrame: true});
+          JXA
+          for receiving in "$GITHUB_WORKSPACE" "$RUNNER_TEMP" "$RUNNER_TOOL_CACHE"; do
+            [[ -d "$receiving" && ! -L "$receiving" ]]
+            available_kib=$(/bin/df -kP "$receiving" | /usr/bin/awk 'NR == 2 {print $4}')
+            [[ "$available_kib" =~ ^[0-9]+$ ]]
+            printf 'receiving_available_kib=%s required_bytes=42949672960\n' "$available_kib"
+            (( available_kib * 1024 >= 42949672960 )) || { echo 'STOP G0-capacity'; exit 1; }
+          done
+      - name: Set up pinned Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        timeout-minutes: 2
+        with:
+          node-version: '24.19.0'
+      - name: G1 prove Node and admit owned setup scratch
+        id: g1
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import * as fs from 'node:fs/promises';
+          import path from 'node:path';
+          import { WORKTREE, setupBudget } from './tests/acceptance/preview/trace-probe.mjs';
+          import { thinArm64 } from './tests/acceptance/preview/trace-probe-reference.mjs';
+          import { inspectStorage, requireAdmission, resolveDestination } from './tools/storage/admission.mjs';
+          setupBudget(Number(process.env.QPV4_END), Date.now()/1000, 'g1');
+          assert.equal(process.version, 'v24.19.0'); assert.equal(process.arch, 'arm64');
+          const binary = await fs.open(await fs.realpath(process.execPath), 'r');
+          try { const header = Buffer.alloc(32), r = await binary.read(header, 0, 32, 0); thinArm64(header.subarray(0,r.bytesRead)); } finally { await binary.close(); }
+          assert.match(process.env.QPV4_RUN_ID, /^[1-9][0-9]{0,31}$/); assert.equal(process.env.QPV4_ATTEMPT,'1');
+          const scratch = path.join(WORKTREE,'.t3',`qpv4-install-${process.env.QPV4_RUN_ID}-1`);
+          const evidence = path.join(process.env.RUNNER_TEMP,'hq-qpv4-evidence');
+          const runtime = path.join(WORKTREE,'.t3/preview-acceptance-scratch');
+          const roots = [
+            ...['apps/desktop/dist','apps/desktop/dist-electron'].map(p=>({kind:'compiled',path:path.join(WORKTREE,p)})),
+            ...['.t3/cache','node_modules/.vite-temp'].map(p=>({kind:'cache',path:path.join(WORKTREE,p)})),
+            ...[scratch,evidence,runtime].map(p=>({kind:'scratch',path:p}))
+          ];
+          requireAdmission(await inspectStorage({worktree:WORKTREE,roots}));
+          assert.equal((await resolveDestination(evidence)).dev,(await resolveDestination(runtime)).dev,'same-filesystem-required');
+          await fs.mkdir(path.dirname(scratch),{recursive:true,mode:0o700});
+          await fs.mkdir(scratch,{mode:0o700});
+          await fs.mkdir(path.join(scratch,'tmp'),{mode:0o700});
+          const routing={TMPDIR:path.join(scratch,'tmp'),npm_config_cache:path.join(scratch,'npm'),electron_config_cache:path.join(scratch,'electron')};
+          for(const [key,value] of Object.entries(routing)) { assert.ok(!/[\r\n]/.test(value)); await fs.appendFile(process.env.GITHUB_ENV,`${key}=${value}\n`); }
+          console.log('G1 passed; provisional setup peak 10737418240 bytes, reserve 32212254720 bytes');
+          NODE
+      - name: Allocate the exclusive admitted evidence parent
+        id: evidence-parent
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import * as fs from 'node:fs/promises';
+          import path from 'node:path';
+          import { WORKTREE } from './tests/acceptance/preview/trace-probe.mjs';
+          import { inspectStorage, requireAdmission, resolveDestination } from './tools/storage/admission.mjs';
+          const end=Number(process.env.QPV4_END);
+          if(!Number.isFinite(end)||Date.now()/1000+60+180>end)throw Error('budget:evidence-parent');
+          const evidence=path.join(process.env.RUNNER_TEMP,'hq-qpv4-evidence'),scratch=path.join(WORKTREE,'.t3/preview-acceptance-scratch');
+          requireAdmission(await inspectStorage({worktree:WORKTREE,roots:[{kind:'scratch',path:evidence},{kind:'scratch',path:scratch}]}));
+          const target=await resolveDestination(evidence),runtime=await resolveDestination(scratch);
+          assert.equal(target.dev,runtime.dev,'same-filesystem-required');
+          assert.equal(target.exists,false,'evidence-parent-exists');
+          await fs.mkdir(evidence,{mode:0o700});
+          const s=await fs.lstat(evidence,{bigint:true});
+          assert.ok(s.isDirectory()&&s.uid===BigInt(process.getuid())&&(s.mode&0o777n)===0o700n&&String(s.dev)===target.dev);
+          NODE
+      - name: Install locked npm dependencies
+        timeout-minutes: 4
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "import {setupBudget} from './tests/acceptance/preview/trace-probe.mjs'; setupBudget(Number(process.env.QPV4_END),Date.now()/1000,'npm');"
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Acquire the locked Electron binary
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "import {setupBudget} from './tests/acceptance/preview/trace-probe.mjs'; setupBudget(Number(process.env.QPV4_END),Date.now()/1000,'electron');"
+          node node_modules/electron/install.js
+      - name: Build exact source and admit driver time
+        id: build
+        timeout-minutes: 4
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "import {setupBudget} from './tests/acceptance/preview/trace-probe.mjs'; setupBudget(Number(process.env.QPV4_END),Date.now()/1000,'build');"
+          npm run build
+          node --input-type=module <<'NODE'
+          import * as fs from 'node:fs/promises';
+          import { driverBudget } from './tests/acceptance/preview/trace-probe.mjs';
+          const {minutes}=driverBudget(Number(process.env.QPV4_END),Date.now()/1000);
+          await fs.appendFile(process.env.GITHUB_OUTPUT,`driver_minutes=${minutes}\n`);
+          NODE
+      - name: Run exactly normal then tiny under the owned driver
+        id: driver
+        timeout-minutes: ${{ fromJSON(steps.build.outputs.driver_minutes) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import path from 'node:path';
+          import { runProbe } from './tests/acceptance/preview/trace-probe.mjs';
+          import { publicationBinding, publicationDirectory } from './tests/acceptance/preview/trace-probe-storage.mjs';
+          const e=process.env;
+          const binding=publicationBinding({repository:e.QPV4_REPOSITORY,repositoryId:Number(e.QPV4_REPOSITORY_ID),pr:Number(e.QPV4_PR),runId:e.QPV4_RUN_ID,attempt:Number(e.QPV4_ATTEMPT),
+            event:e.QPV4_EVENT,action:e.QPV4_ACTION,label:e.QPV4_LABEL,headRepositoryId:Number(e.QPV4_HEAD_REPOSITORY_ID),baseRepositoryId:Number(e.QPV4_BASE_REPOSITORY_ID),
+            draft:JSON.parse(e.QPV4_DRAFT),head:e.QPV4_HEAD,base:e.QPV4_BASE,actor:e.QPV4_ACTOR,sourceHead:e.QPV4_HEAD});
+          const parent=path.join(e.RUNNER_TEMP,'hq-qpv4-evidence'),publicDirectory=publicationDirectory(parent,binding);
+          try {
+            const r=await runProbe({parent,publicDirectory,binding,jobEnd:Number(e.QPV4_END),expectedHead:binding.head});
+            console.log(JSON.stringify({outcome:r.outcome,FULL_FIDELITY:r.FULL_FIDELITY,TRUNCATION:r.TRUNCATION,publication:r.publication?.state}));
+            process.exitCode=r.signal==='SIGINT'?130:r.signal==='SIGTERM'?143:1;
+          } catch { console.error('diagnostic-refused'); process.exitCode=1; }
+          NODE
+      - name: Read-only verify the closed sanitized publication
+        id: closure
+        if: ${{ always() && steps.g1.outcome == 'success' }}
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import * as fs from 'node:fs/promises';
+          import path from 'node:path';
+          import { spawnSync } from 'node:child_process';
+          import { publicationBinding, publicationDirectory } from './tests/acceptance/preview/trace-probe-storage.mjs';
+          const e=process.env;
+          const binding=publicationBinding({repository:e.QPV4_REPOSITORY,repositoryId:Number(e.QPV4_REPOSITORY_ID),pr:Number(e.QPV4_PR),runId:e.QPV4_RUN_ID,attempt:Number(e.QPV4_ATTEMPT),
+            event:e.QPV4_EVENT,action:e.QPV4_ACTION,label:e.QPV4_LABEL,headRepositoryId:Number(e.QPV4_HEAD_REPOSITORY_ID),baseRepositoryId:Number(e.QPV4_BASE_REPOSITORY_ID),
+            draft:JSON.parse(e.QPV4_DRAFT),head:e.QPV4_HEAD,base:e.QPV4_BASE,actor:e.QPV4_ACTOR,sourceHead:e.QPV4_HEAD});
+          const parent=path.join(e.RUNNER_TEMP,'hq-qpv4-evidence'),publicDirectory=publicationDirectory(parent,binding);
+          const verified=spawnSync(process.execPath,['tests/acceptance/preview/trace-probe.mjs','verify-publication','--evidence',parent,'--publication',publicDirectory,'--binding-json',JSON.stringify(binding)],
+            {shell:false,stdio:['ignore','pipe','pipe'],maxBuffer:65536,timeout:45000});
+          if(verified.error||verified.signal||verified.status!==0){console.error('publication-not-verified');process.exitCode=1;}
+          else await fs.appendFile(e.GITHUB_OUTPUT,'publication_verified=true\n');
+          NODE
+      - name: Upload only the four verified sanitized files
+        if: ${{ always() && steps.closure.outcome == 'success' && steps.closure.outputs.publication_verified == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        timeout-minutes: 1
+        with:
+          name: hq-qpv4-trace-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/hq-qpv4-evidence/public-*/report.json
+            ${{ runner.temp }}/hq-qpv4-evidence/public-*/closure.json
+            ${{ runner.temp }}/hq-qpv4-evidence/public-*/config-normal.json
+            ${{ runner.temp }}/hq-qpv4-evidence/public-*/config-tiny.json
+          if-no-files-found: ignore
+          include-hidden-files: false
+          retention-days: 7

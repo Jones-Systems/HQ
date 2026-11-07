@@ -810,6 +810,89 @@ No new state or basis literal is added.
 - compatibility exports unchanged.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.resolve-unknown.001" -->
 
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#iface.qpv4-trace-probe.001" -->
+## Q-PV4 Diagnostic Trace Probe Contract
+
+**Owner and authority.** T1 is the sole writer of the seven probe paths; the workflow and `tests/acceptance/preview/trace-probe-reference.json` stay under T2 shared-CI/manifest custody. This contract is diagnostic only: it decides no Q-PV4 result and authorizes no execution, acquisition, label, upload or production adapter. `refuseRawTrace()` and the Q-PV4 hold are unchanged. A probe outcome is never a Q-PV4 pass. Running the probe requires a separate exact owner envelope.
+
+**Frozen inputs.** `heldCaptureContainment`, all product assertions, `run.mjs`, `containment.mjs`, `images.mjs`, `runtime.mjs`, both evidence writers, Stage A, `package.json`, the lockfile, existing workflows and check groups. The driver reproduces the `run.mjs` Q-PV4 port object key for key; only `traceStart`, `traceStop` and `browserPid` (the PID captured at `traceStart`) differ.
+
+**Producer.** One dedicated browser-target CDP connection sends only `Tracing.start` with `tracingBackend: "chrome"`, `transferMode: "ReturnAsStream"` and a base64 closed config. It never sends `Tracing.end` or `IO.*`; any tracing or stream event on it is nonpassing. Electron launches with the preview argv plus `--enable-features=TracingServiceInProcess`. The closed config has:
+- one 4096 KiB DISCARD buffer;
+- one `track_event` source with `"*"` disabled, only `disabled-by-default-viz.quads` enabled, and producer filter `org.chromium-<browserPid>`;
+- `duration_ms` 40000;
+- `write_into_file`, `file_write_period_ms` 1000, `flush_timeout_ms` 5000, `data_source_stop_timeout_ms` 5000;
+- an absent absolute `output_path` inside the owned runtime root;
+- `max_file_size_bytes` 16777216 (normal) or 4096 (tiny).
+No other field is set. The two cases run serially, one launch each, and differ only in the cap.
+
+**Lifecycle.** The start acknowledgement must arrive within 5 s, and the workload must end within 38 s of the request. `traceStop` never throws. Its steps, in order:
+1. wait until acknowledgement + 52 s;
+2. hash the raw file and run the terminal query while Electron is alive;
+3. close the connection;
+4. run frozen `stop`, then prove the group and descendants have ceased;
+5. re-verify identity and hash, then set mode 0600;
+6. check for secondary files;
+7. rename on the same filesystem into the retained run;
+8. convert.
+Uncertain cessation keeps the scratch, skips frozen `close`, and stops the probe. The first original failure is primary.
+
+**Storage.** An independent owner precharges 114 MiB + 4096 ordinary bytes (raw 16 MiB + 4096, JSON 2×32 MiB, tools 24 MiB, logs 8 MiB, facts 2 MiB) and writes 8 MiB of real closure: at most 256 artifacts, each at most 32 MiB. The raw file is charged before start and moved, never copied. The producer's 0644 mode is accepted only inside the 0700 runtime root. Frozen Stage A admission (30 GiB + 10 GiB) and an owned setup scratch apply before install.
+
+**Publication ownership and recovery.** The same process-local owner reserves publication before the lock's first write and keeps that exact lock through sealing, staging, receipt, atomic directory rename and direct durable readback. The existing 2 MiB facts allowance is split into 2,060,288 ordinary-fact bytes, 16,384 public bytes (four files of at most 4,096 bytes), one 16,384-byte private receipt and 4,096 lock bytes. Seven reserved artifact positions leave 249 ordinary positions. Aggregate ordinary and closure budgets remain unchanged; failed reservations and partial files are not reclaimed.
+
+A closed canonical invocation binding fixes repository identity, PR, run, attempt 1, labeled event, exact label, same-repository head/base IDs, non-draft state, actor, event head/base and matching verified source HEAD. The required publication directory selector is an absent controlled `public-<binding SHA-256>` under the already existing admitted private evidence parent on the same filesystem. It is not authority or provisioning. The private run, staging and receipt stay outside the public allowlist.
+
+Closing synchronously bars ordinary operations and never restarts after failure or late sink completion. The owner validates and seals the retained report/closure before projecting the exact four sanitized schemas from immutable bytes. All capacities precede the first public file. One exclusive private staging directory is atomically renamed without copying; a single bounded private receipt binds identities, sizes, hashes and reservations. The immutable closure records prospective reservations, not future public hashes. Only successful readback permits closing the lock descriptor and final validated unlink. Unknown operations retain custody and evidence without replay, overwrite, eviction or a replacement writer.
+
+The separate verification entrypoint performs reads only, requires no outstanding lock and revalidates the expected binding, private identities, immutable report/closure inventory, exact four files and recomputed projection bytes. A complete post-crash publication can verify; incomplete or ambiguous states cannot be repaired or promoted. Verification grants no diagnostic success or operational authority. Upload requires the separately allocated custodian-owned positive verification guard; file presence alone is insufficient. These publication interfaces remain subject to T7 source custody and T2's workflow/directory custody under the change control below.
+
+**Workflow parent and verified destination.** On an ephemeral hosted runner, exactly one workflow step may exclusively create `${RUNNER_TEMP}/hq-qpv4-evidence` mode 0700 after G1 and fresh actual-filesystem Stage A admission, before the driver. Any existing entry, uncertain custody or different filesystem refuses. This source-defined mkdir requires the separate exact execution envelope. Its one-minute maximum is admitted only when `now + 60 + 180 <= END`; the job ceiling, tail and case limits are unchanged.
+
+The read-only verifier additionally requires exactly one `public-*` parent entry of any type, equal to the expected helper-derived canonical binding destination. No extra or unsafe matching entry is repaired. The closure wrapper passes event fields as env data, never script interpolation, and emits only fixed `publication_verified=true` after verifier exit zero. Upload requires successful closure and that positive output; four explicit nonrecursive filename globs select only the verified directory. No path output or transferred writer authority is involved.
+
+**Hosted retention.** Private evidence, raw/decoded traces, run, receipt and owned scratch persist only for the hosted job lifetime. Only the four-file sanitized artifact is durable if verified and separately execution-authorized. Failed publication has no durable uploaded bundle; source checks and ordinary job logs do not substitute for the private closed evidence. Verification never means diagnostic success.
+
+**Reference.** Upstream v57.2 mac-arm64 `traceconv` and `trace_processor_shell`, at the manifest's URLs, sizes, hashes and provenance nonclaim. Each is hash-verified and confirmed thin arm64 Mach-O before it runs. They run serially on absolute local paths, with private empty HOME/TMPDIR and bounded pipes: JSON ≤ 32 MiB, query output ≤ 64 MiB, stderr ≤ 1 MiB. There is no custom decoder and no new dependency. The manifest fixes the exact queries, the four schema pins and all budgets.
+
+**Predicates.** Normal terminal completeness requires all of:
+- ordered lifecycle metadata;
+- disabled − started ≥ 39.5 s;
+- exactly one successful final flush;
+- zero flush, loss, discard, overwrite and ABI stats, and no nonzero `data_loss` or `error` stat;
+- raw size below the cap;
+- the closed config lines;
+- a clean CDP ledger;
+- proven cessation and identity.
+
+Snapshot results are reported separately:
+- `SUBSET_EXPORT_CONSISTENT`: browser-PID `LayerTreeHostImpl:snapshot` multisets per integer-µs bucket, and exact `active_tree.layers` leaf multisets, between trace_processor and the converted JSON, under the exporter's integer-µs timestamps and 16-significant-digit reals;
+- `REAL_EXACTNESS`;
+- `TS_PRECISION`;
+- `FULL_FIDELITY`, which is `FAILED` or `UNPROVED` and never PASS here: empty containers, nulls, nanosecond timestamps and 17-digit reals are not observable or not preserved through these references.
+
+Tiny `TRUNCATION` is `INCONCLUSIVE_TRUNCATION_UNPROVEN`, `NOT_ADMITTED`, `UNEXPECTED_COMPLETE` or `NONPASSING`, never PASS, because the file cannot carry positive cap evidence. The best overall result is `MEASURED_PARTIAL`. `DIAGNOSTIC_SUCCESS` is not attainable under this contract.
+
+**Gates.**
+- G0, before setup: hosted arm64 runner, image and macOS facts; a GUI display; the capacity floor.
+- G1, after setup-node: Node 24.19.0, arm64, Stage A.
+- G2, inside each launch: Electron 44.9.0 / Chromium 152.0.7977.167, unpackaged arm64, PID binding, frozen drawable sentinel, window focus.
+A missing fact stops at its gate as inconclusive. The upload is all-or-none of four closed-schema files.
+
+**Budget.** The job anchors on its `Runner.Worker` start minus 30 s and reserves 180 s for closure and upload inside the 15-minute limit. Each setup step, the driver and each case are refused when their maximum duration would breach that reserve. A refusal is an inconclusive stop, never an extension.
+
+**Nonclaims.** No result claims complete faithful capture, positive cap truncation, Q-PV4, a production route, or native or merge authority. Results reflect in-process tracing-service placement. Open residuals:
+- an out-of-band early-close observation for truncation;
+- a producer-encoding-preserving reference for full fidelity.
+Each needs its own allocation.
+
+**Change control.** T1 may propose changes to this section. A change takes effect only through the custody that allocated the affected item:
+- root's T7 allocation for probe source and contract values;
+- T2 custody for the workflow and manifest;
+- a new exact C envelope for any operational effect.
+This section grants no standing authority to change any bound, deadline, native argv or launch flag, accepted predicate or result class, held source, or approval envelope.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#iface.qpv4-trace-probe.001" -->
+
 <!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.test-plan.001" -->
 ## Test Plan
 

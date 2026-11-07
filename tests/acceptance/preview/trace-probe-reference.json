@@ -1,0 +1,131 @@
+{
+  "schema": "hq-qpv4-trace-reference/v1",
+  "upstream": {
+    "repository": "google/perfetto",
+    "commit": "9c7ce42050379be8c24a270f395e00c7347965cb",
+    "provenance": "pinned by the 9c7 prebuilt manifest; not proved built from 9c7, reproducible or independently build-attested"
+  },
+  "tools": [
+    {
+      "name": "traceconv",
+      "url": "https://commondatastorage.googleapis.com/perfetto-luci-artifacts/v57.2/mac-arm64/traceconv",
+      "size": 11175288,
+      "sha256": "2a4692f355fb48ad481d523a9f0b13d61f3693f233cba0b9fed25d639f74f892",
+      "manifest": {
+        "path": "python/perfetto/prebuilts/manifests/traceconv.py",
+        "blob": "e8b933b4b154e75e8c259825cd9625b57ec4b961",
+        "sha256": "42d0dd2a4d28330b9a54fc4ea57d62ec18d7bb6c2e77cb0a1f7eb4da7cdb9c13"
+      }
+    },
+    {
+      "name": "trace_processor_shell",
+      "url": "https://commondatastorage.googleapis.com/perfetto-luci-artifacts/v57.2/mac-arm64/trace_processor_shell",
+      "size": 12704456,
+      "sha256": "98a41b80e9f60da0373d64aff6455681f8c26b7c391ae5736324a5b11e3dacc2",
+      "manifest": {
+        "path": "python/perfetto/prebuilts/manifests/trace_processor_shell.py",
+        "blob": "31dabf9b3965132f5553ba798eb15f517cd45681",
+        "sha256": "e9ef0b361539f43f7e2e092be696ad9a48f811479bb89bfcf3eacf85e81b17cc"
+      }
+    }
+  ],
+  "schemas": [
+    {
+      "path": "protos/perfetto/config/trace_config.proto",
+      "blob": "b64cb8f19ae483da625043229a46adfd451e1a89",
+      "sha256": "e06c2fd8de4d5523fb38eed3a555581b47d8e3c7bca73a698b3eb03be0e49466"
+    },
+    {
+      "path": "protos/perfetto/trace/perfetto/tracing_service_event.proto",
+      "blob": "045ed65747efa5ed5bacbafa0f1de0cd2c827766",
+      "sha256": "6c9b499b31415b99d9cebe05494bc569ef91e9fbbc661ea0ac495de571458978"
+    },
+    {
+      "path": "protos/perfetto/config/data_source_config.proto",
+      "blob": "f3c0db87c3a5b78b06eeb3021933e7c617e11df3",
+      "sha256": "ca16530dc35763d91f7cf41f64b7d6f6ddf95e9a4fd10d5448045f4458850df8"
+    },
+    {
+      "path": "protos/perfetto/config/track_event/track_event_config.proto",
+      "blob": "a799346ce0296a6d18e63c19ce5437644ab0eb06",
+      "sha256": "cdab98ee0daaa0987ef155c057c002ff0014c80c1933bf7d1b3a05c11748399d"
+    }
+  ],
+  "config": {
+    "bufferKiB": 4096,
+    "fillPolicy": 2,
+    "dataSource": "track_event",
+    "disabledCategories": [
+      "*"
+    ],
+    "enabledCategories": [
+      "disabled-by-default-viz.quads"
+    ],
+    "producerPrefix": "org.chromium-",
+    "durationMs": 40000,
+    "fileWritePeriodMs": 1000,
+    "flushTimeoutMs": 5000,
+    "stopTimeoutMs": 5000,
+    "caps": {
+      "normal": 16777216,
+      "tiny": 4096
+    }
+  },
+  "queries": {
+    "Q1": "SELECT 'm' AS k, hex(name) AS n, int_value AS i, hex(str_value) AS s, str_value IS NULL AS z FROM metadata\nUNION ALL\nSELECT 's', hex(name), value, hex(coalesce(severity,'')||'|'||coalesce(source,'')||'|'||coalesce(idx,'')), 0 FROM stats WHERE value <> 0",
+    "Q2": "SELECT 'e' AS k, s.id AS sid, s.ts AS ts, coalesce(p1.pid, p2.pid) AS pid, '' AS ak, '' AS vt, NULL AS i, NULL AS r, '' AS sv, 0 AS z\nFROM slice s\nLEFT JOIN thread_track tt ON s.track_id = tt.id LEFT JOIN thread t ON tt.utid = t.utid LEFT JOIN process p1 ON t.upid = p1.upid\nLEFT JOIN process_track pt ON s.track_id = pt.id LEFT JOIN process p2 ON pt.upid = p2.upid\nWHERE s.name = 'LayerTreeHostImpl:snapshot'\nUNION ALL\nSELECT 'a', s.id, NULL, NULL, hex(a.key), hex(a.value_type), a.int_value,\n  CASE WHEN a.real_value IS NULL THEN NULL ELSE printf('%.17g', a.real_value) END,\n  hex(a.string_value), a.string_value IS NULL\nFROM slice s JOIN args a ON a.arg_set_id = s.arg_set_id\nWHERE s.name = 'LayerTreeHostImpl:snapshot'\n  AND (a.key = 'debug.snapshot' OR a.key = 'debug.snapshot.active_tree.layers'\n       OR substr(a.key, 1, 34) = 'debug.snapshot.active_tree.layers[')"
+  },
+  "budget": {
+    "ordinaryBytes": 119541760,
+    "closureBytes": 8388608,
+    "artifacts": 256,
+    "artifactBytes": 33554432,
+    "chunkBytes": 65536,
+    "jsonBytes": 33554432,
+    "queryBytes": 67108864,
+    "textBytes": 1048576,
+    "stderrBytes": 1048576,
+    "electronBytes": 1048576
+  },
+  "deadlines": {
+    "jobSeconds": 900,
+    "unprovedClockGapSeconds": 30,
+    "unprovedTransitionSeconds": 15,
+    "tailReserveSeconds": 180,
+    "caseAdmissionSeconds": 260,
+    "startAckMs": 5000,
+    "spanMs": 38000,
+    "waitAfterAckMs": 52000,
+    "toolsMs": 60000,
+    "caseMs": {
+      "launch": 30000,
+      "gate": 10000,
+      "pretrace": 30000,
+      "traceWindow": 57000,
+      "Q1": 20000,
+      "cessation": 15000,
+      "rename": 10000,
+      "json": 30000,
+      "Q2": 30000,
+      "text": 10000,
+      "close": 10000
+    }
+  },
+  "outcomes": {
+    "best": "MEASURED_PARTIAL",
+    "fullFidelity": [
+      "FAILED",
+      "UNPROVED"
+    ],
+    "truncation": [
+      "INCONCLUSIVE_TRUNCATION_UNPROVEN",
+      "NOT_ADMITTED",
+      "UNEXPECTED_COMPLETE",
+      "NONPASSING"
+    ],
+    "openResiduals": [
+      "R-T",
+      "R-F"
+    ]
+  }
+}

@@ -515,3 +515,131 @@ fixtures or captures, nor prove source-to-build provenance. Build the exact
 clean candidate immediately before native acceptance, retain its compiled
 files, and keep them quiescent during both execution and verification.
 A matching subset of T7 rows never upgrades overall T7 acceptance or HQ-07.
+
+### Diagnostic Q-PV4 source checkpoint
+
+`preview/trace-probe.mjs` is a standalone diagnostic core. It leaves the production
+runner's `refuseRawTrace()` and the complete containment oracle unchanged. Its
+best result is `MEASURED_PARTIAL`; it exits nonzero even then. `FULL_FIDELITY` is
+`FAILED` or `UNPROVED`, and tiny-case `TRUNCATION` never passes. No diagnostic
+success, production route, Q-PV4 pass or native acceptance follows from source CI.
+
+The label-only `hq-qpv4-trace-probe.yml` workflow implements the accepted staged
+G0/G1/G2 and verified-upload conditions. Source publication carries no label and
+does not run that diagnostic workflow. The core and static workflow assertions
+use existing portable test discovery; no dependency or lockfile edit is needed.
+Do not invoke the native diagnostic from a laptop or VPS. Any future invocation
+requires the separate exact operational envelope, a proved Apple Silicon hosted
+macOS runner, pinned Node 24.19.0, the locked app build, an existing private owned
+evidence parent, and the workflow's approved event head/base and budget anchor.
+Its source CLI shape is:
+
+```text
+node tests/acceptance/preview/trace-probe.mjs run --evidence EXISTING_PRIVATE_PARENT --publication PUBLIC_DIRECTORY --binding-json EXPECTED_BINDING_JSON --job-end EPOCH_SECONDS --head APPROVED_HEAD
+```
+
+This command is not a setup or permission mechanism. `--job-end` must come from
+the allocated Runner.Worker anchor, not an invented extension. The 30 s
+service/worker gap and 15 s transition allowances are unproved native feasibility
+conditions. The hard job limit is 15 minutes, reserving 180 s for closure/upload.
+The driver needs at least six integer timeout minutes; each serial case needs
+260 s remaining. A refusal never extends a bound or triggers another case.
+
+The process-local storage owner admits actual receiving filesystems before any
+new run or scratch parent. It precharges 114 MiB + 4096 ordinary bytes and
+preallocates a real 8 MiB closure, under the unchanged Stage A reserve/peak and
+per-artifact limits. Raw slots, decoded JSON, both pinned tools, logs, and facts
+share that accounting. Evidence and runtime scratch are disjoint on the same
+filesystem. Raw files are charged before start, accepted at 0644 only in the
+owned 0700 runtime root, then made 0600 after cessation and moved without copying.
+No retained file is overwritten or deleted, and an existing parent lock refuses
+without eviction. Pipe chunks are at most 64 KiB with one pending sink write;
+JSON is at most 32 MiB, query memory 64 MiB, text/stderr 1 MiB each, and Electron
+output 1 MiB in memory. These provisional limits are unmeasured; they are not a
+global quota, memory sandbox, or reservation of external free space.
+
+Sanitized publication uses that same process-local owner and lock. Admission
+validates a closed immutable repository/PR/run/attempt/event/actor/head/base/source
+binding and hashes its canonical encoding. The required publication selector is
+`EXISTING_PRIVATE_PARENT/public-<binding SHA-256>`; it grants no authority and
+must be absent, private, disjoint from scratch and on the admitted filesystem.
+The selector itself provisions nothing. After G1 and fresh Stage A admission,
+one workflow step exclusively creates `${RUNNER_TEMP}/hq-qpv4-evidence` at mode
+0700, failing on any existing entry. Before allocation it checks actual receiving
+filesystem/custody and the same filesystem as runtime scratch. Its one-minute
+maximum must fit `now + 60 + 180 <= END`; no time allowance is added.
+
+Before the first lock write, the existing 2 MiB facts allowance is split into
+2,060,288 bytes for ordinary facts, 16,384 bytes for the four public files
+(4,096 each), 16,384 bytes for one private receipt and 4,096 bytes for the lock.
+Seven artifact positions are reserved, leaving 249 ordinary positions. There is
+no extra allowance, reclaimed failed reservation or second writer. Failed partial
+files retain their charges. The aggregate 114 MiB + 4096 ordinary and 8 MiB
+closure limits are unchanged.
+
+`close(outcome, {projectClosed, signal})` bars ordinary writes synchronously and
+memoizes its first terminal promise. It validates the actual retained report,
+seals and hashes the immutable closure while retaining ownership, then projects
+exactly four closed-schema files from those validated bytes. It checks every
+public capacity before any public file, writes one exclusive private staging
+directory and one flat private receipt, then atomically renames that same inode.
+There is no copy, overwrite, second receipt or completion marker. The receipt
+binds report/closure/file identities and hashes, not future outcome upgrades.
+Only verified durable publication permits lock release. Unknown rename, late
+close or unlock retains evidence/custody and never triggers a retry. A parent
+lock or ambiguous state always refuses recovery.
+
+The later closure step can invoke only this read-only command:
+
+```text
+node tests/acceptance/preview/trace-probe.mjs verify-publication --evidence EXISTING_PRIVATE_PARENT --publication PUBLIC_DIRECTORY --binding-json EXPECTED_BINDING_JSON
+```
+
+It verifies expected binding, no outstanding lock, private ownership, identities,
+exact hashes/inventory, four exact public filenames and projection-byte equality.
+It neither opens an owner nor writes, repairs, evicts, finalizes or emits workflow
+outputs. Exit zero means publication verified, never diagnostic success. Complete
+post-crash publication may verify; incomplete or unknown publication cannot.
+The verifier additionally requires exactly one parent entry beginning `public-`,
+of any type, and that it is the expected directory. Extra, malformed, mismatched
+or unsafe matching entries refuse without repair. The closure wrapper derives
+that directory with the helper's canonical digest, passes the expected event
+binding through env data and the read-only CLI, and emits only fixed
+`publication_verified=true` after exit zero. Upload requires that positive output
+and successful closure; a present directory alone is insufficient. Exactly four
+nonrecursive `public-*` filename globs select the verified directory. Event fields
+are never interpolated as code in `run` bodies. Private
+receipt, run, staging, raw/decoded trace and full closure remain outside the four
+sanitized upload files. Native/public-upload authority remains separate.
+
+The closed reference manifest pins exactly two v57.2 mac-arm64 Perfetto tools by
+the 9c7 prebuilt manifests, not by a proved 9c7 build, reproducible build or
+independent build attestation. Acquisition, tool execution and uploads remain
+unapproved. There is no package-manager, source-build, signing or PATH fallback.
+The diagnostic uses `ReturnAsStream` only as the protobuf start-format flag;
+it sends no `Tracing.end` or `IO.*` request. The disclosed in-process tracing
+service flag is diagnostic-only and also needs the later operational envelope.
+
+The unchanged native oracle consumes the upstream JSON export. Subset comparison
+uses exact event multisets per integer-microsecond bucket and exact leaf values,
+with explicit 16-significant-digit rounding disclosure. Empty containers, nulls,
+nanosecond timestamps and 17-digit reals are unobservable or not preserved through
+these references. R-F requires a separately allocated producer-encoding-preserving
+reference. Tiny files and missing terminal markers are consistency facts only;
+positive cap evidence needs the separately allocated R-T early-close observation.
+Neither R-T's proposed lsof command nor an R-F decoder is implemented here.
+
+Cessation is independently checked before frozen runtime cleanup. Unknown group
+or descendant absence retains scratch, prevents the next case and blocks cleanup;
+writer/converter/cleanup failures prevent apparent success. Original producer
+failure or cancellation remains primary. Closure retains bounded refusal facts.
+Runtime/native capability, complete trace containment, public sanitized upload,
+production capture, other producers and full Stage B qualification remain open.
+
+On ephemeral hosted runners, the private parent, run, receipt, raw/decoded traces
+and owned setup/runtime scratch last only for the job lifetime and disappear
+with the runner. Only the VERIFIED four-file sanitized artifact can be durable
+under the separate C authorization. Failed publication leaves no durable uploaded
+evidence bundle; ordinary job logs and source CI do not substitute for it. No
+public upload, acquisition, native diagnostic build/run, label or merge follows
+from this source workflow. VERIFIED means publication verification only.
