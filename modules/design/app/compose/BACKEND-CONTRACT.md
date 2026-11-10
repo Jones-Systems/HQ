@@ -111,6 +111,27 @@ New section errors must set `this.name` and either be added to `classifyDesignEr
 `DesignBridgeError` is also recognised by its name, in case a second bundle chunk carries its own copy of
 the class.
 
+### Operation names
+
+Operations are stable. Imports on the durable env (`imports-env.ts`) report these. The Imports controller keeps
+what was thrown on `state.cause`. A view classifies that to read `failure.operation` and `failure.kind`, never the
+message (section 12 shows how).
+
+| operation | write | what failed |
+| --- | --- | --- |
+| `imports.pick` | no | Choosing files with the system picker, or turning them into an import source. |
+| `imports.plan` | no | Reserved for views that wrap planning. The storage layer reports its reads as `imports.read`. |
+| `imports.read` | no | Reading records, history, conflicts or blobs while planning, listing or checking. |
+| `imports.apply` | yes | The atomic commit that applies an import. |
+| `imports.undo` | yes | The atomic commit that undoes an import. |
+| `imports.resolve` | yes | The atomic commit that takes the incoming file or keeps the current one. |
+| `imports.edit` | yes | The atomic commit that saves an owner edit of an imported record. |
+| `imports.export` | no | Backup or export. Always `disabled` in this build (section 12). |
+
+A commit is named by the event it appends to the `imports` stream: `import.applied` is `imports.apply`,
+`import.undone` is `imports.undo`, `conflict.resolved` is `imports.resolve`. A batch with no event is an owner
+edit, `imports.edit`.
+
 ## 2. Bridge envelopes (`bridge-documents.ts`)
 
 The desktop host answers every `hq:svc:design` call with exactly one of:
@@ -152,7 +173,7 @@ Who notifies today:
 | live capture acceptance (`interactive-workspace.ts`) | after any attempt to save the version, including a failed save. A stale capture is refused before saving and does not notify |
 | adding a screen to the saved interactive flow | after any attempt to save the flow, including a failed save |
 | Projects edits (`onContentChange` port of the Projects controller, wired in `bridged-workspace.ts`) | after any attempt to edit, including a refused or failed one |
-| Imports linking | when it lands (it calls `contentEvents.notify`; this table lists it then) |
+| Imports linking (`imports-content-link.ts`) | after an imports commit that carries linked versions is sent, whatever the outcome (section 12) |
 
 A writer that does not notify is not seen until something else does. The fake workspace's fixtures never
 change, so its revision stays 0 unless a test notifies.
@@ -331,3 +352,91 @@ call, so it never goes stale; the Compare controller's own cached lists are refr
 returns `captures: []`. Project content does not keep the provenance, time and extent that a static capture
 needs, and full-extent capture with its HQR-2 receipts is owner-held. Nothing here fabricates a capture
 receipt. A digest or a thumbnail alone is not one.
+
+## 12. Imports on the durable store (`imports-env.ts`)
+
+In a bridged workspace, `workspace.importsFor(project)` returns the durable Imports env. It is on by default.
+In the in-memory fake workspace it stays the labelled synthetic env. Bridged mode never shows synthetic data.
+
+| piece | contract |
+| --- | --- |
+| Storage | `imports-storage.ts` adapts the importer's `StoragePort` to the bridge. Keys `imports/...` map to `design/imports/...`. The stream `imports` maps to `design/imports`. Revisions are decimal strings in the importer and numbers on the wire. Each write is one atomic `import.commit`. |
+| Reads | `design/imports/{records,versions,manifests,conflicts,undo}/` are readable with `doc.get` and `doc.list`. `doc.put` refuses them: they change only through `import.commit`. Blobs are checked with `blob.has`, so planning does not list the whole blob store. |
+| Picking | `capabilities.pickSource` calls `import.pick`. The system dialog says "Only choose files you made. HQ records you as their owner.", and that wording is the explicit rights statement for `rights: { basis: 'owned', holder: 'Owner' }`. `pickSource` records `owned` only. The other bases (`licensed`, `permission`, `public-domain`) need a choice in the Imports UI before a file is picked, which is F5's lane; until then a file that is licensed rather than made by the owner must not be imported here. The panel's introductory sentence ("files you have the rights to use") is the panel's own and is not changed by this lane. A canceled dialog resolves `null`. A refused pick rejects as a typed failure with the picker's reason, for example `invalid-png`, `file-too-large` or `file-changed` (`stale`). |
+| Identity | One stable source ID (`src-local-png-files`) per project. Item keys are the normalized file names, so the same file is the same item every time: choosing identical files changes nothing and writes nothing. A changed file under the same name is an update. An owner-edited record whose source changed is a conflict. Two files with the same name, or a name that cannot be a key, are `invalid`. |
+| Conflicts | A write that lost a race throws `StorageConflictError`, which classifies as `conflict`. Nothing was written. A plan that went stale before it was applied is the same `conflict`. |
+| Unknown outcome | A commit whose reply was lost is `unknown` (it may have landed). Views offer `Check`, which re-reads history, never a blind retry. |
+| Disabled | A host that does not accept imports answers `{ ok: false, kind: 'unavailable', reason: 'disabled' }`. That is `disabled` with outcome no effect, on every Imports operation. |
+| Backup and export | Not available in this build. `saveBundle` is undefined and the storage port's bundle reads (`listBlobs`, `listStreams`, and `listDocuments` of the whole store) fail with `disabled`, reason `disabled`, message "Backup and export are not available in this build". Nothing is read into a bundle and nothing is written. The host's `export.*` routes stay disabled. A backup draft over the durable store therefore stays empty and is never saved. |
+
+### How a view gets the typed failure
+
+The Imports controller's state (`ImportsState`) carries two fields for a failure:
+
+- `message` is the sentence the panel shows. When what was thrown has a string `description`, as every typed
+  failure does, `message` is `<message>. <description>`, so the panel says what was kept. A trailing period on
+  the message is not doubled.
+- `cause` is what was thrown, as thrown. It is `null` unless `status` is `error`, and it is cleared whenever
+  `message` is replaced, so it never outlives its sentence.
+
+The Imports module reads `description` by duck typing and never imports `compose`. A view does the typing:
+
+```ts
+const state = controller.getState();
+if (state.status === 'error') {
+  const feedback = designFeedback(classifyDesignError(state.cause, IMPORTS_CONTEXTS.read));
+  // feedback.meta, .status, .action (Retry, Reload or Check), .persistent
+}
+```
+
+Every Imports rejection is a `DesignOperationError`, and it keeps its own operation, kind and reason. The context
+passed in only matters for a rejection that is not typed, which reads as `unavailable` with Retry.
+
+| what happened | `kind` | `meta` | `action` |
+| --- | --- | --- | --- |
+| A refused pick, for example `invalid-png` | `invalid` | `imports.pick · invalid-png` | none |
+| An apply that lost a race, or whose plan went stale | `conflict` | `imports.apply` | Reload |
+| An apply whose reply was lost (it may have landed) | `unknown` | `imports.apply` | Check, and the notice stays |
+| A read that could not reach storage | `unavailable` | `imports.read` | Retry |
+| Backup or export | `disabled` | `imports.export · disabled` | none |
+
+A plan the importer refuses (for example a newer format) is not an error: `status` is `rejected`, `message` is the
+importer's own sentence and there is no `cause`.
+
+### Retry, Reload and Check for Imports
+
+`workspace.retry` (section 10) is not the Imports Retry. The Imports env is built once per project and building it
+cannot fail, so `retry` has no failed Imports build to clear. Calling it as well does no harm: it only notifies
+content readers. A view maps the Imports actions onto the controller:
+
+- **Retry**, after an `unavailable` read: `controller.refresh()`, which reads the history and open conflicts again.
+- **Reload**, after a `conflict`: `controller.refresh()`, then the owner chooses the files again. The controller
+  dropped the stale plan before it sent the commit, so nothing is applied again by itself.
+- **Check**, after an `unknown` apply: `controller.refresh()`, then show whether the import is in the history. A view
+  never calls `apply()` again for it. The plan was dropped before sending, so a blind resend is not possible from
+  that state.
+
+### Imports linking into project content
+
+Importing a PNG makes it a project version, so Projects, Gallery, Compare and Annotations see it.
+
+- Each live image record becomes one view (`screen`) and one version in the project's content document. The
+  version has `origin: 'imported'`, the label `Imported <name>`, a capture binding of route `imported/<name>`,
+  the image size at device pixel ratio 1 and the PNG digest, and a `thumbnail` PreviewRef at the PNG blob.
+  View and version IDs derive from the import record, so the same record always maps to the same IDs.
+- The content document is written in the same atomic `import.commit` as the Imports records and the journal
+  event. Either all of it lands or none. The write is append-only and checked with `assertAppendOnly`.
+- It is idempotent. A record already linked is skipped, so retrying an apply, or taking the incoming file after
+  a conflict, never duplicates a version. A conflicted record is not linked until the owner takes the incoming
+  file.
+- Versions are never removed. **Undo leaves the imported versions in place.** It only marks the import undone in
+  the Imports history. Removing a version needs a separate Projects action.
+- Only PNG items link. An image larger than 2 MiB is imported and linked without a thumbnail, because the
+  thumbnail port caps previews at 2 MiB.
+- A project whose content is read-only (saved by a newer HQ) cannot be linked: the commit fails as `read-only`
+  before anything is written.
+- After the commit is sent, whatever the outcome (it landed, it lost a race or was refused, or its reply was
+  lost), the adapter calls `contentEvents.notify(projectId)` for each linked project. Nothing is notified when
+  the batch fails before it is sent, for example a read-only project or a batch over the size cap.
+- A commit is capped at 64 MiB of canonical bytes by the host. A batch over the cap fails as `too-large` with
+  reason `import-total`, before anything is sent.

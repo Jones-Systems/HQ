@@ -1,4 +1,5 @@
 /** Durable section composition. Construction and navigation never seed workspace documents. */
+import type { ProjectContext } from '@hq/contracts';
 import type { WorkspaceDocuments, WorkspaceRecords } from '../storage/index.ts';
 import { createProjectsStorage, createComponentsStorage, createFlowsStorage, createCompareStorage, createAnnotationsStorage, createCanvasStorage, DEVICE_STORAGE_LABEL } from '../storage/index.ts';
 import { ProjectContentRepository } from '../../projects/src/repository.ts';
@@ -26,12 +27,15 @@ import { canvasId } from '../../canvas/src/contract.ts';
 import { createProviderRegistry } from '../../canvas/src/providers.ts';
 import { createCanvasProviderAdapter } from './canvas-adapter.ts';
 import { createProjectVersionsProvider } from './project-versions.ts';
-import { canvasProjectIdFor, shellProjectIdFor, importsFor } from './fake-workspace.ts';
+import { canvasProjectIdFor, shellProjectIdFor, type ImportsEnv } from './fake-workspace.ts';
 import { createBridgedDiscovery } from './bridged-discovery.ts';
 import { createWorkspaceThumbnailPort } from './thumbnail-port.ts';
 import { createProjectCompareCatalog } from './compare-catalog.ts';
 import type { EvidenceTag } from './labels.ts';
 import { createProjectContentEvents, type ProjectContentEvents } from './content-events.ts';
+import { bridgeTransportFor } from './bridge-documents.ts';
+import { createDurableImportsEnv, createUnavailableImportsEnv } from './imports-env.ts';
+import type { ImportSource } from '../../imports/src/contract.ts';
 import { perProjectRevision } from './revision-cache.ts';
 import { designFailure, designOperation, DesignOperationError, type DesignFailureContext } from './errors.ts';
 import { ANNOTATIONS_OPEN, openAnnotationSession } from './annotation-session.ts';
@@ -194,6 +198,19 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
     catch { throw new DesignOperationError(designFailure('invalid', TASTE_OPEN, { reason: 'project-id' })); }
     return createProjectTasteContribution({ documents, projectId: id, sha256: webCryptoSha256, clock });
   }, TASTE_OPEN), KEEP);
+  // Durable Imports: the real picker and store over the same bridge, linked into project content. The source argument
+  // only serves the in-memory workspace. Documents not built on the bridge have no picker or store to offer.
+  const importEnvs = new Map<string, ImportsEnv>();
+  const importsFor = (project: ProjectContext, _syntheticSource?: () => ImportSource): ImportsEnv => {
+    let env = importEnvs.get(project.id);
+    if (!env) {
+      const transport = bridgeTransportFor(documents);
+      env = transport === null ? createUnavailableImportsEnv(clock)
+        : createDurableImportsEnv({ transport, documents, repository, clock, contentEvents });
+      importEnvs.set(project.id, env);
+    }
+    return env;
+  };
   // The call behind Try again, Retry and Reload for reads. It marks the project's content as possibly changed: failed
   // builds (and a failed discovery) are built again on the next read, and healthy stateful values are kept.
   const retry = (projectId: string): void => contentEvents.notify(projectId);
