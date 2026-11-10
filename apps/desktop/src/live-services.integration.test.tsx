@@ -9,6 +9,7 @@ import type { HqServices } from '@hq/contracts/services';
 import type { ModulePort } from '@hq/contracts';
 import * as Work from '@hq/work';
 import { createServiceDomains, RELOAD_NOTE, selectService } from './services/domains';
+import { findServiceStatus } from './services/test-support';
 import { createServices, sendHttp, type HttpCall, type Transport } from '../electron/services';
 import type { ServiceConfig } from '../electron/service-config';
 import { createLiveSocialPort } from '../../../modules/social/live';
@@ -39,22 +40,22 @@ it('explicit unconfigured mounts labelled examples once; later settings changes 
   const bind = vi.spyOn(Work, 'setWorkSessionPort');
   const domains = createServiceDomains(() => ({ ...services, config: { ...services.config, status } }));
   const p = props(); const view = render(<domains.Work {...p} />);
-  expect(await screen.findByText('Work: Sample data · not set up.')).toBeTruthy();
+  expect(await findServiceStatus('Work', 'Sample data')).toBeTruthy();
   expect(screen.getAllByTitle(RELOAD_NOTE)).toHaveLength(1);
   status.mockResolvedValue(configured); view.unmount();
   render(<domains.Work {...p} />);
-  expect(await screen.findByText('Work: Sample data · not set up.')).toBeTruthy();
+  expect(await findServiceStatus('Work', 'Sample data')).toBeTruthy();
   expect(bind).toHaveBeenCalledTimes(1); expect(status).toHaveBeenCalledTimes(1);
   cleanup(); status.mockResolvedValue({ configured: false, policy: 'ok', transport: null });
   render(<domains.Social {...props()} />);
-  expect(await screen.findByText('Social: Sample data · not set up.')).toBeTruthy();
+  expect(await findServiceStatus('Social', 'Sample data')).toBeTruthy();
 });
 it('failed status mounts unavailable surfaces without creating Work sessions or fixtures', async () => {
   const bind = vi.spyOn(Work, 'setWorkSessionPort');
   const domains = createServiceDomains(() => undefined);
   render(<><domains.Work {...props()} /><domains.Social {...props()} /></>);
-  expect(await screen.findByText('Work: Unavailable.')).toBeTruthy();
-  expect(await screen.findByText('Social: Unavailable.')).toBeTruthy();
+  expect(await findServiceStatus('Work', 'Unavailable')).toBeTruthy();
+  expect(await findServiceStatus('Social', 'Unavailable')).toBeTruthy();
   expect(screen.queryByText(/Fictional example/)).toBeNull(); expect(bind).not.toHaveBeenCalled();
 });
 
@@ -91,7 +92,7 @@ describe('synthetic Social wire through the actual main HTTP layer', () => {
     try {
       const services = bridge(url, url); const domains = createServiceDomains(() => services);
       render(<domains.Social {...props()} />);
-      expect(await screen.findByText('Social: Set up · not checked.')).toBeTruthy();
+      expect(await findServiceStatus('Social', 'Set up')).toBeTruthy();
       await waitFor(() => expect(calls).toContain('GET /api/workspace'));
       const port = createLiveSocialPort(services.social);
       await port.snapshot();
@@ -133,7 +134,7 @@ it('shell binds the real disposable Planner: live reads, lost write, stable repl
     const bind = vi.spyOn(Work, 'setWorkSessionPort');
     const domains = createServiceDomains(() => bridge(url, url, transport));
     render(<domains.Work {...props()} />);
-    expect(await screen.findByText('Work: Set up · not checked.')).toBeTruthy();
+    expect(await findServiceStatus('Work', 'Set up')).toBeTruthy();
     await waitFor(() => expect(bind).toHaveBeenCalledTimes(1));
     const [port, options] = bind.mock.calls[0]!;
     const before = await port!.snapshot(); loseWrite = true;
