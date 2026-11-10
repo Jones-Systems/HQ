@@ -88,3 +88,63 @@ New, found while assembling:
 - **P4** the client does not time out a port call; a bridge that never settles leaves the view in its loading state
   (the view's own sequence guard still discards stale answers).
 - **P4** the bundle size of the Wiki entry is unmeasured.
+
+## Wiki pages as cross-module reference targets (task B5-W2)
+
+Base `work/hq-foundation` at `0cd50abc974320771cc21145dc8a8fd58a3eb8b1`. Before this, `REFERENCE_PROVIDERS` had Design,
+Social and Work but no Wiki provider, so "Link to…" in Work and Social could not attach a Wiki page, a stored reference to
+one never resolved, and the shell's `ReferencePort.find` (the palette lane, F7 finding X9 on PR #185) could not find one.
+
+What changed (design and rules: [`modules/wiki/app/README.md`](../../../modules/wiki/app/README.md)):
+
+- `modules/wiki/app/src/references.ts`: `createWikiReferenceProvider(service, now)`; `domain: 'wiki'`, `kinds: ['page']`,
+  `entityId` = `<namespace>/<path>`. It calls only `search` and `getPage`, stores no outgoing HQ links (RL-1) and has no
+  execution member (RL-10). The Wiki is a reference **target** only.
+- `apps/desktop/src/reference-providers.ts` registers it with a Wiki client built like the mounted module's, so a missing
+  bridge finds nothing and resolves `unavailable`.
+- Revision: `sourceRevision` is `wiki-c1:` + SHA-256 of the canonical JSON of `{ byteLength, title, fields, content }`. The
+  commit id is excluded on purpose, so an unrelated later commit leaves a link `available`; only a change to the page's own
+  content makes it `changed`.
+- Caps are `parseReference`'s: a page whose id exceeds 160 characters (or whose destination exceeds 512) is omitted from
+  `find`, and titles are cut at 300 without splitting a surrogate pair.
+- One existing assertion changed outside the lane's file list: `references.integration.test.tsx` pinned the registry as
+  `['design', 'social', 'work']`; it now pins `['design', 'social', 'work', 'wiki']`. Nothing was loosened.
+
+Evidence, run serially from the repository root on Node v24.19.0, each after its own CPU admission sample (57.6%, 75.4%,
+83.18%, 77.74%, 57.99% used, in the order listed):
+
+| Check | Result |
+| --- | --- |
+| `node --test modules/wiki/app/test/*.test.ts` | 140 tests, 140 pass, 0 fail, 0 skipped (29 new in `references.test.ts`) |
+| `node --test modules/wiki/{contract,core,ui}/test/*.test.ts` | 395 tests, 395 pass, 0 fail, 0 skipped |
+| `tsc -p modules/wiki/tsconfig.json --noEmit` | exit 0 |
+| `npm run typecheck` | exit 0 |
+| `npm test` (build, then root Vitest) | 118 files, 1876 tests pass, 0 fail, 0 skipped (3 new in `wiki-references.integration.test.tsx`) |
+| Mutation sanity check on the provider (dropped the surrogate guard; put the commit id into the revision) | 3 of 29 `references.test.ts` tests failed; restored, 29 pass. This short run was sampled at 93.55% CPU, above the 85% admission limit |
+
+What the tests show: over the real core and committed synthetic repositories, `find` returns valid envelopes from both
+namespaces that resolve `available`, a path with spaces, non-ASCII letters and `&` round-trips through its destination, a
+later commit that leaves a page untouched stays `available`, and only `search` and `getPage` cross the bridge. Over scripted
+services: limits, the kinds filter, the empty query, the 160/300/512 caps, every status, invalid ids (`../x`, absolute, other
+namespace, wrong kind or domain), `observedAt` taken after the read, and a service Proxy that fails on any other member. In the
+real `App` over the real Wiki runtime: a Work card with `hq-references-v1` shows a stale Wiki link as Changed and a removed page
+as Missing (not openable, snapshot kept), "Link to…" finds and saves a Wiki page through the Planner, opening it shows the page,
+and Back restores the card with its unsaved text; the shell's `ReferencePort` finds, resolves and opens Wiki pages directly; zero
+execution calls on the Social recorder and the Work route list.
+
+**Not shown:** the packaged Electron app and the real preload/IPC channel (the host boundary is the same seven-method handler
+the shell uses, called in-process), hosted CI at the exact head, and Social's "Link to…" flow against a Wiki page (Social's
+picker uses the same `LinkPicker` and `ReferencePort`; only Work's is driven end to end).
+
+Findings, original severity:
+
+- **P3** `find` costs one `search` plus one `getPage` per hit (at most the scope limit, 50 at most) to give each envelope a
+  content revision; the host bridge serialises them, so picker latency grows with the number of hits. A cheaper design would
+  need the search result to carry a content digest, which is a Wiki contract change.
+- **P3** `references.ts` restates `parseReference`'s caps because the Wiki package may not import `@hq/contracts`
+  (`static.test.ts`, `react` as the only dependency). `references.test.ts` pins the restatement; a change to the shared caps
+  would need the same change here.
+- **P4** a page whose id fits in 160 characters but whose encoded destination exceeds 512 (long non-ASCII paths) cannot be
+  referenced at all; this is the same 512-character cap recorded as the UI **P2** above.
+- **P4** the App's Work module keeps its store for the life of the module, so only one test per file can mount a Work card
+  through `App`; `wiki-references.integration.test.tsx` therefore runs one Work journey plus port-level tests.

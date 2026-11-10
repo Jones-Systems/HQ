@@ -4,7 +4,8 @@ import type { ServiceResponse, SocialServiceRoute, WorkServiceRoute, WorkMutatio
 import type { ServiceConfig } from './service-config.js';
 
 export const CHANNELS = Object.freeze({ social: 'hq:svc:social', work: 'hq:svc:work', design: 'hq:svc:design', config: 'hq:svc:config', wiki: 'hq:svc:wiki' });
-export const LIMITS = Object.freeze({ social: 2_000_000, work: 256 * 1024, replay: 352 * 1024, response: 2_000_000 });
+// `response` is the default response cap. `socialWorkspace` is the Social snapshot's own cap: it carries every draft body (up to 50,000 characters each).
+export const LIMITS = Object.freeze({ social: 2_000_000, work: 256 * 1024, replay: 352 * 1024, response: 2_000_000, socialWorkspace: 16 * 1024 * 1024 });
 const unavailable = (): ServiceResponse => ({ ok: false, kind: 'unavailable' });
 export function record(v: unknown): v is Record<string, unknown> { return v !== null && typeof v === 'object' && !Array.isArray(v) && (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null); }
 export function keys(p: Record<string, unknown>, required: readonly string[], optional: readonly string[] = []): boolean { return required.every(k => Object.hasOwn(p, k)) && Object.keys(p).every(k => required.includes(k) || optional.includes(k)); }
@@ -20,7 +21,17 @@ export function jsonValue(v: unknown, seen = new Set<object>()): boolean {
   const valid = (Array.isArray(v) ? Array.from(v) : Object.values(v)).every(x => jsonValue(x, seen));
   seen.delete(v); return valid;
 }
-interface Encoded { method: 'GET' | 'POST' | 'PATCH' | 'PUT'; path: string; body?: string; requestId?: string; loss: 'unavailable' | 'unknown' }
+// Keep the main-process emit self-contained; services.test.ts checks this guard against parseReference.
+function referenceEnvelope(value: unknown): boolean {
+  const text = (v: unknown, max = 160): v is string => typeof v === 'string' && v.length > 0 && v.length <= max && v.trim() === v && !/[\u0000-\u001f\u007f]/u.test(v);
+  const domain = (v: unknown) => typeof v === 'string' && ['design', 'social', 'work', 'wiki'].includes(v);
+  return record(value) && keys(value, ['version', 'domain', 'projectId', 'kind', 'entityId', 'title', 'returnDestination'], ['sourceRevision', 'workspaceId'])
+    && value.version === 1 && domain(value.domain) && text(value.projectId) && text(value.kind) && text(value.entityId) && text(value.title, 300)
+    && record(value.returnDestination) && keys(value.returnDestination, ['domain', 'destination'])
+    && domain(value.returnDestination.domain) && text(value.returnDestination.destination, 512) && !/^[a-z][a-z\d+.-]*:|^[/\\]{2}/iu.test(value.returnDestination.destination)
+    && (!('sourceRevision' in value) || text(value.sourceRevision, 300)) && (!('workspaceId' in value) || text(value.workspaceId));
+}
+interface Encoded { method: 'GET' | 'POST' | 'PATCH' | 'PUT'; path: string; body?: string; requestId?: string; loss: 'unavailable' | 'unknown'; maxResponse?: number }
 export const WORK_METHODS = { state: 'GET', version: 'GET', item: 'GET', history: 'GET', create: 'POST', patch: 'PATCH', move: 'POST', archive: 'POST', restore: 'POST', reviewed: 'POST', settings: 'PUT', replay: 'POST', export: 'GET' } as const satisfies Record<WorkServiceRoute, string>;
 export const SOCIAL_PATHS = { workspace: '/api/workspace', sample: '/api/sample/', run: '/api/runs/', saveContent: '/api/content', addBrand: '/api/brands', submitRun: '/api/runs' } as const satisfies Record<SocialServiceRoute, string>;
 /** Fixed ordering recursively makes persisted originals independent of object insertion order. */
@@ -69,16 +80,19 @@ export function encodeWork(route: unknown, params: unknown): Encoded | null {
 }
 // Type-level check: the replay original is the same closed mutation input, never raw JSON bytes.
 export function encodeOriginal(call: WorkMutationCall): Encoded | null { return encodeWork(call.route, call.params); }
+/** The snapshot read, also used to learn or refresh the workspace token; it alone has the larger response cap. */
+const workspaceRead = (): Encoded => ({ method: 'GET', path: SOCIAL_PATHS.workspace, loss: 'unavailable', maxResponse: LIMITS.socialWorkspace });
 export function encodeSocial(route: unknown, p: unknown): Encoded | null {
   if (typeof route !== 'string' || !Object.hasOwn(SOCIAL_PATHS, route) || !record(p) || !jsonValue(p)) return null;
   let path = SOCIAL_PATHS[route as SocialServiceRoute];
-  if (route === 'workspace') return keys(p, []) ? { method: 'GET', path, loss: 'unavailable' } : null;
+  if (route === 'workspace') return keys(p, []) ? workspaceRead() : null;
   if (route === 'run') return keys(p, ['id']) && id(p.id) ? { method: 'GET', path: path + p.id, loss: 'unavailable' } : null;
   if (route === 'sample') return keys(p, ['tool']) && typeof p.tool === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(p.tool) ? { method: 'GET', path: path + p.tool, loss: 'unavailable' } : null;
   if (route === 'addBrand' && (!keys(p, ['name']) || typeof p.name !== 'string')) return null;
   if (route === 'submitRun' && (!keys(p, ['tool', 'input', 'is_example']) || typeof p.tool !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(p.tool) || !record(p.input) || typeof p.is_example !== 'boolean')) return null;
   if (route === 'saveContent') {
-    if (!keys(p, ['title', 'body', 'brand_id', 'channel', 'planned_date', 'archived'], ['id', 'version', 'planning_slot']) || !['title', 'body', 'brand_id', 'channel', 'planned_date'].every(k => typeof p[k] === 'string') || !/^$|^\d{4}-\d{2}-\d{2}$/.test(p.planned_date as string) || (p.archived !== 0 && p.archived !== 1) || (('id' in p || 'version' in p) && (!id(p.id) || !integer(p.version)))) return null;
+    if (!keys(p, ['title', 'body', 'brand_id', 'channel', 'planned_date', 'archived'], ['id', 'version', 'planning_slot', 'links']) || !['title', 'body', 'brand_id', 'channel', 'planned_date'].every(k => typeof p[k] === 'string') || !/^$|^\d{4}-\d{2}-\d{2}$/.test(p.planned_date as string) || (p.archived !== 0 && p.archived !== 1) || (('id' in p || 'version' in p) && (!id(p.id) || !integer(p.version)))) return null;
+    if ('links' in p && (!Array.isArray(p.links) || p.links.length > 30 || p.links.some(link => !referenceEnvelope(link)))) return null;
     if ('planning_slot' in p && p.planning_slot !== null && (!record(p.planning_slot) || !keys(p.planning_slot, ['start', 'duration_minutes', 'timezone']) || typeof p.planning_slot.start !== 'string' || !integer(p.planning_slot.duration_minutes) || typeof p.planning_slot.timezone !== 'string')) return null;
   }
   const body = canonical(p);
@@ -99,7 +113,7 @@ export const sendHttp: Transport = (url, call) => new Promise<ServiceResponse>(r
     const chunks: Buffer[] = []; let length = 0;
     res.on('data', (chunk: Buffer) => {
       length += chunk.length;
-      if (length > LIMITS.response) { fail(); res.destroy(); req?.destroy(); } else chunks.push(chunk);
+      if (length > (call.maxResponse ?? LIMITS.response)) { fail(); res.destroy(); req?.destroy(); } else chunks.push(chunk);
     });
     res.on('error', fail); res.on('aborted', fail);
     res.on('end', () => {
@@ -141,13 +155,13 @@ export function createServices(config: ServiceConfig, transport: Transport = sen
       try { encoded = encodeSocial(route, params); base = config.get('social'); } catch { return unavailable(); }
       if (!encoded || !base) return unavailable();
       if (encoded.body !== undefined && !tokens.has(base.origin)) {
-        await socialRequest(base, { method: 'GET', path: '/api/workspace', loss: 'unavailable' });
+        await socialRequest(base, workspaceRead());
         if (!tokens.has(base.origin)) return unavailable();
       }
       const response = await socialRequest(base, encoded, tokens.get(base.origin));
       if ((route === 'saveContent' || route === 'addBrand') && response.ok && response.status === 403 && record(response.body) && response.body.error === 'Reload the workspace before saving') {
         tokens.delete(base.origin);
-        const refresh = await socialRequest(base, { method: 'GET', path: '/api/workspace', loss: 'unavailable' });
+        const refresh = await socialRequest(base, workspaceRead());
         if (!refresh.ok || refresh.status < 200 || refresh.status >= 300 || !tokens.has(base.origin)) return response;
         return socialRequest(base, encoded, tokens.get(base.origin));
       }

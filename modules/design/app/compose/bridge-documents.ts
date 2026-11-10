@@ -12,13 +12,39 @@ export type WireDocumentAligned = Assert<Equal<WireDocument, ErasedDocument>>;
 export type WireJsonAligned = Assert<Equal<JsonValue, Parameters<WorkspaceDocuments['putDocument']>[1]>>;
 
 export type DesignBridgeErrorKind = 'read-only' | 'invalid' | 'unavailable' | 'unknown';
+/** Closed machine reasons the desktop host may attach to a refusal; anything else is dropped. */
+export const DESIGN_BRIDGE_REASONS = ['disabled'] as const;
+export type DesignBridgeReason = (typeof DESIGN_BRIDGE_REASONS)[number];
 export class DesignBridgeError extends Error {
   readonly kind: DesignBridgeErrorKind;
-  constructor(kind: DesignBridgeErrorKind) {
-    super(`Design storage bridge: ${kind}`);
+  /** `disabled`: the host refused before any storage access because the capability is off in this build. */
+  readonly reason?: DesignBridgeReason;
+  constructor(kind: DesignBridgeErrorKind, reason?: DesignBridgeReason) {
+    super(reason === undefined ? `Design storage bridge: ${kind}` : `Design storage bridge: ${kind} (${reason})`);
     this.name = 'DesignBridgeError';
     this.kind = kind;
+    if (reason !== undefined) this.reason = reason;
   }
+}
+
+/**
+ * Validates one host result envelope. A refusal keeps its closed reason; a malformed envelope is
+ * `uncertain` (`unknown` for writes, `unavailable` for reads), never a success.
+ */
+export function bridgeResultValue(result: unknown, uncertain: 'unknown' | 'unavailable'): unknown {
+  if (!plain(result)) throw new DesignBridgeError(uncertain);
+  if (result.ok === true && exact(result, ['ok', 'value'])) return result.value;
+  if (result.ok === false && (exact(result, ['ok', 'kind']) || exact(result, ['ok', 'kind', 'reason']))) {
+    if (Object.hasOwn(result, 'reason')) {
+      // A reason only qualifies an `unavailable` refusal. `disabled` is reported before the host touches storage,
+      // so it is a definite no-effect. Any other pairing could hide a possible write, so it stays uncertain.
+      if (result.kind !== 'unavailable' || !(DESIGN_BRIDGE_REASONS as readonly unknown[]).includes(result.reason)) throw new DesignBridgeError(uncertain);
+      throw new DesignBridgeError('unavailable', result.reason as DesignBridgeReason);
+    }
+    if (result.kind === 'conflict') throw new DesignBridgeConflictError();
+    if (result.kind === 'read-only' || result.kind === 'invalid' || result.kind === 'unavailable' || result.kind === 'unknown') throw new DesignBridgeError(result.kind);
+  }
+  throw new DesignBridgeError(uncertain);
 }
 
 /** Matches F1's isStoreErrorCode without importing the Node store's error class. */
@@ -46,7 +72,7 @@ const exact = (value: Record<string, unknown>, keys: readonly string[]) => Refle
   && keys.every((key) => Object.hasOwn(value, key));
 const DIGEST = /^sha256:[0-9a-f]{64}$/u; // Exact isBlobDigest pattern from design-store/src/ids.ts.
 
-function brandWireDocument(wire: unknown, expected: { namespace: string; key: string }): Document {
+export function brandWireDocument(wire: unknown, expected: { namespace: string; key: string }): Document {
   if (!plain(wire) || !exact(wire, ['namespace', 'key', 'revision', 'valueDigest', 'updatedAt', 'value'])
     || wire.namespace !== expected.namespace || wire.key !== expected.key
     || typeof wire.revision !== 'number' || !Number.isSafeInteger(wire.revision) || wire.revision <= 0
@@ -57,6 +83,15 @@ function brandWireDocument(wire: unknown, expected: { namespace: string; key: st
   return wire as unknown as Document;
 }
 
+const bridgeTransports = new WeakMap<object, DesignServiceTransport>();
+/**
+ * The transport a bridge-backed workspace was built on, or null for any other documents. Imports needs routes the
+ * document seam does not expose (`import.commit`, `import.pick`), and must use the same transport as the rest of the workspace.
+ */
+export function bridgeTransportFor(documents: unknown): DesignServiceTransport | null {
+  return typeof documents === 'object' && documents !== null ? bridgeTransports.get(documents) ?? null : null;
+}
+
 export function createBridgeWorkspaceDocuments(transport: DesignServiceTransport): WorkspaceRecords {
   const namespace = 'workspace';
   async function call<R extends DesignServiceRoute>(route: R, params: DesignServiceParams[R]): Promise<unknown> {
@@ -64,13 +99,7 @@ export function createBridgeWorkspaceDocuments(transport: DesignServiceTransport
     let result: unknown;
     try { result = await transport.call(route, params); } catch { throw new DesignBridgeError(uncertain); }
     try {
-      if (!plain(result)) throw new DesignBridgeError(uncertain);
-      if (result.ok === true && exact(result, ['ok', 'value'])) return result.value;
-      if (result.ok === false && exact(result, ['ok', 'kind'])) {
-        if (result.kind === 'conflict') throw new DesignBridgeConflictError();
-        if (result.kind === 'read-only' || result.kind === 'invalid' || result.kind === 'unavailable' || result.kind === 'unknown') throw new DesignBridgeError(result.kind);
-      }
-      throw new DesignBridgeError(uncertain);
+      return bridgeResultValue(result, uncertain);
     } catch (error) {
       if (error instanceof DesignBridgeError || error instanceof DesignBridgeConflictError) throw error;
       throw new DesignBridgeError(uncertain);
@@ -79,7 +108,7 @@ export function createBridgeWorkspaceDocuments(transport: DesignServiceTransport
   const validate = (value: unknown, key: string, kind: 'unknown' | 'unavailable'): Document => {
     try { return brandWireDocument(value, { namespace, key }); } catch { throw new DesignBridgeError(kind); }
   };
-  return Object.freeze<WorkspaceRecords>({
+  const documents = Object.freeze<WorkspaceRecords>({
     kind: 'workspace', namespace,
     async putBlob(bytes, options) {
       if (!(bytes instanceof Uint8Array) || bytes.byteLength > BLOB_CAP) throw new DesignBridgeError('invalid');
@@ -137,6 +166,8 @@ export function createBridgeWorkspaceDocuments(transport: DesignServiceTransport
       } catch { throw new DesignBridgeError('unavailable'); }
     },
   });
+  bridgeTransports.set(documents, transport);
+  return documents;
 }
 
 const BLOB_CAP = 16 * 1024 * 1024;

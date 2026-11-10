@@ -1,3 +1,4 @@
+import { parseReference } from '@hq/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'node:http';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
@@ -179,6 +180,114 @@ describe('actual loopback HTTP transport', () => {
       expect(await result).toEqual(unavailable);
     } finally { vi.useRealTimers(); await srv.close(); }
   });
+  describe('per-route response caps', () => {
+    /** A JSON object of exactly `bytes` UTF-8 bytes, so a failure at the cap cannot be a parse failure. */
+    const jsonOf = (bytes: number, extra: Record<string, unknown> = {}) => {
+      const overhead = Buffer.byteLength(JSON.stringify({ ...extra, pad: '' }));
+      return JSON.stringify({ ...extra, pad: 'a'.repeat(bytes - overhead) });
+    };
+    const send = (url: URL, route: Parameters<typeof encodeSocial>[0], params: Record<string, unknown>) => {
+      const encoded = encodeSocial(route, params)!;
+      return sendHttp(new URL(encoded.path, url), { ...encoded, headers: {} });
+    };
+    const respondWith = (payload: string) => server((_req, res) => { res.setHeader('Content-Type', 'application/json'); res.end(payload); });
+
+    it('only the Social workspace snapshot has the larger cap, and the named limit is 16 MiB', () => {
+      expect(LIMITS.socialWorkspace).toBe(16_777_216);
+      expect(LIMITS.response).toBe(2_000_000);
+      expect(encodeSocial('workspace', {})!.maxResponse).toBe(LIMITS.socialWorkspace);
+      for (const [route, params] of [['sample', { tool: 'x-studio' }], ['run', { id: 'run123' }], ...socialMutations] as const) expect(encodeSocial(route, params)!.maxResponse).toBeUndefined();
+      for (const [route, params] of [['state', {}], ['item', { id: 'item123' }], ['create', original.params]] as const) expect(encodeWork(route, params)!.maxResponse).toBeUndefined();
+    });
+
+    it('Social workspace accepts a response just over the default cap, up to 16 MiB, and fails one byte beyond it', async () => {
+      for (const [bytes, expected] of [
+        [LIMITS.response + 1, 'ok'], [5_000_000, 'ok'], [LIMITS.socialWorkspace, 'ok'], [LIMITS.socialWorkspace + 1, 'unavailable'],
+      ] as const) {
+        const srv = await respondWith(jsonOf(bytes));
+        try {
+          const result = await send(srv.url, 'workspace', {});
+          if (expected === 'ok') expect(result).toMatchObject({ ok: true, status: 200, body: { pad: expect.any(String) } });
+          else expect(result).toEqual(unavailable);
+        } finally { await srv.close(); }
+      }
+    });
+
+    it('a large library reaches the renderer through the real transport with its token stripped', async () => {
+      const content = Array.from({ length: 50 }, (_, n) => ({ id: `draft${n}`, body: 'b'.repeat(50_000) }));
+      const payload = JSON.stringify({ brands: [], content, runs: [], tools: [], features: [], csrf: 'token-one' });
+      expect(Buffer.byteLength(payload)).toBeGreaterThan(LIMITS.response);
+      const srv = await respondWith(payload);
+      try {
+        const result = await createServices({ ...config, get: () => srv.url }).social('workspace', {});
+        expect(result).toMatchObject({ ok: true, status: 200, body: { content: expect.any(Array) } });
+        expect(JSON.stringify(result)).not.toContain('token-one');
+        expect((result as { body: { content: unknown[] } }).body.content).toHaveLength(50);
+      } finally { await srv.close(); }
+    });
+
+    it('the token read before a first save and the one after a stale-token refusal also accept a large workspace', async () => {
+      const big = JSON.stringify({ brands: [], content: [], csrf: 'good-token', pad: 'a'.repeat(3_000_000) });
+      const seen: string[] = [];
+      let saves = 0;
+      const srv = await server((req, res) => {
+        seen.push(`${req.method} ${req.url}`);
+        if (req.method === 'GET') { res.end(big); return; }
+        req.resume();
+        req.on('end', () => {
+          saves += 1;
+          // The first write is refused as a stale token, which makes main refresh the token once and send the same write again.
+          if (saves === 1) res.writeHead(403).end(JSON.stringify({ error: 'Reload the workspace before saving' }));
+          else res.end(JSON.stringify({ id: 'saved12' }));
+        });
+      });
+      try {
+        const result = await createServices({ ...config, get: () => srv.url }).social('addBrand', { name: 'Example' });
+        expect(result).toMatchObject({ ok: true, status: 200, body: { id: 'saved12' } });
+        expect(seen).toEqual(['GET /api/workspace', 'POST /api/brands', 'GET /api/workspace', 'POST /api/brands']);
+      } finally { await srv.close(); }
+    });
+
+    it.each([
+      ['sample', { tool: 'x-studio' }, 'unavailable'], ['run', { id: 'run123' }, 'unavailable'],
+      ['saveContent', socialMutations[0][1], 'unknown'], ['addBrand', socialMutations[1][1], 'unknown'], ['submitRun', socialMutations[2][1], 'unknown'],
+    ] as const)('Social %s keeps the 2,000,000-byte cap and fails with its loss kind %s', async (route, params, loss) => {
+      const atCap = await respondWith(jsonOf(LIMITS.response)), overCap = await respondWith(jsonOf(LIMITS.response + 1));
+      try {
+        if (route === 'saveContent' || route === 'addBrand' || route === 'submitRun') {
+          // Send the encoded write directly, without a token exchange, so only the response cap is under test.
+          const encoded = encodeSocial(route, params)!;
+          expect(await sendHttp(new URL(encoded.path, atCap.url), { ...encoded, headers: {} })).toMatchObject({ ok: true, status: 200 });
+          expect(await sendHttp(new URL(encoded.path, overCap.url), { ...encoded, headers: {} })).toEqual({ ok: false, kind: loss });
+        } else {
+          expect(await send(atCap.url, route, params)).toMatchObject({ ok: true, status: 200 });
+          expect(await send(overCap.url, route, params)).toEqual({ ok: false, kind: loss });
+        }
+      } finally { await atCap.close(); await overCap.close(); }
+    });
+
+    it('run and submitRun responses over 2,000,000 bytes still fail through createServices after a larger workspace read', async () => {
+      const srv = await server((req, res) => { res.setHeader('Content-Type', 'application/json'); if (req.url === '/api/workspace') res.end(jsonOf(LIMITS.response + 1, { csrf: 'tok-one' })); else { req.resume(); res.end(jsonOf(LIMITS.response + 1)); } });
+      try {
+        const svc = createServices({ ...config, get: () => srv.url });
+        expect(await svc.social('workspace', {})).toMatchObject({ ok: true, status: 200 });
+        expect(await svc.social('run', { id: 'run123' })).toEqual(unavailable);
+        expect(await svc.social('submitRun', { tool: 'x-studio', input: {}, is_example: true })).toEqual({ ok: false, kind: 'unknown' });
+      } finally { await srv.close(); }
+    });
+
+    it('Work keeps the 2,000,000-byte cap on reads and writes', async () => {
+      for (const [bytes, expected] of [[LIMITS.response, 'ok'], [LIMITS.response + 1, 'lost']] as const) {
+        const srv = await respondWith(jsonOf(bytes));
+        try {
+          const svc = createServices({ ...config, get: () => srv.url });
+          const read = await svc.work('state', {}), write = await svc.work('create', original.params);
+          if (expected === 'ok') { expect(read).toMatchObject({ ok: true, status: 200 }); expect(write).toMatchObject({ ok: true, status: 200 }); }
+          else { expect(read).toEqual(unavailable); expect(write).toEqual({ ok: false, kind: 'unknown' }); }
+        } finally { await srv.close(); }
+      }
+    });
+  });
   it('connection refused before send is unavailable even for writes', async () => {
     const srv = await server((_req, res) => res.end('{}')); const url = srv.url; await srv.close();
     expect(await sendHttp(url, { method: 'POST', path: '/', headers: {}, body: '{}', loss: 'unknown' })).toEqual(unavailable);
@@ -219,4 +328,121 @@ it('Social saveContent allows only a null or exact-shaped planning slot on the e
     expect(encodeSocial('saveContent', { ...draft, planning_slot })).toBeNull();
   }
   expect(JSON.parse(encodeSocial('saveContent', draft)!.body!)).not.toHaveProperty('planning_slot');
+});
+
+describe('Social draft reference transport', () => {
+  const draft = { title: 'Linked draft', body: '', brand_id: 'default', channel: 'X', planned_date: '', archived: 0 };
+  const reference = (entityId = 'view-alpha') => ({
+    version: 1, domain: 'design', projectId: 'project-alpha', kind: 'view', entityId, title: 'Saved view',
+    returnDestination: { domain: 'design', destination: 'projects/view-alpha' },
+    sourceRevision: 'revision-one', workspaceId: 'workspace-origin',
+  });
+
+  it('preserves legacy omission, explicit clearing, optimistic versions and planning slots', () => {
+    const legacy = encodeSocial('saveContent', draft)!;
+    expect(JSON.parse(legacy.body!)).toEqual(draft);
+    expect(legacy.body).not.toContain('"links"');
+    for (const links of [[], [reference()], Array.from({ length: 30 }, (_, n) => reference(`view-${n}`))]) {
+      const params = { ...draft, id: 'draft12', version: 0, planning_slot: null, links };
+      const encoded = encodeSocial('saveContent', params)!;
+      expect(encoded).toMatchObject({ method: 'POST', path: '/api/content', loss: 'unknown' });
+      expect(JSON.parse(encoded.body!)).toEqual(params);
+    }
+  });
+
+  it('uses the existing envelope contract for every domain and optional provenance', () => {
+    for (const domain of ['design', 'social', 'work', 'wiki']) {
+      const { sourceRevision: _revision, workspaceId: _workspace, ...minimal } = reference();
+      const link = { ...minimal, domain, returnDestination: { domain, destination: 'overview' } };
+      expect(JSON.parse(encodeSocial('saveContent', { ...draft, links: [link] })!.body!).links).toEqual([link]);
+    }
+  });
+
+  it('refuses invalid references and oversized lists before even fetching a CSRF token', async () => {
+    const transport = vi.fn<Transport>();
+    const svc = createServices(config, transport);
+    const ref = reference();
+    const invalid = [
+      null, undefined, {}, 'links', [null], Array(1), Array.from({ length: 31 }, (_, n) => reference(`view-${n}`)),
+      [{ ...ref, version: 2 }], [{ ...ref, domain: 'other' }], [{ ...ref, projectId: '' }],
+      [{ ...ref, entityId: '' }], [{ ...ref, kind: '' }], [{ ...ref, title: ' bad title ' }],
+      [{ ...ref, title: 'x'.repeat(301) }], [{ ...ref, workspaceId: '' }], [{ ...ref, sourceRevision: undefined }],
+      [{ ...ref, extra: true }], [{ ...ref, returnDestination: { domain: 'design', destination: 'https://example.test' } }],
+      [{ ...ref, returnDestination: { domain: 'design', destination: 'projects', token: 'forbidden' } }],
+    ];
+    for (const links of invalid) {
+      const params = { ...draft, links };
+      expect(encodeSocial('saveContent', params)).toBeNull();
+      expect(await svc.social('saveContent', params)).toEqual(unavailable);
+    }
+    expect(encodeSocial('saveContent', { ...draft, links: [], unexpected: true })).toBeNull();
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('keeps the isolated main-process guard aligned with the public reference parser', () => {
+    const ref = reference();
+    const candidates: unknown[] = [null, [], {}, ref, { ...ref, returnDestination: null }];
+    for (const key of Object.keys(ref)) {
+      const missing: Record<string, unknown> = { ...ref }; delete missing[key]; candidates.push(missing);
+      for (const value of [null, undefined, 0, 1, 2, false, '', ' ', 'x', ' x', 'x ', 'x\u0000', 'x\u007f', 'x'.repeat(160), 'x'.repeat(161), 'x'.repeat(300), 'x'.repeat(301)]) {
+        candidates.push({ ...ref, [key]: value });
+      }
+    }
+    for (const domain of ['design', 'social', 'work', 'wiki', 'other']) for (const destination of [
+      'overview', '/projects/view', '../view', 'x:y', '//remote', '\\\\remote', ' /view', 'view\u0001', 'x'.repeat(512), 'x'.repeat(513),
+    ]) candidates.push({ ...ref, returnDestination: { domain, destination } });
+    candidates.push({ ...ref, unexpected: true }, { ...ref, returnDestination: { ...ref.returnDestination, unexpected: true } });
+    for (const link of candidates) {
+      expect(encodeSocial('saveContent', { ...draft, links: [link] }) !== null).toBe(parseReference(link) !== null);
+    }
+  });
+
+  it('keeps canonical nested bytes independent of property insertion order', () => {
+    const ref = reference();
+    const reversed = Object.fromEntries(Object.entries(ref).reverse());
+    reversed.returnDestination = Object.fromEntries(Object.entries(ref.returnDestination).reverse());
+    const params = { ...draft, links: [ref] };
+    const reordered = Object.fromEntries(Object.entries({ ...draft, links: [reversed] }).reverse());
+    expect(encodeSocial('saveContent', reordered)!.body).toBe(encodeSocial('saveContent', params)!.body);
+  });
+
+  it('applies the existing UTF-8 body cap including reference bytes', () => {
+    const params = { ...draft, links: [reference()] };
+    const overhead = Buffer.byteLength(encodeSocial('saveContent', params)!.body!);
+    const atLimit = { ...params, body: 'a'.repeat(LIMITS.social - overhead) };
+    expect(Buffer.byteLength(encodeSocial('saveContent', atLimit)!.body!)).toBe(LIMITS.social);
+    expect(encodeSocial('saveContent', { ...atLimit, body: atLimit.body + 'é' })).toBeNull();
+  });
+
+  it('sends identical link/version bytes through the existing one-time token refresh', async () => {
+    const params = { ...draft, id: 'draft12', version: 3, links: [reference()] };
+    const rejection = ok({ error: 'Reload the workspace before saving' }, 403);
+    const saved = ok({ id: 'draft12', version: 4, links: params.links });
+    const transport = vi.fn<Transport>().mockResolvedValueOnce(ok({ csrf: 'first' }))
+      .mockResolvedValueOnce(rejection).mockResolvedValueOnce(ok({ csrf: 'second' })).mockResolvedValueOnce(saved);
+    expect(await createServices(config, transport).social('saveContent', params)).toEqual(saved);
+    expect(transport.mock.calls.map(([, call]) => [call.method, call.path])).toEqual([
+      ['GET', '/api/workspace'], ['POST', '/api/content'], ['GET', '/api/workspace'], ['POST', '/api/content'],
+    ]);
+    const first = transport.mock.calls[1]![1], retry = transport.mock.calls[3]![1];
+    expect(first.body).toBe(encodeSocial('saveContent', params)!.body);
+    expect(retry.body).toBe(first.body);
+    expect(first.headers['X-Workspace-Token']).toBe('first');
+    expect(retry.headers['X-Workspace-Token']).toBe('second');
+    expect(JSON.parse(first.body!)).not.toHaveProperty('csrf');
+  });
+
+  it('never retries an uncertain save or an optimistic-version conflict carrying links', async () => {
+    const params = { ...draft, id: 'draft12', version: 2, links: [reference()] };
+    const conflict = ok({ error: 'Draft changed', version: 3 }, 409);
+    for (const lost of [true, false]) {
+      const transport = vi.fn<Transport>().mockResolvedValueOnce(ok({ csrf: 'token' }));
+      if (lost) transport.mockRejectedValueOnce(new Error('response lost after POST'));
+      else transport.mockResolvedValueOnce(conflict);
+      expect(await createServices(config, transport).social('saveContent', params))
+        .toEqual(lost ? { ok: false, kind: 'unknown' } : conflict);
+      expect(transport).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(transport.mock.calls[1]![1].body!)).toEqual(params);
+    }
+  });
 });
