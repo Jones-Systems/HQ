@@ -83,7 +83,7 @@ export function createSourceHost(options: {
           if (selected.length > 999) throw Error('Registry metadata oversized');
           const files: Record<string, Uint8Array> = {}; let total = manifestBytes.length;
           for (const path of selected) { const part = await bytes(new URL(path, base)); total += part.length; if (total > 16 * 1024 * 1024) throw Error('Registry oversized'); files[path] = part; }
-          snapshot = await mappers.gallery({ manifestBytes, files, baseUrl: base.href, complete: selected.length === Object.keys(manifest.files).length }, context);
+          snapshot = await mappers.gallery({ manifestBytes, files, baseUrl: base.href, complete: selected.includes('data/gallery-index.json') && selected.every(path => files[path] !== undefined) }, context);
         } else {
           const identity = await options.jones.environment(source.hostId); if (identity.hostId !== source.hostId) throw Error('Host identity changed');
           const value = await options.jones.projects(source.hostId);
