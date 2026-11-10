@@ -72,7 +72,7 @@ const exact = (value: Record<string, unknown>, keys: readonly string[]) => Refle
   && keys.every((key) => Object.hasOwn(value, key));
 const DIGEST = /^sha256:[0-9a-f]{64}$/u; // Exact isBlobDigest pattern from design-store/src/ids.ts.
 
-function brandWireDocument(wire: unknown, expected: { namespace: string; key: string }): Document {
+export function brandWireDocument(wire: unknown, expected: { namespace: string; key: string }): Document {
   if (!plain(wire) || !exact(wire, ['namespace', 'key', 'revision', 'valueDigest', 'updatedAt', 'value'])
     || wire.namespace !== expected.namespace || wire.key !== expected.key
     || typeof wire.revision !== 'number' || !Number.isSafeInteger(wire.revision) || wire.revision <= 0
@@ -81,6 +81,15 @@ function brandWireDocument(wire: unknown, expected: { namespace: string; key: st
   canonicalize(wire.value); // Reject non-JSON, cycles, sparse arrays and non-plain objects.
   // The only brand assertion: metadata and JSON have been checked at the untrusted wire boundary.
   return wire as unknown as Document;
+}
+
+const bridgeTransports = new WeakMap<object, DesignServiceTransport>();
+/**
+ * The transport a bridge-backed workspace was built on, or null for any other documents. Imports needs routes the
+ * document seam does not expose (`import.commit`, `import.pick`), and must use the same transport as the rest of the workspace.
+ */
+export function bridgeTransportFor(documents: unknown): DesignServiceTransport | null {
+  return typeof documents === 'object' && documents !== null ? bridgeTransports.get(documents) ?? null : null;
 }
 
 export function createBridgeWorkspaceDocuments(transport: DesignServiceTransport): WorkspaceRecords {
@@ -99,7 +108,7 @@ export function createBridgeWorkspaceDocuments(transport: DesignServiceTransport
   const validate = (value: unknown, key: string, kind: 'unknown' | 'unavailable'): Document => {
     try { return brandWireDocument(value, { namespace, key }); } catch { throw new DesignBridgeError(kind); }
   };
-  return Object.freeze<WorkspaceRecords>({
+  const documents = Object.freeze<WorkspaceRecords>({
     kind: 'workspace', namespace,
     async putBlob(bytes, options) {
       if (!(bytes instanceof Uint8Array) || bytes.byteLength > BLOB_CAP) throw new DesignBridgeError('invalid');
@@ -157,6 +166,8 @@ export function createBridgeWorkspaceDocuments(transport: DesignServiceTransport
       } catch { throw new DesignBridgeError('unavailable'); }
     },
   });
+  bridgeTransports.set(documents, transport);
+  return documents;
 }
 
 const BLOB_CAP = 16 * 1024 * 1024;

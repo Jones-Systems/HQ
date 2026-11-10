@@ -9,7 +9,7 @@ export function openEnabledCandidateStorage(options: OpenDesignStorageOptions) {
   return openEnabledStorage(options, 'candidate');
 }
 
-/** Explicit source opt-in; the application callsite remains disabled by default. */
+/** Explicit source opt-in. The application opts in through `createProductionDesignHost`; a caller that does not stays disabled. */
 export function openEnabledDesignStorage(options: OpenDesignStorageOptions) {
   return openEnabledStorage(options, 'enabled');
 }
