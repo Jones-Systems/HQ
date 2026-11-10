@@ -159,7 +159,9 @@ export function ToastViewport({ label = 'Notifications', hotkey = 'F8', visible 
         ))}
       </ol>
       <div className="hq-sr-only" role="status" aria-live="polite" aria-atomic="true">{polite}</div>
-      <div className="hq-sr-only" role="alert" aria-live="assertive" aria-atomic="true">{assertive}</div>
+      {/* Stays mounted so assistive tech already watches it; it claims alert semantics only while it holds a
+          failure, so an empty region never reads as an alert. aria-live carries the assertive announcement. */}
+      <div className="hq-sr-only" role={assertive ? 'alert' : undefined} aria-live="assertive" aria-atomic="true">{assertive}</div>
     </section>
   );
 }
