@@ -110,6 +110,31 @@ test('in-tree service crash mid-test surfaces the child exit, not only a refused
   assert.throws(() => process.kill(servicePid, 0), { code: 'ESRCH' });
 });
 
+// HQR-A8 (#82) against the real Planner: `dates` is a replacement array, so `update --due` used to send one date and
+// delete the item's others. The flag is now refused before any send, and the documented path (the complete array from
+// `items get`, edited, in --fields-file) changes the deadline and keeps the target.
+test('in-tree Planner: items update --due keeps the item\'s other dates', { skip: optIn }, async () => {
+  await withService(async ({ origin, root }) => {
+    const cli = cliFor(origin);
+    const created = (await cli(['planner', 'items', 'create', '--title', 'Two dates', '--planned', '2030-01-05', '--due', '2030-01-09'])).data.item;
+    const kinds = item => item.dates.map(({ kind, value }) => [kind, value]);
+    assert.deepEqual(kinds(created), [['target', '2030-01-05'], ['deadline', '2030-01-09']]);
+    // A usage failure answers as `hq.usage`, which has no command output schema, so this call bypasses `cliFor`.
+    const failed = await exec(process.execPath, [resolve(here, 'driver.mjs'), instant, '--planner-url', origin, 'planner', 'items', 'update', created.id, '--revision', String(created.revision), '--due', '2030-01-20'], { timeout: 15000 })
+      .then(() => assert.fail('update --due must not succeed'), error => error);
+    assert.equal(failed.code, 2);
+    const refused = JSON.parse(failed.stdout);
+    assert.equal(refused.ok, false); assert.equal(refused.effect, 'none'); assert.equal(refused.error.code, 'usage_error');
+    const kept = (await cli(['planner', 'items', 'get', created.id])).data.item;
+    assert.equal(kept.revision, created.revision); assert.deepEqual(kept.dates, created.dates);
+    const fields = resolve(root, 'due.json');
+    await writeFile(fields, JSON.stringify({ dates: kept.dates.map(d => d.kind === 'deadline' ? { ...d, value: '2030-01-20' } : d) }));
+    const updated = (await cli(['planner', 'items', 'update', created.id, '--revision', String(kept.revision), '--fields-file', fields])).data.item;
+    assert.deepEqual(kinds(updated), [['target', '2030-01-05'], ['deadline', '2030-01-20']]);
+    assert.deepEqual(kinds((await cli(['planner', 'items', 'get', created.id])).data.item), kinds(updated));
+  });
+});
+
 // Cross-component regressions for the HQR-A3 server fixes: WHATWG URL ports, read-time date derivation and
 // lone-surrogate rejection. Each seeds a legacy row directly into the scratch store.
 const legacyRef = { id: 'legacyp1', kind: 'url', label: 'Typo port', url: 'http://example.com:abc/' };
