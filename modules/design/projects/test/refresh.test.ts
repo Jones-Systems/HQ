@@ -101,6 +101,27 @@ describe('Projects refresh after writes made elsewhere', () => {
     assert.equal(viewIds(controller)?.includes('outside-late'), true);
   });
 
+  test('a failed re-read followed by a successful one of unchanged content recovers without publishing', async () => {
+    const { faults, controller, seeded } = await setup();
+    const A = seeded.projectIds[0]!;
+    controller.openProject(A);
+    await settle();
+    faults.failing = true;
+    await controller.refreshContent(A);
+    const afterFailure = controller.getSnapshot();
+    assert.equal(afterFailure.active?.status, 'ready', 'the earlier content stays visible');
+    faults.failing = false;
+    let notified = 0;
+    const stop = controller.subscribe(() => { notified += 1; });
+    await controller.refreshContent(A);
+    stop();
+    // The stored revision did not change, so the snapshot is kept as it is. The failure marker is private to the
+    // controller and hidden behind cached content, so what this pins is that recovery is silent and stays ready.
+    assert.equal(notified, 0);
+    assert.equal(controller.getSnapshot(), afterFailure);
+    assert.equal(controller.getSnapshot().active?.status, 'ready');
+  });
+
   test('keeps the last good content visible when the refresh read fails, and recovers on the next one', async () => {
     const { faults, controller, seeded, addOutside } = await setup();
     const A = seeded.projectIds[0]!;

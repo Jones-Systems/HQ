@@ -236,6 +236,14 @@ Only the project that changed is affected. Another project's change reads nothin
 accessor returns the same promise, so React `use()` does not loop. A failed build is cached for the revision
 too, and the next change retries it (§10).
 
+Every bridged per-project accessor follows one failure rule: a healthy value is kept (the stateful ones for the
+whole session), and a failed build is kept only until the next change to that project or `workspace.retry`,
+then built again. This covers `projectsFor`, `canvasFor` and `componentsFor` as well as the table above, and
+the discovery connection they wait on (`discoveryEnv()`): one timeout from the catalog host at startup no
+longer leaves Projects or Canvas failed until HQ restarts. A build that listens for changes starts listening
+only after it has succeeded, so a rebuilt one never holds two subscriptions. A version whose annotations
+failed to load (`annotationsEnv().controllerFor`) is read again the next time it is opened.
+
 `read` is `{ revision?, selection? }`. `selection` picks one of several values (§8). `revision` is what the
 view is showing, from the hook below. A request for an older revision is answered with the newest value that
 already resolved, so a refresh in the background never puts a mounted view back into its loading state.
@@ -299,14 +307,39 @@ Every operation here except `captures.accept` is a read (`write: false`), so an 
 | `projects.load` | projects | `contentFor`, and anything that waits on it | `unavailable`; `read-only` (newer format, reason `unsupported-stored-schema`); `corrupt` (reason `invalid-content`) |
 | `flows.load` | flows | `flowsFor` | `unavailable` |
 | `compare.load` | compare | `compareFor` | `read-only`; `corrupt` (reason `wrong-project` or `invalid-comparison`); `unavailable` |
-| `taste.load` | taste | `tasteFor` | `invalid` (reason `project-id`) |
+| `taste.open` | taste | `tasteFor` | `invalid` (reason `project-id`). Action `open Taste` |
 | `annotations.open` | annotations | `annotationSessionFor` | `not-found` (reason `version`); `invalid` (reason `no-capture`). A content load failure keeps `projects.load` |
 | `captures.accept` | captures | live capture and pick events | `stale` (the page changed), `unavailable`, `conflict`, `read-only`, `invalid`, `unknown` |
 
 Each rejection is a `DesignOperationError` with the original as `cause`. A failed accessor stays failed for
-that revision, so a suspended view does not re-read in a loop. To retry after a `reload` or `retry` action,
-call `workspace.contentEvents.notify(project.id)`: it only marks the content as possibly changed, and the next
-read rebuilds.
+that revision, so a suspended view does not re-read in a loop.
+
+### Try again, Retry and Reload for reads
+
+`workspace.retry(project.id)` is the call behind them. A section boundary's **Try again** calls it and then
+resets the boundary, which renders the view again; without the call the view would get the same rejected
+promise back.
+
+- It marks the project's content as possibly changed (it notifies `contentEvents`), so the next read of
+  every failed accessor builds again, including a failed discovery. It reads nothing itself.
+- Healthy stateful values are kept: the Compare controller (with its unsaved layout), the Taste client, the
+  Projects controller, the canvas environment and discovery. Snapshot-style values (`contentFor`, `flowsFor`,
+  the annotation session) are read again, as for any change.
+- It is on both workspaces. The fake accepts it and changes nothing.
+- `workspace.contentEvents.notify(project.id)` has the same effect, and is what a writer calls.
+
+### Showing the typed failure in a section boundary
+
+A boundary fallback shows the failure with the call below, where `section` is the section the boundary wraps:
+
+```ts
+designFeedback(classifyDesignError(error, { section, operation: `${section}.load`, action: 'show this section', write: false }))
+```
+
+A `DesignOperationError` passes through with its own operation, so the toast meta line names what failed, for
+example `projects.load · unsupported-stored-schema` for content saved by a newer HQ, even in another
+section's boundary. Anything else, such as the missing desktop catalog connection, becomes an `unavailable`
+read of `<section>.load` with **Retry**. Kinds with nothing safe to repeat, such as `read-only`, show no action.
 
 `captures.accept` is not a promise the view awaits. `workspace.interactive.snapshot()` carries `failure`
 (a `DesignFailure`, or null) beside the `error` sentence, and clears both together. An `unknown` failure also

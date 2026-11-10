@@ -228,13 +228,14 @@ export class ProjectsController {
   #remember(content: ProjectContent, revision: string | null, seq: number): void {
     const existing = this.#content.get(content.projectId);
     if (existing && existing.seq > seq) return;
+    // A successful read clears an earlier failure marker, including when the content turns out to be unchanged.
+    this.#unavailable.delete(content.projectId);
     // The same stored revision is the same document: keep the snapshot and its identity, publish nothing.
     if (existing && existing.revision !== null && existing.revision === revision) {
       this.#content.set(content.projectId, { ...existing, seq });
       return;
     }
     this.#content.set(content.projectId, { content, revision, seq });
-    this.#unavailable.delete(content.projectId);
     const summaries = new Map(this.#snapshot.summaries);
     summaries.set(content.projectId, summarize(content));
     this.#set({ summaries });
