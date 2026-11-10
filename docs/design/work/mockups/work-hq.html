@@ -1,0 +1,1777 @@
+<!doctype html>
+<html lang="en" data-appearance="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HQ · Work — interactive design mockup</title>
+<!--
+  HQ Work design mockup. Fictional records only. Not production source.
+  The fixture adapter mirrors the Manual Planner HTTP semantics (revision guard,
+  server-owned order with neighbour anchors, request ids, undo) so interactions
+  can be inspected. It has no execution port: card capture, drag, reorder,
+  status/list changes and navigation make zero execution calls.
+  See ../hq-work-design.md and ../adapter-boundary.md.
+-->
+<style>
+/* ---------------------------------------------------------------- tokens */
+/* Shell roles (--hq-*) are provisional until the shared style lane publishes
+   its tokens; Work roles (--work-*) carry Manual Planner's palette forward. */
+:root {
+  --hq-base: #f4f3ee; --hq-raised: #ffffff; --hq-raised-2: #fbfaf7; --hq-sunken: #ebe9e2; --hq-rail: #e6e4dc;
+  --hq-border: #dedbd1; --hq-border-strong: #c9c4b7;
+  --hq-text: #1c1e22; --hq-text-2: #474b54; --hq-muted: #686d77;
+  --hq-accent: #3a50c9; --hq-accent-text: #ffffff; --hq-accent-soft: #e6e9fa; --hq-accent-line: #c3cbf1;
+  --hq-focus: #3a50c9; --hq-success: #1d7a45; --hq-warning: #8c540a; --hq-danger: #b8322a; --hq-danger-soft: #fbe9e7;
+  --hq-warning-soft: #fbf0dc;
+  --hq-shadow-sm: 0 1px 2px rgba(28,30,34,.07), 0 1px 1px rgba(28,30,34,.04);
+  --hq-shadow: 0 6px 18px rgba(28,30,34,.10), 0 1px 3px rgba(28,30,34,.06);
+  --hq-shadow-lg: 0 22px 48px rgba(28,30,34,.20), 0 4px 10px rgba(28,30,34,.08);
+
+  --work-need: #b0441a; --work-need-bg: #fbeae2; --work-want: #0b6b62; --work-want-bg: #dff2ee;
+  --work-exploring: #6a3fc4; --work-exploring-bg: #eee8fb;
+  --work-st-inbox: #7c828d; --work-st-considering: #b07d14; --work-st-next: #3366d0; --work-st-active: #1c8f4d;
+  --work-st-on_hold: #7f58c9; --work-st-done: #4f7f66; --work-st-dropped: #979ba3;
+  --work-dk-target: #0e6f8a; --work-dk-deadline: #8d520f; --work-dk-start: #4a760e; --work-dk-event: #7135d6;
+  --work-col: #ebe9e2; --work-card: #ffffff; --work-dock: #f9f8f4;
+
+  --radius: 10px; --radius-sm: 7px; --radius-lg: 14px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Liberation Sans", "Noto Sans", system-ui, sans-serif;
+  --mono: "SF Mono", Menlo, Consolas, "Liberation Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+:root[data-appearance="dark"] {
+  --hq-base: #111317; --hq-raised: #1b1e24; --hq-raised-2: #1f2229; --hq-sunken: #15171c; --hq-rail: #0c0d10;
+  --hq-border: #2a2f38; --hq-border-strong: #3b414c;
+  --hq-text: #e8eaef; --hq-text-2: #b8bec9; --hq-muted: #8f97a4;
+  --hq-accent: #8c9bff; --hq-accent-text: #0f1430; --hq-accent-soft: rgba(140,155,255,.15); --hq-accent-line: rgba(140,155,255,.42);
+  --hq-focus: #a3afff; --hq-success: #5fd08f; --hq-warning: #e3a84f; --hq-danger: #ff7a6e; --hq-danger-soft: rgba(255,122,110,.13);
+  --hq-warning-soft: rgba(227,168,79,.13);
+  --hq-shadow-sm: 0 1px 2px rgba(0,0,0,.45); --hq-shadow: 0 8px 22px rgba(0,0,0,.42); --hq-shadow-lg: 0 24px 52px rgba(0,0,0,.6);
+  --work-need: #ff9466; --work-need-bg: rgba(255,148,102,.14); --work-want: #4fd1c0; --work-want-bg: rgba(79,209,192,.13);
+  --work-exploring: #b99bff; --work-exploring-bg: rgba(185,155,255,.15);
+  --work-st-inbox: #8f96a3; --work-st-considering: #e0b04a; --work-st-next: #6e9bff; --work-st-active: #4cc985;
+  --work-st-on_hold: #ad8bf0; --work-st-done: #7fb69a; --work-st-dropped: #6f7580;
+  --work-dk-target: #4fc3dc; --work-dk-deadline: #e3a84f; --work-dk-start: #9bd35a; --work-dk-event: #b99bff;
+  --work-col: #16191e; --work-card: #20242b; --work-dock: #181b21;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-appearance="system"] {
+    --hq-base: #111317; --hq-raised: #1b1e24; --hq-raised-2: #1f2229; --hq-sunken: #15171c; --hq-rail: #0c0d10;
+    --hq-border: #2a2f38; --hq-border-strong: #3b414c;
+    --hq-text: #e8eaef; --hq-text-2: #b8bec9; --hq-muted: #8f97a4;
+    --hq-accent: #8c9bff; --hq-accent-text: #0f1430; --hq-accent-soft: rgba(140,155,255,.15); --hq-accent-line: rgba(140,155,255,.42);
+    --hq-focus: #a3afff; --hq-success: #5fd08f; --hq-warning: #e3a84f; --hq-danger: #ff7a6e; --hq-danger-soft: rgba(255,122,110,.13);
+    --hq-warning-soft: rgba(227,168,79,.13);
+    --hq-shadow-sm: 0 1px 2px rgba(0,0,0,.45); --hq-shadow: 0 8px 22px rgba(0,0,0,.42); --hq-shadow-lg: 0 24px 52px rgba(0,0,0,.6);
+    --work-need: #ff9466; --work-need-bg: rgba(255,148,102,.14); --work-want: #4fd1c0; --work-want-bg: rgba(79,209,192,.13);
+    --work-exploring: #b99bff; --work-exploring-bg: rgba(185,155,255,.15);
+    --work-st-inbox: #8f96a3; --work-st-considering: #e0b04a; --work-st-next: #6e9bff; --work-st-active: #4cc985;
+    --work-st-on_hold: #ad8bf0; --work-st-done: #7fb69a; --work-st-dropped: #6f7580;
+    --work-dk-target: #4fc3dc; --work-dk-deadline: #e3a84f; --work-dk-start: #9bd35a; --work-dk-event: #b99bff;
+    --work-col: #16191e; --work-card: #20242b; --work-dock: #181b21;
+    color-scheme: dark;
+  }
+}
+
+/* ---------------------------------------------------------------- base */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font: 14px/1.4 var(--font); color: var(--hq-text); background: var(--hq-base); -webkit-font-smoothing: antialiased; overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+svg.ic { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--hq-border-strong); border-bottom-width: 2px; border-radius: 4px; background: var(--hq-raised); color: var(--hq-text-2); }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--radius-sm); border: 1px solid var(--hq-border); background: var(--hq-raised); color: var(--hq-text); font-weight: 500; white-space: nowrap; }
+.btn:hover { border-color: var(--hq-border-strong); }
+.btn-primary { background: var(--hq-accent); border-color: var(--hq-accent); color: var(--hq-accent-text); }
+.btn-primary:hover { filter: brightness(1.06); border-color: var(--hq-accent); }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--hq-text-2); }
+.btn-ghost:hover { background: var(--hq-sunken); border-color: transparent; color: var(--hq-text); }
+.btn-icon { width: 32px; padding: 0; justify-content: center; }
+.btn-sm { height: 26px; padding: 0 9px; font-size: 12.5px; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+.input, .select, .textarea { border: 1px solid var(--hq-border); background: var(--hq-raised); border-radius: var(--radius-sm); padding: 6px 9px; min-height: 32px; width: 100%; }
+.input:focus, .select:focus, .textarea:focus { outline: none; border-color: var(--hq-accent); box-shadow: 0 0 0 3px var(--hq-accent-soft); }
+.textarea { resize: vertical; line-height: 1.5; }
+
+/* ---------------------------------------------------------------- shell */
+.hq { display: grid; grid-template-columns: 60px 216px minmax(0, 1fr); height: 100vh; }
+.rail { background: var(--hq-rail); border-right: 1px solid var(--hq-border); display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 4px; }
+.rail-mark { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font: 700 13px var(--font); letter-spacing: .02em; background: var(--hq-text); color: var(--hq-base); margin-bottom: 10px; }
+.rail-item { width: 48px; padding: 6px 0 5px; border: 0; background: none; border-radius: 10px; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--hq-muted); font-size: 10.5px; font-weight: 600; position: relative; }
+.rail-item svg.ic { width: 20px; height: 20px; }
+.rail-item:hover { color: var(--hq-text); background: var(--hq-sunken); }
+.rail-item[aria-current="page"] { color: var(--hq-text); background: var(--hq-raised); box-shadow: var(--hq-shadow-sm); }
+.rail-item[aria-current="page"]::before { content: ""; position: absolute; left: -6px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--hq-accent); }
+.rail-spacer { flex: 1; }
+
+.work-nav { background: var(--hq-raised-2); border-right: 1px solid var(--hq-border); display: flex; flex-direction: column; min-height: 0; }
+.work-nav-head { padding: 16px 16px 6px; }
+.work-nav-head h1 { font-size: 15px; margin: 0; letter-spacing: -.01em; }
+.work-nav-head p { margin: 2px 0 0; color: var(--hq-muted); font-size: 12px; }
+.nav-group { padding: 8px 8px 4px; }
+.nav-label { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--hq-muted); padding: 6px 8px 4px; display: flex; align-items: center; gap: 6px; }
+.nav-item { white-space: nowrap; display: flex; align-items: center; gap: 9px; width: 100%; height: 32px; padding: 0 8px; border-radius: var(--radius-sm); border: 0; background: none; color: var(--hq-text-2); text-align: left; }
+.nav-item:hover { background: var(--hq-sunken); color: var(--hq-text); }
+.nav-item[aria-current="page"] { background: var(--hq-accent-soft); color: var(--hq-text); font-weight: 600; }
+.nav-item[aria-current="page"] svg.ic { color: var(--hq-accent); }
+.nav-item .key { margin-left: auto; font: 11px var(--mono); color: var(--hq-muted); }
+.nav-item .count { margin-left: auto; font-size: 12px; color: var(--hq-muted); }
+.tag-proposed { font-size: 9.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; border: 1px dashed var(--hq-border-strong); color: var(--hq-muted); }
+.nav-foot { margin-top: auto; padding: 10px 12px 12px; border-top: 1px solid var(--hq-border); display: grid; gap: 8px; }
+.conn { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--hq-text-2); }
+.conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hq-success); margin-top: 5px; flex: none; }
+.conn.is-off .conn-dot { background: var(--hq-danger); }
+.conn small { display: block; color: var(--hq-muted); font-size: 11.5px; }
+
+.work-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.topbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--hq-border); background: var(--hq-raised-2); min-height: 56px; }
+.ctx { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ctx-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--hq-border); background: var(--hq-raised); font-size: 12.5px; font-weight: 550; white-space: nowrap; }
+.ctx-chip .dot { width: 8px; height: 8px; border-radius: 3px; background: #c66b3d; }
+.ctx-note { font-size: 12px; color: var(--hq-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-spacer { flex: 1; }
+.search { position: relative; width: 240px; }
+.search input { padding-left: 30px; height: 32px; }
+.search svg { position: absolute; left: 9px; top: 8px; color: var(--hq-muted); }
+.view-select { display: none; width: auto; }
+
+.banner { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; border-bottom: 1px solid var(--hq-border); }
+.banner[hidden] { display: none; }
+.banner.is-off { background: var(--hq-danger-soft); color: var(--hq-text); }
+.banner.is-info { background: var(--hq-warning-soft); }
+.banner strong { font-weight: 650; }
+
+#view { flex: 1; min-height: 0; overflow: auto; position: relative; }
+
+/* ---------------------------------------------------------------- board */
+.board-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px 10px; flex-wrap: wrap; }
+.board-head h2 { margin: 0; font-size: 17px; letter-spacing: -.01em; }
+.seg { display: inline-flex; max-width: 100%; overflow-x: auto; padding: 2px; border-radius: 9px; background: var(--hq-sunken); border: 1px solid var(--hq-border); }
+.seg button { flex: none; white-space: nowrap; border: 0; background: none; height: 28px; padding: 0 11px; border-radius: 7px; color: var(--hq-text-2); font-size: 12.5px; font-weight: 550; display: inline-flex; gap: 6px; align-items: center; }
+.seg button[aria-pressed="true"] { background: var(--hq-raised); color: var(--hq-text); box-shadow: var(--hq-shadow-sm); }
+.board-hint { font-size: 12px; color: var(--hq-muted); margin-left: auto; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+.board { display: flex; align-items: flex-start; gap: 12px; padding: 0 18px 24px; min-height: calc(100% - 60px); }
+.col { width: 276px; flex: none; background: var(--work-col); border-radius: var(--radius-lg); display: flex; flex-direction: column; max-height: calc(100vh - 182px); border: 1px solid transparent; }
+.col.col-dock { background: var(--work-dock); border-color: var(--hq-border); box-shadow: var(--hq-shadow-sm); }
+.col.drop-active { border-color: var(--hq-accent-line); box-shadow: 0 0 0 3px var(--hq-accent-soft); }
+.col-head { display: flex; align-items: center; gap: 6px; padding: 10px 8px 6px 12px; }
+.col-name { font-weight: 650; font-size: 13.5px; display: flex; align-items: center; gap: 7px; }
+.st-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--st, var(--work-st-inbox)); flex: none; }
+.col-count { font-size: 12px; color: var(--hq-muted); font-variant-numeric: tabular-nums; }
+.col-head .btn-icon { width: 26px; height: 26px; margin-left: auto; }
+.col-head .btn-icon + .btn-icon { margin-left: 0; }
+.col-sub { font-size: 11.5px; color: var(--hq-muted); padding: 0 12px 6px; margin-top: -3px; }
+.col-list { padding: 2px 8px 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 7px; min-height: 40px; }
+.col-empty { border: 1.5px dashed var(--hq-border-strong); border-radius: var(--radius); padding: 14px 10px; text-align: center; color: var(--hq-muted); font-size: 12.5px; }
+.col.is-collapsed { width: 46px; cursor: default; }
+.col.is-collapsed .col-head { flex-direction: column; padding: 10px 0; gap: 10px; }
+.col.is-collapsed .col-head .btn-icon { margin: 0; }
+.col.is-collapsed .col-name { writing-mode: vertical-rl; transform: rotate(180deg); }
+.col-add { margin: 0 8px 6px; display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 9px; border-radius: var(--radius-sm); border: 0; background: none; color: var(--hq-text-2); font-weight: 550; font-size: 13px; }
+.col-add:hover { background: var(--hq-sunken); color: var(--hq-text); }
+.col.col-dock .col-add:hover, .col .col-add:hover { background: color-mix(in srgb, var(--hq-text) 7%, transparent); }
+.composer { margin: 0 8px 8px; display: grid; gap: 6px; }
+.composer textarea { min-height: 54px; resize: none; background: var(--work-card); border: 1px solid var(--hq-accent-line); box-shadow: var(--hq-shadow-sm); }
+.composer-row { display: flex; gap: 6px; align-items: center; }
+.composer-row small { margin-left: auto; color: var(--hq-muted); font-size: 11.5px; }
+
+.card { position: relative; background: var(--work-card); border-radius: var(--radius); padding: 9px 10px 8px 13px; box-shadow: var(--hq-shadow-sm); border: 1px solid var(--hq-border); cursor: grab; user-select: none; touch-action: none; }
+.card::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--why, transparent); }
+.card.why-need { --why: var(--work-need); }
+.card.why-want { --why: var(--work-want); }
+.card.why-exploring { --why: var(--work-exploring); }
+.card:hover { border-color: var(--hq-border-strong); }
+.card:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 1px; }
+.card.is-selected { border-color: var(--hq-accent); box-shadow: 0 0 0 1px var(--hq-accent), var(--hq-shadow-sm); }
+.card.is-pending { opacity: .78; }
+.card.is-closed .card-title { color: var(--hq-text-2); }
+.card-top { display: flex; gap: 7px; align-items: flex-start; }
+.card-top .kind { color: var(--hq-muted); margin-top: 2px; }
+.card-title { font-size: 13.5px; font-weight: 550; line-height: 1.35; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.card-menu { border: 0; background: none; color: var(--hq-muted); width: 24px; height: 22px; border-radius: 6px; margin: -2px -4px 0 0; display: grid; place-items: center; opacity: 0; }
+.card:hover .card-menu, .card:focus-within .card-menu, .card-menu:focus-visible { opacity: 1; }
+.card-menu:hover { background: var(--hq-sunken); color: var(--hq-text); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; height: 21px; padding: 0 7px; border-radius: 999px; font-size: 11.5px; font-weight: 550; background: var(--hq-sunken); color: var(--hq-text-2); white-space: nowrap; }
+.chip svg.ic { width: 12px; height: 12px; }
+.pill-need { background: var(--work-need-bg); color: var(--work-need); }
+.pill-want { background: var(--work-want-bg); color: var(--work-want); }
+.pill-exploring { background: var(--work-exploring-bg); color: var(--work-exploring); }
+.chip-date.dk-target { color: var(--work-dk-target); }
+.chip-date.dk-deadline { color: var(--work-dk-deadline); }
+.chip-date.dk-start { color: var(--work-dk-start); }
+.chip-date.dk-event { color: var(--work-dk-event); }
+.chip-date.is-coarse { background: transparent; border: 1px dashed currentColor; }
+.chip-date.ds-overdue { background: var(--hq-danger-soft); color: var(--hq-danger); }
+.chip-status { background: transparent; border: 1px solid var(--hq-border); color: var(--hq-text-2); }
+.chip-prio { color: var(--hq-danger); background: transparent; border: 1px solid color-mix(in srgb, var(--hq-danger) 40%, transparent); }
+.chip-area { background: transparent; color: var(--hq-muted); padding: 0 2px; }
+.badges { display: flex; gap: 10px; margin-top: 7px; color: var(--hq-muted); font-size: 11.5px; align-items: center; }
+.badges span { display: inline-flex; align-items: center; gap: 3px; }
+.badges svg.ic { width: 13px; height: 13px; }
+.badge-link { color: var(--hq-accent); }
+.saving { position: absolute; right: 8px; bottom: 7px; font-size: 11px; font-weight: 600; color: var(--hq-accent); background: var(--hq-accent-soft); padding: 1px 6px; border-radius: 999px; }
+.saving.is-unconfirmed { color: var(--hq-warning); background: var(--hq-warning-soft); }
+
+.placeholder { border: 2px dashed var(--hq-accent-line); background: var(--hq-accent-soft); border-radius: var(--radius); flex: none; }
+.drag-hidden { display: none !important; }
+.ghost { position: fixed; z-index: 1000; pointer-events: none; transform: rotate(2.5deg); box-shadow: var(--hq-shadow-lg); cursor: grabbing; opacity: .97; }
+.ghost-badge { position: absolute; left: 10px; top: -12px; background: var(--hq-text); color: var(--hq-base); font-size: 11.5px; font-weight: 650; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+body.dragging, body.dragging * { cursor: grabbing !important; }
+
+.status-tabs { display: none; gap: 6px; padding: 0 14px 10px; overflow-x: auto; }
+.status-tab { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--hq-border); background: var(--hq-raised); font-size: 12.5px; font-weight: 550; white-space: nowrap; color: var(--hq-text-2); }
+.status-tab[aria-selected="true"] { border-color: var(--hq-accent); color: var(--hq-text); background: var(--hq-accent-soft); }
+.status-tab.drop-active { box-shadow: 0 0 0 3px var(--hq-accent-soft); border-color: var(--hq-accent); }
+.status-tab .n { color: var(--hq-muted); font-size: 11.5px; }
+
+.proposal { margin: 0 18px 12px; padding: 10px 12px; border: 1px dashed var(--hq-border-strong); border-radius: var(--radius); font-size: 12.5px; color: var(--hq-text-2); display: flex; gap: 10px; align-items: flex-start; background: var(--hq-raised-2); }
+.proposal svg { color: var(--hq-warning); margin-top: 1px; }
+.proposal.is-info { border-style: solid; }
+.proposal.is-info svg { color: var(--hq-accent); }
+.add-list { width: 276px; flex: none; height: 44px; border-radius: var(--radius-lg); border: 1.5px dashed var(--hq-border-strong); background: none; color: var(--hq-text-2); font-weight: 550; display: flex; align-items: center; gap: 8px; padding: 0 14px; }
+
+/* ---------------------------------------------------------------- detail */
+.detail { position: fixed; top: 0; right: 0; bottom: 0; width: 452px; max-width: 100vw; background: var(--hq-raised); border-left: 1px solid var(--hq-border); box-shadow: var(--hq-shadow-lg); display: flex; flex-direction: column; z-index: 50; }
+.detail[hidden] { display: none; }
+.detail-head { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--hq-border); }
+.detail-head .crumb { font-size: 12px; color: var(--hq-muted); flex: 1; display: flex; gap: 6px; align-items: center; }
+.save-state { font-size: 12px; color: var(--hq-muted); }
+.save-state.is-saving { color: var(--hq-accent); }
+.save-state.is-error { color: var(--hq-danger); }
+.detail-body { overflow-y: auto; padding: 14px 18px 40px; display: flex; flex-direction: column; gap: 18px; flex: 1; min-height: 0; }
+.detail-body > * { flex: none; }
+.detail-title { font-size: 19px; font-weight: 650; line-height: 1.3; letter-spacing: -.01em; border: 1px solid transparent; border-radius: var(--radius-sm); padding: 4px 6px; margin: -4px -6px; resize: none; background: none; width: calc(100% + 12px); }
+.detail-title:hover { border-color: var(--hq-border); }
+.detail-title:focus { outline: none; border-color: var(--hq-accent); box-shadow: 0 0 0 3px var(--hq-accent-soft); }
+.status-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+.status-pill { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--hq-border); background: var(--hq-raised); font-size: 12.5px; font-weight: 550; color: var(--hq-text-2); }
+.status-pill[aria-checked="true"] { border-color: var(--st); background: color-mix(in srgb, var(--st) 14%, transparent); color: var(--hq-text); }
+.sec h3 { margin: 0 0 8px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--hq-muted); font-weight: 650; display: flex; align-items: center; gap: 8px; }
+.sec h3 .btn { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.fields { display: grid; grid-template-columns: 92px 1fr; gap: 6px 10px; align-items: center; font-size: 13px; }
+.fields label { color: var(--hq-text-2); }
+.fields .select, .fields .input { min-height: 30px; padding: 4px 8px; }
+.date-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--hq-border); font-size: 13px; }
+.date-row:last-child { border-bottom: 0; }
+.date-row .when { font-weight: 550; }
+.date-row .meta { color: var(--hq-muted); font-size: 12px; }
+.date-row .btn { margin-left: auto; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.step { display: flex; align-items: center; gap: 8px; padding: 4px 4px; border-radius: 6px; }
+.step:hover { background: var(--hq-sunken); }
+.step input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--hq-accent); }
+.step .txt { flex: 1; font-size: 13.5px; }
+.step.is-done .txt { color: var(--hq-muted); text-decoration: line-through; }
+.step .grip { color: var(--hq-muted); cursor: grab; opacity: .6; }
+.progress { height: 5px; border-radius: 5px; background: var(--hq-sunken); overflow: hidden; margin-bottom: 8px; }
+.progress span { display: block; height: 100%; background: var(--hq-success); border-radius: 5px; }
+.refs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ref { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; padding: 9px 10px; border: 1px solid var(--hq-border); border-radius: var(--radius); font-size: 13px; }
+.ref .k { font-size: 11px; font-weight: 650; letter-spacing: .03em; color: var(--hq-muted); text-transform: uppercase; }
+.ref a { color: var(--hq-accent); text-decoration: none; font-weight: 550; }
+.ref a:hover { text-decoration: underline; }
+.ref .sub { grid-column: 2 / 4; font-size: 12px; color: var(--hq-muted); }
+.ref.is-linked { border-style: solid; border-color: var(--hq-accent-line); background: color-mix(in srgb, var(--hq-accent-soft) 45%, transparent); }
+.ref.is-run { border-color: color-mix(in srgb, var(--hq-warning) 45%, transparent); }
+.ref.is-missing { border-style: dashed; }
+.obs { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--hq-warning-soft); color: var(--hq-warning); }
+.captured { margin-top: 4px; grid-column: 1 / 4; display: flex; gap: 10px; align-items: center; }
+.captured svg { width: 132px; height: 82px; border-radius: 6px; border: 1px solid var(--hq-border); flex: none; }
+.captured small { color: var(--hq-muted); font-size: 11.5px; }
+.conflict { border: 1px solid color-mix(in srgb, var(--hq-danger) 45%, transparent); background: var(--hq-danger-soft); border-radius: var(--radius); padding: 10px 12px; display: grid; gap: 8px; font-size: 13px; }
+.conflict-actions { display: flex; gap: 8px; }
+.history { font-size: 12.5px; color: var(--hq-text-2); display: grid; gap: 4px; }
+
+/* ---------------------------------------------------------------- overlays */
+.scrim { position: fixed; inset: 0; background: rgba(10,12,16,.38); z-index: 80; display: grid; place-items: start center; padding-top: 12vh; }
+.scrim[hidden] { display: none; }
+.modal { width: min(560px, calc(100vw - 32px)); background: var(--hq-raised); border: 1px solid var(--hq-border); border-radius: var(--radius-lg); box-shadow: var(--hq-shadow-lg); padding: 18px; display: grid; gap: 14px; }
+.modal h2 { margin: 0; font-size: 16px; }
+.modal .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.modal label { display: grid; gap: 5px; font-size: 12.5px; color: var(--hq-text-2); font-weight: 550; }
+.modal-foot { display: flex; gap: 8px; align-items: center; }
+.modal-foot small { color: var(--hq-muted); font-size: 12px; margin-right: auto; }
+.suggest { display: flex; gap: 8px; align-items: center; font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--hq-accent-soft); color: var(--hq-text); }
+.suggest[hidden] { display: none; }
+.suggest .btn { margin-left: auto; }
+.menu { position: fixed; z-index: 90; min-width: 220px; background: var(--hq-raised); border: 1px solid var(--hq-border); border-radius: var(--radius); box-shadow: var(--hq-shadow-lg); padding: 5px; display: grid; }
+.menu[hidden] { display: none; }
+.menu-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--hq-muted); padding: 6px 9px 3px; font-weight: 650; }
+.menu button { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 9px; border: 0; background: none; border-radius: 6px; text-align: left; font-size: 13px; }
+.menu button:hover, .menu button:focus-visible { background: var(--hq-accent-soft); outline: none; }
+.menu button[disabled] { opacity: .5; cursor: default; background: none; }
+.menu button .hint { margin-left: auto; font: 11px var(--mono); color: var(--hq-muted); }
+.menu hr { border: 0; border-top: 1px solid var(--hq-border); margin: 4px 2px; }
+.toasts { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); display: grid; gap: 8px; z-index: 95; width: min(460px, calc(100vw - 24px)); }
+.toast { display: flex; align-items: center; gap: 10px; background: var(--hq-text); color: var(--hq-base); border-radius: var(--radius); padding: 10px 10px 10px 14px; box-shadow: var(--hq-shadow-lg); font-size: 13px; }
+.toast .detail-text { display: block; opacity: .75; font-size: 12px; }
+.toast .btn { margin-left: auto; background: transparent; color: inherit; border-color: color-mix(in srgb, var(--hq-base) 35%, transparent); height: 28px; }
+.toast.is-error { background: var(--hq-danger); color: #fff; }
+
+/* ---------------------------------------------------------------- other views */
+.page { padding: 18px 22px 40px; max-width: 1180px; }
+.page h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: -.01em; }
+.page .lede { margin: 0 0 18px; color: var(--hq-text-2); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; align-items: start; }
+.panel { background: var(--hq-raised); border: 1px solid var(--hq-border); border-radius: var(--radius-lg); padding: 14px 16px; }
+.panel h3 { margin: 0 0 10px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.panel h3 .n { color: var(--hq-muted); font-weight: 500; }
+.rowlink { display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-radius: 7px; border: 0; background: none; width: 100%; text-align: left; font-size: 13.5px; }
+.rowlink:hover { background: var(--hq-sunken); }
+.rowlink .meta { margin-left: auto; padding-left: 8px; color: var(--hq-muted); font-size: 12px; white-space: nowrap; max-width: 45%; overflow: hidden; text-overflow: ellipsis; flex: none; }
+.stat-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.stat { display: inline-flex; gap: 6px; align-items: center; height: 30px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--hq-border); background: var(--hq-raised); font-size: 12.5px; }
+.stat b { font-variant-numeric: tabular-nums; }
+table.list { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--hq-raised); border: 1px solid var(--hq-border); border-radius: var(--radius-lg); overflow: hidden; }
+table.list th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--hq-muted); font-weight: 650; padding: 9px 10px; border-bottom: 1px solid var(--hq-border); background: var(--hq-raised-2); }
+table.list td { padding: 7px 10px; border-bottom: 1px solid var(--hq-border); vertical-align: middle; }
+table.list tr:last-child td { border-bottom: 0; }
+table.list .select { min-height: 28px; padding: 2px 6px; width: auto; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--hq-border); border-radius: var(--radius-lg); overflow: hidden; background: var(--hq-border); gap: 1px; }
+.cal-h { background: var(--hq-raised-2); font-size: 11.5px; font-weight: 650; color: var(--hq-muted); padding: 6px 8px; text-transform: uppercase; letter-spacing: .05em; }
+.cal-d { background: var(--hq-raised); min-height: 92px; padding: 5px 6px; display: flex; flex-direction: column; gap: 3px; }
+.cal-d.out { background: var(--hq-raised-2); color: var(--hq-muted); }
+.cal-d .n { font-size: 12px; font-weight: 600; }
+.cal-d.today .n { background: var(--hq-accent); color: var(--hq-accent-text); border-radius: 999px; width: 22px; height: 22px; display: grid; place-items: center; }
+.cal-chip { display: block; width: 100%; text-align: left; border: 0; font-family: inherit; cursor: pointer; font-size: 11.5px; padding: 2px 6px; border-radius: 5px; background: var(--hq-sunken); border-left: 3px solid currentColor; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--hq-text); }
+.cal-chip.dk-target { border-left-color: var(--work-dk-target); }
+.cal-chip.dk-deadline { border-left-color: var(--work-dk-deadline); }
+.cal-chip.dk-event { border-left-color: var(--work-dk-event); }
+.cal-chip.dk-start { border-left-color: var(--work-dk-start); }
+.cal-chip.overdue { background: var(--hq-danger-soft); color: var(--hq-danger); }
+.cal-week { grid-column: 1 / -1; background: var(--hq-raised); padding: 3px 8px; font-size: 11.5px; border-top: 1px dashed var(--hq-border-strong); color: var(--hq-text-2); }
+.band { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.band .chip { border: 1px dashed var(--hq-border-strong); background: var(--hq-raised); height: 26px; }
+.cal-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; }
+.tl { border: 1px solid var(--hq-border); border-radius: var(--radius-lg); overflow: hidden; background: var(--hq-raised); }
+.tl-head, .tl-lane { display: grid; grid-template-columns: 120px 1fr; }
+.tl-head > div:first-child, .tl-lane > div:first-child { border-right: 1px solid var(--hq-border); padding: 8px 10px; font-size: 12.5px; font-weight: 650; }
+.tl-q { display: grid; grid-template-columns: repeat(8, 1fr); font-size: 11.5px; color: var(--hq-muted); }
+.tl-q div { padding: 8px; border-left: 1px solid var(--hq-border); }
+.tl-lane { border-top: 1px solid var(--hq-border); }
+.tl-rows { position: relative; padding: 6px 0; background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(12.5% - 1px), var(--hq-border) calc(12.5% - 1px), var(--hq-border) 12.5%); }
+.tl-row { position: relative; height: 26px; }
+.tl-row .lab { position: absolute; font-size: 11.5px; top: 5px; white-space: nowrap; color: var(--hq-text); background: var(--hq-raised); border-radius: 4px; }
+.tl-mark { position: absolute; top: 7px; width: 10px; height: 10px; border-radius: 50%; margin-left: -5px; background: var(--work-dk-target); }
+.tl-mark.dk-deadline { background: var(--work-dk-deadline); transform: rotate(45deg); border-radius: 2px; }
+.tl-mark.dk-event { background: var(--work-dk-event); }
+.tl-band { position: absolute; top: 5px; height: 14px; border: 1.5px dashed var(--work-dk-target); border-radius: 4px; background: color-mix(in srgb, var(--work-dk-target) 10%, transparent); }
+.tl-bar { position: absolute; top: 8px; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--work-dk-start) 55%, transparent); }
+.tl-today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--hq-accent); }
+.review-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--hq-border); border-radius: var(--radius); background: var(--hq-raised); }
+.review-card .why { font-size: 12.5px; color: var(--hq-text-2); }
+.review-card .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ---------------------------------------------------------------- mockup instrumentation */
+.mock { position: fixed; right: 14px; bottom: 14px; z-index: 70; width: 300px; background: var(--hq-raised); border: 1.5px dashed var(--hq-border-strong); border-radius: var(--radius); box-shadow: var(--hq-shadow); font-size: 12px; }
+.mock summary { padding: 8px 10px; cursor: pointer; font-weight: 650; display: flex; gap: 8px; align-items: center; list-style: none; }
+.mock summary::-webkit-details-marker { display: none; }
+.mock .zero { margin-left: auto; font: 600 11px var(--mono); color: var(--hq-success); }
+.mock-body { padding: 0 10px 10px; display: grid; gap: 8px; }
+.mock-log { max-height: 150px; overflow: auto; font: 11px/1.45 var(--mono); background: var(--hq-sunken); border-radius: 6px; padding: 6px 7px; color: var(--hq-text-2); }
+.mock-log div { white-space: pre-wrap; word-break: break-all; }
+.mock-log .ok { color: var(--hq-success); }
+.mock-log .err { color: var(--hq-danger); }
+.mock-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.mock-note { color: var(--hq-muted); }
+
+/* ---------------------------------------------------------------- narrow window */
+@media (max-width: 760px) {
+  .hq { grid-template-columns: 52px minmax(0, 1fr); }
+  .work-nav { display: none; }
+  .rail-item { width: 44px; font-size: 9.5px; }
+  .topbar { padding: 8px 10px; gap: 8px; flex-wrap: wrap; }
+  .ctx-note { display: none; }
+  .search { width: auto; flex: 1; min-width: 120px; order: 5; }
+  .view-select { display: block; }
+  .board-head { padding: 12px 14px 8px; }
+  .board-hint { display: none; }
+  .status-tabs { display: flex; }
+  .board { padding: 0 14px 90px; }
+  .board .col, .board .add-list { display: none; }
+  .board .col.is-mobile-current { display: flex; width: 100%; max-height: none; }
+  .board .col.is-mobile-current.is-collapsed { width: 100%; }
+  .board .col.is-mobile-current.is-collapsed .col-name { writing-mode: horizontal-tb; transform: none; }
+  /* Date groups and proposed lists have no status tabs: stack them. */
+  .board:not([data-board-kind="status"]) { flex-direction: column; overflow-x: visible; }
+  .board:not([data-board-kind="status"]) .col { display: flex; width: 100%; max-height: none; flex: none; }
+  .board:not([data-board-kind="status"]) .add-list { display: flex; width: 100%; }
+  .detail { width: 100vw; }
+  .mock { width: calc(100vw - 80px); right: 8px; }
+  .mock:not([open]) { width: auto; }
+  .cal-wrap { grid-template-columns: 1fr; }
+  .fields { grid-template-columns: 84px 1fr; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card, .status-tab, .col { transition: border-color .12s, box-shadow .12s; }
+  .toast { animation: toast-in .18s ease-out; }
+  @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-design" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></symbol>
+  <symbol id="i-social" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+  <symbol id="i-work" viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="14" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/></symbol>
+  <symbol id="i-glance" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></symbol>
+  <symbol id="i-board" viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-timeline" viewBox="0 0 24 24"><path d="M3 7h9M7 12h12M5 17h8"/></symbol>
+  <symbol id="i-review" viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01" stroke-width="3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></symbol>
+  <symbol id="i-system" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+  <symbol id="i-collapse" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-notes" viewBox="0 0 24 24"><path d="M5 6h14M5 11h14M5 16h9"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/></symbol>
+  <symbol id="i-deadline" viewBox="0 0 24 24"><path d="M6 3v18M6 4h11l-2.5 4L17 12H6"/></symbol>
+  <symbol id="i-start" viewBox="0 0 24 24"><path d="M7 5l11 7-11 7z"/></symbol>
+  <symbol id="i-event" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16"/><circle cx="12" cy="15" r="1.5"/></symbol>
+  <symbol id="i-project" viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3z"/></symbol>
+  <symbol id="i-idea" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9V16h7v-2.1A6 6 0 0012 3z"/></symbol>
+  <symbol id="i-goal" viewBox="0 0 24 24"><path d="M5 21V4h11l-2 4 2 4H5"/></symbol>
+  <symbol id="i-chore" viewBox="0 0 24 24"><path d="M14 4l6 6-9 9H5v-6z"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-run" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M4 12a8 8 0 108-8 8 8 0 00-6 2.7L4 9"/><path d="M4 4v5h5M12 8v4l3 2"/></symbol>
+</svg>
+
+<div class="hq" id="hq">
+  <nav class="rail" aria-label="HQ domains">
+    <div class="rail-mark" aria-hidden="true">HQ</div>
+    <button class="rail-item" data-domain="design" title="Design"><svg class="ic"><use href="#i-design"/></svg>Design</button>
+    <button class="rail-item" data-domain="social" title="Social"><svg class="ic"><use href="#i-social"/></svg>Social</button>
+    <button class="rail-item" data-domain="work" aria-current="page" title="Work"><svg class="ic"><use href="#i-work"/></svg>Work</button>
+    <div class="rail-spacer"></div>
+    <button class="rail-item" id="appearance-btn" aria-haspopup="menu" title="Appearance (HQ setting)"><svg class="ic"><use href="#i-system"/></svg><span>System</span></button>
+  </nav>
+
+  <aside class="work-nav" aria-label="Work navigation">
+    <div class="work-nav-head"><h1>Work</h1><p>Planning from Manual Planner</p></div>
+    <div class="nav-group" id="nav-views"></div>
+    <div class="nav-group" id="nav-boards"></div>
+    <div class="nav-foot">
+      <div class="conn" id="conn"></div>
+      <button class="btn btn-ghost btn-sm" id="settings-btn" style="justify-content:flex-start"><svg class="ic"><use href="#i-settings"/></svg>Data &amp; settings</button>
+    </div>
+  </aside>
+
+  <div class="work-main">
+    <header class="topbar">
+      <div class="ctx">
+        <span class="ctx-chip" title="HQ project context (shell-owned)"><span class="dot" aria-hidden="true"></span>Pottery club site</span>
+        <span class="ctx-note" id="ctx-note">Planner items aren't project-scoped · showing all planning</span>
+      </div>
+      <select class="select view-select" id="view-select" aria-label="Work view"></select>
+      <div class="top-spacer"></div>
+      <label class="search"><svg class="ic"><use href="#i-search"/></svg><input class="input" id="search" type="search" placeholder="Search planning  /" aria-label="Search planning"></label>
+      <button class="btn btn-ghost btn-icon" id="undo-btn" title="Undo (Ctrl/⌘+Z)" aria-label="Undo"><svg class="ic"><use href="#i-undo"/></svg></button>
+      <button class="btn btn-primary" id="new-btn" title="New item (N)"><svg class="ic"><use href="#i-plus"/></svg>New</button>
+    </header>
+    <div class="banner" id="banner" hidden></div>
+    <main id="view" tabindex="-1"></main>
+  </div>
+</div>
+
+<aside class="detail" id="detail" hidden aria-label="Item detail"></aside>
+<div class="scrim" id="scrim" hidden></div>
+<div class="menu" id="menu" role="menu" hidden></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="sr" id="live" aria-live="assertive"></div>
+
+<details class="mock" id="mock">
+  <summary>Mockup instrumentation <span class="zero" id="exec-count">execution calls: 0</span></summary>
+  <div class="mock-body">
+    <div class="mock-note">Not product UI. Shows what the Work adapter would send to the Planner service. There is no execution port.</div>
+    <div class="mock-row">
+      <button class="btn btn-sm" id="mock-online">Planner reachable</button>
+      <button class="btn btn-sm" id="mock-offline">Unreachable</button>
+      <button class="btn btn-sm" id="mock-elsewhere" title="Changes the open card's notes as if another device saved first">Edit elsewhere</button>
+    </div>
+    <div class="mock-log" id="mock-log" aria-label="Adapter calls"></div>
+  </div>
+</details>
+
+<script>
+'use strict';
+/* =================================================================== vocab */
+const TODAY = '2026-10-20';           // fixed for deterministic fictional data
+const ZONE_ABBR = 'EDT';
+const STATUSES = [
+  { id: 'inbox', label: 'Inbox', hint: 'Captured, not yet sorted' },
+  { id: 'considering', label: 'Considering', hint: 'Thinking it over' },
+  { id: 'next', label: 'Next', hint: 'Up soon' },
+  { id: 'active', label: 'Active', hint: 'In motion now' },
+  { id: 'on_hold', label: 'On hold', hint: 'Paused on purpose' },
+  { id: 'done', label: 'Done', hint: 'Fulfilled' },
+  { id: 'dropped', label: 'Dropped', hint: 'Decided against' },
+];
+const ST = Object.fromEntries(STATUSES.map((s) => [s.id, s]));
+const ORDER = STATUSES.map((s) => s.id);
+const CLOSED = new Set(['done', 'dropped']);
+const HORIZONS = { now: 'Now', soon: 'Soon', later: 'Later', someday: 'Someday' };
+const WHY = { need: 'Need', want: 'Want', exploring: 'Exploring' };
+const KINDS = { project: 'Project', idea: 'Idea', goal: 'Goal', chore: 'Chore' };
+const PRIORITY = { high: 'High', normal: 'Normal', low: 'Low' };
+const DATE_KIND = { target: 'Target', deadline: 'Deadline', start: 'Start', event: 'Event' };
+const VIEWS = [
+  { id: 'glance', label: 'Glance', icon: 'glance', key: '1' },
+  { id: 'board', label: 'Board', icon: 'board', key: '2' },
+  { id: 'list', label: 'List', icon: 'list', key: '3' },
+  { id: 'calendar', label: 'Calendar', icon: 'calendar', key: '4' },
+  { id: 'timeline', label: 'Timeline', icon: 'timeline', key: '5' },
+  { id: 'review', label: 'Review', icon: 'review', key: '6' },
+  { id: 'archive', label: 'Archive', icon: 'archive', key: '7' },
+];
+
+/* =================================================================== fictional fixture */
+const d = (kind, precision, value, extra = {}) => ({ id: 'dt-' + Math.random().toString(36).slice(2, 9), kind, precision, value, ...extra });
+const step = (text, done = false) => ({ id: 'st-' + Math.random().toString(36).slice(2, 9), text, done });
+const base = { kind: 'idea', why: null, horizon: null, priority: null, area: null, notes: '', steps: [], refs: [], links: [], dates: [], archived: false, rev: 1, updated: '2026-10-18' };
+const FIXTURE = [
+  { id: 'it-zine', title: 'Sketch ideas for the autumn zine cover', kind: 'idea', status: 'inbox', why: 'exploring', area: 'Studio', updated: '2026-10-19' },
+  { id: 'it-paper', title: 'Ask the print shop about riso paper stock', kind: 'chore', status: 'inbox', horizon: 'soon', area: 'Studio', dates: [d('target', 'week', '2026-W43')] },
+  { id: 'it-bread', title: 'Try the rye loaf from the library cookbook', kind: 'idea', status: 'inbox', why: 'want', area: 'Home' },
+  { id: 'it-seeds', title: 'Start a seed library at the community garden', kind: 'project', status: 'considering', why: 'want', horizon: 'later', area: 'Garden club', notes: 'Talk to the garden committee before buying envelopes.', steps: [step('List seed sources'), step('Ask about a shelf in the shed'), step('Draft a borrowing card')], dates: [d('target', 'quarter', '2027-Q1')] },
+  { id: 'it-binding', title: 'Learn basic bookbinding', kind: 'goal', status: 'considering', why: 'exploring', horizon: 'someday', area: 'Studio', dates: [d('target', 'day', '2026-10-15', { note: 'Try one pamphlet stitch' })] },
+  { id: 'it-news', title: 'Plan the November newsletter', kind: 'project', status: 'next', why: 'need', horizon: 'soon', priority: 'high', area: 'Newsletter', steps: [step('Pick three member stories', true), step('Draft the intro'), step('Collect photos from the open studio'), step('Schedule the send')], dates: [d('deadline', 'day', '2026-10-30')], notes: 'Keep it to one screen on a phone.' },
+  { id: 'it-lamp', title: 'Replace the studio desk lamp', kind: 'chore', status: 'next', why: 'need', horizon: 'now', area: 'Studio', dates: [d('target', 'day', '2026-10-23')] },
+  { id: 'it-talk', title: 'Draft talk outline for the maker meetup', kind: 'project', status: 'next', why: 'want', horizon: 'soon', area: 'Writing', dates: [d('event', 'day', '2026-11-12', { time: '18:30', tz: 'America/New_York' })] },
+  { id: 'it-site', title: 'Redesign the pottery club website', kind: 'project', status: 'active', why: 'need', horizon: 'now', priority: 'high', area: 'Studio', rev: 7,
+    notes: 'Members mostly visit on phones to check class times. Lead with the schedule, then the gallery.\n\nKeep the kiln-firing photos.',
+    steps: [step('Collect class schedule', true), step('Pick three gallery photos', true), step('Review home page v3 with the committee'), step('Write the about page'), step('Hand the request to the builder')],
+    refs: [{ id: 'rf-1', kind: 'url', label: 'Current club website', url: 'https://example.org/pottery-club' }, { id: 'rf-2', kind: 'doc', label: 'Committee notes (shared doc)', url: 'https://example.org/notes/committee' }],
+    links: [
+      { kind: 'design', domain: 'Design', objectKind: 'Annotation', title: 'Home page v3 · note C — move schedule above gallery', project: 'Pottery club site', revision: 'source rev 14', state: 'available' },
+      { kind: 'run', domain: 'Jones', objectKind: 'Request', title: 'Build home page v3 candidate', project: 'Pottery club site', observed: 'Running', checked: '6 min ago', state: 'observed' },
+      { kind: 'social', domain: 'Social', objectKind: 'Draft', title: 'Open studio announcement', project: 'Pottery club site', state: 'unavailable' },
+    ],
+    dates: [d('start', 'day', '2026-10-05'), d('target', 'month', '2026-11', { note: 'Before the winter market' })] },
+  { id: 'it-glaze', title: 'Inventory the glaze shelf', kind: 'chore', status: 'active', why: 'need', horizon: 'now', area: 'Studio', dates: [d('deadline', 'day', '2026-10-17')] },
+  { id: 'it-words', title: 'Write 300 words a day', kind: 'goal', status: 'active', why: 'want', horizon: 'now', area: 'Writing', updated: '2026-09-18', steps: [step('Pick a morning slot', true), step('Keep a word log')], dates: [d('target', 'month', '2026-10', { note: 'Finish draft one' })] },
+  { id: 'it-hinge', title: 'Fix the shed door hinge', kind: 'chore', status: 'on_hold', horizon: 'someday', area: 'Home', notes: 'Waiting for the replacement part.', dates: [d('deadline', 'day', '2026-11-05')] },
+  { id: 'it-market', title: 'Book the hall for the winter market', kind: 'project', status: 'done', why: 'need', area: 'Garden club', updated: '2026-10-12' },
+  { id: 'it-card', title: 'Renew library card', kind: 'chore', status: 'done', updated: '2026-10-09' },
+  { id: 'it-pod', title: 'Record a podcast pilot', kind: 'idea', status: 'dropped', why: 'exploring', updated: '2026-09-30' },
+  { id: 'it-fair', title: 'Summer fair stall', kind: 'project', status: 'done', archived: true, updated: '2026-08-20' },
+];
+const counters = {};
+FIXTURE.forEach((raw) => { counters[raw.status] = (counters[raw.status] || 0) + 1; raw.pos = counters[raw.status] * 1024; });
+
+/* Proposed extension: one custom board with owner-editable lists. Placement is
+   separate from status, horizon and dates. Requires a Planner schema change. */
+const PROPOSED_LISTS = [
+  { id: 'l-today', name: 'Today' }, { id: 'l-week', name: 'This Week' }, { id: 'l-later', name: 'Later' },
+];
+const PLACEMENTS = { 'it-lamp': ['l-today', 1], 'it-glaze': ['l-today', 2], 'it-news': ['l-week', 1], 'it-site': ['l-week', 2], 'it-paper': ['l-week', 3], 'it-seeds': ['l-later', 1], 'it-talk': ['l-later', 2] };
+
+/* =================================================================== fixture adapter
+   Mirrors Manual Planner semantics: revision guard (409 revision_conflict),
+   server-owned order renumbered on move, anchors resolved against the full
+   stored column (409 order_conflict when missing), request ids, and no
+   execution capability. */
+const server = {
+  items: new Map(FIXTURE.map((raw) => [raw.id, structuredClone({ ...base, ...raw })])),
+  placements: new Map(Object.entries(PLACEMENTS).map(([id, [list, n]]) => [id, { list, pos: n * 1024 }])),
+  version: 41,
+  reachable: true,
+};
+let EXECUTION_CALLS = 0;                // asserted to stay 0; nothing increments it
+const LATENCY = 420;
+const logEl = () => document.getElementById('mock-log');
+function logCall(text, cls = '') {
+  const row = document.createElement('div');
+  row.className = cls;
+  row.textContent = text;
+  logEl().prepend(row);
+}
+class PlannerError extends Error {
+  constructor(code, message, extra = {}) { super(message); this.code = code; Object.assign(this, extra); }
+}
+const rid = () => 'req-' + Math.random().toString(36).slice(2, 8);
+const later = (ms) => new Promise((r) => setTimeout(r, ms));
+function columnIds(status, except) {
+  return [...server.items.values()].filter((it) => it.status === status && it.id !== except).sort((a, b) => a.pos - b.pos).map((it) => it.id);
+}
+const planner = {
+  async call(name, args, apply) {
+    const req = rid();
+    logCall(`→ planner.${name}(${args}) ${req}`);
+    await later(LATENCY);
+    if (!server.reachable) { logCall(`← ${req} no response — unconfirmed`, 'err'); throw new PlannerError('network', 'The Planner service could not be reached.'); }
+    try {
+      const out = apply();
+      server.version += 1;
+      logCall(`← ${req} 200 · state_version ${server.version}`, 'ok');
+      return out;
+    } catch (err) {
+      logCall(`← ${req} ${err.code === 'revision_conflict' || err.code === 'order_conflict' ? 409 : 400} ${err.code}`, 'err');
+      throw err;
+    }
+  },
+  guard(id, rev) {
+    const it = server.items.get(id);
+    if (!it) throw new PlannerError('not_found', 'That item does not exist.');
+    if (it.rev !== rev) throw new PlannerError('revision_conflict', 'This item changed since you loaded it.', { current: structuredClone(it) });
+    return it;
+  },
+  snapshot() { return { items: [...server.items.values()].map((it) => structuredClone(it)), version: server.version }; },
+  createItem(fields) {
+    return this.call('createItem', JSON.stringify({ title: fields.title, status: fields.status }), () => {
+      const id = 'it-' + Math.random().toString(36).slice(2, 8);
+      const top = columnIds(fields.status).map((x) => server.items.get(x).pos);
+      const item = structuredClone({ ...base, ...fields, id, pos: (top.length ? Math.min(...top) : 2048) - 1024, rev: 1, updated: TODAY });
+      server.items.set(id, item);
+      return structuredClone(item);
+    });
+  },
+  patchItem(id, rev, patch) {
+    return this.call('patchItem', `${id}, rev ${rev}, {${Object.keys(patch).join(', ')}}`, () => {
+      const it = this.guard(id, rev);
+      Object.assign(it, structuredClone(patch));
+      it.rev += 1; it.updated = TODAY;
+      return structuredClone(it);
+    });
+  },
+  moveItem(id, rev, status, anchors) {
+    const a = anchors.after_id ? `after ${anchors.after_id}` : anchors.before_id ? `before ${anchors.before_id}` : anchors.place;
+    return this.call('moveItem', `${id}, rev ${rev}, ${status}, ${a}`, () => {
+      const it = this.guard(id, rev);
+      const ids = columnIds(status, id);
+      const anchor = anchors.after_id || anchors.before_id;
+      let index;
+      if (anchor) {
+        if (!ids.includes(anchor)) throw new PlannerError('order_conflict', 'The board changed since it was loaded.');
+        index = ids.indexOf(anchor) + (anchors.after_id ? 1 : 0);
+      } else index = anchors.place === 'bottom' ? ids.length : 0;
+      ids.splice(index, 0, id);
+      ids.forEach((x, i) => { server.items.get(x).pos = (i + 1) * 1024; });
+      it.status = status; it.rev += 1; it.updated = TODAY;
+      return structuredClone(it);
+    });
+  },
+  setArchived(id, rev, archived) {
+    return this.call(archived ? 'archive' : 'restore', `${id}, rev ${rev}`, () => {
+      const it = this.guard(id, rev);
+      it.archived = archived; it.rev += 1;
+      return structuredClone(it);
+    });
+  },
+  /* Proposed (Planner schema v2): place an item on a custom list. */
+  placeOnList(id, list, anchors) {
+    const a = anchors.after_id ? `after ${anchors.after_id}` : anchors.before_id ? `before ${anchors.before_id}` : anchors.place;
+    return this.call('placeOnList [proposed v2]', `${id}, ${list}, ${a}`, () => {
+      const ids = [...server.placements.entries()].filter(([x, p]) => p.list === list && x !== id).sort((p, q) => p[1].pos - q[1].pos).map(([x]) => x);
+      const anchor = anchors.after_id || anchors.before_id;
+      let index = anchor ? ids.indexOf(anchor) + (anchors.after_id ? 1 : 0) : (anchors.place === 'bottom' ? ids.length : 0);
+      if (anchor && !ids.includes(anchor)) throw new PlannerError('order_conflict', 'The list changed since it was loaded.');
+      ids.splice(index, 0, id);
+      ids.forEach((x, i) => { const p = server.placements.get(x) || { list }; p.list = list; p.pos = (i + 1) * 1024; server.placements.set(x, p); });
+      return { id, list };
+    });
+  },
+};
+
+/* =================================================================== client state */
+const state = {
+  items: [], byId: new Map(), placements: new Map(),
+  view: 'board', boardMode: 'status', selected: null, q: '',
+  collapsed: new Set(['dropped']), mobileCol: 'inbox', composer: null,
+  pending: new Map(),       // id -> 'saving' | 'unconfirmed'
+  connection: 'online', loadedAt: '10:42 AM', drafts: [],
+  conflict: null, focusKey: null, dirty: new Map(),
+};
+function load() {
+  const snap = planner.snapshot();
+  state.items = snap.items;
+  state.byId = new Map(snap.items.map((it) => [it.id, it]));
+  state.placements = new Map([...server.placements].map(([k, v]) => [k, { ...v }]));
+}
+function upsert(item) { state.byId.set(item.id, item); state.items = [...state.byId.values()]; }
+const get = (id) => state.byId.get(id);
+const live = () => state.items.filter((it) => !it.archived);
+const isOpen = (it) => !CLOSED.has(it.status);
+function matches(it) {
+  if (!state.q) return true;
+  const hay = [it.title, it.notes, it.area || '', ...it.steps.map((s) => s.text)].join('\n').toLowerCase();
+  return hay.includes(state.q.toLowerCase());
+}
+const byPos = (a, b) => a.pos - b.pos;
+const column = (status) => live().filter((it) => it.status === status && matches(it)).sort(byPos);
+const columnAll = (status) => state.items.filter((it) => it.status === status).sort(byPos);
+
+/* ------------------------------------------------------------------- ordering (ported semantics) */
+function anchorsForDrop(visibleIds, index) {
+  const i = Math.max(0, Math.min(index, visibleIds.length));
+  if (i > 0) return { after_id: visibleIds[i - 1] };
+  if (visibleIds.length) return { before_id: visibleIds[0] };
+  return { place: 'top' };
+}
+function anchorsToRestore(allIds, id) {
+  const i = allIds.indexOf(id);
+  if (i < 0) return { place: 'top' };
+  if (i > 0) return { after_id: allIds[i - 1] };
+  if (allIds.length > 1) return { before_id: allIds[1] };
+  return { place: 'top' };
+}
+function stepAnchors(visibleIds, id, delta) {
+  const i = visibleIds.indexOf(id);
+  const target = i + delta;
+  if (i < 0 || target < 0 || target >= visibleIds.length) return null;
+  return anchorsForDrop(visibleIds.filter((x) => x !== id), target);
+}
+function projectMove(id, status, anchors) {
+  const ids = columnAll(status).filter((it) => it.id !== id).map((it) => it.id);
+  const anchor = anchors.after_id || anchors.before_id;
+  let index = anchor ? ids.indexOf(anchor) + (anchors.after_id ? 1 : 0) : (anchors.place === 'bottom' ? ids.length : 0);
+  if (anchor && ids.indexOf(anchor) < 0) return null;
+  ids.splice(index, 0, id);
+  const before = new Map();
+  ids.forEach((x, i) => { const it = get(x); before.set(x, { status: it.status, pos: it.pos }); upsert({ ...it, status, pos: (i + 1) * 1024 }); });
+  return () => before.forEach((v, x) => { const it = get(x); if (it) upsert({ ...it, ...v }); });
+}
+
+/* ------------------------------------------------------------------- undo (in Work service, survives domain switches) */
+const undoStack = [];
+function remember(label, run, message) {
+  const entry = { label, run };
+  undoStack.push(entry);
+  if (undoStack.length > 40) undoStack.shift();
+  // An entry runs at most once, whether from its toast or from Ctrl/⌘+Z.
+  entry.toastEl = toast(message, { action: { label: 'Undo', run: () => { const i = undoStack.indexOf(entry); if (i < 0) return; undoStack.splice(i, 1); entry.run(); } } });
+}
+function undoLast() {
+  const entry = undoStack.pop();
+  if (!entry) { toast('Nothing to undo.'); return; }
+  entry.toastEl?.remove();
+  entry.run();
+}
+
+/* ------------------------------------------------------------------- actions */
+function failure(err, what) {
+  if (err.code === 'network') toast(`${what}: not confirmed yet`, { error: true, detail: 'No response from the Planner service. Marked unconfirmed; it will be re-sent with the same request id when the service answers.' });
+  else if (err.code === 'offline') toast(`${what}: not sent`, { error: true, detail: 'The Planner service is unreachable, so changes are paused.' });
+  else if (err.code === 'revision_conflict') toast(`${what}: changed elsewhere`, { error: true, detail: 'The latest version is now shown. Please try again.' });
+  else if (err.code === 'order_conflict') toast(`${what}: the board changed`, { error: true, detail: 'The latest order has been loaded. Please try again.' });
+  else toast(`${what}: not saved`, { error: true, detail: err.message });
+}
+function ensureOnline() {
+  if (state.connection === 'offline') throw new PlannerError('offline', 'Unreachable');
+}
+
+async function moveItem(item, status, anchors, { undo = true, label = null } = {}) {
+  const baseItem = get(item.id);
+  const oldStatus = baseItem.status;
+  const restore = anchorsToRestore(columnAll(oldStatus).map((it) => it.id), baseItem.id);
+  const what = label || (status === oldStatus ? 'Reorder' : `Move to ${ST[status].label}`);
+  try { ensureOnline(); } catch (err) { failure(err, what); return; }
+  const rollback = projectMove(baseItem.id, status, anchors);
+  state.pending.set(baseItem.id, 'saving');
+  render();
+  try {
+    const saved = await planner.moveItem(baseItem.id, baseItem.rev, status, anchors);
+    state.pending.delete(baseItem.id);
+    upsert({ ...get(saved.id), ...saved });
+    load();
+    const msg = status === oldStatus ? `Reordered “${baseItem.title}”.` : `Moved “${baseItem.title}” to ${ST[status].label}.`;
+    announce(msg);
+    if (undo) remember(what, () => moveItem(get(baseItem.id), oldStatus, restore, { undo: false, label: 'Undo move' }), msg);
+  } catch (err) {
+    if (err.code === 'network') { state.pending.set(baseItem.id, 'unconfirmed'); setConnection('offline'); }
+    else { state.pending.delete(baseItem.id); rollback && rollback(); load(); }
+    failure(err, what);
+  }
+  render();
+}
+
+/* Field patches register a compare-and-swap undo: undo only applies when the
+   field still holds the value this change wrote (recommendation; the current
+   Planner client sends the inverse unconditionally at the latest revision). */
+async function patchItem(item, patch, { label = 'Change', undo = true, quiet = false } = {}) {
+  const baseItem = get(item.id);
+  const inverse = Object.fromEntries(Object.keys(patch).map((k) => [k, structuredClone(baseItem[k])]));
+  ensureOnline();
+  state.pending.set(baseItem.id, 'saving');
+  render({ keepDetail: true });
+  try {
+    const saved = await planner.patchItem(baseItem.id, baseItem.rev, patch);
+    state.pending.delete(baseItem.id);
+    upsert(saved);
+    if (undo) {
+      remember(label, async () => {
+        const now = get(baseItem.id);
+        const unchanged = Object.keys(patch).every((k) => JSON.stringify(now[k]) === JSON.stringify(saved[k]));
+        if (!unchanged) { toast('Not undone', { error: true, detail: `${label} was changed again since; the newer value was kept.` }); return; }
+        try { await patchItem(now, inverse, { label: 'Undo', undo: false, quiet: true }); toast('Undone.'); } catch (err) { failure(err, 'Undo'); }
+      }, `${label} saved.`);
+    } else if (!quiet) toast(`${label} saved.`);
+    render({ keepDetail: true });
+    return saved;
+  } catch (err) {
+    state.pending.delete(baseItem.id);
+    if (err.code === 'revision_conflict' && err.current) upsert(err.current);
+    render({ keepDetail: true });
+    throw err;
+  }
+}
+
+async function createItem(fields) {
+  if (state.connection === 'offline') {
+    state.drafts.push({ ...fields, localId: rid() });
+    toast(`Kept “${fields.title}” as a device draft.`, { detail: 'Not in the planning store until you send it.' });
+    render();
+    return null;
+  }
+  const item = await planner.createItem(fields);
+  load();
+  announce(`Added “${item.title}” to ${ST[item.status].label}.`);
+  remember('New item', async () => {
+    try { await setArchived(get(item.id), true, { undo: false, quietMessage: `Removed new item “${item.title}” (archived, restorable).` }); } catch (err) { failure(err, 'Undo'); }
+  }, `Added “${item.title}” to ${ST[item.status].label}.`);
+  render();
+  return item;
+}
+
+async function setArchived(item, archived, { undo = true, quietMessage = null } = {}) {
+  const baseItem = get(item.id);
+  try { ensureOnline(); } catch (err) { failure(err, archived ? 'Archive' : 'Restore'); return; }
+  try {
+    const saved = await planner.setArchived(baseItem.id, baseItem.rev, archived);
+    upsert(saved);
+    const msg = quietMessage || (archived ? `Archived “${baseItem.title}”.` : `Restored “${baseItem.title}”.`);
+    if (undo) remember(archived ? 'Archive' : 'Restore', () => setArchived(get(baseItem.id), !archived, { undo: false }), msg);
+    else toast(msg);
+    if (archived && state.selected === baseItem.id) closeDetail();
+  } catch (err) { failure(err, archived ? 'Archive' : 'Restore'); }
+  render();
+}
+
+async function placeOnList(item, list, anchors, { undo = true } = {}) {
+  const old = state.placements.get(item.id);
+  const oldIds = [...state.placements.entries()].filter(([, p]) => old && p.list === old.list).sort((p, q) => p[1].pos - q[1].pos).map(([x]) => x);
+  const restore = old ? anchorsToRestore(oldIds, item.id) : null;
+  try { ensureOnline(); } catch (err) { failure(err, 'Move'); return; }
+  state.pending.set(item.id, 'saving');
+  // projection
+  const ids = [...state.placements.entries()].filter(([x, p]) => p.list === list && x !== item.id).sort((p, q) => p[1].pos - q[1].pos).map(([x]) => x);
+  const anchor = anchors.after_id || anchors.before_id;
+  ids.splice(anchor ? ids.indexOf(anchor) + (anchors.after_id ? 1 : 0) : 0, 0, item.id);
+  ids.forEach((x, i) => state.placements.set(x, { list, pos: (i + 1) * 1024 - 1 }));
+  render();
+  try {
+    await planner.placeOnList(item.id, list, anchors);
+    state.pending.delete(item.id);
+    load();
+    const name = PROPOSED_LISTS.find((l) => l.id === list).name;
+    const msg = old && old.list === list ? `Reordered “${item.title}” in ${name}.` : `Placed “${item.title}” in ${name}. Status, horizon and dates unchanged.`;
+    announce(msg);
+    if (undo && old) remember('List move', () => placeOnList(get(item.id), old.list, restore, { undo: false }), msg);
+  } catch (err) { state.pending.delete(item.id); load(); failure(err, 'Move'); }
+  render();
+}
+
+/* =================================================================== formatting */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const toDate = (iso) => new Date(iso + 'T00:00:00Z');
+const dayNum = (iso) => Math.round(toDate(iso).getTime() / 864e5);
+const isoOf = (dt) => dt.toISOString().slice(0, 10);
+function isoWeekStart(value) {
+  const [y, w] = value.split('-W').map(Number);
+  const jan4 = new Date(Date.UTC(y, 0, 4));
+  const mon = new Date(jan4); mon.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay() + 6) % 7) + (w - 1) * 7);
+  return mon;
+}
+function bounds(e) {
+  if (e.precision === 'day') return [e.value, e.value];
+  if (e.precision === 'week') { const s = isoWeekStart(e.value); const t = new Date(s); t.setUTCDate(s.getUTCDate() + 6); return [isoOf(s), isoOf(t)]; }
+  if (e.precision === 'month') { const [y, m] = e.value.split('-').map(Number); return [isoOf(new Date(Date.UTC(y, m - 1, 1))), isoOf(new Date(Date.UTC(y, m, 0)))]; }
+  if (e.precision === 'quarter') { const [y, q] = e.value.split('-Q').map(Number); return [isoOf(new Date(Date.UTC(y, 3 * q - 3, 1))), isoOf(new Date(Date.UTC(y, 3 * q, 0)))]; }
+  const y = Number(e.value); return [`${y}-01-01`, `${y}-12-31`];
+}
+function fmtDay(iso) { const dt = toDate(iso); return `${DAYS[dt.getUTCDay()]} ${MONTHS[dt.getUTCMonth()]} ${dt.getUTCDate()}`; }
+function fmtShort(e) {
+  if (e.precision === 'day') { const n = dayNum(e.value) - dayNum(TODAY); if (n === 0) return 'Today'; if (n === 1) return 'Tomorrow'; return fmtDay(e.value).slice(4); }
+  if (e.precision === 'week') return `Week of ${fmtDay(bounds(e)[0]).slice(4)}`;
+  if (e.precision === 'month') { const [y, m] = e.value.split('-'); return `${MONTHS[m - 1]} ${y}`; }
+  if (e.precision === 'quarter') { const [y, q] = e.value.split('-Q'); return `Q${q} ${y}`; }
+  return e.value;
+}
+function fmtLong(e) {
+  if (e.precision === 'day') return fmtDay(e.value) + (e.time ? ` · ${to12(e.time)} ${ZONE_ABBR}` : '');
+  return fmtShort(e);
+}
+const to12 = (t) => { const [h, m] = t.split(':').map(Number); return `${(h % 12) || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
+function relative(e) {
+  if (e.precision !== 'day') { const [a, b] = bounds(e); return dayNum(TODAY) < dayNum(a) ? 'later period' : dayNum(TODAY) > dayNum(b) ? 'period passed' : 'this period'; }
+  const n = dayNum(e.value) - dayNum(TODAY);
+  if (n === 0) return 'today'; if (n > 0) return `in ${n} day${n === 1 ? '' : 's'}`; return `${-n} day${n === -1 ? '' : 's'} ago`;
+}
+function dateState(e, open) {
+  const [a, b] = bounds(e);
+  if (dayNum(b) < dayNum(TODAY)) return e.kind === 'deadline' && open ? 'overdue' : 'passed';
+  if (dayNum(a) <= dayNum(TODAY)) return e.precision === 'day' ? 'today' : 'current';
+  return 'upcoming';
+}
+function primaryDate(it) {
+  const open = isOpen(it);
+  const overdue = it.dates.find((e) => dateState(e, open) === 'overdue');
+  if (overdue) return overdue;
+  const ahead = it.dates.filter((e) => dayNum(bounds(e)[1]) >= dayNum(TODAY)).sort((x, y) => dayNum(bounds(x)[0]) - dayNum(bounds(y)[0]));
+  return ahead[0] || it.dates[it.dates.length - 1] || null;
+}
+
+/* =================================================================== rendering helpers */
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ic = (name, extra = '') => `<svg class="ic" ${extra} aria-hidden="true"><use href="#i-${name}"/></svg>`;
+function dateChip(e, it) {
+  const s = dateState(e, isOpen(it));
+  const prefix = s === 'overdue' ? '<strong>Overdue ·</strong> ' : (s === 'passed' && e.kind === 'target' ? 'Target passed · ' : '');
+  return `<span class="chip chip-date dk-${e.kind} ds-${s} ${e.precision !== 'day' ? 'is-coarse' : ''}" title="${DATE_KIND[e.kind]} · ${esc(fmtLong(e))}">${ic(e.kind)}<span class="sr">${DATE_KIND[e.kind]}: </span>${prefix}${esc(fmtShort(e))}</span>`;
+}
+function cardHTML(it, { showStatus = false } = {}) {
+  const pending = state.pending.get(it.id);
+  const done = it.steps.filter((s) => s.done).length;
+  const pd = primaryDate(it);
+  const chips = [
+    showStatus ? `<span class="chip chip-status"><span class="st-dot" style="--st:var(--work-st-${it.status})"></span>${ST[it.status].label}</span>` : '',
+    it.why ? `<span class="chip pill-${it.why}">${WHY[it.why]}</span>` : '',
+    it.horizon ? `<span class="chip" title="Horizon">${HORIZONS[it.horizon]}</span>` : '',
+    pd ? dateChip(pd, it) : '',
+    it.priority === 'high' ? `<span class="chip chip-prio">${ic('up')}High</span>` : '',
+  ].join('');
+  const badges = [
+    it.notes ? `<span title="Has notes">${ic('notes')}<span class="sr">Has notes</span></span>` : '',
+    it.steps.length ? `<span title="Next steps">${ic('check')}${done}/${it.steps.length}</span>` : '',
+    it.refs.length ? `<span title="Links">${ic('link')}${it.refs.length}</span>` : '',
+    it.links.length ? `<span class="badge-link" title="Linked across HQ (proposed)">${ic('run')}${it.links.length} linked</span>` : '',
+    it.area ? `<span class="chip chip-area">${esc(it.area)}</span>` : '',
+  ].join('');
+  const label = `${it.title}. ${ST[it.status].label}${it.why ? ', ' + WHY[it.why] : ''}${it.horizon ? ', horizon ' + HORIZONS[it.horizon] : ''}${pd ? ', ' + DATE_KIND[pd.kind] + ' ' + fmtLong(pd) : ''}.`;
+  return `<article class="card ${it.why ? 'why-' + it.why : ''} ${pending ? 'is-pending' : ''} ${CLOSED.has(it.status) ? 'is-closed' : ''} ${state.selected === it.id ? 'is-selected' : ''}" data-card data-id="${it.id}" tabindex="0" data-focus-key="card:${it.id}" aria-label="${esc(label)}" aria-roledescription="draggable card">
+    <div class="card-top"><span class="kind">${ic(it.kind)}</span><span class="card-title">${esc(it.title)}</span>
+      <button class="card-menu" data-menu="${it.id}" aria-label="Move or open “${esc(it.title)}”" tabindex="-1">${ic('more')}</button></div>
+    ${chips ? `<div class="chips">${chips}</div>` : ''}
+    ${badges ? `<div class="badges">${badges}</div>` : ''}
+    ${pending ? `<span class="saving ${pending === 'unconfirmed' ? 'is-unconfirmed' : ''}">${pending === 'unconfirmed' ? 'Unconfirmed' : 'Saving…'}</span>` : ''}
+  </article>`;
+}
+
+/* =================================================================== views */
+function renderBoard() {
+  const isLists = state.boardMode === 'lists';
+  const isDates = state.boardMode === 'dates';
+  const head = `<div class="board-head">
+    <h2>${isLists ? 'Weekly plan' : isDates ? 'By date' : 'Status board'}</h2>
+    <div class="seg" role="group" aria-label="Board">
+      <button data-board="status" aria-pressed="${state.boardMode === 'status'}">Status board</button>
+      <button data-board="dates" aria-pressed="${isDates}">By date</button>
+      <button data-board="lists" aria-pressed="${isLists}">Weekly plan <span class="tag-proposed">Proposed</span></button>
+    </div>
+    <div class="board-hint">${isDates ? 'Open a card to change its date' : `Drag a card, or use its ${ic('more')} menu`}<button class="btn btn-ghost btn-sm" data-shortcuts>Keyboard <kbd>?</kbd></button></div>
+  </div>`;
+  if (isLists) return head + renderListsBoard();
+  if (isDates) return head + renderDatesBoard();
+  const tabs = `<div class="status-tabs" role="tablist" aria-label="Board column">${STATUSES.map((s) => `<button class="status-tab" role="tab" aria-selected="${state.mobileCol === s.id}" data-tab="${s.id}" data-drop-tab="${s.id}"><span class="st-dot" style="--st:var(--work-st-${s.id})"></span>${s.label}<span class="n">${column(s.id).length}</span></button>`).join('')}</div>`;
+  const cols = STATUSES.map((s) => {
+    const items = column(s.id);
+    const collapsed = state.collapsed.has(s.id);
+    const dock = s.id === 'inbox';
+    const composerOpen = state.composer === s.id;
+    const list = collapsed ? '' : `<div class="col-list" data-col-list="${s.id}">${items.map((it) => cardHTML(it)).join('') || `<div class="col-empty">${state.q ? 'No matches here' : s.hint}<br><small>Drop cards here</small></div>`}</div>`;
+    const composer = collapsed ? '' : composerOpen
+      ? `<div class="composer"><textarea class="textarea" id="composer-input" placeholder="Enter a title" aria-label="New item title in ${s.label}"></textarea>
+          <div class="composer-row"><button class="btn btn-primary btn-sm" data-composer-save="${s.id}">Add card</button><button class="btn btn-ghost btn-icon btn-sm" data-composer-close aria-label="Close">${ic('close')}</button><small>Adds to the top · <kbd>Esc</kbd></small></div></div>`
+      : `<button class="col-add" data-composer="${s.id}">${ic('plus')}${dock ? 'Capture to Inbox' : 'Add a card'}</button>`;
+    return `<section class="col ${dock ? 'col-dock' : ''} ${collapsed ? 'is-collapsed' : ''} ${state.mobileCol === s.id ? 'is-mobile-current' : ''}" data-drop-col="${s.id}" aria-label="${s.label}, ${items.length} item${items.length === 1 ? '' : 's'}" style="--st:var(--work-st-${s.id})">
+      <header class="col-head"><span class="col-name"><span class="st-dot"></span>${s.label}</span><span class="col-count">${items.length}</span>
+        <button class="btn btn-ghost btn-icon" data-collapse="${s.id}" aria-expanded="${!collapsed}" aria-label="${collapsed ? 'Expand' : 'Collapse'} ${s.label}" title="${collapsed ? 'Expand' : 'Collapse'} (still accepts drops)">${ic(collapsed ? 'expand' : 'collapse')}</button></header>
+      ${dock && !collapsed ? `<div class="col-sub">Status · ${s.hint.toLowerCase()}</div>` : ''}
+      ${composer}${list}
+    </section>`;
+  }).join('');
+  return head + tabs + `<div class="board" data-board-kind="status">${cols}</div>`;
+}
+
+function renderListsBoard() {
+  const banner = `<div class="proposal" role="note">${ic('alert')}<div><strong>Proposed extension, not current Planner behavior.</strong> Owner-editable lists on a custom board need a Planner schema change (see adapter-boundary.md). Moving a card here changes only its list placement. Its <em>status</em>, <em>horizon</em> and <em>dates</em> stay as shown on the card. Nothing is renamed or migrated.</div></div>`;
+  const cols = PROPOSED_LISTS.map((l) => {
+    const ids = [...state.placements.entries()].filter(([x, p]) => p.list === l.id && get(x) && !get(x).archived).sort((p, q) => p[1].pos - q[1].pos).map(([x]) => x);
+    const items = ids.map(get).filter(matches);
+    return `<section class="col" data-drop-col="${l.id}" data-list="${l.id}" aria-label="${l.name}, ${items.length} items">
+      <header class="col-head"><span class="col-name">${l.name}</span><span class="col-count">${items.length}</span>
+        <button class="btn btn-ghost btn-icon" aria-label="List actions" title="Rename, reorder or archive list">${ic('more')}</button></header>
+      <div class="col-list" data-col-list="${l.id}">${items.map((it) => cardHTML(it, { showStatus: true })).join('') || '<div class="col-empty">Drop cards here</div>'}</div>
+      <button class="col-add">${ic('plus')}Add existing item</button>
+    </section>`;
+  }).join('');
+  return banner + `<div class="board" data-board-kind="lists">${cols}<button class="add-list">${ic('plus')}Add another list</button></div>`;
+}
+
+/* Phase-1 default for Today / This week / Later: read-only groups derived from
+   each item's own dates (ISO week, Monday start). Nothing here writes. */
+const WEEK_END = '2026-10-25';
+const DATE_GROUPS = [
+  { id: 'today', name: 'Today', rule: 'A day date today, or an overdue deadline' },
+  { id: 'week', name: 'This week', rule: 'A day or week date later this week (to Sun Oct 25)' },
+  { id: 'later', name: 'Later', rule: 'A date after this week, or a month, quarter or year period' },
+  { id: 'none', name: 'Undated', rule: 'No date ahead. Dates are never invented' },
+];
+function dateGroup(it) {
+  const open = isOpen(it);
+  if (it.dates.some((e) => (e.precision === 'day' && e.value === TODAY) || dateState(e, open) === 'overdue')) return 'today';
+  const ahead = it.dates.filter((e) => dayNum(bounds(e)[1]) >= dayNum(TODAY));
+  if (ahead.some((e) => (e.precision === 'day' || e.precision === 'week') && dayNum(bounds(e)[1]) <= dayNum(WEEK_END))) return 'week';
+  return ahead.length ? 'later' : 'none';
+}
+function renderDatesBoard() {
+  const banner = `<div class="proposal is-info" role="note">${ic('calendar')}<div><strong>Grouped from each card's own dates.</strong> This board is read-only, so dragging is off. To move a card to another group, change its date in the card. Status and horizon don't change here. Done and Dropped are hidden.</div></div>`;
+  const items = live().filter((it) => isOpen(it) && matches(it)).sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status) || a.pos - b.pos);
+  const cols = DATE_GROUPS.map((g) => {
+    const list = items.filter((it) => dateGroup(it) === g.id);
+    return `<section class="col" data-drop-col="${g.id}" aria-label="${g.name}, ${list.length} item${list.length === 1 ? '' : 's'}">
+      <header class="col-head"><span class="col-name">${g.name}</span><span class="col-count">${list.length}</span></header>
+      <div class="col-sub">${g.rule}</div>
+      <div class="col-list">${list.map((it) => cardHTML(it, { showStatus: true })).join('') || '<div class="col-empty">Nothing here</div>'}</div>
+    </section>`;
+  }).join('');
+  return banner + `<div class="board" data-board-kind="dates">${cols}</div>`;
+}
+
+function renderGlance() {
+  const items = live();
+  const active = items.filter((it) => it.status === 'active');
+  const overdue = items.filter((it) => isOpen(it) && it.dates.some((e) => dateState(e, true) === 'overdue'));
+  const upcoming = [];
+  items.filter(isOpen).forEach((it) => it.dates.forEach((e) => { const [a] = bounds(e); const n = dayNum(a) - dayNum(TODAY); if (e.precision === 'day' && n >= 0 && n <= 21) upcoming.push({ it, e, n }); }));
+  upcoming.sort((x, y) => x.n - y.n);
+  const inbox = column('inbox');
+  const now = items.filter((it) => isOpen(it) && (it.status === 'active' || it.horizon === 'now'));
+  const recent = [...items].sort((a, b) => (a.updated < b.updated ? 1 : -1)).slice(0, 5);
+  const row = (it, meta) => `<button class="rowlink" data-open="${it.id}"><span class="st-dot" style="--st:var(--work-st-${it.status})" title="${ST[it.status].label}"></span>${esc(it.title)}<span class="meta">${meta}</span></button>`;
+  return `<div class="page">
+    <h2>Good morning</h2>
+    <p class="lede">${active.length} active, ${overdue.length} overdue, ${upcoming.length} dates in the next 21 days, ${inbox.length} waiting in Inbox.</p>
+    <div class="stat-row">${STATUSES.map((s) => `<button class="stat" data-goto-board="${s.id}"><span class="st-dot" style="--st:var(--work-st-${s.id})"></span>${s.label} <b>${items.filter((it) => it.status === s.id).length}</b></button>`).join('')}</div>
+    <div class="grid2">
+      <section class="panel"><h3>Now <span class="n">${now.length}</span></h3>${now.map((it) => row(it, esc(it.steps.find((s) => !s.done)?.text || ST[it.status].label))).join('')}</section>
+      <section class="panel"><h3>Next 21 days <span class="n">${upcoming.length + overdue.length}</span></h3>
+        ${overdue.map((it) => row(it, '<span style="color:var(--hq-danger);font-weight:600">Overdue</span>')).join('')}
+        ${upcoming.map(({ it, e }) => row(it, `${DATE_KIND[e.kind]} · ${fmtShort(e)}`)).join('')}</section>
+      <section class="panel"><h3>Inbox <span class="n">${inbox.length}</span></h3>${inbox.map((it) => row(it, 'Sort in Review')).join('')}</section>
+      <section class="panel"><h3>Recently changed</h3>${recent.map((it) => row(it, fmtDay(it.updated).slice(4))).join('')}</section>
+    </div></div>`;
+}
+
+function renderList() {
+  const items = live().filter(matches).sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status) || a.pos - b.pos);
+  return `<div class="page"><h2>List</h2><p class="lede">Every live item. Status changes here use the same move call as the board, so undo restores the card's place.</p>
+    <table class="list"><thead><tr><th>Title</th><th>Status</th><th>Horizon</th><th>Why</th><th>Next date</th><th>Area</th></tr></thead><tbody>
+    ${items.map((it) => { const pd = primaryDate(it); return `<tr><td><button class="rowlink" style="padding:2px 0" data-open="${it.id}">${ic(it.kind)}${esc(it.title)}</button></td>
+      <td><select class="select" data-list-status="${it.id}" aria-label="Status of ${esc(it.title)}">${STATUSES.map((s) => `<option value="${s.id}" ${s.id === it.status ? 'selected' : ''}>${s.label}</option>`).join('')}</select></td>
+      <td><select class="select" data-list-horizon="${it.id}" aria-label="Horizon of ${esc(it.title)}"><option value="">—</option>${Object.entries(HORIZONS).map(([k, v]) => `<option value="${k}" ${k === it.horizon ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
+      <td>${it.why ? `<span class="chip pill-${it.why}">${WHY[it.why]}</span>` : '<span style="color:var(--hq-muted)">—</span>'}</td>
+      <td>${pd ? dateChip(pd, it) : ''}</td><td>${esc(it.area || '')}</td></tr>`; }).join('')}
+    </tbody></table></div>`;
+}
+
+function renderCalendar() {
+  const first = toDate('2026-10-01');
+  const start = new Date(first); start.setUTCDate(1 - first.getUTCDay());
+  const entries = [];
+  live().filter((it) => isOpen(it) && matches(it)).forEach((it) => it.dates.forEach((e) => entries.push({ it, e })));
+  const dayChips = (iso) => entries.filter(({ e }) => e.precision === 'day' && e.value === iso).map(({ it, e }) =>
+    `<button class="cal-chip dk-${e.kind} ${dateState(e, true) === 'overdue' ? 'overdue' : ''}" data-open="${it.id}" title="${DATE_KIND[e.kind]} · ${esc(it.title)}">${esc(it.title)}</button>`).join('');
+  let cells = DAYS.map((x) => `<div class="cal-h">${x}</div>`).join('');
+  for (let w = 0; w < 5; w += 1) {
+    for (let i = 0; i < 7; i += 1) {
+      const dt = new Date(start); dt.setUTCDate(start.getUTCDate() + w * 7 + i);
+      const iso = isoOf(dt);
+      cells += `<div class="cal-d ${dt.getUTCMonth() !== 9 ? 'out' : ''} ${iso === TODAY ? 'today' : ''}"><span class="n">${dt.getUTCDate()}</span>${dayChips(iso)}</div>`;
+    }
+    const weekStart = new Date(start); weekStart.setUTCDate(start.getUTCDate() + w * 7 + 1);
+    const weekly = entries.filter(({ e }) => e.precision === 'week' && bounds(e)[0] === isoOf(weekStart));
+    if (weekly.length) cells += `<div class="cal-week">${weekly.map(({ it, e }) => `Week · ${DATE_KIND[e.kind]}: ${esc(it.title)}`).join(' · ')}</div>`;
+  }
+  const period = entries.filter(({ e }) => ['month', 'quarter', 'year'].includes(e.precision) && bounds(e)[0] <= '2026-10-31' && bounds(e)[1] >= '2026-10-01');
+  const outside = entries.filter(({ e }) => !(bounds(e)[0] <= '2026-10-31' && bounds(e)[1] >= '2026-10-01'));
+  const unscheduled = live().filter((it) => isOpen(it) && !it.dates.length);
+  return `<div class="page" style="max-width:1300px"><h2>October 2026</h2><p class="lede">Coarse dates stay periods: they sit in the period band and are never pinned to a day.</p>
+    <div class="band"><span style="font-size:12px;color:var(--hq-muted);align-self:center">This month:</span>${period.map(({ it, e }) => `<span class="chip">${ic(e.kind)}${esc(it.title)} · ${fmtShort(e)}</span>`).join('') || '<span class="chip">None</span>'}</div>
+    <div class="cal-wrap"><div class="cal">${cells}</div>
+    <div class="grid2" style="grid-template-columns:1fr;align-content:start">
+      <section class="panel"><h3>Unscheduled <span class="n">${unscheduled.length}</span></h3>${unscheduled.slice(0, 6).map((it) => `<button class="rowlink" data-open="${it.id}">${esc(it.title)}</button>`).join('')}<p style="font-size:12px;color:var(--hq-muted);margin:6px 0 0">Drag onto a day, then choose Target, Deadline, Start or Event.</p></section>
+      <section class="panel"><h3>Outside this month</h3>${outside.map(({ it, e }) => `<button class="rowlink" data-open="${it.id}">${esc(it.title)}<span class="meta">${DATE_KIND[e.kind]} · ${fmtShort(e)}</span></button>`).join('')}</section>
+    </div></div></div>`;
+}
+
+function renderTimeline() {
+  const quarters = ['Q4 2026', 'Q1 2027', 'Q2 2027', 'Q3 2027', 'Q4 2027', 'Q1 2028', 'Q2 2028', 'Q3 2028'];
+  const t0 = dayNum('2026-10-01'); const t1 = dayNum('2028-10-01');
+  const pct = (iso) => Math.max(0, Math.min(100, ((dayNum(iso) - t0) / (t1 - t0)) * 100));
+  const lanes = [...Object.entries(HORIZONS), ['', 'No horizon']];
+  return `<div class="page" style="max-width:1300px"><h2>Timeline</h2><p class="lede">Horizon lanes across eight quarters. Drag a row to another lane to change its horizon; a bar is drawn only from a start to a later target or deadline.</p>
+    <div class="tl"><div class="tl-head"><div>Horizon</div><div class="tl-q">${quarters.map((q) => `<div>${q}</div>`).join('')}</div></div>
+    ${lanes.map(([k, label]) => { const rows = live().filter((it) => isOpen(it) && (it.horizon || '') === k && matches(it)); return `<div class="tl-lane"><div>${label}</div><div class="tl-rows"><span class="tl-today" style="left:${pct(TODAY)}%"></span>${rows.map((it) => {
+      const start = it.dates.find((e) => e.kind === 'start');
+      const end = it.dates.find((e) => e.kind !== 'start' && start && dayNum(bounds(e)[1]) > dayNum(start.value));
+      const marks = it.dates.map((e) => e.precision === 'day' ? `<span class="tl-mark dk-${e.kind}" style="left:${pct(e.value)}%" title="${DATE_KIND[e.kind]} ${fmtLong(e)}"></span>` : `<span class="tl-band" style="left:${pct(bounds(e)[0])}%;width:${Math.max(.6, pct(bounds(e)[1]) - pct(bounds(e)[0]))}%" title="${DATE_KIND[e.kind]} ${fmtShort(e)}"></span>`).join('');
+      const bar = start && end ? `<span class="tl-bar" style="left:${pct(start.value)}%;width:${pct(bounds(end)[1]) - pct(start.value)}%"></span>` : '';
+      const labLeft = it.dates.length ? Math.min(78, Math.max(...it.dates.map((e) => pct(bounds(e)[1]))) + 1.2) : 1;
+      return `<div class="tl-row">${bar}${marks}<button class="lab rowlink" data-open="${it.id}" style="left:${labLeft}%;width:auto;padding:0 4px;top:2px">${esc(it.title)}</button></div>`; }).join('') || '<div class="tl-row"></div>'}</div></div>`; }).join('')}
+    </div></div>`;
+}
+
+function renderReview() {
+  const items = live();
+  const inbox = column('inbox');
+  const overdue = items.filter((it) => isOpen(it) && it.dates.some((e) => dateState(e, true) === 'overdue'));
+  const passed = items.filter((it) => isOpen(it) && it.dates.some((e) => e.kind === 'target' && dateState(e, true) === 'passed'));
+  const quiet = items.filter((it) => it.status === 'active' && dayNum(TODAY) - dayNum(it.updated) >= 21);
+  const mismatch = items.filter((it) => isOpen(it) && it.horizon === 'someday' && it.dates.some((e) => e.kind === 'deadline' && dayNum(bounds(e)[0]) - dayNum(TODAY) <= 45 && dayNum(bounds(e)[0]) >= dayNum(TODAY)));
+  const noWhy = items.filter((it) => isOpen(it) && it.status !== 'inbox' && !it.why);
+  const card = (it, why, acts) => `<div class="review-card"><button class="rowlink" style="padding:0;font-weight:600" data-open="${it.id}">${esc(it.title)}</button><div class="why">${why}</div><div class="acts">${acts}</div></div>`;
+  const sec = (title, list) => list ? `<section class="panel"><h3>${title}</h3><div style="display:grid;gap:8px">${list}</div></section>` : '';
+  return `<div class="page"><h2>Review</h2><p class="lede">Gentle prompts. Nothing changes until you choose an action.</p><div class="grid2">
+    ${sec(`Sort Inbox <span class="n">${inbox.length}</span>`, inbox.map((it) => card(it, 'Captured, not yet sorted.', `${Object.entries(WHY).map(([k, v]) => `<button class="btn btn-sm" data-review-why="${it.id}:${k}">${v}</button>`).join('')}<button class="btn btn-sm" data-menu-btn="${it.id}">Move to…</button>`)).join(''))}
+    ${sec(`Overdue deadlines <span class="n">${overdue.length}</span>`, overdue.map((it) => card(it, 'Deadline ' + fmtLong(it.dates.find((e) => e.kind === 'deadline')) + ' has passed.', `<button class="btn btn-sm">Reschedule…</button><button class="btn btn-sm" data-review-done="${it.id}">Mark done</button>`)).join(''))}
+    ${sec('Passed targets', passed.map((it) => card(it, 'Target passed. Targets stay neutral; set a new one if it still matters.', '<button class="btn btn-sm">New target…</button>')).join(''))}
+    ${sec('Active but quiet', quiet.map((it) => card(it, `No changes for ${dayNum(TODAY) - dayNum(it.updated)} days (threshold 21).`, `<button class="btn btn-sm">Still active</button><button class="btn btn-sm" data-menu-btn="${it.id}">Move to…</button>`)).join(''))}
+    ${sec('Horizon and date disagree', mismatch.map((it) => card(it, 'Horizon is Someday, but it has a deadline within six weeks.', '<button class="btn btn-sm">Set horizon…</button>')).join(''))}
+    ${sec('No “why” yet', noWhy.map((it) => card(it, 'Say whether this is a need, a want or exploration.', Object.entries(WHY).map(([k, v]) => `<button class="btn btn-sm" data-review-why="${it.id}:${k}">${v}</button>`).join(''))).join(''))}
+  </div></div>`;
+}
+
+function renderArchive() {
+  const items = state.items.filter((it) => it.archived);
+  return `<div class="page"><h2>Archive</h2><p class="lede">Archived items are hidden everywhere else. Restoring keeps their status and place. Archiving is not the same as Done.</p>
+    <section class="panel">${items.map((it) => `<div class="rowlink"><span class="st-dot" style="--st:var(--work-st-${it.status})"></span>${esc(it.title)}<span class="meta">${ST[it.status].label}</span><button class="btn btn-sm" data-restore="${it.id}">Restore</button></div>`).join('') || 'Nothing archived.'}</section></div>`;
+}
+
+/* =================================================================== detail */
+function renderDetail() {
+  const el = document.getElementById('detail');
+  const it = state.selected && get(state.selected);
+  if (!it) { el.hidden = true; return; }
+  const active = document.activeElement;
+  const keep = active && el.contains(active) && active.dataset.field ? { field: active.dataset.field, start: active.selectionStart, end: active.selectionEnd } : null;
+  el.hidden = false;
+  const pending = state.pending.get(it.id);
+  const done = it.steps.filter((s) => s.done).length;
+  const sel = (key, opts, allowNone = true) => `<select class="select" data-field-select="${key}" aria-label="${key}">${allowNone ? '<option value="">—</option>' : ''}${Object.entries(opts).map(([k, v]) => `<option value="${k}" ${it[key] === k ? 'selected' : ''}>${v}</option>`).join('')}</select>`;
+  const notesValue = state.dirty.has('notes') ? state.dirty.get('notes') : it.notes;
+  const links = it.links.map((l) => {
+    if (l.kind === 'run') return `<li class="ref is-run"><span class="k">${l.domain} · ${l.objectKind}</span><span>${esc(l.title)}</span><span class="obs">${ic('run')}Observed: ${l.observed}</span>
+      <span class="sub">Status owned by Jones · checked ${l.checked} · this card's status is unaffected. Opening it never re-sends.</span></li>`;
+    if (l.state === 'unavailable') return `<li class="ref is-missing"><span class="k">${l.domain} · ${l.objectKind}</span><span>${esc(l.title)}</span><span class="obs" style="background:var(--hq-sunken);color:var(--hq-muted)">Unavailable</span>
+      <span class="sub">Kept as a readable reference. The target can't be resolved right now; nothing was copied here.</span></li>`;
+    return `<li class="ref is-linked"><span class="k">${l.domain} · ${l.objectKind}</span><a href="#" data-follow-ref title="Opens in Design, with a way back to this card">${esc(l.title)}</a><span style="font-size:11.5px;color:var(--hq-muted)">${l.revision}</span>
+      <span class="sub">Project: ${esc(l.project)} · follow opens Design and returns here; following never starts work.</span>
+      <div class="captured"><svg viewBox="0 0 132 82" role="img" aria-label="Captured thumbnail of home page v3"><rect width="132" height="82" fill="#fffaf3"/><rect width="132" height="14" fill="#c4542a"/><rect x="8" y="20" width="70" height="7" rx="2" fill="#2a2320"/><rect x="8" y="31" width="52" height="4" rx="2" fill="#8a7f78"/><rect x="8" y="44" width="36" height="28" rx="3" fill="#e8c9a8"/><rect x="48" y="44" width="36" height="28" rx="3" fill="#a9c2b0"/><rect x="88" y="44" width="36" height="28" rx="3" fill="#d9b9c9"/><circle cx="112" cy="24" r="7" fill="none" stroke="#c4542a" stroke-width="2"/><text x="109" y="27.5" font-size="9" font-family="sans-serif" fill="#c4542a">C</text></svg>
+        <small>Captured image keeps its own colors in light and dark HQ themes.</small></div></li>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="detail-head"><span class="crumb">${ic(it.kind)}${KINDS[it.kind]} · <span class="st-dot" style="--st:var(--work-st-${it.status})"></span>${ST[it.status].label}</span>
+      <span class="save-state ${pending ? 'is-saving' : ''} ${state.conflict ? 'is-error' : ''}" id="save-state">${state.conflict ? 'Changed elsewhere' : pending ? 'Saving…' : 'Saved'}</span>
+      <button class="btn btn-ghost btn-icon" data-menu="${it.id}" aria-label="Move or more">${ic('more')}</button>
+      <button class="btn btn-ghost btn-icon" data-close-detail aria-label="Close detail (Esc)">${ic('close')}</button></div>
+    <div class="detail-body">
+      ${state.conflict ? `<div class="conflict" role="alert"><div>${ic('alert')} <strong>Notes were changed on another device.</strong> Your version is still shown.</div><div class="conflict-actions"><button class="btn btn-primary btn-sm" data-conflict="mine">Keep mine</button><button class="btn btn-sm" data-conflict="theirs">Use theirs</button></div></div>` : ''}
+      <textarea class="detail-title" data-field="title" rows="2" aria-label="Title" maxlength="200">${esc(state.dirty.has('title') ? state.dirty.get('title') : it.title)}</textarea>
+      <div class="status-pills" role="radiogroup" aria-label="Status">${STATUSES.map((s) => `<button class="status-pill" role="radio" aria-checked="${s.id === it.status}" data-detail-status="${s.id}" style="--st:var(--work-st-${s.id})"><span class="st-dot"></span>${s.label}</button>`).join('')}</div>
+      <section class="sec"><div class="fields">
+        <label>Why</label>${sel('why', WHY)}
+        <label>Horizon</label>${sel('horizon', HORIZONS)}
+        <label>Kind</label>${sel('kind', KINDS, false)}
+        <label>Priority</label>${sel('priority', PRIORITY)}
+        <label>Area</label><input class="input" data-field="area" value="${esc(it.area || '')}" aria-label="Area" list="areas">
+      </div></section>
+      <section class="sec"><h3>Dates <button class="btn btn-ghost btn-sm">${ic('plus')}Add date</button></h3>
+        ${it.dates.map((e) => `<div class="date-row">${ic(e.kind)}<div><div class="when">${DATE_KIND[e.kind]} · ${esc(fmtLong(e))}</div><div class="meta">${e.precision} precision · ${relative(e)}${e.note ? ' · ' + esc(e.note) : ''}</div></div><button class="btn btn-ghost btn-sm">Edit</button></div>`).join('') || '<div style="color:var(--hq-muted);font-size:13px">No dates. Nothing is invented for undated items.</div>'}
+      </section>
+      <section class="sec"><h3>Next steps <span style="text-transform:none;letter-spacing:0;font-weight:500">${done}/${it.steps.length}</span></h3>
+        ${it.steps.length ? `<div class="progress"><span style="width:${(done / it.steps.length) * 100}%"></span></div>` : ''}
+        <ul class="steps">${it.steps.map((s, i) => `<li class="step ${s.done ? 'is-done' : ''}" data-step="${s.id}"><span class="grip" title="Drag or Alt+↑/↓">${ic('grip')}</span><input type="checkbox" ${s.done ? 'checked' : ''} data-step-toggle="${s.id}" aria-label="Done: ${esc(s.text)}"><span class="txt" tabindex="0" data-step-key="${s.id}" data-focus-key="step:${s.id}" aria-label="Step ${i + 1}: ${esc(s.text)}. Alt+arrows to reorder">${esc(s.text)}</span></li>`).join('')}</ul>
+        <input class="input" style="margin-top:6px" data-new-step placeholder="Add a next step and press Enter" aria-label="New next step">
+      </section>
+      <section class="sec"><h3>Notes <span style="text-transform:none;letter-spacing:0;font-weight:500">saves as you pause</span></h3>
+        <textarea class="textarea" data-field="notes" rows="5" aria-label="Notes">${esc(notesValue)}</textarea></section>
+      <section class="sec"><h3>Links <button class="btn btn-ghost btn-sm">${ic('plus')}Add link</button></h3>
+        <ul class="refs">${it.refs.map((r) => `<li class="ref"><span class="k">${r.kind === 'url' ? 'Link' : 'Document'}</span><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.label)}</a><span style="font-size:11.5px;color:var(--hq-muted)">${esc(new URL(r.url).host)}</span></li>`).join('') || '<li style="color:var(--hq-muted);font-size:13px">No links.</li>'}</ul></section>
+      ${it.links.length ? `<section class="sec"><h3>Linked across HQ <span class="tag-proposed">Proposed</span></h3><ul class="refs">${links}</ul></section>` : ''}
+      <section class="sec"><h3>History</h3><div class="history"><div>${ic('history')} Moved to ${ST[it.status].label} · revision ${it.rev}</div><div style="color:var(--hq-muted)">Last 200 entries are kept per item by the Planner service.</div></div></section>
+      <div style="display:flex;gap:8px"><button class="btn btn-sm" data-archive="${it.id}">${ic('archive')}Archive</button><button class="btn btn-sm btn-ghost">Copy link</button></div>
+    </div>`;
+  if (keep) {
+    const target = el.querySelector(`[data-field="${keep.field}"]`);
+    if (target) { target.focus(); try { target.setSelectionRange(keep.start, keep.end); } catch (_) { /* not text */ } }
+  }
+}
+function openDetail(id) { state.selected = id; state.conflict = null; state.dirty.clear(); render(); document.querySelector('#detail .detail-title')?.focus(); }
+function closeDetail() {
+  const id = state.selected;
+  flushNotes();
+  state.selected = null; state.conflict = null; state.dirty.clear();
+  render();
+  if (id) document.querySelector(`[data-focus-key="card:${id}"]`)?.focus();
+}
+
+let notesTimer = null;
+function flushNotes() {
+  if (!notesTimer) return;
+  clearTimeout(notesTimer); notesTimer = null;
+  saveNotes();
+}
+async function saveNotes() {
+  const it = get(state.selected);
+  if (!it || !state.dirty.has('notes')) return;
+  const mine = state.dirty.get('notes');
+  const before = it.notes;
+  if (mine === before) { state.dirty.delete('notes'); return; }
+  try {
+    await patchItem(it, { notes: mine }, { label: 'Notes', undo: false, quiet: true });
+    state.dirty.delete('notes');
+    render({ keepDetail: true });
+  } catch (err) {
+    if (err.code === 'revision_conflict') {
+      const latest = get(it.id);
+      if (latest.notes === before) {          // a different field changed: re-apply ours
+        try { await patchItem(latest, { notes: mine }, { label: 'Notes', undo: false, quiet: true }); state.dirty.delete('notes'); render({ keepDetail: true }); return; } catch (e2) { failure(e2, 'Notes'); }
+      }
+      state.conflict = { field: 'notes', mine };
+      render({ keepDetail: true });
+    } else failure(err, 'Notes');
+  }
+}
+
+/* =================================================================== shell rendering */
+function render() {
+  const view = document.getElementById('view');
+  const scroll = view.querySelector('.board')?.scrollLeft;
+  const focusKey = state.focusKey || document.activeElement?.dataset?.focusKey;
+  document.getElementById('nav-views').innerHTML = `<div class="nav-label">Views</div>` + VIEWS.map((v) => `<button class="nav-item" data-view="${v.id}" ${state.view === v.id ? 'aria-current="page"' : ''}>${ic(v.icon)}${v.label}<span class="key">${v.key}</span></button>`).join('');
+  document.getElementById('nav-boards').innerHTML = `<div class="nav-label">Boards</div>
+    <button class="nav-item" data-goto-mode="status" ${state.view === 'board' && state.boardMode === 'status' ? 'aria-current="page"' : ''}>${ic('board')}Status board<span class="count">${live().length}</span></button>
+    <button class="nav-item" data-goto-mode="dates" ${state.view === 'board' && state.boardMode === 'dates' ? 'aria-current="page"' : ''}>${ic('calendar')}By date</button>
+    <button class="nav-item" data-goto-mode="lists" ${state.view === 'board' && state.boardMode === 'lists' ? 'aria-current="page"' : ''}>${ic('board')}Weekly plan<span class="tag-proposed" style="margin-left:auto">Proposed</span></button>`;
+  document.getElementById('view-select').innerHTML = VIEWS.map((v) => `<option value="${v.id}" ${state.view === v.id ? 'selected' : ''}>${v.label}</option>`).join('');
+  const off = state.connection === 'offline';
+  document.getElementById('conn').className = `conn ${off ? 'is-off' : ''}`;
+  document.getElementById('conn').innerHTML = `<span class="conn-dot" aria-hidden="true"></span><span>${off ? 'Planner service unreachable' : 'Planner service connected'}<small>Loaded ${state.loadedAt} ${ZONE_ABBR} · ${off ? 'changes paused' : 'synced'}</small></span>`;
+  const banner = document.getElementById('banner');
+  if (off) {
+    banner.hidden = false; banner.className = 'banner is-off';
+    const unconfirmed = [...state.pending.values()].filter((v) => v === 'unconfirmed').length;
+    banner.innerHTML = `${ic('alert')}<span><strong>The Planner service can't be reached.</strong> Showing data loaded at ${state.loadedAt} ${ZONE_ABBR}. Changes are paused${unconfirmed ? `; ${unconfirmed} change unconfirmed and will be re-sent safely` : ''}. New captures are kept as device drafts.</span>`;
+  } else if (state.drafts.length) {
+    banner.hidden = false; banner.className = 'banner is-info';
+    banner.innerHTML = `<span><strong>${state.drafts.length} device draft${state.drafts.length === 1 ? '' : 's'}</strong>, not in the planning store yet.</span><button class="btn btn-sm" id="send-drafts">Send drafts</button>`;
+  } else banner.hidden = true;
+  const html = { glance: renderGlance, board: renderBoard, list: renderList, calendar: renderCalendar, timeline: renderTimeline, review: renderReview, archive: renderArchive }[state.view]();
+  if (!drag.active) {
+    view.innerHTML = html;
+    const b = view.querySelector('.board'); if (b && scroll) b.scrollLeft = scroll;
+  }
+  renderDetail();
+  if (state.composer) document.getElementById('composer-input')?.focus();
+  else if (focusKey && !document.getElementById('detail').contains(document.activeElement)) document.querySelector(`[data-focus-key="${focusKey}"]`)?.focus({ preventScroll: true });
+  state.focusKey = null;
+}
+
+/* =================================================================== drag & drop (pointer events; mouse, pen, touch long-press) */
+const drag = { pending: null, active: null };
+document.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || drag.active) return;
+  const card = e.target.closest('[data-card]');
+  if (!card || e.target.closest('button, a, input, select, textarea')) return;
+  if (card.closest('[data-board-kind="dates"]')) return;     // read-only grouping
+  drag.pending = { card, id: card.dataset.id, x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch', t: Date.now() };
+});
+document.addEventListener('pointermove', (e) => {
+  if (drag.pending && !drag.active) {
+    const p = drag.pending;
+    const dist = Math.hypot(e.clientX - p.x, e.clientY - p.y);
+    if (p.touch && Date.now() - p.t < 320) { if (dist > 10) drag.pending = null; return; }
+    if (dist < 5) return;
+    startDrag(p, e);
+  }
+  if (drag.active) { e.preventDefault(); moveDrag(e.clientX, e.clientY); }
+});
+document.addEventListener('pointerup', (e) => {
+  if (drag.active) { finishDrag(); suppressClick = true; setTimeout(() => { suppressClick = false; }, 0); }
+  drag.pending = null;
+});
+document.addEventListener('pointercancel', () => cancelDrag());
+let suppressClick = false;
+function startDrag(p, e) {
+  const rect = p.card.getBoundingClientRect();
+  const ghost = p.card.cloneNode(true);
+  ghost.classList.add('ghost'); ghost.removeAttribute('data-card'); ghost.style.width = rect.width + 'px';
+  ghost.insertAdjacentHTML('beforeend', '<span class="ghost-badge">Reorder</span>');
+  document.body.appendChild(ghost);
+  const ph = document.createElement('div'); ph.className = 'placeholder'; ph.style.height = rect.height + 'px';
+  p.card.after(ph); p.card.classList.add('drag-hidden');
+  document.body.classList.add('dragging');
+  drag.active = { ...p, ghost, ph, dx: e.clientX - rect.left, dy: e.clientY - rect.top, target: null, kind: p.card.closest('[data-board-kind]')?.dataset.boardKind || 'status' };
+  moveDrag(e.clientX, e.clientY);
+}
+function moveDrag(x, y) {
+  const a = drag.active;
+  a.ghost.style.left = (x - a.dx) + 'px'; a.ghost.style.top = (y - a.dy) + 'px';
+  document.querySelectorAll('.drop-active').forEach((el) => el.classList.remove('drop-active'));
+  const el = document.elementFromPoint(x, y);
+  const badge = a.ghost.querySelector('.ghost-badge');
+  const item = get(a.id);
+  const tab = el && el.closest('[data-drop-tab]');
+  if (tab && a.kind === 'status') {
+    tab.classList.add('drop-active');
+    a.target = { kind: 'tab', key: tab.dataset.dropTab };
+    badge.textContent = `Move to top of ${ST[tab.dataset.dropTab].label}`;
+    return;
+  }
+  const col = el && el.closest('[data-drop-col]');
+  if (!col || (a.kind === 'lists') !== Boolean(col.dataset.list)) { a.target = null; badge.textContent = 'Drop on a column · Esc cancels'; return; }
+  col.classList.add('drop-active');
+  const key = col.dataset.dropCol;
+  const list = col.querySelector('[data-col-list]');
+  if (!list) {
+    a.target = { kind: 'col', key, index: 0, ids: [] };
+    badge.textContent = `Move to ${ST[key].label}`;
+    return;
+  }
+  const cards = [...list.querySelectorAll('[data-card]:not(.drag-hidden)')];
+  let index = cards.findIndex((c) => { const r = c.getBoundingClientRect(); return y < r.top + r.height / 2; });
+  if (index < 0) index = cards.length;
+  const before = cards[index];
+  if (before) { if (a.ph.nextElementSibling !== before) list.insertBefore(a.ph, before); }
+  else if (list.lastElementChild !== a.ph) { list.querySelector('.col-empty')?.remove(); list.append(a.ph); }
+  a.target = { kind: 'col', key, index, ids: cards.map((c) => c.dataset.id) };
+  if (a.kind === 'lists') { const same = state.placements.get(a.id)?.list === key; badge.textContent = same ? 'Reorder' : `Place in ${PROPOSED_LISTS.find((l) => l.id === key).name}`; }
+  else badge.textContent = item.status === key ? 'Reorder' : `Move to ${ST[key].label}`;
+}
+function cleanupDrag() {
+  const a = drag.active;
+  if (!a) return;
+  a.ghost.remove(); a.ph.remove(); a.card.classList.remove('drag-hidden');
+  document.body.classList.remove('dragging');
+  document.querySelectorAll('.drop-active').forEach((el) => el.classList.remove('drop-active'));
+  drag.active = null;
+}
+function cancelDrag() { if (drag.active) { cleanupDrag(); announce('Drag cancelled.'); render(); } drag.pending = null; }
+function finishDrag() {
+  const a = drag.active;
+  const t = a && a.target;
+  cleanupDrag();
+  if (!t) { render(); return; }
+  const item = get(a.id);
+  state.focusKey = `card:${a.id}`;
+  if (a.kind === 'lists') {
+    const ids = t.ids.filter((x) => x !== a.id);
+    const old = state.placements.get(a.id);
+    if (old && old.list === t.key) {
+      const visible = t.ids; const from = visible.indexOf(a.id);
+      if (from === t.index || from + 1 === t.index) { render(); return; }
+    }
+    placeOnList(item, t.key, anchorsForDrop(ids, t.index));
+    return;
+  }
+  if (t.kind === 'tab' || !t.ids) {
+    if (item.status === t.key) { render(); return; }
+    moveItem(item, t.key, { place: 'top' });
+    return;
+  }
+  const ids = t.ids.filter((x) => x !== a.id);
+  if (item.status === t.key) {
+    const visible = column(t.key).map((it) => it.id);
+    const from = visible.indexOf(a.id);
+    if (from === t.index) { render(); return; }   // dropped where it started
+  }
+  moveItem(item, t.key, anchorsForDrop(ids, t.index));
+}
+
+/* =================================================================== menus, toasts, capture */
+function announce(msg) { document.getElementById('live').textContent = msg; }
+function toast(message, { error = false, detail = '', action = null } = {}) {
+  const host = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${error ? 'is-error' : ''}`;
+  el.setAttribute('role', error ? 'alert' : 'status');
+  el.innerHTML = `<span>${esc(message)}${detail ? `<span class="detail-text">${esc(detail)}</span>` : ''}</span>`;
+  if (action) {
+    const b = document.createElement('button'); b.className = 'btn btn-sm'; b.innerHTML = `${ic('undo')}${esc(action.label)}`;
+    b.addEventListener('click', () => { el.remove(); action.run(); });
+    el.append(b);
+  }
+  host.append(el);
+  while (host.children.length > 3) host.firstElementChild.remove();
+  setTimeout(() => el.remove(), error ? 9000 : 6000);
+  return el;
+}
+
+let menuReturn = null;
+function openMoveMenu(id, anchorEl) {
+  const it = get(id);
+  const menu = document.getElementById('menu');
+  const visible = column(it.status).map((x) => x.id);
+  const idx = visible.indexOf(id);
+  menu.innerHTML = `<div class="menu-label">Move “${esc(it.title.length > 30 ? it.title.slice(0, 29) + '…' : it.title)}” to</div>
+    ${STATUSES.map((s) => `<button role="menuitem" data-move-status="${s.id}" ${s.id === it.status ? 'disabled' : ''}><span class="st-dot" style="--st:var(--work-st-${s.id})"></span>${s.label}${s.id === it.status ? '<span class="hint">current</span>' : ''}</button>`).join('')}
+    ${state.view === 'board' && state.boardMode === 'dates' ? '' : `<hr><button role="menuitem" data-move-step="-1" ${idx <= 0 ? 'disabled' : ''}>Move up<span class="hint">Alt+↑</span></button>
+    <button role="menuitem" data-move-step="1" ${idx < 0 || idx >= visible.length - 1 ? 'disabled' : ''}>Move down<span class="hint">Alt+↓</span></button>
+    <button role="menuitem" data-move-edge="top" ${idx === 0 ? 'disabled' : ''}>Move to top</button>
+    <button role="menuitem" data-move-edge="bottom" ${idx === visible.length - 1 ? 'disabled' : ''}>Move to bottom</button>`}
+    <hr><button role="menuitem" data-open-item="${id}">Open card<span class="hint">Enter</span></button>`;
+  menu.dataset.id = id;
+  menu.hidden = false;
+  const r = anchorEl.getBoundingClientRect();
+  const mh = menu.offsetHeight, mw = menu.offsetWidth;
+  menu.style.top = Math.min(window.innerHeight - mh - 8, r.bottom + 4) + 'px';
+  menu.style.left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.left)) + 'px';
+  menuReturn = anchorEl.closest('[data-card]') || anchorEl;
+  menu.querySelector('button:not([disabled])')?.focus();
+}
+function closeMenu({ restore = true } = {}) {
+  const menu = document.getElementById('menu');
+  if (menu.hidden) return;
+  menu.hidden = true;
+  if (restore && menuReturn) menuReturn.focus();
+}
+
+function openAppearanceMenu(btn) {
+  const menu = document.getElementById('menu');
+  const cur = document.documentElement.dataset.appearance;
+  menu.innerHTML = `<div class="menu-label">Appearance · HQ setting</div>
+    ${[['light', 'Light', 'sun'], ['dark', 'Dark', 'moon'], ['system', 'System', 'system']].map(([k, label, icn]) => `<button role="menuitemradio" aria-checked="${cur === k}" data-appearance-choice="${k}">${ic(icn)}${label}${cur === k ? '<span class="hint">current</span>' : ''}</button>`).join('')}
+    <hr><div class="menu-label" style="text-transform:none;letter-spacing:0;font-weight:500;max-width:220px;white-space:normal">Changes HQ chrome only. Captured images and previews keep their own colors.</div>`;
+  menu.hidden = false; delete menu.dataset.id;
+  const r = btn.getBoundingClientRect();
+  menu.style.left = (r.right + 8) + 'px';
+  menu.style.top = Math.max(8, r.bottom - menu.offsetHeight) + 'px';
+  menuReturn = btn;
+  menu.querySelector('button')?.focus();
+}
+function setAppearance(mode) {
+  document.documentElement.dataset.appearance = mode;
+  try { localStorage.setItem('hq.mock.appearance', mode); } catch (_) { /* preference only */ }
+  const btn = document.getElementById('appearance-btn');
+  btn.innerHTML = `${ic(mode === 'light' ? 'sun' : mode === 'dark' ? 'moon' : 'system')}<span>${mode[0].toUpperCase() + mode.slice(1)}</span>`;
+}
+
+function openCapture(status = 'inbox') {
+  const scrim = document.getElementById('scrim');
+  scrim.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="cap-title">
+    <h2 id="cap-title">New planning item</h2>
+    <label>Title<input class="input" id="cap-input" maxlength="200" placeholder="What do you want to remember?" autocomplete="off"></label>
+    <div class="suggest" id="cap-suggest" hidden></div>
+    <div class="row">
+      <label>Status<select class="select" id="cap-status">${STATUSES.map((s) => `<option value="${s.id}" ${s.id === status ? 'selected' : ''}>${s.label}</option>`).join('')}</select></label>
+      <label>Optional date<span style="display:flex;gap:6px"><select class="select" id="cap-kind" style="width:auto" aria-label="Date kind">${Object.entries(DATE_KIND).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select><input class="input" type="date" id="cap-date" aria-label="Day"></span></label>
+    </div>
+    <div class="modal-foot"><small>Saves a planning record only. Nothing starts.</small>
+      <button class="btn btn-ghost" data-cap-cancel>Cancel</button>
+      <button class="btn" data-cap-save="again" title="Shift+Enter">Save &amp; add another</button>
+      <button class="btn btn-primary" data-cap-save="once" title="Enter">Save</button></div></div>`;
+  scrim.hidden = false;
+  document.getElementById('cap-input').focus();
+}
+const NL_DATES = { today: 0, tomorrow: 1, friday: 3, monday: 6, 'next week': 6 };
+function captureSuggest() {
+  const v = document.getElementById('cap-input').value.toLowerCase();
+  const box = document.getElementById('cap-suggest');
+  const hit = Object.keys(NL_DATES).find((k) => new RegExp(`\\b${k}\\b`).test(v));
+  if (!hit || document.getElementById('cap-date').value) { box.hidden = true; return; }
+  const dt = toDate(TODAY); dt.setUTCDate(dt.getUTCDate() + NL_DATES[hit]);
+  box.hidden = false;
+  box.innerHTML = `${ic('target')}<span>“${hit}” looks like a date. Add <strong>Target · ${fmtDay(isoOf(dt))}</strong>? The title stays as typed.</span><button class="btn btn-sm" data-cap-accept="${isoOf(dt)}">Add date</button>`;
+}
+async function saveCapture(again) {
+  const input = document.getElementById('cap-input');
+  const title = input.value.trim();
+  if (!title) { input.focus(); input.setAttribute('aria-invalid', 'true'); toast('A title is required.', { error: true }); return; }
+  const day = document.getElementById('cap-date').value;
+  const fields = { title, status: document.getElementById('cap-status').value, dates: day ? [d(document.getElementById('cap-kind').value, 'day', day)] : [] };
+  if (!again) closeCapture();
+  else { input.value = ''; document.getElementById('cap-date').value = ''; document.getElementById('cap-suggest').hidden = true; input.focus(); }
+  try { await createItem(fields); } catch (err) { failure(err, 'New item'); }
+}
+function closeCapture() { const s = document.getElementById('scrim'); s.hidden = true; s.innerHTML = ''; }
+
+function openSettings() {
+  const scrim = document.getElementById('scrim');
+  scrim.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="set-title">
+    <h2 id="set-title">Data &amp; settings</h2>
+    <div style="display:grid;gap:10px;font-size:13px">
+      <div class="panel" style="padding:12px"><strong>Export</strong><p style="margin:4px 0 8px;color:var(--hq-text-2)">Full JSON backup (jones-planning-export v1) or a readable Markdown export, straight from the Planner service.</p><div style="display:flex;gap:8px"><button class="btn btn-sm">Save JSON backup…</button><button class="btn btn-sm">Save Markdown…</button></div></div>
+      <div class="panel" style="padding:12px"><strong>Import and restore</strong><p style="margin:4px 0 0;color:var(--hq-text-2)">Phase 1 keeps these in the Planner's own data tools: import is validated completely first, then <em>add new items only</em> or <em>replace everything</em> (with a confirmation and a server-side safety backup).</p></div>
+      <div class="panel" style="padding:12px"><strong>Planner preferences</strong><p style="margin:4px 0 0;color:var(--hq-text-2)">Display zone America/New_York · Week starts Monday · Quiet after 21 days. Stored by the Planner service, not HQ.</p></div>
+    </div>
+    <div class="modal-foot"><small>Appearance is an HQ setting (rail).</small><button class="btn btn-primary" data-cap-cancel>Close</button></div></div>`;
+  scrim.hidden = false;
+  scrim.querySelector('button').focus();
+}
+
+function openShortcuts() {
+  const rows = [['N', 'New item (title only is required)'], ['Shift+Enter', 'Save and capture another'], ['1 – 7', 'Glance, Board, List, Calendar, Timeline, Review, Archive'], ['/', 'Search'],
+    ['↑ ↓ ← →', 'Move focus between cards'], ['Enter', 'Open the focused card'], ['M', 'Move-to menu for the focused card'], ['Alt+← →', 'Change status (same call as dragging across columns)'],
+    ['Alt+↑ ↓', 'Reorder within the column'], ['Ctrl/⌘+Z', 'Undo the last change'], ['Esc', 'Cancel a drag, close a menu or the card']];
+  const scrim = document.getElementById('scrim');
+  scrim.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="kb-title"><h2 id="kb-title">Keyboard</h2>
+    <div class="fields" style="grid-template-columns:120px 1fr;gap:8px 12px">${rows.map(([k, v]) => `<span><kbd>${k}</kbd></span><span>${v}</span>`).join('')}</div>
+    <div class="modal-foot"><small>Every drag has a menu and keyboard equivalent, and every move has Undo.</small><button class="btn btn-primary" data-cap-cancel>Close</button></div></div>`;
+  scrim.hidden = false;
+  scrim.querySelector('button').focus();
+}
+function setConnection(value) { state.connection = value; server.reachable = value === 'online'; render(); }
+async function reconnect() {
+  setConnection('online');
+  const unconfirmed = [...state.pending.entries()].filter(([, v]) => v === 'unconfirmed');
+  unconfirmed.forEach(([id]) => state.pending.delete(id));
+  if (unconfirmed.length) logCall(`-> re-sent ${unconfirmed.length} unconfirmed change(s) with original request ids; server answered from its record`, 'ok');
+  load(); render();
+}
+
+/* =================================================================== events */
+function setView(v) { if (!VIEWS.some((x) => x.id === v)) return; state.view = v; closeMenu({ restore: false }); render(); document.getElementById('view').focus({ preventScroll: true }); }
+
+document.addEventListener('click', async (e) => {
+  if (suppressClick) { e.preventDefault(); e.stopPropagation(); return; }
+  const t = e.target;
+  const menu = document.getElementById('menu');
+  if (!menu.hidden && !menu.contains(t) && !t.closest('#appearance-btn')) closeMenu({ restore: false });
+  let el;
+  if ((el = t.closest('[data-view]'))) return setView(el.dataset.view);
+  if ((el = t.closest('[data-goto-mode]'))) { state.view = 'board'; state.boardMode = el.dataset.gotoMode; return render(); }
+  if ((el = t.closest('[data-board]'))) { state.boardMode = el.dataset.board; return render(); }
+  if ((el = t.closest('[data-goto-board]'))) { state.view = 'board'; state.boardMode = 'status'; state.mobileCol = el.dataset.gotoBoard; return render(); }
+  if ((el = t.closest('[data-domain]'))) { if (el.dataset.domain !== 'work') toast(`${el.textContent.trim()} opens in its own module. Work keeps this view, selection and undo history.`); return; }
+  if ((el = t.closest('#appearance-btn'))) return menu.hidden ? openAppearanceMenu(el) : closeMenu();
+  if ((el = t.closest('[data-appearance-choice]'))) { setAppearance(el.dataset.appearanceChoice); return closeMenu(); }
+  if ((el = t.closest('[data-collapse]'))) { const s = el.dataset.collapse; state.collapsed.has(s) ? state.collapsed.delete(s) : state.collapsed.add(s); return render(); }
+  if ((el = t.closest('[data-tab]'))) { state.mobileCol = el.dataset.tab; return render(); }
+  if ((el = t.closest('[data-composer]'))) { state.composer = el.dataset.composer; return render(); }
+  if (t.closest('[data-composer-close]')) { state.composer = null; return render(); }
+  if ((el = t.closest('[data-composer-save]'))) return composerSave(el.dataset.composerSave);
+  if ((el = t.closest('[data-menu]')) || (el = t.closest('[data-menu-btn]'))) { e.stopPropagation(); return openMoveMenu(el.dataset.menu || el.dataset.menuBtn, el); }
+  if ((el = t.closest('[data-move-status]'))) { const it = get(menu.dataset.id); closeMenu(); state.focusKey = `card:${it.id}`; return moveItem(it, el.dataset.moveStatus, { place: 'top' }); }
+  if ((el = t.closest('[data-move-step]'))) { const it = get(menu.dataset.id); closeMenu(); const a = stepAnchors(column(it.status).map((x) => x.id), it.id, Number(el.dataset.moveStep)); state.focusKey = `card:${it.id}`; return a && moveItem(it, it.status, a); }
+  if ((el = t.closest('[data-move-edge]'))) { const it = get(menu.dataset.id); closeMenu(); state.focusKey = `card:${it.id}`; return moveItem(it, it.status, { place: el.dataset.moveEdge }); }
+  if ((el = t.closest('[data-open-item]'))) { closeMenu({ restore: false }); return openDetail(el.dataset.openItem); }
+  if ((el = t.closest('[data-open]'))) return openDetail(el.dataset.open);
+  if ((el = t.closest('[data-card]'))) return openDetail(el.dataset.id);
+  if (t.closest('[data-close-detail]')) return closeDetail();
+  if ((el = t.closest('[data-detail-status]'))) { const it = get(state.selected); if (el.dataset.detailStatus !== it.status) moveItem(it, el.dataset.detailStatus, { place: 'top' }); return; }
+  if ((el = t.closest('[data-archive]'))) return setArchived(get(el.dataset.archive), true);
+  if ((el = t.closest('[data-restore]'))) return setArchived(get(el.dataset.restore), false);
+  if ((el = t.closest('[data-conflict]'))) {
+    const c = state.conflict; state.conflict = null;
+    if (el.dataset.conflict === 'theirs') { state.dirty.delete('notes'); render(); return; }
+    try { await patchItem(get(state.selected), { notes: c.mine }, { label: 'Notes', undo: false, quiet: true }); state.dirty.delete('notes'); } catch (err) { failure(err, 'Notes'); }
+    return render();
+  }
+  if (t.closest('[data-follow-ref]')) { e.preventDefault(); toast('Would open Design at this annotation, with “Back to Work card”.', { detail: 'Reference navigation never starts work.' }); return; }
+  if ((el = t.closest('[data-review-why]'))) { const [id, why] = el.dataset.reviewWhy.split(':'); try { await patchItem(get(id), { why }, { label: 'Why' }); } catch (err) { failure(err, 'Why'); } return; }
+  if ((el = t.closest('[data-review-done]'))) return moveItem(get(el.dataset.reviewDone), 'done', { place: 'top' });
+  if (t.closest('[data-shortcuts]')) return openShortcuts();
+  if (t.closest('#new-btn')) return openCapture();
+  if (t.closest('#undo-btn')) return undoLast();
+  if (t.closest('#settings-btn')) return openSettings();
+  if (t.closest('[data-cap-cancel]')) return closeCapture();
+  if ((el = t.closest('[data-cap-save]'))) return saveCapture(el.dataset.capSave === 'again');
+  if ((el = t.closest('[data-cap-accept]'))) { document.getElementById('cap-date').value = el.dataset.capAccept; document.getElementById('cap-kind').value = 'target'; document.getElementById('cap-suggest').hidden = true; return; }
+  if (t.closest('#send-drafts')) {
+    const drafts = state.drafts.splice(0);
+    for (const dr of drafts) { try { await createItem({ title: dr.title, status: dr.status, dates: dr.dates }); } catch (err) { state.drafts.push(dr); failure(err, 'Draft'); } }
+    return render();
+  }
+  if (t.closest('#mock-offline')) { setConnection('offline'); return; }
+  if (t.closest('#mock-online')) return reconnect();
+  if (t.closest('#mock-elsewhere')) {
+    const id = state.selected || 'it-site';
+    const it = server.items.get(id);
+    it.notes = (it.notes ? it.notes + '\n' : '') + 'Added on the studio laptop: check the kiln schedule.'; it.rev += 1; server.version += 1;
+    logCall(`!! another device saved ${id} notes → rev ${it.rev}`);
+    toast('Simulated: another device saved this card’s notes.', { detail: 'Type in Notes to see the conflict choice.' });
+  }
+});
+
+async function composerSave(status) {
+  const input = document.getElementById('composer-input');
+  const title = input.value.trim();
+  if (!title) { input.focus(); return; }
+  input.value = '';
+  try { await createItem({ title, status }); } catch (err) { failure(err, 'New item'); }
+  state.composer = status;   // stays open for the next card
+  render();
+}
+
+document.addEventListener('change', async (e) => {
+  const t = e.target;
+  if (t.id === 'view-select') return setView(t.value);
+  if (t.dataset.listStatus) { const it = get(t.dataset.listStatus); state.focusKey = null; return moveItem(it, t.value, { place: 'top' }); }
+  if (t.dataset.listHorizon) { try { await patchItem(get(t.dataset.listHorizon), { horizon: t.value || null }, { label: 'Horizon' }); } catch (err) { failure(err, 'Horizon'); } return; }
+  if (t.dataset.fieldSelect) { const key = t.dataset.fieldSelect; try { await patchItem(get(state.selected), { [key]: t.value || null }, { label: key[0].toUpperCase() + key.slice(1) }); } catch (err) { failure(err, key); } return; }
+  if (t.dataset.field === 'area') { try { await patchItem(get(state.selected), { area: t.value.trim() || null }, { label: 'Area' }); } catch (err) { failure(err, 'Area'); } return; }
+  if (t.dataset.stepToggle) {
+    const it = get(state.selected);
+    const steps = it.steps.map((s) => (s.id === t.dataset.stepToggle ? { ...s, done: t.checked } : s));
+    try { await patchItem(it, { steps }, { label: t.checked ? 'Step done' : 'Step reopened' }); } catch (err) { failure(err, 'Next step'); }
+  }
+});
+
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (t.id === 'search') { state.q = t.value; render(); t.focus(); return; }
+  if (t.id === 'cap-input') return captureSuggest();
+  if (t.dataset.field === 'notes') {
+    state.dirty.set('notes', t.value);
+    const s = document.getElementById('save-state'); if (s) { s.textContent = 'Editing…'; s.className = 'save-state'; }
+    clearTimeout(notesTimer);
+    notesTimer = setTimeout(() => { notesTimer = null; saveNotes(); }, 1200);
+  }
+  if (t.dataset.field === 'title') state.dirty.set('title', t.value);
+});
+document.addEventListener('focusout', async (e) => {
+  const t = e.target;
+  if (t.dataset && t.dataset.field === 'title' && state.selected) {
+    const v = t.value.replace(/\s+/g, ' ').trim();
+    const it = get(state.selected);
+    state.dirty.delete('title');
+    if (v && v !== it.title) { try { await patchItem(it, { title: v }, { label: 'Title' }); } catch (err) { failure(err, 'Title'); } }
+  }
+  if (t.dataset && t.dataset.field === 'notes') flushNotes();
+});
+
+const typing = (el) => el && (el.matches('input, textarea, select') || el.isContentEditable);
+document.addEventListener('keydown', async (e) => {
+  const t = e.target;
+  if (e.key === 'Escape' && drag.active) { e.preventDefault(); return cancelDrag(); }
+  const menu = document.getElementById('menu');
+  if (!menu.hidden) {
+    const items = [...menu.querySelectorAll('button:not([disabled])')];
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); return closeMenu(); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); return items[(i + 1) % items.length]?.focus(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); return items[(i - 1 + items.length) % items.length]?.focus(); }
+    return;
+  }
+  const scrim = document.getElementById('scrim');
+  if (!scrim.hidden) {
+    if (e.key === 'Escape') { e.preventDefault(); return closeCapture(); }
+    if (e.key === 'Enter' && t.id === 'cap-input') { e.preventDefault(); return saveCapture(e.shiftKey); }
+    return;
+  }
+  if (t.id === 'composer-input') {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); return composerSave(state.composer); }
+    if (e.key === 'Escape') { state.composer = null; return render(); }
+    return;
+  }
+  if (t.dataset && t.dataset.newStep !== undefined && e.key === 'Enter') {
+    e.preventDefault();
+    const text = t.value.replace(/\s+/g, ' ').trim(); if (!text) return;
+    const it = get(state.selected);
+    t.value = '';
+    try { await patchItem(it, { steps: [...it.steps, step(text)] }, { label: 'Next step' }); } catch (err) { failure(err, 'Next step'); }
+    document.querySelector('[data-new-step]')?.focus();
+    return;
+  }
+  if (t.dataset && t.dataset.stepKey && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault();
+    const it = get(state.selected);
+    const steps = [...it.steps]; const i = steps.findIndex((s) => s.id === t.dataset.stepKey); const j = i + (e.key === 'ArrowUp' ? -1 : 1);
+    if (j < 0 || j >= steps.length) { announce(j < 0 ? 'Already first.' : 'Already last.'); return; }
+    [steps[i], steps[j]] = [steps[j], steps[i]];
+    state.focusKey = `step:${t.dataset.stepKey}`;
+    try { await patchItem(it, { steps }, { label: 'Reorder steps' }); } catch (err) { failure(err, 'Reorder steps'); }
+    document.querySelector(`[data-focus-key="step:${t.dataset.stepKey}"]`)?.focus();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !typing(t)) { e.preventDefault(); return undoLast(); }
+  if (typing(t)) { if (e.key === 'Escape') t.blur(); return; }
+  if (e.key === 'Escape' && state.selected) { e.preventDefault(); return closeDetail(); }
+
+  const card = t.closest && t.closest('[data-card]');
+  if (card && t === card) {
+    const it = get(card.dataset.id);
+    const isLists = state.boardMode !== 'status' && state.view === 'board';
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); return openDetail(it.id); }
+    if (e.key === 'm' || e.key === 'M') { e.preventDefault(); return openMoveMenu(it.id, card.querySelector('[data-menu]') || card); }
+    if (!isLists && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const a = stepAnchors(column(it.status).map((x) => x.id), it.id, e.key === 'ArrowUp' ? -1 : 1);
+      if (!a) { announce(e.key === 'ArrowUp' ? 'Already at the top.' : 'Already at the bottom.'); return; }
+      state.focusKey = `card:${it.id}`;
+      return moveItem(it, it.status, a);
+    }
+    if (!isLists && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      const next = ORDER[ORDER.indexOf(it.status) + (e.key === 'ArrowLeft' ? -1 : 1)];
+      if (!next) return;
+      state.focusKey = `card:${it.id}`; state.mobileCol = next;
+      return moveItem(it, next, { place: 'top' });
+    }
+    if (!e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const cards = [...card.parentElement.querySelectorAll('[data-card]')];
+      return cards[cards.indexOf(card) + (e.key === 'ArrowUp' ? -1 : 1)]?.focus();
+    }
+    if (!e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      const cols = [...document.querySelectorAll('[data-drop-col]:not(.is-collapsed)')];
+      const col = card.closest('[data-drop-col]');
+      const pos = [...col.querySelectorAll('[data-card]')].indexOf(card);
+      let ci = cols.indexOf(col);
+      for (;;) {
+        ci += e.key === 'ArrowLeft' ? -1 : 1;
+        const target = cols[ci]; if (!target) return;
+        const cards = [...target.querySelectorAll('[data-card]')];
+        if (cards.length) return cards[Math.min(pos, cards.length - 1)].focus();
+      }
+    }
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'n' || e.key === 'N') { e.preventDefault(); return openCapture(); }
+  if (e.key === '?') { e.preventDefault(); return openShortcuts(); }
+  if (e.key === '/') { e.preventDefault(); return document.getElementById('search').focus(); }
+  const v = VIEWS.find((x) => x.key === e.key);
+  if (v) { e.preventDefault(); return setView(v.id); }
+});
+
+/* =================================================================== boot */
+try { setAppearance(new URLSearchParams(location.search).get('appearance') || localStorage.getItem('hq.mock.appearance') || 'system'); } catch (_) { setAppearance('system'); }
+(() => {
+  const p = new URLSearchParams(location.search);
+  if (p.get('view')) state.view = p.get('view');
+  if (p.get('board')) state.boardMode = p.get('board');
+  if (p.get('col')) state.mobileCol = p.get('col');
+  if (p.get('mock') === 'closed') document.getElementById('mock').open = false;
+  else if (p.get('mock') === 'open') document.getElementById('mock').open = true;
+  load();
+  render();
+  if (p.get('open')) openDetail(p.get('open'));
+  if (p.get('state') === 'offline') setConnection('offline');
+})();
+window.__workMock = { executionCalls: () => EXECUTION_CALLS, server, state };
+</script>
+</body>
+</html>

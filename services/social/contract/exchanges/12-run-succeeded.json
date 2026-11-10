@@ -1,0 +1,42 @@
+{
+  "schema": "hq.social.exchange/v1",
+  "request": {
+    "method": "GET",
+    "path": "/api/runs/00000000000000000000000000000003",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json"
+    },
+    "body_utf8": ""
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "Content-Length": "297"
+    },
+    "body": {
+      "id": "00000000000000000000000000000003",
+      "tool": "x-studio",
+      "status": "succeeded",
+      "is_example": 0,
+      "created_at": "2026-01-15T12:00:05+00:00",
+      "finished_at": "2026-01-15T12:00:06+00:00",
+      "error": null,
+      "output": {
+        "ok": true,
+        "result": {
+          "worker": "contract",
+          "tool": "x-studio",
+          "echo": {
+            "notes": "Contract example"
+          }
+        }
+      }
+    }
+  }
+}

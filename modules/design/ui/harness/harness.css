@@ -1,0 +1,22 @@
+/* Harness-only styles for the fake shell and fake sections. */
+html, body, #root { height: 100%; margin: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fake-shell { display: flex; height: 100%; }
+.fake-shell[data-theme="light"] { background: #f8f9fb; color: #20232a; }
+.fake-shell[data-theme="dark"] { background: #17191d; color: #eceef2; color-scheme: dark; }
+.fake-rail { display: flex; flex-direction: column; gap: 10px; width: 150px; padding: 16px 10px; border-right: 1px solid #8884; font-size: 13px; }
+.fake-rail nav { display: grid; gap: 4px; }
+.fake-rail button { font: inherit; color: inherit; background: transparent; border: 1px solid #8884; border-radius: 6px; padding: 6px 8px; text-align: left; }
+.fake-rail button[aria-current="page"] { font-weight: 700; border-color: currentColor; }
+.fake-rail small { font-weight: 400; opacity: 0.7; }
+.fake-module { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fake-placeholder { padding: 40px; }
+.fake-section { padding: 20px; display: grid; gap: 12px; }
+.fake-label { margin: 0; font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase; opacity: 0.7; }
+.fake-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fake-toolbar button, .fake-section li button { font: inherit; padding: 4px 8px; }
+.fake-board { display: flex; flex-wrap: wrap; gap: 16px; align-items: start; }
+.fake-artboard { display: grid; gap: 6px; padding: 8px; border: 1px solid #8886; border-radius: 6px; background: transparent; color: inherit; }
+.fake-artboard[aria-pressed="true"] { border-color: #516aa2; box-shadow: 0 0 0 2px #516aa2; }
+.fake-artboard img { display: block; image-rendering: pixelated; }
+.fake-section textarea { font: inherit; width: min(560px, 100%); }

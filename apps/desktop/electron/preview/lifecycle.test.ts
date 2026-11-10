@@ -1,0 +1,357 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { runInNewContext } from 'node:vm';
+import { app } from 'electron';
+import type { BrowserWindow } from 'electron';
+const fake = vi.hoisted(() => ({ readFile: vi.fn(), create: vi.fn(), classify: vi.fn() }));
+vi.mock('electron', () => ({ app: { isPackaged: false, on: vi.fn() }, screen: { getDisplayMatching: () => ({ scaleFactor: 1 }) } }));
+vi.mock('node:fs/promises', () => ({ readFile: fake.readFile }));
+vi.mock('../contents-factory.js', () => ({ createIsolatedContents: fake.create, contentsClass: fake.classify, probeUnregisteredContents: vi.fn() }));
+import { createPreviewHost } from './host';
+import { previewParams } from './validation';
+const hosts: ReturnType<typeof createPreviewHost>[] = [];
+afterEach(async () => { await Promise.all(hosts.splice(0).map(host => host.closeAll())); vi.useRealTimers(); vi.unstubAllEnvs(); vi.clearAllMocks(); });
+function fixture(zoomFactor?: number) {
+  vi.stubEnv('HQ_USER_DATA_DIR', 'synthetic-owned-profile'); vi.stubEnv('HQ_QUALIFY_PREVIEW', '1');
+  let destroyed = false, url = 'about:blank', attached = false, bounds = { x: 0, y: 0, width: 0, height: 0 };
+  const contents = { on: vi.fn(), isDestroyed: () => destroyed, isCrashed: vi.fn(() => false), close: vi.fn(() => { destroyed = true; }), getURL: () => url,
+    loadURL: vi.fn(async (value: string) => { url = value; }), executeJavaScriptInIsolatedWorld: vi.fn(async (_world: number, _scripts: { code: string }[]): Promise<unknown> => undefined),
+    setWindowOpenHandler: vi.fn(), setAudioMuted: vi.fn(), setWebRTCIPHandlingPolicy: vi.fn(),
+    debugger: { isAttached: () => attached, attach: () => { attached = true; }, sendCommand: vi.fn(async (_method: string, _params?: { captureBeyondViewport?: boolean }): Promise<unknown> => ({})) } };
+  const session = { clearData: vi.fn(async () => {}), on: vi.fn(), webRequest: { onBeforeRequest: vi.fn() }, setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), setDevicePermissionHandler: vi.fn(), setDisplayMediaRequestHandler: vi.fn() };
+  const view = { webContents: contents, getBounds: () => bounds, setBounds: vi.fn(value => { bounds = value; }), setVisible: vi.fn(), setBorderRadius: vi.fn() };
+  fake.readFile.mockResolvedValue('synthetic agent bundle'); fake.create.mockReturnValue({ view, session });
+  const window = { webContents: { getOSProcessId: () => 123, ...(zoomFactor === undefined ? {} : { getZoomFactor: () => zoomFactor }) }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1600, height: 1000 }), contentView: { addChildView: vi.fn(), removeChildView: vi.fn() } } as unknown as BrowserWindow;
+  const putBlob = vi.fn(async () => true);
+  const host = createPreviewHost({ window: () => window, putBlob }); hosts.push(host);
+  return { host, contents, session, view, putBlob, window };
+}
+const openParams = { versionId: 'synthetic-version', url: 'https://example.com/', viewport: { w: 390, h: 844, dpr: 3 }, label: 'Synthetic' };
+it('rejects an in-flight open deactivated before native allocation', async () => {
+  const { host } = fixture(); let resolve!: (source: string) => void;
+  fake.readFile.mockReturnValue(new Promise<string>(done => { resolve = done; }));
+  const opening = host.call('open', openParams);
+  expect(await host.call('deactivate', {})).toEqual({ ok: true, value: null });
+  resolve('synthetic bundle');
+  expect(await opening).toEqual({ ok: false, kind: 'stale', reason: 'deactivated' });
+  expect(fake.create).not.toHaveBeenCalled();
+});
+it('deactivates directly opened native sessions without a renderer tracking set', async () => {
+  const { host, contents, session } = fixture();
+  expect(await host.call('open', openParams)).toMatchObject({ ok: true });
+  expect(await host.call('deactivate', {})).toEqual({ ok: true, value: null });
+  expect(contents.close).toHaveBeenCalledOnce(); expect(session.clearData).toHaveBeenCalledOnce();
+});
+it('keeps late placement hidden under Settings and restores intended visibility', async () => {
+  const { host, view } = fixture();
+  const opened = await host.call('open', openParams) as { ok: true; value: { sessionId: string } };
+  await host.call('overlay', { hidden: true });
+  await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 0, y: 0, width: 390, height: 844 }, visible: true });
+  expect(view.setVisible).toHaveBeenLastCalledWith(false);
+  await host.call('overlay', { hidden: false }); expect(view.setVisible).toHaveBeenLastCalledWith(true);
+  await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 0, y: 0, width: 390, height: 844 }, visible: false });
+  await host.call('overlay', { hidden: true }); await host.call('overlay', { hidden: false }); expect(view.setVisible).toHaveBeenLastCalledWith(false);
+});
+const desktopOpen = { ...openParams, viewport: { w: 1024, h: 720, dpr: 1 } };
+const metrics = (contents: ReturnType<typeof fixture>['contents']) => contents.debugger.sendCommand.mock.calls
+  .filter(([method]) => method === 'Emulation.setDeviceMetricsOverride').map(([, params]) => params as unknown as Record<string, unknown>);
+const widgetSizes = (contents: ReturnType<typeof fixture>['contents']) => contents.debugger.sendCommand.mock.calls
+  .filter(([method]) => method === 'Emulation.setVisibleSize').map(([, params]) => params as unknown as { width: number; height: number });
+it('installs the native frame clip before the view joins the window', async () => {
+  const { host, view, window } = fixture();
+  await host.call('open', desktopOpen);
+  // CSS cannot clip a native view; without this a widget larger than the view painted over HQ.
+  expect(view.setBorderRadius).toHaveBeenCalledWith(1);
+  const added = vi.mocked(window.contentView.addChildView).mock.invocationCallOrder[0]!;
+  expect(view.setBorderRadius.mock.invocationCallOrder[0]).toBeLessThan(added);
+});
+it('places native bounds on the fitted page and keeps the emulated widget size equal to the frame', async () => {
+  const { host, view, contents } = fixture();
+  const opened = await host.call('open', desktopOpen) as { ok: true; value: { sessionId: string; generation: number } };
+  const placed = await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 120, y: 179, width: 1006, height: 420 }, visible: true }) as { ok: true; value: { generation: number } };
+  // Before the repair the view took the whole 1006×420 placeholder and painted background beside a 597px page.
+  expect(view.setBounds).toHaveBeenLastCalledWith({ x: 325, y: 179, width: 597, height: 420 });
+  const applied = metrics(contents);
+  expect(applied.length).toBeGreaterThanOrEqual(2);
+  // A stored emulation size would resize each new main-frame widget to 1024×720 after link navigation.
+  for (const params of applied) expect(params).toMatchObject({ width: 1024, height: 720, deviceScaleFactor: 1, dontSetVisibleSize: true });
+  // The stored widget size is the frame, so a new main-frame widget also fills the frame and no more.
+  expect(widgetSizes(contents).at(-1)).toEqual({ width: 597, height: 420 });
+  expect(applied.at(-1)!.scale).toBeCloseTo(597 / 1024, 6);
+  expect(placed.value.generation).toBe(opened.value.generation + 1);
+  const again = await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 0, y: 64, width: 597, height: 420 }, visible: true }) as { ok: true; value: { generation: number } };
+  expect(again.value.generation).toBe(placed.value.generation);
+  expect(view.setBounds).toHaveBeenLastCalledWith({ x: 0, y: 64, width: 597, height: 420 });
+  const resized = await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 0, y: 64, width: 1024, height: 720 }, visible: true }) as { ok: true; value: { generation: number } };
+  expect(resized.value.generation).toBe(placed.value.generation + 1);
+  expect(metrics(contents).at(-1)!.scale).toBe(1);
+  expect(widgetSizes(contents)).toEqual([{ width: 597, height: 420 }, { width: 597, height: 420 }, { width: 1024, height: 720 }]);
+});
+it('refuses to size the widget once the renderer has gone, before the crash event arrives', async () => {
+  const { host, contents } = fixture();
+  const opened = await host.call('open', desktopOpen) as { ok: true; value: { sessionId: string } };
+  contents.isCrashed.mockReturnValue(true);
+  // Chromium dereferences the widget without a null guard, so the send must not happen.
+  expect(await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 0, y: 0, width: 942, height: 662 }, visible: true })).toEqual({ ok: false, kind: 'unavailable' });
+  expect(widgetSizes(contents)).toEqual([]);
+});
+it('converts placeholder CSS pixels by the main renderer zoom before placing the native view', async () => {
+  const { host, view } = fixture(0.8);
+  const opened = await host.call('open', desktopOpen) as { ok: true; value: { sessionId: string } };
+  await host.call('place', { sessionId: opened.value.sessionId, rect: { x: 100, y: 50, width: 1024, height: 720 }, visible: true });
+  expect(view.setBounds).toHaveBeenLastCalledWith({ x: 80, y: 40, width: 819, height: 576 });
+});
+it('applies only the newest of overlapping placements', async () => {
+  const { host, view, contents } = fixture();
+  const opened = await host.call('open', { ...openParams, viewport: { w: 390, h: 844, dpr: 1 } }) as { ok: true; value: { sessionId: string } };
+  const sessionId = opened.value.sessionId;
+  // Native Resume: the pre-fit placeholder is reported, then the fitted frame, while the first install is still pending.
+  let release!: () => void;
+  contents.executeJavaScriptInIsolatedWorld.mockImplementationOnce(() => new Promise(resolve => { release = () => resolve(undefined); }));
+  const stale = host.call('place', { sessionId, rect: { x: 432, y: 232, width: 942, height: 2039 }, visible: false });
+  await host.call('place', { sessionId, rect: { x: 708, y: 232, width: 390, height: 844 }, visible: true });
+  release(); await stale;
+  expect(view.setBounds).toHaveBeenLastCalledWith({ x: 708, y: 232, width: 390, height: 844 });
+  expect(view.setVisible).toHaveBeenLastCalledWith(true);
+  expect(metrics(contents).at(-1)!.scale).toBe(1);
+});
+it('reports a mark whose coherent capture failed once instead of dropping it silently', async () => {
+  const { host, contents } = fixture();
+  const opened = await host.call('open', desktopOpen) as { ok: true; value: { sessionId: string } };
+  const sessionId = opened.value.sessionId;
+  await host.call('place', { sessionId, rect: { x: 0, y: 0, width: 942, height: 662 }, visible: true });
+  const { generation } = (await host.call('status', { sessionId }) as { ok: true; value: { generation: number } }).value;
+  expect(await host.call('mode', { sessionId, generation, mode: 'pick' })).toEqual({ ok: true, value: null });
+  const rect = { x: 10, y: 10, width: 100, height: 20 };
+  const event = { type: 'element-picked', target: { kind: 'element', path: 'body > h1', rect }, frame: { viewport: { w: 1024, h: 720, dpr: 1 }, scroll: { x: 0, y: 0 } }, generation, snapshot: { identity: 'h1', text: 'Heading', rects: [rect] } };
+  let drained = false;
+  // The agent queue yields one pick; the capture's agent reading is unusable, so the capture fails.
+  contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (_world, scripts) => {
+    if (scripts[0]!.code.includes('.drain()') && !drained) { drained = true; return [event]; }
+    return scripts[0]!.code.includes('.drain()') ? [] : undefined;
+  });
+  await vi.waitFor(async () => expect(await host.call('status', { sessionId })).toEqual({ ok: false, kind: 'stale', reason: 'mark-capture-failed' }));
+  expect(await host.call('status', { sessionId })).toMatchObject({ ok: true });
+  expect(await host.call('events', { sessionId, after: 0 })).toMatchObject({ ok: true, value: { events: [] } });
+});
+it('accepts only the closed lifecycle route payloads', () => {
+  expect(previewParams('deactivate', {})).toBe(true); expect(previewParams('overlay', { hidden: true })).toBe(true);
+  expect(previewParams('deactivate', { sessionId: 'arbitrary' })).toBe(false);
+  expect(previewParams('overlay', { hidden: 1 })).toBe(false); expect(previewParams('overlay', { hidden: false, url: 'https://example.com/' })).toBe(false);
+});
+
+function captureFixture(contents: ReturnType<typeof fixture>['contents']) {
+  const bytes = Buffer.alloc(24); bytes.write('PNG', 1); bytes.writeUInt32BE(1170, 16); bytes.writeUInt32BE(2532, 20);
+  const pixels = { data: bytes.toString('base64') };
+  contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (_world, scripts) => scripts[0].code.includes('resolveExact') ? {
+    mutationCounter: 0, frame: { viewport: openParams.viewport, scroll: { x: 0, y: 0 } }, results: [], contentSize: { w: 390, h: 844 },
+  } : undefined);
+  contents.debugger.sendCommand.mockResolvedValue(pixels);
+  return pixels;
+}
+it.each([false, true])('preserves responsive capture stability while refusing genuine mutation=%s', async genuineMutation => {
+  const { host, contents, putBlob } = fixture();
+  const opened = await host.call('open', openParams) as { ok: true; value: { sessionId: string; generation: number } };
+  const pixels = captureFixture(contents);
+  let mutationCounter = 0;
+  contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (_world, scripts) => scripts[0].code.includes('resolveExact') ? {
+    mutationCounter, frame: { viewport: openParams.viewport, scroll: { x: 0, y: 100 } }, results: [], contentSize: { w: 390, h: 1800 },
+  } : undefined);
+  contents.debugger.sendCommand.mockImplementation(async (method, params) => {
+    // Beyond-viewport capture can resize responsive content whose handlers write attributes.
+    if (method === 'Page.captureScreenshot' && (params?.captureBeyondViewport || genuineMutation)) mutationCounter++;
+    return pixels;
+  });
+  const result = await host.call('capture', { sessionId: opened.value.sessionId, expectedGeneration: opened.value.generation });
+  if (genuineMutation) {
+    expect(result).toEqual({ ok: false, kind: 'stale', reason: 'mutation' });
+    expect(putBlob).not.toHaveBeenCalled();
+  } else {
+    expect(result).toMatchObject({ ok: true, value: { scroll: { x: 0, y: 100 } } });
+    expect(putBlob).toHaveBeenCalledOnce();
+    expect(contents.debugger.sendCommand.mock.calls.filter(([method]) => method === 'Page.captureScreenshot').at(-1)).toEqual(['Page.captureScreenshot', {
+      format: 'png', fromSurface: true, captureBeyondViewport: false,
+      clip: { x: 0, y: 100, width: 390, height: 844, scale: 1 },
+    }]);
+  }
+});
+// Native evidence (Chromium 152): a screenshot of a widget not already at the shot size rescales it, re-rasters
+// and restores it, and two such rasters of a static image-heavy page were not byte-identical. The widget takes
+// the view's size when the view is placed, or the emulated visible size.
+function rasterModel(contents: ReturnType<typeof fixture>['contents'], view: ReturnType<typeof fixture>['view'], viewport: { w: number; h: number; dpr: number }) {
+  let scale = 1, raster = 0, widget = { width: view.getBounds().width, height: view.getBounds().height };
+  const place = view.setBounds.getMockImplementation()!;
+  view.setBounds.mockImplementation(value => { place(value); widget = { width: value.width, height: value.height }; });
+  const atShotSize = () => widget.width === viewport.w * viewport.dpr && widget.height === viewport.h * viewport.dpr && scale === viewport.dpr;
+  contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (_world, scripts) => scripts[0].code.includes('resolveExact') ? {
+    mutationCounter: 0, frame: { viewport, scroll: { x: 0, y: 0 } }, results: [], contentSize: { w: viewport.w, h: viewport.h },
+  } : undefined);
+  contents.debugger.sendCommand.mockImplementation(async (method, params) => {
+    if (method === 'Emulation.setVisibleSize') { widget = params as unknown as typeof widget; return {}; }
+    if (method === 'Emulation.setDeviceMetricsOverride') { scale = (params as unknown as { scale: number }).scale; if (atShotSize()) raster++; return {}; }
+    if (method !== 'Page.captureScreenshot') return {};
+    const bytes = Buffer.alloc(28); bytes.write('PNG', 1); bytes.writeUInt32BE(viewport.w * viewport.dpr, 16); bytes.writeUInt32BE(viewport.h * viewport.dpr, 20);
+    bytes.writeUInt32BE(atShotSize() ? raster : ++raster, 24);
+    return { data: bytes.toString('base64') };
+  });
+}
+const qualification = () => (globalThis as unknown as { __hqPreviewQualification: { pauseAt(stage: string | null): void; waitForPause(): Promise<unknown>; resume(): void } }).__hqPreviewQualification;
+async function scaledSession(rect = { x: 40, y: 60, width: 942, height: 662 }) {
+  const native = fixture();
+  const opened = await native.host.call('open', desktopOpen) as { ok: true; value: { sessionId: string } };
+  const sessionId = opened.value.sessionId;
+  await native.host.call('place', { sessionId, rect, visible: true });
+  rasterModel(native.contents, native.view, desktopOpen.viewport);
+  const { generation } = (await native.host.call('status', { sessionId }) as { ok: true; value: { generation: number } }).value;
+  return { ...native, sessionId, generation, fittedScale: Math.min(942 / 1024, 662 / 720) };
+}
+it('reads both screenshots of a scaled frame from one raster held inside the frame, then restores the widget', async () => {
+  const { host, view, contents, putBlob, sessionId, generation, fittedScale } = await scaledSession();
+  const placed = view.setBounds.mock.calls.length, sized = widgetSizes(contents).length;
+  // Before the repair each screenshot rescaled the widget itself, so the pair compared two rasters: pixels-unstable.
+  expect(await host.call('capture', { sessionId, expectedGeneration: generation })).toMatchObject({ ok: true, value: { generation } });
+  expect(putBlob).toHaveBeenCalledOnce();
+  // Only the widget took the shot size; the view, and so its clip and hit area, never left the frame.
+  expect(view.setBounds.mock.calls.length).toBe(placed);
+  expect(view.getBounds()).toEqual({ x: 40, y: 60, width: 942, height: 662 });
+  expect(widgetSizes(contents).slice(sized)).toEqual([{ width: 1024, height: 720 }, { width: 942, height: 662 }]);
+  expect(metrics(contents).at(-1)!.scale).toBeCloseTo(fittedScale, 6);
+  for (const params of metrics(contents)) expect(params).toMatchObject({ width: 1024, height: 720, deviceScaleFactor: 1, dontSetVisibleSize: true });
+  expect(await host.call('status', { sessionId })).toMatchObject({ ok: true, value: { generation } });
+});
+it('leaves an unscaled frame untouched while capturing', async () => {
+  const { host, view, contents, sessionId, generation } = await scaledSession({ x: 0, y: 64, width: 1024, height: 720 });
+  const placed = view.setBounds.mock.calls.length, emulated = metrics(contents).length, sized = widgetSizes(contents).length;
+  expect(await host.call('capture', { sessionId, expectedGeneration: generation })).toMatchObject({ ok: true });
+  expect(view.setBounds.mock.calls.length).toBe(placed); expect(metrics(contents).length).toBe(emulated); expect(widgetSizes(contents).length).toBe(sized);
+});
+it('lets a same-size placement during a held capture move the view without fencing, and keeps the newest placement', async () => {
+  const { host, view, contents, putBlob, sessionId, generation } = await scaledSession();
+  qualification().pauseAt('first-capture');
+  const pending = host.call('capture', { sessionId, expectedGeneration: generation });
+  try {
+    await qualification().waitForPause();
+    expect(view.getBounds()).toEqual({ x: 40, y: 60, width: 942, height: 662 });
+    expect(widgetSizes(contents).at(-1)).toEqual({ width: 1024, height: 720 });
+    expect(await host.call('place', { sessionId, rect: { x: 40, y: 200, width: 942, height: 662 }, visible: true })).toMatchObject({ ok: true, value: { generation } });
+  } finally { qualification().resume(); qualification().pauseAt(null); }
+  // The move ended the hold before the second screenshot, so the pair is refused rather than stored.
+  expect(await pending).toEqual({ ok: false, kind: 'stale', reason: 'pixels-unstable' });
+  expect(putBlob).not.toHaveBeenCalled();
+  expect(view.setBounds).toHaveBeenLastCalledWith({ x: 40, y: 200, width: 942, height: 662 });
+  expect(widgetSizes(contents).at(-1)).toEqual({ width: 942, height: 662 });
+});
+it('restores the frame-sized widget when a held screenshot fails', async () => {
+  const { host, view, contents, putBlob, sessionId, generation, fittedScale } = await scaledSession();
+  const ordinary = contents.debugger.sendCommand.getMockImplementation()!;
+  let shots = 0;
+  contents.debugger.sendCommand.mockImplementation((method, params) => method === 'Page.captureScreenshot' && ++shots === 2 ? Promise.reject(new Error('Synthetic compositor failure')) : ordinary(method, params));
+  expect(await host.call('capture', { sessionId, expectedGeneration: generation })).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-failed' });
+  expect(putBlob).not.toHaveBeenCalled();
+  expect(view.getBounds()).toEqual({ x: 40, y: 60, width: 942, height: 662 });
+  expect(widgetSizes(contents).at(-1)).toEqual({ width: 942, height: 662 });
+  expect(metrics(contents).at(-1)!.scale).toBeCloseTo(fittedScale, 6);
+});
+it('restores the frame-sized widget when a held screenshot times out, and again when it completes late', async () => {
+  vi.useFakeTimers();
+  const { host, view, contents, putBlob, sessionId, generation, fittedScale } = await scaledSession();
+  const ordinary = contents.debugger.sendCommand.getMockImplementation()!;
+  let shots = 0, finishLate!: () => void;
+  contents.debugger.sendCommand.mockImplementation((method, params) => method === 'Page.captureScreenshot' && ++shots === 2
+    ? new Promise(resolve => { finishLate = () => resolve(ordinary(method, params)); }) : ordinary(method, params));
+  const result = vi.fn(); void host.call('capture', { sessionId, expectedGeneration: generation }).then(result);
+  await vi.advanceTimersByTimeAsync(9000);
+  expect(result).toHaveBeenCalledWith({ ok: false, kind: 'unavailable', reason: 'capture-timeout' });
+  expect(putBlob).not.toHaveBeenCalled();
+  expect(view.getBounds()).toEqual({ x: 40, y: 60, width: 942, height: 662 });
+  expect(widgetSizes(contents).at(-1)).toEqual({ width: 942, height: 662 });
+  expect(metrics(contents).at(-1)!.scale).toBeCloseTo(fittedScale, 6);
+  // On completion Chromium restores the size and metrics the screenshot started with: the held shot's.
+  const sized = widgetSizes(contents).length, emulated = metrics(contents).length;
+  finishLate(); await vi.advanceTimersByTimeAsync(0);
+  expect(widgetSizes(contents).slice(sized)).toEqual([{ width: 942, height: 662 }]);
+  expect(metrics(contents).slice(emulated).map(params => params.scale)).toEqual([fittedScale]);
+  expect(putBlob).not.toHaveBeenCalled();
+});
+it('times out a stuck screenshot, releases the queue, and ignores its late result', async () => {
+  vi.useFakeTimers();
+  const { host, contents, putBlob } = fixture();
+  const opened = await host.call('open', openParams) as { ok: true; value: { sessionId: string; generation: number } };
+  const pixels = captureFixture(contents);
+  let finishLate!: (value: unknown) => void;
+  contents.debugger.sendCommand.mockImplementationOnce(() => new Promise(resolve => { finishLate = resolve; }));
+  const params = { sessionId: opened.value.sessionId, expectedGeneration: opened.value.generation };
+  const firstResult = vi.fn(); void host.call('capture', params).then(firstResult);
+  await vi.advanceTimersByTimeAsync(9000);
+  expect(firstResult).toHaveBeenCalledWith({ ok: false, kind: 'unavailable', reason: 'capture-timeout' });
+  expect(putBlob).not.toHaveBeenCalled();
+  expect(await host.call('capture', params)).toMatchObject({ ok: true });
+  expect(putBlob).toHaveBeenCalledOnce();
+  finishLate(pixels); await vi.advanceTimersByTimeAsync(0);
+  expect(putBlob).toHaveBeenCalledOnce();
+});
+it.each(['reading', 'reset'])('bounds a never-resolving %s world operation without storing a capture', async stage => {
+  vi.useFakeTimers();
+  const { host, contents, putBlob } = fixture();
+  const opened = await host.call('open', openParams) as { ok: true; value: { sessionId: string; generation: number } };
+  captureFixture(contents);
+  const ordinary = contents.executeJavaScriptInIsolatedWorld.getMockImplementation()!;
+  contents.executeJavaScriptInIsolatedWorld.mockImplementation((world, scripts) => scripts[0].code.includes(stage === 'reading' ? 'resolveExact' : 'setHighlightHidden(false)') ? new Promise(() => {}) : ordinary(world, scripts));
+  const result = vi.fn(); void host.call('capture', { sessionId: opened.value.sessionId, expectedGeneration: opened.value.generation }).then(result);
+  await vi.advanceTimersByTimeAsync(9000);
+  expect(result).toHaveBeenCalledWith({ ok: false, kind: 'unavailable', reason: 'capture-timeout' });
+  expect(putBlob).not.toHaveBeenCalled();
+});
+it.each(['closing-preview', 'unregistered', 'control', 'component', 'null', 'hq-main'])('client certificate selection denies %s without relying on the live-session map', async kind => {
+  const { host, contents } = fixture();
+  const opened = await host.call('open', openParams) as { ok: true; value: { sessionId: string } };
+  if (kind === 'closing-preview') await host.call('close', { sessionId: opened.value.sessionId });
+  fake.classify.mockReturnValue(kind === 'hq-main' ? 'hq-main' : kind === 'component' ? 'hq-component' : ['closing-preview', 'control'].includes(kind) ? 'hq-preview' : undefined);
+  const handler = vi.mocked(app.on).mock.calls.find(call => call[0] === 'select-client-certificate')![1] as (...args: unknown[]) => void;
+  const preventDefault = vi.fn(), callback = vi.fn();
+  handler({ preventDefault }, kind === 'null' ? null : kind === 'closing-preview' ? contents : {}, 'https://example.com/', [{ synthetic: true }], callback);
+  if (kind === 'hq-main') { expect(preventDefault).not.toHaveBeenCalled(); expect(callback).not.toHaveBeenCalled(); }
+  else { expect(preventDefault).toHaveBeenCalledOnce(); expect(callback.mock.calls).toEqual([[]]); }
+});
+
+it('fences a late isolated-world reading and allows an already queued capture to recover', async () => {
+  vi.useFakeTimers();
+  const { host, contents, putBlob } = fixture();
+  const opened = await host.call('open', openParams) as { ok: true; value: { sessionId: string; generation: number } };
+  captureFixture(contents);
+  let hidden = false;
+  const sandbox = { window: { __hqPreviewAgentHostV1: { agent: {
+    setHighlightHidden(value: boolean) { hidden = value; },
+    resolveExact() { return { mutationCounter: 0, frame: { viewport: openParams.viewport, scroll: { x: 0, y: 0 } }, results: [] }; },
+  } } }, document: { documentElement: { scrollWidth: 390, scrollHeight: 844 } } };
+  let releaseLate!: () => void;
+  let first = true;
+  contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (_world, scripts) => {
+    if (first) { first = false; await new Promise<void>(resolve => { releaseLate = resolve; }); }
+    return structuredClone(runInNewContext(scripts[0].code, sandbox));
+  });
+  const params = { sessionId: opened.value.sessionId, expectedGeneration: opened.value.generation };
+  const stalled = host.call('capture', params), queued = host.call('capture', params);
+  await vi.advanceTimersByTimeAsync(9000);
+  expect(await stalled).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-timeout' });
+  const recovered = await queued; expect(recovered, JSON.stringify(recovered)).toMatchObject({ ok: true }); expect(putBlob).toHaveBeenCalledOnce(); expect(hidden).toBe(false);
+  releaseLate(); await vi.advanceTimersByTimeAsync(0);
+  expect(hidden).toBe(false); expect(putBlob).toHaveBeenCalledOnce();
+});
+it('reports ordinary capture errors as unavailable without claiming navigation changed', async () => {
+  const { host, contents, putBlob } = fixture();
+  const opened = await host.call('open', openParams) as { ok: true; value: { sessionId: string; generation: number } };
+  captureFixture(contents); contents.debugger.sendCommand.mockRejectedValueOnce(new Error('Synthetic compositor failure'));
+  expect(await host.call('capture', { sessionId: opened.value.sessionId, expectedGeneration: opened.value.generation })).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-failed' });
+  expect(putBlob).not.toHaveBeenCalled();
+});
+
+it('counts certificate denials for owned preview contents after close, excluding other classes', async () => {
+  const { host, contents } = fixture();
+  const opened = await host.call('open', openParams) as { ok: true; value: { sessionId: string } };
+  await host.call('close', { sessionId: opened.value.sessionId });
+  const handler = vi.mocked(app.on).mock.calls.find(call => call[0] === 'select-client-certificate')![1] as (...args: unknown[]) => void;
+  fake.classify.mockReturnValue('hq-preview');
+  for (const target of [contents, {}, null]) handler({ preventDefault: vi.fn() }, target, 'https://example.com/', [], vi.fn());
+  const hook = (globalThis as unknown as { __hqPreviewQualification: { stats(): { denials: { certificates: number } } } }).__hqPreviewQualification;
+  expect(hook.stats().denials.certificates).toBe(1);
+});
