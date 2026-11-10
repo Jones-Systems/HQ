@@ -19,6 +19,7 @@ import { catalogPersistence, createCatalogHost } from './catalog-host.js';
 import { createSaveDialog } from './save-dialog.js';
 import { createWorkExport } from './work-export.js';
 import { createDesignHost, openEmittedDesignStore } from './design-host.js';
+import { attachRendererRecovery, createCrashLog, registerCrashLogging } from './crash-handling.js';
 
 interface BootstrapContext {
   readonly record: InstallationRecord;
@@ -64,6 +65,8 @@ let updateBridge: ReturnType<typeof registerUpdateBridge> | undefined;
 
 // Explicit temporary userData is supported only in unpackaged qualification runs.
 if (!app.isPackaged && process.env.HQ_USER_DATA_DIR) app.setPath('userData', process.env.HQ_USER_DATA_DIR);
+const crashLog = createCrashLog(app.getPath('userData'));
+registerCrashLogging(process, app, crashLog);
 const ownsInstance = app.requestSingleInstanceLock();
 if (!ownsInstance) app.quit();
 const save = createSaveDialog(async request => {
@@ -101,6 +104,7 @@ async function createWindow(): Promise<void> {
   mainWindow = window;
   window.webContents.on('did-start-loading', () => { void preview.closeAll(); });
   window.webContents.on('render-process-gone', () => { void preview.closeAll(); });
+  attachRendererRecovery(window, crashLog, dialog);
   window.on('close', () => { void preview.closeAll(); });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
