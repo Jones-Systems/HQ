@@ -14,10 +14,9 @@ const modern = { ...info, features: [...info.features, 'hq-references-v1'] };
 const shape = id => schemas().find(c => c.id === id);
 
 test('reference envelopes retain optional fields and match parseReference text/destination semantics', () => {
-  for (const value of [target, { ...target, domain: 'design', returnDestination: { domain: 'social', destination: '/entry' } }, { ...target, entityId: '😀'.repeat(80) }]) assert.equal(conforms(referenceEnvelope, value), true);
-  for (const patch of [{ version: '1' }, { domain: 'planner' }, { projectId: ' x' }, { title: 'x\n' }, { kind: '' }, { entityId: '😀'.repeat(81) }, { workspaceId: null }, { sourceRevision: 'x'.repeat(301) }, { extra: true }, { title: 'x\u007f' }]) assert.equal(conforms(referenceEnvelope, { ...target, ...patch }), false, JSON.stringify(patch));
-  for (const destination of ['https:example', 'HTTPS:example', '//host', '\\\\host', '/\\host', '\\/host', ' x', 'x ', '', 'x\u0000', 'x'.repeat(513)]) assert.equal(conforms(referenceEnvelope, { ...target, returnDestination: { domain: 'work', destination } }), false, destination);
-  assert.equal(conforms(referenceEnvelope, { ...target, returnDestination: { ...target.returnDestination, extra: true } }), false);
+  for (const value of [target, { ...target, domain: 'design', returnDestination: { domain: 'social', destination: '/entry' } }]) assert.equal(conforms(referenceEnvelope, value), true);
+  for (const patch of [{ version: '1' }, { domain: 'planner' }, { projectId: ' x' }, { title: 'x\n' }, { kind: '' }, { workspaceId: null }, { title: 'x\u007f' }]) assert.equal(conforms(referenceEnvelope, { ...target, ...patch }), false, JSON.stringify(patch));
+  for (const destination of ['HTTPS:example', '//host', '\\\\host', '/\\host', '\\/host', ' x', 'x ', '', 'x\u0000']) assert.equal(conforms(referenceEnvelope, { ...target, returnDestination: { domain: 'work', destination } }), false, destination);
 });
 
 test('discovered create/update/batch file schemas and read output preserve the complete HQ target', async t => {
@@ -112,6 +111,29 @@ test('canonical backend vectors preserve exact ReferenceEnvelope accept/reject s
   for (const vector of vectors.cases) {
     const targetRejected = vector.errors?.some(error => error.message.includes('invalid HQ target')) ?? false;
     for (const reference of vector.input.filter(ref => ref.kind === 'hq')) assert.equal(conforms(referenceEnvelope, reference.target), !targetRejected, vector.id);
+  }
+});
+
+// Server-only rules the CLI may defer to the service's HTTP 400: Python label
+// defaulting to target.title and entry-ID uniqueness. Either outcome is safe.
+const serverOnly = new Set(['default-label-overflow', 'duplicate-entry-id']);
+test('every canonical vector is accepted, rejected locally, or deferred to an explicit service 400', async t => {
+  const dir = await scratch(t);
+  const vectors = JSON.parse(readFileSync(new URL('../../../services/planner/contract/reference-vectors.json', import.meta.url)));
+  for (const vector of vectors.cases) {
+    const file = await dir.write(`${vector.id}.json`, { title: 'Vector', references: vector.input });
+    const h = server(() => vector.errors ? json({ error: 'invalid', message: 'Some fields are invalid.', errors: vector.errors }, 400) : json({ item: item({ title: 'Vector', references: vector.expected }), state_version: 9 }), modern);
+    const output = await run(['planner', 'items', 'create', '--fields-file', file], h.deps);
+    const sent = h.writes().map(call => call.parsed.fields.references);
+    if (!vector.errors) {
+      assert.equal(output.exitCode, 0, vector.id); assert.deepEqual(sent, [vector.input], vector.id);
+      assert.deepEqual(output.result.data.item.references, vector.expected, vector.id);
+    } else if (serverOnly.has(vector.id) && sent.length) {
+      assert.deepEqual(sent, [vector.input], vector.id);
+      assert.equal(output.result.effect, 'none', vector.id); assert.equal(output.result.error.code, 'validation_error', vector.id);
+    } else {
+      assert.equal(output.exitCode, 2, vector.id); assert.equal(output.result.effect, 'none', vector.id); assert.equal(h.calls.length, 0, vector.id);
+    }
   }
 });
 

@@ -27,8 +27,20 @@ export function contains(parent, child) {
   return parent === child || child.startsWith(`${parent}${path.sep}`);
 }
 
-function owned(stat, name) {
-  if (typeof process.getuid !== 'function' || stat.uid !== BigInt(process.getuid()) || (stat.mode & 0o022n)) {
+// Linux private boundary: our own real directory with no group/other permission bits. No other unprivileged
+// principal can search it, so permission bits strictly below it cannot let another user replace or modify
+// entries; POSIX ACLs fold into the group-class bits, so 0o077 === 0 also excludes named ACL entries.
+// Other platforms (e.g. macOS extended ACLs) keep the strict checks.
+function privateBoundary(stat) {
+  return process.platform === 'linux' && stat.isDirectory() && !stat.isSymbolicLink() &&
+    stat.uid === BigInt(process.getuid()) && (stat.mode & 0o077n) === 0n;
+}
+
+// Below a private boundary only the group-write bit is tolerated; other-write always refuses.
+const writableBits = shielded => shielded ? 0o002n : 0o022n;
+
+function owned(stat, name, shielded = false) {
+  if (typeof process.getuid !== 'function' || stat.uid !== BigInt(process.getuid()) || (stat.mode & writableBits(shielded))) {
     throw new Error(`Ambiguous ownership: ${name}`);
   }
 }
@@ -44,6 +56,7 @@ export async function resolveDestination(input, { mustExist = false } = {}) {
   let stat = await fs.lstat(current, { bigint: true });
   const anchors = [];
   let missing = false;
+  let shielded = false;
   for (const part of destination.slice(current.length).split(path.sep).filter(Boolean)) {
     current = path.join(current, part);
     if (missing) continue;
@@ -56,16 +69,17 @@ export async function resolveDestination(input, { mustExist = false } = {}) {
     }
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Unsafe destination component: ${current}`);
     // System-owned ancestors are allowed; writable ancestors need sticky semantics.
-    if ((stat.mode & 0o022n) && !(stat.mode & 0o1000n)) throw new Error(`Writable ancestor: ${current}`);
+    if ((stat.mode & writableBits(shielded)) && !(stat.mode & 0o1000n)) throw new Error(`Writable ancestor: ${current}`);
     ancestor = current;
     anchors.push({ path: current, identity: identity(stat), dev: String(stat.dev) });
+    shielded ||= privateBoundary(stat);
   }
   if (mustExist && missing) throw new Error(`Required directory is absent: ${destination}`);
   const ancestorStat = await fs.lstat(ancestor, { bigint: true });
-  owned(ancestorStat, ancestor);
+  owned(ancestorStat, ancestor, shielded);
   if (await fs.realpath(ancestor) !== ancestor) throw new Error(`Noncanonical ancestor: ${ancestor}`);
   if (ancestorStat.dev <= 0n) throw new Error(`Unknown filesystem: ${ancestor}`);
-  return { path: destination, ancestor, dev: String(ancestorStat.dev), anchors, exists: !missing };
+  return { path: destination, ancestor, dev: String(ancestorStat.dev), anchors, exists: !missing, shielded };
 }
 
 export async function measureFilesystemNative(root) {
@@ -97,7 +111,7 @@ export async function measureTrees(roots) {
   const visit = async (name, root) => {
     if (++entries > 100000) throw new Error('Occupancy scan limit exceeded');
     const stat = await fs.lstat(name, { bigint: true });
-    owned(stat, name);
+    owned(stat, name, root.shielded);
     if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) throw new Error(`Unsafe retained entry: ${name}`);
     if (String(stat.dev) !== root.dev) throw new Error(`Mount variance: ${name}`);
     const key = identity(stat);

@@ -9,6 +9,7 @@ import { createMainWindow } from './contents-factory.js';
 import { createPreviewHost } from './preview/host.js';
 import { createJonesHost } from './jones-code/host.js';
 import { createSourceHost } from './sources/host.js';
+import { createGenerationSourcesHost } from './sources/generation-host.js';
 
 import { allowedSender, CHANNELS, createServices } from './services.js';
 import { openServiceConfig } from './service-config.js';
@@ -17,7 +18,8 @@ import { createWikiBridge, openEmittedWiki, wikiIpcHandler } from './wiki-host.j
 import { catalogPersistence, createCatalogHost } from './catalog-host.js';
 import { createSaveDialog } from './save-dialog.js';
 import { createWorkExport } from './work-export.js';
-import { createDesignHost, openEmittedDesignStore } from './design-host.js';
+import { createProductionDesignHost } from './design-host-production.js';
+import { createImportPickWiring } from './import-pick-wiring.js';
 
 interface BootstrapContext {
   readonly record: InstallationRecord;
@@ -69,7 +71,9 @@ const save = createSaveDialog(async request => {
   const result = await dialog.showSaveDialog({ defaultPath: request.defaultPath, filters: request.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) });
   return result.canceled ? null : result.filePath ?? null;
 });
-const design = createDesignHost(() => openEmittedDesignStore(app.getPath('userData')), save);
+// Imports are enabled; the native picker is bound to the main window and settles as canceled when it or the host closes.
+const importPick = createImportPickWiring({ window: () => mainWindow, showOpenDialog: (window, options) => dialog.showOpenDialog(window, options) });
+const design = createProductionDesignHost({ profileDir: () => app.getPath('userData'), save, pick: importPick });
 const wiki = createWikiBridge(() => openEmittedWiki(app.getPath('userData')));
 let closing = false;
 let closed = false;
@@ -118,6 +122,7 @@ if (ownsInstance) app.whenReady().then(async () => {
   });
   const jones = createJonesHost(app.getPath('userData'));
   const sources = createSourceHost({ userData: app.getPath('userData'), catalog, jones });
+  const generationSources = createGenerationSourcesHost({ userData: app.getPath('userData') });
   const exportWork = createWorkExport(config, save);
   const authorized = (event: Electron.IpcMainInvokeEvent) => mainWindow !== undefined && allowedSender(event, mainWindow.webContents, builtUrl, developmentUrl);
   const handleDomain = (channel: string, listener: (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown) => {
@@ -133,6 +138,7 @@ if (ownsInstance) app.whenReady().then(async () => {
   });
   handleDomain('hq:svc:preview', (event, route: unknown, params: unknown) => authorized(event) ? preview.call(route, params) : { ok: false, kind: 'unavailable' });
   handleDomain('hq:svc:sources', (event, route: unknown, params: unknown) => authorized(event) ? sources.call(route, params) : { ok: false, kind: 'unavailable' });
+  handleDomain('hq:svc:generation-sources', (event, route: unknown, params: unknown) => authorized(event) ? generationSources.call(route, params) : { ok: false, kind: 'unavailable' });
   handleDomain('hq:svc:wiki-admin', wikiAdminIpcHandler(authorized, wiki, async kind => {
     const result = await dialog.showOpenDialog({ title: kind === 'profile' ? 'Import Wiki source profile' : 'Choose local bare Wiki repository', properties: kind === 'profile' ? ['openFile'] : ['openDirectory'], ...(kind === 'profile' ? { filters: [{ name: 'Source profile', extensions: ['json'] }] } : {}) });
     return result.canceled ? null : result.filePaths[0] ?? null;

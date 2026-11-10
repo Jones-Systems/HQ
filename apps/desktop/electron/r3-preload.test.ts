@@ -12,6 +12,11 @@ it('emitted sandbox preload sends the exact typed r3 calls through closed channe
   }
   await services.work.call('export', { format: 'markdown' }); expect(invoke).toHaveBeenLastCalledWith('hq:svc:work', 'export', { format: 'markdown' });
   expect(Object.keys(services.design)).toEqual(['call']); expect(Object.keys(services.work)).toEqual(['call']);
+  expect(Object.keys(services.generationSources!)).toEqual(['call']);
+  await services.generationSources!.call('snapshot', {});
+  expect(invoke).toHaveBeenLastCalledWith('hq:svc:generation-sources', 'snapshot', {});
+  await services.generationSources!.call('serving', { sourceId: 'synthetic-source' });
+  expect(invoke).toHaveBeenLastCalledWith('hq:svc:generation-sources', 'serving', { sourceId: 'synthetic-source' });
   const mainFrame = { url: 'file:///app/index.html' }, contents = { mainFrame };
   expect(allowedSender({ sender: contents, senderFrame: { ...mainFrame } }, contents, mainFrame.url, null)).toBe(false);
   expect(allowedSender({ sender: contents, senderFrame: mainFrame }, contents, mainFrame.url, null)).toBe(true);

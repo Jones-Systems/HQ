@@ -11,11 +11,21 @@ import type { HqServices } from '@hq/contracts/services';
 let root: string | undefined; let close: (() => Promise<void>) | undefined;
 afterEach(async () => { cleanup(); await close?.(); if (root) await rm(root, { recursive: true, force: true }); root = undefined; close = undefined; delete (window as { hqServices?: HqServices }).hqServices; window.localStorage.clear(); });
 function setup() { window.localStorage.clear(); window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} }); }
+/** The runtime now opens at once and indexes in the background, so the shell is rendered only after the sources are indexed. */
+async function indexed(bridge: { admin(route: unknown, params: unknown): Promise<unknown> }) {
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const result = await bridge.admin('status', {}) as { ok: boolean; value?: { sources: { state: string }[] } };
+    if (result.ok && !result.value!.sources.some(source => source.state === 'indexing')) return;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  throw new Error('Wiki indexing did not settle');
+}
 it('real shell reads search, pages, backlinks and topics through the seven-method host boundary', async () => {
   setup(); await mkdir(resolve('.t3/wiki-mount'), { recursive: true }); root = await mkdtemp(resolve('.t3/wiki-mount/shell-'));
   const corpus = buildCorpus(join(root, 'corpus')); const home = join(root, 'userData'); await mkdir(join(home, 'wiki'), { recursive: true });
   await writeFile(join(home, 'wiki/config.json'), JSON.stringify({ version: 1, sources: corpus.profiles }));
   const bridge = createWikiBridge(() => openWikiRuntime(home)); close = () => bridge.close();
+  await indexed(bridge);
   const handler = wikiIpcHandler((authorized: boolean) => authorized, bridge);
   const methods = ['listSources', 'search', 'getPage', 'resolveAlias', 'getBacklinks', 'listTopics', 'indexStatus'];
   const calls: string[] = [];
