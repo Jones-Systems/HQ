@@ -3,7 +3,7 @@ import {
   type AppendResult, type JournalRecord, type ProfileExport, type ProfileExportOptions, type ProjectId,
   type Sha256Hex, type TasteClientPort, type TasteCommand, type TasteEvent, type TasteSnapshot,
 } from './contract.ts';
-import { parseScope, parseTasteEvent } from './events.ts';
+import { parseScope, parseTasteEvent, sameScope } from './events.ts';
 import type { AppendPrecondition, TasteJournal } from './journal.ts';
 import { DEFAULT_SAMPLE_THRESHOLD, buildProfile, currentAssessment, exportProfile, projectTaste, type TasteState } from './profile.ts';
 
@@ -19,6 +19,8 @@ export interface TasteServiceOptions {
   readonly sampleThreshold?: number;
   readonly label?: string;
 }
+
+export type TasteJournalPort = Pick<TasteJournal, 'head' | 'status' | 'records' | 'append'>;
 
 /** Validates an untrusted command arriving over a typed channel. */
 export function parseTasteCommand(value: unknown): TasteCommand | null {
@@ -45,7 +47,8 @@ function precondition(event: TasteEvent): AppendPrecondition {
       || (payload.type === 'note.added' && payload.noteId === id)
       || (payload.type === 'counterevidence.added' && payload.counterevidenceId === id)
       || (payload.type === 'example.imported' && payload.exampleId === id)));
-    const assessmentExists = (id: string | null) => id === null || state.assessments.some((item) => item.assessmentId === id);
+    const assessmentExists = (id: string | null) => id === null || state.assessments.some((item) => item.assessmentId === id
+      && 'scope' in event && sameScope(item.scope, event.scope));
     switch (event.type) {
       case 'assessment.recorded': {
         if (used(event.assessmentId)) return 'id-reused';
@@ -69,11 +72,11 @@ function precondition(event: TasteEvent): AppendPrecondition {
 
 export class TasteService implements TasteClientPort {
   readonly label: string;
-  readonly #journal: TasteJournal;
+  readonly #journal: TasteJournalPort;
   readonly #options: TasteServiceOptions;
   #cache: { seq: number; state: TasteState } | null = null;
 
-  constructor(journal: TasteJournal, options: TasteServiceOptions) {
+  constructor(journal: TasteJournalPort, options: TasteServiceOptions) {
     this.#journal = journal;
     this.#options = options;
     this.label = options.label ?? 'HQ taste journal';

@@ -20,13 +20,19 @@ import { AnnotationController, loadAnnotations } from '../../annotations/src/con
 import { annotationId, versionId as annotationVersionId } from '../../annotations/src/contract.ts';
 import type { VersionId } from '../../annotations/src/contract.ts';
 import { FakeClipboard } from '../../annotations/src/fakes.ts';
+import { createProjectTasteContribution } from '../../taste/src/project-service.ts';
+import { projectId as tasteProjectId } from '../../taste/src/contract.ts';
+import { webCryptoSha256 } from '../../taste/src/web-digest.ts';
 import { canvasId } from '../../canvas/src/contract.ts';
 import { createProviderRegistry } from '../../canvas/src/providers.ts';
 import { createCanvasProviderAdapter } from './canvas-adapter.ts';
 import { createProjectVersionsProvider } from './project-versions.ts';
-import { canvasProjectIdFor, shellProjectIdFor, tasteEnv, importsFor } from './fake-workspace.ts';
+import { canvasProjectIdFor, shellProjectIdFor, importsFor } from './fake-workspace.ts';
 import { createBridgedDiscovery } from './bridged-discovery.ts';
+import { createWorkspaceThumbnailPort } from './thumbnail-port.ts';
+import { createProjectCompareCatalog } from './compare-catalog.ts';
 import type { EvidenceTag } from './labels.ts';
+import { createProjectContentEvents, type ProjectContentEvents } from './content-events.ts';
 
 function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
   const cache = new Map<string, Promise<T>>();
@@ -37,7 +43,13 @@ function perProject<T>(build: (project: ProjectContext) => Promise<T>) {
   };
 }
 
-export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<Pick<WorkspaceRecords, 'getBlob'>>) {
+export interface BridgedWorkspaceOptions {
+  /** Shared change feed; writers outside this workspace (captures, Imports) notify it. */
+  readonly contentEvents?: ProjectContentEvents;
+}
+
+export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<Pick<WorkspaceRecords, 'getBlob'>>, options: BridgedWorkspaceOptions = {}) {
+  const contentEvents = options.contentEvents ?? createProjectContentEvents();
   const storageTag: EvidenceTag = Object.freeze({ status: 'workspace', text: DEVICE_STORAGE_LABEL });
   const clock = { now: () => new Date().toISOString() };
   const ids = { next: (kind: 'project' | 'view' | 'version') => `${kind}-${globalThis.crypto.randomUUID()}` };
@@ -45,8 +57,7 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
   const discoveryEnv = () => discovery ??= createBridgedDiscovery();
   const projectStorage = createProjectsStorage(documents);
   const repository = new ProjectContentRepository(projectStorage, clock);
-  // The document bridge has no blob capability: unavailable thumbnails remain unavailable.
-  const thumbnails = { async readThumbnail(): Promise<never> { throw new Error('Thumbnail storage is unavailable'); } };
+  const thumbnails = createWorkspaceThumbnailPort(documents);
   const contentFor = perProject(async (project) => {
     const loaded = await repository.load(projectId(project.id));
     if (loaded.status !== 'ok') throw new Error(`Project content unavailable: ${loaded.status}`);
@@ -70,9 +81,10 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
     const id = comparisonId(`${project.id}-compare`);
     const loaded = await loadComparison(storage, id);
     if (loaded.status !== 'ok' && loaded.status !== 'missing') throw new Error(`Comparison unavailable: ${loaded.status}`);
+    if (loaded.status === 'ok' && loaded.state.projectId !== project.id) throw new Error('Comparison belongs to another project');
     return createCompareController(loaded.status === 'ok' ? loaded.state : createComparison(id, compareProjectId(project.id), []), {
       storage,
-      catalog: { async listViews() { return []; }, async getVersion() { return null; }, async listVersions() { return []; } },
+      catalog: createProjectCompareCatalog(repository, projectId(project.id)),
     });
   });
   const store = createAnnotationsStorage(documents);
@@ -124,6 +136,9 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
     return { projectId: cid, canvasId: canvasId(`${cid}-canvas`), storage: createCanvasStorage(documents), registry,
       ids: { next: (kind: string) => `${kind}-${globalThis.crypto.randomUUID()}` }, adapters: [components, flows], sourceErrors };
   });
-  return { bridged: true as const, storageTag, contentFor, projectsFor, componentsFor, flowsFor, compareFor, annotationsEnv,
-    annotationSessionFor, canvasFor, discoveryEnv, tasteEnv, importsFor };
+  const tasteFor = perProject(async (project) => createProjectTasteContribution({
+    documents, projectId: tasteProjectId(project.id), sha256: webCryptoSha256, clock,
+  }));
+  return { bridged: true as const, storageTag, contentEvents, contentFor, projectsFor, componentsFor, flowsFor, compareFor, annotationsEnv,
+    annotationSessionFor, canvasFor, discoveryEnv, tasteFor, importsFor };
 }
