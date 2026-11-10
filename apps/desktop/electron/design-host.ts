@@ -4,6 +4,7 @@ import type { DesignStorageResult, JsonValue, StoredDocument } from '@hq/contrac
 import type { BlobDigest, BlobRef, EventRead, ImportWriteOp } from '@hq/contracts/design-records';
 import { ReadersWriterGate } from './readers-writer-gate.js';
 import type { SaveBytes } from './save-dialog.js';
+import type { ImportPickerResult as ImportPickResult } from './import-picker.js';
 import { jsonValue, keys, record } from './services.js';
 
 type NodeResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly kind: 'unavailable'; readonly reason: string };
@@ -41,25 +42,37 @@ export interface DesignStore {
   close(): Promise<void>;
 }
 export const DOCUMENT_ROOTS = ['design/projects/', 'design/components/', 'design/flows/', 'design/compare/', 'design/annotations/', 'design.canvas.arrangement.v1/', 'design/requests/', 'design/connector/outbox/', 'design/connector/evidence/', 'design/references/'] as const;
+export const TASTE_JOURNAL_KEY = 'design/taste/journal.v1';
 export const DESIGN_BLOB_CAP = 16 * 1024 * 1024;
 const disabled = () => ({ ok: false as const, kind: 'unavailable' as const, reason: 'disabled' as const });
 const digest = (v: unknown): v is BlobDigest => typeof v === 'string' && /^sha256:[0-9a-f]{64}$/.test(v);
 const eventType = (stream: unknown) => typeof stream === 'string' && allowedDocumentKey(stream) && stream.startsWith('design/requests/') ? 'requests.event-bytes' : stream === 'design/imports' ? 'imports.event' : null;
 export const DESIGN_VALUE_CAP = 2_000_000;
-export function allowedDocumentKey(value: unknown, prefix = false): value is string {
+/** Imports documents. `doc.get` and `doc.list` read them; only the atomic `import.commit` writes them, never `doc.put`. */
+export const IMPORT_DOCUMENT_ROOTS = ['design/imports/records/', 'design/imports/versions/', 'design/imports/manifests/', 'design/imports/conflicts/', 'design/imports/undo/'] as const;
+const IMPORTS_LIST_ROOT = 'design/imports/';
+function wellFormedKey(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 256 && value.trim() === value
     && !/[\u0000-\u001f\u007f-\u009f]/u.test(value)
     && !/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(value)
-    && !value.split('/').includes('..')
-    && DOCUMENT_ROOTS.some(root => value.startsWith(root) && (prefix || value.length > root.length));
+    && !value.split('/').includes('..');
 }
+/** Keys `doc.put` and ordinary commits may write. Imports documents are deliberately not here. */
+export function allowedDocumentKey(value: unknown, prefix = false): value is string {
+  return wellFormedKey(value) && DOCUMENT_ROOTS.some(root => value.startsWith(root) && (prefix || value.length > root.length));
+}
+export function importsDocumentKey(value: unknown, prefix = false): value is string {
+  return wellFormedKey(value) && ((prefix && value === IMPORTS_LIST_ROOT)
+    || IMPORT_DOCUMENT_ROOTS.some(root => value.startsWith(root) && (prefix || value.length > root.length)));
+}
+const readableDocumentKey = (value: unknown, prefix = false): value is string => allowedDocumentKey(value, prefix) || importsDocumentKey(value, prefix);
 function validImportOps(value: unknown): value is readonly ImportWriteOp[] {
   if (!Array.isArray(value) || !value.length || value.length > 10_000) return false;
   let bytes = 0;
   for (const op of value) {
     if (!record(op) || op.namespace !== 'workspace') return false;
     if (op.op === 'put-document') {
-      if (!keys(op, ['op', 'namespace', 'key', 'value', 'expectedRevision']) || !allowedDocumentKey(op.key) || !jsonValue(op.value)
+      if (!keys(op, ['op', 'namespace', 'key', 'value', 'expectedRevision']) || !(allowedDocumentKey(op.key) || importsDocumentKey(op.key)) || !jsonValue(op.value)
         || !(op.expectedRevision === null || (typeof op.expectedRevision === 'string' && /^[1-9][0-9]*$/.test(op.expectedRevision) && Number.isSafeInteger(Number(op.expectedRevision))))) return false;
       bytes += Buffer.byteLength(JSON.stringify(op));
     } else if (op.op === 'append-event') {
@@ -78,12 +91,28 @@ function checkedDocument(value: StoredDocument | null): StoredDocument | null {
   if (value !== null && (!jsonValue(value.value) || Buffer.byteLength(JSON.stringify(value.value)) > DESIGN_VALUE_CAP)) throw new Error('Unavailable document');
   return value;
 }
-export async function openEmittedDesignStore(userData: string): Promise<DesignStore> {
+export async function openEmittedDesignStore(userData: string, options: { readonly imports?: 'disabled' | 'enabled' } = {}): Promise<DesignStore> {
+  if (options.imports === 'enabled') {
+    const module = await import(new URL('./design-host/modules/design/app/storage/enabled-candidate.js', import.meta.url).href) as { openEnabledDesignStorage(options: { root: string }): Promise<DesignStore> };
+    return module.openEnabledDesignStorage({ root: join(userData, 'design-store') });
+  }
   const module = await import(new URL('./design-host/modules/design/app/storage/node.js', import.meta.url).href) as { openDesignStorage(options: { root: string }): Promise<DesignStore> };
   return module.openDesignStorage({ root: join(userData, 'design-store') });
 }
+function pickResult(value: unknown): DesignStorageResult<unknown> {
+  if (!record(value)) return { ok: false, kind: 'unavailable' };
+  if (value.status === 'canceled') return { ok: true, value: { status: 'canceled' } };
+  if (value.status === 'rejected' && typeof value.reason === 'string') return { ok: true, value: { status: 'rejected', reason: value.reason } };
+  if (value.status !== 'picked' || !Array.isArray(value.files)) return { ok: false, kind: 'unavailable' };
+  const files = [];
+  for (const file of value.files) {
+    if (!record(file) || typeof file.name !== 'string' || file.mediaType !== 'image/png' || !(file.bytes instanceof Uint8Array)) return { ok: false, kind: 'unavailable' };
+    files.push({ name: file.name, mediaType: 'image/png' as const, bytes: new Uint8Array(file.bytes) });
+  }
+  return { ok: true, value: { status: 'picked', files } };
+}
 /** Lazy singleton, with an idempotent close that drains every admitted operation before closing. */
-export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBytes) {
+export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBytes, pick?: () => Promise<ImportPickResult>) {
   const gate = new ReadersWriterGate();
   let store: Promise<DesignStore> | undefined, closing = false, closePromise: Promise<void> | undefined;
   const active = new Set<Promise<unknown>>();
@@ -111,19 +140,23 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
         if (!keys(params, ['ops']) || !validImportOps(params.ops)) return { ok: false, kind: 'invalid' };
       } else if (route === 'import.repair') {
         if (!keys(params, ['txnId']) || typeof params.txnId !== 'string' || !/^[a-f0-9]{64}$/.test(params.txnId)) return { ok: false, kind: 'invalid' };
-      } else if (route === 'import.status' || route === 'storage.diagnostics') {
+      } else if (route === 'import.status' || route === 'storage.diagnostics' || route === 'import.pick') {
         if (!keys(params, [])) return { ok: false, kind: 'invalid' };
       } else if (route === 'export.preview' || route === 'export.save') {
         if (!keys(params, ['exportedAt']) || typeof params.exportedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(params.exportedAt) || !Number.isFinite(Date.parse(params.exportedAt))) return { ok: false, kind: 'invalid' };
       } else if (route === 'cache.get') {
         if (!keys(params, ['key']) || params.key !== 'design.discovery.catalog') return { ok: false, kind: 'invalid' };
       } else if (route === 'doc.list') {
-        if (!keys(params, ['prefix']) || !allowedDocumentKey(params.prefix, true)) return { ok: false, kind: 'invalid' };
+        if (!keys(params, ['prefix']) || !readableDocumentKey(params.prefix, true)) return { ok: false, kind: 'invalid' };
       } else if (route === 'doc.get' || route === 'doc.put') {
-        if (!keys(params, route === 'doc.put' ? ['key', 'value'] : ['key'], route === 'doc.put' ? ['expectedRevision'] : []) || !allowedDocumentKey(params.key)) return { ok: false, kind: 'invalid' };
+        if (!keys(params, route === 'doc.put' ? ['key', 'value'] : ['key'], route === 'doc.put' ? ['expectedRevision'] : [])
+          || !(params.key === TASTE_JOURNAL_KEY || (route === 'doc.get' ? readableDocumentKey(params.key) : allowedDocumentKey(params.key)))) return { ok: false, kind: 'invalid' };
         if (route === 'doc.put' && (!(!Object.hasOwn(params, 'expectedRevision') || params.expectedRevision === null || (Number.isSafeInteger(params.expectedRevision) && (params.expectedRevision as number) >= 0)) || !jsonValue(params.value) || Buffer.byteLength(JSON.stringify(params.value)) > DESIGN_VALUE_CAP)) return { ok: false, kind: 'invalid' };
       } else return { ok: false, kind: 'invalid' };
     } catch { return { ok: false, kind: 'invalid' }; }
+    if (route === 'import.pick') {
+      try { return pick ? pickResult(await pick()) : disabled(); } catch { return { ok: false, kind: 'unavailable' }; }
+    }
     let current: DesignStore;
     try { current = await getStore(); } catch { return { ok: false, kind: 'unavailable' }; }
     const p = params as Record<string, unknown>;
@@ -184,7 +217,7 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
       let captured: unknown;
       try { if (!record(params)) throw Error(); captured = structuredClone(params); } catch { return Promise.resolve<DesignStorageResult<unknown>>({ ok: false, kind: 'invalid' }); }
       const exclusive = typeof route === 'string' && (route.startsWith('import.') || route.startsWith('export.'));
-      const operation = exclusive ? gate.exclusive(() => execute(route, captured)) : gate.shared(() => execute(route, captured));
+      const operation = route === 'import.pick' ? execute(route, captured) : exclusive ? gate.exclusive(() => execute(route, captured)) : gate.shared(() => execute(route, captured));
       active.add(operation);
       void operation.finally(() => active.delete(operation));
       return operation;

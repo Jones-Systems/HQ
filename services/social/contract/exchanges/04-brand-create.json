@@ -1,0 +1,29 @@
+{
+  "schema": "hq.social.exchange/v1",
+  "request": {
+    "method": "POST",
+    "path": "/api/brands",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-Workspace-Token": "synthetic-workspace-token"
+    },
+    "body_utf8": "{\"name\":\"Larkspur Tea Co.\"}"
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "Content-Length": "67"
+    },
+    "body": {
+      "id": "00000000000000000000000000000001",
+      "name": "Larkspur Tea Co."
+    }
+  }
+}

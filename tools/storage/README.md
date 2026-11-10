@@ -58,7 +58,11 @@ Shared evidence parents must already exist under their independently admitted
 creator's ownership; the helper never bootstraps or removes shared parents.
 
 Paths containing traversal, symlinks, unsafe writable ancestors, unclear UID
-ownership, special files, changed identities or changed mounts refuse. Callers
+ownership, special files, changed identities or changed mounts refuse. On
+Linux, a real directory owned by the current user with no group or other
+permission bits is a private boundary: below it, group-write is tolerated on
+ancestors and retained entries (as created under `umask 0002`), but other-write
+still refuses. Other platforms keep the strict checks. Callers
 must supply canonical paths, including canonicalizing trusted system aliases
 such as a platform temporary-directory alias before forming a plan. Generated
 roots must be inside the worktree. Evidence, generated and scratch lifecycles

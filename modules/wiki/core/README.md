@@ -85,10 +85,9 @@ Interpretations made where the plan was silent:
 
 ## Git adapter
 
-`createNodeGitObjectSource(profile, options)` uses `execFile` with `shell: false`, `encoding: 'buffer'`,
-`killSignal: 'SIGKILL'`, a per-command timeout and `maxBuffer`, `cwd` = the real git dir, a small
-concurrency semaphore (default 4) and a minimal environment (no user/system config, no prompts, no
-optional locks, no replace objects, no lazy fetch). Every call is prefixed
+`createNodeGitObjectSource(profile, options)` starts every Git process with `shell: false`, `windowsHide`,
+`cwd` = the real git dir and a minimal environment (no user/system config, no prompts, no optional locks, no
+replace objects, no lazy fetch). Every call is prefixed
 `--git-dir=<realpath> --no-replace-objects --literal-pathspecs -c core.fsmonitor=false` and is exactly one of:
 
 - `rev-parse --is-bare-repository`
@@ -97,11 +96,27 @@ optional locks, no replace objects, no lazy fetch). Every call is prefixed
 - `show -s --no-show-signature --format=%ct --end-of-options <commit>` (so a repository's
   `log.showSignature` cannot start its `gpg.program`)
 - `ls-tree -r -z -l --full-tree <commit>`
-- `cat-file blob <oid>`
+- `cat-file --batch`
 
-Commit and object ids are regex-validated before spawning; blobs above `MAX_PAGE_BLOB_BYTES` are
-reported `too-large` without being read in full. The exec function is injectable (`GitExec`) so tests can
-assert the exact argv and environment.
+The first five run once each through `execFile` (`encoding: 'buffer'`, `killSignal: 'SIGKILL'`, a per-command
+timeout and `maxBuffer`, behind a small concurrency semaphore, default 4). Blobs are read through **one
+persistent `cat-file --batch` child per source** (`spawn` with piped stdin and stdout, stderr ignored), so a
+refresh of N pages starts five processes plus one, not N + 5. That child is started lazily; its stdin only ever
+receives a regex-validated 40/64-hex object id and a line feed. One request is in flight at a time and requests are
+answered strictly in arrival order. The reply header is checked against the requested id; a `missing` reply is
+`not-found`; a non-blob or a header larger than `min(maxBytes, MAX_PAGE_BLOB_BYTES)` is refused (`not-found` /
+`too-large`) from the header alone and the child is killed, so such a body is never buffered (buffered output is
+bounded by that limit plus one header). A framing error, unexpected exit, stream error or the per-read timeout
+(`blobTimeoutMs`, default 30 s, counted from the write) kills the child and fails only that read as `unavailable`; the
+next read gets a fresh child. The real path of the git directory is resolved for every read, and a child is never
+reused for a different real path. The child gets end of input after `batchIdleMs` (default 1.5 s) without a read and
+is killed if it ignores that, and `close()` kills it at once; a source is `unavailable` after `close()`, and no
+process outlives the last read or `close()`.
+
+Commit and object ids are regex-validated before spawning. The execution seams are injectable (`GitExec` for the
+one-shot commands, `GitSpawn` for the batch child) so tests can assert the exact argv, options and everything
+written to stdin. `GitSpawn` and `NodeGitObjectSource` (a `GitObjectSource` plus `close()`) are exported from
+`node-git-source.ts`; the barrel was left unchanged.
 
 ## Checks
 

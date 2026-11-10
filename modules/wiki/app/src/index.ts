@@ -10,6 +10,9 @@
  * under `style-src 'self'`. Tests import `./domain.ts` instead, which has no stylesheet import.
  *
  * Registered capabilities: none. No transport, filesystem, shell, refresh or home migration is reachable from here.
+ *
+ * `createWikiReferenceProvider(service, now)` makes Wiki pages a read-only cross-module reference target: the shell
+ * registers it next to the other reference providers. It only calls `search` and `getPage` on the service it is given.
  */
 import '../../ui/src/wiki-view.css';
 import './wiki-domain.css';
@@ -17,4 +20,12 @@ import './wiki-domain.css';
 export { createWikiDomain } from './domain.ts';
 export type { WikiDomain, WikiDomainOptions } from './domain.ts';
 export { createWikiClient } from './client.ts';
+export { createWikiReferenceProvider, WIKI_REVISION_PREFIX } from './references.ts';
+export type {
+  WikiReferenceEnvelope,
+  WikiReferenceInput,
+  WikiReferenceProvider,
+  WikiReferenceResolution,
+  WikiReferenceStatus,
+} from './references.ts';
 export type { WikiHostPort, WikiModulePort } from './port.ts';
