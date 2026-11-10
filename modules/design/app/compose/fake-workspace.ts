@@ -61,9 +61,16 @@ import { createCanvasProviderAdapter, type CanvasProviderAdapter } from './canva
 import { FAKE_TAG, SYNTHETIC_TAG } from './labels.ts';
 import type { CanvasDocumentPort } from './storage-seam.ts';
 import { bindFlowToProject, createProjectScreenPreviews, createProjectVersionsProvider, type FlowBindingReport, type ProjectScreenPreviews, type ProjectVersionsProvider } from './project-versions.ts';
+import type { AnnotationTarget } from './annotation-session.ts';
+import type { RevisionRead } from './revision-cache.ts';
 
-/** Memoise one async build per project id; the same promise is returned on every call. */
-function perProject<T>(create: (project: ProjectContext) => Promise<T>): (project: ProjectContext) => Promise<T> {
+export type { AnnotationTarget } from './annotation-session.ts';
+
+/**
+ * Memoise one async build per project id; the same promise is returned on every call. The fixtures never change,
+ * so the optional revision read that the durable accessors take is accepted and ignored.
+ */
+function perProject<T>(create: (project: ProjectContext) => Promise<T>): (project: ProjectContext, read?: RevisionRead) => Promise<T> {
   const built = new Map<string, Promise<T>>();
   return (project) => {
     let value = built.get(project.id);
@@ -365,13 +372,6 @@ export function annotationsEnv(): AnnotationsEnv {
   return annotations;
 }
 
-export interface AnnotationTarget {
-  readonly version: AnnotationVersionId;
-  readonly frame: SourceFrame;
-  /** Verified thumbnail of the version, or null when it has none. A thumbnail, not the capture. */
-  readonly thumbnailUrl: string | null;
-}
-
 /** The project's first home version, with the route, viewport and capture digest it is pinned to. */
 export const annotationTargetFor = perProject(async (project): Promise<AnnotationTarget> => {
   const env = await contentFor(project);
@@ -383,7 +383,7 @@ export const annotationTargetFor = perProject(async (project): Promise<Annotatio
     versionId: id, route: version.capture.route, state: 'default', viewport: version.capture.viewport, scroll: { x: 0, y: 0 },
     captureDigest: version.capture.captureDigest ?? '',
   };
-  return { version: id, frame, thumbnailUrl };
+  return { version: id, frame, thumbnailUrl, captureUrl: null };
 });
 
 /** The target plus its controller with the frame already set, memoised so React can suspend on one promise. */

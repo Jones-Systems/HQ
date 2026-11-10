@@ -9,6 +9,7 @@ import type { ProjectContent } from '../../projects/src/content.ts';
 import type { RequestsEnvironment } from '../sections/requests/env.ts';
 import { brandId } from '../../requests/src/validate.ts';
 import { useDesignWorkspace } from './workspace-context.tsx';
+import { useProjectContentRevision } from './content-revision.ts';
 import { SectionFrame } from './views/SectionFrame.tsx';
 import { withSectionErrorBoundary } from './views/SectionErrorBoundary.tsx';
 
@@ -19,7 +20,8 @@ function RequestPicker({ props, create, children }: {
 }) {
   const workspace = useDesignWorkspace();
   const env = workspace.closure.requests;
-  const { content } = use<{ readonly content: ProjectContent }>(workspace.contentFor(props.context));
+  const revision = useProjectContentRevision(workspace, props.context.id);
+  const { content } = use<{ readonly content: ProjectContent }>(workspace.contentFor(props.context, { revision }));
   const [sessions, setSessions] = useState<readonly RequestSession[]>([]);
   const [selected, setSelected] = useState<RequestSession | null>(null);
   const [versionId, setVersionId] = useState('');
