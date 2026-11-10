@@ -238,6 +238,85 @@ HQ must never post to a real account or handle real credentials without a separa
 - **Copy.** The UI may say *Simulated* and must not say *posted*, *published*, *live* or *connected* for simulator results.
 <!-- codex-section:end id="spec.hq-social-backend#iface.publishing.001" -->
 
+## Extension contracts (*target*, WS-X)
+
+<!-- codex-section:begin id="spec.hq-social-backend#iface.extensions.001" -->
+Every extension is advertised in `features` only when the service can persist and serve it. Without the feature, its routes return 404 `Route not found`, its port methods reject locally with `invalid` before any transport call, and the UI shows today's copy. Request bodies use strict keys, so any unknown key is 400 `Unknown field: <key>`. Errors are the same `{error}` envelope and map to `PortError` as today.
+
+**`hq-brand-project-v1`.** Brands map to an opaque HQ project ID, owned by Social and keyed by the shell's `ProjectContext.id`.
+
+- Brands in the workspace, and the response of `POST /api/brands`, carry `project_id: string | null`. New brands start at `null`.
+- `POST /api/brands/<id>/project` takes exactly `{project_id}`. A `project_id` of `null` clears the link. A string must satisfy HQ's context-ID text rule: 1–160 UTF-16 units, no surrounding whitespace, no control characters. Otherwise 400 `Project ID must be 1–160 characters with no surrounding spaces`. An unknown brand is 404 `Brand not found`. The route returns the Brand. A brand link has no version: it is a set operation, and repeating it is harmless.
+- Port: `setBrandProject(brandId, projectId | null): Promise<Brand>`, content class. Bridge route `setBrandProject` with `{id, project_id}`. Main applies its single token refresh as it does for other content routes.
+
+**`hq-sources-v1`.** A supplied-data registry with provenance. Sources are files the user supplies; HQ never collects them.
+
+- **Workspace.** The snapshot gains `sources`: metadata only, newest first, at most 500. Each record is `{id, name, kind, file_name, sha256, bytes, records, as_of, imported_at, archived, status, age_days, used_by_runs}`:
+  - `status` is `valid`, or `stale` when `as_of` is more than 30 days before the service clock. It is computed at read time.
+  - `used_by_runs` holds the latest 20 run IDs.
+  - Invalid files are never saved, so no record is `invalid`.
+- **Kinds.** The kinds form a closed list, mapped to the workbench import slots:
+
+  | Kind | Workbench and input |
+  | --- | --- |
+  | `feed-items` | x-intelligence `items` |
+  | `tiktok-niche` | tiktok-intelligence `niche` |
+  | `tiktok-manifest` | tiktok-intelligence `batches[].manifest` |
+  | `tiktok-records` | tiktok-intelligence `batches[].records` |
+  | `seo-config` | seo-studio `config` |
+  | `seo-packet` | seo-studio `packets[]` |
+  | `search-panel` | search-visibility `panel` |
+  | `search-entities` | search-visibility `entities` |
+  | `search-inventory` | search-visibility `inventory` |
+  | `search-answers` | search-visibility `answers`; JSON or JSON Lines |
+  | `reddit-bundle` | reddit-opportunities `bundle` |
+  | `creator-batch` | creator-relationships `batch` |
+
+- **Save.** `POST /api/sources` takes exactly `{name, kind, file_name, text, as_of}`.
+  - Field limits:
+    - `name`: 1–120 characters;
+    - `file_name`: 1–255 characters, with no path separator or control character;
+    - `text`: the exact file text, 1–1,500,000 UTF-8 bytes;
+    - `as_of`: `''`, `YYYY-MM-DD` or an ISO-8601 date-time.
+  - The text must parse; a parse error is a 400 that names the line and column. Its top-level shape must match the kind. `records` is the length of the list, or of the kind's main list.
+  - `sha256` is computed over the exact UTF-8 bytes of `text`.
+  - An empty `as_of` is derived from the content where it is unambiguous, otherwise `null`.
+  - Saving the same `kind` and `sha256` again is 409 `This file is already saved as a source`.
+- **Read.** `GET /api/sources/<id>` returns the record plus `content`, the parsed value. A missing source is 404 `Source not found`.
+- **Archive.** `POST /api/sources/<id>/archive` takes exactly `{archived: 0|1}`. It is reversible, and no delete endpoint exists.
+- **Runs.** `POST /api/runs` accepts optional `source_ids`: at most 20 existing, unarchived IDs, else 400 `Unknown source`. They are stored with the run, and every RunRecord then carries `source_ids`. The run input itself stays self-contained: the client copies source content into the input and names the sources it used.
+- **Port.** `source(id)` (read), `saveSource(input)` (content), `setSourceArchived(id, archived)` (content), and `submitRun(tool, input, isExample, options?: { sourceIds })`, which stays execution class and is never retried. The bridge gains `source`, `saveSource` and `archiveSource`, and `submitRun` gains optional `source_ids`.
+
+**`hq-publishing-simulator-v1`.** This is advertised only when the service starts with `--publishing simulator`; it is off by default. It has no network, no credentials and no real account.
+
+- **Workspace.** The snapshot gains `publishing: {mode: 'simulator', connections, requests}`, with at most 200 requests, newest first.
+- **Connections.**
+  - Record: `{id, channel, label, status: 'simulated' | 'disconnected', created_at, disconnected_at}`.
+  - `channel` is one of X, LinkedIn, TikTok, Instagram, Facebook and Reddit. `label` is 1–80 characters.
+  - `POST /api/publishing/connections` takes `{channel, label}`, up to 50 connections.
+  - `POST /api/publishing/connections/<id>/disconnect` takes `{}`.
+- **Requests.**
+  - Record: `{id, connection_id, channel, draft_id, draft_version, content: {title, body}, content_sha256, status, created_at, decided_at, receipt}`.
+  - `status` is one of `pending_approval`, `cancelled`, `invalidated`, `delivered_simulated` or `failed`.
+  - `receipt` is null or `{simulated: true, delivered_at, outbox_sequence, readback: 'simulated'}`.
+- **Create.** `POST /api/publishing/requests` takes `{draft_id, draft_version, connection_id}`.
+  - The draft must exist at exactly that version, or the service returns 409 with the draft-conflict text.
+  - The connection must be `simulated`, and its channel must equal the draft's channel. A General or Article draft gets 400 `Choose a draft for an account channel`.
+  - The service snapshots `{title, body}`. `content_sha256` is the SHA-256 of the canonical JSON of `{channel, title, body}`.
+- **Approve.** `POST /api/publishing/requests/<id>/approve` takes exactly `{content_sha256}`. It is the only **execution-class** publishing call.
+  - The request must be pending: otherwise 409 `This request is no longer pending`.
+  - The hash must match: otherwise 409 `The approved content does not match this request`.
+  - The draft must still be at `draft_version`: otherwise the request becomes `invalidated` and the service returns 409 `The draft changed after this request; create a new request`.
+  - On success the simulator appends one line to `<data>/publishing/outbox.jsonl` and syncs it to disk. The request becomes `delivered_simulated` with its receipt. A repeated approve is a 409, so a duplicate delivery cannot happen.
+- **Cancel.** `POST /api/publishing/requests/<id>/cancel` takes `{}`.
+- **Invalidation.** A snapshot marks pending requests whose draft has moved on as `invalidated`.
+- **Port.** `connectChannel`, `disconnectChannel`, `requestPublish` and `cancelPublish` are content class. `approvePublish(id, contentSha256)` is **execution class**: it is never retried, and a lost response is `unknown`.
+- **Bridge.** Routes `publishingConnect`, `publishingDisconnect`, `publishingRequest`, `publishingCancel` and `publishingApprove`. Main's token refresh applies only to the content-class routes and is never applied to `publishingApprove`.
+- **Real providers.** A real network provider adds a provider behind the same seam, and needs D-B2-3 plus a separate, default-off desktop-side enablement. Its outcomes are read back from the platform, and an unconfirmed delivery is `unknown`.
+
+**Follow-on candidates (not in B2).** These are the SOC-6 proposals: draft states (Idea, Drafting, Ready for review), per-channel variants, and brand profile fields (audience, voice, topics, avoid-list).
+<!-- codex-section:end id="spec.hq-social-backend#iface.extensions.001" -->
+
 ## Workstreams (*target*)
 
 <!-- codex-section:begin id="spec.hq-social-backend#plan.workstreams.001" -->
@@ -247,7 +326,8 @@ HQ must never post to a real account or handle real credentials without a separa
 | WS-T | `services/social/social_service/tools/<module>.py` and their `tests/test_tools_*.py` | B2 service base | — |
 | WS-F | Fieldnotes compatibility harness (opt-in, no default-discovery skips) and evidence | foundation + #166 | — |
 | WS-D | `apps/desktop/electron/services*.ts` (#166 ancestor, response caps), the `modules/social/core` error helper, the `modules/social/live` contract README, and real-service E2E in `apps/desktop/src/social-live.integration.test.tsx` | WS-S + WS-T | S, T |
-| WS-X | Extensions: brand project, sources registry, publishing simulator. Service, contracts, main, port, fixture and conformance. | WS-D | D |
+| WS-XS | The service side of `iface.extensions.001`: routes, storage, `--publishing simulator`, tests and contract exchanges | WS-S + WS-T | S, T |
+| WS-XT | The client side of `iface.extensions.001`: contracts routes, main encoding, port methods and guards, fixture parity, conformance, and real-service E2E | WS-D + WS-XS | D, XS |
 
 Each builder is reviewed by the lead, and each PR gets an independent Sonnet review first. PRs target `work/hq-foundation`, and an upper PR states which lower commits it contains. Merge is held for the integration owner.
 <!-- codex-section:end id="spec.hq-social-backend#plan.workstreams.001" -->
