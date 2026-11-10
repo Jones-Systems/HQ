@@ -26,6 +26,7 @@ export class InvalidIdError extends Error {
   readonly kind: string;
   constructor(kind: string, value: unknown) {
     super(`Invalid ${kind}: ${typeof value === 'string' ? JSON.stringify(value.slice(0, 40)) : typeof value}`);
+    this.name = 'InvalidIdError';
     this.kind = kind;
   }
 }
