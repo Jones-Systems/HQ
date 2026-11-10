@@ -1,0 +1,36 @@
+name: HQ Social service
+
+on:
+  pull_request:
+    # All bases and paths retain full discovery, including integration successors.
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hq-social-service-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  social:
+    name: Social service contract and Python tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use Python 3
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13.5'
+      # The service uses only the Python standard library. test_contract regenerates real HTTP
+      # exchanges from a disposable loopback service and compares them byte for byte.
+      - name: Test Social service Python
+        working-directory: services/social
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -t tests
