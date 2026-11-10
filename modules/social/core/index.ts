@@ -9,3 +9,4 @@ export { FIXTURE_IDS, FIXTURE_PROJECT_ID, FIXTURE_OTHER_PROJECT_ID, fictionalSee
 export type { FixtureRun, FixtureSeed } from './fixtures/workspace';
 
 export * from './timebox';
+export * from './errors';
