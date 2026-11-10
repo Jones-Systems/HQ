@@ -20,6 +20,7 @@
   },
   "files": [
     "../../modules/design/app/storage/node.ts",
+    "../../modules/design/app/storage/enabled-candidate.ts",
     "design-host/compat.ts",
     "../../modules/design/discovery/node/local-directory.ts",
     "../../modules/design/discovery/src/adapters/gallery-index.ts",

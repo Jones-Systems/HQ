@@ -1,6 +1,8 @@
+import type { openEnabledDesignStorage } from '../../../modules/design/app/storage/enabled-candidate.ts';
 import type { DesignStorage } from '../../../modules/design/app/storage/node.ts';
 import type { DesignStore } from '../electron/design-host.js';
 type Assert<T extends true> = T;
+export type EnabledDesignStorageCompatibility = Assert<Awaited<ReturnType<typeof openEnabledDesignStorage>> extends DesignStore ? true : false>;
 export type DesignStorageCompatibility = Assert<DesignStorage extends DesignStore ? true : false>;
 
 import type { BuiltLocalCatalog } from '../../../modules/design/discovery/node/local-directory.ts';

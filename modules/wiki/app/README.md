@@ -12,6 +12,7 @@ T2 mounts the module in the shell.
 | `src/port.ts` | `WikiHostPort` (the preload bridge: exactly the seven `WikiService` methods, results `unknown`) and `WikiModulePort` (structurally identical to `ModulePort`) |
 | `src/client.ts` | `createWikiClient(getPort)`: a `WikiService` over the port. Guards requests, reads only the seven method names, validates every response |
 | `src/domain.ts` | `createWikiDomain({ getPort })` → `{ id: 'wiki', label: 'Wiki', presentation: 'fill', Component }` |
+| `src/references.ts` | `createWikiReferenceProvider(service, now)`: Wiki pages as a read-only cross-module reference target (`find` / `resolve`) |
 | `src/wiki-domain.css` | Container styles (a file; the view's own `wiki-view.css` is reused unchanged) |
 | `src/index.ts` | Production entry: imports both stylesheets as files, re-exports the domain, client and types |
 | `fixtures/corpus/**` | Synthetic Wiki text for two namespaces; the tests commit it into bare Git repositories |
@@ -32,6 +33,29 @@ T2 mounts the module in the shell.
   message is never repeated, and a host error is rebuilt from its known fields only.
 - **No bridge discovery.** `getPort` is supplied by the caller (T2 owns the preload global's name) and is read on every
   call. The module never touches `window`, `document`, `localStorage` or Electron.
+- **Reference target, never a link source** (B5-W2, `req.references.001`). `createWikiReferenceProvider(service, now)` lets
+  Work and Social attach a Wiki page, lets the shell's `ReferencePort.find` list pages, and resolves a stored reference. It
+  reads the `WikiService` through `search` and `getPage` only, has just `domain`, `kinds`, `find` and `resolve`, and stores
+  nothing (RL-1: a link belongs to the record that holds it; the Git sources are read-only). Details:
+  - **Identity.** `domain: 'wiki'`, `kinds: ['page']`, `entityId` = `pageKeyId(key)` = `<namespace>/<path>`. A resolution
+    splits at the first `/` and re-validates with `makePageKey`, so `../x`, absolute paths, another namespace, other kinds
+    and other domains are `unknown` without a read. `returnDestination` and a resolution's `destination` are the contract's
+    `page/<namespace>/<encoded path>` and round-trip through `parseDestination`.
+  - **`find(query, scope)`.** A blank query lists nothing (no listing). Otherwise one `search` over both namespaces with
+    `limit = min(scope.limit, 50)`, then one `getPage` per hit to take its `sourceRevision`. A scope whose `kinds` excludes
+    `page` returns `[]`; any failure returns `[]`; a hit whose page cannot be read is left out rather than listed without a
+    revision. Every envelope passes `parseReference`. A page whose id exceeds 160 characters, or whose destination exceeds
+    512, is **omitted** (`parseReference` could not carry it); titles are trimmed and cut at 300 on a code point boundary.
+  - **`resolve(envelope)`.** `available`, or `changed` when the envelope's `sourceRevision` differs from the current token;
+    `latestTitle`, `latestRevision`, `destination` are carried. `not-found` → `missing`, `unavailable` (or a thrown read) →
+    `unavailable`, `invalid-input`/`internal` or an untrustworthy answer → `unknown`. Never `moved`, `archived` or
+    `forbidden`, and never `targetProjectId` (the Wiki is workspace-wide). `observedAt` is the injected clock read after the read.
+  - **Revision token.** `wiki-c1:` + SHA-256 (Web Crypto) of the canonical JSON (sorted keys) of
+    `{ byteLength, title, fields, content }` of the returned `Page`. It is content-based on purpose: the commit id is
+    excluded, so a new commit that leaves a page untouched does not turn its links `changed`. A change to the recipe must
+    change the `wiki-c1` prefix.
+  - **No contract import.** The package depends on `react` alone and `static.test.ts` limits its imports, so the caps of
+    `parseReference`/`isDestination` are restated in `references.ts`; `references.test.ts` checks them against the real ones.
 - **CSS is a file.** `index.ts` imports `ui/src/wiki-view.css` and `wiki-domain.css`; a Vite build of the entry emits one
   external `.css` file and no style injection (`csp-build.test.ts`). Nothing uses inline styles, so
   `style-src 'self'` needs no change.
@@ -62,6 +86,7 @@ Both need Node >=22.18 (native TypeScript type stripping). The `app/test` suites
 | --- | --- |
 | `client.test.ts` | Seven-method shape, request guards, exact-seven reads, failure mapping, response validation |
 | `assembly.test.ts` | Real core over committed bare repositories (real Git adapter), read through the client over a structured-clone bridge: pins, freshness, symlink/submodule/non-page/outside-prefix exclusion, search, aliases, backlinks, topics, hostile Markdown, raw pages, host-only refresh, no writes |
+| `references.test.ts` | The reference provider over the real corpus (find, resolve, destination round-trip, an unrelated later commit leaves a page `available`, no bridge) and over scripted services (limits, kinds, caps, truncation, every status, invalid ids, `observedAt`, only `search` and `getPage` read) |
 | `mounted.test.ts` | The domain Component mounted with a `ModulePort` in happy-dom: home, search, reading, navigation requests, encoded paths, raw and hostile pages, appearance, no bridge |
 | `static.test.ts` | Renderer source rules, stylesheet rules, package and layout rules, public-safety scans |
 | `csp-build.test.ts` | Vite build of the entry: external CSS file, no style injection |

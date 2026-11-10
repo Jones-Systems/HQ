@@ -56,6 +56,11 @@ export interface ImportsState {
   readonly status: 'idle' | 'busy' | 'planned' | 'applied' | 'rejected' | 'error';
   readonly summary: PlanSummary | null;
   readonly message: string | null;
+  /**
+   * What was thrown when `status` is `error`, as thrown, so a view can read the typed failure behind `message`.
+   * `null` otherwise. It is cleared whenever `message` is replaced.
+   */
+  readonly cause: unknown;
   readonly history: readonly HistoryRow[];
   readonly conflicts: readonly ConflictRow[];
   readonly exportChoice: BundleKind;
@@ -84,6 +89,16 @@ const REJECTION_TEXT: Readonly<Record<RejectionReason, string>> = {
 
 const ACTION_TEXT = { created: 'New', updated: 'Updated', unchanged: 'Unchanged', conflict: 'Conflict — your edits kept' } as const;
 const ACTION_TONE: Readonly<Record<keyof typeof ACTION_TEXT, Tone>> = { created: 'positive', updated: 'positive', unchanged: 'neutral', conflict: 'attention' };
+
+/**
+ * The sentence for a thrown error. An error that carries a string `description` (a typed Design failure does) reads
+ * as `<message>. <description>`. Duck-typed on purpose: this module never imports the app composition.
+ */
+export function describeFailure(error: unknown): string {
+  if (!(error instanceof Error)) return 'Unexpected failure';
+  const description = (error as { readonly description?: unknown }).description;
+  return typeof description === 'string' && description !== '' ? `${error.message.replace(/\.+$/u, '')}. ${description}` : error.message;
+}
 
 export function describeRejection(rejection: Rejection): string {
   return `${REJECTION_TEXT[rejection.reason]} Nothing was written.`;
@@ -125,17 +140,17 @@ export interface ImportsController {
 
 export function createImportsController(deps: ImportDeps, project: ProjectId, capabilities: ImportsCapabilities = {}): ImportsController {
   let state: ImportsState = {
-    status: 'idle', summary: null, message: null, history: [], conflicts: [],
+    status: 'idle', summary: null, message: null, cause: null, history: [], conflicts: [],
     exportChoice: 'backup', confirmPrivate: false, lastExport: null,
     canPick: capabilities.pickSource !== undefined, canSave: capabilities.saveBundle !== undefined,
   };
   let plan: ImportPlan | null = null;
   const listeners = new Set<() => void>();
   const set = (patch: Partial<ImportsState>) => {
-    state = { ...state, ...patch };
+    state = { ...state, ...patch, ...('message' in patch && !('cause' in patch) ? { cause: null } : {}) };
     for (const listener of listeners) listener();
   };
-  const fail = (error: unknown) => set({ status: 'error', message: error instanceof Error ? error.message : 'Unexpected failure' });
+  const fail = (error: unknown) => set({ status: 'error', message: describeFailure(error), cause: error });
 
   async function refresh(): Promise<void> {
     const [history, conflicts] = await Promise.all([listImports(deps), listOpenConflicts(deps)]);

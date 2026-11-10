@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('hqDesktop', desktop);
 const services: import('@hq/contracts/services').HqServices = Object.freeze({
   jonesCode: Object.freeze<import('@hq/contracts/jones-code').JonesTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:design', route, params) }),
   sources: Object.freeze<import('@hq/contracts/catalog').SourceTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:sources', route, params) }),
+  generationSources: Object.freeze<import('@hq/contracts/services').GenerationSourcesTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:generation-sources', route, params) }),
   preview: Object.freeze<import('@hq/contracts/preview').PreviewTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:preview', route, params) }),
   wikiAdmin: Object.freeze<import('@hq/contracts/wiki-admin').WikiAdminTransport>({ call: (route, params) => ipcRenderer.invoke('hq:svc:wiki-admin', route, params) }),
   wiki: Object.freeze<import('@hq/contracts/wiki').WikiServiceTransport>({

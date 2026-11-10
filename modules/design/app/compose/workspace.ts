@@ -6,10 +6,16 @@ import type { DesignRuntimePorts } from './runtime-ports.ts';
 import { createInteractiveWorkspace } from './interactive-workspace.ts';
 import * as fake from './fake-workspace.ts';
 import { createBridgedWorkspace } from './bridged-workspace.ts';
+import { createProjectContentEvents } from './content-events.ts';
 export * from './fake-workspace.ts';
+/** The fake's fixtures never change and never fail, so there is nothing to build again. */
+const retryNothing = (_projectId: string): void => undefined;
 export function createDesignWorkspace(documents: WorkspaceRecords | null, ports: DesignRuntimePorts = {}) {
+  // One change feed per composition: every project-content writer notifies it, cached readers subscribe.
+  const contentEvents = createProjectContentEvents();
   const closure = createClosureWorkspace(documents, ports.runsConnection);
-  const interactive = createInteractiveWorkspace(documents, closure.requests, ports);
-  return documents === null ? { ...fake, closure, interactive, bridged: false as const, storageTag: fakeStorageTag } : { ...createBridgedWorkspace(documents), closure, interactive };
+  const interactive = createInteractiveWorkspace(documents, closure.requests, ports, contentEvents);
+  return documents === null ? { ...fake, closure, interactive, contentEvents, retry: retryNothing, bridged: false as const, storageTag: fakeStorageTag }
+    : { ...createBridgedWorkspace(documents, { contentEvents }), closure, interactive };
 }
 export type DesignWorkspace = ReturnType<typeof createDesignWorkspace>;
