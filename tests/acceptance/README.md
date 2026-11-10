@@ -56,7 +56,38 @@ that a concurrent invocation survives another's cleanup. SIGKILL or host loss
 cannot execute cleanup; a surviving exact run directory requires explicit recovery.
 
 Reports, bounded runtime diagnostics and screenshots remain in a unique directory
-under `.t3/acceptance-evidence/`, outside disposable scratch. Reports include Git
+under `.t3/acceptance-evidence/`, outside disposable scratch. Before creating either
+evidence or scratch parents, `evidence-runner.mjs` checks the actual receiving
+filesystems through Stage A admission. Unknown or insufficient capacity refuses
+without starting the runtime. The standalone writer then accounts existing retained
+evidence, acquires its own matching parent lock and preallocates closure diagnostics
+before accepting artifacts; do not nest this runner inside a Stage A locked invocation.
+
+Runner-owned inventory, screenshot, report and log disk writes now use
+`evidence.mjs`: provisional limits are 128 MiB/run (120 MiB ordinary plus 8 MiB
+preallocated closure), 32 MiB/artifact, 256 artifacts and 8 pending writes. Parent
+retention is prospectively limited to 2 GiB/16 runs, with the existing 30 GiB
+reserve plus 10 GiB additional-peak admission on each receiving filesystem. These
+are unmeasured ceilings, not measured peaks. Excess retained evidence refuses;
+there is no historical overwrite, eviction, deletion or stale-lock recovery.
+
+`report-before-cleanup.json` and immutable `runtime-before-cleanup.log` precede
+teardown. `runtime.log` and `report.json` are each written once afterward. Evidence
+refusal, serialization failure and cancellation still visit runtime cleanup and the
+existing post-cleanup service/build/source oracles. Accepted writes drain before
+writer close. A failed evidence operation makes an otherwise successful invocation
+incomplete/nonzero; an original harness failure or observed SIGINT/SIGTERM remains
+primary. The padded `.closure.json` is the final writer result: an absent, torn,
+failed or incomplete closure is never a passing evidence bundle, even if an earlier
+report says pass. A late close/unlock error may be present only in that closure or
+stdout. Retained failed/cancelled/incomplete runs stay labelled, never swept here.
+
+This bounds only writes owned by this runner. CDP in-memory responses, stdout,
+fixture/internal writes, scratch occupancy after admission, raw traces, preview and
+other producers remain uncovered. It is no global quota, memory bound, sandbox,
+full Stage B coverage or native-acceptance claim. `evidence-runner.test.mjs` exercises
+the actual adapter with small synthetic artifacts and fake cleanup/oracle ports;
+it does not start Electron or a native journey. Reports include Git
 head, dirty-source status, the existing entry-point hashes and a complete
 compiled-build inventory. They do not certify
 that an independently produced build corresponds to source: build immediately
