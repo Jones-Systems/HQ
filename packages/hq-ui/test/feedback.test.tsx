@@ -132,6 +132,17 @@ describe('inline feedback', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
+  it('InlineNotice names its region and dismiss button when asked', () => {
+    const dismiss = vi.fn();
+    const { rerender } = render(<InlineNotice tone="info" variant="bar" title="Read-only" onDismiss={dismiss} />);
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeTruthy();
+    expect(screen.getByRole('status').getAttribute('aria-label')).toBeNull();
+    rerender(<InlineNotice tone="info" variant="bar" title="Read-only" label="Read-only reference" dismissLabel="Dismiss reference" onDismiss={dismiss} />);
+    expect(screen.getByRole('status', { name: 'Read-only reference' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss reference' }));
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
   it('FieldError renders only with a message and ties itself to the field', () => {
     const { rerender } = render(<><input aria-label="Title" {...fieldErrorProps('title-error', '')} /><FieldError id="title-error" /></>);
     expect(screen.getByLabelText('Title').getAttribute('aria-invalid')).toBeNull();

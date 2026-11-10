@@ -22,6 +22,10 @@ export interface InlineNoticeProps {
   /** One or two recovery actions ("Retry", "Check", "Open settings"). */
   readonly actions?: readonly InlineNoticeAction[];
   readonly onDismiss?: () => void;
+  /** Accessible name for the notice region, when the title alone does not identify it ("Read-only reference"). */
+  readonly label?: string;
+  /** Accessible name for the dismiss button. Default: "Dismiss". */
+  readonly dismissLabel?: string;
   /** `banner` (default) is a soft panel with title and description; `bar` is one compact line for the top of a list. */
   readonly variant?: 'banner' | 'bar';
   /**
@@ -45,10 +49,10 @@ const GLYPHS: Record<NoticeTone, ReactNode> = {
  * Status or failure shown in place, on the screen the user is already looking at, instead of replacing it with a
  * full-screen error. Keep what loaded visible below it. Tone pairs a glyph with words, never colour alone.
  */
-export function InlineNotice({ tone, title, children, actions = [], onDismiss, variant = 'banner', live, className }: InlineNoticeProps) {
+export function InlineNotice({ tone, title, children, actions = [], onDismiss, label, dismissLabel = 'Dismiss', variant = 'banner', live, className }: InlineNoticeProps) {
   const politeness = live ?? (tone === 'danger' || tone === 'unknown' ? 'assertive' : 'polite');
   return (
-    <div className={cx('hq-notice', `hq-notice--${tone}`, variant === 'bar' && 'hq-notice--bar', className)} data-tone={tone}
+    <div className={cx('hq-notice', `hq-notice--${tone}`, variant === 'bar' && 'hq-notice--bar', className)} data-tone={tone} aria-label={label}
       role={politeness === 'assertive' ? 'alert' : politeness === 'polite' ? 'status' : undefined}>
       <span className="hq-notice-glyph" aria-hidden="true"><svg viewBox="0 0 24 24">{GLYPHS[tone]}</svg></span>
       <div className="hq-notice-text">
@@ -62,7 +66,7 @@ export function InlineNotice({ tone, title, children, actions = [], onDismiss, v
               busy={action.busy} busyLabel={action.busyLabel} onClick={action.onAction}>{action.label}</Button>
           ))}
           {onDismiss && (
-            <IconButton size="sm" label="Dismiss" onClick={onDismiss} icon={<svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" /></svg>} />
+            <IconButton size="sm" label={dismissLabel} onClick={onDismiss} icon={<svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" /></svg>} />
           )}
         </div>
       )}

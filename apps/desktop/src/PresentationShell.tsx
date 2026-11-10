@@ -153,7 +153,8 @@ function WorkspaceApp({ modules, presentation, referenceProviders }: Presentatio
       onResize={width => setRail(previous => resizeRail(previous, width))} onToggle={() => setRail(toggleRail)} />}
     <div ref={workspaceRef} id="hq-content" tabIndex={-1} className={fill ? 'workspace is-fill' : 'workspace'} data-hq-overlay={settingsOpen ? 'open' : undefined}>
       {referenceNotice && !settingsOpen && <InlineNotice className="shell-reference-notice" variant="bar" tone="info"
-        title={referenceNotice.title} onDismiss={() => setReferenceNotice(null)}>{referenceNotice.message}</InlineNotice>}
+        title={referenceNotice.title} label="Read-only reference" dismissLabel="Dismiss reference"
+        onDismiss={() => setReferenceNotice(null)}>{referenceNotice.message}</InlineNotice>}
       <main hidden={settingsOpen} className={fill ? `${PAGE_TRANSITION_CLASS} is-fill` : PAGE_TRANSITION_CLASS} key={`${projectMountId}:${state.domain}`}>
         <ErrorBoundary resetKeys={[projectMountId, state.domain, state.destinations[state.domain]]} title={`${DOMAIN_LABELS[state.domain]} stopped working`}>
         <Module context={context} destination={state.destinations[state.domain]} appearance={theme} desktop={window.hqDesktop ?? BROWSER_PORT}

@@ -116,7 +116,7 @@ Write titles as one short sentence in plain words. Put provenance in `meta` (mon
 <InlineNotice tone="warning" variant="bar" title="Stale" live="off">Last observed 16 Oct 09:40</InlineNotice>
 ```
 
-Tones: `neutral`, `info`, `success`, `warning`, `danger`, `unknown`. `variant="bar"` is one compact line for the top of a list or panel. By default `danger` and `unknown` announce assertively (`role="alert"`) and the rest politely. Use `live="off"` for notices that are present when the view loads. Wrap one in `<Presence show={failed} motion="collapse">` so it slides open and closed instead of jumping.
+Tones: `neutral`, `info`, `success`, `warning`, `danger`, `unknown`. `variant="bar"` is one compact line for the top of a list or panel. By default `danger` and `unknown` announce assertively (`role="alert"`) and the rest politely. Use `live="off"` for notices that are present when the view loads. `onDismiss` adds a dismiss button; pass `label` to name the notice region and `dismissLabel` to name that button when "Dismiss" alone is ambiguous (the shell's reference notice uses "Read-only reference" and "Dismiss reference"). Wrap one in `<Presence show={failed} motion="collapse">` so it slides open and closed instead of jumping.
 
 ### Status indicators: ongoing state
 
