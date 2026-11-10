@@ -37,3 +37,13 @@ test('weekday names and invalid periods never send a write', async () => {
   }
   assert.equal(h.writes().length, 0);
 });
+
+test('resolution echo names the timezone that resolved the relative token, not the entry wall-time zone', () => {
+  const r = resolveDates([dateToken('event:today@10:00~Pacific/Auckland')], 'America/New_York', clock());
+  assert.deepEqual(r.resolutions[0], { input: 'today', resolved: '2026-10-31', tz: 'America/New_York', today: '2026-10-31' });
+  assert.equal(r.dates[0].tz, 'Pacific/Auckland');
+});
+
+test('empty time, end_time and tz strings mean untimed, matching the service', () => {
+  assert.deepEqual(resolveDates([{ kind: 'target', value: '2026-11-01', time: '', end_time: '', tz: '' }], 'UTC', clock()).dates, [{ kind: 'target', precision: 'day', value: '2026-11-01', time: null, end_time: null, tz: null, note: '' }]);
+});

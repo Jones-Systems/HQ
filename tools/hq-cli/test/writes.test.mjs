@@ -1,12 +1,13 @@
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, unlinkSync, mkdirSync } from 'node:fs';
 import { run } from '../src/cli.ts';
 import { schemas, commands } from '../src/commands.ts';
 import { conforms } from '../src/schema.ts';
 import { atomicJSON } from '../src/files.ts';
-import { server, json, item, scratch, itemReply, info } from './write-fixtures.mjs';
+import { server, json, item, scratch, itemReply, info, batchSpec, replay } from './write-fixtures.mjs';
+import { date } from './fixtures.mjs';
 
 test('every single mutation uses its canonical closed route/body and a version preread', async () => {
   const cases = [
@@ -96,6 +97,44 @@ test('intent write failure prevents sending; rename failure cleans its exact tem
   assert.deepEqual(readdirSync(f.root), []);
 });
 
+for (const outcome of ['applied', 'unknown']) test(`post-send intent persistence failure preserves ${outcome} outcome without retry`, async t => {
+  const f = await scratch(t);
+  const path = f.path('intent.json');
+  let persisted;
+  let replaced = false;
+  const h = server(call => {
+    persisted = JSON.parse(readFileSync(path, 'utf8'));
+    unlinkSync(path);
+    mkdirSync(path);
+    replaced = true;
+    if (outcome === 'unknown') throw Object.assign(new Error('Connection reset after send'), { code: 'ECONNRESET' });
+    return itemReply(call);
+  });
+  const r = await run(['planner', 'items', 'create', '--title', 'Synthetic', '--request-id', 'request-1234', '--intent-file', path], h.deps);
+  assert.deepEqual(persisted, replay());
+  assert.equal(replaced, true);
+  assert.deepEqual(h.calls.map(call => [call.method, call.path]), [['GET', '/api/version'], ['POST', '/api/items']]);
+  assert.equal(h.writes().length, 1);
+  assert.equal(h.writes()[0].body, Buffer.from(persisted.body_b64, 'base64').toString());
+  assert.equal(h.writes()[0].headers['X-Request-Id'], 'request-1234');
+  assert.equal(r.exitCode, outcome === 'applied' ? 0 : 7, JSON.stringify(r));
+  assert.equal(r.result.ok, outcome === 'applied');
+  assert.equal(r.result.effect, outcome);
+  assert.equal(r.result.request_id, 'request-1234');
+  assert.deepEqual(r.result.replay, persisted);
+  if (outcome === 'applied') {
+    assert.deepEqual(r.result.data.item, item({ title: 'Synthetic' }));
+    assert.equal(r.result.data.state_version, 9);
+    assert.match(r.result.data.intent_file_error, /updating the intent file failed/);
+  } else {
+    assert.equal(r.result.error.code, 'network_error');
+    assert.match(r.result.error.details.hint, /Never blindly retry/);
+    assert.match(r.result.error.details.intent_file_error, /updating the intent file failed/);
+  }
+  assert.deepEqual(readdirSync(f.root), ['intent.json']);
+  assert.deepEqual(readdirSync(path), []);
+});
+
 test('invalid local mutations fail without POST, and request IDs are bounded', async () => {
   const h = server(() => assert.fail('Must not send'));
   for (const args of [['items', 'update', 'item0001', '--revision', '0', '--title', 'X'], ['items', 'create', '--title', '   '], ['settings', 'set'], ['items', 'move', 'item0001', '--revision', '3', '--status', 'next', '--before-id', 'item0002', '--after-id', 'item0003'], ['items', 'create', '--title', 'X', '--request-id', 'bad'], ['items', 'create', '--title', 'X', '--request-id', 'x'.repeat(65)]]) assert.equal((await run(['planner', ...args], h.deps)).exitCode, 2);
@@ -123,4 +162,54 @@ test('atomic intent temp is cleaned on handled SIGINT and SIGTERM before process
     assert.equal(child.status, exit, child.stderr);
     assert.deepEqual(readdirSync(f.root), []);
   }
+});
+
+test('update rejects date flags that would silently replace every existing item date', async () => {
+  const h = server(() => assert.fail('Must not send'));
+  for (const flag of [['--due', '2026-12-01'], ['--planned', 'today'], ['--date', 'event:2026-11-02']]) {
+    const r = await run(['planner', 'items', 'update', 'item0001', '--revision', '3', ...flag], h.deps);
+    assert.equal(r.exitCode, 2, flag[0]); assert.equal(r.result.error.code, 'usage_error');
+  }
+  assert.equal(h.calls.length, 0);
+  assert.equal(commands.find(c => c.id === 'planner.items.update').input.properties.due, undefined);
+  assert.match(commands.find(c => c.id === 'planner.items.update').description, /complete dates array/);
+});
+
+test('update fields file accepts dates copied from items get and drops read-only derived fields', async t => {
+  const f = await scratch(t);
+  const timed = date({ kind: 'event', time: '10:30', end_time: '11:30', tz: 'America/New_York', instant: '2026-11-01T15:30:00Z', end_instant: '2026-11-01T16:30:00Z', tz_abbr: 'EST' });
+  const file = await f.write('patch.json', { dates: [timed, date({ id: 'date0002', kind: 'deadline', value: '2026-11-06' })] });
+  const h = server(() => json({ item: item({ revision: 4, dates: [timed, date({ id: 'date0002', kind: 'deadline', value: '2026-11-06' })] }), changed: ['dates'], state_version: 9 }));
+  const r = await run(['planner', 'items', 'update', 'item0001', '--revision', '3', '--fields-file', file], h.deps);
+  assert.equal(r.exitCode, 0, JSON.stringify(r));
+  assert.deepEqual(h.writes()[0].parsed.patch.dates, [
+    { id: 'date0001', kind: 'event', precision: 'day', value: '2026-11-01', time: '10:30', end_time: '11:30', tz: 'America/New_York', note: '' },
+    { id: 'date0002', kind: 'deadline', precision: 'day', value: '2026-11-06', time: null, end_time: null, tz: null, note: '' },
+  ]);
+});
+
+test('local schema errors name the first failing field path', async t => {
+  const f = await scratch(t);
+  const h = server(() => assert.fail('Must not send'));
+  for (const [args, field] of [
+    [['items', 'create', '--fields-file', await f.write('kind.json', { title: 'Synthetic', dates: [{ kind: 'due', value: '2026-11-01' }] })], 'dates[0].kind'],
+    [['items', 'create', '--fields-file', await f.write('unknown.json', { title: 'Synthetic', colour: 'red' })], 'colour'],
+    [['items', 'update', 'item0001', '--revision', '3', '--fields-file', await f.write('steps.json', { next_steps: [{ text: '' }] })], 'next_steps[0].text'],
+    [['items', 'create-batch', '--spec-file', await f.write('batch.json', batchSpec([{ title: 'One' }, { notes: 'No title' }]))], 'items[1].title'],
+  ]) {
+    const r = await run(['planner', ...args], h.deps);
+    assert.equal(r.exitCode, 2, field); assert.equal(r.result.error.details.field, field); assert.match(r.result.error.message, new RegExp(field.replace(/[[\]]/g, '\\$&')));
+  }
+  assert.equal(h.writes().length, 0);
+});
+
+test('write help shares described global flags, and move rejects an anchor combined with --place', async () => {
+  for (const c of commands.filter(c => c.write)) {
+    assert.match(c.input.properties.timeout_ms.description, /Per-request timeout/, c.id);
+    assert.match(c.input.properties.planner_url.description, /HTTPS or loopback/, c.id);
+  }
+  assert.deepEqual(['archive', 'restore', 'reviewed'].map(a => commands.find(c => c.id === `planner.items.${a}`).description.split(' ')[0]), ['Archive', 'Restore', 'Mark']);
+  const h = server(() => assert.fail('Must not send'));
+  const r = await run(['planner', 'items', 'move', 'item0001', '--revision', '3', '--status', 'next', '--place', 'top', '--after-id', 'item0002'], h.deps);
+  assert.equal(r.exitCode, 2); assert.equal(h.calls.length, 0);
 });

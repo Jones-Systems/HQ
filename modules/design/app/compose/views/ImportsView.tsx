@@ -4,7 +4,7 @@ import '../../../imports/src/imports.css';
 import { importSourceId, projectId, type ImportSource } from '../../../imports/src/contract.ts';
 import { syntheticPng } from '../../../projects/fakes/index.ts';
 import { FAKE_TAG, SYNTHETIC_TAG } from '../labels.ts';
-import { importsFor } from '../workspace.ts';
+import { useDesignWorkspace } from '../workspace-context.tsx';
 import { SectionFrame } from './SectionFrame.tsx';
 
 const SYNTHETIC_RIGHTS = { basis: 'owned', holder: 'Synthetic Owner' } as const;
@@ -21,9 +21,11 @@ function syntheticSource(): ImportSource {
 }
 
 export function ImportsView({ context }: DesignSectionProps) {
-  const { deps, capabilities } = importsFor(context, syntheticSource);
-  return <SectionFrame lane="T13 imports" entry="imports/src/ImportsPanel.ts › ImportsPanel" tags={[FAKE_TAG, SYNTHETIC_TAG]}
-    notes={['source picker returns a synthetic two-screen source', 'no save-to-disk capability', 'in-memory fake store']}>
+  const workspace = useDesignWorkspace();
+  const { deps, capabilities } = workspace.importsFor(context, syntheticSource);
+  return <SectionFrame lane="T13 imports" entry="imports/src/ImportsPanel.ts › ImportsPanel" tags={workspace.bridged ? [workspace.storageTag] : [FAKE_TAG, SYNTHETIC_TAG]}
+    notes={workspace.bridged ? ['files are chosen with the system file picker', 'backup and export are not available in this build']
+      : ['source picker returns a synthetic two-screen source', 'no save-to-disk capability', 'in-memory fake store']}>
     <ImportsPanel deps={deps} projectId={projectId(context.id)} capabilities={capabilities} />
   </SectionFrame>;
 }
