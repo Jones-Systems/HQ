@@ -403,6 +403,19 @@ passed in only matters for a rejection that is not typed, which reads as `unavai
 A plan the importer refuses (for example a newer format) is not an error: `status` is `rejected`, `message` is the
 importer's own sentence and there is no `cause`.
 
+### Retry, Reload and Check for Imports
+
+`workspace.retry` (section 10) is not the Imports Retry. The Imports env is built once per project and building it
+cannot fail, so `retry` has no failed Imports build to clear. Calling it as well does no harm: it only notifies
+content readers. A view maps the Imports actions onto the controller:
+
+- **Retry**, after an `unavailable` read: `controller.refresh()`, which reads the history and open conflicts again.
+- **Reload**, after a `conflict`: `controller.refresh()`, then the owner chooses the files again. The controller
+  dropped the stale plan before it sent the commit, so nothing is applied again by itself.
+- **Check**, after an `unknown` apply: `controller.refresh()`, then show whether the import is in the history. A view
+  never calls `apply()` again for it. The plan was dropped before sending, so a blind resend is not possible from
+  that state.
+
 ### Imports linking into project content
 
 Importing a PNG makes it a project version, so Projects, Gallery, Compare and Annotations see it.
