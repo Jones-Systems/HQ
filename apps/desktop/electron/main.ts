@@ -18,7 +18,8 @@ import { createWikiBridge, openEmittedWiki, wikiIpcHandler } from './wiki-host.j
 import { catalogPersistence, createCatalogHost } from './catalog-host.js';
 import { createSaveDialog } from './save-dialog.js';
 import { createWorkExport } from './work-export.js';
-import { createDesignHost, openEmittedDesignStore } from './design-host.js';
+import { createProductionDesignHost } from './design-host-production.js';
+import { createImportPickWiring } from './import-pick-wiring.js';
 
 interface BootstrapContext {
   readonly record: InstallationRecord;
@@ -70,7 +71,9 @@ const save = createSaveDialog(async request => {
   const result = await dialog.showSaveDialog({ defaultPath: request.defaultPath, filters: request.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) });
   return result.canceled ? null : result.filePath ?? null;
 });
-const design = createDesignHost(() => openEmittedDesignStore(app.getPath('userData')), save);
+// Imports are enabled; the native picker is bound to the main window and settles as canceled when it or the host closes.
+const importPick = createImportPickWiring({ window: () => mainWindow, showOpenDialog: (window, options) => dialog.showOpenDialog(window, options) });
+const design = createProductionDesignHost({ profileDir: () => app.getPath('userData'), save, pick: importPick });
 const wiki = createWikiBridge(() => openEmittedWiki(app.getPath('userData')));
 let closing = false;
 let closed = false;

@@ -242,7 +242,9 @@ it('refuses corrupt-stream repair through the host without changing bytes or unb
   });
 });
 
-it('leaves every import route and export route disabled in the emitted production host', async () => {
+// The default store, for any caller that does not opt in, stays closed. The application opts in through
+// createProductionDesignHost; the test after the opener defaults below pins that construction on the emitted build.
+it('leaves every import route and export route disabled in the default emitted store, with no opt-in', async () => {
   await synthetic(async f => {
     const emitted: typeof import('../../../modules/design/app/storage/node.ts') = await import(/* @vite-ignore */ pathToFileURL(join(process.cwd(), 'apps/desktop/dist-electron/design-host/modules/design/app/storage/node.js')).href);
     const save = vi.fn(), host = f.track(createDesignHost(() => emitted.openDesignStorage({ root: f.root }), save));
@@ -303,5 +305,27 @@ it('explicitly enables the actual emitted opener with T9 exclusion and commit/re
     await committed(reopened);
     for (const route of ['export.preview', 'export.save']) expect(await reopened.call(route, { exportedAt })).toEqual(disabled);
     expect(save).not.toHaveBeenCalled();
+  });
+});
+
+it('builds the production host from the actual emitted modules: Imports enabled, the picker injected, export OFF', async () => {
+  const emitted: typeof import('./design-host-production') = await import(/* @vite-ignore */ pathToFileURL(join(process.cwd(), 'apps/desktop/dist-electron/design-host-production.js')).href);
+  await synthetic(async f => {
+    const save = vi.fn();
+    const pick = { pick: vi.fn(async () => ({ status: 'canceled' as const })), cancelPending: vi.fn() };
+    const host = f.track(emitted.createProductionDesignHost({ profileDir: () => f.dir, save, pick }));
+    // Picking is answered by the injected picker and never needs the store.
+    expect(await host.call('import.pick', {})).toEqual({ ok: true, value: { status: 'canceled' } });
+    expect(pick.pick).toHaveBeenCalledTimes(1);
+    expect(await host.ready()).toBe(true);
+    expect(await host.call('import.status', {})).toEqual({ ok: true, value: { accepted: true, state: 'enabled' } });
+    expect(await host.call('import.commit', { ops: operations() })).toEqual({ ok: true, value: { txnId: expect.stringMatching(/^[a-f0-9]{64}$/) } });
+    await committed(host);
+    for (const route of ['export.preview', 'export.save']) expect(await host.call(route, { exportedAt })).toEqual(disabled);
+    expect(save).not.toHaveBeenCalled();
+    // Closing settles a pending pick first, then closes the store.
+    expect(pick.cancelPending).not.toHaveBeenCalled();
+    await host.close();
+    expect(pick.cancelPending).toHaveBeenCalledTimes(1);
   });
 });
