@@ -15,6 +15,11 @@ import type { DesignRuntimePorts, InteractiveCatalogItem } from './runtime-ports
 import { authoringDigest } from './canonical.ts';
 import { catalogProject, interactiveTarget } from './runtime-ports.ts';
 import { createProjectContentEvents, type ProjectContentEvents } from './content-events.ts';
+import { designFailure, designFailureOf, DesignOperationError, isDesignFailure, toDesignOperationError, type DesignFailure, type DesignFailureContext } from './errors.ts';
+import { captureThumbnailRef } from './capture-thumbnail.ts';
+
+/** Operation names are part of the backend contract (BACKEND-CONTRACT.md). */
+const CAPTURE_ACCEPT: DesignFailureContext = { section: 'captures', operation: 'captures.accept', action: 'save the capture', write: true };
 
 export interface InteractiveSnapshot {
   readonly bookmark: PreviewIdentity | null;
@@ -29,6 +34,8 @@ export interface InteractiveSnapshot {
   readonly busy: boolean;
   readonly held: boolean;
   readonly error: string | null;
+  /** The typed failure behind `error` when it has one (see `designFeedback`); cleared whenever `error` is. */
+  readonly failure: DesignFailure | null;
   readonly notice: string | null;
   readonly history: readonly string[];
 }
@@ -55,7 +62,7 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
   const flows = records ? createFlowRepository(createFlowsStorage(records)) : null;
   const bookmarkStore = ports.previewBookmark ?? rendererPreviewBookmark;
   let state: InteractiveSnapshot = { bookmark: bookmarkStore.read(), items: [], selected: null, session: null, capture: null, version: null, image: null, annotations: null, flow: null,
-    busy: false, held: false, error: null, notice: null, history: [] };
+    busy: false, held: false, error: null, failure: null, notice: null, history: [] };
   let after = 0;
   let polling = false;
   let pollDone = Promise.resolve();
@@ -65,7 +72,18 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
   let flowWritable = false;
   let operationHeld = false;
   const next = (kind: string) => `${kind}-${globalThis.crypto.randomUUID()}`;
-  const update = (patch: Partial<InteractiveSnapshot>) => { state = { ...state, ...patch }; for (const listener of listeners) listener(); };
+  const update = (patch: Partial<InteractiveSnapshot>) => {
+    state = { ...state, ...patch, ...(patch.error === null && !('failure' in patch) ? { failure: null } : {}) };
+    for (const listener of listeners) listener();
+  };
+  /** One short sentence for the panel, plus the typed failure when the error has one. */
+  function failureOf(error: unknown, fallback: string): { readonly message: string; readonly failure: DesignFailure | null } {
+    if (isDesignFailure(error)) {
+      const failure = designFailureOf(error);
+      return { message: failure.description === undefined ? failure.message : `${failure.message}. ${failure.description}`, failure };
+    }
+    return { message: error instanceof Error ? error.message : fallback, failure: null };
+  }
   async function call<R extends keyof PreviewParams>(route: R, params: PreviewParams[R]): Promise<PreviewValues[R]> {
     if (!ports.preview) throw new Error('Live preview unavailable: the desktop preview port is not connected.');
     let result;
@@ -85,9 +103,10 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
     update({ busy: true, error: null, notice: null });
     try { await pollDone; return await run(); }
     catch (error) {
-      const message = error instanceof Error ? error.message : 'Operation unavailable.';
-      if (/unknown|unresolved/iu.test(message)) { operationHeld = true; update({ held: true }); }
-      update({ error: message }); return undefined;
+      const { message, failure } = failureOf(error, 'Operation unavailable.');
+      // A write whose result is not confirmed holds further work until the owner reopens, never a blind retry.
+      if (failure?.outcome === 'unknown-effect' || /unknown|unresolved/iu.test(message)) { operationHeld = true; update({ held: true }); }
+      update({ error: message, failure }); return undefined;
     }
     finally { update({ busy: false }); }
   }
@@ -125,8 +144,10 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
     const epoch = lifecycle;
     const session = state.session;
     const selected = state.selected;
-    if (!session || !selected || !repository || !captureMatches(capture, session) || !/^sha256:[0-9a-f]{64}$/u.test(capture.captureDigest)) {
-      throw new Error('Stale capture: its version, route, state or viewport no longer matches.');
+    if (!repository) throw new DesignOperationError(designFailure('unavailable', CAPTURE_ACCEPT, { reason: 'no-storage' }));
+    if (!session || !selected || !captureMatches(capture, session) || !/^sha256:[0-9a-f]{64}$/u.test(capture.captureDigest)) {
+      throw new DesignOperationError(designFailure('stale', CAPTURE_ACCEPT, { reason: 'capture-changed',
+        description: 'The page changed after it was captured. Capture it again.' }));
     }
     // Host session identity stays native. Saved versions identify immutable capture frames, including empty state and scroll.
     const binding = { sourceProjectId: String(selected.entry.sourceProjectId), sourceRevision: selected.entry.revision ?? null,
@@ -134,6 +155,9 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
     const savedVersion = versionId(`capture-${(await authoringDigest(binding)).slice('sha256:'.length)}`);
     const project = catalogProject(selected);
     const vid = viewId(`interactive-${selected.entry.sourceProjectId}`);
+    // The host stored the PNG under its digest before it returned the record. Its size is not in the record, so the
+    // thumbnail is described from the stored bytes, and only when they qualify; otherwise the version has none.
+    const thumbnail = await captureThumbnailRef(records ? (digest) => records.getBlob(digest) : null, capture.captureDigest);
     // Readers re-read after any attempt: success, a definite failure (their cache may be stale) or an unknown outcome.
     try {
       await repository.update(projectId(project.id), (content, now) => {
@@ -142,8 +166,11 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
         if (!nextContent.views.some((view) => view.id === vid)) nextContent = addView(nextContent, { id: vid, title: project.name, kind: 'prototype' }, now);
         return addVersion(nextContent, { id: savedVersion, viewId: vid, label: `Live capture ${capture.route}`.slice(0, 300),
           origin: 'owner-created', capture: { route: capture.route + capture.state, viewport: capture.viewport, captureDigest: capture.captureDigest,
-            ...(selected.entry.revision ? { sourceRevision: selected.entry.revision } : {}) } }, now);
+            ...(selected.entry.revision ? { sourceRevision: selected.entry.revision } : {}) },
+          ...(thumbnail ? { thumbnail } : {}) }, now);
       });
+    } catch (error) {
+      throw toDesignOperationError(error, CAPTURE_ACCEPT);
     } finally {
       contentEvents.notify(project.id);
     }
@@ -285,8 +312,11 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
           if (state.error?.startsWith('Preview stale: mark-')) update({ error: null });
         }
         after = Math.max(after, batch.after);
-      } catch (error) { update({ error: error instanceof Error ? error.message : 'Preview observation unavailable.' }); }
-      finally { polling = false; releasePoll(); }
+      } catch (error) {
+        const { message, failure } = failureOf(error, 'Preview observation unavailable.');
+        if (failure?.outcome === 'unknown-effect') { operationHeld = true; update({ held: true }); }
+        update({ error: message, failure });
+      } finally { polling = false; releasePoll(); }
     },
     capture: () => action(async () => {
       if (!state.session) return;
@@ -322,7 +352,10 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
       const flow: FlowDocument = { schema: FLOW_SCHEMA, id: current?.id ?? flowId(`interactive-${state.selected.entry.sourceProjectId}`), projectId: flowProjectId(state.selected.entry.sourceProjectId),
         title: `${state.selected.entry.displayName} flow`, platform: 'web', start: current?.start ?? screen.id, routes: nextRoutes,
         screens: [...(current?.screens ?? []), screen], hotspots: current?.hotspots ?? [] };
-      await flows.save(flow); update({ flow, notice: 'Screen saved to this project’s flow.' });
+      // Flows read the project's saved flows; tell them after the write, and after one whose result is unknown.
+      const changed = catalogProject(state.selected).id;
+      try { await flows.save(flow); } finally { contentEvents.notify(changed); }
+      update({ flow, notice: 'Screen saved to this project’s flow.' });
     }),
     createProposal: (intent: string) => action(async () => {
       if (state.session) observe(await call('status', { sessionId: state.session.sessionId }));
