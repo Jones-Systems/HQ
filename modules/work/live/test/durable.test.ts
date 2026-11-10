@@ -242,6 +242,7 @@ describe('the module boundary', () => {
   it('stands alone: it does not import Work core durability, which is written in parallel', () => {
     const source = readFileSync(new URL('../durable.ts', import.meta.url), 'utf8');
     expect(/from '[^']*core[^']*'/u.test(source)).toBe(false);
-    expect(Array.from(source.matchAll(/from '([^']+)'/gu), (match) => match[1])).toEqual(['@hq/contracts/services']);
+    // Only the local bridge mirror; the shared `services.ts` is outside ac.work-domain.001.
+    expect(Array.from(source.matchAll(/from '([^']+)'/gu), (match) => match[1])).toEqual(['./transport']);
   });
 });

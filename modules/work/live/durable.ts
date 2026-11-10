@@ -1,4 +1,4 @@
-import type { JsonValue, WorkLocalParams, WorkLocalRoute, WorkLocalTransport } from '@hq/contracts/services';
+import type { WorkLocalJson, WorkLocalParams, WorkLocalRoute, WorkLocalTransport } from './transport';
 
 // The renderer end of Work's durable device state (`hqServices.workLocal`, backend-assessment-planner-20261103, "Offline
 // queue semantics"). The Work store loads one document when it starts and saves it whole after each change; this keeps
@@ -91,7 +91,7 @@ export function workLocalPersistence(transport: WorkLocalTransport): WorkLocalPe
         if (!base) throw new WorkLocalError('not_loaded');
         const sent = base;
         try {
-          const saved = await ask('save', { binding: sent.binding, expectedRevision: sent.revision, value: value as JsonValue });
+          const saved = await ask('save', { binding: sent.binding, expectedRevision: sent.revision, value: value as WorkLocalJson });
           if (!isRecord(saved) || !isRevision(saved.revision) || saved.revision <= sent.revision) throw new WorkLocalError('malformed');
           base = { binding: sent.binding, revision: saved.revision };
         } catch (error) {
