@@ -89,13 +89,18 @@ def service():
 def capture():
     exchanges = {}
     with service() as port:
-        def call(name, method, path, body=None, request_id=None, status=200, raw=None):
+        def call(name, method, path, body=None, request_id=None, status=200, raw=None, override=None):
             wire = raw if raw is not None else (json.dumps(body, separators=(",", ":"), ensure_ascii=True) if body is not None else "")
             headers = {"Host": "localhost", "Accept": "application/json"}
             if method != "GET":
                 headers.update({"Content-Type": "application/json", "X-Planning-Request": "1"})
             if request_id is not None:
                 headers["X-Request-Id"] = request_id
+            for key, value in (override or {}).items():
+                if value is None:
+                    headers.pop(key)
+                else:
+                    headers[key] = value
             connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
             try:
                 connection.request(method, path, body=wire.encode(), headers=headers)
@@ -132,8 +137,9 @@ def capture():
         call("12-restore", "POST", path + "/restore", {"revision": 4}, "contract-restore")
         call("13-reviewed", "POST", path + "/reviewed", {"revision": 5}, "contract-reviewed")
         call("14-settings", "PUT", "/api/settings", {"settings": {"week_start": "mon"}}, "contract-settings")
-        call("15-batch-dry-run", "POST", "/api/items/batch", {"items": [{"title": "Batch A", "references": [ref]}], "dry_run": True}, "contract-dry")
         batch = {"items": [{"title": "Batch A", "references": [ref]}, {"title": "Batch B", "status": "next"}]}
+        # The CLI sends its atomic dry run and the real batch under one request ID.
+        call("15-batch-dry-run", "POST", "/api/items/batch", {**batch, "dry_run": True}, "contract-batch")
         call("16-batch", "POST", "/api/items/batch", batch, "contract-batch", 201)
         call("17-field-validation", "POST", "/api/items", {"fields": {"title": "Invalid", "references": [{**ref, "url": ""}]}}, "contract-invalid", 400)
         call("18-import-validation", "POST", "/api/import/preview", {"data": {"format": "wrong", "version": 1}}, "contract-import", 422)
@@ -151,7 +157,27 @@ def capture():
         call("24-history", "GET", path + "/history")
         call("25-state", "GET", "/api/state")
         call("26-version", "GET", "/api/version")
-        call("27-export", "GET", "/api/export")
+        exported = call("27-export", "GET", "/api/export")
+        # Rejections from 28 through 39 change no state and consume no IDs.
+        call("28-item-not-found", "GET", "/api/items/missing001", status=404)
+        call("29-mutation-not-found", "POST", "/api/items/missing001/archive", {"revision": 1}, "contract-missing", 404)
+        target = {**ref, "target": {**ref["target"], "version": 2}}
+        call("30-reference-target-validation", "POST", "/api/items", {"fields": {"title": "Invalid", "references": [target]}}, "contract-target", 400)
+        call("31-settings-validation", "PUT", "/api/settings", {"settings": {"stale_days": 0}}, "contract-bad-settings", 400)
+        refused = {"revision": 6, "patch": {"title": "Refused"}}
+        call("32-missing-planning-header", "PATCH", path, refused, "contract-refused", 403, override={"X-Planning-Request": None})
+        call("33-unsupported-media-type", "PATCH", path, refused, "contract-refused", 415, override={"Content-Type": "text/plain"})
+        call("34-bad-host", "GET", "/api/version", status=421, override={"Host": "planner.invalid"})
+        # The declared length alone is refused before any body is read.
+        call("35-body-too-large", "POST", "/api/items", None, "contract-large", 413, override={"Content-Length": "262145"})
+        call("36-replay-not-replayable", "POST", "/api/requests/replay", {**replay, "method": "GET", "path": "/api/state"}, status=400)
+        call("37-replay-unobserved-version", "POST", "/api/requests/replay", {**replay, "sent_after_version": 99}, status=400)
+        call("38-replay-id-reuse", "POST", "/api/requests/replay", {**replay, "body_b64": base64.b64encode(b'{"fields":{"title":"Different"}}').decode()}, status=422)
+        call("39-import-confirmation-required", "POST", "/api/import", {"data": exported, "mode": "replace"}, "contract-replace", 400)
+        # Merge import writes no backup; examples report only counts.
+        call("40-import-merge", "POST", "/api/import", {"data": exported, "mode": "merge"}, "contract-merge")
+        call("41-examples", "POST", "/api/examples", {}, "contract-examples", 201)
+        call("42-examples-present", "POST", "/api/examples", {}, "contract-examples-again", 409)
     return exchanges
 
 
