@@ -295,6 +295,24 @@ test('one app session captures two routes into distinct immutable versions and r
 });
 
 
+test('capture acceptance notifies the workspace content feed after a save, a repeated frame and a failed save', async () => {
+  const f = fixture(); await open(f);
+  const project = String(entry.sourceProjectId);
+  const seen: number[] = [];
+  f.workspace.contentEvents.subscribe(project, () => seen.push(f.workspace.contentEvents.revision(project)));
+  await f.ui.capture();
+  assert.equal(f.ui.snapshot().error, null);
+  assert.deepEqual(seen, [1], 'a saved capture version notifies once');
+  await f.ui.capture();
+  assert.deepEqual(seen, [1, 2], 'the same frame writes nothing new but still lets readers re-read');
+  f.d.failWith((route) => route === 'event.read' ? { ok: true, value: { events: [], status: { state: 'ok' } } }
+    : route === 'doc.put' ? { ok: false, kind: 'invalid' } : undefined);
+  await f.ui.navigate('/workout?screen=workout');
+  await f.ui.capture();
+  assert.notEqual(f.ui.snapshot().error, null, 'the refused project write is reported');
+  assert.deepEqual(seen, [1, 2, 3], 'a failed project write still notifies, because cached readers may be stale');
+});
+
 test('unavailable source selection never changes project context', async () => {
   const f = fixture(); await f.ui.refresh();
   const unavailable = { ...item, entry: { ...entry, metadata: { ...entry.metadata, launchStatus: 'unavailable' } } };

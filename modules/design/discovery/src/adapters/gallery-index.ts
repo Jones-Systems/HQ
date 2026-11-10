@@ -20,6 +20,7 @@ function path(value: string): string {
   if (!isRelativePath(value) || value === '.' || /[%?#:]/u.test(value)) throw new TypeError('Invalid manifest path');
   return value;
 }
+function metadataPath(key: string): boolean { return key === 'data/gallery-index.json' || /^projects\/[a-zA-Z0-9_-]+\/data\/collection\.json$/u.test(key); }
 function viewer(url: string): boolean { return /(?:^|\/)viewer\.html$/iu.test(decodeURIComponent(new URL(url).pathname)); }
 
 export async function mapGalleryIndex(input: GalleryRegistryRead, supplied: RegistryContext): Promise<CatalogSnapshot> {
@@ -54,7 +55,7 @@ export async function mapGalleryIndex(input: GalleryRegistryRead, supplied: Regi
   const entries: CatalogEntry[] = [];
   const seen = new Set<string>();
   const projectIds = new Set<string>();
-  let complete = input.complete === true && Object.keys(hashes).every((key) => verified.has(key));
+  let complete = input.complete === true && Object.keys(hashes).filter(metadataPath).every((key) => verified.has(key));
   for (const rawProject of registryList(index.projects)) {
     const project = registryObject(rawProject);
     const projectId = registryId(project.id);
