@@ -51,10 +51,11 @@ const CURRENT = {
 const http = (status: number, body: unknown): ServiceResponse => ({ ok: true, status, body, replayed: false });
 
 describe('the live port surface', () => {
-  it('exposes exactly the Planner API keys, and a recovery with only check, apply and release', () => {
+  it('exposes exactly the Planner API keys, and a recovery of check, apply, release and the intent pair', () => {
     const planner = createPlannerLive(answering(http(500, null)).transport);
     expect(Object.keys(planner.port).sort()).toEqual([...PLANNER_PORT_KEYS].sort());
-    expect(Object.keys(planner.recovery).sort()).toEqual([...PLANNER_RECOVERY_KEYS].sort());
+    // `exportIntent` and `adoptIntent` are the optional members that let a durable queue keep an unresolved intent.
+    expect(Object.keys(planner.recovery).sort()).toEqual([...PLANNER_RECOVERY_KEYS, 'exportIntent', 'adoptIntent'].sort());
     expect(Object.keys(createPlannerLivePort(answering(http(500, null)).transport)).sort()).toEqual([...PLANNER_PORT_KEYS].sort());
     expect(createLivePlanner).toBe(createPlannerLive);
   });
@@ -451,7 +452,7 @@ describe('moves: renumbered neighbours and read-back', () => {
 
 describe('no network capability in the renderer', () => {
   it('live production code has no fetch, XHR, socket, Node or CLI access', () => {
-    for (const file of ['adapter.ts', 'transport.ts', 'wire.ts', 'index.ts']) {
+    for (const file of ['adapter.ts', 'transport.ts', 'wire.ts', 'index.ts', 'intent.ts', 'durable.ts']) {
       const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
       expect([file, /\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|require\(|from 'node:|hq-cli|child_process/u.test(source)]).toEqual([file, false]);
     }

@@ -18,6 +18,7 @@ import { createWikiBridge, openEmittedWiki, wikiIpcHandler } from './wiki-host.j
 import { catalogPersistence, createCatalogHost } from './catalog-host.js';
 import { createSaveDialog } from './save-dialog.js';
 import { createWorkExport } from './work-export.js';
+import { createWorkLocal } from './work-local.js';
 import { createProductionDesignHost } from './design-host-production.js';
 import { createImportPickWiring } from './import-pick-wiring.js';
 
@@ -116,6 +117,7 @@ async function createWindow(): Promise<void> {
 if (ownsInstance) app.whenReady().then(async () => {
   const config = await openServiceConfig(app.getPath('userData'));
   const services = createServices(config);
+  const workLocal = createWorkLocal({ root: app.getPath('userData'), endpoint: () => config.get('work') });
   const catalog = createCatalogHost(catalogPersistence(app.getPath('userData')), async replacing => {
     const result = await dialog.showOpenDialog({ title: replacing ? 'Replace selected catalog directory' : 'Choose catalog directory', buttonLabel: replacing ? 'Replace directory' : 'Choose directory', properties: ['openDirectory'] });
     return result.canceled ? null : result.filePaths[0] ?? null;
@@ -146,6 +148,7 @@ if (ownsInstance) app.whenReady().then(async () => {
   handleDomain(CHANNELS.wiki, wikiIpcHandler(authorized, wiki));
   handleDomain(CHANNELS.social, (event, route: unknown, params: unknown) => authorized(event) ? services.social(route, params) : { ok: false, kind: 'unavailable' });
   handleDomain(CHANNELS.work, (event, route: unknown, params: unknown) => authorized(event) ? (route === 'export' ? exportWork(params) : services.work(route, params)) : { ok: false, kind: 'unavailable' });
+  handleDomain(CHANNELS.workLocal, (event, route: unknown, params: unknown) => authorized(event) ? workLocal.call(route, params) : { ok: false, kind: 'unavailable' });
   handleDomain(CHANNELS.design, async (event, route: unknown, params: unknown) => authorized(event) ? (typeof route === 'string' && route.startsWith('jonesCode.') ? jones.call(route, params) : typeof route === 'string' && route.startsWith('catalog.') ? (await design.ready() ? catalog.call(route, params) : { ok: false, kind: 'unavailable' }) : design.call(route, params)) : { ok: false, kind: 'unavailable' });
   handleDomain(CHANNELS.config, (event, route: unknown, params: unknown) => {
     if (!authorized(event)) return { configured: false, policy: 'rejected', transport: null };
