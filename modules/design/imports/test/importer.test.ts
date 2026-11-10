@@ -329,3 +329,61 @@ test('the mapper registry is the extension point for future legacy adapters', as
   assert.equal(!future.ok && future.reason, 'unsupported-version');
   assert.throws(() => createMapperRegistry([FILES_MAPPER, FILES_MAPPER]), /Duplicate mapper/u);
 });
+
+/** A port that can answer point lookups but whose listing is a fault: planning must not need to enumerate blobs. */
+function hasBlobPort() {
+  const { storage, clock } = setup();
+  const calls = { hasBlob: [] as string[], listBlobs: 0 };
+  const port = new Proxy(storage, {
+    get(target, property, receiver) {
+      if (property === 'hasBlob') {
+        return async (namespace: string, digest: string) => {
+          calls.hasBlob.push(digest);
+          return (await target.getBlob(namespace, digest as never)) !== null;
+        };
+      }
+      if (property === 'listBlobs') return async () => { calls.listBlobs += 1; throw new Error('listing blobs must not be needed'); };
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  return { storage, calls, deps: { storage: port, clock }, clock };
+}
+
+test('an optional hasBlob replaces listing: only the blobs a plan would write are asked about', async () => {
+  const { storage, calls, deps } = hasBlobPort();
+  const first = await apply(deps);
+  assert.equal(first.applied, true);
+  assert.equal(calls.listBlobs, 0, 'planning never listed blobs');
+  const written = storage.committedOps.filter((op) => op.op === 'put-blob');
+  assert.equal(written.length, 4, 'png, webm and the two bundle files; the url item has no blob');
+  assert.deepEqual([...calls.hasBlob].sort(), written.map((op) => (op as { digest: string }).digest).sort(), 'one lookup per distinct blob');
+});
+
+test('hasBlob skips a blob that is already stored and writes the rest', async () => {
+  const { storage, calls, deps } = hasBlobPort();
+  const sample = source();
+  const home = sample.items.find((item) => item.key === 'screens/home.png')!;
+  // Pre-store the PNG under its digest, as a preview capture would have.
+  const plan = await planImport(deps, { projectId: PROJECT, source: { ...sample, items: [home] } });
+  assert.equal(plan.ok, true);
+  const png = (plan as ImportPlan).ops.find((op) => op.op === 'put-blob')!;
+  await storage.commit([png]);
+  const before = storage.committedOps.length;
+  calls.hasBlob.length = 0;
+  const next = await planImport(deps, { projectId: PROJECT, source: { ...sample, items: [home] } });
+  assert.equal(next.ok, true);
+  assert.deepEqual((next as ImportPlan).ops.filter((op) => op.op === 'put-blob'), [], 'stored blob is not written again');
+  assert.equal(calls.hasBlob.length, 1);
+  assert.equal(storage.committedOps.length, before, 'planning writes nothing');
+  assert.equal(calls.listBlobs, 0);
+});
+
+test('without hasBlob the importer still lists blobs, exactly as before', async () => {
+  const { storage, deps } = setup();
+  let listed = 0;
+  const original = storage.listBlobs.bind(storage);
+  storage.listBlobs = async (namespace: string) => { listed += 1; return original(namespace); };
+  await apply(deps);
+  assert.equal(listed, 1);
+});

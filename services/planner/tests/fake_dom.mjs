@@ -1,6 +1,8 @@
 // A deliberately tiny DOM stand-in so view render functions can run under
 // Node without a browser. It records structure and text; it does not do
-// layout, CSS selectors beyond simple id/class/attribute lookups, or events.
+// layout, CSS selectors beyond simple id/class/attribute lookups, or event
+// propagation. Document listeners are recorded so `document.fire()` can drive
+// document-level handlers (such as drag gestures) directly.
 
 class Node {
   constructor() {
@@ -157,6 +159,17 @@ class Element extends Node {
   querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
   getBoundingClientRect() { return { left: 0, top: 0, right: 100, bottom: 30, width: 100, height: 30 }; }
   setSelectionRange() {}
+  cloneNode(deep = false) {
+    const copy = new Element(this.tagName.toLowerCase());
+    Object.assign(copy.attrs, this.attrs);
+    copy.id = this.id;
+    copy.className = this.className;
+    if (deep) {
+      for (const child of this.childNodes) copy.append(child instanceof Element ? child.cloneNode(true) : new Text(child.data));
+    }
+    return copy;
+  }
+
   showModal() { this.open = true; }
   close() { this.open = false; }
 }
@@ -166,6 +179,8 @@ export function installFakeDom() {
   const html = new Element('html');
   html.append(body);
   const storage = new Map();
+  const listeners = [];
+  const capture = (options) => options === true || Boolean(options && options.capture);
   const doc = {
     body,
     documentElement: html,
@@ -177,8 +192,21 @@ export function installFakeDom() {
     getElementById: (id) => html.querySelector(`#${id}`),
     querySelector: (sel) => html.querySelector(sel),
     querySelectorAll: (sel) => html.querySelectorAll(sel),
-    addEventListener() {},
-    removeEventListener() {},
+    addEventListener(type, fn, options) {
+      if (!listeners.some((l) => l.type === type && l.fn === fn && l.capture === capture(options))) {
+        listeners.push({ type, fn, capture: capture(options) });
+      }
+    },
+    removeEventListener(type, fn, options) {
+      const i = listeners.findIndex((l) => l.type === type && l.fn === fn && l.capture === capture(options));
+      if (i >= 0) listeners.splice(i, 1);
+    },
+    /** Call the document's `type` listeners with a plain event object. */
+    fire(type, props = {}) {
+      const event = { type, preventDefault() {}, stopPropagation() {}, ...props };
+      for (const l of listeners.filter((x) => x.type === type)) l.fn(event);
+      return event;
+    },
     elementFromPoint: () => null,
     dispatchEvent() {},
   };
