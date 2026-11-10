@@ -180,6 +180,114 @@ describe('actual loopback HTTP transport', () => {
       expect(await result).toEqual(unavailable);
     } finally { vi.useRealTimers(); await srv.close(); }
   });
+  describe('per-route response caps', () => {
+    /** A JSON object of exactly `bytes` UTF-8 bytes, so a failure at the cap cannot be a parse failure. */
+    const jsonOf = (bytes: number, extra: Record<string, unknown> = {}) => {
+      const overhead = Buffer.byteLength(JSON.stringify({ ...extra, pad: '' }));
+      return JSON.stringify({ ...extra, pad: 'a'.repeat(bytes - overhead) });
+    };
+    const send = (url: URL, route: Parameters<typeof encodeSocial>[0], params: Record<string, unknown>) => {
+      const encoded = encodeSocial(route, params)!;
+      return sendHttp(new URL(encoded.path, url), { ...encoded, headers: {} });
+    };
+    const respondWith = (payload: string) => server((_req, res) => { res.setHeader('Content-Type', 'application/json'); res.end(payload); });
+
+    it('only the Social workspace snapshot has the larger cap, and the named limit is 16 MiB', () => {
+      expect(LIMITS.socialWorkspace).toBe(16_777_216);
+      expect(LIMITS.response).toBe(2_000_000);
+      expect(encodeSocial('workspace', {})!.maxResponse).toBe(LIMITS.socialWorkspace);
+      for (const [route, params] of [['sample', { tool: 'x-studio' }], ['run', { id: 'run123' }], ...socialMutations] as const) expect(encodeSocial(route, params)!.maxResponse).toBeUndefined();
+      for (const [route, params] of [['state', {}], ['item', { id: 'item123' }], ['create', original.params]] as const) expect(encodeWork(route, params)!.maxResponse).toBeUndefined();
+    });
+
+    it('Social workspace accepts a response just over the default cap, up to 16 MiB, and fails one byte beyond it', async () => {
+      for (const [bytes, expected] of [
+        [LIMITS.response + 1, 'ok'], [5_000_000, 'ok'], [LIMITS.socialWorkspace, 'ok'], [LIMITS.socialWorkspace + 1, 'unavailable'],
+      ] as const) {
+        const srv = await respondWith(jsonOf(bytes));
+        try {
+          const result = await send(srv.url, 'workspace', {});
+          if (expected === 'ok') expect(result).toMatchObject({ ok: true, status: 200, body: { pad: expect.any(String) } });
+          else expect(result).toEqual(unavailable);
+        } finally { await srv.close(); }
+      }
+    });
+
+    it('a large library reaches the renderer through the real transport with its token stripped', async () => {
+      const content = Array.from({ length: 50 }, (_, n) => ({ id: `draft${n}`, body: 'b'.repeat(50_000) }));
+      const payload = JSON.stringify({ brands: [], content, runs: [], tools: [], features: [], csrf: 'token-one' });
+      expect(Buffer.byteLength(payload)).toBeGreaterThan(LIMITS.response);
+      const srv = await respondWith(payload);
+      try {
+        const result = await createServices({ ...config, get: () => srv.url }).social('workspace', {});
+        expect(result).toMatchObject({ ok: true, status: 200, body: { content: expect.any(Array) } });
+        expect(JSON.stringify(result)).not.toContain('token-one');
+        expect((result as { body: { content: unknown[] } }).body.content).toHaveLength(50);
+      } finally { await srv.close(); }
+    });
+
+    it('the token read before a first save and the one after a stale-token refusal also accept a large workspace', async () => {
+      const big = JSON.stringify({ brands: [], content: [], csrf: 'good-token', pad: 'a'.repeat(3_000_000) });
+      const seen: string[] = [];
+      let saves = 0;
+      const srv = await server((req, res) => {
+        seen.push(`${req.method} ${req.url}`);
+        if (req.method === 'GET') { res.end(big); return; }
+        req.resume();
+        req.on('end', () => {
+          saves += 1;
+          // The first write is refused as a stale token, which makes main refresh the token once and send the same write again.
+          if (saves === 1) res.writeHead(403).end(JSON.stringify({ error: 'Reload the workspace before saving' }));
+          else res.end(JSON.stringify({ id: 'saved12' }));
+        });
+      });
+      try {
+        const result = await createServices({ ...config, get: () => srv.url }).social('addBrand', { name: 'Example' });
+        expect(result).toMatchObject({ ok: true, status: 200, body: { id: 'saved12' } });
+        expect(seen).toEqual(['GET /api/workspace', 'POST /api/brands', 'GET /api/workspace', 'POST /api/brands']);
+      } finally { await srv.close(); }
+    });
+
+    it.each([
+      ['sample', { tool: 'x-studio' }, 'unavailable'], ['run', { id: 'run123' }, 'unavailable'],
+      ['saveContent', socialMutations[0][1], 'unknown'], ['addBrand', socialMutations[1][1], 'unknown'], ['submitRun', socialMutations[2][1], 'unknown'],
+    ] as const)('Social %s keeps the 2,000,000-byte cap and fails with its loss kind %s', async (route, params, loss) => {
+      const atCap = await respondWith(jsonOf(LIMITS.response)), overCap = await respondWith(jsonOf(LIMITS.response + 1));
+      try {
+        if (route === 'saveContent' || route === 'addBrand' || route === 'submitRun') {
+          // Send the encoded write directly, without a token exchange, so only the response cap is under test.
+          const encoded = encodeSocial(route, params)!;
+          expect(await sendHttp(new URL(encoded.path, atCap.url), { ...encoded, headers: {} })).toMatchObject({ ok: true, status: 200 });
+          expect(await sendHttp(new URL(encoded.path, overCap.url), { ...encoded, headers: {} })).toEqual({ ok: false, kind: loss });
+        } else {
+          expect(await send(atCap.url, route, params)).toMatchObject({ ok: true, status: 200 });
+          expect(await send(overCap.url, route, params)).toEqual({ ok: false, kind: loss });
+        }
+      } finally { await atCap.close(); await overCap.close(); }
+    });
+
+    it('run and submitRun responses over 2,000,000 bytes still fail through createServices after a larger workspace read', async () => {
+      const srv = await server((req, res) => { res.setHeader('Content-Type', 'application/json'); if (req.url === '/api/workspace') res.end(jsonOf(LIMITS.response + 1, { csrf: 'tok-one' })); else { req.resume(); res.end(jsonOf(LIMITS.response + 1)); } });
+      try {
+        const svc = createServices({ ...config, get: () => srv.url });
+        expect(await svc.social('workspace', {})).toMatchObject({ ok: true, status: 200 });
+        expect(await svc.social('run', { id: 'run123' })).toEqual(unavailable);
+        expect(await svc.social('submitRun', { tool: 'x-studio', input: {}, is_example: true })).toEqual({ ok: false, kind: 'unknown' });
+      } finally { await srv.close(); }
+    });
+
+    it('Work keeps the 2,000,000-byte cap on reads and writes', async () => {
+      for (const [bytes, expected] of [[LIMITS.response, 'ok'], [LIMITS.response + 1, 'lost']] as const) {
+        const srv = await respondWith(jsonOf(bytes));
+        try {
+          const svc = createServices({ ...config, get: () => srv.url });
+          const read = await svc.work('state', {}), write = await svc.work('create', original.params);
+          if (expected === 'ok') { expect(read).toMatchObject({ ok: true, status: 200 }); expect(write).toMatchObject({ ok: true, status: 200 }); }
+          else { expect(read).toEqual(unavailable); expect(write).toEqual({ ok: false, kind: 'unknown' }); }
+        } finally { await srv.close(); }
+      }
+    });
+  });
   it('connection refused before send is unavailable even for writes', async () => {
     const srv = await server((_req, res) => res.end('{}')); const url = srv.url; await srv.close();
     expect(await sendHttp(url, { method: 'POST', path: '/', headers: {}, body: '{}', loss: 'unknown' })).toEqual(unavailable);
