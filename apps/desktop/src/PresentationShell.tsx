@@ -1,22 +1,29 @@
-import { useEffect, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type MouseEvent } from 'react';
 import { createReferencePort, type ReferenceNotice } from './references';
 import type { ReferenceProvider, ReturnContext } from '@hq/contracts/references';
 import type { ShellState } from './state';
-import { Splitter } from '@hq/ui';
-import { deactivateDesktopPreview, overlayDesktopPreview, subscribeDesktopProject } from './interactive-runtime';
-import { Connections } from './Connections';
+import { ErrorBoundary, InlineNotice, PAGE_TRANSITION_CLASS, Splitter, ToastViewport, navigateWithTransition, toast } from '@hq/ui';
+import { deactivateDesktopPreview, overlayDesktopPreview, selectDesktopProject, subscribeDesktopProject } from './interactive-runtime';
 import { ServiceSettings } from './ServiceSettings';
 import { usePalette } from './appearance/usePalette';
 import { DataSourcesProvider } from './settings/DataSources';
 import type { DataSource } from './services/data-source-status';
-import { DOMAIN_IDS, parseProjectContext, type Appearance, type DesktopPort, type DomainId, type ModulePort } from '@hq/contracts';
+import { parseProjectContext, type Appearance, type DesktopPort, type DomainId, type ModulePort } from '@hq/contracts';
 import { DOMAIN_LABELS, type ModulePresentation } from './domain-metadata';
-import { APPEARANCE_KEY, RAIL_KEY, RAIL_MIN, RAIL_MAX, RAIL_COMPACT_MAX, readRail, resizeRail, toggleRail, cycleAppearance, navigate, navigationKey, persist, readAppearance, readNavigation, resolveAppearance, type StoragePort } from './state';
+import { APPEARANCE_KEY, RAIL_KEY, RAIL_MIN, RAIL_MAX, RAIL_COMPACT_MAX, readRail, resizeRail, toggleRail, navigate, navigationKey, persist, readAppearance, readNavigation, resolveAppearance, type StoragePort } from './state';
+import { APPEARANCE_LABELS } from './shell/AppearanceControl';
+import { Rail } from './shell/Rail';
+import { TopBar } from './shell/TopBar';
+import { useMediaQuery } from './shell/media';
+import { RECENT_PROJECTS_KEY, readRecentProjects, rememberProject, type RecentProject } from './shell/recent-projects';
+import './shell/shell.css';
 
 const CONTEXT = parseProjectContext({ id: 'hq-local', name: 'Local projects' })!;
 const BROWSER_PORT: DesktopPort = Object.freeze({ platform: 'browser', versions: Object.freeze({ electron: null }) });
 const unavailableStorage: StoragePort = { getItem: () => null, setItem: () => { throw new Error('Storage unavailable'); } };
 function storagePort(): StoragePort { try { return window.localStorage; } catch { return unavailableStorage; } }
+/** Below this width the rail stays compact whatever its saved width, so content keeps the room. */
+const NARROW_WINDOW = '(max-width: 999px)';
 
 export interface PresentationShellProps {
   modules: Readonly<Record<DomainId, ComponentType<ModulePort>>>;
@@ -29,25 +36,32 @@ function WorkspaceApp({ modules, presentation, referenceProviders }: Presentatio
   const [context, setContext] = useState(CONTEXT);
   const contextRef = useRef(context); contextRef.current = context;
   const [projectMountId, setProjectMountId] = useState(CONTEXT.id);
+  const [recentProjects, setRecentProjects] = useState(() => readRecentProjects(storage));
   useEffect(() => subscribeDesktopProject((project, navigation) => {
-    if (navigation !== 'preserve-design' || stateRef.current.domain !== 'design') {
-      void deactivateDesktopPreview();
-      setProjectMountId(project.id);
-      setState(readNavigation(storage, project.id));
-    }
-    setContext(project); setReturnFrame(null); setReferenceNotice(null);
+    const remount = navigation !== 'preserve-design' || stateRef.current.domain !== 'design';
+    if (remount) void deactivateDesktopPreview();
+    setRecentProjects(previous => rememberProject(previous, project));
+    navigateWithTransition(() => {
+      if (remount) { setProjectMountId(project.id); setState(readNavigation(storage, project.id)); }
+      setContext(project); setReturnFrame(null); setReferenceNotice(null);
+    });
   }), [storage]);
   const [rail, setRail] = useState(() => readRail(storage));
-  const compact = rail.width <= RAIL_COMPACT_MAX;
+  const narrow = useMediaQuery(NARROW_WINDOW);
+  const railWidth = narrow ? RAIL_MIN : rail.width;
+  const compact = railWidth <= RAIL_COMPACT_MAX;
+  const shellRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { shellRef.current?.style.setProperty('--shell-rail-w', `${railWidth}px`); }, [railWidth]);
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTarget, setSettingsTarget] = useState<DataSource | 'appearance' | null>(null);
   const settingsOpener = useRef<HTMLElement | null>(null);
   const wasSettingsOpen = useRef(false);
   const openSettings = (target: DataSource | 'appearance' | null, opener?: HTMLElement) => {
     settingsOpener.current = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-    setSettingsTarget(target); setSettingsOpen(true);
+    navigateWithTransition(() => { setSettingsTarget(target); setSettingsOpen(true); }, 'forward');
   };
-  const closeSettings = () => setSettingsOpen(false);
+  const closeSettings = () => navigateWithTransition(() => setSettingsOpen(false), 'back');
   useEffect(() => { void overlayDesktopPreview(settingsOpen); }, [settingsOpen]);
   useEffect(() => {
     if (wasSettingsOpen.current && !settingsOpen) settingsOpener.current?.focus();
@@ -76,17 +90,36 @@ function WorkspaceApp({ modules, presentation, referenceProviders }: Presentatio
     projectId: () => contextRef.current.id,
     notice: setReferenceNotice,
     open(envelope, destination, context) {
-      settingsOpener.current = null; setSettingsOpen(false);
-      setReferenceNotice(null);
-      setReturnFrame({ context, state: navigate(stateRef.current, context.to.domain, context.to.destination) });
-      setState(previous => navigate(previous, envelope.domain, destination));
+      settingsOpener.current = null;
+      navigateWithTransition(() => {
+        setSettingsOpen(false); setReferenceNotice(null);
+        setReturnFrame({ context, state: navigate(stateRef.current, context.to.domain, context.to.destination) });
+        setState(previous => navigate(previous, envelope.domain, destination));
+      }, 'forward');
     },
   }));
+  /** Explicit navigation to a domain (and destination): leaves Settings and any reference trail. */
+  const go = (domain: DomainId, destination?: string) => {
+    settingsOpener.current = null; references.cancelOpen();
+    navigateWithTransition(() => {
+      setSettingsOpen(false); setReturnFrame(null); setReferenceNotice(null);
+      setState(previous => navigate(previous, domain, destination));
+    });
+  };
   const goBack = () => {
     references.cancelOpen();
-    if (returnFrame) setState(returnFrame.state);
-    setReturnFrame(null); setReferenceNotice(null);
+    const frame = returnFrame;
+    navigateWithTransition(() => { if (frame) setState(frame.state); setReturnFrame(null); setReferenceNotice(null); }, 'back');
   };
+  const changeAppearance = (next: Appearance, cycled: boolean) => {
+    // The compact button steps through all three choices; say so when a step leaves the screen as it was.
+    if (cycled && resolveAppearance(next, systemDark) === theme) {
+      toast.show({ id: 'hq-appearance', tone: 'neutral', title: `Appearance: ${APPEARANCE_LABELS[next]}`,
+        description: next === 'system' ? `Follows your system, which is ${theme} right now.` : `Stays ${next} when your system changes.` });
+    }
+    setAppearance(next);
+  };
+  const skipToContent = (event: MouseEvent<HTMLAnchorElement>) => { event.preventDefault(); workspaceRef.current?.focus(); };
   useEffect(() => { if (state.domain !== 'design') void deactivateDesktopPreview(); }, [state.domain]);
   const fill = presentation[state.domain] === 'fill';
 
@@ -102,51 +135,37 @@ function WorkspaceApp({ modules, presentation, referenceProviders }: Presentatio
     const navigationSaved = persist(storage, navigationKey(context.id), JSON.stringify(state));
     const appearanceSaved = persist(storage, APPEARANCE_KEY, appearance);
     const railSaved = persist(storage, RAIL_KEY, JSON.stringify(rail));
-    setStorageAvailable(navigationSaved && appearanceSaved && railSaved);
-  }, [storage, state, appearance, rail, context.id]);
+    const recentSaved = persist(storage, RECENT_PROJECTS_KEY, JSON.stringify(recentProjects));
+    setStorageAvailable(navigationSaved && appearanceSaved && railSaved && recentSaved);
+  }, [storage, state, appearance, rail, context.id, recentProjects]);
 
-  return <div className="shell" data-hq-chrome>
-    <aside className={`rail${compact ? " is-compact" : ""}`} ref={element => { element?.style.setProperty("width", `${rail.width}px`); element?.style.setProperty("--rail-w", `${rail.width}px`); }} aria-label="HQ navigation">
-      <div className="brand" aria-label="HQ">HQ<span className="brand-dot" /></div>
-      <nav aria-label="Domains">{DOMAIN_IDS.map((domain) => <button key={domain}
-        className="domain-button" title={DOMAIN_LABELS[domain]} aria-current={!settingsOpen && state.domain === domain ? 'page' : undefined}
-        onClick={() => { settingsOpener.current = null; setSettingsOpen(false); references.cancelOpen(); setReturnFrame(null); setReferenceNotice(null); setState(previous => navigate(previous, domain)); }}>
-        <svg className="domain-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          {domain === 'wiki' ? <><path d="M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Z" /><path d="M12 5v15" /></> : domain === 'design' ? <path d="m12 3 9 9-9 9-9-9Z" /> : domain === 'social' ? <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /></> : <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 15h8" /></>}
-        </svg>
-        <span className="rail-label">{DOMAIN_LABELS[domain]}</span>
-      </button>)}</nav>
-      <div className="rail-footer">
-        <Connections compact={compact} onManage={(source, opener) => openSettings(source ?? null, opener)} />
-        <div className="rail-utilities">
-        <button className="rail-action" title="Settings" aria-current={settingsOpen ? 'page' : undefined} onClick={event => openSettings(null, event.currentTarget)}>
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg>
-          <span className="rail-label">Settings</span>
-        </button>
-        <button className="rail-action" aria-label={`Appearance: ${appearance[0]!.toUpperCase() + appearance.slice(1)}`}
-          title={`Appearance: ${appearance}. Switch to ${cycleAppearance(appearance)}`} onClick={() => setAppearance(cycleAppearance)}>
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            {appearance === 'system' ? <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></> : appearance === 'dark' ? <path d="M20 14A9 9 0 0 1 10 4a9 9 0 1 0 10 10Z"/> : <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/></>}
-          </svg><span className="rail-label">{appearance[0]!.toUpperCase() + appearance.slice(1)}</span>
-        </button>
-        </div>
-      </div>
-    </aside>
-    <Splitter label="Primary navigation width" value={rail.width} min={RAIL_MIN} max={RAIL_MAX}
-      onResize={width => setRail(previous => resizeRail(previous, width))} onToggle={() => setRail(toggleRail)} />
-    <div className={fill ? 'workspace is-fill' : 'workspace'} data-hq-overlay={settingsOpen ? 'open' : undefined}>
-      {returnFrame && <button hidden={settingsOpen} onClick={goBack}>Back to {returnFrame.context.label}</button>}
-      {referenceNotice && <section hidden={settingsOpen} role="status" aria-label="Read-only reference"><strong>{referenceNotice.title}</strong><p>{referenceNotice.message}</p><button onClick={() => setReferenceNotice(null)}>Dismiss reference</button></section>}
-      <main hidden={settingsOpen} className={fill ? 'is-fill' : undefined} key={`${projectMountId}:${state.domain}`}>
+  return <div ref={shellRef} className={compact ? 'shell is-rail-compact' : 'shell'} data-hq-chrome>
+    <a className="shell-skip" href="#hq-content" onClick={skipToContent}>Skip to content</a>
+    <TopBar project={context} recentProjects={recentProjects} fallbackProject={CONTEXT} domain={state.domain}
+      destination={state.destinations[state.domain]} settingsOpen={settingsOpen}
+      returnLabel={returnFrame && !settingsOpen ? returnFrame.context.label : null} onBack={goBack}
+      appearance={appearance} onAppearance={changeAppearance} storageAvailable={storageAvailable && palette.saved}
+      onSelectProject={(project: RecentProject) => selectDesktopProject({ id: project.id, label: project.name })}
+      onBrowseProjects={() => go('design', 'projects')} onManageSources={(source, opener) => openSettings(source, opener)} />
+    <Rail current={state.domain} settingsOpen={settingsOpen} compact={compact} onNavigate={domain => go(domain)}
+      onOpenSettings={opener => openSettings(null, opener)} />
+    {!narrow && <Splitter label="Primary navigation width" value={rail.width} min={RAIL_MIN} max={RAIL_MAX}
+      onResize={width => setRail(previous => resizeRail(previous, width))} onToggle={() => setRail(toggleRail)} />}
+    <div ref={workspaceRef} id="hq-content" tabIndex={-1} className={fill ? 'workspace is-fill' : 'workspace'} data-hq-overlay={settingsOpen ? 'open' : undefined}>
+      {referenceNotice && !settingsOpen && <InlineNotice className="shell-reference-notice" variant="bar" tone="info"
+        title={referenceNotice.title} label="Read-only reference" dismissLabel="Dismiss reference"
+        onDismiss={() => setReferenceNotice(null)}>{referenceNotice.message}</InlineNotice>}
+      <main hidden={settingsOpen} className={fill ? `${PAGE_TRANSITION_CLASS} is-fill` : PAGE_TRANSITION_CLASS} key={`${projectMountId}:${state.domain}`}>
+        <ErrorBoundary resetKeys={[projectMountId, state.domain, state.destinations[state.domain]]} title={`${DOMAIN_LABELS[state.domain]} stopped working`}>
         <Module context={context} destination={state.destinations[state.domain]} appearance={theme} desktop={window.hqDesktop ?? BROWSER_PORT}
           references={references} {...(returnFrame ? { returnContext: returnFrame.context } : {})}
           navigate={destination => { references.cancelOpen(); setState(previous => navigate(previous, state.domain, destination)); }} />
+        </ErrorBoundary>
       </main>
       {settingsOpen && <ServiceSettings config={window.hqServices?.config} onClose={closeSettings}
         returnLabel={DOMAIN_LABELS[state.domain]} target={settingsTarget} appearance={appearance} onAppearanceChange={setAppearance} palette={palette} dark={theme === 'dark'} />}
-      <footer className="context-footer" aria-label="Workspace context"><span>{context.name}</span><span>{DOMAIN_LABELS[state.domain]}</span></footer>
-      {!(storageAvailable && palette.saved) && <p className="storage-notice" role="status">Preferences are available for this session. Local storage is unavailable.</p>}
     </div>
+    <ToastViewport />
   </div>;
 }
 

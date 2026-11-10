@@ -74,8 +74,9 @@ describe('palette edits', () => {
 });
 
 it('removes the selected-domain side stripe from the rail styling', () => {
-  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
-  const selected = [...css.matchAll(/[^{}]*\.domain-button\[aria-current="page"\][^{]*\{([^}]*)\}/g)].map(match => match[1]).join(';');
+  const shell = readFileSync(new URL('../shell/shell.css', import.meta.url), 'utf8');
+  const css = shell + readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  const selected = [...shell.matchAll(/(?:^|\n)\.shell-rail-pill \{([^}]*)\}/g)].map(match => match[1]).join(';');
   expect(selected).toContain('background: var(--hq-selected-bg)');
   expect(css).not.toMatch(/box-shadow:\s*inset\s+[1-9]/);
 });

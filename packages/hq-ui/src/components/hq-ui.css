@@ -26,8 +26,11 @@
   height: var(--hq-size-control-md); min-width: var(--hq-size-hit-min); padding: 0 var(--hq-space-md);
   border: 0; border-radius: var(--hq-radius-control);
   font: var(--hq-type-label); white-space: nowrap; cursor: pointer;
-  transition: background var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard);
+  transition: background var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard),
+    transform var(--hq-duration-fast) var(--hq-ease-standard);
 }
+/* Press feedback: a quick, small scale-down while held (no movement under reduced motion; the scale token is 1). */
+.hq-btn:active:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]) { transform: scale(var(--hq-motion-scale-press)); transition-duration: var(--hq-duration-instant); }
 .hq-btn svg { width: var(--hq-size-icon-md); height: var(--hq-size-icon-md); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .hq-btn .hq-icon { display: inline-flex; }
 .hq-btn--sm { height: var(--hq-size-control-sm); padding: 0 var(--hq-space-sm); }
@@ -64,13 +67,15 @@
   min-width: 180px; margin: 0; padding: var(--hq-space-2xs); list-style: none;
   border-radius: var(--hq-radius-md); background: var(--hq-surface-overlay); color: var(--hq-text);
   box-shadow: var(--hq-shadow-overlay);
+  transform-origin: top left; animation: hq-drop-in var(--hq-duration-base) var(--hq-ease-enter) both;
 }
-.hq-menu-list--end { left: auto; right: 0; }
+.hq-menu-list--end { left: auto; right: 0; transform-origin: top right; }
 .hq-menu-item {
   display: flex; align-items: center; min-height: 28px; padding: 0 var(--hq-space-sm);
   border-radius: var(--hq-radius-sm); font: var(--hq-type-label); color: var(--hq-text); cursor: default;
 }
-.hq-menu-check { display: inline-block; width: 1em; margin-right: var(--hq-space-sm); flex: 0 0 auto; color: var(--hq-accent-text); }
+.hq-menu-check { display: inline-flex; width: 14px; height: 14px; margin-right: var(--hq-space-sm); flex: 0 0 auto; color: var(--hq-accent-text); }
+.hq-menu-check svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .hq-menu-item:focus { background: var(--hq-selected-bg); color: var(--hq-selected-fg); }
 .hq-menu-item:focus-visible { outline-offset: calc(-1 * var(--hq-size-focus-width)); }
 .hq-menu-item--danger { color: var(--hq-danger); }
