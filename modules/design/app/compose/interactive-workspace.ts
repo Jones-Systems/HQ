@@ -14,6 +14,7 @@ import { brandId } from '../../requests/src/validate.ts';
 import type { DesignRuntimePorts, InteractiveCatalogItem } from './runtime-ports.ts';
 import { authoringDigest } from './canonical.ts';
 import { catalogProject, interactiveTarget } from './runtime-ports.ts';
+import { createProjectContentEvents, type ProjectContentEvents } from './content-events.ts';
 
 export interface InteractiveSnapshot {
   readonly bookmark: PreviewIdentity | null;
@@ -45,7 +46,8 @@ export function anchorMatches(frame: SourceFrame, capture: CaptureRecord | null,
 }
 
 /** One visible host session; all authoring reuses the existing durable section repositories. */
-export function createInteractiveWorkspace(records: WorkspaceRecords | null, requests: RequestsEnvironment, ports: DesignRuntimePorts) {
+export function createInteractiveWorkspace(records: WorkspaceRecords | null, requests: RequestsEnvironment, ports: DesignRuntimePorts,
+  contentEvents: ProjectContentEvents = createProjectContentEvents()) {
   const listeners = new Set<() => void>();
   const agentListeners = new Set<(event: AgentEvent) => void>();
   const annotationsStore = records ? createAnnotationsStorage(records) : null;
@@ -132,14 +134,19 @@ export function createInteractiveWorkspace(records: WorkspaceRecords | null, req
     const savedVersion = versionId(`capture-${(await authoringDigest(binding)).slice('sha256:'.length)}`);
     const project = catalogProject(selected);
     const vid = viewId(`interactive-${selected.entry.sourceProjectId}`);
-    await repository.update(projectId(project.id), (content, now) => {
-      if (content.versions.some((version) => version.id === savedVersion)) return content;
-      let nextContent = linkSource(content, sourceProjectId(selected.entry.sourceProjectId), selected.entry.revision ?? null, now);
-      if (!nextContent.views.some((view) => view.id === vid)) nextContent = addView(nextContent, { id: vid, title: project.name, kind: 'prototype' }, now);
-      return addVersion(nextContent, { id: savedVersion, viewId: vid, label: `Live capture ${capture.route}`.slice(0, 300),
-        origin: 'owner-created', capture: { route: capture.route + capture.state, viewport: capture.viewport, captureDigest: capture.captureDigest,
-          ...(selected.entry.revision ? { sourceRevision: selected.entry.revision } : {}) } }, now);
-    });
+    // Readers re-read after any attempt: success, a definite failure (their cache may be stale) or an unknown outcome.
+    try {
+      await repository.update(projectId(project.id), (content, now) => {
+        if (content.versions.some((version) => version.id === savedVersion)) return content;
+        let nextContent = linkSource(content, sourceProjectId(selected.entry.sourceProjectId), selected.entry.revision ?? null, now);
+        if (!nextContent.views.some((view) => view.id === vid)) nextContent = addView(nextContent, { id: vid, title: project.name, kind: 'prototype' }, now);
+        return addVersion(nextContent, { id: savedVersion, viewId: vid, label: `Live capture ${capture.route}`.slice(0, 300),
+          origin: 'owner-created', capture: { route: capture.route + capture.state, viewport: capture.viewport, captureDigest: capture.captureDigest,
+            ...(selected.entry.revision ? { sourceRevision: selected.entry.revision } : {}) } }, now);
+      });
+    } finally {
+      contentEvents.notify(project.id);
+    }
     if (epoch !== lifecycle) return false;
     if (state.annotations?.snapshot.editor.document.annotations.length) await state.annotations.save();
     if (epoch !== lifecycle) return false;

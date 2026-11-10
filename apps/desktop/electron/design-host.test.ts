@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createDesignHost, DESIGN_VALUE_CAP, DOCUMENT_ROOTS, type DesignStore } from './design-host';
+import { createDesignHost, DESIGN_VALUE_CAP, DOCUMENT_ROOTS, TASTE_JOURNAL_KEY, type DesignStore } from './design-host';
 import { DESIGN_SERVICE_ROUTES } from '@hq/contracts/services';
 const dirs: string[] = [];
 afterEach(async () => { await Promise.all(dirs.splice(0).map(d => rm(d, { recursive: true, force: true }))); });
@@ -20,6 +20,49 @@ it('allowlists the r3 roots and rejects reserved storage, arbitrary connector ke
   expect(await host.call('cache.get', { key: 'design.discovery.catalog' })).toEqual({ ok: true, value: null });
   await host.close(); await host.close(); expect(store.close).toHaveBeenCalledTimes(1);
   expect(await host.call('doc.get', { key: 'design/projects/x' })).toEqual({ ok: false, kind: 'unavailable' });
+});
+it('reads the exact Taste journal key and forwards create-only and numeric CAS writes', async () => {
+  const store = fake(), host = createDesignHost(async () => store);
+  expect(TASTE_JOURNAL_KEY).toBe('design/taste/journal.v1');
+  expect(await host.call('doc.get', { key: TASTE_JOURNAL_KEY })).toEqual({ ok: true, value: null });
+  expect(store.transactions.workspace.getDocument).toHaveBeenCalledWith(TASTE_JOURNAL_KEY);
+  for (const expectedRevision of [null, 1]) {
+    const document = { value: { entries: [] }, revision: expectedRevision === null ? 1 : 2 };
+    store.transactions.workspace.putDocument.mockResolvedValueOnce(document);
+    expect(await host.call('doc.put', { key: TASTE_JOURNAL_KEY, value: document.value, expectedRevision })).toEqual({ ok: true, value: document });
+    expect(store.transactions.workspace.putDocument).toHaveBeenLastCalledWith(TASTE_JOURNAL_KEY, document.value, { expectedRevision });
+    store.transactions.workspace.getDocument.mockResolvedValueOnce(document);
+    expect(await host.call('doc.get', { key: TASTE_JOURNAL_KEY })).toEqual({ ok: true, value: document });
+  }
+  store.transactions.workspace.putDocument.mockRejectedValueOnce(Object.assign(new Error(), { code: 'conflict' }));
+  expect(await host.call('doc.put', { key: TASTE_JOURNAL_KEY, value: {}, expectedRevision: 1 })).toEqual({ ok: false, kind: 'conflict' });
+  store.transactions.workspace.putDocument.mockRejectedValueOnce(new Error('Lost outcome'));
+  expect(await host.call('doc.put', { key: TASTE_JOURNAL_KEY, value: {}, expectedRevision: 2 })).toEqual({ ok: false, kind: 'unknown' });
+  expect(store.transactions.workspace.putDocument).toHaveBeenCalledTimes(4);
+  await host.close();
+});
+it('keeps Taste access exact and refuses listing or importing the journal', async () => {
+  const store = fake(), open = vi.fn().mockResolvedValue(store), host = createDesignHost(open);
+  for (const key of ['design/taste/other', 'design/taste/journal.v1/x', 'design/taste/journal.v2']) {
+    expect(await host.call('doc.get', { key })).toEqual({ ok: false, kind: 'invalid' });
+    expect(await host.call('doc.put', { key, value: {} })).toEqual({ ok: false, kind: 'invalid' });
+  }
+  for (const prefix of ['design/taste/', TASTE_JOURNAL_KEY]) expect(await host.call('doc.list', { prefix })).toEqual({ ok: false, kind: 'invalid' });
+  expect(await host.call('import.commit', { ops: [{ op: 'put-document', namespace: 'workspace', key: TASTE_JOURNAL_KEY, value: {}, expectedRevision: null }] })).toEqual({ ok: false, kind: 'invalid' });
+  expect(open).not.toHaveBeenCalled();
+  for (const method of [store.transactions.workspace.getDocument, store.transactions.workspace.putDocument, store.transactions.workspace.listDocuments, store.transactions.commit]) expect(method).not.toHaveBeenCalled();
+  await host.close();
+});
+it('keeps the exact UTF-8 value cap on Taste journal writes and reads', async () => {
+  const store = fake(), open = vi.fn().mockResolvedValue(store), host = createDesignHost(open);
+  for (const value of ['x'.repeat(DESIGN_VALUE_CAP - 1), 'é'.repeat(DESIGN_VALUE_CAP / 2)]) expect(await host.call('doc.put', { key: TASTE_JOURNAL_KEY, value, expectedRevision: null })).toEqual({ ok: false, kind: 'invalid' });
+  expect(open).not.toHaveBeenCalled();
+  const value = 'é'.repeat((DESIGN_VALUE_CAP - 2) / 2);
+  expect((await host.call('doc.put', { key: TASTE_JOURNAL_KEY, value, expectedRevision: null })).ok).toBe(true);
+  expect(store.transactions.workspace.putDocument).toHaveBeenCalledTimes(1);
+  store.transactions.workspace.getDocument.mockResolvedValueOnce({ value: 'x'.repeat(DESIGN_VALUE_CAP - 1), revision: 1 });
+  expect(await host.call('doc.get', { key: TASTE_JOURNAL_KEY })).toEqual({ ok: false, kind: 'unavailable' });
+  await host.close();
 });
 it('JSON and exact UTF-8 cap validation happens before opening', async () => {
   const store = fake(), open = vi.fn().mockResolvedValue(store), host = createDesignHost(open);
