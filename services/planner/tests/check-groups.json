@@ -1,14 +1,27 @@
 {
   "schema": "hq.planner.check-groups/v1",
+  "runtimes": {
+    "python": ">=3.9 (standard library only; suite verified on 3.9.25, 3.10.21, 3.11.16, 3.12.14 and 3.13.5)",
+    "node": "Node tests only; tools/hq-cli requires >=22.18.0"
+  },
   "groups": {
     "planner-service": {
       "cwd": "services/planner",
       "commands": [
         "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -t tests",
-        "node --test --test-concurrency=1 'tests/*.test.mjs'"
+        "node --test --test-concurrency=1 'tests/*.test.mjs'",
+        "PYTHONDONTWRITEBYTECODE=1 python3 contract/generate.py --check"
       ],
       "includes": ["tests/test_*.py", "tests/*.test.mjs"],
       "contract_drift": "tests/test_contract.py"
+    },
+    "planner-cross": {
+      "cwd": "tools/hq-cli",
+      "commands": [
+        "HQ_CLI_E2E=1 node --test --test-concurrency=1 test/e2e/planner.test.mjs"
+      ],
+      "includes": ["test/e2e/planner.test.mjs"],
+      "reason": "Server changes can break the CLI against the real in-tree service; run after any planning/ or contract/ change"
     }
   }
 }

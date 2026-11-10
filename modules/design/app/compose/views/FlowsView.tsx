@@ -9,6 +9,7 @@ import { useFlowCapturePreviews } from '../flow-captures.ts';
 import { interactiveTarget, type InteractiveCatalogItem } from '../runtime-ports.ts';
 
 import { useDesignWorkspace } from '../workspace-context.tsx';
+import { useProjectContentRevision } from '../content-revision.ts';
 import { InteractivePanel } from './InteractivePanel.tsx';
 import { SectionFrame } from './SectionFrame.tsx';
 
@@ -35,7 +36,8 @@ function liveLocation(screen: Screen): string | null {
 }
 
 function BridgedFlows({ context, navigate, workspace }: { navigate: DesignSectionProps['navigate']; context: DesignSectionProps['context']; workspace: Extract<import('../workspace.ts').DesignWorkspace, { bridged: true }> }) {
-  const { flows: stored, readCapture, repository } = use(workspace.flowsFor(context));
+  const revision = useProjectContentRevision(workspace, context.id);
+  const { flows: stored, readCapture, repository } = use(workspace.flowsFor(context, { revision }));
   const { interactive } = workspace;
   const live = useSyncExternalStore(interactive.subscribe, interactive.snapshot, interactive.snapshot);
   const [elsewhere, setElsewhere] = useState<readonly { readonly item: InteractiveCatalogItem; readonly flow: FlowDocument }[]>([]);

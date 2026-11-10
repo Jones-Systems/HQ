@@ -15,6 +15,8 @@ const ok = () => ({ code: 0, signal: null, diagnostics: [] });
 const policy = { reserveBytes: 64 * MiB, peakBytes: 2 * MiB };
 const testContext = createTestContext({ policy });
 const deadlineContext = createTestContext({ policy: { ...policy, lockTimeoutMs: 100 } });
+// Tests that spawn processes get a finite budget so a hung child fails instead of blocking the CI job.
+const SPAWN = { timeout: 20_000 };
 const producer = (code = 'process.exit(0)') => ({ command: process.execPath, args: ['-e', code], bytes: MiB, stdio: 'ignore' });
 
 async function fixture(t) {
@@ -92,17 +94,98 @@ test('nearest ancestor, identical roots, nested roots and hardlinks count once',
 });
 
 test('path traversal, symlinks, writable ownership, and ambiguous evidence overlap refuse', async t => {
-  const { plan, worktree, evidence } = await fixture(t);
+  const { root, plan, worktree, evidence } = await fixture(t);
   await assert.rejects(resolveDestination(`${worktree}/../escape`), /traversal/);
   await fs.symlink(evidence, path.join(worktree, 'alias'));
   await assert.rejects(resolveDestination(path.join(worktree, 'alias', 'new')), /Unsafe/);
+  await fs.chmod(root, 0o755); // a non-private parent keeps this refusal independent of private-boundary shielding
   await fs.chmod(evidence, 0o777);
   await assert.rejects(resolveDestination(evidence), /Writable|ownership/);
   await fs.chmod(evidence, 0o700);
+  await fs.chmod(root, 0o700);
   await assert.rejects(inspectStorage({ ...plan, roots: [{ kind: 'evidence', path: evidence }, { kind: 'scratch', path: evidence }] }), /disjoint/);
   await fs.mkdir(path.join(evidence, 'nested'));
   await assert.rejects(inspectStorage({ ...plan, roots: [{ kind: 'evidence', path: evidence }, { kind: 'evidence', path: path.join(evidence, 'nested') }] }), /Nested evidence/);
   await assert.rejects(inspectStorage({ ...plan, roots: [{ kind: 'evidence', path: path.join(evidence, 'missing') }] }), /absent/);
+});
+
+test('group-writable paths below a private root are admitted and measured on Linux', SPAWN, async t => {
+  const { root, worktree, scratch, plan } = await fixture(t);
+  const dist = path.join(worktree, 'dist');
+  const nested = path.join(dist, 'nested');
+  const artifact = path.join(nested, 'artifact');
+  await fs.mkdir(nested, { recursive: true });
+  await fs.writeFile(artifact, 'group-writable output');
+  // Explicit modes: nothing here depends on the ambient umask.
+  await fs.chmod(root, 0o700);
+  for (const directory of [worktree, scratch, dist, nested]) await fs.chmod(directory, 0o775);
+  await fs.chmod(artifact, 0o664);
+  assert.equal((await fs.stat(nested)).mode & 0o777, 0o775);
+  assert.equal((await fs.stat(artifact)).mode & 0o777, 0o664);
+  if (process.platform !== 'linux') {
+    await assert.rejects(resolveDestination(worktree, { mustExist: true }), /Writable ancestor/);
+    return;
+  }
+  const resolved = await resolveDestination(worktree, { mustExist: true });
+  assert.equal(resolved.shielded, true);
+  assert.equal((await resolveDestination(dist, { mustExist: true })).shielded, true);
+  const snapshot = await inspectStorage(plan, { testContext });
+  const compiled = snapshot.roots.find(entry => entry.kind === 'compiled');
+  assert.equal(compiled.shielded, true);
+  // dist, nested and artifact are each at least one filesystem block.
+  assert.ok(snapshot.compiledBytes >= 3 * compiled.blockBytes);
+  assert.equal(await measureTrees([compiled]), snapshot.compiledBytes);
+  const result = await withStorageInvocation(plan, context => context.launch(producer()), { testContext });
+  assert.equal(result.code, 0);
+  await assert.rejects(fs.stat(path.join(worktree, LOCK_NAME)), { code: 'ENOENT' });
+});
+
+test('a group-writable worktree below a non-private parent refuses', async t => {
+  const { root, worktree, plan } = await fixture(t);
+  await fs.mkdir(path.join(worktree, 'dist'));
+  await fs.chmod(worktree, 0o775);
+  // Any group or other permission bit, readable or not, makes the parent non-private.
+  for (const mode of [0o755, 0o750, 0o710, 0o705, 0o701]) {
+    await fs.chmod(root, mode);
+    await assert.rejects(resolveDestination(worktree, { mustExist: true }), { message: `Writable ancestor: ${worktree}` });
+    await assert.rejects(inspectStorage(plan, { testContext }), { message: `Writable ancestor: ${worktree}` });
+    await assert.rejects(withStorageInvocation(plan, () => assert.fail('must not start'), { testContext }), { message: `Writable ancestor: ${worktree}` });
+  }
+  await fs.chmod(root, 0o700);
+  await fs.chmod(worktree, 0o755);
+  assert.equal((await resolveDestination(worktree, { mustExist: true })).shielded, process.platform === 'linux');
+});
+
+test('other-writable paths still refuse below a private root', async t => {
+  const { root, worktree } = await fixture(t);
+  const dist = path.join(worktree, 'dist');
+  const inner = path.join(dist, 'inner');
+  const plan = { worktree, roots: [{ kind: 'compiled', path: dist }] };
+  await fs.mkdir(inner, { recursive: true });
+  await fs.writeFile(path.join(dist, 'file'), 'output');
+  await fs.chmod(root, 0o700);
+  for (const directory of [worktree, dist, inner]) await fs.chmod(directory, 0o755);
+  await fs.chmod(path.join(dist, 'file'), 0o644);
+  await inspectStorage(plan, { testContext });
+  for (const mode of [0o777, 0o757, 0o707]) {
+    await fs.chmod(worktree, mode);
+    await assert.rejects(resolveDestination(worktree, { mustExist: true }), { message: `Writable ancestor: ${worktree}` });
+    await assert.rejects(inspectStorage(plan, { testContext }), { message: `Writable ancestor: ${worktree}` });
+    await fs.chmod(worktree, 0o755);
+    await fs.chmod(inner, mode);
+    await assert.rejects(inspectStorage(plan, { testContext }), { message: `Ambiguous ownership: ${inner}` });
+    await fs.chmod(inner, 0o755);
+    for (const fileMode of [0o666, 0o646, 0o606]) {
+      await fs.chmod(path.join(dist, 'file'), fileMode);
+      await assert.rejects(inspectStorage(plan, { testContext }), { message: `Ambiguous ownership: ${path.join(dist, 'file')}` });
+    }
+    await fs.chmod(path.join(dist, 'file'), 0o644);
+  }
+  // A sticky bit lets the walk pass but never makes an other-writable directory an owned entry.
+  await fs.chmod(worktree, 0o1777);
+  await assert.rejects(resolveDestination(worktree, { mustExist: true }), { message: `Ambiguous ownership: ${worktree}` });
+  await fs.chmod(worktree, 0o755);
+  await inspectStorage(plan, { testContext });
 });
 
 test('retained symlinks and directory identity changes fail closed', async t => {
@@ -152,7 +235,7 @@ test('all existing evidence directories count, including failed and incomplete r
   assert.equal((await fs.readdir(evidence)).length, 16);
 });
 
-test('success and failure preserve evidence before exact owned scratch cleanup', async t => {
+test('success and failure preserve evidence before exact owned scratch cleanup', SPAWN, async t => {
   for (const exit of [0, 7]) {
     const { plan, scratch, evidence, worktree } = await fixture(t);
     const historical = path.join(scratch, 'historical');
@@ -177,7 +260,7 @@ test('success and failure preserve evidence before exact owned scratch cleanup',
   }
 });
 
-test('failed evidence preservation retains exact scratch and original child outcomes', async t => {
+test('failed evidence preservation retains exact scratch and original child outcomes', SPAWN, async t => {
   for (const [script, code, signal] of [
     ['process.exit(9)', 9, null],
     ["process.kill(process.pid, 'SIGTERM')", null, 'SIGTERM'],
@@ -344,7 +427,7 @@ test('shared evidence lock contention releases only the losing invocation worktr
   assert.equal((await first).code, 0);
 });
 
-test('live nested invocation reuses locks and limits its scope and remaining allowance', async t => {
+test('live nested invocation reuses locks and limits its scope and remaining allowance', SPAWN, async t => {
   const { plan, worktree } = await fixture(t);
   let captured;
   const result = await withStorageInvocation(plan, async parent => {
@@ -368,7 +451,7 @@ test('live nested invocation reuses locks and limits its scope and remaining all
   }
 });
 
-test('unawaited producer is drained and its failure is retained before cleanup', async t => {
+test('unawaited producer is drained and its failure is retained before cleanup', SPAWN, async t => {
   const { plan, scratch } = await fixture(t);
   let owned;
   const result = await withStorageInvocation(plan, async context => {
@@ -380,7 +463,7 @@ test('unawaited producer is drained and its failure is retained before cleanup',
   await assert.rejects(fs.stat(owned), { code: 'ENOENT' });
 });
 
-test('later successful work cannot erase a producer failure or a refused operation', async t => {
+test('later successful work cannot erase a producer failure or a refused operation', SPAWN, async t => {
   const { plan } = await fixture(t);
   const result = await withStorageInvocation(plan, async context => {
     await context.launch(producer('process.exit(12)'));
@@ -397,7 +480,7 @@ test('later successful work cannot erase a producer failure or a refused operati
   assert.match(refused.diagnostics.join(), /Remaining/);
 });
 
-test('capacity is remeasured immediately before launch and after preservation', async t => {
+test('capacity is remeasured immediately before launch and after preservation', SPAWN, async t => {
   const { plan, worktree } = await fixture(t);
   let availableBytes = 100 * MiB;
   const context = createTestContext({ policy, measureFilesystem: async root => ({ id: root.dev, type: 'fixture', blockBytes: 4096, availableBytes }) });
@@ -449,7 +532,7 @@ test('one total deadline covers all locks and cancellation preserves another own
   assert.equal(await fs.readFile(finalLock, 'utf8'), 'other-owner');
 });
 
-test('spawn errors, child signals and cancellation retain outcomes and clean scratch', async t => {
+test('spawn errors, child signals and cancellation retain outcomes and clean scratch', SPAWN, async t => {
   const { plan, scratch, worktree } = await fixture(t);
   const missing = await withStorageInvocation(plan, context => context.launch({ ...producer(), command: path.join(worktree, 'missing') }), { testContext });
   assert.notEqual(missing.code, 0);
@@ -468,7 +551,7 @@ test('spawn errors, child signals and cancellation retain outcomes and clean scr
   await assert.rejects(fs.stat(path.join(worktree, LOCK_NAME)), { code: 'ENOENT' });
 });
 
-test('periodic capacity breach stops the owned producer and remains nonzero', async t => {
+test('periodic capacity breach stops the owned producer and remains nonzero', SPAWN, async t => {
   const { plan } = await fixture(t);
   let availableBytes = 100 * MiB;
   const context = createTestContext({ policy, measureFilesystem: async root => ({ id: root.dev, type: 'fixture', blockBytes: 4096, availableBytes }) });
@@ -481,7 +564,7 @@ test('periodic capacity breach stops the owned producer and remains nonzero', as
   assert.match(result.diagnostics.join(), /Storage refused/);
 });
 
-test('actual launcher process forwards SIGINT and cleans before its caller propagates the signal', async t => {
+test('actual launcher process forwards SIGINT and cleans before its caller propagates the signal', SPAWN, async t => {
   const { plan, scratch, worktree } = await fixture(t);
   const launcher = fileURLToPath(new URL('../launcher.mjs', import.meta.url));
   const admission = fileURLToPath(new URL('../admission.mjs', import.meta.url));
@@ -496,9 +579,17 @@ test('actual launcher process forwards SIGINT and cleans before its caller propa
     if (result.signal) process.kill(process.pid, result.signal);
     else process.exitCode = result.code;
   `;
-  const child = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
+  const child = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); });
+  let stderr = '';
+  child.stderr.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-2000); });
   const closed = new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
-  await new Promise((resolve, reject) => { child.once('message', resolve); child.once('error', reject); });
+  // A child that exits before reporting ready must fail the test with its status instead of hanging it.
+  await new Promise((resolve, reject) => {
+    child.once('message', resolve);
+    child.once('error', reject);
+    child.once('close', (code, signal) => reject(new Error(`Launcher child exited before ready (code ${code}, signal ${signal}): ${stderr.trim().slice(-500)}`)));
+  });
   await new Promise(resolve => setTimeout(resolve, 60));
   child.kill('SIGINT');
   assert.equal((await closed).signal, 'SIGINT');

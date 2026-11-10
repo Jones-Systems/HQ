@@ -19,6 +19,8 @@ globalThis.setInterval = () => 0;
 globalThis.history = { pushState: (_, __, h) => { location.hash = h; }, replaceState: (_, __, h) => { location.hash = h; } };
 const windowListeners = {};
 globalThis.window.addEventListener = (type, fn) => { (windowListeners[type] ||= []).push(fn); };
+const documentListeners = {};
+doc.addEventListener = (type, fn) => { (documentListeners[type] ||= []).push(fn); };
 
 const requests = [];
 const snapshot = {
@@ -76,4 +78,62 @@ test('every route renders, including an open item', async () => {
   const detail = doc.getElementById('detail');
   assert.equal(detail.hidden, false);
   assert.ok(textOf(detail).includes('March'));
+});
+
+// ------------------------------------------------- HQR-A6 regressions
+
+const go = async (hash) => {
+  location.hash = hash;
+  windowListeners.hashchange.forEach((fn) => fn());
+  await settle();
+};
+const key = (k, extra = {}) => documentListeners.keydown.forEach((fn) => fn({
+  key: k, target: doc.body, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false,
+  defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...extra,
+}));
+
+test('the phone More tab uses the more icon, not the help fallback', async () => {
+  const { icon } = await import('../public/js/dom.js');
+  const more = doc.getElementById('tabbar').children.at(-1);
+  const d = more.querySelector('path').getAttribute('d');
+  assert.equal(d, icon('more').querySelector('path').getAttribute('d'));
+  assert.notEqual(d, icon('help').querySelector('path').getAttribute('d'));
+});
+
+test('Escape already handled by a menu does not also close the item', async () => {
+  await go('#/board?item=item000001');
+  const detail = doc.getElementById('detail');
+  assert.equal(detail.hidden, false);
+  key('Escape', { defaultPrevented: true });
+  await settle();
+  assert.equal(detail.hidden, false, 'still open');
+  key('Escape');
+  await settle();
+  assert.equal(detail.hidden, true, 'a plain Escape closes it');
+});
+
+test('closing the item returns focus to the control that opened it', async () => {
+  await go('#/glance');
+  const main = doc.getElementById('main');
+  const row = main.querySelectorAll('.row')[0];
+  const rowKey = row.dataset.focusKey;
+  row.focus();
+  row.listeners.click.forEach((fn) => fn({ currentTarget: row, target: row }));
+  await settle();
+  assert.equal(doc.getElementById('detail').hidden, false);
+  doc.activeElement = doc.getElementById('detail');
+  key('Escape', { target: doc.getElementById('detail') });
+  await settle();
+  assert.equal(doc.activeElement.dataset.focusKey, rowKey);
+  assert.ok(main.contains(doc.activeElement), 'the re-rendered row, not the old one');
+});
+
+test('a re-render that removes the focused control keeps focus in main', async () => {
+  await go('#/glance');
+  const main = doc.getElementById('main');
+  const orphan = doc.createElement('button');
+  main.firstChild.append(orphan);
+  orphan.focus();
+  await go('#/board');
+  assert.equal(doc.activeElement, main);
 });
