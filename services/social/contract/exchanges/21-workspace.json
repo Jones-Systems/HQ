@@ -1,0 +1,133 @@
+{
+  "schema": "hq.social.exchange/v1",
+  "request": {
+    "method": "GET",
+    "path": "/api/workspace",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json"
+    },
+    "body_utf8": ""
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "Content-Length": "2346"
+    },
+    "body": {
+      "brands": [
+        {
+          "id": "00000000000000000000000000000001",
+          "name": "Larkspur Tea Co."
+        },
+        {
+          "id": "default",
+          "name": "My workspace"
+        }
+      ],
+      "content": [
+        {
+          "id": "00000000000000000000000000000002",
+          "title": "Cleared",
+          "body": "Free tasting on Saturday.",
+          "brand_id": "00000000000000000000000000000001",
+          "channel": "X",
+          "planned_date": "2026-10-22",
+          "planning_slot": null,
+          "archived": 0,
+          "version": 3,
+          "updated_at": "2026-01-15T12:00:04+00:00",
+          "links": []
+        }
+      ],
+      "runs": [
+        {
+          "id": "00000000000000000000000000000004",
+          "tool": "social-publisher",
+          "status": "failed",
+          "is_example": 1,
+          "created_at": "2026-01-15T12:00:07+00:00",
+          "finished_at": "2026-01-15T12:00:08+00:00",
+          "error": "Synthetic contract failure"
+        },
+        {
+          "id": "00000000000000000000000000000003",
+          "tool": "x-studio",
+          "status": "succeeded",
+          "is_example": 0,
+          "created_at": "2026-01-15T12:00:05+00:00",
+          "finished_at": "2026-01-15T12:00:06+00:00",
+          "error": null
+        }
+      ],
+      "tools": [
+        {
+          "id": "tiktok-intelligence",
+          "name": "TikTok signals",
+          "category": "Discover",
+          "mark": "TK",
+          "description": "Compare post snapshots you supply. No TikTok access or live discovery."
+        },
+        {
+          "id": "x-intelligence",
+          "name": "Signal inbox",
+          "category": "Discover",
+          "mark": "XI",
+          "description": "Sort feed items you supply into topics with traceable evidence. No live collection."
+        },
+        {
+          "id": "x-studio",
+          "name": "Writing studio",
+          "category": "Create",
+          "mark": "XS",
+          "description": "Turn your notes into a local first draft for a post, thread or article. Nothing is posted."
+        },
+        {
+          "id": "seo-studio",
+          "name": "SEO workbench",
+          "category": "Create",
+          "mark": "SE",
+          "description": "Check source-backed article packets for editorial readiness. No live search data."
+        },
+        {
+          "id": "search-visibility",
+          "name": "Search visibility",
+          "category": "Measure",
+          "mark": "SV",
+          "description": "Analyze answer-search observations you supply. No live queries."
+        },
+        {
+          "id": "social-publisher",
+          "name": "Channel preview",
+          "category": "Plan",
+          "mark": "CP",
+          "description": "Check text against channel profiles. It never publishes or schedules."
+        },
+        {
+          "id": "reddit-opportunities",
+          "name": "Reddit opportunities",
+          "category": "Discover",
+          "mark": "RE",
+          "description": "Find relevant conversations in a corpus you supply. No Reddit access."
+        },
+        {
+          "id": "creator-relationships",
+          "name": "Creator fit",
+          "category": "Connect",
+          "mark": "CR",
+          "description": "Rank creators you supply with explicit fit and missing-evidence reasons. No outreach."
+        }
+      ],
+      "features": [
+        "hq-editorial-timebox-v1",
+        "hq-references-v1"
+      ],
+      "csrf": "synthetic-workspace-token"
+    }
+  }
+}

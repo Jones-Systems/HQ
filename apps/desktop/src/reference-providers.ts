@@ -5,6 +5,7 @@ import { designReferenceReads } from './modules';
 import { createSocialReferenceProvider } from '../../../modules/social/references';
 import { createLiveSocialPort } from '../../../modules/social/live';
 import { createWorkReferenceProvider } from '@hq/work';
+import { createWikiClient, createWikiReferenceProvider } from '@hq/wiki';
 import { bridgeTransport, createPlannerLive } from '../../../modules/work/live';
 
 // Social and Work retain their service workspace binding; Design reads use the selected composition.
@@ -20,10 +21,14 @@ const workTransport: WorkServiceTransport = {
     ?? Promise.resolve({ ok: false, kind: 'unavailable' }),
 };
 const planner = createPlannerLive(bridgeTransport(workTransport));
+// The Wiki is read-only and workspace-wide: a reference target only. Like the mounted module, its client reads the
+// bridge on every call, so a missing bridge finds nothing and resolves unavailable.
+const wiki = createWikiClient(() => globalThis.window?.hqServices?.wiki ?? null);
 
-/** Unregistered kinds stay unknown. Design projects remain unknown; its destinations are section-only. */
+/** Unregistered kinds stay unknown. Design projects remain unknown; its destinations are section-only. Wiki pages are targets only. */
 export const REFERENCE_PROVIDERS: readonly ReferenceProvider[] = Object.freeze([
   createDesignReferenceProvider(designReferenceReads, () => now().toISOString()),
   createSocialReferenceProvider({ snapshot: () => social.snapshot(), run: (id) => social.run(id) }, projectId, now),
   createWorkReferenceProvider(projectId, { snapshot: () => planner.port.snapshot() }, now),
+  createWikiReferenceProvider(wiki, now),
 ]);

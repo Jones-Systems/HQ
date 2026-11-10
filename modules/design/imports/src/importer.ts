@@ -154,6 +154,7 @@ export class StoredSchemaError extends Error {
   readonly reason: 'unsupported-stored-schema' | 'corrupt-stored-record';
   constructor(reason: 'unsupported-stored-schema' | 'corrupt-stored-record', message: string) {
     super(message);
+    this.name = 'StoredSchemaError';
     this.reason = reason;
   }
 }
@@ -308,7 +309,9 @@ async function buildPlan(
   const baseSeq = await streamSeq(ctx);
   const importId = (await shortId(ctx, 'imp_', { projectId, sourceDigest, baseSeq })) as ImportId;
   const importedAt = ctx.clock.now();
-  const knownBlobs = new Set((await ctx.storage.listBlobs(ns)).map((blob) => blob.digest as string));
+  // Point lookups when the port offers them; otherwise one listing. `knownBlobs` also remembers digests planned in this batch.
+  const hasBlob = ctx.storage.hasBlob?.bind(ctx.storage);
+  const knownBlobs = new Set<string>(hasBlob ? [] : (await ctx.storage.listBlobs(ns)).map((blob) => blob.digest as string));
 
   const records: ManifestRecord[] = [];
   const conflicts: ImportManifest['conflicts'][number][] = [];
@@ -366,6 +369,7 @@ async function buildPlan(
           for (const blob of item.blobs) {
             if (knownBlobs.has(blob.digest)) continue;
             knownBlobs.add(blob.digest);
+            if (hasBlob !== undefined && await hasBlob(ns, blob.digest)) continue;
             blobOps.push({ op: 'put-blob', namespace: ns, digest: blob.digest, mediaType: blob.mediaType, bytes: blob.bytes });
           }
         }
