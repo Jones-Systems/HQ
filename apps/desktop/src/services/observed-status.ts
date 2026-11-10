@@ -2,10 +2,12 @@ import { useSyncExternalStore } from 'react';
 import { toast as appToast, type StatusTone, type ToastApi } from '@hq/ui';
 import type { ServiceDomain, SocialServiceTransport, WorkServiceTransport } from '@hq/contracts/services';
 import { isServiceResponse } from '../../../../modules/work/live';
+import { NOT_CHECKED, wikiStatus, type DataSource, type SourceStatus } from './data-source-status';
 
 /**
- * What real traffic last showed, per live domain. Configuration alone ("Set up · not checked") says nothing about
- * whether the service answers; this records what actually happened. Nothing here sends a request or polls.
+ * What real traffic last showed, per data source. Configuration alone ("Set up · not checked") says nothing about
+ * whether a service answers; this records what actually happened: answers to live calls, explicit checks, and the
+ * Wiki index states the native host reported. Nothing here sends a request or polls.
  */
 export type Reachability = 'reachable' | 'unreachable';
 export interface Observation {
@@ -13,7 +15,12 @@ export interface Observation {
   /** Epoch ms of the latest call that reported this state (refreshed at most once a minute). */
   readonly at: number;
 }
-export type ObservedSnapshot = Readonly<Record<ServiceDomain, Observation | null>>;
+export interface WikiObservation {
+  /** Per-namespace index states from the native host; `undefined` when the status call failed. */
+  readonly states: readonly string[] | undefined;
+  readonly at: number;
+}
+export type ObservedSnapshot = Readonly<Record<ServiceDomain, Observation | null> & { wiki: WikiObservation | null }>;
 export type Outcome = Reachability | 'unknown';
 
 /**
@@ -34,17 +41,52 @@ export function formatClock(at: number): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 export interface ObservedWording { readonly tone: StatusTone; readonly label: string; readonly detail: string }
-/** The one wording for an observation, shared by the domain strip and the rail. */
+/** The wording for one service observation. `describe` is what surfaces read; this is its observed half. */
 export function describeObservation(observation: Observation): ObservedWording {
   const time = formatClock(observation.at);
   return observation.state === 'reachable'
-    ? { tone: 'success', label: 'Connected', detail: `observed ${time}` }
+    ? { tone: 'success', label: 'Reachable', detail: `observed ${time}` }
     : { tone: 'danger', label: 'Unreachable', detail: `last tried ${time}` };
+}
+
+/** One data source's status as every surface shows it: `text` is `label` and `detail` joined by " · ". */
+export interface SourceWording extends SourceStatus { readonly indicator: StatusTone; readonly label: string; readonly detail: string }
+export interface DescribeInput {
+  /** What configuration says (or a check in progress), from `serviceStatus`, `CHECKING` or the Wiki placeholder. */
+  readonly config: SourceStatus;
+  /** What the observed-status store holds for this source. */
+  readonly observed: Observation | WikiObservation | null;
+}
+const isWikiObservation = (value: Observation | WikiObservation): value is WikiObservation => 'states' in value;
+function wording(status: SourceStatus, indicator: StatusTone, label?: string, detail?: string): SourceWording {
+  const [first = status.text, ...rest] = status.text.split(' · ');
+  return { ...status, indicator, label: label ?? first, detail: detail ?? rest.join(' · ') };
+}
+/**
+ * The one status description for a data source. The domain strip, the top-bar Sources summary and popover, and
+ * Settings all read it, so they never disagree. A service's observation counts only while its configuration is a
+ * valid saved address (`NOT_CHECKED`); sample data, a rejected or unavailable address, and a check in progress say
+ * only what configuration says. The Wiki's observation is its index state.
+ */
+export function describe(source: DataSource, { config, observed }: DescribeInput): SourceWording {
+  if (source === 'wiki') {
+    if (observed && isWikiObservation(observed)) {
+      const status = wikiStatus(observed.states);
+      return wording(status, status.indicator ?? 'neutral');
+    }
+    return wording(config, config.indicator ?? 'neutral');
+  }
+  if (config.text === NOT_CHECKED.text && observed && !isWikiObservation(observed)) {
+    const seen = describeObservation(observed);
+    return { text: `${seen.label} · ${seen.detail}`, tone: observed.state === 'reachable' ? 'good' : 'bad', indicator: seen.tone, label: seen.label, detail: seen.detail };
+  }
+  return wording(config, config.indicator ?? 'neutral');
 }
 
 const DOMAIN_NAMES: Record<ServiceDomain, string> = { social: 'Social', work: 'Work' };
 const toastId = (domain: ServiceDomain) => `hq-service-${domain}`;
 const minute = (at: number) => Math.floor(at / 60_000);
+const EMPTY: ObservedSnapshot = { social: null, work: null, wiki: null };
 
 export interface ObservedStatusStore {
   subscribe(listener: () => void): () => void;
@@ -52,13 +94,15 @@ export interface ObservedStatusStore {
   /** Record the answer to one real call. Never throws: observing must not change a call. */
   recordResponse(domain: ServiceDomain, answer: unknown): void;
   record(domain: ServiceDomain, outcome: Outcome): void;
+  /** Record the Wiki index states the native host reported (`undefined` when its status call failed). No toasts. */
+  recordWiki(states: readonly string[] | undefined): void;
   /** Forget every observation without toasts (tests and a fresh renderer). */
   reset(): void;
 }
 export interface ObservedStatusOptions { readonly now?: () => number; readonly toast?: Pick<ToastApi, 'warning' | 'success'> }
 
 export function createObservedStatusStore({ now = Date.now, toast = appToast }: ObservedStatusOptions = {}): ObservedStatusStore {
-  let snapshot: ObservedSnapshot = { social: null, work: null };
+  let snapshot: ObservedSnapshot = EMPTY;
   const listeners = new Set<() => void>();
   const emit = () => { for (const listener of [...listeners]) listener(); };
 
@@ -83,15 +127,25 @@ export function createObservedStatusStore({ now = Date.now, toast = appToast }: 
     getSnapshot: () => snapshot,
     record,
     recordResponse(domain, answer) { try { record(domain, outcomeOf(answer)); } catch { /* observation is best effort */ } },
-    reset() { snapshot = { social: null, work: null }; emit(); },
+    recordWiki(states) {
+      const previous = snapshot.wiki;
+      const copy = states ? [...states] : undefined;
+      if (previous && JSON.stringify(previous.states) === JSON.stringify(copy)) return;
+      snapshot = { ...snapshot, wiki: { states: copy, at: now() } };
+      emit();
+    },
+    reset() { snapshot = EMPTY; emit(); },
   };
 }
 
-/** The renderer's store. The shell reads it with `useObservedStatus`; only wrapped live transports write to it. */
+/** The renderer's store. Live transports, explicit checks and Wiki status reads write to it; surfaces read `describe`. */
 export const observedStatus = createObservedStatusStore();
 
 export function useObservedStatus(domain: ServiceDomain, store: ObservedStatusStore = observedStatus): Observation | null {
   return useSyncExternalStore(store.subscribe, () => store.getSnapshot()[domain], () => null);
+}
+export function useObservedSnapshot(store: ObservedStatusStore = observedStatus): ObservedSnapshot {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, () => EMPTY);
 }
 
 /** Same calls, same answers, same errors: the answer is only read on its way past. */

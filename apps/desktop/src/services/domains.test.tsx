@@ -133,7 +133,7 @@ describe('the status strip', () => {
     render(<domains.Work {...props()} />);
     expect(await findServiceStatus('Work', 'Set up')).toBeTruthy();
     act(() => { observedStatus.record('work', 'reachable'); });
-    expect(await findServiceStatus('Work', 'Connected')).toBeTruthy();
+    expect(await findServiceStatus('Work', 'Reachable')).toBeTruthy();
     expect(detail('Work')).toMatch(/^observed \d\d:\d\d$/); expect(tone('Work')).toBe('success');
     expect(within(strip('Work')).getByRole('button', { name: 'Settings' })).toBeTruthy();
     act(() => { observedStatus.record('work', 'unreachable'); });
@@ -166,7 +166,7 @@ describe('observing live traffic', () => {
     expect(toastStore.getSnapshot()).toEqual([]);
     const port = bind.mock.calls[0]![0]!;
     answer.current = ok; await port.snapshot().catch(() => undefined);
-    expect(await findServiceStatus('Work', 'Connected')).toBeTruthy();
+    expect(await findServiceStatus('Work', 'Reachable')).toBeTruthy();
     expect(toastStore.getSnapshot()).toMatchObject([{ id: 'hq-service-work', tone: 'success', title: 'Work service reconnected' }]);
     answer.current = unavailable; await port.snapshot().catch(() => undefined);
     expect(await findServiceStatus('Work', 'Unreachable')).toBeTruthy();
@@ -181,7 +181,7 @@ describe('observing live traffic', () => {
     const answer = { current: ok as ServiceResponse | null };
     const domains = createServiceDomains(() => services(configured, answer));
     render(<domains.Social {...props()} />);
-    expect(await findServiceStatus('Social', 'Connected')).toBeTruthy();
+    expect(await findServiceStatus('Social', 'Reachable')).toBeTruthy();
     expect(detail('Social')).toMatch(/^observed \d\d:\d\d$/);
     expect(observedStatus.getSnapshot().work).toBeNull();
     await waitFor(() => expect(toastStore.getSnapshot()).toEqual([]));

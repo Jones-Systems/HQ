@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createToastApi, createToastStore, type ToastApi } from '@hq/ui';
 import type { ServiceResponse, SocialServiceTransport, WorkServiceTransport } from '@hq/contracts/services';
-import { createObservedStatusStore, describeObservation, formatClock, observeSocial, observeWork, outcomeOf } from './observed-status';
+import { createObservedStatusStore, describe as describeSource, describeObservation, formatClock, observeSocial, observeWork, outcomeOf } from './observed-status';
+import { CHECKING, NOT_CHECKED, WIKI_NOT_CHECKED, serviceStatus } from './data-source-status';
 
 const ok: ServiceResponse = { ok: true, status: 200, body: {}, replayed: false };
 const unavailable: ServiceResponse = { ok: false, kind: 'unavailable' };
@@ -29,7 +30,7 @@ describe('outcomeOf', () => {
 describe('observed status store', () => {
   it('records reachable and unreachable with the time of the call', () => {
     const { store } = fixture();
-    expect(store.getSnapshot()).toEqual({ social: null, work: null });
+    expect(store.getSnapshot()).toEqual({ social: null, work: null, wiki: null });
     store.recordResponse('work', ok);
     expect(store.getSnapshot().work).toEqual({ state: 'reachable', at: at(14, 2) });
     expect(store.getSnapshot().social).toBeNull();
@@ -62,7 +63,7 @@ describe('observed status store', () => {
     const { store, toast } = fixture();
     const listener = vi.fn(); store.subscribe(listener);
     store.recordResponse('work', unknown);
-    expect(store.getSnapshot()).toEqual({ social: null, work: null }); expect(listener).not.toHaveBeenCalled();
+    expect(store.getSnapshot()).toEqual({ social: null, work: null, wiki: null }); expect(listener).not.toHaveBeenCalled();
     store.recordResponse('work', ok); listener.mockClear();
     const before = store.getSnapshot();
     store.recordResponse('work', unknown); store.recordResponse('work', 'not a response');
@@ -95,7 +96,7 @@ describe('observed status store', () => {
     store.recordResponse('work', ok); stop(); store.recordResponse('work', unavailable);
     expect(listener).toHaveBeenCalledTimes(1);
     store.reset();
-    expect(store.getSnapshot()).toEqual({ social: null, work: null }); expect(toast.success).not.toHaveBeenCalled();
+    expect(store.getSnapshot()).toEqual({ social: null, work: null, wiki: null }); expect(toast.success).not.toHaveBeenCalled();
   });
 
   it('shows at most one toast per domain as the service flaps, updated in place', () => {
@@ -116,7 +117,7 @@ describe('observed status store', () => {
 describe('wording', () => {
   it('formats local HH:MM and the two observed phrases', () => {
     expect(formatClock(at(9, 7))).toBe('09:07'); expect(formatClock(at(0, 0))).toBe('00:00'); expect(formatClock(at(23, 59, 59))).toBe('23:59');
-    expect(describeObservation({ state: 'reachable', at: at(14, 2) })).toEqual({ tone: 'success', label: 'Connected', detail: 'observed 14:02' });
+    expect(describeObservation({ state: 'reachable', at: at(14, 2) })).toEqual({ tone: 'success', label: 'Reachable', detail: 'observed 14:02' });
     expect(describeObservation({ state: 'unreachable', at: at(9, 40) })).toEqual({ tone: 'danger', label: 'Unreachable', detail: 'last tried 09:40' });
   });
 });
@@ -140,7 +141,7 @@ describe('observing transports', () => {
     const failure = new Error('bridge lost');
     const work = observeWork({ call: async () => { throw failure; } }, store);
     await expect(work.call('state', {})).rejects.toBe(failure);
-    expect(store.getSnapshot()).toEqual({ social: null, work: null });
+    expect(store.getSnapshot()).toEqual({ social: null, work: null, wiki: null });
   });
 
   it('never lets observation alter an answer even if recording fails', async () => {
@@ -157,5 +158,38 @@ describe('observing transports', () => {
     const social = observeSocial({ call: async () => unavailable } as SocialServiceTransport, store);
     expect(await social.call('workspace', {})).toBe(unavailable);
     expect(store.getSnapshot()).toMatchObject({ social: { state: 'unreachable' }, work: null });
+  });
+});
+
+describe('describe: one status for every surface', () => {
+  const at = new Date(2026, 10, 10, 14, 2).getTime();
+  it('uses an observation only while the configuration is a valid saved address', () => {
+    const reachable = { state: 'reachable' as const, at };
+    expect(describeSource('work', { config: NOT_CHECKED, observed: null })).toMatchObject({ text: 'Set up · not checked', label: 'Set up', detail: 'not checked', indicator: 'neutral', tone: 'neutral' });
+    expect(describeSource('work', { config: NOT_CHECKED, observed: reachable })).toEqual({ text: 'Reachable · observed 14:02', label: 'Reachable', detail: 'observed 14:02', indicator: 'success', tone: 'good' });
+    expect(describeSource('social', { config: NOT_CHECKED, observed: { state: 'unreachable', at } })).toMatchObject({ text: 'Unreachable · last tried 14:02', indicator: 'danger', tone: 'bad' });
+    const sample = serviceStatus({ configured: false, policy: 'ok', transport: null });
+    expect(describeSource('work', { config: sample, observed: reachable })).toMatchObject({ text: 'Sample data · not set up', label: 'Sample data', indicator: 'info' });
+    const rejected = serviceStatus({ configured: true, policy: 'rejected', transport: null });
+    expect(describeSource('social', { config: rejected, observed: reachable })).toMatchObject({ text: 'Address rejected', label: 'Address rejected', detail: '', indicator: 'warning' });
+    expect(describeSource('social', { config: CHECKING, observed: reachable })).toMatchObject({ text: 'Checking…' });
+  });
+  it('describes the Wiki from its observed index states, and its placeholder until then', () => {
+    expect(describeSource('wiki', { config: WIKI_NOT_CHECKED, observed: null })).toMatchObject({ text: 'Index not checked', indicator: 'neutral' });
+    expect(describeSource('wiki', { config: WIKI_NOT_CHECKED, observed: { states: ['ready'], at } })).toMatchObject({ text: 'Index ready', tone: 'good', indicator: 'success' });
+    expect(describeSource('wiki', { config: WIKI_NOT_CHECKED, observed: { states: ['not-configured'], at } })).toMatchObject({ text: 'Not set up', indicator: 'info' });
+    expect(describeSource('wiki', { config: WIKI_NOT_CHECKED, observed: { states: undefined, at } })).toMatchObject({ text: 'Index unavailable', tone: 'bad' });
+  });
+  it('records Wiki index states without toasts and ignores repeats', () => {
+    const toast = { warning: vi.fn(), success: vi.fn() };
+    const store = createObservedStatusStore({ now: () => at, toast });
+    const listener = vi.fn(); store.subscribe(listener);
+    store.recordWiki(['indexing']); store.recordWiki(['indexing']);
+    expect(store.getSnapshot().wiki).toEqual({ states: ['indexing'], at });
+    store.recordWiki(undefined);
+    expect(store.getSnapshot().wiki).toEqual({ states: undefined, at });
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(toast.warning).not.toHaveBeenCalled(); expect(toast.success).not.toHaveBeenCalled();
+    store.reset(); expect(store.getSnapshot()).toEqual({ social: null, work: null, wiki: null });
   });
 });

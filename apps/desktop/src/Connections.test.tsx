@@ -3,8 +3,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { HqServices } from '@hq/contracts/services';
 import { Connections } from './Connections';
 import { DataSourcesProvider } from './settings/DataSources';
+import { observedStatus } from './services/observed-status';
 const original = window.hqServices;
-afterEach(() => { cleanup(); Object.defineProperty(window, 'hqServices', { configurable: true, value: original }); vi.useRealTimers(); });
+afterEach(() => { cleanup(); Object.defineProperty(window, 'hqServices', { configurable: true, value: original }); vi.useRealTimers(); observedStatus.reset(); });
 function services() {
   const value = {
     config: { status: vi.fn(async () => ({ configured: true, policy: 'ok', transport: 'https' })), set: vi.fn() },
@@ -22,7 +23,8 @@ it('loads configuration without health probes; source rows open their settings a
   const row = screen.getByRole('button', { name: 'Social: Set up · not checked' });
   fireEvent.click(row); expect(manage).toHaveBeenCalledWith('social', row);
   fireEvent.click(screen.getByRole('button', { name: 'Recheck Social: Set up · not checked' }));
-  await screen.findByText('Reachable'); expect(value.social.call).toHaveBeenCalledExactlyOnceWith('workspace', {});
+  await screen.findByText(/^Reachable · observed \d\d:\d\d$/); expect(value.social.call).toHaveBeenCalledExactlyOnceWith('workspace', {});
+  expect(observedStatus.getSnapshot().social?.state).toBe('reachable');
   expect(screen.queryByText('discard')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Manage connections' })).toBeNull();
 });
@@ -34,13 +36,13 @@ it('releases timed-out checks and ignores their late answers without unlocking a
   await screen.findAllByText('Set up · not checked');
   vi.useFakeTimers(); fireEvent.click(screen.getByRole('button', { name: 'Recheck Social: Set up · not checked' }));
   await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
-  const retry = screen.getByRole('button', { name: 'Recheck Social: Unreachable' }) as HTMLButtonElement;
+  const retry = screen.getByRole('button', { name: /^Recheck Social: Unreachable · last tried \d\d:\d\d$/ }) as HTMLButtonElement;
   expect(retry.disabled).toBe(false);
   fireEvent.click(retry);
   await act(async () => { releaseFirst({ ok: true, status: 200 }); await vi.advanceTimersByTimeAsync(0); });
   expect((screen.getByRole('button', { name: 'Recheck Social: Checking…' }) as HTMLButtonElement).disabled).toBe(true);
-  expect(screen.queryByText('Reachable')).toBeNull();
+  expect(screen.queryByText(/^Reachable/)).toBeNull();
   await act(async () => { releaseSecond({ ok: true, status: 200 }); await vi.advanceTimersByTimeAsync(0); });
-  vi.useRealTimers(); await waitFor(() => expect((screen.getByRole('button', { name: 'Recheck Social: Reachable' }) as HTMLButtonElement).disabled).toBe(false));
+  vi.useRealTimers(); await waitFor(() => expect((screen.getByRole('button', { name: /^Recheck Social: Reachable · observed/ }) as HTMLButtonElement).disabled).toBe(false));
   expect(value.social.call).toHaveBeenCalledTimes(2);
 });
