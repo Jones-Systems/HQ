@@ -93,7 +93,15 @@ it('durable sections use F1 roots; navigation and reads never put documents', as
     { route: 'doc.get', params: { key: TASTE_DOCUMENT_KEY } },
     { route: 'doc.get', params: { key: TASTE_DOCUMENT_KEY } },
   ]);
-  assert.equal(workspace.importsFor, fake.importsFor);
+  // Imports are durable in the bridged workspace: not the in-memory fake. Constructing an env performs no I/O and is stable per project.
+  assert.notEqual(workspace.importsFor, fake.importsFor);
+  const beforeImports = double.calls.length;
+  const imports = workspace.importsFor(project, () => { throw new Error('the synthetic source belongs to the in-memory workspace'); });
+  assert.equal(workspace.importsFor(project), imports);
+  assert.notEqual(workspace.importsFor({ id: 'other-project', name: 'Other project' }), imports);
+  assert.equal(typeof imports.capabilities.pickSource, 'function');
+  assert.equal(imports.capabilities.saveBundle, undefined, 'backup and export are not available over the bridge');
+  assert.equal(double.calls.length, beforeImports, 'constructing an Imports env performs no I/O');
   for (const root of ['design/projects/', 'design/components/', 'design/flows/', 'design/compare/', 'design/annotations/', 'design.canvas.arrangement.v1/']) {
     assert.ok(double.calls.some(({ params }) => ('key' in params ? params.key : 'prefix' in params ? params.prefix : '').startsWith(root)), root);
   }

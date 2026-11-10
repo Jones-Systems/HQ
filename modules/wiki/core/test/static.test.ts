@@ -55,11 +55,11 @@ describe('purity and boundaries', () => {
     }
   });
 
-  test('the adapter imports only child_process execFile and fs/promises realpath and stat', () => {
+  test('the adapter imports only child_process execFile and spawn, and fs/promises realpath and stat', () => {
     const adapter = sources.get(ADAPTER) as string;
     const nodeImports = specifiers(adapter).filter((spec) => spec.startsWith('node:'));
     assert.deepEqual(nodeImports.sort(), ['node:child_process', 'node:fs/promises']);
-    assert.match(adapter, /import\s*\{\s*execFile as nodeExecFile\s*\}\s*from\s*'node:child_process'/);
+    assert.match(adapter, /import\s*\{\s*execFile as nodeExecFile,\s*spawn as nodeSpawn\s*\}\s*from\s*'node:child_process'/);
     assert.match(adapter, /import\s*\{\s*realpath,\s*stat\s*\}\s*from\s*'node:fs\/promises'/);
   });
 
@@ -89,15 +89,19 @@ describe('purity and boundaries', () => {
 });
 
 describe('no shell, no network, no mutation', () => {
-  test('child_process is used only by the adapter, only as execFile, never with a shell', () => {
+  test('child_process is used only by the adapter, only as execFile and one spawn, never with a shell', () => {
     for (const [name, source] of sources) {
       if (name !== ADAPTER) assert.doesNotMatch(source, /child_process/, name);
     }
     const adapter = sources.get(ADAPTER) as string;
-    assert.doesNotMatch(adapter, /import\s*\{[^}]*\b(?:exec|execSync|execFileSync|spawn|spawnSync|fork)\b[^}]*\}\s*from/);
-    assert.doesNotMatch(adapter, /\b(?:execSync|execFileSync|spawn|spawnSync|fork)\b/);
+    assert.doesNotMatch(adapter, /import\s*\{[^}]*\b(?:exec|execSync|execFileSync|spawnSync|fork)\b[^}]*\}\s*from/);
+    assert.doesNotMatch(adapter, /\b(?:execSync|execFileSync|spawnSync|fork)\b/);
+    // The only `spawn` is the persistent `cat-file --batch` child: one call site, no shell, piped stdin and stdout.
+    assert.equal(adapter.match(/\bnodeSpawn\(/g)?.length, 1);
+    assert.equal(adapter.match(/\bnodeExecFile\(/g)?.length, 1);
     assert.doesNotMatch(adapter, /shell\s*:\s*(?:true|['"`])/);
-    assert.match(adapter, /shell:\s*false/);
+    assert.equal(adapter.match(/\bshell: false, windowsHide: true,/g)?.length, 2, 'both the execFile and the spawn options say shell: false');
+    assert.match(adapter, /stdio:\s*\['pipe',\s*'pipe',\s*'ignore'\]/);
     assert.doesNotMatch(adapter, /\$\{[^}]*\}\s*['"`]\s*,\s*\{[^}]*shell/);
   });
 
@@ -115,9 +119,23 @@ describe('no shell, no network, no mutation', () => {
     for (const word of forbidden) {
       assert.doesNotMatch(adapter, new RegExp(`[\\[,]\\s*['"\`]${word.replace(/[-]/g, '\\-')}['"\`]`), `argv token ${word}`);
     }
-    const allowed = ['rev-parse', 'config', 'show', 'ls-tree', 'cat-file'];
-    const subcommands = [...adapter.matchAll(/\[\s*'(rev-parse|config|show|ls-tree|cat-file)'/g)].map((m) => m[1]);
-    assert.ok(subcommands.length >= 5 && subcommands.every((s) => allowed.includes(s as string)));
+    const allowed = ['rev-parse', 'config', 'show', 'ls-tree'];
+    const subcommands = [...adapter.matchAll(/\[\s*'(rev-parse|config|show|ls-tree)'/g)].map((m) => m[1]);
+    assert.ok(subcommands.length >= 4 && subcommands.every((s) => allowed.includes(s as string)));
+  });
+
+  test('blobs are read only through one `cat-file --batch`; the per-blob form is gone and stdin only gets an object id', () => {
+    const adapter = sources.get(ADAPTER) as string;
+    assert.equal(adapter.match(/'cat-file'/g)?.length, 1, 'cat-file appears once');
+    assert.match(adapter, /'core\.fsmonitor=false',\s*'cat-file',\s*'--batch'\]/, 'cat-file --batch follows the mandatory prefix');
+    assert.deepEqual([...adapter.matchAll(/'(--batch[^']*)'/g)].map((m) => m[1]), ['--batch'], 'no other --batch mode (such as --batch-command or --batch-all-objects)');
+    assert.doesNotMatch(adapter, /'cat-file',\s*'blob'/);
+    assert.doesNotMatch(adapter, /\b(?:--follow-symlinks|--textconv|--filters|--allow-unknown-type|--unordered|--buffer)\b/);
+    // The only thing ever written to a child is a validated object id and a line feed.
+    assert.equal(adapter.match(/\.write\(/g)?.length, 1);
+    assert.match(adapter, /stdin\.write\(`\$\{request\.oid\}\\n`\)/);
+    assert.match(adapter, /const OBJECT_ID = \/\^\(\?:\[0-9a-f\]\{40\}\|\[0-9a-f\]\{64\}\)\$\/;/);
+    assert.match(adapter, /!OBJECT_ID\.test\(oid\)/);
   });
 
   test('sources contain no filesystem writes', () => {
