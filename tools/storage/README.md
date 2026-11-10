@@ -1,9 +1,10 @@
-# Standalone storage admission helpers
+# Storage admission helpers and scoped package commands
 
 Stage A supplies dependency-free Node ESM helpers for a cooperating producer
-coordinator. **No existing HQ build, test, development or acceptance command is
-wired to them.** This is standalone source coverage, not production storage
-coverage, installed runtime protection or native qualification. Repository
+coordinator. The root `build`, `build:electron`, `build:preview-agent` and `test`
+scripts now use one cooperating storage envelope each. This is scoped source
+coverage, not global storage protection, installed runtime protection or native
+qualification. Repository
 ownership remains in [AGENTS.md](../../AGENTS.md); the integration campaign is
 [HQ integration parallel execution](../../docs/engineering-specs/hq-integration-parallel-execution.md).
 
@@ -35,6 +36,72 @@ using Node's type erasure without installing or starting Vite or a server. It
 checks isolated namespaces and checkout relocation, including spaces in paths
 and unrelated working directories. The
 required hosted typecheck/build/tests exercise the actual Vite/Vitest APIs.
+
+## Scoped package-command admission
+
+`commands.mjs` preserves these ordered, short-circuiting chains without spawning
+another wrapped script or coordinator:
+
+- `build`: the unchanged `npm run typecheck`, desktop Vite build, then
+  `build:electron`.
+- `build:electron`: Electron, Design-host and Wiki-host TypeScript compilation,
+  in that order, then `build:preview-agent`.
+- `build:preview-agent`: the preview-agent Vite build.
+- `test`: `build:electron`, then `vitest run`.
+
+Only the final leaf receives forwarded arguments: Vitest for `test`, or the
+preview-agent Vite build for the three build keys. The closed non-routing
+argument grammar accepts Vite `--mode`, `--logLevel` and `--sourcemap`; Vitest
+`--reporter` (the built-in stdout reporters), `--testNamePattern`/`-t`,
+`--passWithNoTests`, `--no-file-parallelism` and `--silent`. Unknown arguments,
+including output/config/root/cache routing, watch and coverage options, refuse
+before allocation or launch. Accepted argument vectors are forwarded unchanged. This is narrower than npm's
+append semantics: positional Vitest filters and other unlisted arguments refuse;
+no current CI caller forwards them.
+
+TypeScript, Vite and Vitest resolve exclusively through this worktree's
+`node_modules/.bin`, using module identity rather than the caller's working
+directory, and run through the current Node executable without a shell.
+Only `build` needs the inherited `npm_execpath`: before admission or allocation
+it must be absolute and realpath to an existing regular file. Its resolved path
+is printed in invocation diagnostics and launched as
+`process.execPath, [driver, 'run', 'typecheck']`. It identifies the invoking npm,
+not a parent capability. There is no PATH search, fallback download or install.
+The other three keys do not consult the driver; standalone `build` without a
+proved driver refuses.
+
+Before creating even a scratch parent, admission measures the actual receiving
+filesystems and custody for `apps/desktop/dist`, `apps/desktop/dist-electron`,
+`.t3/cache`, `node_modules/.vite-temp` and `.t3/storage-command-scratch`.
+Unknown capacity refuses; the unchanged policy requires 40 GiB available on each
+receiving filesystem. Fixed build replacement and `emptyOutDir` remain unchanged.
+The one top-level envelope owns its lock, while nested steps use its live
+process-local parent capability. Each leaf declares a provisional additional
+512 MiB allowance; nested chains reserve their remaining leaves' allowances
+from that same peak. These are conservative unmeasured declarations, not
+measured compiler peaks or hard byte quotas.
+
+The environment passes through, including `HQ_CLI_E2E`, except that npm's cache
+uses `.t3/cache/npm` and `TMPDIR`/`TMP`/`TEMP` use one uniquely owned scratch
+child. Caches persist without eviction. After draining owned producers, cleanup
+removes only the exact owned child and matching locks; it never sweeps the
+shared scratch parent or historical state. The first failing step short-circuits
+the chain, and its exit code or signal remains primary through cleanup. Signals
+propagate to the live leaf and the CLI propagates the result after finalization.
+
+`dev`'s initial `npm run build:electron` now has its own top-level admission;
+long-lived `dev`/`dev:web`, `start` and `preview` remain uncovered. The macOS
+package route and Linux native-journeys build would traverse this coordinator,
+but are **unqualified pre-merge debts**: no package or native pass is claimed.
+The CLI/Planner workflow runs its own `tools/hq-cli` package, not this root
+`test` graph; the Wiki workspace script also remains unchanged. Tests and builds
+for this slice execute only on GitHub. A required job refusing capacity is a
+qualification stop, not permission for an environment bypass or a lower policy.
+
+`commands.test.mjs` uses tiny dependency-free fake CLIs and explicit fixture-only
+context injection to exercise order, argv, forwarding, driver refusal, capacity,
+lock refusal, failure, cancellation and cleanup. The production CLI has no
+fixture, policy, worktree or executable override.
 
 ## Policy and accounting
 
@@ -189,7 +256,8 @@ not a production configuration mechanism; no environment variable lowers
 defaults. Tests admit their temporary filesystem before allocation and remove
 their exact fixture roots. No dependencies, compiler or browser are needed.
 
-Stage B remains uncovered: producer routing and the unallocated Design caches above;
+Stage B remains incomplete. Beyond the four root commands above, other producer
+routing and the unallocated Design caches remain uncovered, along with
 the byte-accounting evidence writer, closure preallocation, pending-write and
 artifact bounds, screenshots and bounded trace collection; check registration
 and campaign amendments. The per-run/ordinary/closure/artifact settings above
