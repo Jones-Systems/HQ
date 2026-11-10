@@ -9,12 +9,21 @@ import { createWikiBridge, wikiIpcHandler } from './wiki-host';
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
+/** Open no longer waits for indexing: poll the admin status until no source is indexing any more. */
+async function settled(bridge: { admin(route: unknown, params: unknown): Promise<unknown> }) {
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const result = await bridge.admin('status', {}) as { ok: boolean; value?: { sources: { state: string }[] } };
+    if (result.ok && !result.value!.sources.some(source => source.state === 'indexing')) return result;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  throw new Error('Wiki indexing did not settle');
+}
 async function temporary() { const parent = resolve('.t3/wiki-mount'); await mkdir(parent, { recursive: true }); const root = await mkdtemp(join(parent, 'host-')); roots.push(root); return root; }
 it('initializes and upgrades only the supplied Wiki home, indexing committed synthetic Git objects', async () => {
   const root = await temporary(); const corpus = buildCorpus(join(root, 'corpus'));
   const home = join(root, 'userData'); await mkdir(join(home, 'wiki'), { recursive: true });
   const config = join(home, 'wiki/config.json'); await writeFile(config, JSON.stringify({ version: 0, sources: corpus.profiles }));
-  const runtime = await openWikiRuntime(home);
+  const runtime = await openWikiRuntime(home); await runtime.whenIdle(); // open returns before indexing finishes
   expect(JSON.parse(await readFile(config, 'utf8')).version).toBe(1);
   expect((await readdir(join(home, 'wiki/index-v1'))).length).toBe(2);
   const result = await runtime.call('search', [{ query: 'quokkaharbor' }]);
@@ -25,7 +34,7 @@ it('initializes and upgrades only the supplied Wiki home, indexing committed syn
     expect(await runtime.call(method, args)).toMatchObject({ ok: false, error: { code: 'invalid-input' } });
   }
   await runtime.close(); await runtime.close(); expect(await runtime.call('listSources', [])).toMatchObject({ ok: false, error: { code: 'unavailable' } });
-  const reopened = await openWikiRuntime(home); expect(await reopened.call('search', [{ query: 'quokkaharbor' }])).toEqual(result); await reopened.close();
+  const reopened = await openWikiRuntime(home); await reopened.whenIdle(); expect(await reopened.call('search', [{ query: 'quokkaharbor' }])).toEqual(result); await reopened.close();
 });
 it('initializes an empty home and refuses future schema without overwriting it', async () => {
   const root = await temporary(); const runtime = await openWikiRuntime(root); await runtime.close();
@@ -39,7 +48,7 @@ it('residue from an interrupted config or index write does not block opening or 
   const config = join(home, 'wiki/config.json'); await writeFile(config, JSON.stringify({ version: 0, sources: corpus.profiles }));
   await writeFile(config + '.new', '{"partial"');
   for (const profile of corpus.profiles) await writeFile(join(home, 'wiki/index-v1', `${profile.namespace}-${corpus.repos[profile.namespace as 'bl' | 'appdev'].commit}.json.new`), '{');
-  const runtime = await openWikiRuntime(home);
+  const runtime = await openWikiRuntime(home); await runtime.whenIdle();
   expect(JSON.parse(await readFile(config, 'utf8')).version).toBe(1);
   expect(await runtime.call('search', [{ query: 'quokkaharbor' }])).toMatchObject({ ok: true });
   expect((await readdir(join(home, 'wiki/index-v1'))).filter(name => name.endsWith('.json')).length).toBe(2);
@@ -83,7 +92,10 @@ it('imports complete native profiles with single-use tokens, CAS and sanitized s
   const imported = await runtime.admin('importProfile', {}, profilePath) as { ok: true; value: { token: string } };
   expect(imported.ok).toBe(true); expect(JSON.stringify(imported)).not.toContain(root); expect(JSON.stringify(imported)).not.toContain('example.invalid');
   const saved = await runtime.admin('saveSource', { token: imported.value.token, expectedRevision: initial.value.revision });
-  expect(saved).toMatchObject({ ok: true, value: { sources: [{ namespace: 'bl', state: 'ready' }, { namespace: 'appdev', state: 'not-configured' }] } });
+  // Saving returns at once; the new source is indexed in the background.
+  expect(saved).toMatchObject({ ok: true, value: { sources: [{ namespace: 'bl', state: 'indexing' }, { namespace: 'appdev', state: 'not-configured' }] } });
+  await runtime.whenIdle();
+  expect(await runtime.admin('status', {})).toMatchObject({ ok: true, value: { sources: [{ namespace: 'bl', state: 'ready' }, { namespace: 'appdev', state: 'not-configured' }] } });
   expect(JSON.stringify(saved)).not.toContain(root);
   expect(await runtime.admin('saveSource', { token: imported.value.token, expectedRevision: initial.value.revision })).toEqual({ ok: false, kind: 'invalid' });
   const next = await runtime.admin('importProfile', {}, profilePath) as { ok: true; value: { token: string } };
@@ -121,7 +133,7 @@ it('isolates unavailable source startup and keeps unchanged reader allowlist', a
   const root = await temporary(); const corpus = buildCorpus(join(root, 'corpus'));
   const home = join(root, 'home'); await mkdir(join(home, 'wiki'), { recursive: true });
   await writeFile(join(home, 'wiki/config.json'), JSON.stringify({ version: 1, sources: [corpus.profiles[0], { ...corpus.profiles[1], gitDir: join(root, 'missing') }] }));
-  const runtime = await openWikiRuntime(home);
+  const runtime = await openWikiRuntime(home); await runtime.whenIdle();
   expect(await runtime.admin('status', {})).toMatchObject({ ok: true, value: { sources: [{ namespace: 'bl', state: 'ready' }, { namespace: 'appdev', state: 'source-unavailable' }] } });
   expect(await runtime.call('search', [{ query: 'quokkaharbor' }])).toMatchObject({ ok: true });
   expect(await runtime.call('refresh', [])).toMatchObject({ ok: false, error: { code: 'invalid-input' } });
@@ -147,9 +159,11 @@ it('retains a previously ready index as stale when explicit source recheck fails
   const home = join(root, 'home'); await mkdir(join(home, 'wiki'), { recursive: true });
   await writeFile(join(home, 'wiki/config.json'), JSON.stringify({ version: 1, sources: [corpus.profiles[0]] }));
   const bridge = createWikiBridge(() => openWikiRuntime(home));
-  expect(await bridge.admin('status', {})).toMatchObject({ ok: true, value: { sources: [{ namespace: 'bl', state: 'ready' }, { namespace: 'appdev', state: 'not-configured' }] } });
+  expect(await settled(bridge)).toMatchObject({ ok: true, value: { sources: [{ namespace: 'bl', state: 'ready' }, { namespace: 'appdev', state: 'not-configured' }] } });
   await rm(corpus.repos.bl.gitDir, { recursive: true, force: true });
-  expect(await bridge.admin('recheck', {})).toMatchObject({ ok: true, value: { sources: [{ namespace: 'bl', state: 'stale' }, { namespace: 'appdev', state: 'not-configured' }] } });
+  // Recheck returns at once with the source being re-checked; the failed check settles to stale in the background.
+  expect(await bridge.admin('recheck', {})).toMatchObject({ ok: true, value: { sources: [{ namespace: 'bl', state: 'indexing' }, { namespace: 'appdev', state: 'not-configured' }] } });
+  expect(await settled(bridge)).toMatchObject({ ok: true, value: { sources: [{ namespace: 'bl', state: 'stale' }, { namespace: 'appdev', state: 'not-configured' }] } });
   expect(await bridge.call('search', [{ query: 'quokkaharbor' }])).toMatchObject({ ok: true });
   await bridge.close();
 });

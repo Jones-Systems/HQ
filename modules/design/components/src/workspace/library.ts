@@ -55,7 +55,16 @@ export interface ComponentSession {
   readonly overrides: PropValues;
 }
 
-export class IntegrityError extends Error {}
+export class IntegrityError extends Error {
+  /** `exists`: another writer already saved this revision (a conflict). `mismatch`: stored data disagrees with its key. */
+  readonly reason: 'exists' | 'mismatch';
+  constructor(message?: string, reason: 'exists' | 'mismatch' = 'mismatch') {
+    super(message);
+    // A stable name survives bundler class renaming, so the composition can classify it.
+    this.name = 'IntegrityError';
+    this.reason = reason;
+  }
+}
 
 function revisionsFrom(prefix: string, keyList: readonly string[]): number[] {
   return keyList
@@ -98,7 +107,7 @@ export class ComponentLibrary {
     }
     const revision = (latest ?? 0) + 1;
     const key = keys.source(parsed.componentId, revision);
-    if (await this.#storage.readDocument(NS, key) !== undefined) throw new IntegrityError(`Revision ${revision} already exists.`);
+    if (await this.#storage.readDocument(NS, key) !== undefined) throw new IntegrityError(`Revision ${revision} already exists.`, 'exists');
     const source = await createSourceRevision(parsed, revision, this.#digest);
     await this.#storage.writeDocument(NS, key, source);
     return source;
@@ -195,7 +204,7 @@ export class ComponentLibrary {
     const revision = ((await this.motionRevisions(probe.id)).at(-1) ?? 0) + 1;
     const study = parseMotionStudy({ ...probe, revision });
     const key = keys.motion(study.id, revision);
-    if (await this.#storage.readDocument(NS, key) !== undefined) throw new IntegrityError(`Motion revision ${revision} already exists.`);
+    if (await this.#storage.readDocument(NS, key) !== undefined) throw new IntegrityError(`Motion revision ${revision} already exists.`, 'exists');
     await this.#storage.writeDocument(NS, key, study);
     return study;
   }

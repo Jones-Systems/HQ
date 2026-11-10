@@ -7,7 +7,7 @@ import type { WikiService } from '../../../modules/wiki/contract/src/index.ts';
 
 type Assert<T extends true> = T;
 export type WikiCompatibility = [Assert<WikiServiceTransport extends WikiHostPort ? true : false>, Assert<WikiService extends WikiServiceTransport ? true : false>, Assert<ModulePort extends WikiModulePort ? true : false>];
-const wiki = createWikiDomain({ getPort: () => window.hqServices?.wiki ?? null });
+const wiki = createWikiDomain({ getPort: () => window.hqServices?.wiki ?? null, openSettings: () => window.dispatchEvent(new CustomEvent('hq-open-settings', { detail: { source: 'wiki' } })) });
 
 import { createDesignComposition } from '../../../modules/design/app/index.ts';
 import { desktopPreview, createJonesConnection, selectDesktopProject } from './interactive-runtime';

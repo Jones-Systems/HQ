@@ -29,8 +29,11 @@ node --test --test-concurrency=1 'tests/*.test.mjs'
 ```
 
 The [service README](planner/README.md#tests) describes their synthetic fixtures
-and cleanup. These local commands do not claim root CI adoption or installed
-service verification.
+and cleanup. These local commands do not claim installed service verification.
+Pull requests run them in the `HQ CLI and Planner` workflow
+(`.github/workflows/cli-planner.yml`): `CLI Node tests and synthetic Planner E2E`
+and `Planner contract, Python and Node tests`. The root workspace has its own
+`HQ foundation` workflow. Record local check results with changes here too.
 
 Run the HQ Social checks the same way, from `services/social`:
 
