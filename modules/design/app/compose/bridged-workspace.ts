@@ -1,4 +1,5 @@
 /** Durable section composition. Construction and navigation never seed workspace documents. */
+import type { ProjectContext } from '@hq/contracts';
 import type { WorkspaceDocuments, WorkspaceRecords } from '../storage/index.ts';
 import { createProjectsStorage, createComponentsStorage, createFlowsStorage, createCompareStorage, createAnnotationsStorage, createCanvasStorage, DEVICE_STORAGE_LABEL } from '../storage/index.ts';
 import { ProjectContentRepository } from '../../projects/src/repository.ts';
