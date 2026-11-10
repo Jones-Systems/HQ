@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type MouseEvent } from 'react';
-import { createReferencePort, type ReferenceNotice } from './references';
+import { WORKSPACE_DOMAINS, WORKSPACE_SCOPE, createReferencePort, type ReferenceNotice } from './references';
 import type { ReferenceProvider, ReturnContext } from '@hq/contracts/references';
 import type { ShellState } from './state';
 import { ErrorBoundary, InlineNotice, PAGE_TRANSITION_CLASS, Splitter, ToastViewport, navigateWithTransition, toast } from '@hq/ui';
@@ -18,7 +18,9 @@ import { useMediaQuery } from './shell/media';
 import { RECENT_PROJECTS_KEY, readRecentProjects, rememberProject, type RecentProject } from './shell/recent-projects';
 import './shell/shell.css';
 
-const CONTEXT = parseProjectContext({ id: 'hq-local', name: 'Local projects' })!;
+const CONTEXT = parseProjectContext({ id: WORKSPACE_SCOPE, name: 'Local projects' })!;
+/** Social and Work are workspace-scoped: they keep this context, and their references, across Design project switches. */
+const WORKSPACE_CONTEXT = CONTEXT;
 const BROWSER_PORT: DesktopPort = Object.freeze({ platform: 'browser', versions: Object.freeze({ electron: null }) });
 const unavailableStorage: StoragePort = { getItem: () => null, setItem: () => { throw new Error('Storage unavailable'); } };
 function storagePort(): StoragePort { try { return window.localStorage; } catch { return unavailableStorage; } }
@@ -157,7 +159,7 @@ function WorkspaceApp({ modules, presentation, referenceProviders }: Presentatio
         onDismiss={() => setReferenceNotice(null)}>{referenceNotice.message}</InlineNotice>}
       <main hidden={settingsOpen} className={fill ? `${PAGE_TRANSITION_CLASS} is-fill` : PAGE_TRANSITION_CLASS} key={`${projectMountId}:${state.domain}`}>
         <ErrorBoundary resetKeys={[projectMountId, state.domain, state.destinations[state.domain]]} title={`${DOMAIN_LABELS[state.domain]} stopped working`}>
-        <Module context={context} destination={state.destinations[state.domain]} appearance={theme} desktop={window.hqDesktop ?? BROWSER_PORT}
+        <Module context={(WORKSPACE_DOMAINS as readonly string[]).includes(state.domain) ? WORKSPACE_CONTEXT : context} destination={state.destinations[state.domain]} appearance={theme} desktop={window.hqDesktop ?? BROWSER_PORT}
           references={references} {...(returnFrame ? { returnContext: returnFrame.context } : {})}
           navigate={destination => { references.cancelOpen(); setState(previous => navigate(previous, state.domain, destination)); }} />
         </ErrorBoundary>
