@@ -12,13 +12,39 @@ export type WireDocumentAligned = Assert<Equal<WireDocument, ErasedDocument>>;
 export type WireJsonAligned = Assert<Equal<JsonValue, Parameters<WorkspaceDocuments['putDocument']>[1]>>;
 
 export type DesignBridgeErrorKind = 'read-only' | 'invalid' | 'unavailable' | 'unknown';
+/** Closed machine reasons the desktop host may attach to a refusal; anything else is dropped. */
+export const DESIGN_BRIDGE_REASONS = ['disabled'] as const;
+export type DesignBridgeReason = (typeof DESIGN_BRIDGE_REASONS)[number];
 export class DesignBridgeError extends Error {
   readonly kind: DesignBridgeErrorKind;
-  constructor(kind: DesignBridgeErrorKind) {
-    super(`Design storage bridge: ${kind}`);
+  /** `disabled`: the host refused before any storage access because the capability is off in this build. */
+  readonly reason?: DesignBridgeReason;
+  constructor(kind: DesignBridgeErrorKind, reason?: DesignBridgeReason) {
+    super(reason === undefined ? `Design storage bridge: ${kind}` : `Design storage bridge: ${kind} (${reason})`);
     this.name = 'DesignBridgeError';
     this.kind = kind;
+    if (reason !== undefined) this.reason = reason;
   }
+}
+
+/**
+ * Validates one host result envelope. A refusal keeps its closed reason; a malformed envelope is
+ * `uncertain` (`unknown` for writes, `unavailable` for reads), never a success.
+ */
+export function bridgeResultValue(result: unknown, uncertain: 'unknown' | 'unavailable'): unknown {
+  if (!plain(result)) throw new DesignBridgeError(uncertain);
+  if (result.ok === true && exact(result, ['ok', 'value'])) return result.value;
+  if (result.ok === false && (exact(result, ['ok', 'kind']) || exact(result, ['ok', 'kind', 'reason']))) {
+    if (Object.hasOwn(result, 'reason')) {
+      // A reason only qualifies an `unavailable` refusal. `disabled` is reported before the host touches storage,
+      // so it is a definite no-effect. Any other pairing could hide a possible write, so it stays uncertain.
+      if (result.kind !== 'unavailable' || !(DESIGN_BRIDGE_REASONS as readonly unknown[]).includes(result.reason)) throw new DesignBridgeError(uncertain);
+      throw new DesignBridgeError('unavailable', result.reason as DesignBridgeReason);
+    }
+    if (result.kind === 'conflict') throw new DesignBridgeConflictError();
+    if (result.kind === 'read-only' || result.kind === 'invalid' || result.kind === 'unavailable' || result.kind === 'unknown') throw new DesignBridgeError(result.kind);
+  }
+  throw new DesignBridgeError(uncertain);
 }
 
 /** Matches F1's isStoreErrorCode without importing the Node store's error class. */
@@ -64,13 +90,7 @@ export function createBridgeWorkspaceDocuments(transport: DesignServiceTransport
     let result: unknown;
     try { result = await transport.call(route, params); } catch { throw new DesignBridgeError(uncertain); }
     try {
-      if (!plain(result)) throw new DesignBridgeError(uncertain);
-      if (result.ok === true && exact(result, ['ok', 'value'])) return result.value;
-      if (result.ok === false && exact(result, ['ok', 'kind'])) {
-        if (result.kind === 'conflict') throw new DesignBridgeConflictError();
-        if (result.kind === 'read-only' || result.kind === 'invalid' || result.kind === 'unavailable' || result.kind === 'unknown') throw new DesignBridgeError(result.kind);
-      }
-      throw new DesignBridgeError(uncertain);
+      return bridgeResultValue(result, uncertain);
     } catch (error) {
       if (error instanceof DesignBridgeError || error instanceof DesignBridgeConflictError) throw error;
       throw new DesignBridgeError(uncertain);

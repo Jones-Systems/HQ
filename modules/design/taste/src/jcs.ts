@@ -6,7 +6,9 @@
  * functions, symbols, bigint and non-plain objects.
  */
 
-export class CanonicalizationError extends Error {}
+export class CanonicalizationError extends Error {
+  override readonly name = 'CanonicalizationError';
+}
 
 function isPlainObject(value: object): boolean {
   const prototype = Object.getPrototypeOf(value);
