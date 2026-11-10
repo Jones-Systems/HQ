@@ -55,13 +55,17 @@ export function closedArray(value: unknown, maxLength: number): unknown[] {
 }
 
 /** Closed JSON: no getters, sparse arrays, hidden fields, coercion or lossy numbers. */
-export function canonicalJson(value: unknown): string {
+function encodeCanonical(value: unknown, numberMode: 'integer' | 'finite'): string {
   const ancestors = new Set<object>();
   function encode(item: unknown, depth: number): string {
     if (depth > 128) throw new ContractError('Canonical JSON nesting exceeds 128');
     if (item === null || typeof item === 'boolean' || typeof item === 'string') return JSON.stringify(item);
     if (typeof item === 'number') {
-      if (!Number.isSafeInteger(item)) throw new ContractError('Only safe integers are supported');
+      if (numberMode === 'integer') {
+        if (!Number.isSafeInteger(item)) throw new ContractError('Only safe integers are supported');
+      } else if (!Number.isFinite(item) || Object.is(item, -0)) {
+        throw new ContractError('Only finite numbers other than negative zero are supported');
+      }
       return JSON.stringify(item);
     }
     if (typeof item !== 'object') throw new ContractError('Unsupported JSON value');
@@ -87,6 +91,18 @@ export function canonicalJson(value: unknown): string {
     }
   }
   return encode(value, 0);
+}
+
+export function canonicalJson(value: unknown): string {
+  return encodeCanonical(value, 'integer');
+}
+
+export function canonicalFiniteJson(value: unknown): string {
+  return encodeCanonical(value, 'finite');
+}
+
+export function canonicalFiniteDigest(value: unknown): Digest {
+  return sha256Bytes(canonicalFiniteJson(value));
 }
 
 export function canonicalBytes(value: unknown): Uint8Array {
