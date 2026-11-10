@@ -6,7 +6,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
-  // Keep caches in the root install, not inside this section.
-  cacheDir: fileURLToPath(new URL('../../../node_modules/.vite/design-ui', import.meta.url)),
+  // Keep caches isolated in this worktree, separately from other runners.
+  cacheDir: fileURLToPath(new URL('../../../.t3/cache/design-ui', import.meta.url)),
   test: { include: ['test/vite/**/*.test.ts'], environment: 'node' },
 });
