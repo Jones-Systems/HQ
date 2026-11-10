@@ -41,6 +41,16 @@ afterEach(async () => {
   Reflect.deleteProperty(window, 'hqServices'); localStorage.clear();
 });
 
+/** The runtime opens at once and indexes in the background (#207), so tests read only after the sources are indexed. */
+async function indexed(bridge: { admin(route: unknown, params: unknown): Promise<unknown> }) {
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const result = await bridge.admin('status', {}) as { ok: boolean; value?: { sources: { state: string }[] } };
+    if (result.ok && !result.value!.sources.some(source => source.state === 'indexing')) return;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  throw new Error('Wiki indexing did not settle');
+}
+
 /** The real Wiki runtime over the committed synthetic corpus, behind the same seven-method host boundary as the app. */
 async function wikiBridge() {
   await mkdir(resolve('.t3/wiki-mount'), { recursive: true });
@@ -51,6 +61,7 @@ async function wikiBridge() {
   await writeFile(join(home, 'wiki/config.json'), JSON.stringify({ version: 1, sources: corpus.profiles }));
   const bridge = createWikiBridge(() => openWikiRuntime(home));
   closeWiki = () => bridge.close();
+  await indexed(bridge);
   const handler = wikiIpcHandler((authorized: boolean) => authorized, bridge);
   const calls: string[] = [];
   const wiki = Object.freeze(Object.fromEntries(WIKI_METHODS.map(method => [method, async (...args: unknown[]) => {
