@@ -83,8 +83,9 @@ report says pass. A late close/unlock error may be present only in that closure 
 stdout. Retained failed/cancelled/incomplete runs stay labelled, never swept here.
 
 This bounds only writes owned by this runner. CDP in-memory responses, stdout,
-fixture/internal writes, scratch occupancy after admission, raw traces, preview and
-other producers remain uncovered. It is no global quota, memory bound, sandbox,
+fixture/internal writes, scratch occupancy after admission, raw traces and other
+producers remain uncovered. The separately bounded preview entry points are
+described below. It is no global quota, memory bound, sandbox,
 full Stage B coverage or native-acceptance claim. `evidence-runner.test.mjs` exercises
 the actual adapter with small synthetic artifacts and fake cleanup/oracle ports;
 it does not start Electron or a native journey. Reports include Git
@@ -93,6 +94,48 @@ compiled-build inventory. They do not certify
 that an independently produced build corresponds to source: build immediately
 before acceptance. Evidence is local and may contain paths; inspect and sanitize
 before publishing. Tests intentionally use synthetic/default app content only.
+
+## Preview evidence routing and storage holds
+
+`preview/run.mjs` and `preview/packaged.mjs` consume the qualified root writer
+through the thin streaming adapter `preview/evidence.mjs`. Their existing explicit
+absolute `--evidence` path stays outside the repository. Both receiving filesystems
+and path custody are checked before creating any evidence or runtime/profile parent;
+evidence and scratch must be disjoint. The native runner's disposable runtime
+parent is now worktree-local `.t3/preview-acceptance-scratch/`; the packaged runner
+keeps its explicit `--profile-parent`. The unchanged runtime owns and removes only
+its unique child, never either parent or retained evidence.
+
+A unique retained run holds a standalone matching parent lock and a real
+preallocated closure before accepting artifacts. Preview reports/screenshots and
+immediate event, row and stderr appends use the same provisional byte, artifact,
+pending-write, retention and capacity limits stated above. There is no adapter
+promise queue that postpones admission. Refusal latches failure and stops only the
+affected already-owned producer through the runtime's stop port. Accepted writes
+drain; window restoration, runtime close, exact root/process-group absence checks
+and existing source/hash readbacks still run. Original failures or observed
+cancellation remain primary; expected child termination during teardown is not a
+new producer failure. Otherwise successful runs with refused required evidence are
+incomplete/nonzero. Immutable before/after-cleanup reports and the padded closure
+retain diagnostics; a late closure failure may be visible only in closure/stdout.
+No historical overwrite, eviction, deletion, stale-lock recovery or launcher nesting
+is supported.
+
+Q-PV4's existing held-capture containment row is explicitly **storage-held and
+unmeasured** before `contentTracing.startRecording` could start an unbounded raw
+file spill. The result stays incomplete/nonzero. Its containment assertions and
+helper are unchanged; this is an execution refusal, never a passed, waived,
+retired or weakened criterion. Full trace containment remains unfinished until a
+separately allocated actually bounded producer/sink is qualified. There is no
+start-then-truncate, compressed-copy substitution or alternative oracle.
+
+CDP memory responses, stdout, fixture-internal and TLS scratch writes, scratch
+occupancy after admission and other producers remain uncovered. These cooperating
+writer limits are not a global disk/memory quota, sandbox, measured peak, full
+Stage B coverage or native/package/live acceptance. `preview/evidence.test.mjs`
+uses tiny synthetic fixtures and fake producer/cleanup ports; it starts no
+Electron, CDP, native process or raw trace. Evidence bundles still require private
+handling and sanitization before publication.
 
 ## macOS (Darwin)
 
