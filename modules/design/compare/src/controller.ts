@@ -62,6 +62,11 @@ export interface CompareController {
   removePanel(id: PanelId): void;
   movePanel(id: PanelId, toIndex: number): void;
   save(): Promise<boolean>;
+  /**
+   * Re-reads the version lists the pickers already show, after the catalog's project gained versions (a live
+   * capture, an import). Pinned panels never change: versions are immutable. A failed read keeps the old list.
+   */
+  refreshVersions(): Promise<void>;
   dispose(): void;
 }
 
@@ -304,6 +309,19 @@ export function createCompareController(initial: ComparisonState, deps: CompareD
         return true;
       });
       return saving;
+    },
+    async refreshVersions() {
+      if (disposed) return;
+      await Promise.all([...snapshot.versions.keys()].map(async (viewId) => {
+        try {
+          const list = await deps.catalog.listVersions(viewId);
+          const known = snapshot.versions.get(viewId);
+          if (disposed || (known !== undefined && known.length === list.length && known.every((item, index) => item.versionId === list[index]?.versionId))) return;
+          const versions = new Map(snapshot.versions);
+          versions.set(viewId, list);
+          emit({ ...snapshot, versions });
+        } catch { /* The earlier list stays; a failed read must not empty the picker. */ }
+      }));
     },
     dispose() {
       if (disposed) return;

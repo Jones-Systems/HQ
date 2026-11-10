@@ -31,6 +31,52 @@ it('unsubscribes idempotently and isolates a failing listener', () => {
   assert.equal(events.revision('a'), 2);
 });
 
+it('tells every-project listeners which project changed, isolates their failures, and unsubscribes idempotently', () => {
+  const events = createProjectContentEvents();
+  const seen: string[] = [];
+  events.subscribeAll(() => { throw new Error('reader failed'); });
+  const stop = events.subscribeAll((projectId) => seen.push(projectId));
+  events.subscribe('a', () => seen.push('only-a'));
+  events.notify('a');
+  events.notify('b');
+  assert.deepEqual(seen, ['only-a', 'a', 'b']);
+  stop();
+  stop();
+  events.notify('b');
+  assert.deepEqual(seen, ['only-a', 'a', 'b']);
+  assert.equal(events.revision('b'), 2);
+});
+
+it('gives every-project listeners the same rules as project listeners', async () => {
+  const events = createProjectContentEvents();
+  let calls = 0;
+  const listener = () => { calls += 1; };
+  const first = events.subscribeAll(listener);
+  events.subscribeAll(listener);
+  events.notify('a');
+  assert.equal(calls, 2, 'each subscription is its own, even for the same function');
+  first();
+  events.notify('a');
+  assert.equal(calls, 3);
+  const seen: string[] = [];
+  let stopSecond = () => {};
+  events.subscribeAll(() => { seen.push('first'); stopSecond(); });
+  stopSecond = events.subscribeAll(() => seen.push('second'));
+  events.notify('b');
+  assert.deepEqual(seen, ['first'], 'a listener removed during the notification is not called afterwards');
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    events.subscribeAll(async () => { throw new Error('async reader failed'); });
+    events.notify('c');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+});
+
 it('keeps each subscription separate, even for the same function', () => {
   const events = createProjectContentEvents();
   let calls = 0;

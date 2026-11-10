@@ -48,20 +48,31 @@ const disabled = () => ({ ok: false as const, kind: 'unavailable' as const, reas
 const digest = (v: unknown): v is BlobDigest => typeof v === 'string' && /^sha256:[0-9a-f]{64}$/.test(v);
 const eventType = (stream: unknown) => typeof stream === 'string' && allowedDocumentKey(stream) && stream.startsWith('design/requests/') ? 'requests.event-bytes' : stream === 'design/imports' ? 'imports.event' : null;
 export const DESIGN_VALUE_CAP = 2_000_000;
-export function allowedDocumentKey(value: unknown, prefix = false): value is string {
+/** Imports documents. `doc.get` and `doc.list` read them; only the atomic `import.commit` writes them, never `doc.put`. */
+export const IMPORT_DOCUMENT_ROOTS = ['design/imports/records/', 'design/imports/versions/', 'design/imports/manifests/', 'design/imports/conflicts/', 'design/imports/undo/'] as const;
+const IMPORTS_LIST_ROOT = 'design/imports/';
+function wellFormedKey(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 256 && value.trim() === value
     && !/[\u0000-\u001f\u007f-\u009f]/u.test(value)
     && !/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(value)
-    && !value.split('/').includes('..')
-    && DOCUMENT_ROOTS.some(root => value.startsWith(root) && (prefix || value.length > root.length));
+    && !value.split('/').includes('..');
 }
+/** Keys `doc.put` and ordinary commits may write. Imports documents are deliberately not here. */
+export function allowedDocumentKey(value: unknown, prefix = false): value is string {
+  return wellFormedKey(value) && DOCUMENT_ROOTS.some(root => value.startsWith(root) && (prefix || value.length > root.length));
+}
+export function importsDocumentKey(value: unknown, prefix = false): value is string {
+  return wellFormedKey(value) && ((prefix && value === IMPORTS_LIST_ROOT)
+    || IMPORT_DOCUMENT_ROOTS.some(root => value.startsWith(root) && (prefix || value.length > root.length)));
+}
+const readableDocumentKey = (value: unknown, prefix = false): value is string => allowedDocumentKey(value, prefix) || importsDocumentKey(value, prefix);
 function validImportOps(value: unknown): value is readonly ImportWriteOp[] {
   if (!Array.isArray(value) || !value.length || value.length > 10_000) return false;
   let bytes = 0;
   for (const op of value) {
     if (!record(op) || op.namespace !== 'workspace') return false;
     if (op.op === 'put-document') {
-      if (!keys(op, ['op', 'namespace', 'key', 'value', 'expectedRevision']) || !allowedDocumentKey(op.key) || !jsonValue(op.value)
+      if (!keys(op, ['op', 'namespace', 'key', 'value', 'expectedRevision']) || !(allowedDocumentKey(op.key) || importsDocumentKey(op.key)) || !jsonValue(op.value)
         || !(op.expectedRevision === null || (typeof op.expectedRevision === 'string' && /^[1-9][0-9]*$/.test(op.expectedRevision) && Number.isSafeInteger(Number(op.expectedRevision))))) return false;
       bytes += Buffer.byteLength(JSON.stringify(op));
     } else if (op.op === 'append-event') {
@@ -136,9 +147,10 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
       } else if (route === 'cache.get') {
         if (!keys(params, ['key']) || params.key !== 'design.discovery.catalog') return { ok: false, kind: 'invalid' };
       } else if (route === 'doc.list') {
-        if (!keys(params, ['prefix']) || !allowedDocumentKey(params.prefix, true)) return { ok: false, kind: 'invalid' };
+        if (!keys(params, ['prefix']) || !readableDocumentKey(params.prefix, true)) return { ok: false, kind: 'invalid' };
       } else if (route === 'doc.get' || route === 'doc.put') {
-        if (!keys(params, route === 'doc.put' ? ['key', 'value'] : ['key'], route === 'doc.put' ? ['expectedRevision'] : []) || !(params.key === TASTE_JOURNAL_KEY || allowedDocumentKey(params.key))) return { ok: false, kind: 'invalid' };
+        if (!keys(params, route === 'doc.put' ? ['key', 'value'] : ['key'], route === 'doc.put' ? ['expectedRevision'] : [])
+          || !(params.key === TASTE_JOURNAL_KEY || (route === 'doc.get' ? readableDocumentKey(params.key) : allowedDocumentKey(params.key)))) return { ok: false, kind: 'invalid' };
         if (route === 'doc.put' && (!(!Object.hasOwn(params, 'expectedRevision') || params.expectedRevision === null || (Number.isSafeInteger(params.expectedRevision) && (params.expectedRevision as number) >= 0)) || !jsonValue(params.value) || Buffer.byteLength(JSON.stringify(params.value)) > DESIGN_VALUE_CAP)) return { ok: false, kind: 'invalid' };
       } else return { ok: false, kind: 'invalid' };
     } catch { return { ok: false, kind: 'invalid' }; }
