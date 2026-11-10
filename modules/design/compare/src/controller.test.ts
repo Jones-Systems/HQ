@@ -47,6 +47,42 @@ describe('compare controller with labelled fakes', () => {
     expect(snap.versions.get(runB.version!.viewId)!.map((item) => item.versionId)).toEqual(['home-v1', 'home-v2', 'home-v3']);
   });
 
+  it('refreshVersions shows versions added later without touching pinned panels, layout state or unchanged lists', async () => {
+    const { controller, catalog, v } = setup();
+    const first = await settle(controller);
+    const home = first.runtime.get(b)!.version!.viewId;
+    expect(first.versions.get(home)!.map((item) => item.versionId)).toEqual(['home-v1', 'home-v2', 'home-v3']);
+    controller.resize(a, 700);
+    const seen: string[][] = [];
+    const stop = controller.subscribe(() => seen.push([...controller.getSnapshot().versions.get(home)!.map((item) => item.versionId)]));
+    await controller.refreshVersions();
+    expect(seen).toEqual([]); // nothing changed, nothing published
+    catalog.addVersion({ ...v('home-v3'), versionId: versionId('home-v4'), label: 'Home v4', captures: [] });
+    await controller.refreshVersions();
+    stop();
+    const after = controller.getSnapshot();
+    expect(after.versions.get(home)!.map((item) => item.versionId)).toEqual(['home-v1', 'home-v2', 'home-v3', 'home-v4']);
+    expect(after.runtime.get(b)!.version!.versionId).toBe('home-v2');
+    expect(after.comparison.panels.map((panel) => panel.width)).toEqual([700, 420, 300]);
+    expect(after.dirty).toBe(true); // an unsaved layout survives
+  });
+
+  it('refreshVersions keeps the earlier list when the catalog fails, and does nothing once disposed', async () => {
+    const { controller, catalog } = setup();
+    const first = await settle(controller);
+    const home = first.runtime.get(b)!.version!.viewId;
+    const read = catalog.listVersions.bind(catalog);
+    catalog.listVersions = async () => { throw new Error('catalog unavailable'); };
+    await controller.refreshVersions();
+    expect(controller.getSnapshot().versions.get(home)).toBe(first.versions.get(home));
+    catalog.listVersions = read;
+    controller.dispose();
+    const calls = catalog.calls.listVersions;
+    await controller.refreshVersions();
+    expect(catalog.calls.listVersions).toBe(calls);
+    expect(controller.getSnapshot().versions.get(home)).toBe(first.versions.get(home));
+  });
+
   it('resize through the controller changes only that panel width', async () => {
     const { controller } = setup();
     await settle(controller);
