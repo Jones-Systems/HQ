@@ -6,6 +6,10 @@ export * from './port';
 export * from './validation';
 export * from './planning';
 export * from './store';
+export {
+  DURABLE_SCHEMA, durableDrafts, registerWorkDurability, resetWorkDurability,
+  type DurableDrafts, type DurableStatus, type DurableUnconfirmed, type WorkPersistence,
+} from './durability';
 export { useWorkState, VERSION_POLL_MS } from './hook';
 export {
   createFixturePlanner, MAX_REMEMBERED_REQUESTS, POSITION_STEP, ReplayIndeterminateError, withDerived,
