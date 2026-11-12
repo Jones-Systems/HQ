@@ -1,0 +1,23 @@
+/* Work and Social service wrapper (domains.tsx): the status strip, the connecting skeleton and the unavailable state. */
+.service-domain { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
+.service-domain > :last-child:not(.service-status) { flex: 1; min-height: 0; }
+
+/* Slim strip above the domain: which service, what is known about it, one small action. */
+.service-status {
+  display: flex; align-items: center; gap: var(--hq-space-md); flex-shrink: 0; min-width: 0;
+  padding: var(--hq-space-2xs) var(--hq-space-lg); border-bottom: 1px solid var(--hq-border);
+  background: var(--hq-nav); color: var(--hq-text-muted); font: var(--hq-type-small);
+}
+.service-status-name { color: var(--hq-text); font-weight: var(--hq-font-weight-medium); }
+
+/* Connecting: a skeleton shaped like the domain. It fades in late so a fast check never flashes. */
+.service-checking { display: flex; flex-direction: column; gap: var(--hq-space-lg); padding: var(--hq-space-lg); overflow: hidden; }
+.service-checking-status { margin: 0; min-height: 16px; color: var(--hq-text-muted); font: var(--hq-type-small); }
+.service-skeleton { display: flex; flex-direction: column; gap: var(--hq-space-lg); min-height: 0; }
+.service-skeleton-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--hq-space-md); }
+.service-skeleton-column { display: flex; flex-direction: column; gap: var(--hq-space-sm); }
+.service-skeleton-rows { display: flex; flex-direction: column; gap: var(--hq-space-sm); }
+
+/* Unavailable: a calm, centred explanation instead of a blank workspace. */
+.service-empty { display: grid; place-items: center; padding: var(--hq-space-lg); overflow: auto; }
+.service-empty .hq-state { justify-items: center; align-content: center; text-align: center; }

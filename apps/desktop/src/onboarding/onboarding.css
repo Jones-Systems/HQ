@@ -1,0 +1,103 @@
+/* Getting started: a calm, non-modal card anchored at the bottom-left of the workspace, above the footer and clear of
+   the rail. Tokens only. Durations, distances and scales come from the motion tokens, so every transition and
+   animation here is instant under prefers-reduced-motion and <html data-hq-motion="reduce">. */
+
+/* The anchor is a zero-height row between the module and the footer: the card and the pill hang above its edge, so
+   they never cover the footer or the rail and never take part in layout. The toast stack owns the bottom-right. */
+.gs-anchor { position: relative; flex: 0 0 0; width: 100%; height: 0; z-index: var(--hq-z-sticky); }
+.gs-card, .gs-pill-slot { position: absolute; inset-inline-start: var(--gs-inset-inline, var(--hq-space-md)); inset-block-end: var(--gs-inset-block, var(--hq-space-md)); }
+
+.gs-card {
+  width: min(340px, calc(100% - 2 * var(--gs-inset-inline, var(--hq-space-md)))); max-height: var(--gs-max, calc(100dvh - 96px));
+  border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg);
+  background: var(--hq-surface-overlay); color: var(--hq-text); box-shadow: var(--hq-shadow-overlay); font: var(--hq-type-body);
+}
+.gs-inner { display: flex; flex-direction: column; max-height: calc(var(--gs-max, calc(100dvh - 96px)) - 2px); min-height: 0; }
+
+.gs-header { display: flex; align-items: flex-start; gap: var(--hq-space-sm); padding: var(--hq-space-md) var(--hq-space-sm) 0 var(--hq-space-lg); flex: none; }
+.gs-heading { flex: 1; min-width: 0; }
+.gs-title { margin: 0; font: var(--hq-type-title); letter-spacing: var(--hq-type-title-tracking); }
+.gs-title:focus { outline: none; }
+.gs-lede { margin: var(--hq-space-3xs) 0 0; color: var(--hq-text-muted); font: var(--hq-type-small); }
+
+.gs-progress { display: flex; align-items: center; gap: var(--hq-space-sm); padding: var(--hq-space-sm) var(--hq-space-lg) 0; flex: none; }
+.gs-count { color: var(--hq-text-muted); font: var(--hq-type-meta); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gs-bar { flex: 1; height: 4px; border-radius: var(--hq-radius-pill); background: var(--hq-border); overflow: hidden; }
+.gs-bar-fill { display: block; height: 100%; width: calc(var(--gs-progress, 0) * 1%); border-radius: inherit; background: var(--hq-accent); transition: width var(--hq-duration-slow) var(--hq-ease-standard); }
+
+.gs-body-slot { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+.gs-body { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--hq-space-lg) var(--hq-space-xs); }
+.gs-notice { padding-top: var(--hq-space-sm); }
+.gs-subhead { margin: var(--hq-space-md) 0 var(--hq-space-2xs); color: var(--hq-text-muted); font: var(--hq-type-eyebrow); letter-spacing: var(--hq-type-eyebrow-tracking); text-transform: uppercase; }
+.gs-domains, .gs-checklist { margin: 0; padding: 0; list-style: none; }
+
+/* Domains: icon, name, live status, one-line purpose. The status drops under the name when it is too long to sit beside it. */
+.gs-domain { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 0 10px; padding: 5px 0; }
+.gs-domain-icon { width: 18px; height: 18px; margin-top: 1px; color: var(--hq-text-muted); }
+.gs-domain-text { display: grid; gap: var(--hq-space-3xs); min-width: 0; }
+.gs-domain-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--hq-space-sm); }
+.gs-domain-head > strong { font: var(--hq-type-label); font-weight: var(--hq-font-weight-semibold); }
+.gs-purpose { color: var(--hq-text-muted); font: var(--hq-type-small); }
+.gs-status .hq-status-label { font-weight: var(--hq-font-weight-regular); }
+
+/* Checklist: the whole row is the button's hit area; the check sits in the first column. */
+.gs-item {
+  position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr); column-gap: 10px; align-items: start;
+  margin-inline: calc(-1 * var(--hq-space-xs)); padding: 5px var(--hq-space-xs); border-radius: var(--hq-radius-md);
+  transition: background-color var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.gs-item:hover { background: var(--hq-surface-hover); }
+.gs-item:active { background: var(--hq-surface-pressed); }
+.gs-check { grid-row: 1 / span 2; display: grid; place-items: center; width: 18px; height: 18px; margin-top: 1px; color: var(--hq-border-control); }
+.gs-check svg { width: 16px; height: 16px; stroke: currentColor; }
+.gs-check-ring { fill: transparent; transition: fill var(--hq-duration-base) var(--hq-ease-standard), stroke var(--hq-duration-base) var(--hq-ease-standard); }
+.gs-check-mark { stroke-dasharray: 1; stroke-dashoffset: 0; visibility: hidden; }
+.gs-check[data-done] { color: var(--hq-success); }
+.gs-check[data-done] .gs-check-ring { fill: var(--hq-success); }
+.gs-check[data-done] .gs-check-mark { stroke: var(--hq-surface-overlay); visibility: visible; }
+.gs-item-button {
+  grid-column: 2; justify-self: start; min-height: 0; min-width: 0; padding: 0; border: 0; border-radius: 0; background: transparent;
+  color: var(--hq-text); font: var(--hq-type-body); font-weight: var(--hq-font-weight-medium); text-align: start; cursor: pointer;
+}
+.gs-item-button::after { content: ''; position: absolute; inset: 0; border-radius: var(--hq-radius-md); }
+.gs-item-button:focus-visible { outline: none; }
+.gs-item-button:focus-visible::after { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: -2px; }
+.gs-item[data-done] .gs-item-button { color: var(--hq-text-muted); }
+.gs-item-hint { grid-column: 2; color: var(--hq-text-subtle); font: var(--hq-type-small); }
+
+/* A step that just completed draws its check, pops once and washes with the accent (hq-flash, from the motion kit). */
+@keyframes gs-check-draw { from { stroke-dashoffset: 1; } }
+@keyframes gs-check-pop { from { transform: scale(var(--hq-motion-scale-enter)); } }
+.gs-item.is-fresh .gs-check-mark { animation: gs-check-draw var(--hq-duration-slow) var(--hq-ease-standard) both; }
+.gs-item.is-fresh .gs-check svg { animation: gs-check-pop var(--hq-duration-slow) var(--hq-ease-spring) both; }
+
+.gs-allset { display: flex; align-items: center; gap: var(--hq-space-md); padding: var(--hq-space-lg); }
+.gs-allset .gs-check, .gs-allset .gs-check svg { width: 28px; height: 28px; margin: 0; }
+.gs-allset strong { display: block; font: var(--hq-type-heading); }
+.gs-allset span { color: var(--hq-text-muted); font: var(--hq-type-small); }
+.gs-allset .gs-check-mark { animation: gs-check-draw var(--hq-duration-slow) var(--hq-ease-standard) both; }
+
+.gs-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--hq-space-sm); flex: none; margin-top: var(--hq-space-xs); padding: var(--hq-space-xs) var(--hq-space-sm) var(--hq-space-sm) var(--hq-space-lg); border-top: 1px solid var(--hq-border); }
+.gs-reopen { min-width: 0; color: var(--hq-text-subtle); font: var(--hq-type-meta); }
+
+/* The pill: the same panel at rest, one control high. */
+.gs-pill {
+  display: inline-flex; align-items: center; gap: var(--hq-space-sm); height: var(--hq-size-control-md); min-height: 0; padding: 0 var(--hq-space-md) 0 10px;
+  border: 1px solid var(--hq-border); border-radius: var(--hq-radius-pill); background: var(--hq-surface-overlay); color: var(--hq-text);
+  box-shadow: var(--hq-shadow-overlay); font: var(--hq-type-label); white-space: nowrap; cursor: pointer;
+  transition: background-color var(--hq-duration-fast) var(--hq-ease-standard), transform var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.gs-pill:hover { background: var(--hq-control-hover); }
+.gs-pill:active { background: var(--hq-control-pressed); transform: scale(var(--hq-motion-scale-press)); transition-duration: var(--hq-duration-instant); }
+.gs-ring { width: 16px; height: 16px; flex: none; }
+.gs-ring-track { stroke: var(--hq-border-strong); }
+.gs-ring-value { stroke: var(--hq-accent); transition: stroke-dasharray var(--hq-duration-slow) var(--hq-ease-standard); }
+.gs-pill.is-complete .gs-ring-value { stroke: var(--hq-success); }
+
+@media (forced-colors: active) {
+  .gs-card, .gs-pill { border-color: CanvasText; }
+  .gs-bar-fill { background: Highlight; }
+  .gs-check-ring { stroke: CanvasText; }
+  .gs-check[data-done] .gs-check-ring { fill: Highlight; stroke: Highlight; }
+  .gs-check[data-done] .gs-check-mark { stroke: HighlightText; }
+}

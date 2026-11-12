@@ -5,7 +5,7 @@ import { Button, IconButton } from '@hq/ui';
 import type { Appearance } from '@hq/contracts';
 import type { ServiceConfigTransport, ServiceDomain } from '@hq/contracts/services';
 import type { WikiAdminStatus, WikiAdminTransport, WikiSelection, WikiAdminNamespace } from '@hq/contracts/wiki-admin';
-import { SOURCE_NAMES, type DataSource } from './services/data-source-status';
+import { SOURCE_NAMES, WIKI_STATE_LABELS, type DataSource } from './services/data-source-status';
 import { useDataSources } from './settings/DataSources';
 import { PaletteSettings } from './appearance/PaletteSettings';
 import type { PaletteController } from './appearance/usePalette';
@@ -46,7 +46,6 @@ function DomainSettings({ domain, config, selected }: { domain: ServiceDomain; c
     </div>}
   </section>;
 }
-const labels = { ready: 'Index ready', stale: 'Index stale', indexing: 'Indexing', 'index-unavailable': 'Index unavailable', 'source-unavailable': 'Source unavailable', 'not-configured': 'Not set up' };
 function WikiSettings({ admin }: { admin?: WikiAdminTransport }) {
   const [status, setStatus] = useState<WikiAdminStatus>();
   const [selection, setSelection] = useState<WikiSelection>();
@@ -87,7 +86,7 @@ function WikiSettings({ admin }: { admin?: WikiAdminTransport }) {
         })}>Save source</Button>
       </div>}
       {status?.sources.map(source => <div className="wiki-manager-source" key={source.namespace}>
-        <span><strong>{source.namespace}</strong> · {labels[source.state]}</span>
+        <span><strong>{source.namespace}</strong> · {WIKI_STATE_LABELS[source.state] ?? source.state}</span>
         {source.state !== 'not-configured' && <>
           <Button size="sm" disabled={busy} onClick={() => void run(async () => { const result = await admin.call('chooseRepository', { namespace: source.namespace }); if (result.ok) { if (result.value) setSelection(result.value); } else failure(result.kind); })}>Choose repository…</Button>
           <IconButton label={`Reindex ${source.namespace}`} icon="↻" disabled={busy} onClick={() => void run(async () => { const result = await admin.call('reindex', { namespace: source.namespace }); if (result.ok) { setStatus(result.value); changed(); } else failure(result.kind); })} />

@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ModulePort } from '@hq/contracts';
 import { createServiceDomains } from '../services/domains';
+import { findServiceStatus } from '../services/test-support';
 import { previewModules, seed, UNCONFIGURED, PREVIEW_PRESENTATION, PREVIEW_REFERENCE_PROVIDERS } from './composition';
 import { ENTRIES } from './capabilities';
 import { PreviewChrome } from './PreviewChrome';
@@ -19,10 +20,10 @@ it('renders example Work and Social without any global service bridge', async ()
   expect(window.hqServices).toBeUndefined(); expect(window.hqDesktop).toBeUndefined();
   const modules = previewModules('default');
   render(<modules.work {...props} />);
-  expect(await screen.findByText('Work: Sample data · not set up.')).toBeTruthy();
+  expect(await findServiceStatus('Work', 'Sample data')).toBeTruthy();
   expect((await seed('default').planner().snapshot()).items.length).toBeGreaterThan(0);
   cleanup(); render(<modules.social {...props} />);
-  expect(await screen.findByText('Social: Sample data · not set up.')).toBeTruthy();
+  expect(await findServiceStatus('Social', 'Sample data')).toBeTruthy();
   expect(window.hqServices).toBeUndefined(); expect(window.hqDesktop).toBeUndefined();
   expect(await UNCONFIGURED.work.call()).toEqual({ ok: false, kind: 'unavailable' });
 });
@@ -30,8 +31,8 @@ it('renders example Work and Social without any global service bridge', async ()
 it('keeps missing production bridges unavailable', async () => {
   const { Work, Social } = createServiceDomains(() => undefined);
   render(<><Work {...props} /><Social {...props} /></>);
-  expect(await screen.findByText('Work: Unavailable.')).toBeTruthy();
-  expect(await screen.findByText('Social: Unavailable.')).toBeTruthy();
+  expect(await findServiceStatus('Work', 'Unavailable')).toBeTruthy();
+  expect(await findServiceStatus('Social', 'Unavailable')).toBeTruthy();
   expect(screen.queryByText(/Sample data/)).toBeNull();
 });
 
@@ -42,7 +43,7 @@ it('uses an empty fixture and preserves independently seeded planner stores', as
   expect((await empty.snapshot()).items).toHaveLength(1);
   expect((await other.snapshot()).items).toEqual([]);
   const modules = previewModules('empty'); render(<modules.work {...props} />);
-  expect(await screen.findByText('Work: Sample data · not set up.')).toBeTruthy();
+  expect(await findServiceStatus('Work', 'Sample data')).toBeTruthy();
   expect(ENTRIES.map(entry => entry.id)).toEqual(['default', 'empty']);
 });
 
@@ -61,7 +62,7 @@ it.each(['default', 'empty'] as const)('mounts the shared shell with %s fixtures
   window.localStorage.clear();
   window.localStorage.setItem(navigationKey('hq-local'), JSON.stringify({ ...DEFAULT_STATE, domain: 'work' }));
   render(<PresentationShell modules={previewModules(entry)} presentation={PREVIEW_PRESENTATION} referenceProviders={PREVIEW_REFERENCE_PROVIDERS} />);
-  expect(await screen.findByText('Work: Sample data · not set up.')).toBeTruthy();
+  expect(await findServiceStatus('Work', 'Sample data')).toBeTruthy();
   const user = userEvent.setup();
   await user.type(await screen.findByRole('textbox', { name: 'Capture to Inbox' }), 'Preview created item{Enter}');
   const card = (await screen.findByText('Preview created item')).closest<HTMLElement>('[data-card-id]');
@@ -76,7 +77,7 @@ it.each(['default', 'empty'] as const)('mounts the shared shell with %s fixtures
   fireEvent.click(rail.getByRole('button', { name: 'Wiki' }));
   expect(screen.getByRole('region', { name: 'Wiki unavailable' }).textContent).toContain('Open the desktop app');
   fireEvent.click(rail.getByRole('button', { name: 'Social' }));
-  expect(await screen.findByText('Social: Sample data · not set up.')).toBeTruthy();
+  expect(await findServiceStatus('Social', 'Sample data')).toBeTruthy();
   const social = within(screen.getByRole('complementary', { name: 'Social workspace' }));
   fireEvent.click(social.getByRole('button', { name: 'Calendar' }));
   expect(social.getByRole('button', { name: 'Calendar' }).getAttribute('aria-current')).toBe('page');
