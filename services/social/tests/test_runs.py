@@ -16,7 +16,7 @@ from social_service.errors import ValidationError
 QUEUE_FULL = 'Run queue is full. Wait for a run to finish.'
 TOO_LARGE = 'Result is too large to return (limit 1,500,000 bytes)'
 INTERRUPTED = 'Service restarted before completion; run again explicitly.'
-RECORD_KEYS = ['id', 'tool', 'status', 'is_example', 'created_at', 'finished_at', 'error']
+RECORD_KEYS = ['id', 'tool', 'status', 'is_example', 'created_at', 'finished_at', 'error', 'source_ids']
 
 
 def wait_until(predicate, timeout=20.0, what='condition'):

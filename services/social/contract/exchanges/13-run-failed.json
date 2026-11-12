@@ -17,7 +17,7 @@
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
-      "Content-Length": "279"
+      "Content-Length": "295"
     },
     "body": {
       "id": "00000000000000000000000000000004",
@@ -30,7 +30,8 @@
       "output": {
         "ok": false,
         "error": "Synthetic contract failure"
-      }
+      },
+      "source_ids": []
     }
   }
 }

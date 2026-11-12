@@ -32,7 +32,7 @@ Python 3.11 or newer, standard library only. It needs POSIX file locking and pro
 | `--host` | Loopback only: `127.0.0.1` (default), `::1` or `localhost`. Anything else exits 2. |
 | `--port` | Default 8766. `0` picks a free port; the ready line shows the real one. |
 | `--allowed-host HOST[:PORT]` | Accept one more `Host` value, for a private HTTPS front the owner sets up separately. Repeatable. |
-| `--publishing off` | The only value for now. |
+| `--publishing off` | Default; no publishing advertisement or routes. `simulator` opts into local simulated delivery only. |
 
 The ready line is printed and flushed once the port is bound; IPv6 hosts are bracketed. `SIGINT` and `SIGTERM`
 stop the service gracefully. A refused configuration exits 2 and a port in use exits 1.
@@ -59,7 +59,7 @@ and a JSON object body. Other methods get 405. Every error is exactly `{"error":
 
 `features` in the workspace snapshot lists `hq-editorial-timebox-v1` (only when the host resolves
 `America/New_York`; without zone data any time slot is refused as `Unknown time zone`) and `hq-references-v1`.
-The brand-to-project, sources and publishing-simulator features are not advertised yet.
+Brand-to-project and supplied-source registry features are advertised after their additive storage migration. Publishing is advertised only with `--publishing simulator`; it has no network provider or credentials.
 
 ## Routes
 
@@ -103,3 +103,16 @@ is used.
 Limits to know: there is no authentication beyond the per-process token and loopback binding, so this is a
 single-owner local service. Data is not encrypted. A saved draft body is limited to 50,000 characters, but the
 workspace snapshot has no overall size cap, and HQ's desktop transport caps a response at 2,000,000 bytes.
+
+
+The extension source follows `spec.hq-social-backend#iface.extensions.001`. Sources retain parsed content,
+exact-byte SHA-256 provenance and run associations; snapshots return metadata only. Schema v2 is additive.
+Simulator approval snapshots the draft version and canonical UTF-8 JSON (sorted keys, no whitespace) of
+`{channel,title,body}`. It records a non-replayable failed state before outbox I/O, allocates a durable
+sequence (gaps are possible), syncs the outbox and directory, and then records a simulated receipt.
+A lost response or I/O failure must be reconciled from the request and local outbox; never automatically
+resubmit approval. Real provider decisions and desktop enablement remain separate holds.
+
+This recovery checkpoint is source only. Golden baseline exchange fields and hashes were updated
+statically for the additive wire shape; they are expected artifacts, not newly captured HTTP evidence.
+The serial verifier must run contract recapture/check, full Python discovery and client conformance.

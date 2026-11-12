@@ -10,3 +10,5 @@ export type { FixtureRun, FixtureSeed } from './fixtures/workspace';
 
 export * from './timebox';
 export * from './errors';
+
+export * from './extensions';

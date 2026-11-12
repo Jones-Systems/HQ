@@ -201,7 +201,7 @@ class TokenGuard(Endpoint):
             with self.subTest(token=token):
                 reply = self.post('/api/brands', {'name': 'x'}, token=token if token is not None else False)
                 self.assertRefused(reply, 403, RELOAD)
-        self.assertEqual(self.get('/api/workspace').json['brands'], [{'id': 'default', 'name': 'My workspace'}])
+        self.assertEqual(self.get('/api/workspace').json['brands'], [{'id': 'default', 'name': 'My workspace', 'project_id': None}])
 
     def test_the_workspace_hands_out_the_token_that_works(self):
         token = self.get('/api/workspace').json['csrf']
@@ -396,10 +396,10 @@ class Routes(Endpoint):
         reply = self.get('/api/workspace')
         self.assertEqual(reply.status, 200)
         data = reply.json
-        self.assertEqual(list(data), ['brands', 'content', 'runs', 'tools', 'features', 'csrf'])
-        self.assertEqual(data['brands'], [{'id': 'default', 'name': 'My workspace'}])
+        self.assertEqual(list(data), ['brands', 'content', 'runs', 'tools', 'features', 'csrf', 'sources'])
+        self.assertEqual(data['brands'], [{'id': 'default', 'name': 'My workspace', 'project_id': None}])
         self.assertEqual((data['content'], data['runs']), ([], []))
-        self.assertEqual(data['features'], ['hq-editorial-timebox-v1', 'hq-references-v1'])
+        self.assertEqual(data['features'], ['hq-editorial-timebox-v1', 'hq-references-v1', 'hq-brand-project-v1', 'hq-sources-v1'])
 
     def test_tools_are_the_eight_in_hq_order(self):
         data = self.get('/api/workspace').json
@@ -411,22 +411,23 @@ class Routes(Endpoint):
 
     def test_features_without_zone_data_do_not_advertise_timeboxes(self):
         self.restart(timezones=False)
-        self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1'])
+        self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1', 'hq-brand-project-v1', 'hq-sources-v1'])
 
     def test_the_service_detects_missing_zone_data_for_itself(self):
         with mock.patch.object(timebox, '_zone_names', return_value=frozenset()):
             self.restart(timezones=None)
-            self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1'])
+            self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1', 'hq-brand-project-v1', 'hq-sources-v1'])
             reply = self.post('/api/content', {'title': 'x', 'planned_date': '2026-10-22',
                                                'planning_slot': {'start': '09:00', 'duration_minutes': 30, 'timezone': 'UTC'}})
             self.assertRefused(reply, 400, 'Unknown time zone')
         self.restart(timezones=None)
-        self.assertEqual(self.get('/api/workspace').json['features'], ['hq-editorial-timebox-v1', 'hq-references-v1'])
+        self.assertEqual(self.get('/api/workspace').json['features'], ['hq-editorial-timebox-v1', 'hq-references-v1', 'hq-brand-project-v1', 'hq-sources-v1'])
 
-    def test_future_features_are_not_advertised_yet(self):
+    def test_persisted_extensions_are_advertised_but_publishing_stays_off(self):
         features = self.get('/api/workspace').json['features']
-        for later in ('hq-brand-project-v1', 'hq-sources-v1', 'hq-publishing-simulator-v1'):
-            self.assertNotIn(later, features)
+        self.assertIn('hq-brand-project-v1', features)
+        self.assertIn('hq-sources-v1', features)
+        self.assertNotIn('hq-publishing-simulator-v1', features)
 
     def test_samples_for_every_tool_equal_hq_examples(self):
         for tool in tools.TOOL_IDS:
