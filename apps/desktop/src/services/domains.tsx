@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Skeleton, StateView, StatusIndicator } from '@hq/ui';
+import type { PlannerPort, PlannerRecovery } from '../../../../modules/work/core';
+import { PortFailure, type SocialWorkspacePort } from '../../../../modules/social/core';
 import type { ModulePort } from '@hq/contracts';
 import type { HqServices, ServiceConfigStatus, ServiceDomain } from '@hq/contracts/services';
 import { createWorkExportClient } from './work-export';
@@ -92,7 +94,8 @@ function Connecting({ domain }: { domain: DomainName }) {
 /** One factory per renderer. Promises cache the choice across remounts and concurrent renders. */
 export function createServiceDomains(getServices: () => Services | undefined, examples?: Examples) {
   let socialChoice: ReturnType<typeof chooseSocial> | undefined;
-  let workChoice: Promise<ServiceChoice> | undefined;
+  let workChoice: ReturnType<typeof chooseWork> | undefined;
+  let workMounted: Promise<ServiceChoice> | undefined;
   let workExport: ReturnType<typeof createWorkExportClient> | undefined;
   async function chooseSocial() {
     const services = getServices();
@@ -102,29 +105,49 @@ export function createServiceDomains(getServices: () => Services | undefined, ex
       : selection === 'example' ? (examples?.social?.() ?? createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port) : null;
     return { choice, port };
   }
+  const getSocial = () => socialChoice ??= chooseSocial();
   function Social(props: ModulePort) {
     const [choice, setChoice] = useState<Awaited<ReturnType<typeof chooseSocial>> | null>(null);
-    useEffect(() => { let mounted = true; socialChoice ??= chooseSocial(); void socialChoice.then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
+    useEffect(() => { let mounted = true; void getSocial().then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
     return choice ? <Surface domain="Social" choice={choice.choice}>{choice.port && <SocialDomain {...props} port={choice.port} example={choice.choice.selection === 'example'} />}</Surface> : <Connecting domain="Social" />;
   }
-  async function chooseWork(): Promise<ServiceChoice> {
+  async function chooseWork() {
     const services = getServices();
     const choice = await readService(services, 'work');
     const { selection } = choice;
+    let port: PlannerPort | null = null;
+    let recovery: PlannerRecovery | null = null;
     if (selection === 'live') {
       const work = observeWork(services!.work);
       const planner = createPlannerLive(bridgeTransport(work));
       workExport = createWorkExportClient(work);
-      setWorkSessionPort(planner.port, { example: false, recovery: planner.recovery });
-    } else if (selection === 'example') setWorkSessionPort(examples?.planner?.() ?? examplePlanner(), { example: true });
+      port = planner.port;
+      recovery = planner.recovery;
+    } else if (selection === 'example') port = examples?.planner?.() ?? examplePlanner();
+    return { choice, port, recovery };
+  }
+  const getWork = () => workChoice ??= chooseWork();
+  async function mountWork() {
+    const { choice, port, recovery } = await getWork();
+    if (port) setWorkSessionPort(port, { example: choice.selection === 'example', ...(recovery ? { recovery } : {}) });
     return choice;
   }
   function Work(props: ModulePort) {
     const [choice, setChoice] = useState<ServiceChoice | null>(null);
-    useEffect(() => { let mounted = true; workChoice ??= chooseWork(); void workChoice.then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
+    useEffect(() => { let mounted = true; workMounted ??= mountWork(); void workMounted.then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
     return choice ? <Surface domain="Work" choice={choice}>{choice.selection !== 'unavailable' && <WorkModule {...props} workExport={workExport} />}</Surface> : <Connecting domain="Work" />;
   }
-  return { Social, Work };
+  // Read capabilities share the mounted domain's frozen selection and exact port. Search never mounts a Work session.
+  const referenceReads = {
+    social: {
+      async snapshot() { const { port } = await getSocial(); if (!port) throw new PortFailure({ kind: 'unavailable' }); return port.snapshot(); },
+      async run(id: string) { const { port } = await getSocial(); if (!port) throw new PortFailure({ kind: 'unavailable' }); return port.run(id); },
+    } satisfies Pick<SocialWorkspacePort, 'snapshot' | 'run'>,
+    work: {
+      async snapshot() { const { port } = await getWork(); if (!port) throw Error('Work unavailable'); return port.snapshot(); },
+    } satisfies Pick<PlannerPort, 'snapshot'>,
+  };
+  return { Social, Work, referenceReads };
 }
 
 /** Production wrapper identities, constructed once for this renderer. */

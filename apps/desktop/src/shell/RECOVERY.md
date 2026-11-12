@@ -8,6 +8,19 @@ This candidate recovers the settled shell and saved cross-HQ flows onto foundati
 `8945d156585510fbdf1515fad01798f416146b4e`. It is source-only and untested.
 No installation, runtime activation, PR, or integration merge is implied.
 
+## Successor checkpoint
+
+The SHL integration successor consumes INT `6cfbaf28964eb8376244e1ab14e6efc6a1d73301`
+by ordinary merge. Social/Work reference providers now share the cached choice
+and exact port used by their mounted service domains. Reads do not mount Work;
+failed live reads never fall back to examples. The source-only receipt and
+pending module/test hunks are in
+`docs/handoffs/hq-life-20261103/SHL/shell-checkpoint-20261112.md`.
+
+The dependencies below describe the earlier checkpoint. Work's no-op shortcut
+and Social's stored example reference scope still require module-owned hunks;
+no mounted journey or test pass is claimed by this successor.
+
 ## Sources and integration
 
 Normal merge ancestry retains these source branches and their handoffs:
