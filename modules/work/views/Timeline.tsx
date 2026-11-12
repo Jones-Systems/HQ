@@ -78,7 +78,7 @@ export function TimelineView() {
 
   const setHorizon = async (id: string, horizon: Horizon | null): Promise<boolean> => {
     const item = state.items.find((it) => it.id === id);
-    if (!item) return false;
+    if (!item || isPending(env.store.getState(), id)) { env.announce('Planning paused · check the current item state'); return false; }
     if (item.horizon === horizon) {
       env.announce('Same horizon');
       shake(rowOf(id));
@@ -87,7 +87,7 @@ export function TimelineView() {
     const saved = env.run(env.store.patch(id, { horizon }), `“${item.title}” is now ${horizon ? HORIZON_LABEL[horizon] : 'without a horizon'}.`);
     setLanded({ id });
     const ok = await saved;
-    if (!ok) shake(rowOf(id));
+    if (!ok && !isPending(env.store.getState(), id)) shake(rowOf(id));
     return ok;
   };
 

@@ -21,11 +21,11 @@ const VIEW_PROOF: Record<string, string[]> = {
   glance: ['Good morning', 'Now', 'Next 21 days', 'Inbox', 'Worth a look', 'Recently changed'],
   list: ['Repaint the garden shed', 'Draft the spring market stall list', 'Tune up the old bicycle'],
   calendar: ['October', 'This month, no set day', 'Unscheduled', 'Outside this month'],
-  timeline: ['No horizon', 'Someday', '2026 · Q4'],
+  timeline: ['No horizon', 'Someday', 'Q4 2026'],
   review: ['Gentle prompts. Nothing changes until you choose an action.', 'Sort the Inbox', 'Overdue deadlines', 'Targets that have passed', 'Active but quiet', 'Horizon and date disagree', 'No “why” yet'],
   archive: ['Copy out the old recipe cards', 'Restore'],
   'by-date': ['Today', 'This week', 'Later', 'Undated'],
-  week: ['Plan week'],
+  week: ['Plan week', 'Week of', 'This week, no day', 'Overdue deadlines'],
 };
 
 describe.each(['light', 'dark'] as const)('views in %s chrome', (theme) => {

@@ -45,14 +45,20 @@ export function useEnv(): ViewEnv {
 
 const touches = (id: string) => (write: { op: string } & Partial<{ id: string }>) => write.id === id;
 
-/** True while a write for `id` is in flight or unconfirmed. */
+/** Optional queue projection consumed when the parent composes the reviewed core. */
+type QueueViewState = WorkState & { queued?: readonly { write: { op: string; id?: string }; state: 'queued' | 'sending' | 'conflict' | 'rejected' }[] };
+
+/** Blocks repeat edits while saving, queued, unconfirmed, or held. */
 export function isPending(state: WorkState, id: string): boolean {
-  return state.pending.some((p) => touches(id)(p.write)) || state.unconfirmed.some((u) => touches(id)(u.write));
+  return !!state.held || !!(state as QueueViewState).queued?.some((q) => touches(id)(q.write)) || state.pending.some((p) => touches(id)(p.write)) || state.unconfirmed.some((u) => touches(id)(u.write));
 }
 
-/** The honest word for an item's write: in flight is Saving…, a lost response is Unconfirmed, never Saving. */
-export function pendingWord(state: WorkState, id: string): 'Saving…' | 'Unconfirmed' | null {
+/** Labels projected writes without claiming that queued or unknown writes were saved. */
+export function pendingWord(state: WorkState, id: string): string | null {
+  if (state.held) return 'Saving paused · held';
   if (state.unconfirmed.some((u) => touches(id)(u.write))) return 'Unconfirmed';
+  const queued = (state as QueueViewState).queued?.find((q) => touches(id)(q.write));
+  if (queued) return ({ queued: 'Queued on this device', sending: 'Sending…', conflict: 'Changed in the Planner while offline', rejected: 'Queued change rejected' })[queued.state];
   return state.pending.some((p) => touches(id)(p.write)) ? 'Saving…' : null;
 }
 

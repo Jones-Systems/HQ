@@ -165,6 +165,7 @@ export function CalendarView() {
    * reason is announced) and a failed write is rolled back by the store; either way the chip shakes once.
    */
   const commit = async (item: Item, patch: ItemPatch | null, message: string, where: { dateId?: string; day: string; from?: Point | null; refusal?: string }): Promise<boolean> => {
+    if (isPending(env.store.getState(), item.id)) { env.announce('Planning paused · check the current item state'); return false; }
     if (!patch) {
       if (where.refusal) env.announce(where.refusal);
       shakeChip(item.id, where.dateId);
@@ -173,7 +174,7 @@ export function CalendarView() {
     const saved = env.run(env.store.patch(item.id, patch), message);
     land(item.id, where.dateId, where.day, where.from ?? null);
     const ok = await saved;
-    if (!ok) shakeChip(item.id, where.dateId);
+    if (!ok && !isPending(env.store.getState(), item.id)) shakeChip(item.id, where.dateId);
     return ok;
   };
   const reschedule = (item: Item, entry: PlanningDate, day: string, from: Point | null = null) => {
@@ -192,7 +193,7 @@ export function CalendarView() {
   const remove = (itemId: string, dateId: string) => {
     const item = latest(itemId);
     const patch = item ? removeDatePatch(item, dateId) : null;
-    if (item && patch) void env.run(env.store.patch(item.id, patch), `Removed date from “${item.title}”.`);
+    if (item && patch && !isPending(env.store.getState(), item.id)) void env.run(env.store.patch(item.id, patch), `Removed date from “${item.title}”.`);
   };
   const add = (itemId: string, kind: DateKind, day: string, minute?: number, from: Point | null = null) => {
     const item = latest(itemId);
