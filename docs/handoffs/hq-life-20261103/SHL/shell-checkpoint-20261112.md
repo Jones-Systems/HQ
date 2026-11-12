@@ -87,7 +87,12 @@ fixture's provider instead of changing the transport underneath a frozen choice.
 ## Static evidence and deferred qualification
 
 `git diff --check`, final authored-file review, merge conflict preflight,
-ancestry readback and `git apply --check` of the proposed fixture patch only. New `services/reference-reads.test.tsx` is unexecuted
+ancestry readback and `git apply --check` of the proposed fixture patch only.
+Authored diff from merge `c12abb7` passes whitespace checks. The wider diff
+from shell base reports pre-existing trailing spaces in the inherited
+`b1-planner/evidence/hqr-verify-summary-20261103.txt`; those upstream bytes
+are preserved, not repaired. Electron, contracts and module paths match INT;
+the lockfile difference is solely the retained react-dom dependency. New `services/reference-reads.test.tsx` is unexecuted
 source covering shared example reads, Work injection timing, configuration
 freeze, live-failure refusal and unavailable configuration.
 
