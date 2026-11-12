@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { uiDriver } from './ui.mjs';
+import { recoveryUi, clickRecoveryControl } from '../fixtures/recovery-ui.mjs';
 
 export async function referenceScenario(context) {
   context.begin('reference-round-trips');
@@ -9,7 +10,7 @@ export async function referenceScenario(context) {
   const item = state.items.find(item => item.title.startsWith('Acceptance capture '));
   assert.ok(item, 'run the real Planner capture journey first');
   assert.equal(await ui.evaluate(`(() => { const card = [...document.querySelectorAll('[data-card-id]')].find(c => c.dataset.cardId === ${JSON.stringify(item.id)}); if (!card) return false; card.click(); return true; })()`), true);
-  await context.until(() => ui.evaluate(`!!document.querySelector('input.work-detail-title')`), 'Work card opened');
+  await context.until(() => ui.evaluate(recoveryUi.workDetailReady()), 'Work card opened');
   const before = work.ledger.length, socialBefore = social.ledger.length;
   await ui.click('Link to…');
   // Input insertion goes through Chromium, not a direct port mutation.
@@ -30,8 +31,8 @@ export async function referenceScenario(context) {
   await ui.click('Open Retry Policy');
   await context.until(() => ui.evaluate(`document.querySelector('.wiki-page-title')?.textContent === 'Retry Policy'`), 'Wiki page opened');
   await context.capture('reference-open');
-  await ui.click(`Back to ${item.title}`);
-  await context.until(() => ui.evaluate(`document.querySelector('input.work-detail-title')?.value === ${JSON.stringify(item.title)}`), 'return to originating card');
+  await clickRecoveryControl(context, recoveryUi.returnButton(item.title), `Back to ${item.title}`);
+  await context.until(() => ui.evaluate(recoveryUi.workDetailReady(item.title)), 'return to originating card');
   assert.equal(mutations().length, 1, 'open and return never save or execute');
   assert.deepEqual((await work.state()).items.find(value => value.id === item.id), linked);
   assert.equal(social.ledger.slice(socialBefore).filter(entry => entry.method !== 'GET').length, 0);
