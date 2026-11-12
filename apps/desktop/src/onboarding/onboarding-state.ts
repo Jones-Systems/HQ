@@ -1,5 +1,6 @@
 import { isDomainId, type DomainId } from '@hq/contracts';
-import { checkedServiceStatus, serviceStatus, wikiStatus, CHECKING, type DataSource, type SourceStatus } from '../services/data-source-status';
+import { serviceStatus, wikiStatus, CHECKING, type DataSource, type SourceStatus } from '../services/data-source-status';
+import { describeObservation } from '../services/observed-status';
 import { persist, type StoragePort } from '../state';
 
 /** Versioned so a later redesign can ignore, or migrate, what this version wrote. */
@@ -92,8 +93,8 @@ export interface SourceSummary {
 
 const SAMPLE_TEXT = serviceStatus({ configured: false, policy: 'ok', transport: null }).text;
 const SET_UP_TEXT = serviceStatus({ configured: true, policy: 'ok', transport: 'https' }).text;
-const REACHABLE_TEXT = checkedServiceStatus(true).text;
-const UNREACHABLE_TEXT = checkedServiceStatus(false).text;
+const REACHABLE_TEXT = describeObservation({ state: 'reachable', at: 0 }).label;
+const UNREACHABLE_TEXT = describeObservation({ state: 'unreachable', at: 0 }).label;
 const WIKI_UNSET_TEXT = wikiStatus([]).text;
 const WIKI_READY_TEXT = wikiStatus(['ready']).text;
 const WIKI_INDEXING_TEXT = wikiStatus(['indexing']).text;
@@ -110,9 +111,9 @@ export function summarizeSource(source: DataSource, status: SourceStatus): Sourc
     if (text === WIKI_STALE_TEXT) return { kind: 'stale', text, tone: 'warning', configured: true };
   } else {
     if (text === SAMPLE_TEXT) return { kind: 'sample', text: 'Sample data · set up to use your own', tone: 'neutral', configured: false };
-    if (text === REACHABLE_TEXT) return { kind: 'connected', text: 'Connected', tone: 'good', configured: true };
+    if (text === REACHABLE_TEXT || text.startsWith(`${REACHABLE_TEXT} · `)) return { kind: 'connected', text, tone: 'good', configured: true };
     if (text === SET_UP_TEXT) return { kind: 'configured', text, tone: 'neutral', configured: true };
-    if (text === UNREACHABLE_TEXT) return { kind: 'unreachable', text, tone: 'warning', configured: false };
+    if (text === UNREACHABLE_TEXT || text.startsWith(`${UNREACHABLE_TEXT} · `)) return { kind: 'unreachable', text, tone: 'warning', configured: true };
   }
   // Anything else that the shell marks as a problem ("Address rejected", "Index unavailable") is shown as it says.
   return status.tone === 'bad' ? { kind: 'problem', text, tone: 'warning', configured: false } : CHECKING_SUMMARY;
@@ -165,7 +166,7 @@ function connectHint(name: string, summary: SourceSummary): string {
   switch (summary.kind) {
     case 'sample': return `${name} shows sample data until you do`;
     case 'configured': return 'Set up · not checked yet';
-    case 'connected': return 'Connected';
+    case 'connected': return summary.text;
     case 'unreachable': return 'Unreachable · check the address in Data sources';
     case 'problem': return `${summary.text} · check Data sources`;
     default: return 'Checking…';

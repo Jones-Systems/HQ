@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CHECKING, UNAVAILABLE, checkedServiceStatus, serviceStatus, wikiStatus, type DataSource, type SourceStatus } from '../services/data-source-status';
+import { CHECKING, UNAVAILABLE, serviceStatus, wikiStatus, type DataSource, type SourceStatus } from '../services/data-source-status';
+import { describe as describeStatus } from '../services/observed-status';
 import type { StoragePort } from '../state';
 import {
   DEFAULT_ONBOARDING, ONBOARDING_KEY, checklistAction, checklistProgress, evaluateChecklist, isFirstRun, markCelebrated, markUsed, markVisited,
@@ -15,6 +16,7 @@ const refusing: StoragePort = { getItem: () => { throw new Error('denied'); }, s
 
 const SAMPLE = serviceStatus({ configured: false, policy: 'ok', transport: null });
 const SET_UP = serviceStatus({ configured: true, policy: 'ok', transport: 'https' });
+const observedService = (reachable: boolean) => describeStatus('work', { config: SET_UP, observed: { state: reachable ? 'reachable' : 'unreachable', at: 0 } });
 const statuses = (social: SourceStatus, work: SourceStatus, wiki: SourceStatus): Record<DataSource, SourceStatus> => ({ social, work, wiki });
 const fresh = summarizeSources(statuses(SAMPLE, SAMPLE, wikiStatus(['not-configured'])));
 
@@ -81,8 +83,8 @@ describe('source summaries', () => {
   it('describes Social and Work in the panel words', () => {
     expect(summarizeSource('work', SAMPLE)).toEqual({ kind: 'sample', text: 'Sample data · set up to use your own', tone: 'neutral', configured: false });
     expect(summarizeSource('work', SET_UP)).toEqual({ kind: 'configured', text: 'Set up · not checked', tone: 'neutral', configured: true });
-    expect(summarizeSource('social', checkedServiceStatus(true))).toEqual({ kind: 'connected', text: 'Connected', tone: 'good', configured: true });
-    expect(summarizeSource('social', checkedServiceStatus(false))).toEqual({ kind: 'unreachable', text: 'Unreachable', tone: 'warning', configured: false });
+    expect(summarizeSource('social', observedService(true))).toEqual({ kind: 'connected', text: observedService(true).text, tone: 'good', configured: true });
+    expect(summarizeSource('social', observedService(false))).toEqual({ kind: 'unreachable', text: observedService(false).text, tone: 'warning', configured: true });
     expect(summarizeSource('social', CHECKING)).toMatchObject({ kind: 'checking', configured: undefined });
     expect(summarizeSource('work', UNAVAILABLE)).toMatchObject({ kind: 'problem', text: 'Unavailable', configured: false });
     expect(summarizeSource('work', serviceStatus({ configured: true, policy: 'rejected', transport: null }))).toMatchObject({ kind: 'problem', text: 'Address rejected' });
@@ -125,11 +127,11 @@ describe('checklist', () => {
   });
 
   it('derives the connect steps from the shell\'s data-source state', () => {
-    const live = summarizeSources(statuses(checkedServiceStatus(true), SET_UP, wikiStatus(['ready'])));
+    const live = summarizeSources(statuses(observedService(true), SET_UP, wikiStatus(['ready'])));
     expect(done(evaluateChecklist(DEFAULT_ONBOARDING, live, 'Ctrl K'))).toMatchObject({ 'connect-work': true, 'connect-social': true, 'add-wiki': true, 'look-around': false });
-    const dead = summarizeSources(statuses(checkedServiceStatus(false), checkedServiceStatus(false), wikiStatus(undefined)));
+    const dead = summarizeSources(statuses(observedService(false), observedService(false), wikiStatus(undefined)));
     const items = evaluateChecklist(DEFAULT_ONBOARDING, dead, 'Ctrl K');
-    expect(done(items)).toMatchObject({ 'connect-work': false, 'connect-social': false, 'add-wiki': false });
+    expect(done(items)).toMatchObject({ 'connect-work': true, 'connect-social': true, 'add-wiki': false });
     expect(items.find(item => item.id === 'connect-work')!.hint).toBe('Unreachable · check the address in Data sources');
     expect(items.find(item => item.id === 'add-wiki')!.hint).toBe('Index unavailable · check Data sources');
   });
@@ -147,13 +149,13 @@ describe('checklist', () => {
   });
 
   it('counts a finished checklist as complete', () => {
-    const all: SourceSummaries = summarizeSources(statuses(checkedServiceStatus(true), checkedServiceStatus(true), wikiStatus(['ready'])));
+    const all: SourceSummaries = summarizeSources(statuses(observedService(true), observedService(true), wikiStatus(['ready'])));
     const state = markUsed(markVisited(markVisited(DEFAULT_ONBOARDING, 'social'), 'work'), 'palette');
     expect(checklistProgress(evaluateChecklist(state, all, '⌘K'))).toEqual({ done: 5, total: 5, complete: true });
   });
 
   it('drops "sample data" from the first step once Social or Work is really connected', () => {
-    const mixed = summarizeSources(statuses(SAMPLE, checkedServiceStatus(true), wikiStatus([])));
+    const mixed = summarizeSources(statuses(SAMPLE, observedService(true), wikiStatus([])));
     expect(evaluateChecklist(DEFAULT_ONBOARDING, mixed, 'Ctrl K')[0]!.label).toBe('Take a look around Social and Work');
   });
 

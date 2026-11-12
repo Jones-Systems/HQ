@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ToastViewport, toastStore } from '@hq/ui';
 import type { ServiceConfigStatus } from '@hq/contracts/services';
+import { observedStatus } from '../services/observed-status';
 import { DataSourcesProvider, useDataSources } from '../settings/DataSources';
 import type { StoragePort } from '../state';
 import { GettingStarted, type GettingStartedProps } from './GettingStarted';
@@ -48,6 +49,7 @@ const settled = () => screen.findByText('Not set up');
 const event = (name: string, detail?: unknown) => act(() => { window.dispatchEvent(new CustomEvent(name, { detail })); });
 
 beforeEach(() => {
+  observedStatus.reset();
   Object.assign(world, { social: SAMPLE, work: SAMPLE, wiki: [], socialReachable: true, workReachable: true });
   document.documentElement.setAttribute('data-hq-motion', 'reduce');
   Object.defineProperty(window, 'hqServices', { configurable: true, value: {
@@ -58,6 +60,7 @@ beforeEach(() => {
   } });
 });
 afterEach(() => {
+  observedStatus.reset();
   cleanup();
   vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals();
   toastStore.dismiss();
@@ -320,12 +323,12 @@ describe('checklist', () => {
     await waitFor(() => expect(item('Connect Work (Planner)').dataset.done).toBe('true'));
     fireEvent.click(screen.getByRole('button', { name: 'Recheck Work' }));
     expect(item('Connect Work (Planner)').dataset.done).toBe('true');
-    await waitFor(() => expect(screen.getAllByText('Connected').length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/^Reachable · observed /).length).toBeGreaterThan(0));
     expect(item('Connect Work (Planner)').dataset.done).toBe('true');
     expect(live()).toBe('');
   });
 
-  it('says so, inline, when a set-up source does not answer, and leaves the step open', async () => {
+  it('says so, inline, when a set-up source does not answer, and keeps the configured step ticked', async () => {
     world.work = HTTPS; world.workReachable = false;
     mount({ extra: <Recheck /> });
     await findCard();
@@ -333,7 +336,7 @@ describe('checklist', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Recheck Work' }));
     const notice = await screen.findByText('Work is unreachable');
     expect(notice.closest('.hq-notice')).toBeTruthy();
-    expect(item('Connect Work (Planner)').dataset.done).toBeUndefined();
+    expect(item('Connect Work (Planner)').dataset.done).toBe('true');
     expect(within(item('Connect Work (Planner)')).getByText(/Unreachable · check the address in Data sources/)).toBeTruthy();
 
     const opened = vi.fn();

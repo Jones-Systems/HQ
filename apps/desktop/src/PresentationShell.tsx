@@ -16,6 +16,8 @@ import { Rail } from './shell/Rail';
 import { TopBar } from './shell/TopBar';
 import { useMediaQuery } from './shell/media';
 import { RECENT_PROJECTS_KEY, readRecentProjects, rememberProject, type RecentProject } from './shell/recent-projects';
+import { CommandPalette, ReturnPill, useShellShortcuts, useDocumentTitle, OPEN_PALETTE_EVENT, PALETTE_CHORD, chordText, currentPlatformIsMac } from './navigation';
+import { GettingStarted } from './onboarding';
 import './shell/shell.css';
 
 const CONTEXT = parseProjectContext({ id: WORKSPACE_SCOPE, name: 'Local projects' })!;
@@ -113,6 +115,8 @@ function WorkspaceApp({ modules, presentation, referenceProviders }: Presentatio
     const frame = returnFrame;
     navigateWithTransition(() => { if (frame) setState(frame.state); setReturnFrame(null); setReferenceNotice(null); }, 'back');
   };
+  useShellShortcuts({ switchDomain: domain => go(domain), openSettings: () => openSettings(null) });
+  useDocumentTitle({ domain: state.domain, settingsOpen });
   const changeAppearance = (next: Appearance, cycled: boolean) => {
     // The compact button steps through all three choices; say so when a step leaves the screen as it was.
     if (cycled && resolveAppearance(next, systemDark) === theme) {
@@ -145,15 +149,18 @@ function WorkspaceApp({ modules, presentation, referenceProviders }: Presentatio
     <a className="shell-skip" href="#hq-content" onClick={skipToContent}>Skip to content</a>
     <TopBar project={context} recentProjects={recentProjects} fallbackProject={CONTEXT} domain={state.domain}
       destination={state.destinations[state.domain]} settingsOpen={settingsOpen}
-      returnLabel={returnFrame && !settingsOpen ? returnFrame.context.label : null} onBack={goBack}
+      returnLabel={null} onBack={goBack}
       appearance={appearance} onAppearance={changeAppearance} storageAvailable={storageAvailable && palette.saved}
       onSelectProject={(project: RecentProject) => selectDesktopProject({ id: project.id, label: project.name })}
+      search={<button type="button" className="shell-search" aria-label="Search HQ and commands"
+        onClick={() => window.dispatchEvent(new CustomEvent(OPEN_PALETTE_EVENT))}>Search HQ <kbd>{chordText(PALETTE_CHORD, currentPlatformIsMac())}</kbd></button>}
       onBrowseProjects={() => go('design', 'projects')} onManageSources={(source, opener) => openSettings(source, opener)} />
     <Rail current={state.domain} settingsOpen={settingsOpen} compact={compact} onNavigate={domain => go(domain)}
       onOpenSettings={opener => openSettings(null, opener)} />
     {!narrow && <Splitter label="Primary navigation width" value={rail.width} min={RAIL_MIN} max={RAIL_MAX}
       onResize={width => setRail(previous => resizeRail(previous, width))} onToggle={() => setRail(toggleRail)} />}
     <div ref={workspaceRef} id="hq-content" tabIndex={-1} className={fill ? 'workspace is-fill' : 'workspace'} data-hq-overlay={settingsOpen ? 'open' : undefined}>
+      <ReturnPill label={returnFrame?.context.label ?? null} onBack={goBack} hidden={settingsOpen} />
       {referenceNotice && !settingsOpen && <InlineNotice className="shell-reference-notice" variant="bar" tone="info"
         title={referenceNotice.title} label="Read-only reference" dismissLabel="Dismiss reference"
         onDismiss={() => setReferenceNotice(null)}>{referenceNotice.message}</InlineNotice>}
@@ -164,9 +171,14 @@ function WorkspaceApp({ modules, presentation, referenceProviders }: Presentatio
           navigate={destination => { references.cancelOpen(); setState(previous => navigate(previous, state.domain, destination)); }} />
         </ErrorBoundary>
       </main>
+      <GettingStarted storage={storage} domain={state.domain} settingsOpen={settingsOpen} onNavigate={go} />
       {settingsOpen && <ServiceSettings config={window.hqServices?.config} onClose={closeSettings}
         returnLabel={DOMAIN_LABELS[state.domain]} target={settingsTarget} appearance={appearance} onAppearanceChange={setAppearance} palette={palette} dark={theme === 'dark'} />}
     </div>
+    <CommandPalette domain={state.domain} destinations={state.destinations} settingsOpen={settingsOpen}
+      projectId={context.id} appearance={appearance} references={references}
+      returnFrame={returnFrame ? { label: returnFrame.context.label, onBack: goBack } : null}
+      onNavigate={go} onOpenSettings={openSettings} onAppearance={next => changeAppearance(next, false)} />
     <ToastViewport />
   </div>;
 }

@@ -184,3 +184,11 @@
   .shell-rail-item[aria-current="page"], .shell-segmented button[aria-checked="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
   .workspace { border: 1px solid CanvasText; }
 }
+
+.shell-search { display: inline-flex; align-items: center; gap: var(--hq-space-sm); flex: none;
+  border: 1px solid var(--hq-border); border-radius: var(--hq-radius-sm); padding: var(--hq-space-xs) var(--hq-space-sm);
+  background: var(--hq-control); color: var(--hq-text); font: var(--hq-type-label); cursor: pointer; }
+.shell-search:hover { background: var(--hq-control-hover); }
+.shell-search:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
+.shell-search kbd { color: var(--hq-text-muted); font: inherit; }
+@media (max-width: 999px) { .shell-search kbd { display: none; } }
