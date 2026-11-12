@@ -132,7 +132,8 @@ describe('card detail conflicts', () => {
     const env = await setup();
     const panel = openCard(env, 'it-zine');
     await env.device.patch('it-zine', 1, { motivation: 'want' }, env.otherRid());
-    await act(async () => { fireEvent.change(within(panel).getByRole('combobox', { name: 'Why' }), { target: { value: 'need' } }); });
+    fireEvent.click(within(panel).getByRole('button', { name: /^Why:/u }));
+    await act(async () => { fireEvent.click(screen.getByRole('menuitemradio', { name: 'Need' })); });
     expect(within(panel).getByRole('alert').textContent).toContain('The why changed in the Planner');
     expect(patches(env)).toHaveLength(1);
     fireEvent.click(within(panel).getByRole('button', { name: 'Use theirs' }));
@@ -144,7 +145,7 @@ describe('card detail conflicts', () => {
     const env = await setup();
     const panel = openCard(env, 'it-shed');
     expect(env.byId('it-shed').area).toBeNull();
-    const area = within(panel).getByRole('textbox', { name: 'Area' });
+    const area = within(panel).getByRole('combobox', { name: 'Area' });
     fireEvent.change(area, { target: { value: 'Garden' } });
     await act(async () => { fireEvent.blur(area); });
     expect(patches(env).map((c) => c.args.slice(0, 3))).toEqual([['it-shed', 1, { area: 'Garden' }]]);
@@ -156,7 +157,7 @@ describe('card detail conflicts', () => {
     const env = await setup();
     const panel = openCard(env, 'it-shed');
     await env.device.patch('it-shed', 1, { title: 'Repaint the shed green' }, env.otherRid());
-    const area = within(panel).getByRole('textbox', { name: 'Area' });
+    const area = within(panel).getByRole('combobox', { name: 'Area' });
     fireEvent.change(area, { target: { value: 'Garden' } });
     await act(async () => { fireEvent.blur(area); });
     expect(patches(env).map((c) => c.args.slice(0, 3))).toEqual([
@@ -199,16 +200,17 @@ describe('card detail status and Undo', () => {
   it('a field edit shows Saved with Undo, and Undo restores the old value', async () => {
     const env = await setup();
     const panel = openCard(env, 'it-zine');
-    await act(async () => { fireEvent.change(within(panel).getByRole('combobox', { name: 'Why' }), { target: { value: 'need' } }); });
+    fireEvent.click(within(panel).getByRole('button', { name: /^Why:/u }));
+    await act(async () => { fireEvent.click(screen.getByRole('menuitemradio', { name: 'Need' })); });
     expect(env.byId('it-zine').motivation).toBe('need');
-    expect(screen.getByText('Saved why')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Saved why' })).toBeTruthy();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
     expect(patches(env).map((c) => c.args.slice(0, 3))).toEqual([
       ['it-zine', 1, { motivation: 'need' }],
       ['it-zine', 2, { motivation: 'exploring' }],
     ]);
     expect(env.byId('it-zine').motivation).toBe('exploring');
-    expect(screen.getByText('Undone: Saved why')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Undone: Saved why' })).toBeTruthy();
   });
 });
 
@@ -290,7 +292,7 @@ describe('card detail checklist, dates and links', () => {
     expect(env.calls).toHaveLength(calls);
 
     expect(within(links).getAllByRole('link')).toHaveLength(1);
-    expect(within(links).getByText('HQ · social · draft')).toBeTruthy();
+    expect(within(links).getByText('Social · Draft')).toBeTruthy();
     expect(within(links).getByText('Not resolved')).toBeTruthy();
     expect(within(links).getByText(/Read-only here; following it never starts anything\./u)).toBeTruthy();
   });

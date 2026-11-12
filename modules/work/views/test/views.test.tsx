@@ -60,7 +60,7 @@ describe.each(['light', 'dark'] as const)('views in %s chrome', (theme) => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const broken = new Proxy({} as Filters, { get: () => { throw new Error('fictional render failure'); } });
     await setup({ view: 'list', filters: broken });
-    const error = screen.getByRole('alert');
+    const error = screen.getByText('This view could not be shown').closest('[role="alert"]')!;
     expect(error.getAttribute('data-state')).toBe('error');
     expect(error.textContent).toContain('This view could not be shown');
     expect(screen.getByText(PROJECT_NOTE)).toBeTruthy();
@@ -79,10 +79,10 @@ describe.each(['light', 'dark'] as const)('views in %s chrome', (theme) => {
     const { held } = await setup({ view: 'list' });
     held.hold();
     await user.selectOptions(screen.getByRole('combobox', { name: 'Horizon of Tune up the old bicycle' }), 'soon');
-    await screen.findByText('Saving…', { selector: '[role="status"]' });
+    expect((await screen.findByText('Saving…')).closest('[role="status"]')?.getAttribute('aria-busy')).toBe('true');
     expect(screen.getByRole('combobox', { name: 'Horizon of Tune up the old bicycle' })).toHaveProperty('value', 'soon');
     await act(async () => { held.release(); });
-    await screen.findByText(/^Saved /, { selector: '[role="status"]' });
+    expect((await screen.findByText('Saved')).closest('[role="status"]')).toBeTruthy();
   });
 
   it('unknown: a lost response is shown as unconfirmed with Check, never as saved or failed', async () => {
@@ -90,10 +90,11 @@ describe.each(['light', 'dark'] as const)('views in %s chrome', (theme) => {
     const { faults, rec, store } = await setup({ view: 'list' });
     faults.next('lose-response');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Status of Tune up the old bicycle' }), 'next');
-    await screen.findByText('Save result unknown');
+    await screen.findByText('1 unconfirmed', { selector: '.hq-indicator .hq-status-label' });
+    expect(screen.queryByText('Saved')).toBeNull();
     expect(pendingWord(store.getState(), 'ex-bike')).toBe('Unconfirmed');
-    expect(screen.getByText(/was sent but not confirmed\. It may or may not have been saved\./)).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Check' }).length).toBeGreaterThan(0);
+    expect(within(screen.getByRole('region', { name: 'Unconfirmed changes' })).getByText(/Check asks the Planner whether it was saved; nothing is re-sent/u)).toBeTruthy();
+    await user.click(within(screen.getByRole('region', { name: 'Unconfirmed changes' })).getByRole('button', { name: 'Check now' }));
     expect(rec.writes()).toHaveLength(1);
   });
 
@@ -125,22 +126,31 @@ describe('view behaviour', () => {
     });
     expect(screen.getByRole('button', { name: 'Undo' }).getAttribute('aria-keyshortcuts')).toBe('Control+Z Meta+Z');
     await act(async () => { await vi.advanceTimersByTimeAsync(7999); });
-    expect(screen.getByText('“Tune up the old bicycle” is now Later.')).toBeTruthy();
+    expect(screen.getByRole('group', { name: '“Tune up the old bicycle” is now Later.' })).toBeTruthy();
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-    expect(screen.queryByText('“Tune up the old bicycle” is now Later.')).toBeNull();
+    const leaving = within(container.querySelector('.hq-toast-list')!).getByText('“Tune up the old bicycle” is now Later.').closest('li')!;
+    expect(leaving.hasAttribute('inert')).toBe(true);
+    fireEvent.animationEnd(leaving);
+    expect(screen.queryByRole('group', { name: '“Tune up the old bicycle” is now Later.' })).toBeNull();
     expect(store.getState().undo).toHaveLength(1);
     await act(async () => { fireEvent.keyDown(container.querySelector('.wv')!, { key: 'z', [modifier]: true }); });
     expect(rec.writes()).toHaveLength(2);
     expect(lastWrite(rec)!.args.slice(0, 3)).toEqual(['ex-bike', 2, { horizon: 'someday' }]);
-    expect(screen.getByText('Undone.')).toBeTruthy();
+    expect(screen.getByRole('group', { name: /^Undone:/u })).toBeTruthy();
     expect(store.getState().undo).toHaveLength(0);
     await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
-    expect(screen.queryByText('Undone.')).toBeNull();
+    const undoneExit = within(container.querySelector('.hq-toast-list')!).getByText(/^Undone:/u).closest('li')!;
+    expect(undoneExit.hasAttribute('inert')).toBe(true);
+    fireEvent.animationEnd(undoneExit);
+    expect(screen.queryByRole('group', { name: /^Undone:/u })).toBeNull();
     await act(async () => { fireEvent.keyDown(container.querySelector('.wv')!, { key: 'z', [modifier]: true }); });
-    expect(screen.getByText('Nothing to undo.')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Nothing to undo.' })).toBeTruthy();
     expect(rec.writes()).toHaveLength(2);
     await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
-    expect(screen.queryByText('Nothing to undo.')).toBeNull();
+    const emptyExit = within(container.querySelector('.hq-toast-list')!).getByText('Nothing to undo.').closest('li')!;
+    expect(emptyExit.hasAttribute('inert')).toBe(true);
+    fireEvent.animationEnd(emptyExit);
+    expect(screen.queryByRole('group', { name: 'Nothing to undo.' })).toBeNull();
   });
 
   it('keeps a refused undo visible after eight seconds', async () => {
@@ -152,10 +162,12 @@ describe('view behaviour', () => {
     await device.patch('ex-bike', 2, { horizon: 'soon' }, 'toast-conflict-device');
     await act(async () => { await store.poll(); });
     await act(async () => { fireEvent.keyDown(container.querySelector('.wv')!, { key: 'z', ctrlKey: true }); });
-    const text = container.querySelector('.hq-toast-text')!.textContent;
+    const refusal = screen.getByRole('group', { name: /^Not undone:/u });
+    const text = refusal.textContent;
+    expect(text).toContain('the newer value was kept');
     expect(text).not.toContain('Undone.');
     await act(async () => { await vi.advanceTimersByTimeAsync(16_000); });
-    expect(container.querySelector('.hq-toast-text')!.textContent).toBe(text);
+    expect(screen.getByRole('group', { name: /^Not undone:/u }).textContent).toBe(text);
   });
 
   it('List sorts by column and moves status through move (top of the new status), with Undo restoring the place', async () => {
@@ -255,7 +267,7 @@ describe('view behaviour', () => {
     await screen.findByRole('button', { name: 'Undo' });
     // For example the Work shell's own Ctrl/⌘+Z, which calls the shared store directly.
     await act(async () => { await store.undo(); });
-    expect(screen.getByText('“Tune up the old bicycle” is now Later.')).toBeTruthy();
+    expect(screen.getByRole('group', { name: '“Tune up the old bicycle” is now Later.' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
     expect(rec.writes()).toHaveLength(2);
   });
@@ -268,10 +280,10 @@ describe('view behaviour', () => {
     fireEvent.keyDown(container.querySelector('.wv')!, { key: 'z', ctrlKey: true });
     await waitFor(() => expect(rec.writes()).toHaveLength(2));
     expect(lastWrite(rec)!.args.slice(0, 3)).toEqual(['ex-bike', 2, { horizon: 'someday' }]);
-    await screen.findByText('Undone.');
+    await screen.findByRole('group', { name: /^Undone:/u });
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
     fireEvent.keyDown(container.querySelector('.wv')!, { key: 'z', ctrlKey: true });
-    await screen.findByText('Nothing to undo.');
+    await screen.findByRole('group', { name: 'Nothing to undo.' });
     expect(rec.writes()).toHaveLength(2);
   });
 });

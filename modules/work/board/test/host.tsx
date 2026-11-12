@@ -54,10 +54,10 @@ export function syntheticLayout() {
     }) as DOMRect;
     const status = this.dataset.dropStatus;
     if (status) return rect(STATUS_IDS.indexOf(status as Status) * COLUMN_WIDTH, 0, 280, 2000);
-    const id = this.dataset.cardId;
+    const id = this.dataset.cardId ?? (this.matches('li[data-hq-motion-key]') ? this.querySelector<HTMLElement>('[data-card-id]')?.dataset.cardId : undefined);
     if (id) {
       const column = this.closest<HTMLElement>('[data-drop-status]')!;
-      const index = [...column.querySelectorAll<HTMLElement>('[data-card-id]')].indexOf(this);
+      const index = [...column.querySelectorAll<HTMLElement>('[data-card-id]')].findIndex((card) => card.dataset.cardId === id);
       return rect(STATUS_IDS.indexOf(column.dataset.dropStatus as Status) * COLUMN_WIDTH + 8, 100 + index * CARD_HEIGHT, 264, 70);
     }
     return rect(0, 0, 0, 0);
