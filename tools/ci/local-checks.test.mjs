@@ -87,3 +87,28 @@ test('the actual workflows still parse into every required group (drift guard)',
   assert.ok(steps.some(step => step.group === 'cli' && step.cwd === 'tools/hq-cli' && /HQ_CLI_E2E=1/.test(step.label)));
   assert.throws(() => plan(parseArgs(['--only', 'design', '--design', 'no-such-section'])), /Unknown Design section/);
 });
+
+
+test('the inventory block retains every command and its indentation', () => {
+  const parsed = parseJob(workflow, 'second', { allowBlocks: true });
+  assert.equal(parsed.commands[0].run, 'echo one\n');
+});
+
+test('empty selections cannot report a passing empty check set', () => {
+  for (const args of [['--only='], ['--only'], ['--design='], ['--design']]) {
+    assert.throws(() => parseArgs(args), /needs at least one/);
+  }
+});
+
+test('Design planning includes workflow inventory validation before sections', () => {
+  const steps = plan(parseArgs(['--only', 'design', '--design', 'canvas']));
+  assert.match(steps[0].label, /^inventory:/);
+  const inventory = steps.find(step => step.label.includes('Require every cone'));
+  assert.ok(inventory);
+  assert.match(inventory.args.at(-1), /Every test file on disk must be claimed exactly once/);
+  assert.match(inventory.args.at(-1), /HQD_SECTIONS=.*design-sections.mjs plan/);
+  assert.match(inventory.env.HQD_INVENTORY, /canvas\|modules\/design\/canvas/);
+  assert.equal(inventory.env.HQD_BATCH_COUNT, '1');
+  assert.ok(steps.some(step => step.label.startsWith('canvas:')));
+  assert.ok(steps.every(step => /^inventory:|^canvas:/.test(step.label)));
+});

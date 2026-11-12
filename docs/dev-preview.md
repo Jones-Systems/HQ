@@ -1,14 +1,14 @@
-# Dev preview: run HQ headlessly and capture screenshots
+# Dev preview and local checks
 
-`tools/dev-preview/` launches the real, built HQ desktop app with no display, seeds it with example data,
-lets you drive it, and saves PNG screenshots. It is the one shared way to look at your change in the real app.
+`tools/dev-preview/` launches the real, built HQ desktop app, seeds it with synthetic example data,
+lets you drive it, and saves PNG screenshots. Linux uses a virtual display; Darwin opens a native Electron window.
 It adds no dependencies: it uses Node's built-in WebSocket and the repository's own acceptance runtime
 (`tests/acceptance/runtime.mjs` and its fixtures), imported read-only. The approach comes from lane F7's
 exploration driver.
 
 ## Prerequisites
 
-Linux with `Xvfb` and `bwrap` (bubblewrap) on `PATH`, Node 22.22+, 24.15+ or 26+, and `python3` for `live` mode.
+Use CI-pinned Node 24.19.0 and Python 3.13.5 (`live` mode needs `python3`). Linux also needs `Xvfb` and `bwrap` (bubblewrap) on `PATH`. Darwin uses the existing acceptance runtime with owned process groups and requires a graphical login session; it does not require Linux display tools. The Darwin route is source-only and awaits native qualification.
 Then, in the checkout whose build you want to look at:
 
 ```sh
@@ -17,7 +17,7 @@ npm run build
 node tools/dev-preview/capture.mjs --install-electron   # first run only
 ```
 
-`npm ci --ignore-scripts` skips Electron's download. If `node_modules/electron/dist/electron` is missing the
+`npm ci --ignore-scripts` skips Electron's download. If the platform Electron binary (`node_modules/electron/dist/electron` on Linux, `node_modules/electron/dist/Electron.app/Contents/MacOS/Electron` on Darwin) is missing the
 tools stop and print the fix. `--install-electron` runs the package's own installer
 (`node node_modules/electron/install.js`) with the default shared download cache and the package's checksum
 verification. It needs no sudo and installs nothing global. Run `npm run build` again after you change source:
@@ -33,7 +33,7 @@ node tools/dev-preview/capture.mjs --mode live --reduced-motion --out /tmp/my-sh
 
 It starts a session, visits Design, Social, Work, Wiki and Settings in each theme and size, waits for fonts,
 animations and "Loading…" indicators to settle (bounded), writes the PNGs and a `manifest.json`, prints the
-output directory on stdout, and always cleans up. A full run takes roughly 5 to 10 seconds on this host.
+output directory on stdout, and always cleans up. The retained Linux handoff records roughly 5 to 10 seconds; current-head timing and Darwin behavior are unverified.
 
 Files are named `NN-<domain>-<theme>-<size>.png`. The manifest records, per shot: file, domain, theme, size,
 mode, git HEAD and a dirty flag, timestamp, what the page actually showed (theme, viewport, current item),
@@ -138,7 +138,7 @@ The control API listens on `127.0.0.1` only and requires the token from the sess
 
 ## Cleanup and etiquette
 
-About a dozen lanes share this host. Keep to one session per lane at a time, and always end with `ctl quit`
+Follow the active host admission and serial-verifier allocation before any session, build or test. Keep one admitted session at a time, and always end with `ctl quit`
 (or Ctrl-C / SIGTERM on `serve`, which does the same). `capture` always cleans up, including on a failed step or a
 signal. `serve` quits by itself after 90 idle minutes. Screenshots are yours to delete when you no longer need
 them: disk is tight.
@@ -148,13 +148,49 @@ them: disk is tight.
 - Screenshots are of the renderer only: no native window frame, menus or OS dialogs. Native Electron journeys are
   not covered here.
 - Window sizes are emulated viewports. The real window's minimum is 760×560, which `--sizes` can still go below.
-- Linux only, with Xvfb and bubblewrap. Other platforms stop with a clear message.
-- Fonts: this host maps `sans-serif` and `system-ui` to a monospace face, so the sandbox's private fontconfig maps
+- Linux uses Xvfb and bubblewrap. Darwin uses native windows and owned process groups, without Linux PID/user namespaces. Both retain Electron sandboxing. Other platforms stop with a clear message.
+- Fonts on the original Linux host: it maps `sans-serif` and `system-ui` to a monospace face, so the sandbox's private fontconfig maps
   them (and the app's `IBM Plex Sans`, which is not installed) to Liberation Sans. Shots show a proportional
   stand-in, not the shipped typeface. The alias never touches the host's fonts.
 - Endless animations (spinners) are noted, not waited for; use `--reduced-motion` for steadier shots.
 - Domain navigation depends on accessible names, with the selectors in one table (`NAV` in
   `tools/dev-preview/config.mjs`). If the shell is redesigned, a failed lookup is recorded in the manifest and
   that table is the place to adjust.
-- Unit tests cover the pure parts (`tools/dev-preview/test/`). The Electron path needs a built app and a host with
-  Xvfb and bubblewrap, so it is exercised by hand, not in CI.
+- Unit tests cover the pure parts (`tools/dev-preview/test/`). The Electron path needs a built app and an admitted Linux virtual-display or Darwin graphical session. Unit discovery alone does not qualify that path.
+
+
+## Local mirror of required checks
+
+```sh
+node tools/ci/local-checks.mjs --list
+node tools/ci/local-checks.mjs
+node tools/ci/local-checks.mjs --only cli,planner
+node tools/ci/local-checks.mjs --only design --design canvas,flows --timeout 120
+```
+
+The default selects Foundation, CLI, Planner and Design. `--list` plans and prints commands without executing them.
+`--only` narrows the groups; `--design` narrows Design sections, while retaining the complete inventory coverage
+and duplicate-ownership validation. Empty group/section selections refuse. A subset is partial verification.
+
+Foundation, CLI and Planner single-line commands and job environment come from the checked-out workflows.
+Dependency/setup actions and `npm ci` are excluded: prepare the locked dependencies and exact CI runtime versions
+separately, under host admission. The CLI command retains `HQ_CLI_E2E=1`. Foundation retains its npm build,
+full Vitest, Wiki, acceptance and storage discovery. No storage policy, test filter or evidence control is bypassed.
+
+Design runs the workflow inventory test command and complete inventory shell block, then uses the existing
+`design-sections.mjs` commands for selected rows, serially. This mirrors check commands rather than hosted
+matrix scheduling, cancellation or the fan-in job. Workflow edits outside the supported parser shape require
+maintainer review; this is a narrow parser, not a general YAML/Actions interpreter. New unsupported multiline
+Foundation/CLI/Planner steps refuse. The hosted jobs remain the required merge evidence.
+
+Design requires Bash 4+ on PATH for associative arrays, `mapfile` and `globstar`; macOS's bundled Bash 3.2
+cannot run it. Use an already authorized compatible Bash or report this prerequisite missing. The launcher does
+not install a shell. `--timeout` is a per-command timeout (default 600 s), not the hosted job timeout or a
+host-wide descendant controller. A failed command suppresses remaining commands in its group, continues other
+groups and yields a nonzero result. Temporary output is cleanup-owned; the summary prints command durations.
+Run only under the serial verifier's qualified controller and lock. Do not interpret this tool as host admission.
+
+The recovery checkpoint has static syntax/diff evidence only. No current-head unit suite, full mirror, Darwin
+launch, lifecycle/signal/idle-timeout check, cold Electron install or concurrent-session check has run. Existing
+Linux evidence belongs to the retained handoff. Workflow hooks for the two tooling suites are proposed to INT
+in the B4 recovery receipt; until integrated, the current Foundation workflow does not discover dev-preview tests.

@@ -1,4 +1,4 @@
-// A headless HQ session: the built Electron app under Xvfb inside bubblewrap, driven over CDP.
+// An HQ session: native Electron on Darwin, Xvfb/bubblewrap on Linux, driven over CDP.
 //
 // Built on the repository's own acceptance runtime (tests/acceptance/runtime.mjs and fixtures),
 // imported read-only from the repo that holds this tool. The first working version of this
@@ -17,6 +17,7 @@ import { createWikiCorpus } from '../../tests/acceptance/fixtures/wiki.mjs';
 import { BUSY, NAV, fontconfigXml, formatSize, keyEvents, modeNeedsFixtures, parseMode, pickFace, resolveSize, serviceConfigFor } from './config.mjs';
 import { defaultShotsDir, reapStaleRuns, resolveInside, safeFileName, scratchDir, writeOwnerFile } from './files.mjs';
 import { currentInPage, findInPage, mountedInPage, pageStateInPage, settleInPage, textVisibleInPage } from './page.mjs';
+import { createLauncher, startDisplay } from './launch.mjs';
 import { PrerequisiteError, checkPrerequisites, desktopMain, desktopRenderer, electronBinary, installElectron } from './prereq.mjs';
 
 export { PrerequisiteError };
@@ -131,13 +132,11 @@ export async function startSession(options = {}) {
     await writeOwnerFile(runtime.root);
     const profile = join(runtime.root, 'profile');
     for (const dir of ['tmp', 'home', 'config', 'cache', 'profile']) await mkdir(join(runtime.root, dir));
-    const fontFace = await installFontAlias(runtime);
-    if (!fontFace) say('WARNING: no proportional sans face found for the sandbox font alias; text may render monospace');
+    const darwin = process.platform === 'darwin';
+    const fontFace = darwin ? null : await installFontAlias(runtime);
+    if (!darwin && !fontFace) say('WARNING: no proportional sans face found for the sandbox font alias; text may render monospace');
     const env = { ...isolatedEnvironment(runtime.root), HQ_USER_DATA_DIR: profile };
-    const wrapped = (command, args, spawnOptions = {}) => runtime.spawn('bwrap', [
-      '--die-with-parent', '--unshare-user', '--unshare-pid', '--bind', '/', '/', '--bind', join(runtime.root, 'tmp'), '/tmp',
-      '--bind', repo, repo, '--proc', '/proc', '--dev', '/dev', command, ...args,
-    ], { cwd: repo, env, ...spawnOptions });
+    const wrapped = createLauncher(runtime, repo, env);
 
     // ---- fixtures and profile
     const gates = { work: { down: false }, social: { down: false } };
@@ -188,18 +187,7 @@ export async function startSession(options = {}) {
     }
 
     // ---- display and app
-    const screenWidth = Math.max(1920, baseSize.width);
-    const screenHeight = Math.max(1200, baseSize.height);
-    let display = '';
-    const xvfb = wrapped('Xvfb', ['-displayfd', '3', '-screen', '0', `${screenWidth}x${screenHeight}x24`, '-nolisten', 'tcp'], { stdio: ['ignore', 'ignore', 'pipe', 'pipe'] });
-    let xvfbLog = '';
-    xvfb.stderr.on('data', data => { xvfbLog = (xvfbLog + data).slice(-4000); });
-    xvfb.stdio[3].on('data', data => { display += data; });
-    await until(() => {
-      if (xvfb.exitCode !== null || xvfb.launchError) throw new Error(`Xvfb failed to start under bubblewrap: ${xvfbLog}`);
-      return /^\d+\s*$/.test(display);
-    }, 'Xvfb display', 20_000);
-    env.DISPLAY = `:${display.trim()}`;
+    await startDisplay(wrapped, env, baseSize);
 
     let app;
     let cdp;

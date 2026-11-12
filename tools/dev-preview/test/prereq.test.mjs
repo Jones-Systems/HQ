@@ -14,7 +14,7 @@ async function fakeRepo(name, parts = {}) {
   await mkdir(repo, { recursive: true });
   const put = async (path, mode = 0o644) => { await mkdir(join(path, '..'), { recursive: true }); await writeFile(path, ''); await chmod(path, mode); };
   if (parts.electronPackage) await put(join(repo, 'node_modules/electron/package.json'));
-  if (parts.binary) await put(electronBinary(repo), 0o755);
+  if (parts.binary) await put(electronBinary(repo, parts.platform ?? 'linux'), 0o755);
   if (parts.build) { await put(desktopMain(repo)); await put(desktopRenderer(repo)); }
   return repo;
 }
@@ -42,7 +42,7 @@ test('a missing Electron binary prints the install command and the flag', async 
   const problems = await check(repo, { searchPath: bin });
   assert.deepEqual(codes(problems), ['electron-binary']);
   assert.match(problems[0].message, /npm ci --ignore-scripts skips Electron's download/);
-  assert.match(problems[0].message, new RegExp(electronBinary(repo).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(problems[0].message, new RegExp(electronBinary(repo, 'linux').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.ok(problems[0].fix.includes('node node_modules/electron/install.js'));
   assert.ok(problems[0].fix.includes('--install-electron'));
 });
@@ -50,8 +50,8 @@ test('a missing Electron binary prints the install command and the flag', async 
 test('a binary that is not executable counts as missing', async () => {
   const repo = await fakeRepo('not-executable', { electronPackage: true, build: true });
   await mkdir(join(repo, 'node_modules/electron/dist'), { recursive: true });
-  await writeFile(electronBinary(repo), '');
-  await chmod(electronBinary(repo), 0o644);
+  await writeFile(electronBinary(repo, 'linux'), '');
+  await chmod(electronBinary(repo, 'linux'), 0o644);
   const bin = await fakeTools('bin-all', ['Xvfb', 'bwrap']);
   assert.deepEqual(codes(await check(repo, { searchPath: bin })), ['electron-binary']);
 });
@@ -76,9 +76,9 @@ test('missing host tools are reported without a fix we could run, and live mode 
 
 test('other platforms stop immediately with one explanation', async () => {
   const repo = await fakeRepo('complete', { electronPackage: true, binary: true, build: true });
-  const problems = await check(repo, { platform: 'darwin' });
+  const problems = await check(repo, { platform: 'win32' });
   assert.deepEqual(codes(problems), ['platform']);
-  assert.match(problems[0].message, /Linux only/);
+  assert.match(problems[0].message, /Linux .*Darwin/);
 });
 
 test('fix commands quote paths that need it', async () => {
@@ -104,4 +104,15 @@ test('PrerequisiteError lists every problem and its fix', () => {
   assert.equal(error.name, 'PrerequisiteError');
   assert.equal(error.message, 'Cannot start a dev-preview session:\n- first\n    fix: do this\n- second');
   assert.equal(formatProblems([]), '');
+});
+
+
+test('Darwin uses the app-bundle binary without Linux display tools', async () => {
+  const repo = await fakeRepo('darwin', { electronPackage: true, binary: true, build: true, platform: 'darwin' });
+  const none = await fakeTools('darwin-no-tools', []);
+  assert.equal(electronBinary(repo, 'darwin'), join(repo, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'));
+  assert.deepEqual(await check(repo, { platform: 'darwin', searchPath: none }), []);
+  assert.deepEqual(codes(await check(repo, { platform: 'darwin', mode: 'live', searchPath: none })), ['tool-python3']);
+  await chmod(electronBinary(repo, 'darwin'), 0o644);
+  assert.deepEqual(codes(await check(repo, { platform: 'darwin', searchPath: none })), ['electron-binary']);
 });

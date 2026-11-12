@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Run HQ's required PR checks locally, in the same order and with the same
 // commands as hosted CI. Steps are read from the workflow files on every run, so
-// this mirror cannot silently drift from CI: Foundation, CLI and Planner jobs
+// supported workflow command changes are reflected locally: Foundation, CLI and Planner jobs
 // use their single-line `run:` steps; Design uses the workflow's HQD_INVENTORY
 // rows and the shared runner in design-sections.mjs.
 import { spawnSync } from 'node:child_process';
@@ -22,7 +22,7 @@ export const GROUPS = Object.freeze({
 const unquote = value => value.trim().replace(/^'(.*)'$/s, '$1').replace(/^"(.*)"$/s, '$1');
 
 /** Parse one job's env and single-line `run:` steps; setup and install steps are skipped. */
-export function parseJob(text, job) {
+export function parseJob(text, job, { allowBlocks = false } = {}) {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex(line => line === `  ${job}:`);
   if (start < 0) throw new Error(`Job not found: ${job}`);
@@ -32,7 +32,16 @@ export function parseJob(text, job) {
   const steps = [];
   let section = null;
   let step = null;
-  for (const line of body) {
+  for (let index = 0; index < body.length; index++) {
+    const line = body[index];
+    if (allowBlocks && /^        run: \|$/.test(line)) {
+      const script = [];
+      while (index + 1 < body.length && (/^          /.test(body[index + 1]) || !body[index + 1].trim())) {
+        script.push(body[++index].slice(10));
+      }
+      step.run = script.join('\n');
+      continue;
+    }
     if (/^\s*(#|$)/.test(line)) continue;
     if (/^    \S/.test(line)) { section = line.trim().replace(/:.*/, ''); continue; }
     if (section === 'env' && /^      \S/.test(line)) {
@@ -83,12 +92,14 @@ export function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const [flag, inline] = argv[i].split(/=(.*)/s);
     const value = () => inline ?? argv[++i];
-    if (flag === '--only') options.groups = value().split(',').filter(Boolean);
-    else if (flag === '--design') options.design = value().split(',').filter(Boolean);
+    if (flag === '--only') options.groups = (value() ?? '').split(',').filter(Boolean);
+    else if (flag === '--design') options.design = (value() ?? '').split(',').filter(Boolean);
     else if (flag === '--timeout') options.timeoutSeconds = Number(value());
     else if (flag === '--list') options.list = true;
     else throw new Error(`Unknown argument: ${argv[i]}`);
   }
+  if (!options.groups.length) throw new Error('--only needs at least one group');
+  if (argv.some(arg => arg === '--design' || arg.startsWith('--design=')) && !options.design.length) throw new Error('--design needs at least one section');
   for (const group of options.groups) if (!Object.hasOwn(GROUPS, group)) throw new Error(`Unknown group: ${group}`);
   if (!Number.isInteger(options.timeoutSeconds) || options.timeoutSeconds < 1) throw new Error('--timeout must be a positive integer (seconds)');
   return options;
@@ -101,6 +112,16 @@ export function plan(options, read = file => readFileSync(path.join(repo, '.gith
     const text = read(workflow);
     if (group === 'design') {
       const sections = parseDesignInventory(text);
+      const inventory = /^  HQD_INVENTORY: \|\n((?:    .*\n|\s*\n)+)/m.exec(text)[1]
+        .split('\n').map(line => line.slice(4)).join('\n');
+      const expected = /^  HQD_EXPECTED_ROWS: '(\d+)'/m.exec(text)[1];
+      // Execute the workflow's complete inventory validation, including coverage and
+      // duplicate ownership checks, even when a subset of sections is requested.
+      for (const command of parseJob(text, 'inventory', { allowBlocks: true }).commands) {
+        steps.push({ group, label: `inventory: ${command.name}`, command: 'bash',
+          args: ['-e', '-o', 'pipefail', '-c', command.run], cwd: command.cwd,
+          env: { HQD_INVENTORY: inventory, HQD_EXPECTED_ROWS: expected, HQD_BATCH_COUNT: '1' } });
+      }
       const unknown = options.design.filter(id => !sections.some(section => section.id === id));
       if (unknown.length) throw new Error(`Unknown Design section: ${unknown.join(', ')}`);
       for (const section of sections.filter(section => !options.design.length || options.design.includes(section.id))) {
@@ -113,7 +134,7 @@ export function plan(options, read = file => readFileSync(path.join(repo, '.gith
       }
     } else {
       const { env, commands } = parseJob(text, job);
-      for (const command of commands) steps.push({ group, label: command.run, command: 'bash', args: ['-c', command.run], cwd: command.cwd, env });
+      for (const command of commands) steps.push({ group, label: command.run, command: 'bash', args: ['-e', '-o', 'pipefail', '-c', command.run], cwd: command.cwd, env });
     }
   }
   return steps;
@@ -136,7 +157,7 @@ function main() {
       const started = performance.now();
       const result = spawnSync(step.command, step.args, {
         cwd: path.join(repo, step.cwd), stdio: 'inherit', timeout: options.timeoutSeconds * 1000, killSignal: 'SIGTERM',
-        env: { ...process.env, ...step.env, TMPDIR: scratch },
+        env: { ...process.env, ...step.env, TMPDIR: scratch, GITHUB_OUTPUT: path.join(scratch, 'outputs') },
       });
       const seconds = (performance.now() - started) / 1000;
       const status = result.error?.code === 'ETIMEDOUT' ? `timed out after ${options.timeoutSeconds}s`
@@ -151,7 +172,7 @@ function main() {
   console.log(`\nHQ local checks (${process.version}; CI pins Node 24.19.0 and Python 3.13.5)`);
   for (const result of results) console.log(`${result.status === 'passed' ? '✔' : '✖'} ${result.group.padEnd(10)} ${result.seconds.toFixed(1).padStart(6)}s  ${result.status === 'passed' ? '' : `[${result.status}] `}${result.label}`);
   const failed = results.filter(result => result.status !== 'passed');
-  console.log(failed.length ? `\n${failed.length} step(s) did not pass.` : '\nAll mirrored required checks passed.');
+  console.log(failed.length ? `\n${failed.length} step(s) did not pass.` : '\nAll selected local check commands passed (hosted CI and native qualification remain separate).');
   return failed.length ? 1 : 0;
 }
 

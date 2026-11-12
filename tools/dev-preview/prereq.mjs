@@ -16,7 +16,8 @@ export async function findExecutable(name, searchPath = process.env.PATH ?? '') 
   return null;
 }
 
-export const electronBinary = repo => join(repo, 'node_modules/electron/dist/electron');
+export const electronBinary = (repo, platform = process.platform) => join(repo, 'node_modules/electron/dist',
+  platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron');
 export const electronInstaller = repo => join(repo, 'node_modules/electron/install.js');
 export const desktopMain = repo => join(repo, 'apps/desktop/dist-electron/main.js');
 export const desktopRenderer = repo => join(repo, 'apps/desktop/dist/index.html');
@@ -29,24 +30,24 @@ const exists = async (path, mode = constants.F_OK) => { try { await access(path,
  */
 export async function checkPrerequisites(repo, { mode = 'example', platform = process.platform, searchPath } = {}) {
   const problems = [];
-  if (platform !== 'linux') {
-    return [{ code: 'platform', message: `dev-preview runs the app under Xvfb and bubblewrap, so it supports Linux only (this host: ${platform})`, fix: null }];
+  if (!['linux', 'darwin'].includes(platform)) {
+    return [{ code: 'platform', message: `dev-preview supports Linux (Xvfb/bubblewrap) and Darwin (native Electron) only (this host: ${platform})`, fix: null }];
   }
   const where = quote(repo);
   const dependenciesPresent = await exists(join(repo, 'node_modules/electron/package.json'));
   if (!dependenciesPresent) {
     problems.push({ code: 'dependencies', message: `Dependencies are not installed in ${repo}`, fix: `cd ${where} && npm ci --ignore-scripts --no-audit --no-fund` });
-  } else if (!await exists(electronBinary(repo), constants.X_OK)) {
+  } else if (!await exists(electronBinary(repo, platform), constants.X_OK)) {
     problems.push({
       code: 'electron-binary',
-      message: `Electron binary missing: ${electronBinary(repo)} (npm ci --ignore-scripts skips Electron's download)`,
+      message: `Electron binary missing: ${electronBinary(repo, platform)} (npm ci --ignore-scripts skips Electron's download)`,
       fix: `cd ${where} && node node_modules/electron/install.js    # or rerun with --install-electron`,
     });
   }
   if (!await exists(desktopMain(repo)) || !await exists(desktopRenderer(repo))) {
     problems.push({ code: 'build', message: `The desktop app is not built in ${repo}`, fix: `cd ${where} && npm run build` });
   }
-  for (const tool of ['Xvfb', 'bwrap', ...(mode === 'live' ? ['python3'] : [])]) {
+  for (const tool of [...(platform === 'linux' ? ['Xvfb', 'bwrap'] : []), ...(mode === 'live' ? ['python3'] : [])]) {
     if (!await findExecutable(tool, searchPath)) {
       problems.push({ code: `tool-${tool.toLowerCase()}`, message: `${tool} is required but was not found on PATH`, fix: null });
     }
