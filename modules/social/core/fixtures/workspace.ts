@@ -1,6 +1,7 @@
 import type { ReferenceEnvelope } from '@hq/contracts';
 import { DEFAULT_BRAND_ID, type Brand, type Draft, type RunRecord, type Tool, type ToolId } from '../port';
 import { MESSAGES } from '../validate';
+import { WORKBENCH_OUTPUTS } from './outputs';
 
 /**
  * Fictional Social workspace data. Every brand, draft, run and example here is invented;
@@ -66,29 +67,34 @@ export interface FixtureSeed {
   runs: FixtureRun[];
 }
 
-function citation(runId: string, title: string, draftId: string): ReferenceEnvelope {
+function citation(projectId: string, runId: string, title: string, draftId: string): ReferenceEnvelope {
   return {
-    version: 1, domain: 'social', projectId: FIXTURE_PROJECT_ID, kind: 'run', entityId: runId, title,
+    version: 1, domain: 'social', projectId, kind: 'run', entityId: runId, title,
     returnDestination: { domain: 'social', destination: `library/${draftId}` }, sourceRevision: '2026-10-18',
   };
 }
 
+/** The Work example item the linked draft is paired with (the Work example planner holds the other side). */
+export const FIXTURE_WORK_ITEM_ID = 'ex-cupping-hour';
+
 /**
  * The seed covers every run status, a planned/unplanned/archived spread and one linked draft.
  * `links` and `project_id` are added by the fixture only when their proposed feature is advertised.
+ * `projectId` is the HQ project the example is shown in: its brand and sample links point there, so they open
+ * instead of reading as another project's. Harbor Lane Bakery stays in another project for the mismatch case.
  */
-export function fictionalSeed(): FixtureSeed {
+export function fictionalSeed(projectId: string = FIXTURE_PROJECT_ID): FixtureSeed {
   const ids = FIXTURE_IDS;
   const draft = (id: string, fields: Omit<Draft, 'id'>): Draft => ({ id, ...fields });
   return {
     brands: [
       { id: DEFAULT_BRAND_ID, name: 'My workspace' },
-      { id: ids.larkspur, name: 'Larkspur Tea Co.', project_id: FIXTURE_PROJECT_ID },
+      { id: ids.larkspur, name: 'Larkspur Tea Co.', project_id: projectId },
       { id: ids.harbor, name: 'Harbor Lane Bakery', project_id: FIXTURE_OTHER_PROJECT_ID },
     ],
     content: [
       draft(ids.autumnBlend, { title: 'Autumn blend tasting notes', body: 'Three cups, three steeping times. Which one tastes like October?', brand_id: ids.larkspur, channel: 'LinkedIn', planned_date: '2026-10-24', archived: 0, version: 3, updated_at: '2026-10-19T16:05:00+00:00' }),
-      draft(ids.steepingThread, { title: 'Steeping times thread', body: '1/ Most bitterness is a timing problem, not a leaf problem.', brand_id: ids.larkspur, channel: 'X', planned_date: '', archived: 0, version: 1, updated_at: '2026-10-18T10:30:00+00:00', links: [citation(ids.exampleRun, 'Signal inbox · Neighborhood tea', ids.steepingThread), { version: 1, domain: 'work', projectId: FIXTURE_PROJECT_ID, kind: 'item', entityId: 'fixture-item-1', title: 'Plan the cupping hour', returnDestination: { domain: 'social', destination: `library/${ids.steepingThread}` } }] }),
+      draft(ids.steepingThread, { title: 'Steeping times thread', body: '1/ Most bitterness is a timing problem, not a leaf problem.', brand_id: ids.larkspur, channel: 'X', planned_date: '', archived: 0, version: 1, updated_at: '2026-10-18T10:30:00+00:00', links: [citation(projectId, ids.exampleRun, 'Signal inbox · Neighborhood tea', ids.steepingThread), { version: 1, domain: 'work', projectId, kind: 'item', entityId: FIXTURE_WORK_ITEM_ID, title: 'Plan the cupping hour', returnDestination: { domain: 'social', destination: `library/${ids.steepingThread}` } }] }),
       draft(ids.icedRecap, { title: 'Summer iced tea recap', body: 'What we learned pouring cold brew all summer.', brand_id: ids.larkspur, channel: 'Instagram', planned_date: '2026-08-30', archived: 1, version: 2, updated_at: '2026-09-02T09:00:00+00:00' }),
       draft(ids.openDay, { title: 'Sourdough starter open day', body: 'Bring a jar; leave with a starter and a feeding schedule.', brand_id: ids.harbor, channel: 'General', planned_date: '2026-11-02', archived: 0, version: 1, updated_at: '2026-10-17T14:45:00+00:00' }),
       draft(ids.slowerRhythm, { title: 'Notes on a slower posting rhythm', body: '', brand_id: DEFAULT_BRAND_ID, channel: 'Article', planned_date: '', archived: 0, version: 1, updated_at: '2026-10-15T08:00:00+00:00' }),
@@ -96,7 +102,7 @@ export function fictionalSeed(): FixtureSeed {
     runs: [
       { record: { id: ids.queuedRun, tool: 'x-studio', status: 'queued', is_example: 0, created_at: '2026-10-19T17:02:00+00:00', finished_at: null, error: null } },
       { record: { id: ids.runningRun, tool: 'social-publisher', status: 'running', is_example: 0, created_at: '2026-10-19T17:01:00+00:00', finished_at: null, error: null } },
-      { record: { id: ids.exampleRun, tool: 'x-intelligence', status: 'succeeded', is_example: 1, created_at: '2026-10-18T10:00:00+00:00', finished_at: '2026-10-18T10:00:04+00:00', error: null }, output: { ok: true, topic: 'Neighborhood tea', clusters: [{ label: 'Cold brew', items: ['fixture-item-1'] }] } },
+      { record: { id: ids.exampleRun, tool: 'x-intelligence', status: 'succeeded', is_example: 1, created_at: '2026-10-18T10:00:00+00:00', finished_at: '2026-10-18T10:00:04+00:00', error: null }, output: structuredClone(WORKBENCH_OUTPUTS['x-intelligence']) },
       { record: { id: ids.failedRun, tool: 'seo-studio', status: 'failed', is_example: 0, created_at: '2026-10-17T12:00:00+00:00', finished_at: '2026-10-17T12:00:02+00:00', error: 'Packet 1 has no sources. Add at least one source and run again.' }, output: { ok: false, error: 'Packet 1 has no sources. Add at least one source and run again.' } },
       { record: { id: ids.interruptedRun, tool: 'reddit-opportunities', status: 'interrupted', is_example: 0, created_at: '2026-10-16T09:00:00+00:00', finished_at: '2026-10-16T09:05:00+00:00', error: MESSAGES.interrupted } },
     ],

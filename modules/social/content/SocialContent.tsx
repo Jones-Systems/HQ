@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { StateView, StatusChip, type ReferencePort } from '@hq/ui';
-import { useSocialSession, workspaceSnapshot, type SocialWorkspacePort } from '../core';
+import { useSocialSession, portErrorNotice, workspaceSnapshot, type SocialWorkspacePort } from '../core';
+import { useSocialFrame } from '../ui';
 import { Calendar } from './Calendar';
 import { Library } from './Library';
 import { localToday, parseContentDestination } from './model';
@@ -28,6 +29,7 @@ function clock(iso: string): string {
  */
 export function SocialContent({ port, projectId, destination, navigate, references, now = () => new Date() }: SocialContentProps) {
   const { state, session } = useSocialSession(projectId);
+  const framed = useSocialFrame() !== null;
   const location = parseContentDestination(destination) ?? { page: 'library' as const };
   const load = state.workspace;
   const snapshot = workspaceSnapshot(load);
@@ -40,11 +42,12 @@ export function SocialContent({ port, projectId, destination, navigate, referenc
   if (!snapshot) {
     if (load.status === 'error') {
       const offline = load.error.kind === 'unavailable';
+      const notice = portErrorNotice(load.error, 'load');
       return (
         <StateView
           state={offline ? 'unavailable' : 'error'}
-          title={offline ? 'The Social service is unreachable' : 'The workspace could not be loaded'}
-          description="Nothing was changed. Unsaved text in open drafts is kept for this session."
+          title={notice.title}
+          description={notice.message}
           action={{ label: 'Try again', onAction: () => void session.load(port) }}
         />
       );
@@ -58,13 +61,14 @@ export function SocialContent({ port, projectId, destination, navigate, referenc
 
   return (
     <div className="soc-content">
-      <div className="soc-freshness" role="status">
+      {/* Inside the Social domain the page header's sync pill shows freshness; mounted on its own, this line does. */}
+      {!framed && <div className="soc-freshness" role="status">
         {load.status === 'loading' && <StatusChip tone="info" label="Refreshing" />}
         {stale
           ? <StatusChip tone={load.error.kind === 'unavailable' ? 'unavailable' : 'warning'} label={load.error.kind === 'unavailable' ? 'Offline' : 'Stale'} detail={`showing data last synced ${clock(snapshot.observedAt)}`} />
           : <span className="hq-meta">Last synced {clock(snapshot.observedAt)}</span>}
         {stale && <button type="button" className="hq-save-action" onClick={() => void session.load(port)}>Check again</button>}
-      </div>
+      </div>}
       {location.page === 'calendar' ? (
         <Calendar
           session={session} port={port} snapshot={snapshot} month={location.month ?? localToday(now()).slice(0, 7)}

@@ -63,6 +63,11 @@ export function filterDrafts(drafts: readonly Draft[], filters: LibraryFilters):
     && (!query || draft.title.toLocaleLowerCase().includes(query) || draft.body.toLocaleLowerCase().includes(query)));
 }
 
+/** "24 Oct": a planned date for a crowded Library row. The full date, with its year, stays in the row's title text. */
+export function rowDateLabel(date: string): string {
+  return dateLabel(date).replace(/\s\d+$/u, '');
+}
+
 // ── Calendar ───────────────────────────────────────────────────────────────────
 
 export interface CalendarDay {
@@ -142,4 +147,33 @@ export function calendarPlan(drafts: readonly Draft[], brand: string): CalendarP
   for (const list of byDate.values()) list.sort((a, b) => a.title.localeCompare(b.title));
   undated.sort((a, b) => a.title.localeCompare(b.title));
   return { byDate, undated };
+}
+
+/** "Oct 24", or "Oct 24, 2027" when it is not in `relativeTo`'s year. For short calendar nudges; toasts use `dateLabel`. */
+export function shortDateLabel(date: string, relativeTo: string): string {
+  const [year, m, d] = date.split('-').map(Number) as [number, number, number];
+  const sameYear = date.slice(0, 4) === relativeTo.slice(0, 4);
+  return `${MONTH_NAMES[m - 1]!.slice(0, 3)} ${d}${sameYear ? '' : `, ${year}`}`;
+}
+
+export interface NearestPlanned {
+  readonly date: string;
+  /** `after` the visible range, or `before` it when nothing is planned later. */
+  readonly direction: 'after' | 'before';
+}
+
+/**
+ * The planned date nearest the visible range `[first, last]`: the next one after it, otherwise the latest one
+ * before it. Null when the range has planned dates itself, or nothing is planned at all.
+ */
+export function nearestPlanned(dates: Iterable<string>, first: string, last: string): NearestPlanned | null {
+  let after: string | null = null;
+  let before: string | null = null;
+  for (const date of dates) {
+    if (date >= first && date <= last) return null;
+    if (date > last && (after === null || date < after)) after = date;
+    if (date < first && (before === null || date > before)) before = date;
+  }
+  if (after) return { date: after, direction: 'after' };
+  return before ? { date: before, direction: 'before' } : null;
 }

@@ -1,0 +1,65 @@
+diff --git a/apps/desktop/src/preview/composition.test.tsx b/apps/desktop/src/preview/composition.test.tsx
+index a0149c9..d35dbc2 100644
+--- a/apps/desktop/src/preview/composition.test.tsx
++++ b/apps/desktop/src/preview/composition.test.tsx
+@@ -13 +13 @@ import { resetWorkSessions, setWorkSessionPort } from '../../../../modules/work/
+-import { resetSocialSessions } from '../../../../modules/social/core';
++import { FIXTURE_IDS, FIXTURE_WORK_ITEM_ID, resetSocialSessions, type SocialWorkspacePort } from '../../../../modules/social/core';
+@@ -29,0 +30,14 @@ it('renders example Work and Social without any global service bridge', async ()
++it('opens the Social example in the project it is shown in, so its sample links are not read as another project', async () => {
++  const social = vi.fn((projectId: string) => seed('default').social(projectId));
++  const { Social } = createServiceDomains(() => UNCONFIGURED, { social });
++  render(<Social {...props} destination={`library/${FIXTURE_IDS.steepingThread}`} />);
++  expect(await screen.findByDisplayValue('Steeping times thread')).toBeTruthy();
++  expect(social).toHaveBeenCalledWith('preview-test');
++  const port = social.mock.results[0]!.value as SocialWorkspacePort;
++  const draft = (await port.snapshot()).content.find((item) => item.id === FIXTURE_IDS.steepingThread)!;
++  expect(draft.links?.map((link) => [link.domain, link.projectId, link.entityId])).toEqual([
++    ['social', 'preview-test', FIXTURE_IDS.exampleRun], ['work', 'preview-test', FIXTURE_WORK_ITEM_ID],
++  ]);
++  expect(screen.queryByText(/Another project: links are read-only/u)).toBeNull();
++});
++
+diff --git a/apps/desktop/src/preview/composition.tsx b/apps/desktop/src/preview/composition.tsx
+index b201122..e47e4c3 100644
+--- a/apps/desktop/src/preview/composition.tsx
++++ b/apps/desktop/src/preview/composition.tsx
+@@ -7,2 +7 @@ import { bridgeTransport, createPlannerLive } from '../../../../modules/work/liv
+-import { createWorkbenchFixture } from '../../../../modules/social/workbench/fixtures/examples';
+-import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES } from '../../../../modules/social/core';
++import { createExampleWorkspace } from '../../../../modules/social/nav';
+@@ -28 +27 @@ export function seed(entry: PreviewEntry) {
+-    social: () => createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port,
++    social: (projectId: string) => createExampleWorkspace(projectId),
+diff --git a/apps/desktop/src/services/domains.tsx b/apps/desktop/src/services/domains.tsx
+index 14b18c8..f356cf1 100644
+--- a/apps/desktop/src/services/domains.tsx
++++ b/apps/desktop/src/services/domains.tsx
+@@ -6 +6 @@ import { WorkModule, setWorkSessionPort, examplePlanner } from '@hq/work';
+-import { SocialDomain } from '../../../../modules/social/nav';
++import { SocialDomain, createExampleWorkspace } from '../../../../modules/social/nav';
+@@ -8,2 +7,0 @@ import { createLiveSocialPort } from '../../../../modules/social/live';
+-import { createWorkbenchFixture } from '../../../../modules/social/workbench/fixtures/examples';
+-import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES } from '../../../../modules/social/core';
+@@ -14 +12 @@ type Services = Pick<HqServices, 'social' | 'work'> & { config: Pick<HqServices[
+-type Examples = { planner?: () => import('../../../../modules/work/core/port').PlannerPort; social?: () => import('../../../../modules/social/core/port').SocialWorkspacePort };
++type Examples = { planner?: () => import('../../../../modules/work/core/port').PlannerPort; social?: (projectId: string) => import('../../../../modules/social/core/port').SocialWorkspacePort };
+@@ -40 +38,2 @@ export function createServiceDomains(getServices: () => Services | undefined, ex
+-  async function chooseSocial() {
++  /** `projectId` is the project the example workspace is first shown in; its sample links point there. */
++  async function chooseSocial(projectId: string) {
+@@ -44 +43 @@ export function createServiceDomains(getServices: () => Services | undefined, ex
+-      : selection === 'example' ? (examples?.social?.() ?? createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port) : null;
++      : selection === 'example' ? (examples?.social?.(projectId) ?? createExampleWorkspace(projectId)) : null;
+@@ -49 +48 @@ export function createServiceDomains(getServices: () => Services | undefined, ex
+-    useEffect(() => { let mounted = true; socialChoice ??= chooseSocial(); void socialChoice.then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
++    useEffect(() => { let mounted = true; socialChoice ??= chooseSocial(props.context.id); void socialChoice.then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
+diff --git a/apps/desktop/src/social-work.integration.test.tsx b/apps/desktop/src/social-work.integration.test.tsx
+index 12528a8..68de738 100644
+--- a/apps/desktop/src/social-work.integration.test.tsx
++++ b/apps/desktop/src/social-work.integration.test.tsx
+@@ -205,0 +206 @@ describe('Social and Work mounted in the T0 shell', () => {
++    expect(screen.getByRole('button', { name: /^Example workspace/u })).toBeTruthy();
+@@ -207 +208 @@ describe('Social and Work mounted in the T0 shell', () => {
+-    expect(screen.getByText(/^No account connection, posting, live collection or scheduling\./u)).toBeTruthy();
++    expect(within(screen.getByRole('region', { name: 'What Social can do here' })).getByText(/^No account connection, posting, live collection or scheduling\./u)).toBeTruthy();

@@ -1,4 +1,8 @@
 /* Evidence page only: stands in for the shell's canvas, type and module frame. */
+*, *::before, *::after { box-sizing: border-box; } /* As the desktop shell's own reset. */
 html, body { margin: 0; background: var(--hq-canvas); color: var(--hq-text); font-family: var(--hq-font-family-sans); }
 .preview { padding: var(--hq-space-lg); display: grid; gap: var(--hq-space-md); }
 .preview-caption { margin: 0; font: var(--hq-type-meta); color: var(--hq-text-subtle); }
+
+/* Library views fill the window and scroll inside the page, as the real shell does, so the composer's save bar sticks. */
+.preview[data-view^="library"] { box-sizing: border-box; height: 100dvh; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
