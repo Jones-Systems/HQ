@@ -7,8 +7,8 @@ import { CONTRACT } from './support';
 
 // Integrity of the pinned public Planner contract copies, and the shared reference vectors run against Work.
 
-/** SHA-256 of the upstream SHA256SUMS file itself, as copied from 523104b (identical blob at 67594ade). */
-const SUMS_SHA256 = 'dafe2da70363b4db60b9bc5d5466a6c77097369f896fbbb7c1ac56f1c5c7733b';
+/** SHA-256 of the upstream SHA256SUMS file itself, for the PLN-W source compatibility vectors; see contract/PROVENANCE.md. */
+const SUMS_SHA256 = 'e06ebfd0278431efa3e6662acecb98dbde0743bf2c3f7a9e2e167c6ebb0e3921';
 const UPSTREAM = new URL('../../../../services/planner/contract/', import.meta.url);
 
 const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
@@ -64,6 +64,13 @@ describe('shared reference vectors against Work validation', () => {
     const result = normalizeFields({ references: c.input }, { creating: false, features: [vectors.feature], newId: () => vectors.generated_entry_id });
     if (c.expected) expect(result).toEqual({ ok: true, value: { references: c.expected } });
     else expect(result).toEqual({ ok: false, errors: c.errors });
+  });
+
+  it('preserves remote Wiki provenance in Work wire fields without inferring a source association', () => {
+    const c = vectors.cases.find((value) => value.id === 'wiki-return-work')!;
+    const result = canonicalFields({ title: 'Source Work item', references: c.input }, [vectors.feature]);
+    expect(result).toEqual({ ok: true, value: { title: 'Source Work item', references: c.expected } });
+    expect(c.expected![0]).toMatchObject({ target: { domain: 'wiki', projectId: 'remote-project', workspaceId: 'remote-workspace', sourceRevision: 'remote-revision-7', returnDestination: { domain: 'work' } } });
   });
 
   it('refuses locally, before sending, exactly the vectors whose HQ target parseReference rejects', () => {
