@@ -296,6 +296,30 @@ action while retaining every no-empty/no-synthetic/no-write oracle. Production
 source is unchanged. These three source repairs have not run locally; the new
 assembled head needs full required CI and later Mini/native qualification.
 
+At `212e5bb0`, Design inventory, batch and fan-in are green, as are Social,
+Planner and CLI with the real synthetic Planner E2E. Foundation build and root
+Vitest pass; Wiki reports 825 passed, zero failed, one cancelled and zero skipped.
+Only the combobox pending-promise cancellation remains, so the portable fixture
+stage is still not reached. The timer-teardown candidate did not resolve it.
+
+Diagnostic checkpoint `71d22f0f` brackets the keyboard test's existing awaits and
+clock restores with fixed stderr labels. Removing those lines reproduces the
+prior test byte-for-byte. It introduces no yield, timeout, retry, skip, keepalive
+or assertion change. The next Foundation run must identify the entered call
+without a return before another repair is selected. A diagnostic pass alone
+would not establish the original cause.
+
+The ordinary controller's synthetic qualification is nonpass: repeated KILL
+attempts raised a signal error before unknown-custody recording in the escaped-
+pipe case. Synthetic processes closed and the real shared lock was untouched.
+New private source copies make signal attempts one-shot and retain failed-signal
+observations without treating them as closure. Independent source review also
+records two gating P1s: closed-pipe escaped-descendant custody and receipt-write
+failure bypassing the hold. Those corrections and final executable qualification
+remain required. The separate P2 admission finding stays recorded/unselected.
+Task-local exact-runtime preparation and descendant-boundary research proceed;
+no HQ compiler, build, local test service or native producer has started.
+
 Contributing conversations and roles, with native identifiers retained privately:
 
 - Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.
