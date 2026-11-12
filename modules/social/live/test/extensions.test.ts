@@ -4,6 +4,30 @@ import { createFixtureWorkspace, FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_SOURCES, F
 import { createLiveSocialPort } from '../port';
 import { createWireStub } from './wire-stub';
 const features = [FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_SOURCES, FEATURE_HQ_PUBLISHING];
+it('rejects every absent extension without a pre-read or mutation', async () => {
+  const stub = createWireStub({ features: [] });
+  const p = createLiveSocialPort(stub.transport);
+  const calls = [
+    () => p.setBrandProject('default', null),
+    () => p.source('source01'),
+    () => p.saveSource({ name: 'Example', kind: 'feed-items', file_name: 'feed.json', text: '[]', as_of: '' }),
+    () => p.setSourceArchived('source01', 1),
+    () => p.connectChannel('X', 'Example'),
+    () => p.disconnectChannel('connect1'),
+    () => p.requestPublish('draft001', 1, 'connect1'),
+    () => p.cancelPublish('request1'),
+    () => p.approvePublish('request1', 'a'.repeat(64)),
+    () => p.submitRun('x-studio', {}, true, { sourceIds: ['source01'] }),
+  ];
+  for (const observed of [false, true]) {
+    if (observed) await p.snapshot();
+    const before = stub.calls.length;
+    for (const call of calls) {
+      await expect(call()).rejects.toMatchObject({ error: { kind: 'invalid' } });
+      expect(stub.calls).toHaveLength(before);
+    }
+  }
+});
 for (const mode of ['fixture', 'live'] as const) describe(`extensions ${mode}`, () => {
   const create = (flags: string[]) => mode === 'fixture' ? createFixtureWorkspace({ features: flags }).port
     : createLiveSocialPort(createWireStub({ features: flags }).transport);

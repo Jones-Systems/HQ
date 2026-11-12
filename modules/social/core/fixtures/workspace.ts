@@ -12,7 +12,7 @@ import { WORKBENCH_OUTPUTS } from './outputs';
 export const FIXTURE_PROJECT_ID = 'fixture-project';
 export const FIXTURE_OTHER_PROJECT_ID = 'fixture-other-project';
 
-export function fixtureId(prefix: 'b' | 'd' | 'e', n: number): string {
+export function fixtureId(prefix: 'b' | 'c' | 'd' | 'e', n: number): string {
   return prefix + n.toString(16).padStart(31, '0');
 }
 

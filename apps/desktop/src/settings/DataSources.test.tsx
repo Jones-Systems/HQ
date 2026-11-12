@@ -17,7 +17,7 @@ it.each([
 ] as const)('checks Planner health once and shares its wording and observation time: %s', async (answer, label) => {
   const call = vi.fn(async () => answer as ServiceResponse);
   const config = { status: async () => ({ configured: true, policy: 'ok', transport: 'loopback-http' }) };
-  window.hqServices = { config, work: { call } } as unknown as HqServices;
+  Object.defineProperty(window, 'hqServices', { configurable: true, value: { config, work: { call } } as unknown as HqServices });
   const store = createObservedStatusStore({ now: () => new Date(2026, 10, 12, 9, 30).getTime() });
   render(<DataSourcesProvider store={store}><Consumer /></DataSourcesProvider>);
   await screen.findByText('Set up · not checked');

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FIXTURE_IDS, createFixtureWorkspace } from '../../core';
+import { FIXTURE_IDS, createFixtureWorkspace, FEATURE_HQ_SOURCES } from '../../core';
 import { WORKBENCH_OUTPUTS, WORKBENCH_EXAMPLES, createWorkbenchFixture, disposeWorkbenchFixture, EXAMPLE_RUN_STEP_MS } from '../fixtures/examples';
 import { summarizeRun } from '../results';
 
@@ -9,6 +9,30 @@ afterEach(() => { vi.useRealTimers(); });
 const lastRun = (fixture: ReturnType<typeof createWorkbenchFixture>) => fixture.controls.inspect().runs.at(-1)!;
 
 describe('example-run simulation', () => {
+  it.each([false, true])('preserves source extension methods and submission provenance with simulation %s', async (simulateExampleRuns) => {
+    const fixture = createWorkbenchFixture({ features: [FEATURE_HQ_SOURCES], simulateExampleRuns });
+    try {
+      await fixture.port.snapshot();
+      const source = await fixture.port.saveSource({ name: 'Example', kind: 'feed-items', file_name: 'feed.json', text: '[{"title":"Synthetic"}]', as_of: '' });
+      const run = await fixture.port.submitRun('x-studio', WORKBENCH_EXAMPLES['x-studio'], true, { sourceIds: [source.id] });
+      expect(run.source_ids).toEqual([source.id]);
+      expect((await fixture.port.source(source.id)).content).toEqual([{ title: 'Synthetic' }]);
+      await fixture.port.setSourceArchived(source.id, 1);
+      await expect(fixture.port.submitRun('x-studio', WORKBENCH_EXAMPLES['x-studio'], true, { sourceIds: [source.id] })).rejects.toMatchObject({ error: { kind: 'invalid' } });
+    } finally { fixture.dispose(); }
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps source extensions unavailable without the advertised feature', async () => {
+    const fixture = createWorkbenchFixture({ features: [] });
+    try {
+      await fixture.port.snapshot();
+      const before = fixture.controls.inspect();
+      await expect(fixture.port.source('source01')).rejects.toMatchObject({ error: { kind: 'invalid' } });
+      expect(fixture.controls.inspect()).toEqual(before);
+    } finally { fixture.dispose(); }
+  });
+
   it('is off unless opted in: a submitted example run stays queued', async () => {
     const fixture = createWorkbenchFixture();
     await fixture.port.submitRun('x-studio', WORKBENCH_EXAMPLES['x-studio'], true);

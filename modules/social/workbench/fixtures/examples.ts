@@ -114,16 +114,17 @@ export function createWorkbenchFixture(options: WorkbenchFixtureOptions = {}): W
     later(() => { fixture.controls.advanceRuns({ ok: true, output: structuredClone(WORKBENCH_OUTPUTS[tool]) }, runId); }, stepMs);
   }, stepMs);
 
-  const port: SocialWorkspacePort = {
+  const port: FixtureWorkspace['port'] = {
+    ...base,
     snapshot: () => base.snapshot(),
     saveDraft: (draft) => base.saveDraft(draft),
     addBrand: (name) => base.addBrand(name),
     run: (id) => base.run(id),
-    async submitRun(tool, input, isExample) {
-      if (!simulateExampleRuns || disposed) return base.submitRun(tool, input, isExample);
+    async submitRun(tool, input, isExample, options) {
+      if (!simulateExampleRuns || disposed) return base.submitRun(tool, input, isExample, options);
       const known = new Set(fixture.controls.inspect().runs.map((run) => run.id));
       try {
-        return await base.submitRun(tool, input, isExample);
+        return await base.submitRun(tool, input, isExample, options);
       } finally {
         // Also covers a lost response that still created the run: the service worker would run it either way.
         for (const run of fixture.controls.inspect().runs) {

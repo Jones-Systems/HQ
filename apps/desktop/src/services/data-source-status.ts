@@ -43,8 +43,10 @@ export function worstSource(statuses: Readonly<Record<DataSource, SourceStatus>>
 const LIMIT_WORDS: Record<PlannerLimit, string> = { no_replay: 'no replay', no_hq_references: 'no HQ links', no_batch: 'no batch create' };
 /** Wording for the explicit, read-only Planner connection check. */
 export function plannerHealthStatus(health: PlannerHealth): SourceStatus {
-  if (health.status === 'ready') return { text: health.api === null ? 'Reachable' : `Reachable · Planner API ${health.api}`, tone: 'good', indicator: 'success' };
-  if (health.status === 'limited') return { text: health.limits.length ? `Reachable · limited (${health.limits.map(limit => LIMIT_WORDS[limit]).join(', ')})` : 'Reachable · limited', tone: 'neutral', indicator: 'warning' };
+  if (health.status !== 'unavailable') {
+    if (health.status === 'ready') return { text: health.api === null ? 'Reachable' : `Reachable · Planner API ${health.api}`, tone: 'good', indicator: 'success' };
+    return { text: health.limits.length ? `Reachable · limited (${health.limits.map(limit => LIMIT_WORDS[limit]).join(', ')})` : 'Reachable · limited', tone: 'neutral', indicator: 'warning' };
+  }
   switch (health.reason) {
     case 'refused': return { text: 'Refused · start the Planner with --allowed-host for this address', tone: 'bad', indicator: 'warning' };
     case 'server_error': return { text: 'Planner error', tone: 'bad', indicator: 'danger' };

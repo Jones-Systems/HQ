@@ -2,7 +2,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import * as Work from '@hq/work';
-import { registeredPersistence, resetWorkDurability } from '../../../../modules/work/core';
+import { resetWorkDurability } from '../../../../modules/work/core';
+import { registeredPersistence } from '../../../../modules/work/core/durability';
 import { createExampleWorkspace } from '../../../../modules/social/nav';
 import { resetWorkSessions } from '../../../../modules/work/nav';
 import { createFixtureWorkspace, resetSocialSessions } from '../../../../modules/social/core';
