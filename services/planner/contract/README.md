@@ -9,7 +9,7 @@ contract artifact, not a runtime library.
 Each case supplies an `input` reference list and either its normalized
 `expected` list or exact `errors`. Tests may inject `generated_entry_id` when
 an entry has no ID. The HQ target contract matches `parseReference` and Work
-validation at HQ revision `562986d1852d7b4ef101ff6d4c9340c3751c727a`:
+validation, including all four public domains (Design, Social, Work and Wiki):
 closed keys, JavaScript trim and UTF-16 text limits, preserved optional
 provenance, and slash-joined domain/kind/entity deduplication. Planner labels
 keep the existing Python whitespace normalization and code-point limits.

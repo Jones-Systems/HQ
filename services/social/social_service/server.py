@@ -42,6 +42,8 @@ HTTP_ERRORS = {408: 'Request timed out', 414: 'Request target too long', 431: 'R
 
 class ThreadingHTTPServer(BaseThreadingHTTPServer):
     daemon_threads = True
+    # Pending TCP connections need room for bursts; the runner separately caps active runs at eight.
+    request_queue_size = 128
 
     def handle_error(self, request: Any, client_address: Any) -> None:
         # Clients that reset, vanish or time out are routine on a long-running service; anything else is a bug.

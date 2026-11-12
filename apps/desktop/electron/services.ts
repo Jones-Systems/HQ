@@ -3,7 +3,7 @@ import { request as httpsRequest } from 'node:https';
 import type { ServiceResponse, SocialServiceRoute, WorkServiceRoute, WorkMutationCall } from '@hq/contracts/services';
 import type { ServiceConfig } from './service-config.js';
 
-export const CHANNELS = Object.freeze({ social: 'hq:svc:social', work: 'hq:svc:work', design: 'hq:svc:design', config: 'hq:svc:config', wiki: 'hq:svc:wiki' });
+export const CHANNELS = Object.freeze({ social: 'hq:svc:social', work: 'hq:svc:work', workLocal: 'hq:svc:work-local', design: 'hq:svc:design', config: 'hq:svc:config', wiki: 'hq:svc:wiki' });
 // `response` is the default response cap. `socialWorkspace` is the Social snapshot's own cap: it carries every draft body (up to 50,000 characters each).
 export const LIMITS = Object.freeze({ social: 2_000_000, work: 256 * 1024, replay: 352 * 1024, response: 2_000_000, socialWorkspace: 16 * 1024 * 1024 });
 const unavailable = (): ServiceResponse => ({ ok: false, kind: 'unavailable' });
