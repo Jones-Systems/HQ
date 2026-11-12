@@ -359,4 +359,25 @@ describe('typed Imports failures reach the view', () => {
     assert.deepEqual([feedback.status, feedback.action?.kind, feedback.meta], ['Unavailable', 'retry', 'imports.read']);
     assert.ok(state.message !== null && state.message.length > 0);
   });
+
+  it('a failed explicit history read preserves an unknown write for a later read-only Check', async () => {
+    const f = setup();
+    f.pick(pngFile('home.png'));
+    await f.controller.choose();
+    f.double.loseNextCommitReply();
+    await f.controller.apply();
+    assert.equal(f.controller.getState().outcome?.checkable, true);
+    const writes = f.commitCount();
+    f.double.failWith((route) => { if (route === 'doc.list') throw new Error('History unavailable'); });
+    await f.controller.refresh();
+    assert.equal(f.controller.getState().status, 'error');
+    assert.equal(f.controller.getState().outcome?.tone, 'unknown');
+    assert.equal(f.controller.getState().outcome?.checkable, true);
+    f.double.failWith(null);
+    await f.controller.check();
+    assert.equal(f.controller.getState().status, 'applied');
+    assert.equal(f.controller.getState().outcome?.title, 'The import had landed');
+    assert.equal(f.controller.getState().outcome?.reconciles, true);
+    assert.equal(f.commitCount(), writes, 'history refresh and Check never repeat the unknown write');
+  });
 });

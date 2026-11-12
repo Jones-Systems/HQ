@@ -359,7 +359,20 @@ export function createImportsController(deps: ImportDeps, project: ProjectId, ca
       outcomeListeners.add(listener);
       return () => outcomeListeners.delete(listener);
     },
-    refresh: refreshQuietly,
+    async refresh() {
+      try { await refresh(); }
+      catch (error) {
+        // A read failure must not clear an earlier write's unknown-result Check target.
+        set({ status: 'error' });
+        if (unconfirmed === null) historyFailed(error);
+        else {
+          const text = describeFailure(error);
+          set({ message: text, cause: error });
+          publish({ tone: 'unknown', where: 'history', title: 'Still could not confirm', detail: `${text}. The result is still unknown.`, checkable: true,
+            ...(unconfirmed.action === 'resolve' ? {} : { importId: unconfirmed.importId }) });
+        }
+      }
+    },
     async choose() {
       if (capabilities.pickSource === undefined) { set({ message: 'File selection is unavailable in this build.' }); return; }
       const startedAt = begin('choose', null, { message: null });

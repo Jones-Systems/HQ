@@ -229,6 +229,30 @@ session history and keyboard source are present, with new behavior tests still
 unrun. The next required CI must qualify this assembled source; native layout,
 accessibility, persistence and reference-return evidence remain outstanding.
 
+At `61eccd73`, Social remains green. Foundation reports two Wiki composition
+failures: a global Wiki-button query now matches the new header, and the new Home
+requests topics before setup classification. INT scopes the reference assertion to
+Domains navigation and delays mounting content until setup answers. The original
+two-status-read/no-content oracle stays intact, with a pending-status regression.
+
+Design successor `12aea79d` isolates complete synthetic stores/caches and their
+feed per workspace, preserving the original independence assertions and fake
+retry no-op. Its fault seams were correct: both remaining Imports failures came
+from public refresh retaining idle status. INT exposes a failed explicit read as
+error while retaining the separate quiet post-write refresh. A pending unknown
+write keeps its immutable Check target and checkable unknown notice; a new
+lost-commit/read-loss/Check regression asserts no second commit. These changes
+remain source-only until required CI executes them.
+
+The ordinary Mini launcher now has a source-bound direct native TypeScript
+subset with one compiler job and six serial commands. Full Vite/Vitest execution
+is refused because worker teardown and native runtime recreation still lack a
+proved aggregate bound. A separate serial mechanics task may execute only its
+synthetic controller regressions in private scratch; it may not use the shared
+compiler lock, run HQ compilers/tests, install dependencies or launch the app.
+This is controller qualification, not the foundation baseline or assembled-head
+acceptance. The existing native and integration-owner holds remain.
+
 Contributing conversations and roles, with native identifiers retained privately:
 
 - Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.

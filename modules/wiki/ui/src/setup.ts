@@ -26,7 +26,7 @@ export interface WikiSetupGateProps {
   readonly appearance: 'light' | 'dark';
   /** Asks the shell to open Settings at Data sources › Local Wiki. Null: the card names the place and offers no button. */
   readonly openSettings: (() => void) | null;
-  /** The Wiki view, shown while the check runs and whenever the Wiki is set up and answering. */
+  /** The Wiki view, shown after the setup check permits reading content. */
   readonly children?: ReactNode;
 }
 
@@ -42,7 +42,7 @@ function SettingsButton(props: { readonly openSettings: (() => void) | null; rea
 }
 
 /**
- * Shows the view unless the check finds the Wiki not set up or its host silent. The check runs on mount and again on
+ * Checks setup before mounting the view, so an unconfigured Wiki requests no content. The check runs on mount and again on
  * Check again / Try again; a check that is overtaken or outlived by its component publishes nothing.
  */
 export function WikiSetupGate(props: WikiSetupGateProps): ReactElement {
@@ -64,6 +64,10 @@ export function WikiSetupGate(props: WikiSetupGateProps): ReactElement {
   }, [service, round]);
   const again = () => setRound((value) => value + 1);
 
+  if (state === null) {
+    return h(Frame, { appearance: props.appearance },
+      h('div', { className: 'wiki-loading', role: 'status', 'aria-busy': true }, 'Checking Wiki setup…'));
+  }
   if (state?.kind === 'not-configured') {
     return h(
       Frame,
