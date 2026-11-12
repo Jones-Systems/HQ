@@ -130,6 +130,7 @@ function captureFailure({ output, root, production, archive, active, handoff, er
     snapshot.scenario = selected(active.scenario, ['lifecycle', 'failed-health']);
     snapshot.journey = selected(active.journey, ['fresh', 'next-launch', 'interrupted-recovery', 'failed-health']);
     snapshot.buildSequence = sequence(active.buildSequence);
+    snapshot.runtimeBuildSequence = sequence(active.runtimeBuildSequence ?? active.buildSequence);
     const stateRoot = path.join(root, snapshot.scenario, 'state');
     if (stateRoot !== active.stateRoot) throw new Error('Invalid active diagnostic binding');
     snapshot.journal = readKnown(root, path.join(stateRoot, 'transaction.json'), projectJournal, budget);
@@ -138,6 +139,11 @@ function captureFailure({ output, root, production, archive, active, handoff, er
     for (const [role, stages] of Object.entries(STAGES)) for (const stage of stages) {
       const name = fixtureName(role, snapshot.buildSequence, stage);
       snapshot.milestones[role + ':' + stage] = readKnown(root, path.join(stateRoot, name), value => ({
+        stage: selected(value.stage, [stage]), category: value.category === null ? null : selected(value.category, CATEGORIES),
+      }), budget);
+    }
+    if (snapshot.runtimeBuildSequence !== snapshot.buildSequence) for (const stage of STAGES.bootstrap) {
+      snapshot.milestones['launching-runtime:bootstrap:' + stage] = readKnown(root, path.join(stateRoot, fixtureName('bootstrap', snapshot.runtimeBuildSequence, stage)), value => ({
         stage: selected(value.stage, [stage]), category: value.category === null ? null : selected(value.category, CATEGORIES),
       }), budget);
     }

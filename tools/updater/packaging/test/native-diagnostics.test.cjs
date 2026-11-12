@@ -44,6 +44,11 @@ test('snapshot projects only bounded known records and finite fixture categories
     assert.equal(fs.statSync(file).mode & 0o777, 0o600);
     assert.throws(() => diagnostics.captureFailure(args), { code: 'EEXIST' });
     assert.equal(fs.readFileSync(file, 'utf8'), raw);
+    const nextOutput = path.join(root, 'next-output'); fs.mkdirSync(nextOutput);
+    assert.equal(diagnostics.fixtureReporter(directory, 'bootstrap')('error', Object.assign(new Error(sentinel), { code: 'busy' })), true);
+    const next = diagnostics.captureFailure({ ...args, output: nextOutput, active: { ...args.active, journey: 'next-launch', buildSequence: 2, runtimeBuildSequence: 1 } });
+    assert.equal(next.runtimeBuildSequence, 1);
+    assert.equal(next.milestones['launching-runtime:bootstrap:error'].category, 'busy', 'next-launch observes the prior runtime bootstrap before candidate main exists');
   });
 });
 

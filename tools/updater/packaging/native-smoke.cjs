@@ -84,10 +84,11 @@ async function smoke({ output = process.env.HQ_PACKAGE_OUTPUT, scratchParent = p
         result.storage = admitNativeStorage({ sourceBundle: source, outputDirectory: activeRoot, bundleCopies });
         const run = (executable, args, environment = {}) => new Promise((resolve, reject) => {
           const child = spawn(executable, args, { stdio: ['ignore', 'ignore', 'pipe'], env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: path.join(activeRoot, 'synthetic-home'), TMPDIR: path.join(activeRoot, 'tmp'), LANG: 'en_US.UTF-8', ...environment } });
-          handoff = { status: 'started', code: null, stderrObserved: false };
-          child.stderr.on('data', () => { handoff.stderrObserved = true; });
-          child.once('error', error => { handoff.status = 'spawn-error'; reject(error); });
-          child.once('exit', code => { handoff.status = 'exited'; handoff.code = code; code === 0 ? resolve() : reject(Object.assign(new Error('Synthetic launch failed'), { diagnosticCategory: 'subprocess-exit' })); });
+          const outcome = { status: 'started', code: null, stderrObserved: false };
+          handoff = outcome;
+          child.stderr.on('data', () => { outcome.stderrObserved = true; });
+          child.once('error', error => { outcome.status = 'spawn-error'; reject(error); });
+          child.once('exit', code => { outcome.status = 'exited'; outcome.code = code; code === 0 ? resolve() : reject(Object.assign(new Error('Synthetic launch failed'), { diagnosticCategory: 'subprocess-exit' })); });
         });
         fs.mkdirSync(path.join(activeRoot, 'synthetic-home')); fs.mkdirSync(path.join(activeRoot, 'tmp'));
         for (const scenario of plan) {
@@ -118,7 +119,7 @@ async function smoke({ output = process.env.HQ_PACKAGE_OUTPUT, scratchParent = p
           };
           for (let index = 0; index < scenario.steps.length; index++) {
             const step = scenario.steps[index], prior = record.installed;
-            active = { scenario: scenario.name, journey: step.journey, buildSequence: step.receipt.buildSequence, stateRoot: record.stateRoot };
+            active = { scenario: scenario.name, journey: step.journey, buildSequence: step.receipt.buildSequence, runtimeBuildSequence: step.journey === 'next-launch' ? prior.buildSequence : step.receipt.buildSequence, stateRoot: record.stateRoot };
             handoff = null;
             if (step.journey === 'fresh') {
               const next = scenario.steps[index + 1];
