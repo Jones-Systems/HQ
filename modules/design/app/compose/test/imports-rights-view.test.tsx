@@ -38,7 +38,7 @@ it('requires explicit rights and discards a prepared plan when the statement cha
 
 it.each(['licensed', 'permission', 'public-domain'] as const)('permits an explicit %s statement in bridged presentation', async (basis) => {
   // Keep data synthetic while exercising the same rights controls as the native picker.
-  const workspace = { ...createDesignWorkspace(null), bridged: true };
+  const workspace = { ...createDesignWorkspace(null), bridged: true as const };
   await act(async () => { render(<DesignWorkspaceContext.Provider value={workspace}>
     <Suspense fallback={<p>Loading</p>}><ImportsView {...props} /></Suspense>
   </DesignWorkspaceContext.Provider>); });

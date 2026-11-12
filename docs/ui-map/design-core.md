@@ -33,6 +33,12 @@ SecondaryPanel also serves References, its graph and Components; the existing
 [References map](references.md) and [chrome map](design-chrome-interactive.md)
 remain separate coverage records. Shared UI primitives were consumed unchanged.
 
+The Components token board now accepts an optional host-owned copy callback.
+The production composition supplies browser copying; the isolated preview omits
+the capability and shows the value without accessing the host. Its existing
+egress scan stays strict. Source regressions cover one copy, absent-capability
+zero calls and refusal feedback; current-head execution and UI evidence are pending.
+
 All journeys above are **unverified** at the DSN-C recovery head. Historical
 builder screenshots and checks do not qualify this source. The serial Mini
 verifier must cover creation → version → Canvas → Compare → Requests → Runs →

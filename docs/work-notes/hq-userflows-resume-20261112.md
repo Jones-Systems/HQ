@@ -175,6 +175,17 @@ source research identified TypeScript's single-threaded option and ruled out the
 unselected parallel-plugin path, but aggregate compiler concurrency remains
 unqualified. All Mini, activation and integration-owner holds remain in force.
 
+On successor `484b5c14`, Foundation passed build/typecheck and 3488 root tests;
+three assertions failed across two files. Social, CLI with synthetic real-Planner
+E2E, Planner and Design inventory passed. Design batch still failed Imports markup,
+two app type errors and preview egress. INT follows the retained Social label
+`Changed since linked`, scopes the Work save indicator separately from its row,
+normalizes request selection from JSON state, and keeps the test's bridged flag
+literal. The Imports test checks the typed alert and complete original failure
+detail. Token copying is injected by the production composition instead of reading
+the host inside the preview graph; the egress oracle is unchanged. All corrections
+await a new full required CI run; native qualification remains unrun.
+
 Contributing conversations and roles, with native identifiers retained privately:
 
 - Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.

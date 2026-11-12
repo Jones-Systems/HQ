@@ -24,16 +24,15 @@ function Sample({ token, value }: { readonly token: DesignToken; readonly value:
 }
 
 /** Swatch grid by design-system group and type. A token is a button: it copies its id. */
-export function TokenBoard({ system }: { readonly system: DesignSystem }) {
+export function TokenBoard({ system, copyTokenId }: { readonly system: DesignSystem; readonly copyTokenId?: (id: string) => Promise<void> }) {
   const { values, problems } = resolveTokens(system);
   const toast = useToast();
   const copy = async (token: DesignToken) => {
     const value = values[token.id] ?? 'unresolved';
-    const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard;
     const showValue = () => toast.info(`${token.id} · ${value}`, { id: 'hqc-token-copy', description: 'Copying is not available here, so this is the value.' });
-    if (clipboard === undefined || typeof clipboard.writeText !== 'function') { showValue(); return; }
+    if (copyTokenId === undefined) { showValue(); return; }
     try {
-      await clipboard.writeText(token.id);
+      await copyTokenId(token.id);
       toast.success(`Copied ${token.id}`, { id: 'hqc-token-copy', meta: value });
     } catch {
       showValue();

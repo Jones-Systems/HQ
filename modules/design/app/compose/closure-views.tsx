@@ -48,7 +48,7 @@ function RequestPicker({ props, mode, children }: {
       return env.create({ title: 'New request', sources: [{ projectId: brandId(project.id),
         viewId: brandId(version.viewId), versionId: brandId(version.id), sourceRevision: version.capture.sourceRevision }] });
     },
-    readSelected: () => state.read(),
+    readSelected: () => { const selected = state.read(); return typeof selected === 'string' ? selected : null; },
     writeSelected: (requestId) => state.write(requestId),
     openProjects: () => navigate({ nav: 'projects', section: 'projects' }),
     openRequests: () => navigate({ nav: 'requests', section: 'requests' }),

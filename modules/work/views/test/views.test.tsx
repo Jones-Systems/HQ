@@ -79,10 +79,10 @@ describe.each(['light', 'dark'] as const)('views in %s chrome', (theme) => {
     const { held } = await setup({ view: 'list' });
     held.hold();
     await user.selectOptions(screen.getByRole('combobox', { name: 'Horizon of Tune up the old bicycle' }), 'soon');
-    expect((await screen.findByText('Saving…')).closest('[role="status"]')?.getAttribute('aria-busy')).toBe('true');
+    expect((await screen.findByText('Saving…', { selector: '.hq-indicator .hq-status-label' })).closest('[role="status"]')?.getAttribute('aria-busy')).toBe('true');
     expect(screen.getByRole('combobox', { name: 'Horizon of Tune up the old bicycle' })).toHaveProperty('value', 'soon');
     await act(async () => { held.release(); });
-    expect((await screen.findByText('Saved')).closest('[role="status"]')).toBeTruthy();
+    expect((await screen.findByText('Saved', { selector: '.hq-indicator .hq-status-label' })).closest('[role="status"]')).toBeTruthy();
   });
 
   it('unknown: a lost response is shown as unconfirmed with Check, never as saved or failed', async () => {

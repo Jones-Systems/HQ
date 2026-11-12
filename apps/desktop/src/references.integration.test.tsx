@@ -215,7 +215,7 @@ it('Social draft ↔ Work card open/Back preserves source state; explicit snapsh
   fireEvent.click(within(screen.getByRole('navigation', { name: 'Domains' })).getByRole('button', { name: 'Social' }));
   await screen.findByLabelText('Body');
   fireEvent.click(screen.getByRole('button', { name: 'Check references' }));
-  await screen.findByText('Changed', { exact: true });
+  await screen.findByText('Changed since linked', { exact: true });
   expect(f.social.service.controls.inspect().content.find(d => d.id === FIXTURE_IDS.autumnBlend)?.links).toEqual([target]);
   const targetBytes = JSON.stringify((await f.planner.port.snapshot()).items);
   fireEvent.click(screen.getByRole('button', { name: 'Update title Synthetic reference card' }));

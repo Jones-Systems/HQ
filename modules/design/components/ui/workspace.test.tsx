@@ -388,25 +388,34 @@ describe('tokens', () => {
   it('copies a token id on click and confirms with a success toast', async () => {
     const { library } = await seed();
     const writeText = vi.fn(async () => {});
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    const { view, store } = mount(library);
+    const { view, store } = mount(library, { copyTokenId: writeText });
     await openTokens(view);
     await act(async () => { view.getByRole('button', { name: 'Copy color.brand.primary, #3b5bdb' }).click(); });
     expect(writeText).toHaveBeenCalledWith('color.brand.primary');
+    expect(writeText).toHaveBeenCalledTimes(1);
     expect(toasts(store)).toHaveLength(1);
     expect(toasts(store)[0]).toMatchObject({ tone: 'success', title: 'Copied color.brand.primary', meta: '#3b5bdb' });
   });
 
-  it('shows the value in an info toast when the clipboard is missing or refuses', async () => {
+  it('shows the value without touching the host when no copy capability is supplied', async () => {
     const { library } = await seed();
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     const { view, store } = mount(library);
     await openTokens(view);
-    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
     await act(async () => { view.getByRole('button', { name: 'Copy color.brand.danger, #c92a2a' }).click(); });
     expect(toasts(store)[0]).toMatchObject({ tone: 'info', title: 'color.brand.danger · #c92a2a' });
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => { throw new Error('denied'); } }, configurable: true });
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('shows the value when the supplied copy capability refuses', async () => {
+    const { library } = await seed();
+    const copyTokenId = vi.fn(async () => { throw new Error('denied'); });
+    const { view, store } = mount(library, { copyTokenId });
+    await openTokens(view);
     await act(async () => { view.getByRole('button', { name: 'Copy space.2, 8px' }).click(); });
     expect(toasts(store)[0]).toMatchObject({ tone: 'info', title: 'space.2 · 8px' });
+    expect(copyTokenId).toHaveBeenCalledExactlyOnceWith('space.2');
   });
 
   it('draws a swatch grid by group and type, keeping alias info', async () => {

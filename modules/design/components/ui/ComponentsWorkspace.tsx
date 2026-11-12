@@ -30,6 +30,8 @@ export interface ComponentTasteSubject {
 }
 
 export interface ComponentsWorkspaceProps {
+  /** Optional host capability. Capability-free previews omit it and show the token value instead. */
+  readonly copyTokenId?: (id: string) => Promise<void>;
   readonly runner?: ComponentRunnerPort;
   readonly library: ComponentLibrary;
   readonly clock: ClockPort;
@@ -132,7 +134,7 @@ function Stage({ selection, input, systems, tokens, runner, backdrop, width, onB
   </div>;
 }
 
-export function ComponentsWorkspace({ library, clock, appearance, runner, onSendToTaste }: ComponentsWorkspaceProps) {
+export function ComponentsWorkspace({ library, clock, appearance, runner, onSendToTaste, copyTokenId }: ComponentsWorkspaceProps) {
   const toast = useToast();
   const [tab, setTab] = useState<Tab>('components');
   const [catalog, setCatalog] = useState<readonly CatalogEntry[]>([]);
@@ -287,7 +289,7 @@ export function ComponentsWorkspace({ library, clock, appearance, runner, onSend
     </div> : null}
 
     {loaded && tab === 'tokens' ? <div role="tabpanel" id="hqc-panel-tokens" aria-labelledby="hqc-tab-tokens">
-      {systems.length === 0 ? <p className="hqc-note">No design systems yet.</p> : systems.map((system) => <TokenBoard key={system.id} system={system} />)}
+      {systems.length === 0 ? <p className="hqc-note">No design systems yet.</p> : systems.map((system) => <TokenBoard key={system.id} system={system} copyTokenId={copyTokenId} />)}
     </div> : null}
 
     {loaded && tab === 'motion' ? <div role="tabpanel" id="hqc-panel-motion" aria-labelledby="hqc-tab-motion">
