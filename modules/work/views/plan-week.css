@@ -1,2 +1,21 @@
 /* Plan week board. Shared Work roles, chips and page header come from ../theme/work-theme.css. */
 .wv-week { display: grid; gap: var(--hq-space-md); min-width: 0; }
+.wv-week { container-type: inline-size; }
+.wv-week-board { display: grid; grid-template-columns: 232px repeat(8, minmax(144px, 1fr)); gap: 10px; overflow-x: auto; padding: 4px 4px 12px; align-items: start; }
+.wv-week-zone { min-width: 0; min-height: 180px; padding: 10px; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); background: var(--hq-surface); }
+.wv-week-zone h3, .wv-week-zone h4 { font-size: 0.85rem; overflow-wrap: anywhere; }
+.wv-week-zone:first-child { position: sticky; left: 0; z-index: 1; }
+.wv-week-zone.is-today { border-color: var(--hq-accent); }
+.wv-week-zone.is-past { background: var(--hq-bg); }
+.wv-week-zone[data-over] { outline: 2px solid var(--hq-accent); outline-offset: -3px; }
+.wv-plan-card { display: grid; gap: 8px; padding: 10px; margin-block: 8px; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-md); background: var(--hq-surface); overflow-wrap: anywhere; }
+.wv-plan-card:focus-visible { outline: 2px solid var(--hq-accent); }
+.wv-plan-chips, .wv-plan-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+@container (max-width: 760px) { .wv-week-board { display: flex; flex-direction: column; overflow: visible; } .wv-week-zone { width: 100%; box-sizing: border-box; min-height: 80px; } .wv-week-zone:first-child { position: static; } }
+@media (forced-colors: active) { .wv-week-zone[data-over], .wv-plan-card:focus-visible { outline-color: Highlight; } }
+.wv-plan-card[data-drag-source] { opacity: 0.45; border-style: dashed; }
+.wv-plan-ghost { position: fixed; top: 0; left: 0; width: var(--plan-width); transform: translate(var(--plan-x), var(--plan-y)) rotate(var(--plan-tilt, 0deg)); pointer-events: none; z-index: 10000; box-sizing: border-box; box-shadow: 0 12px 28px #0003; }
+@media (prefers-reduced-motion: reduce) { .wv-plan-ghost { transform: translate(var(--plan-x), var(--plan-y)); } }
+[data-hq-motion=reduce] .wv-plan-ghost { transform: translate(var(--plan-x), var(--plan-y)); }
+
+.wv-plan-drop-badge { margin: 0; font-weight: 600; font-size: 0.85rem; }

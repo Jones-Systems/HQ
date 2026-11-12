@@ -18,10 +18,28 @@ List titles open the same detail, and its status select uses the move path.
 Glance Now offers Done with Undo. Confirmed Inbox captures land at the visible
 Inbox list or Status board navigation item; unknown saves offer Check.
 
-`board/week` retains the planned stub for WRK-V2. Calendar, Timeline, Review
-and Archive retain their current source and await WRK-V2 completion. Editable
-Weekly plan remains Proposed with a link to Plan week. Queue UI/adapter assembly
-awaits the independently reviewed queue checkpoint; no queue source is consumed here.
+WRK-V2 implements `board/week` in the existing nav order: backlog, seven
+Planner-start day columns and an ISO-week lane. Plan for menus, P and Alt+arrows
+share one date patch path with pointer drag. Week conversion explicitly clears
+clock fields; backlog removes only the represented date. Done uses move/Undo.
+The board scrolls horizontally at intermediate widths and stacks below 760px.
+Calendar exposes Month/Week/Day/Agenda, period controls, grouped unscheduled work,
+date picking and timed/all-day drops. Timeline exposes eight-quarter navigation,
+horizon drop/menu/Alt+arrow controls and same-lane refusal.
+Review exposes Inbox triage with scoped Why, horizon and move keys, session
+progress, read-only last-seven-day counts and retained row exits. Inputs yield
+to typing; triage consumes handled keys before global navigation. Archive Restore
+uses the same retained exits. Editable Weekly plan remains Proposed.
+The optional queue projection labels queued, sending, conflict, rejected and held
+states and blocks repeated edits. Unknown results remain Unconfirmed with the
+existing Check path; no replay action is added. WRK-Q is read-only design/API input
+here and must be composed by the parent; queue runtime evidence remains absent.
+
+New shared consumers: retained rows use `@hq/ui` Presence and list motion in
+Review and Archive. Plan week reuses Menu, DoneButton, date chips and PageHeader.
+No shared primitive or route mapping changes. Source-authored regression coverage
+names ISO-week mapping, date preservation, keyboard plan/Undo and triage key
+ownership. These tests are unrun. All new entries and layout states are unverified.
 
 Shared consumers: `@hq/ui` Dialog (capture and narrow detail), Menu (detail and
 capture chip pickers), toast viewport (shell or standalone fallback), list motion

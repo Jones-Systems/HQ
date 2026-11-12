@@ -24,11 +24,7 @@ async function pick(user: ReturnType<typeof userEvent.setup>, trigger: HTMLEleme
 }
 
 async function showCalendarView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day' | 'Agenda') {
-  if (name === 'Agenda') { await user.click(screen.getByRole('button', { name: 'Agenda' })); return; }
-  if (screen.queryByRole('button', { name: 'Agenda', pressed: true })) await user.click(screen.getByRole('button', { name: 'Agenda' }));
-  for (let i = 0; i < 3 && !screen.getByRole('button', { name: /^Calendar view:/ }).textContent?.includes(name); i++) {
-    await user.click(screen.getByRole('button', { name: /^Calendar view:/ }));
-  }
+  await user.click(within(screen.getByRole('navigation', { name: 'Calendar view' })).getByRole('button', { name }));
 }
 
 describe('Calendar moves', () => {
@@ -101,8 +97,10 @@ describe('Calendar moves', () => {
     const tray = screen.getByRole('region', { name: 'Unscheduled items' });
     expect(within(tray).getByText('Sort the old postcards')).toBeTruthy();
     expect(within(tray).getByText('Tune up the old bicycle')).toBeTruthy();
-    await user.click(within(tray).getByRole('button', { name: /^Schedule “Sort the old postcards” on Wed, Oct 21 2026/ }));
-    expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Target (default)', 'Deadline', 'Start', 'Event']);
+    // Inbox captures sit in their own collapsed group (P-2); open it to reach their Schedule button.
+    await user.click(within(tray).getByRole('button', { name: /^Inbox captures/ }));
+    await user.click(within(tray).getByRole('button', { name: 'Schedule “Sort the old postcards”' }));
+    expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Target (default)', 'Deadline', 'Start', 'Event', 'Pick another day…']);
     await user.click(screen.getByRole('menuitem', { name: 'Deadline' }));
     await waitFor(() => expect(rec.writes()).toHaveLength(1));
     const [id, , patch] = lastWrite(rec)!.args as [string, number, { dates: Record<string, unknown>[] }];
@@ -192,7 +190,7 @@ describe('Calendar moves', () => {
     const { container } = await setup({ view: 'calendar', settings: { default_tz: 'America/New_York', week_start: 'mon', stale_days: 21 } });
     expect(container.querySelector('.wv-month-head')!.textContent).toBe('MonTueWedThuFriSatSun');
     await showCalendarView(user, 'Agenda');
-    expect(screen.getByRole('button', { name: 'Agenda', pressed: true })).toBeTruthy();
+    expect(within(screen.getByRole('navigation', { name: 'Calendar view' })).getByRole('button', { name: 'Agenda' }).getAttribute('aria-current')).toBe('page');
     expect(container.querySelector('.wv-agenda')!.textContent).toContain('Sat, Oct 24 · in 3 days');
     expect(container.querySelector('.wv-month')).toBeNull();
   });
@@ -287,10 +285,10 @@ describe('timed calendar interaction', () => {
     expect(container.querySelectorAll('[data-time-day]')).toHaveLength(1);
     await user.click(screen.getByRole('button', { name: 'Today' }));
     expect(container.querySelector('[data-time-day="2026-10-21"]')).toBeTruthy();
-    const layout = screen.getByRole('group', { name: 'Calendar layout' });
-    expect(within(layout).getAllByRole('button')).toHaveLength(2);
+    const layout = screen.getByRole('navigation', { name: 'Calendar view' });
+    expect(within(layout).getAllByRole('button').map((b) => b.textContent)).toEqual(['Month', 'Week', 'Day', 'Agenda']);
     await showCalendarView(user, 'Month');
-    expect(within(layout).getByRole('button', { name: /^Calendar view: Month\./ })).toBeTruthy();
+    expect(within(layout).getByRole('button', { name: 'Month' }).getAttribute('aria-current')).toBe('page');
     expect(container.querySelectorAll('[data-time-day]')).toHaveLength(0);
     await showCalendarView(user, 'Agenda');
     expect(container.querySelector('.wv-agenda')).toBeTruthy();

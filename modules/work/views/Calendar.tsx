@@ -1,17 +1,20 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Button, Dialog, Menu, Splitter, type MenuItem } from '@hq/ui';
 import {
   addDays, DATE_KIND_IDS, DATE_KIND_LABEL, dateState, datedEntries, dayNum, formatDay, formatValue, isLive, isOpen,
   matchesFilters, periodBounds, plannerMonthGrid, relativeDays, sortByPosition, viewerLocalTime,
   type DateKind, type Item, type ItemPatch, type PlanningDate,
 } from '../core';
+import { DateKindIcon, PageHeader, SegmentedNav } from '../theme';
+import { settleInto, shake, slideIn } from './calendar-motion';
 import { isPending, isTyping, useCssVars, useEnv, useRemembered } from './env';
 import {
   addDatePatch, clearTimePatch, timeboxPatch, CHIP_KEY_DAYS, outsideEntries, removeDatePatch, rescheduleDatePatch, scheduleDay, shiftDatePatch,
+  trayGroups, type TrayGroupId,
 } from './moves';
 import { TimeGrid } from './TimeGrid';
-import { calendarDays, gridDatePatch } from './time-grid';
-import { cx, DateChip, MotivationPill, KindMark, SectionHead, ViewHint } from './parts';
+import { calendarDays, gridDatePatch, periodTitle } from './time-grid';
+import { cx, DateChip, MotivationPill, KindMark, SectionHead } from './parts';
 import './calendar.css';
 
 // Calendar: month, timed week/day or agenda, a band for coarse dates, the
@@ -22,14 +25,30 @@ import './calendar.css';
 // Timed grid drops convert through the display zone; all-day drops clear time, end and zone.
 // Every move is one dates patch with Undo. A month-precision date never
 // appears on a single day.
+//
+// Presentation (flow assessment X-4, X-8, P-2): the page title names the period; changing the range or the layout
+// slides the content in the direction of travel; the tray separates this week's focus, Next and Inbox captures; day
+// cells light up as drop targets and a dropped date settles into its cell (a refused drop shakes once). Motion is
+// decoration only: it never delays a write, and it is off under reduced motion.
 
 const MAX_CHIPS = 3;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MODES = [{ id: 'month', label: 'Month' }, { id: 'week', label: 'Week' }, { id: 'day', label: 'Day' }, { id: 'agenda', label: 'Agenda' }] as const;
+const TRAY_GROUPS: readonly { id: TrayGroupId; title: string; hint: string }[] = [
+  { id: 'focus', title: 'This week’s focus', hint: 'Horizon Now' },
+  { id: 'next', title: 'Next', hint: 'Planned, no date yet' },
+  { id: 'inbox', title: 'Inbox captures', hint: 'Not sorted yet' },
+];
+/** The drop targets: a month cell or agenda day, a timed day column, an all-day row, and the tray (removes a date). */
+const DROP_ZONE = '[data-drop], [data-time-day], [data-grid-all-day], [data-calendar-remove]';
 
 type Entry = { item: Item; entry: PlanningDate; bounds: [string, string] };
 type Drag = { type: 'date'; itemId: string; dateId: string } | { type: 'undated'; itemId: string };
-type Mode = 'month' | 'week' | 'day' | 'agenda';
+type Mode = (typeof MODES)[number]['id'];
+type Point = { x: number; y: number };
+/** A date that was just written: where to find its chip once it has moved, so it can settle and flash there. */
+type Landing = { itemId: string; dateId?: string; day: string; from: Point | null };
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const overlaps = (a: readonly [string, string], b: readonly [string, string]) => dayNum(a[0]) <= dayNum(b[1]) && dayNum(b[0]) <= dayNum(a[1]);
@@ -38,33 +57,56 @@ const shiftMonth = (year: number, month: number, delta: number): [number, number
   return [Math.floor(index / 12), (index % 12) + 1];
 };
 const narrow = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 760px)').matches;
+const pointOf = (event: DragEvent): Point | null => (
+  Number.isFinite(event.clientX) && Number.isFinite(event.clientY) && (event.clientX !== 0 || event.clientY !== 0) ? { x: event.clientX, y: event.clientY } : null
+);
+
+/** The chip, or timed event, that a write put on `day` (or, when `day` is not given, anywhere). */
+function findLanded(root: HTMLElement | null, itemId: string, dateId: string | undefined, day: string | undefined): HTMLElement | null {
+  if (!root) return null;
+  for (const el of root.querySelectorAll<HTMLElement>('[data-item-id], [data-event-id]')) {
+    const id = el.dataset.itemId ?? '';
+    const event = el.dataset.eventId ?? '';
+    const isItem = id === itemId || event.startsWith(`${itemId}:`);
+    if (!isItem) continue;
+    if (dateId && el.dataset.dateId !== dateId && !event.endsWith(`:${dateId}`)) continue;
+    if (day && !el.closest(`[data-day="${day}"], [data-time-day="${day}"], [data-grid-all-day="${day}"]`)) continue;
+    return el;
+  }
+  return null;
+}
+
+function ChevronIcon({ dir }: { dir: 'prev' | 'next' }) {
+  return <svg className="work-icon work-icon--sm" viewBox="0 0 24 24" aria-hidden="true"><path d={dir === 'prev' ? 'm14.5 6-6 6 6 6' : 'm9.5 6 6 6-6 6'} /></svg>;
+}
 
 export function CalendarView() {
   const env = useEnv();
   const { today, state, settings } = env;
   const [cursor, setCursor] = useRemembered('calendar.cursor', () => ({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) }));
   const [mode, setMode] = useRemembered<Mode>('calendar.mode', () => (narrow() ? 'agenda' : 'month'));
-  const [lastGridMode, setLastGridMode] = useState<Exclude<Mode, 'agenda'>>(() => mode === 'agenda' ? 'month' : mode);
-  const gridMode = mode === 'agenda' ? lastGridMode : mode;
-  const nextGridMode = gridMode === 'month' ? 'week' : gridMode === 'week' ? 'day' : 'month';
-  const labelMode = (value: string) => value[0]!.toUpperCase() + value.slice(1);
   const [dayCursor, setDayCursor] = useRemembered('calendar.day', today);
   const [kinds, setKinds] = useRemembered<readonly DateKind[]>('calendar.kinds', DATE_KIND_IDS);
   const [showFinished, setShowFinished] = useRemembered('calendar.finished', false);
   const [sidebarWidth, setSidebarWidth] = useRemembered('calendar.sidebar.width', () => narrow() ? 0 : 280);
   const [sidebarRestore, setSidebarRestore] = useRemembered('calendar.sidebar.restore', 280);
+  const [inboxOpen, setInboxOpen] = useRemembered('calendar.tray.inbox', false);
   const resizeSidebar = (size: number) => {
     const next = size < 112 ? 0 : Math.min(420, size);
     if (next > 0) setSidebarRestore(next);
     setSidebarWidth(next);
   };
   const [focusKey, setFocusKey] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [dropChoice, setDropChoice] = useState<{ itemId: string; day: string; minute?: number } | null>(null);
+  const [dropChoice, setDropChoice] = useState<{ itemId: string; day: string; minute?: number; from: Point | null } | null>(null);
+  const [picker, setPicker] = useState<{ itemId: string; day: string; kind: DateKind } | null>(null);
+  const [landing, setLanding] = useState<Landing | null>(null);
   const drag = useRef<Drag | null>(null);
+  const over = useRef<Element | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const title = useRef<HTMLHeadingElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const title = useRef<HTMLSpanElement>(null);
   const focusTitle = useRef(false);
+  const slid = useRef<{ mode: Mode; anchor: number } | null>(null);
   useCssVars(root, { '--wv-cal-sidebar-width': `${sidebarWidth}px` });
 
   const { year, month } = cursor;
@@ -87,14 +129,57 @@ export function CalendarView() {
     if (focusTitle.current) { title.current?.focus(); focusTitle.current = false; }
   }, [mode, dayCursor]);
 
+  // Slide the content in the direction of travel: a later range or a deeper layout (Month → Week → Day → Agenda)
+  // arrives from the end side. The header and its controls stay mounted, so focus stays on the control pressed.
+  const anchor = timed ? dayNum(days[0]!) : year * 12 + month - 1;
+  useLayoutEffect(() => {
+    const before = slid.current;
+    slid.current = { mode, anchor };
+    if (!before || (before.mode === mode && before.anchor === anchor)) return;
+    const order = MODES.map((m) => m.id);
+    slideIn(stage.current, before.mode === mode ? anchor - before.anchor : order.indexOf(mode) - order.indexOf(before.mode));
+  }, [mode, anchor]);
+
+  // A date that was just written glides into its new cell and flashes. The write is projected at once, so the chip
+  // is found within a few frames; if it never appears (a day outside the shown range) nothing animates.
+  useEffect(() => {
+    if (!landing) return undefined;
+    let frames = 0;
+    let handle = 0;
+    const attempt = () => {
+      const el = findLanded(root.current, landing.itemId, landing.dateId, landing.day);
+      if (el) { settleInto(el, landing.from); return; }
+      frames += 1;
+      if (frames < 12) handle = requestAnimationFrame(attempt);
+    };
+    handle = requestAnimationFrame(attempt);
+    return () => cancelAnimationFrame(handle);
+  }, [landing]);
+
   const latest = (id: string) => state.items.find((it) => it.id === id);
-  const send = (item: Item, patch: ItemPatch | null, message: string): Promise<unknown> => (
-    patch ? env.run(env.store.patch(item.id, patch), message) : Promise.resolve()
-  );
   const dayText = (iso: string) => formatDay(iso, { year: 'auto', today });
-  const reschedule = (item: Item, entry: PlanningDate, day: string) => {
-    if (entry.value === day) { env.announce('Same day'); return; }
-    void send(item, rescheduleDatePatch(item, entry.id, day), `Moved “${item.title}” to ${dayText(day)}.`);
+  const land = (itemId: string, dateId: string | undefined, day: string, from: Point | null) => setLanding({ itemId, dateId, day, from });
+  const shakeChip = (itemId: string, dateId?: string) => shake(findLanded(root.current, itemId, dateId, undefined));
+  /**
+   * One write: the chip settles where it lands and the toast offers Undo (env.run). A null patch is refused (the
+   * reason is announced) and a failed write is rolled back by the store; either way the chip shakes once.
+   */
+  const commit = async (item: Item, patch: ItemPatch | null, message: string, where: { dateId?: string; day: string; from?: Point | null; refusal?: string }): Promise<boolean> => {
+    if (isPending(env.store.getState(), item.id)) { env.announce('Planning paused · check the current item state'); return false; }
+    if (!patch) {
+      if (where.refusal) env.announce(where.refusal);
+      shakeChip(item.id, where.dateId);
+      return false;
+    }
+    const saved = env.run(env.store.patch(item.id, patch), message);
+    land(item.id, where.dateId, where.day, where.from ?? null);
+    const ok = await saved;
+    if (!ok && !isPending(env.store.getState(), item.id)) shakeChip(item.id, where.dateId);
+    return ok;
+  };
+  const reschedule = (item: Item, entry: PlanningDate, day: string, from: Point | null = null) => {
+    if (entry.value === day) { env.announce('Same day'); shakeChip(item.id, entry.id); return; }
+    void commit(item, rescheduleDatePatch(item, entry.id, day), `Moved “${item.title}” to ${dayText(day)}.`, { dateId: entry.id, day, from });
   };
   const shift = (itemId: string, dateId: string, days: number) => {
     const item = latest(itemId);
@@ -103,18 +188,20 @@ export function CalendarView() {
     const patch = shiftDatePatch(item, dateId, days);
     if (!patch) return;
     const value = (patch.dates!.find((d) => d.id === dateId) as PlanningDate).value;
-    void send(item, patch, `Moved “${item.title}” to ${dayText(value)}.`);
+    void commit(item, patch, `Moved “${item.title}” to ${dayText(value)}.`, { dateId, day: value });
   };
   const remove = (itemId: string, dateId: string) => {
     const item = latest(itemId);
-    if (item) void send(item, removeDatePatch(item, dateId), `Removed date from “${item.title}”.`);
+    const patch = item ? removeDatePatch(item, dateId) : null;
+    if (item && patch && !isPending(env.store.getState(), item.id)) void env.run(env.store.patch(item.id, patch), `Removed date from “${item.title}”.`);
   };
-  const add = (itemId: string, kind: DateKind, day: string, minute?: number) => {
+  const add = (itemId: string, kind: DateKind, day: string, minute?: number, from: Point | null = null) => {
     const item = latest(itemId);
     if (item) {
       const patch = minute === undefined ? addDatePatch(item, kind, day) : timeboxPatch(item, null, day, minute, settings.default_tz, kind);
-      if (!patch) { env.announce('Choose a valid timebox that ends before midnight. Clock-change gaps cannot be scheduled.'); return; }
-      void send(item, patch, `${DATE_KIND_LABEL[kind]} set for “${item.title}” on ${dayText(day)}.`);
+      void commit(item, patch, `${DATE_KIND_LABEL[kind]} set for “${item.title}” on ${dayText(day)}.`, {
+        day, from, refusal: 'Choose a valid timebox that ends before midnight. Clock-change gaps cannot be scheduled.',
+      });
     }
   };
 
@@ -132,46 +219,71 @@ export function CalendarView() {
     }
     const key = `chip:${item.id}:${entry.id}`;
     setFocusKey(key);
-    void send(item, patch, `Moved “${item.title}” to ${dayText(value)}.`).finally(() => setFocusKey((k) => (k === key ? null : k)));
+    void commit(item, patch, `Moved “${item.title}” to ${dayText(value)}.`, { dateId: entry.id, day: value }).finally(() => setFocusKey((k) => (k === key ? null : k)));
   };
 
-  const onDayDrop = (event: DragEvent, day: string) => {
+  // ---- drag: arm on dragstart, light up the day under the pointer, disarm on drop or dragend
+  const setOver = (next: Element | null) => {
+    if (over.current === next) return;
+    over.current?.removeAttribute('data-over');
+    next?.setAttribute('data-over', 'true');
+    over.current = next;
+  };
+  const beginDrag = (payload: Drag, event: DragEvent) => {
+    drag.current = payload;
+    event.dataTransfer?.setData('text/plain', latest(payload.itemId)?.title ?? '');
+    // Marked after the browser has taken its drag image, so the image shows the chip as it was.
+    window.setTimeout(() => { if (drag.current === payload) root.current?.setAttribute('data-wk-dragging', payload.type); }, 0);
+  };
+  const takeDrag = (): Drag | null => {
     const payload = drag.current;
     drag.current = null;
+    setOver(null);
+    root.current?.removeAttribute('data-wk-dragging');
+    return payload;
+  };
+  const trackOver = (event: DragEvent) => {
+    const payload = drag.current;
+    if (!payload) return;
+    const zone = event.target instanceof Element ? event.target.closest(DROP_ZONE) : null;
+    setOver(zone && (!zone.hasAttribute('data-calendar-remove') || payload.type === 'date') ? zone : null);
+  };
+  const onDayDrop = (event: DragEvent, day: string) => {
+    const payload = takeDrag();
     if (!payload) return;
     event.preventDefault();
     const item = latest(payload.itemId);
     if (!item) return;
-    if (payload.type === 'undated') { setDropChoice({ itemId: item.id, day }); return; }
+    const from = pointOf(event);
+    if (payload.type === 'undated') { setDropChoice({ itemId: item.id, day, from }); return; }
     const entry = item.dates.find((d) => d.id === payload.dateId);
-    if (entry) reschedule(item, entry, day);
+    if (entry) reschedule(item, entry, day, from);
   };
   const commitTime = (item: Item, entry: PlanningDate, day: string, minute: number, resize: boolean) => {
     if (isPending(state, item.id)) return;
     const patch = gridDatePatch(item, entry, day, minute, settings.default_tz, resize);
-    if (!patch) { env.announce('No change saved. Choose a valid time on the same day; clock-change gaps and midnight crossings are unavailable.'); return; }
-    if (!days.includes(day)) goTo(day);
-    void send(item, patch, `${resize ? 'Resized' : 'Moved'} “${item.title}”.`);
+    if (patch && !days.includes(day)) goTo(day);
+    void commit(item, patch, `${resize ? 'Resized' : 'Moved'} “${item.title}”.`, {
+      dateId: entry.id, day, refusal: 'No change saved. Choose a valid time on the same day; clock-change gaps and midnight crossings are unavailable.',
+    });
   };
   const allDay = (item: Item, entry: PlanningDate, day: string) => {
-    if (!isPending(state, item.id)) void send(item, clearTimePatch(item, entry.id, day), `Moved “${item.title}” to all day.`);
+    if (!isPending(state, item.id)) void commit(item, clearTimePatch(item, entry.id, day), `Moved “${item.title}” to all day.`, { dateId: entry.id, day });
   };
   const onGridDrop = (event: DragEvent, day: string, minute?: number) => {
-    const payload = drag.current;
-    drag.current = null;
+    const payload = takeDrag();
     if (!payload) return;
     event.preventDefault();
     const item = latest(payload.itemId);
     if (!item || isPending(state, item.id)) return;
-    if (payload.type === 'undated') { setDropChoice({ itemId: item.id, day, ...(minute === undefined ? {} : { minute }) }); return; }
+    if (payload.type === 'undated') { setDropChoice({ itemId: item.id, day, from: pointOf(event), ...(minute === undefined ? {} : { minute }) }); return; }
     const entry = item.dates.find((date) => date.id === payload.dateId);
     if (!entry) return;
     if (minute === undefined) allDay(item, entry, day);
     else commitTime(item, entry, day, minute, false);
   };
   const onTrayDrop = (event: DragEvent) => {
-    const payload = drag.current;
-    drag.current = null;
+    const payload = takeDrag();
     if (!payload || payload.type !== 'date') return;
     event.preventDefault();
     remove(payload.itemId, payload.dateId);
@@ -190,26 +302,23 @@ export function CalendarView() {
       onShift={shift}
       onRemove={remove}
       onKey={onChipKey}
-      onDragStart={(event) => {
-        drag.current = { type: 'date', itemId: x.item.id, dateId: x.entry.id };
-        event.dataTransfer?.setData('text/plain', x.item.title);
-      }}
+      onDragStart={(event) => beginDrag({ type: 'date', itemId: x.item.id, dateId: x.entry.id }, event)}
     />
   );
 
   const goTo = (iso: string) => { setDayCursor(iso); setCursor({ year: Number(iso.slice(0, 4)), month: Number(iso.slice(5, 7)) }); };
   const selectMode = (next: Mode) => {
+    if (next === mode) return;
     if (next === 'week' || next === 'day') {
       if (!timed) {
         const shownMonth = `${year}-${pad(month)}`;
         goTo(dayCursor.startsWith(shownMonth) ? dayCursor : today.startsWith(shownMonth) ? today : `${shownMonth}-01`);
       }
     } else if (timed) goTo(dayCursor);
-    if (next !== 'agenda') setLastGridMode(next);
     setMode(next);
   };
   const openDay = (iso: string, next: 'week' | 'day') => {
-    focusTitle.current = true; goTo(iso); setLastGridMode(next); setMode(next);
+    focusTitle.current = true; goTo(iso); setMode(next);
   };
   const step = (delta: number) => {
     if (timed) { goTo(addDays(dayCursor, delta * (mode === 'week' ? 7 : 1))); return; }
@@ -218,48 +327,98 @@ export function CalendarView() {
   const shownRange: [string, string] = timed ? [days[0]!, days[days.length - 1]!] : monthRange;
   const coarse = entries.filter(({ entry, bounds }) => (timed ? ['week', 'month', 'quarter', 'year'] : ['month', 'quarter', 'year']).includes(entry.precision) && overlaps(bounds, shownRange));
   const undated = sortByPosition(items.filter((it) => !it.dates.length));
+  const groups = trayGroups(undated);
   const outside = outsideEntries(entries, shownRange, today);
   const target = timed ? dayCursor : scheduleDay(year, month, today);
+  const unit = timed ? mode : 'month';
+  const startPicker = (item: Item) => setPicker({ itemId: item.id, day: target, kind: 'target' });
+
+  const trayItem = (item: Item) => (
+    <div
+      key={item.id}
+      className={cx('wv-tray-item', isPending(state, item.id) && 'is-pending', item.is_example && 'is-example')}
+      draggable
+      onDragStart={(event) => beginDrag({ type: 'undated', itemId: item.id }, event)}
+    >
+      <KindMark kind={item.kind} />
+      {env.openItem
+        ? <button type="button" className="wv-link wv-tray-title" onClick={() => env.openItem!(item.id)}>{item.title}</button>
+        : <span className="wv-tray-title">{item.title}</span>}
+      <MotivationPill motivation={item.motivation} />
+      <Menu
+        size="sm"
+        align="end"
+        className="wv-tray-schedule"
+        trigger="Schedule"
+        triggerLabel={`Schedule “${item.title}”`}
+        items={[
+          ...DATE_KIND_IDS.map((k) => ({
+            id: k,
+            label: `${DATE_KIND_LABEL[k]}${k === 'target' ? ' (default)' : ''}`,
+            onSelect: () => add(item.id, k, target),
+          })),
+          { id: 'pick', label: 'Pick another day…', onSelect: () => startPicker(item) },
+        ]}
+      />
+    </div>
+  );
+
+  const pickedItem = picker ? latest(picker.itemId) : undefined;
+  const confirmPicker = () => {
+    if (!picker || !/^\d{4}-\d{2}-\d{2}$/.test(picker.day)) return;
+    const choice = picker;
+    setPicker(null);
+    add(choice.itemId, choice.kind, choice.day);
+  };
 
   return (
     <div
       ref={root}
       className="wv-cal"
-      onDragEnd={() => { drag.current = null; }}
+      onDragOver={trackOver}
+      onDragEnd={() => { takeDrag(); }}
       onKeyDown={(event) => {
-        if (event.key === 'Escape') drag.current = null;
+        if (event.key === 'Escape') takeDrag();
         if ((event.key === 'PageUp' || event.key === 'PageDown') && !event.altKey && !isTyping(event.target)) {
           event.preventDefault();
           step(event.key === 'PageUp' ? -1 : 1);
         }
       }}
     >
-      <div className="wv-cal-toolbar">
-        <div className="wv-cal-nav">
-          <Button size="sm" variant="ghost" aria-label={`Previous ${timed ? mode : 'month'}`} onClick={() => step(-1)}>‹</Button>
-          <Button size="sm" onClick={() => goTo(today)}>Today</Button>
-          <Button size="sm" variant="ghost" aria-label={`Next ${timed ? mode : 'month'}`} onClick={() => step(1)}>›</Button>
-          <h2 ref={title} tabIndex={-1} className="wv-cal-title" aria-live="polite">{timed ? `${dayText(days[0]!)}${mode === 'week' ? ` – ${dayText(days[6]!)}` : ''}` : <>{MONTHS[month - 1]} <span className="wv-muted">{year}</span></>}</h2>
-        </div>
-        <div className="wv-cal-controls">
-          <div className="wv-cal-view-controls" role="group" aria-label="Calendar layout">
-            <Button size="sm" aria-pressed={mode === 'agenda'} onClick={() => selectMode(mode === 'agenda' ? gridMode : 'agenda')}>Agenda</Button>
-            <Button size="sm" aria-pressed={mode !== 'agenda'}
-              aria-label={`Calendar view: ${labelMode(gridMode)}. ${mode === 'agenda' ? 'Return to' : 'Switch to'} ${labelMode(mode === 'agenda' ? gridMode : nextGridMode)}`}
-              onClick={() => selectMode(mode === 'agenda' ? gridMode : nextGridMode)}>{labelMode(gridMode)}</Button>
-          </div>
-          <div className="wv-seg" role="group" aria-label="Show date kinds">
+      <PageHeader
+        title={(
+          <span ref={title} tabIndex={-1} className="wv-cal-title" aria-live="polite">
+            {timed ? periodTitle(mode, year, month, days) : <>{MONTHS[month - 1]} <span className="wv-cal-year">{year}</span></>}
+          </span>
+        )}
+        meta="Coarse dates stay periods: they sit in the period band and are never pinned to a day."
+        actions={(
+          <>
+            <div className="wk-seg wv-cal-range" role="group" aria-label="Calendar range">
+              <button type="button" className="wk-seg-item wv-cal-step" aria-label={`Previous ${unit}`} onClick={() => step(-1)}><ChevronIcon dir="prev" /></button>
+              <button type="button" className="wk-seg-item" onClick={() => goTo(today)}>Today</button>
+              <button type="button" className="wk-seg-item wv-cal-step" aria-label={`Next ${unit}`} onClick={() => step(1)}><ChevronIcon dir="next" /></button>
+            </div>
+            <SegmentedNav
+              label="Calendar view"
+              items={MODES.map((m) => ({ id: m.id, label: m.label, current: mode === m.id, onSelect: () => selectMode(m.id) }))}
+            />
+          </>
+        )}
+      >
+        <div className="wv-cal-filters">
+          <div className="wv-cal-kinds" role="group" aria-label="Show date kinds">
             {DATE_KIND_IDS.map((k) => {
               const on = kinds.includes(k);
               return (
                 <button
                   key={k}
                   type="button"
-                  className={cx('wv-seg-btn', 'wv-kind-toggle', `wv-dk--${k}`)}
+                  className={cx('wk-chip', 'wv-kind-toggle', on && `wk-chip--${k}`)}
                   aria-pressed={on}
                   onClick={() => setKinds(on ? kinds.filter((x) => x !== k) : DATE_KIND_IDS.filter((x) => x === k || kinds.includes(x)))}
                 >
-                  <span className="wv-dk-shape" aria-hidden="true" />{DATE_KIND_LABEL[k]}s
+                  <DateKindIcon kind={k} />{DATE_KIND_LABEL[k]}s
                 </button>
               );
             })}
@@ -269,7 +428,7 @@ export function CalendarView() {
             Show done &amp; dropped
           </label>
         </div>
-      </div>
+      </PageHeader>
 
       {sidebarWidth === 0 && <section className="wv-cal-closed-tray" data-calendar-remove aria-label="Remove date"
         onDragOver={acceptDrop(['date'])} onDrop={onTrayDrop}>
@@ -277,7 +436,7 @@ export function CalendarView() {
         <span>Drop a date here to remove it</span>
       </section>}
       <div className="wv-cal-layout">
-        <div className="wv-cal-main">
+        <div ref={stage} className="wv-cal-main">
           <section className="wv-period-band" aria-label="Dates without a set day">
             <div className="wv-band-label">{timed ? `This ${mode}, no set day` : 'This month, no set day'}</div>
             <div className="wv-band-list">
@@ -299,13 +458,14 @@ export function CalendarView() {
                         {week.map((iso) => {
                           const list = entries.filter(({ entry }) => entry.precision === 'day' && entry.value === iso)
                             .sort((a, b) => (a.entry.time || '99').localeCompare(b.entry.time || '99'));
-                          const open = expanded === iso;
-                          const shown = open ? list : list.slice(0, MAX_CHIPS);
+                          // Three chips fit a cell; a fourth turns the last slot into "+N more", which opens the day.
+                          const shown = list.length > MAX_CHIPS ? list.slice(0, MAX_CHIPS - 1) : list;
                           return (
                             <div
                               key={iso}
                               role="group"
                               data-day={iso}
+                              data-drop="day"
                               aria-label={`${formatDay(iso, { year: true })}, ${list.length} date${list.length === 1 ? '' : 's'}`}
                               className={cx('wv-day', Number(iso.slice(5, 7)) !== month && 'is-outside', iso === today && 'is-today', dayNum(iso) < dayNum(today) && 'is-past')}
                               onDragOver={acceptDrop(['date', 'undated'])}
@@ -313,6 +473,7 @@ export function CalendarView() {
                             >
                               <div className="wv-day-head" title="Double-click to open this week" onDoubleClick={() => openDay(iso, 'week')}>
                                 <button type="button" className="wv-day-num" aria-label={`Open week of ${formatDay(iso, { year: true })}`}
+                                  aria-current={iso === today ? 'date' : undefined}
                                   onClick={(event) => { if (event.detail === 0) openDay(iso, 'week'); }}
                                   onKeyDown={(event) => {
                                     if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDay(iso, 'week'); }
@@ -331,8 +492,9 @@ export function CalendarView() {
                               <div className="wv-day-chips">
                                 {shown.map((x) => chip(x, true))}
                                 {list.length > MAX_CHIPS && (
-                                  <button type="button" className="wv-day-more" aria-expanded={open} onClick={() => setExpanded(open ? null : iso)}>
-                                    {open ? 'Show fewer' : `+${list.length - MAX_CHIPS} more`}
+                                  <button type="button" className="wv-day-more" aria-label={`${list.length - shown.length} more on ${formatDay(iso, { year: true })}. Open the day.`}
+                                    onClick={() => openDay(iso, 'day')}>
+                                    +{list.length - shown.length} more
                                   </button>
                                 )}
                               </div>
@@ -356,42 +518,42 @@ export function CalendarView() {
         <aside className="wv-cal-side" aria-label="Calendar sidebar" hidden={sidebarWidth === 0}>
           <section className="wv-tray" data-calendar-remove aria-label="Unscheduled items" onDragOver={acceptDrop(['date'])} onDrop={onTrayDrop}>
             <SectionHead title="Unscheduled" count={undated.length} />
-            <ViewHint>Drag onto a day to add a date, or use Schedule. Schedule adds a date on {dayText(target)}.</ViewHint>
+            <p className="wv-hint">Drag onto a day to add a date, or use Schedule. Schedule adds a date on {dayText(target)}.</p>
             <div className="wv-tray-list">
-              {undated.map((item) => (
-                <div
-                  key={item.id}
-                  className={cx('wv-tray-item', isPending(state, item.id) && 'is-pending', item.is_example && 'is-example')}
-                  draggable
-                  onDragStart={(event) => {
-                    drag.current = { type: 'undated', itemId: item.id };
-                    event.dataTransfer?.setData('text/plain', item.title);
-                  }}
-                >
-                  <KindMark kind={item.kind} />
-                  {env.openItem
-                    ? <button type="button" className="wv-link" onClick={() => env.openItem!(item.id)}>{item.title}</button>
-                    : <span>{item.title}</span>}
-                  <MotivationPill motivation={item.motivation} />
-                  <Menu
-                    size="sm"
-                    trigger="Schedule"
-                    triggerLabel={`Schedule “${item.title}” on ${formatDay(target, { year: true })}: choose a date kind`}
-                    items={DATE_KIND_IDS.map((k) => ({
-                      id: k,
-                      label: `${DATE_KIND_LABEL[k]}${k === 'target' ? ' (default)' : ''}`,
-                      onSelect: () => add(item.id, k, target),
-                    }))}
-                  />
-                </div>
-              ))}
+              {TRAY_GROUPS.map((group) => {
+                const list = groups[group.id];
+                if (group.id === 'inbox') {
+                  return list.length > 0 && (
+                    <div key={group.id} className="wv-tray-group wv-tray-group--inbox" data-group={group.id}>
+                      <div className="wv-tray-group-head">
+                        <button type="button" className="wv-tray-toggle" aria-expanded={inboxOpen} aria-controls="wv-tray-inbox-list" onClick={() => setInboxOpen(!inboxOpen)}>
+                          <svg className="work-icon work-icon--sm wv-tray-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6" /></svg>
+                          <span className="wv-tray-group-title">{group.title}</span>
+                          <span className="wv-count">{list.length}</span>
+                        </button>
+                        {env.navigate && <button type="button" className="wv-more" onClick={() => env.navigate!({ view: 'review' })}>Sort in Review</button>}
+                      </div>
+                      <div id="wv-tray-inbox-list" className="wv-tray-group-list" hidden={!inboxOpen}>{list.map(trayItem)}</div>
+                    </div>
+                  );
+                }
+                return list.length > 0 && (
+                  <div key={group.id} className="wv-tray-group" data-group={group.id} role="group" aria-labelledby={`wv-tray-${group.id}`}>
+                    <div className="wv-tray-group-head">
+                      <h4 id={`wv-tray-${group.id}`} className="wv-tray-group-title">{group.title}</h4>
+                      <span className="wv-count">{list.length}</span>
+                    </div>
+                    <div className="wv-tray-group-list">{list.map(trayItem)}</div>
+                  </div>
+                );
+              })}
               {!undated.length && <p className="wv-muted">Every visible item has a date. Unscheduled is a normal state, too.</p>}
             </div>
             <div className="wv-tray-drop" aria-hidden="true">Drop a date here to remove it</div>
           </section>
 
-          <section className="wv-outside" aria-label={`Outside this ${timed ? mode : 'month'}`}>
-            <SectionHead title={`Outside this ${timed ? mode : 'month'}`} count={outside.earlier.length + outside.later.length} />
+          <section className="wv-outside" aria-label={`Outside this ${unit}`}>
+            <SectionHead title={`Outside this ${unit}`} count={outside.earlier.length + outside.later.length} />
             {outside.earlier.length > 0 && <div className="wv-outside-label">Earlier, still open</div>}
             {outside.earlier.slice(0, 6).map((x) => <OutsideRow key={`${x.item.id}:${x.entry.id}`} x={x} goTo={goTo} />)}
             {outside.later.length > 0 && <div className="wv-outside-label">Later</div>}
@@ -413,12 +575,56 @@ export function CalendarView() {
             <Button
               key={k}
               variant={k === 'target' ? 'primary' : 'secondary'}
-              onClick={() => { const choice = dropChoice!; setDropChoice(null); add(choice.itemId, k, choice.day, choice.minute); }}
+              onClick={() => { const choice = dropChoice!; setDropChoice(null); add(choice.itemId, k, choice.day, choice.minute, choice.from); }}
             >
               {DATE_KIND_LABEL[k]}{k === 'target' ? ' (default)' : ''}
             </Button>
           ))}
         </div>
+      </Dialog>
+
+      <Dialog
+        open={picker !== null && pickedItem !== undefined}
+        onClose={() => setPicker(null)}
+        title={pickedItem ? `Schedule “${pickedItem.title}”` : ''}
+        description="Pick the day and the kind of date to create. Nothing is added until you schedule it."
+        actions={(
+          <>
+            <Button onClick={() => setPicker(null)}>Cancel</Button>
+            <Button variant="primary" disabled={!picker || !/^\d{4}-\d{2}-\d{2}$/.test(picker.day)} onClick={confirmPicker}>Schedule</Button>
+          </>
+        )}
+      >
+        {picker && (
+          <div className="wv-picker">
+            <label className="work-field">
+              <span className="work-field-label">Day</span>
+              <input
+                type="date"
+                className="work-input"
+                value={picker.day}
+                onChange={(event) => setPicker({ ...picker, day: event.target.value })}
+                onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); confirmPicker(); } }}
+              />
+            </label>
+            <div className="work-field">
+              <span className="work-field-label" id="wv-picker-kind">Kind of date</span>
+              <div className="wv-picker-kinds" role="group" aria-labelledby="wv-picker-kind">
+                {DATE_KIND_IDS.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    className={cx('wk-chip', 'wv-kind-toggle', picker.kind === k && `wk-chip--${k}`)}
+                    aria-pressed={picker.kind === k}
+                    onClick={() => setPicker({ ...picker, kind: k })}
+                  >
+                    <DateKindIcon kind={k} />{DATE_KIND_LABEL[k]}{k === 'target' ? ' (default)' : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </Dialog>
     </div>
   );
@@ -453,7 +659,7 @@ function CalendarChip({ item, entry, movable, showPeriod, onShift, onRemove, onK
   ];
   return (
     <span
-      className={cx('wv-cal-chip', `wv-dk--${entry.kind}`, `wv-ds--${st}`, isPending(env.state, item.id) && 'is-pending', !isOpen(item) && 'is-closed', item.is_example && 'is-example')}
+      className={cx('wv-cal-chip', `wv-dk--${entry.kind}`, `wv-ds--${st}`, !isDay && 'is-coarse', isPending(env.state, item.id) && 'is-pending', !isOpen(item) && 'is-closed', item.is_example && 'is-example')}
       data-focus-key={`chip:${item.id}:${entry.id}`}
       data-item-id={item.id}
       data-date-id={entry.id}
@@ -468,10 +674,11 @@ function CalendarChip({ item, entry, movable, showPeriod, onShift, onRemove, onK
         triggerLabel={`${item.title}, ${DATE_KIND_LABEL[entry.kind]} ${value}${st === 'overdue' ? ', overdue' : ''}. ${movable && isDay ? 'Alt+arrow keys move the day. ' : ''}Enter for options.`}
         trigger={(
           <>
-            <span className="wv-dk-shape" aria-hidden="true" />
+            <DateKindIcon kind={entry.kind} />
             {entry.time && <span className="wv-chip-time">{entry.time}</span>}
             <span className="wv-chip-title">{item.title}</span>
             {showPeriod && <span className="wv-chip-period">{value}</span>}
+            {st === 'overdue' && <span className="wv-chip-flag" aria-hidden="true">Overdue</span>}
           </>
         )}
         items={items}
@@ -508,6 +715,7 @@ function Agenda({ entries, monthRange, monthLabel, chip, onDayDrop, acceptDrop }
             key={g.key}
             className={cx('wv-agenda-day', isToday && 'is-today', dayNum(g.key) < dayNum(today) && 'is-past')}
             data-day={g.key}
+            data-drop={g.week ? undefined : 'day'}
             onDragOver={g.week ? undefined : acceptDrop}
             onDrop={g.week ? undefined : (event) => onDayDrop(event, g.key)}
           >

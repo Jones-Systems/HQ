@@ -5,3 +5,13 @@
 .wv-review-row:first-of-type { border-top: 0; }
 .wv-review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
 .wv-archive-list { gap: 0; background: var(--hq-surface); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); padding: var(--hq-space-sm) var(--hq-space-md); }
+.wv-review { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); align-items: start; }
+.wv-review > .wk-page-head, .wv-review > .wv-hint, .wv-review-week, .wv-review > [data-state], .wv-review-section:has([data-triage]) { grid-column: 1 / -1; }
+.wv-review-section { min-width: 0; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); background: var(--hq-surface); padding: 16px; }
+.wv-retained-rows { display: grid; gap: 12px; min-width: 0; }
+.wv-retained-rows > [inert] { pointer-events: none; }
+.wv-review-row:focus-visible { outline: 2px solid var(--hq-accent); outline-offset: 3px; }
+.wv-review-week, .wv-triage-help { color: var(--hq-text-muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+.wv-review-actions [aria-pressed=true] { background: var(--hq-accent); color: var(--hq-surface); }
+
+.wv-review-section .wv-review-row { border: 1px solid var(--hq-border); border-radius: var(--hq-radius-md); padding: 12px; align-items: start; }
