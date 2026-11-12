@@ -2,14 +2,16 @@
 // context-free description (`RawLink`); resolving them to contract `LinkTarget`s needs the whole
 // namespace (page paths, aliases) and happens later, so the same parse serves both indexing and reading.
 
-import type {
-  BlockNode,
-  InlineNode,
-  LinkTarget,
-  MarkdownDocument,
-  TableAlign,
-  TableRowNode,
+import {
+  MAX_BACKLINK_EXCERPT_LENGTH,
+  type BlockNode,
+  type InlineNode,
+  type LinkTarget,
+  type MarkdownDocument,
+  type TableAlign,
+  type TableRowNode,
 } from '../../contract/src/index.ts';
+import { cleanLabel } from './text.ts';
 
 /** Thrown when input exceeds a structural bound of the parser; the page then falls back to raw text. */
 export class Overflow extends Error {}
@@ -52,6 +54,15 @@ export interface LinkRef {
   readonly link: RawLink;
 }
 
+/**
+ * A link found in a page body, with the plain text of the block that holds it (heading, paragraph or
+ * table row), flattened like `documentText`, whitespace-collapsed and cut to the backlink excerpt cap.
+ * `context` is empty when the block has no text.
+ */
+export interface BodyLink extends LinkRef {
+  readonly context: string;
+}
+
 export function inlineText(children: readonly DraftInline[]): string {
   let out = '';
   for (const node of children) {
@@ -61,22 +72,33 @@ export function inlineText(children: readonly DraftInline[]): string {
   return out;
 }
 
-function collectInline(children: readonly DraftInline[], out: LinkRef[]): void {
+/** Block text for excerpts: flattened and cleaned at most once, and only for a block that holds a link. */
+function blockContext(flatten: () => string): () => string {
+  let cached: string | null = null;
+  return () => (cached ??= cleanLabel(flatten(), MAX_BACKLINK_EXCERPT_LENGTH));
+}
+
+function collectInline(children: readonly DraftInline[], out: BodyLink[], context: () => string): void {
   for (const node of children) {
     if (node.type === 'link') {
-      out.push({ text: inlineText(node.children), link: node.link });
+      out.push({ text: inlineText(node.children), link: node.link, context: context() });
     } else if (node.type === 'emphasis') {
-      collectInline(node.children, out);
+      collectInline(node.children, out, context);
     }
   }
 }
 
-function collectBlocks(blocks: readonly DraftBlock[], out: LinkRef[]): void {
+function collectRow(cells: readonly (readonly DraftInline[])[], out: BodyLink[]): void {
+  const context = blockContext(() => cells.map(inlineText).join(' '));
+  for (const cell of cells) collectInline(cell, out, context);
+}
+
+function collectBlocks(blocks: readonly DraftBlock[], out: BodyLink[]): void {
   for (const block of blocks) {
     switch (block.type) {
       case 'heading':
       case 'paragraph':
-        collectInline(block.children, out);
+        collectInline(block.children, out, blockContext(() => inlineText(block.children)));
         break;
       case 'quote':
         collectBlocks(block.children, out);
@@ -85,8 +107,8 @@ function collectBlocks(blocks: readonly DraftBlock[], out: LinkRef[]): void {
         for (const item of block.items) collectBlocks(item, out);
         break;
       case 'table':
-        for (const cell of block.header) collectInline(cell, out);
-        for (const row of block.rows) for (const cell of row) collectInline(cell, out);
+        collectRow(block.header, out);
+        for (const row of block.rows) collectRow(row, out);
         break;
       case 'fence':
         break;
@@ -95,8 +117,8 @@ function collectBlocks(blocks: readonly DraftBlock[], out: LinkRef[]): void {
 }
 
 /** Links in document order (code never contributes: code is not parsed for links). */
-export function collectLinks(doc: DraftDocument): LinkRef[] {
-  const out: LinkRef[] = [];
+export function collectLinks(doc: DraftDocument): BodyLink[] {
+  const out: BodyLink[] = [];
   collectBlocks(doc.children, out);
   return out;
 }

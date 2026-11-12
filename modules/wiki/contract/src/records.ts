@@ -2,6 +2,8 @@
 
 import { checkInertText, checkInteger, checkKeys, checkLabel, isRecord } from './guard.ts';
 import {
+  MAX_BACKLINK_EXCERPT_LENGTH,
+  MAX_BACKLINK_VIA,
   MAX_LABEL_LENGTH,
   MAX_RESULTS,
   MAX_SNIPPET_LENGTH,
@@ -10,6 +12,7 @@ import {
   checkQuery,
 } from './limits.ts';
 import { checkNamespace, NAMESPACES, type WikiNamespace } from './namespace.ts';
+import { checkFieldName } from './page.ts';
 import { checkPageKey, pageKeyId, type PageKey } from './page-key.ts';
 import { invalid, resultOf, type WikiError, type WikiResult } from './result.ts';
 import { checkSourceDescriptor, type SourceDescriptor } from './source.ts';
@@ -137,6 +140,19 @@ export function validateSearchResult(value: unknown): WikiResult<SearchResult> {
 export interface BacklinkEntry {
   readonly source: PageKey;
   readonly title: string;
+  /**
+   * How the source page links to the target: the distinct origins, sorted by code unit and without
+   * duplicates, at most MAX_BACKLINK_VIA. Each is the literal `body` (a Markdown or wiki link in the page
+   * body) or a frontmatter relationship field name exactly as the source profile configures it. Omitted
+   * when unknown, never empty. Optional since the additive revision; consumers must not require it.
+   */
+  readonly via?: readonly string[];
+  /**
+   * Inert plain text of the block holding the source's first body link to the target: flattened,
+   * whitespace-collapsed, single-line, at most MAX_BACKLINK_EXCERPT_LENGTH code units. Omitted when the
+   * only links are frontmatter fields (or no excerpt is derivable). Optional since the additive revision.
+   */
+  readonly excerpt?: string;
 }
 
 export interface BacklinkResult {
@@ -144,6 +160,34 @@ export interface BacklinkResult {
   readonly entries: readonly BacklinkEntry[];
   readonly total: number;
   readonly truncated: boolean;
+}
+
+function checkVia(value: unknown, path: string): WikiError | null {
+  if (!Array.isArray(value)) return invalid('wrong-type', 'via must be an array of origin names', path);
+  if (value.length === 0) return invalid('empty', 'via is omitted when unknown, never empty', path);
+  if (value.length > MAX_BACKLINK_VIA) return invalid('too-large', `via carries at most ${MAX_BACKLINK_VIA} origins`, path);
+  let previous: string | null = null;
+  for (const [i, origin] of value.entries()) {
+    const error = checkFieldName(origin, `${path}[${i}]`);
+    if (error !== null) return error;
+    if (previous !== null) {
+      if (origin === previous) return invalid('duplicate', 'duplicate origin', `${path}[${i}]`);
+      if ((origin as string) < previous) return invalid('inconsistent', 'via must be sorted by code unit', `${path}[${i}]`);
+    }
+    previous = origin as string;
+  }
+  return null;
+}
+
+function checkBacklinkEntry(entry: unknown, path: string): WikiError | null {
+  if (!isRecord(entry)) return invalid('wrong-type', 'backlink must be an object', path);
+  return (
+    checkKeys(entry, ['source', 'title', 'via', 'excerpt'], ['source', 'title'], path) ??
+    checkPageKey(entry['source'], `${path}.source`) ??
+    checkLabel(entry['title'], `${path}.title`, MAX_LABEL_LENGTH) ??
+    ('via' in entry ? checkVia(entry['via'], `${path}.via`) : null) ??
+    ('excerpt' in entry ? checkLabel(entry['excerpt'], `${path}.excerpt`, MAX_BACKLINK_EXCERPT_LENGTH) : null)
+  );
 }
 
 export function checkBacklinkResult(value: unknown, path: string = '$'): WikiError | null {
@@ -158,13 +202,9 @@ export function checkBacklinkResult(value: unknown, path: string = '$'): WikiErr
   const seen = new Set<string>();
   for (const [i, entry] of entries.entries()) {
     const entryPath = `${path}.entries[${i}]`;
-    if (!isRecord(entry)) return invalid('wrong-type', 'backlink must be an object', entryPath);
-    const error =
-      checkKeys(entry, ['source', 'title'], ['source', 'title'], entryPath) ??
-      checkPageKey(entry['source'], `${entryPath}.source`) ??
-      checkLabel(entry['title'], `${entryPath}.title`, MAX_LABEL_LENGTH);
+    const error = checkBacklinkEntry(entry, entryPath);
     if (error !== null) return error;
-    const id = pageKeyId((entry as unknown as BacklinkEntry).source);
+    const id = pageKeyId((entry as BacklinkEntry).source);
     if (seen.has(id)) return invalid('duplicate', 'duplicate backlink source', `${entryPath}.source`);
     seen.add(id);
   }
@@ -192,11 +232,26 @@ export interface Topic {
   readonly pageCount: number;
   /** Preview of member pages, at most MAX_RESULTS. */
   readonly pages: readonly PageKey[];
+  /**
+   * Display titles of `pages`, in the same order and of the same length. Optional since the additive
+   * revision: consumers fall back to the page keys when it is absent.
+   */
+  readonly pageTitles?: readonly string[];
 }
 
 export interface TopicList {
   readonly namespace: WikiNamespace;
   readonly topics: readonly Topic[];
+}
+
+function checkPageTitles(value: unknown, path: string, pageCount: number): WikiError | null {
+  if (!Array.isArray(value)) return invalid('wrong-type', 'pageTitles must be an array of titles', path);
+  if (value.length !== pageCount) return invalid('inconsistent', 'pageTitles must match pages one to one', path);
+  for (const [i, title] of value.entries()) {
+    const error = checkLabel(title, `${path}[${i}]`, MAX_LABEL_LENGTH);
+    if (error !== null) return error;
+  }
+  return null;
 }
 
 function checkTopicId(value: unknown, path: string): WikiError | null {
@@ -218,12 +273,13 @@ export function checkTopicList(value: unknown, path: string = '$'): WikiError | 
     const topicPath = `${path}.topics[${i}]`;
     if (!isRecord(topic)) return invalid('wrong-type', 'topic must be an object', topicPath);
     const error =
-      checkKeys(topic, ['id', 'label', 'parentId', 'pageCount', 'pages'], ['id', 'label', 'parentId', 'pageCount', 'pages'], topicPath) ??
+      checkKeys(topic, ['id', 'label', 'parentId', 'pageCount', 'pages', 'pageTitles'], ['id', 'label', 'parentId', 'pageCount', 'pages'], topicPath) ??
       checkTopicId(topic['id'], `${topicPath}.id`) ??
       checkLabel(topic['label'], `${topicPath}.label`, MAX_LABEL_LENGTH) ??
       (topic['parentId'] === null ? null : checkTopicId(topic['parentId'], `${topicPath}.parentId`)) ??
       checkInteger(topic['pageCount'], `${topicPath}.pageCount`, 0, MAX_COUNT) ??
-      checkKeyList(topic['pages'], `${topicPath}.pages`, 0, MAX_RESULTS);
+      checkKeyList(topic['pages'], `${topicPath}.pages`, 0, MAX_RESULTS) ??
+      ('pageTitles' in topic ? checkPageTitles(topic['pageTitles'], `${topicPath}.pageTitles`, (topic['pages'] as unknown[]).length) : null);
     if (error !== null) return error;
     const id = topic['id'] as string;
     if (ids.has(id)) return invalid('duplicate', `duplicate topic "${id}"`, `${topicPath}.id`);

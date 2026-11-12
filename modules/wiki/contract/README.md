@@ -18,7 +18,7 @@ Completion of this slice is not acceptance. The Wiki continuity owner decides co
 | Pages | `Page`, `PageContent` (`parsed` \| `raw`), `PageField`, `OutLink`, `RawReason`, `validatePage` |
 | Records | `AliasResolution`, `SearchHit`, `SearchResult`, `BacklinkResult`, `Topic`, `TopicList`, `IndexStatus` and their `validate*` functions |
 | Service | `WikiService`, `WIKI_SERVICE_METHODS`, request types and `validateSearchRequest`, `validateGetPageRequest`, `validateResolveAliasRequest`, `validateGetBacklinksRequest`, `validateListTopicsRequest`, `FORBIDDEN_REQUEST_KEYS` |
-| Limits | `MAX_QUERY_LENGTH`, `MAX_RESULTS`, `MAX_PAGE_BLOB_BYTES`, `validateQuery`, `clampQuery`, `validateResultLimit`, `clampResultLimit`, `validatePageBlobSize`, `validatePageText` (+ structural bounds) |
+| Limits | `MAX_QUERY_LENGTH`, `MAX_RESULTS`, `MAX_PAGE_BLOB_BYTES`, `MAX_BACKLINK_VIA`, `MAX_BACKLINK_EXCERPT_LENGTH`, `validateQuery`, `clampQuery`, `validateResultLimit`, `clampResultLimit`, `validatePageBlobSize`, `validatePageText` (+ structural bounds) |
 | Destinations | `Destination`, `formatDestination`, `parseDestination` |
 | Results | `WikiResult<T>`, `WikiError` (`code`, `reason`, `message`, `path`) |
 
@@ -57,6 +57,53 @@ Completion of this slice is not acceptance. The Wiki continuity owner decides co
   records in `bl` and `appdev` have different `pageKeyId`s and never merge. Topic and alias lists
   reject cross-namespace members.
 
+## Additive revision: backlink provenance and titled topic previews
+
+A backward-compatible revision of this contract. The schema id stays `hq.wiki.source/v1`, the seven
+`WikiService` methods and every request type are unchanged, and every old payload still validates.
+
+**What.** Three optional members:
+
+| Member | On | Meaning |
+| --- | --- | --- |
+| `via?: readonly string[]` | `BacklinkEntry` | How the source page links to the target: its distinct origins, each the literal `body` (a Markdown or wiki link in the page body) or a frontmatter relationship field name exactly as the source profile configures it. |
+| `excerpt?: string` | `BacklinkEntry` | Inert plain text of the block that holds the source's first body link to the target. |
+| `pageTitles?: readonly string[]` | `Topic` | The display titles of `pages`, in the same order. |
+
+**Why.** The Wiki UI flow assessment (WF-4 and WF-7) found that a backlink gave only a title and a path, with
+no hint of how the page is mentioned, and that a topic preview carried page keys only, so the UI showed file
+paths. Real corpora link mostly through typed frontmatter relationship fields, so "linked via a field" is the
+most useful context. The topic-preview gap is the deferred P4 "topic previews carry keys only" in the Wiki
+evidence record.
+
+**Compatibility.**
+
+- Consumers must treat all three members as optional. A host without this revision omits them, and a current
+  host omits `via` when the origin is unknown (for example data from an older stored snapshot) and `excerpt`
+  when the only links are frontmatter fields or no excerpt can be derived. Do not infer anything from absence.
+- The validators stay closed: `checkBacklinkResult` and `checkTopicList` accept exactly these members and still
+  reject every other property. Every earlier invariant is unchanged (duplicate sources and topics, the
+  `total`/`truncated` and `pageCount` consistency rules, the 50-result and 500-topic caps).
+- A present member is never `undefined` or `null`, and never empty where emptiness would mean "unknown": `via`
+  is omitted rather than sent as `[]`, and `excerpt` is omitted rather than sent as `""`.
+- No existing export changes meaning. The page field-name rule is now also used for `via` (`checkFieldName`, an
+  internal helper); the two new limits are exported.
+
+**Limits and rules.**
+
+- `via`: 1..`MAX_BACKLINK_VIA` (8) entries. Each follows the page field-name rule (at most 64 characters, a plain
+  identifier, not `__proto__`, `constructor` or `prototype`; `body` satisfies it). Entries are strictly
+  ascending in UTF-16 code-unit order, so uppercase sorts before lowercase. Failures: not an array
+  `wrong-type`, empty `empty`, over 8 `too-large`, a bad name `invalid-format`, a repeat `duplicate`, disorder
+  `inconsistent`.
+- `excerpt`: at most `MAX_BACKLINK_EXCERPT_LENGTH` (160) **UTF-16 code units**, checked like a label: non-empty,
+  single line, no NUL or other control character, no lone surrogate. It is shown verbatim and is never
+  interpreted as Markdown, so `<b>` or `[x](y)` inside it is plain text.
+- `pageTitles`: the same length as `pages` (`inconsistent` otherwise; at most 50 because `pages` is), each a valid
+  label of at most 256 characters. Titles may repeat. A topic whose `pages` is empty has an empty `pageTitles`.
+- A relationship field that is itself named `body` cannot be told apart from a body link in `via`. The contract
+  does not forbid that profile name.
+
 ## Checks
 
 Fixture/synthetic data only. Run from the repository root, serially, after a fresh CPU admission
@@ -72,6 +119,8 @@ temporarily adding an eighth method to `WikiService` makes `tsc` fail in `servic
 file (restored afterwards). Telemetry before the check batches: CPU 18.75% used / 34.44 GiB RAM available, then (final candidate)
 CPU 18.09% used / 33.92 GiB RAM available; admission allowed (threshold 85%). An earlier exploratory
 typecheck ran on a reading taken minutes before (CPU 34.15%, 37.71 GiB).
+
+Results after the additive revision above: 75 tests, 75 pass, 0 fail, 0 skipped; `tsc` exit 0.
 
 These checks prove the contract types, validators and interface only. They do not show core, UI,
 IPC/preload, an adapter, or installed-app behaviour. The plan's `wiki-contract` check group is a

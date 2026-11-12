@@ -33,6 +33,10 @@ export const MAX_FIELD_NAME_LENGTH = 64;
 export const MAX_FIELD_LIST_ITEMS = 64;
 export const MAX_FIELD_VALUE_LENGTH = 2048;
 export const MAX_TOPICS = 500;
+/** Most origins (`body` and relationship field names) one backlink entry reports. */
+export const MAX_BACKLINK_VIA = 8;
+/** Longest backlink excerpt, in UTF-16 code units. */
+export const MAX_BACKLINK_EXCERPT_LENGTH = 160;
 export const MAX_AST_DEPTH = 64;
 export const MAX_AST_NODES = 200_000;
 export const MAX_TABLE_COLUMNS = 64;

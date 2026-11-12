@@ -87,6 +87,24 @@ describe('shape', () => {
     }
   });
 
+  test('backlinks with via and excerpt, and topics with pageTitles, pass through unchanged (additive revision)', async () => {
+    const other = { namespace: 'bl', path: 'guides/other.md' };
+    const backlinks = {
+      target: KEY,
+      entries: [
+        { source: other, title: 'Other', via: ['body', 'related'], excerpt: 'See the onboarding guide.' },
+        { source: { namespace: 'bl', path: 'plain.md' }, title: 'Plain' },
+      ],
+      total: 2,
+      truncated: false,
+    };
+    const topics = { namespace: 'bl', topics: [{ id: 'f-guides', label: 'Guides', parentId: null, pageCount: 2, pages: [KEY, other], pageTitles: ['Onboarding', 'Other'] }] };
+    const { port } = scripted((method) => okResult(method, method === 'getBacklinks' ? backlinks : method === 'listTopics' ? topics : GOOD[method]));
+    const client = createWikiClient(() => port);
+    assert.deepEqual(await client.getBacklinks({ key: KEY }), { ok: true, value: backlinks });
+    assert.deepEqual(await client.listTopics({ namespace: 'bl' }), { ok: true, value: topics });
+  });
+
   test('requests are sent as canonical plain copies with defaults filled', async () => {
     const { port, calls } = scripted((method) => okResult(method));
     const client = createWikiClient(() => port);
@@ -237,7 +255,13 @@ describe('response validation: anything off-contract becomes internal', () => {
     ['resolveAlias', { status: 'resolved', target: { namespace: 'appdev', path: 'x.md' } }],
     ['resolveAlias', { status: 'ambiguous', candidates: [{ namespace: 'bl', path: 'a.md' }] }],
     ['getBacklinks', { target: { namespace: 'bl', path: 'other.md' }, entries: [], total: 0, truncated: false }],
+    ['getBacklinks', { target: KEY, entries: [{ source: { namespace: 'bl', path: 'a.md' }, title: 'A', via: [] }], total: 1, truncated: false }],
+    ['getBacklinks', { target: KEY, entries: [{ source: { namespace: 'bl', path: 'a.md' }, title: 'A', via: ['related', 'body'] }], total: 1, truncated: false }],
+    ['getBacklinks', { target: KEY, entries: [{ source: { namespace: 'bl', path: 'a.md' }, title: 'A', excerpt: 'two\nlines' }], total: 1, truncated: false }],
+    ['getBacklinks', { target: KEY, entries: [{ source: { namespace: 'bl', path: 'a.md' }, title: 'A', rank: 1 }], total: 1, truncated: false }],
     ['listTopics', { namespace: 'appdev', topics: [] }],
+    ['listTopics', { namespace: 'bl', topics: [{ id: 't', label: 'T', parentId: null, pageCount: 1, pages: [KEY], pageTitles: [] }] }],
+    ['listTopics', { namespace: 'bl', topics: [{ id: 't', label: 'T', parentId: null, pageCount: 1, pages: [KEY], titles: ['T'] }] }],
     ['indexStatus', { namespaces: 'none' }],
   ];
   for (const [method, value] of wrongValue) {
