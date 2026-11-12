@@ -8,7 +8,8 @@ import type { RequestSession } from '../../requests/src/session.ts';
 import type { ProjectContent } from '../../projects/src/content.ts';
 import type { RequestsEnvironment } from '../sections/requests/env.ts';
 import { brandId } from '../../requests/src/validate.ts';
-import { useDesignWorkspace } from './workspace-context.tsx';
+import { useDesignProject, useDesignWorkspace } from './workspace-context.tsx';
+import { ProjectScope } from './views/ProjectScope.tsx';
 import { useProjectContentRevision } from './content-revision.ts';
 import { SectionFrame } from './views/SectionFrame.tsx';
 import { withSectionErrorBoundary } from './views/SectionErrorBoundary.tsx';
@@ -21,9 +22,10 @@ function RequestPicker({ props, create, children }: {
   readonly children: (session: RequestSession) => ReactNode;
 }) {
   const workspace = useDesignWorkspace();
+  const project = useDesignProject(props.context);
   const env = workspace.closure.requests;
-  const revision = useProjectContentRevision(workspace, props.context.id);
-  const { content } = use<{ readonly content: ProjectContent }>(workspace.contentFor(props.context, { revision }));
+  const revision = useProjectContentRevision(workspace, project.id);
+  const { content } = use<{ readonly content: ProjectContent }>(workspace.contentFor(project, { revision }));
   const [sessions, setSessions] = useState<readonly RequestSession[]>([]);
   const [selected, setSelected] = useState<RequestSession | null>(null);
   const [versionId, setVersionId] = useState('');
@@ -31,11 +33,11 @@ function RequestPicker({ props, create, children }: {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    void projectRequests(env, props.context.id).then((found) => {
+    void projectRequests(env, project.id).then((found) => {
       if (active) { setSessions(found); setSelected(found.find((session) => session.state.requestId === props.state.read()) ?? null); }
     }).catch(() => { if (active) setError('Requests unavailable. Stored data was not replaced.'); });
     return () => { active = false; };
-  }, [env, props.context.id, props.state]);
+  }, [env, project.id, props.state]);
   const choose = (session: RequestSession | null) => {
     setSelected(session);
     if (session) props.state.write(session.state.requestId);
@@ -45,7 +47,7 @@ function RequestPicker({ props, create, children }: {
     if (!version?.capture.sourceRevision) return;
     setBusy(true); setError(null);
     try {
-      const session = await env.create({ title: 'New request', sources: [{ projectId: brandId(props.context.id),
+      const session = await env.create({ title: 'New request', sources: [{ projectId: brandId(project.id),
         viewId: brandId(version.viewId), versionId: brandId(version.id), sourceRevision: version.capture.sourceRevision }] });
       setSessions((current) => [...current, session]); choose(session);
     } catch { setError('Request creation failed or its outcome is unknown. Reopen to reconcile before trying again.'); }
@@ -93,8 +95,9 @@ async function projectRequests(env: RequestsEnvironment, projectId: string) {
 export function mountRequests(Section: ComponentType<RequestsSectionProps>): ComponentType<DesignSectionProps> {
   return withSectionErrorBoundary(function RequestsMount(props) {
     const workspace = useDesignWorkspace();
-    return <SectionFrame lane="Requests" entry="app/sections/requests/View.tsx" tags={[workspace.storageTag]}>
-      <RequestPicker key={props.context.id} props={props} create>{(session) => <Section env={workspace.closure.requests} session={session}
+    const project = useDesignProject(props.context);
+    return <SectionFrame lane="Requests" entry="app/sections/requests/View.tsx" tags={[workspace.storageTag]} scope={<ProjectScope project={project} navigate={props.navigate} />}>
+      <RequestPicker key={project.id} props={props} create>{(session) => <Section env={workspace.closure.requests} session={session}
         navigation={{ navigate: (intent) => { if (intent.type === 'open-runs') props.navigate({ nav: 'runs', section: 'connector' }); } }} />}</RequestPicker>
     </SectionFrame>;
   });
@@ -104,8 +107,9 @@ export function mountRuns(Section: ComponentType<RunsSectionProps>): ComponentTy
   return withSectionErrorBoundary(function RunsMount(props) {
     const workspace = useDesignWorkspace();
     const env = use(workspace.closure.runs());
-    return <SectionFrame lane="Runs" entry="app/sections/runs/View.tsx" tags={[workspace.storageTag]}>
-      <RequestPicker key={props.context.id} props={props} create={false}>{(session) => <Section env={env} session={session} now={workspace.closure.requests.clock.now()} />}</RequestPicker>
+    const project = useDesignProject(props.context);
+    return <SectionFrame lane="Runs" entry="app/sections/runs/View.tsx" tags={[workspace.storageTag]} scope={<ProjectScope project={project} navigate={props.navigate} />}>
+      <RequestPicker key={project.id} props={props} create={false}>{(session) => <Section env={env} session={session} now={workspace.closure.requests.clock.now()} />}</RequestPicker>
     </SectionFrame>;
   });
 }

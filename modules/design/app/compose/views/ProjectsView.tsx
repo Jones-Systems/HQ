@@ -26,6 +26,19 @@ function ProjectsViewContent({ context, navigate }: DesignSectionProps) {
   const preview = useSyncExternalStore(workspace.interactive.subscribe, workspace.interactive.snapshot, workspace.interactive.snapshot);
   const previewItem = selected ? findPreview(preview.items, selected) : null;
   useEffect(() => { if (entry) close.current?.focus(); }, [selected]);
+  // The project opened here scopes Review and Requests; returning to the gallery keeps the last one open.
+  // A controller without a store (a rendering double) leaves the scope unchanged.
+  useEffect(() => {
+    const sync = () => {
+      const snapshot = controller.getSnapshot?.();
+      const active = snapshot?.active;
+      if (!active) return;
+      const name = active.record?.name ?? snapshot.registry.projects.find((project) => project.id === active.projectId)?.name ?? active.projectId;
+      workspace.activeProject.set({ id: active.projectId, name });
+    };
+    sync();
+    return controller.subscribe?.(sync);
+  }, [controller, workspace.activeProject]);
   async function run(action: () => Promise<void>) {
     setBusy(true); setError(null); setSelected(null);
     try { await action(); } catch (failure) { setError(failure instanceof Error ? failure.message : 'Project folders are unavailable.'); }
