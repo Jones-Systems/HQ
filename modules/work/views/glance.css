@@ -1,0 +1,39 @@
+/* Glance. */
+.wv-glance { display: grid; gap: var(--hq-space-lg); }
+.wv-glance-hero { display: grid; gap: var(--hq-space-xs); }
+.wv-glance-heading { font: var(--hq-type-display); letter-spacing: var(--hq-type-display-tracking); }
+.wv-glance-summary { color: var(--hq-text-muted); }
+.wv-strip { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
+.wv-strip-pill {
+  display: inline-flex; align-items: center; gap: var(--hq-space-xs); font: var(--hq-type-label); color: var(--hq-text);
+  background: var(--hq-surface-raised); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-pill); padding: var(--hq-space-3xs) var(--hq-space-sm);
+}
+button.wv-strip-pill { cursor: pointer; }
+.wv-strip-done { font: var(--hq-type-meta); color: var(--hq-text-subtle); }
+.wv-glance-grid { display: grid; gap: var(--hq-space-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.wv-glance .wv-panel { min-width: 0; }
+.wv-glance .wv-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; grid-template-areas: "kind title trail" ". sub trail"; column-gap: var(--hq-space-xs); row-gap: 0; min-height: 36px; padding: 6px var(--hq-space-xs); border-bottom: 1px solid var(--hq-border); border-radius: var(--hq-radius-sm); }
+.wv-glance .wv-row:last-child { border-bottom-color: transparent; }
+.wv-glance .wv-row:hover { background: var(--hq-surface-hover); }
+.wv-glance .wv-row > .wv-kind { grid-area: kind; }
+.wv-glance .wv-row > .wv-link, .wv-glance .wv-row > .wv-row-title { grid-area: title; min-width: 0; }
+.wv-glance .wv-row-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wv-glance .wv-row-sub { grid-area: sub; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wv-glance .wv-row-trailing { grid-area: trail; justify-content: flex-end; flex-wrap: wrap; max-width: 180px; font: var(--hq-type-meta); }
+.wv-glance .wv-row-trailing .wv-status { font: inherit; }
+.wv-rows, .wv-mini-agenda { display: grid; }
+.wv-agenda-group { display: grid; padding-bottom: var(--hq-space-xs); min-width: 0; }
+.wv-agenda-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--hq-space-xs); padding: var(--hq-space-xs); border-bottom: 1px solid var(--hq-border); }
+.wv-agenda-dayname { font: var(--hq-type-label); font-weight: var(--hq-font-weight-semibold); color: var(--hq-text-muted); }
+.wv-agenda-group > .wv-agenda-dayname { padding: var(--hq-space-xs); border-bottom: 1px solid var(--hq-border); }
+.wv-agenda-relative { font: var(--hq-type-meta); color: var(--hq-text-subtle); white-space: nowrap; }
+.wv-agenda-group.is-overdue { background: var(--hq-danger-soft); border-radius: var(--hq-radius-md); margin-bottom: var(--hq-space-xs); }
+.wv-agenda-group.is-overdue .wv-agenda-dayname { color: var(--hq-danger); }
+.wv-agenda-group.is-today .wv-agenda-dayname { color: var(--hq-text); }
+.wv-attn { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--hq-space-2xs); }
+
+.wv-glance-now-row { display: flex; align-items: center; gap: var(--hq-space-xs); min-width: 0; }
+.wv-glance-now-row > .wv-row { flex: 1; min-width: 0; }
+.wv-glance-now-row .wk-done { opacity: 0; }
+.wv-glance-now-row:hover .wk-done, .wv-glance-now-row:focus-within .wk-done { opacity: 1; }
+@media (hover: none) { .wv-glance-now-row .wk-done { opacity: 1; } }

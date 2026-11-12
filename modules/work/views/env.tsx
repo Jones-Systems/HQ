@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 import type { DateInput, Filters, Settings, SettingsResult, WorkState, WorkStore, WriteOutcome } from '../core';
+import type { Feedback } from '../board/feedback';
 import type { WorkDestination } from './meta';
 
 /** Optional hand-offs to the sibling Work lanes. Each is navigation or UI only; none writes or executes. */
@@ -26,6 +27,11 @@ export interface ViewEnv extends ViewLinks {
   readonly run: (write: Promise<WriteOutcome> | Promise<WriteOutcome<SettingsResult>>, success: string) => Promise<boolean>;
   /** Polite announcement for results that are not a toast, such as an inert By date gesture. */
   readonly announce: (text: string) => void;
+  /**
+   * The Work feedback list, for a view that raises its own toast (for example a Done control's Undo). A write that goes
+   * through `run` is reported for you.
+   */
+  readonly feedback: Feedback;
 }
 
 const Env = createContext<ViewEnv | null>(null);

@@ -10,7 +10,12 @@ export const TOUCH_HOLD_MS = 320;
 /** Touch travel before the hold completes means the user is scrolling. */
 export const TOUCH_SLOP_PX = 8;
 
-export interface DropTarget { status: Status; index: number }
+export interface DropTarget {
+  status: Status;
+  index: number;
+  /** `tab` for a narrow-layout status tab: the drop is a plain move to that status, not a position in a list. */
+  zone?: 'tab';
+}
 
 export interface DragView {
   id: string;
@@ -20,11 +25,16 @@ export interface DragView {
   target: DropTarget | null;
 }
 
+/** How a drag ended: a release (over a target or not) or a cancel (Escape, pointercancel, blur). */
+export interface DragEnd { reason: 'drop' | 'cancel'; id: string; target: DropTarget | null; x: number; y: number }
+
 export interface DragControllerOptions {
   /** Maps a viewport point to a column and an insertion index among its visible cards, without the dragged one. */
   hitTest(x: number, y: number, id: string): DropTarget | null;
   onChange(view: DragView | null): void;
   onDrop(id: string, target: DropTarget): void;
+  /** Called once as a drag ends, before `onChange(null)`, so the surface can settle or fly back its ghost. */
+  onEnd?(end: DragEnd): void;
   setTimer?: (run: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
 }
@@ -99,8 +109,9 @@ export function createDragController(options: DragControllerOptions) {
     pointerUp(pointerId: number): void {
       if (phase.kind === 'idle' || phase.start.pointerId !== pointerId) return;
       if (phase.kind === 'dragging') {
-        const { id, target } = phase.view;
+        const { id, target, x, y } = phase.view;
         suppressNextClick();
+        options.onEnd?.({ reason: 'drop', id, target, x, y });
         reset();
         if (target) options.onDrop(id, target);
         return;
@@ -110,7 +121,11 @@ export function createDragController(options: DragControllerOptions) {
 
     /** Escape, pointercancel or loss of capture: nothing moves. */
     cancel(): void {
-      if (phase.kind === 'dragging') suppressNextClick();
+      if (phase.kind === 'dragging') {
+        const { id, x, y } = phase.view;
+        suppressNextClick();
+        options.onEnd?.({ reason: 'cancel', id, target: null, x, y });
+      }
       reset();
     },
 

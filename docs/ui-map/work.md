@@ -1,5 +1,37 @@
 # Work presentation
 
+## Recovery source discovery (2026-11-12, unverified)
+
+The recovery frame mounts compact capture, always-visible labelled filters,
+one shared toast bridge, navigation counts/number shortcuts and a shared-dialog
+detail sheet below 720px of work-area width. The frame retains 12px content
+gutters; the board owns its horizontal scroller. Reduced motion uses the shared
+tokens and OS/shell preference. These source changes invalidate historical
+appearance evidence for the changed surfaces; the observations below are historical.
+
+Known entries: Work navigation and remembered destinations; `board`,
+`board/by-date`, `glance`, `list`, `item/<id>`; N opens capture and 1–7 navigate
+outside typing/modal/scoped key owners. Board cards open detail by Enter or
+title activation, move with Alt+arrows, drag or their move menu, and offer Done.
+Alt+Left at Inbox reserves the chord without a write or shell reference return.
+List titles open the same detail, and its status select uses the move path.
+Glance Now offers Done with Undo. Confirmed Inbox captures land at the visible
+Inbox list or Status board navigation item; unknown saves offer Check.
+
+`board/week` retains the planned stub for WRK-V2. Calendar, Timeline, Review
+and Archive retain their current source and await WRK-V2 completion. Editable
+Weekly plan remains Proposed with a link to Plan week. Queue UI/adapter assembly
+awaits the independently reviewed queue checkpoint; no queue source is consumed here.
+
+Shared consumers: `@hq/ui` Dialog (capture and narrow detail), Menu (detail and
+capture chip pickers), toast viewport (shell or standalone fallback), list motion
+and navigation transitions. No shared primitive is edited. All entry points,
+responsive states, focus/keyboard behavior, enlarged text, native persistence,
+layout fidelity and gallery/export evidence for this candidate are unverified.
+Later serial qualification must exercise wide/narrow light/dark/system states,
+reduced motion, capture recovery, unknown Check without duplicate intent, one
+Undo per action, board drag/cancel/edge chords and detail focus restoration.
+
 Product entry: Work domain → Home/status board or Calendar. WorkDomain owns the
 outer content gutter and scroll region; StatusBoard owns the horizontal columns
 scroller; CalendarView owns the view controls. Existing Work stores, navigation,

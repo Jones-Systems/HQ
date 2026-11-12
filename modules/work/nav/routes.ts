@@ -1,9 +1,10 @@
 import { isDestination } from '@hq/contracts';
 import type { PlanningViewId, WorkDestination } from '../views';
+import { WORK_VIEWS } from '../views/meta';
 
 /**
  * Work destinations (spec.hq-social-work#iface.domain-module.001, with T4 P-8): `home` (Board), `glance`, `board`,
- * `board/by-date`, `list`, `calendar`, `calendar/<YYYY-MM>`, `timeline`, `review`, `archive`, `settings` and
+ * `board/by-date`, `board/week` (Plan week, flow assessment 2026-11-03), `list`, `calendar`, `calendar/<YYYY-MM>`, `timeline`, `review`, `archive`, `settings` and
  * `item/<itemId>`. `lists` is an alias of `board/by-date`; `item/<itemId>` opens the card detail over the last page;
  * `board/plan/<listBoardId>` is reserved for D-3. Destinations are module-local strings the shell stores per domain;
  * parsing one never writes or starts anything.
@@ -22,20 +23,36 @@ export interface NavItem {
   readonly label: string;
   readonly destination: string;
   readonly group: 'views' | 'boards' | 'settings';
+  /** The number key that opens this page, from `WORK_VIEWS` (the Planner's keys). Boards without one have none. */
+  readonly key?: string;
 }
 
-/** Planner order for views; the two boards; then the Planner settings the views follow. */
-export const NAV_ITEMS: readonly NavItem[] = [
-  { page: 'board', label: 'Status board', destination: 'board', group: 'boards' },
-  { page: 'by-date', label: 'By date', destination: 'board/by-date', group: 'boards' },
+const ORDER: readonly Omit<NavItem, 'key'>[] = [
   { page: 'glance', label: 'Glance', destination: 'glance', group: 'views' },
   { page: 'list', label: 'List', destination: 'list', group: 'views' },
   { page: 'calendar', label: 'Calendar', destination: 'calendar', group: 'views' },
   { page: 'timeline', label: 'Timeline', destination: 'timeline', group: 'views' },
   { page: 'review', label: 'Review', destination: 'review', group: 'views' },
   { page: 'archive', label: 'Archive', destination: 'archive', group: 'views' },
+  { page: 'board', label: 'Status board', destination: 'board', group: 'boards' },
+  { page: 'by-date', label: 'By date', destination: 'board/by-date', group: 'boards' },
+  { page: 'week', label: 'Plan week', destination: 'board/week', group: 'boards' },
   { page: 'settings', label: 'Planner settings', destination: 'settings', group: 'settings' },
 ];
+
+/**
+ * Navigation order: the Views first with Glance, the daily start, on top; then the Boards; then the Planner settings the
+ * views follow. Number keys come from `WORK_VIEWS` (the Planner's keys); the Status board is the Planner's Board, key 2.
+ */
+export const NAV_ITEMS: readonly NavItem[] = ORDER.map((item) => {
+  const key = WORK_VIEWS.find((view) => view.id === item.page)?.key;
+  return key ? { ...item, key } : item;
+});
+
+/** The destination a number key opens, or null. Navigation only: it never writes or starts anything. */
+export function numberKeyDestination(key: string): string | null {
+  return NAV_ITEMS.find((item) => item.key === key)?.destination ?? null;
+}
 
 export const PAGE_LABELS: { readonly [P in WorkPage]: string } = {
   ...(Object.fromEntries(NAV_ITEMS.map((item) => [item.page, item.label])) as Record<Exclude<WorkPage, 'plan'>, string>),
@@ -43,7 +60,7 @@ export const PAGE_LABELS: { readonly [P in WorkPage]: string } = {
 };
 
 const SIMPLE: Readonly<Record<string, Exclude<WorkPage, 'plan' | 'calendar'>>> = {
-  home: 'board', board: 'board', 'board/by-date': 'by-date', lists: 'by-date',
+  home: 'board', board: 'board', 'board/by-date': 'by-date', lists: 'by-date', 'board/week': 'week',
   glance: 'glance', list: 'list', timeline: 'timeline', review: 'review', archive: 'archive', settings: 'settings',
 };
 
@@ -74,6 +91,7 @@ export function pageDestination(route: Exclude<WorkRoute, { kind: 'item' }>): st
   switch (route.page) {
     case 'board': return 'board';
     case 'by-date': return 'board/by-date';
+    case 'week': return 'board/week';
     case 'calendar': return route.month ? `calendar/${route.month}` : 'calendar';
     case 'plan': return `board/plan/${route.planId}`;
     default: return route.page;
@@ -86,5 +104,5 @@ export function itemDestination(itemId: string): string {
 
 /** A view link (for example a Glance status pill) as a destination. Navigation only; it never writes. */
 export function viewLinkDestination(to: WorkDestination): string {
-  return to.view === 'board' ? 'board' : to.view === 'by-date' ? 'board/by-date' : to.view;
+  return to.view === 'board' ? 'board' : to.view === 'by-date' ? 'board/by-date' : to.view === 'week' ? 'board/week' : to.view;
 }
