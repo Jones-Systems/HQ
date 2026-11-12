@@ -1,0 +1,55 @@
+/* Wiki topics browser. Scoped under .wiki-view; motion uses the shared duration and easing tokens. */
+
+.wiki-view .wiki-topic-tree {
+  margin: 0;
+  padding-left: 22px;
+  list-style: none;
+}
+
+.wiki-view .wiki-topic-root {
+  padding-left: 0;
+}
+
+.wiki-view .wiki-topic {
+  margin: 4px 0;
+}
+
+.wiki-view .wiki-topic-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wiki-view .wiki-toggle,
+.wiki-view .wiki-toggle-spacer {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+
+.wiki-view .wiki-toggle {
+  padding: 0;
+  border: 1px solid var(--wiki-border);
+  border-radius: 5px;
+  background: var(--wiki-surface);
+  color: var(--wiki-text);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.wiki-view .wiki-topic-label {
+  font-weight: 600;
+}
+
+.wiki-view .wiki-topic-body {
+  margin: 4px 0 6px 32px;
+  padding-left: 12px;
+  border-left: 1px solid var(--wiki-border);
+}
+
+.wiki-view .wiki-topic-body .wiki-topic-tree {
+  padding-left: 0;
+}
+

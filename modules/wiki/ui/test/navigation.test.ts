@@ -3,56 +3,60 @@ import { test } from 'node:test';
 import { createSyntheticService } from '../fixtures/synthetic.ts';
 import { createWikiView } from '../src/index.ts';
 import { dom } from './dom.ts';
+import { backButton, forwardButton, historyButton, historyItems, historyLabels, homeButton, shown, topicsButton } from './chrome.ts';
 import { all, byText, click, mount, one, settle, textOf } from './render.ts';
 import { launch, override } from './support.ts';
 
-const nav = (container: HTMLElement, label: string): HTMLElement => byText(container, '.wiki-nav button', label);
-const historyCount = (container: HTMLElement): string => textOf(byText(container, '.wiki-nav button', /^History/));
-const shown = (container: HTMLElement): string => (container.querySelector('main')?.firstElementChild?.getAttribute('aria-label') ?? '');
+const historyCount = async (container: HTMLElement): Promise<number> => (await historyLabels(container)).length;
 
 test('in-session history: back, forward and jumping through the list', async () => {
   const app = await launch();
-  await click(nav(app.container, 'Topics · BusinessLessons'));
+  await click(topicsButton(app.container, 'bl'));
   await click(byText(app.container, '.wiki-topic-pages button', 'lessons/pricing.mdBusinessLessons'));
   assert.deepEqual(app.requested, ['topics/bl', 'page/bl/lessons/pricing.md']);
-  assert.equal(historyCount(app.container), 'History (3)');
+  assert.equal(await historyCount(app.container), 3);
   assert.equal(shown(app.container), 'Reader');
 
-  await click(nav(app.container, '← Back'));
+  await click(backButton(app.container));
   assert.equal(shown(app.container), 'Topics');
   assert.equal(app.shell(), 'topics/bl', 'back asks the shell to persist the earlier destination');
-  assert.equal(historyCount(app.container), 'History (3)', 'back adds no entry');
-  await click(nav(app.container, '← Back'));
+  assert.equal(await historyCount(app.container), 3, 'back adds no entry');
+  await click(backButton(app.container));
   assert.equal(shown(app.container), 'Home');
-  assert.equal(nav(app.container, '← Back').hasAttribute('disabled'), true);
-  await click(nav(app.container, 'Forward →'));
+  assert.equal(backButton(app.container).hasAttribute('disabled'), true);
+  await click(forwardButton(app.container));
   assert.equal(shown(app.container), 'Topics');
 
-  await click(nav(app.container, 'History (3)'));
-  const entries = all(app.container, '.wiki-history li button');
-  assert.deepEqual(entries.map((entry) => entry.textContent), ['Home', 'Topics · bl', 'Page · bl/lessons/pricing.md']);
+  // The popover lists the session newest first, in the terms a reader would use, and marks where we are.
+  await click(historyButton(app.container));
+  const entries = historyItems(app.container);
+  assert.equal(entries.length, 3);
+  assert.deepEqual(entries.map((entry) => textOf(one(entry, '.wiki-history-label'))).slice(1), ['BusinessLessons topics', 'Home']);
+  assert.equal(entries[0]!.getAttribute('data-entry'), '2', 'the page, the newest entry, comes first');
   assert.equal(entries[1]!.getAttribute('aria-current'), 'step');
-  await click(entries[2]!);
+  assert.equal(entries.filter((entry) => entry.hasAttribute('aria-current')).length, 1);
+  await click(entries[0]!);
   assert.equal(shown(app.container), 'Reader');
-  assert.equal(nav(app.container, 'Forward →').hasAttribute('disabled'), true);
+  assert.equal(forwardButton(app.container).hasAttribute('disabled'), true);
+  assert.equal(app.container.querySelector('.wiki-history'), null, 'choosing an entry closes the popover');
   await app.unmount();
 });
 
 test('navigating after going back drops the forward branch', async () => {
   const app = await launch();
-  await click(nav(app.container, 'Topics · BusinessLessons'));
-  await click(nav(app.container, '← Back'));
-  await click(nav(app.container, 'Topics · App Development'));
-  assert.equal(historyCount(app.container), 'History (2)');
-  assert.equal(nav(app.container, 'Forward →').hasAttribute('disabled'), true);
+  await click(topicsButton(app.container, 'bl'));
+  await click(backButton(app.container));
+  await click(topicsButton(app.container, 'appdev'));
+  assert.equal(await historyCount(app.container), 2);
+  assert.equal(forwardButton(app.container).hasAttribute('disabled'), true);
   await app.unmount();
 });
 
 test('the shell echoing a request does not add a history entry', async () => {
   const app = await launch();
-  await click(nav(app.container, 'Topics · BusinessLessons'));
+  await click(topicsButton(app.container, 'bl'));
   assert.equal(app.shell(), 'topics/bl');
-  assert.equal(historyCount(app.container), 'History (2)');
+  assert.equal(await historyCount(app.container), 2);
   await app.unmount();
 });
 
@@ -61,16 +65,16 @@ test('an external destination change re-syncs the view and becomes history', asy
   await app.external('search?q=cash');
   assert.equal(shown(app.container), 'Search results');
   assert.equal(input(app.container).value, 'cash');
-  assert.equal(historyCount(app.container), 'History (2)');
+  assert.equal(await historyCount(app.container), 2);
   assert.deepEqual(app.requested, [], 'the view asked for nothing');
 
   await app.external('page/appdev/notes/navigation.md');
   assert.equal(textOf(one(app.container, '.wiki-page-title')), 'Navigation');
-  await click(nav(app.container, '← Back'));
+  await click(backButton(app.container));
   assert.equal(shown(app.container), 'Search results');
   assert.equal(app.shell(), 'search?q=cash');
   await app.external('page/appdev/notes/navigation.md');
-  assert.equal(historyCount(app.container), 'History (3)', 'a fresh external change after Back replaces the forward branch');
+  assert.equal(await historyCount(app.container), 3, 'a fresh external change after Back replaces the forward branch');
   await app.unmount();
 });
 
@@ -82,9 +86,9 @@ test('an external change to the destination already shown is not a new entry', a
   const app = await launch({ destination: 'topics/bl' });
   await app.external('topics/bl');
   await app.external('home');
-  assert.equal(historyCount(app.container), 'History (2)');
+  assert.equal(await historyCount(app.container), 2);
   await app.external('home');
-  assert.equal(historyCount(app.container), 'History (2)');
+  assert.equal(await historyCount(app.container), 2);
   await app.unmount();
 });
 
@@ -113,10 +117,10 @@ test('a long destination the shell cannot persist still navigates in-session (kn
   assert.deepEqual(gap.requested, [long], 'the view still requests persistence');
   assert.equal(gap.shell(), 'page/bl/start.md', 'the shell refused the long destination');
   assert.equal(textOf(one(gap.container, '.wiki-crumbs code')), longPath, 'but the view navigated');
-  assert.equal(historyCount(gap.container), 'History (2)');
-  await click(nav(gap.container, '← Back'));
+  assert.equal(await historyCount(gap.container), 2);
+  await click(backButton(gap.container));
   assert.equal(textOf(one(gap.container, '.wiki-crumbs code')), 'start.md', 'in-session history still works');
-  await click(nav(gap.container, 'Forward →'));
+  await click(forwardButton(gap.container));
   assert.equal(textOf(one(gap.container, '.wiki-crumbs code')), longPath);
   await gap.unmount();
 });
@@ -153,17 +157,17 @@ test('the notice excerpt is bounded and a later valid destination clears it', as
   assert.ok(textOf(one(app.container, '.wiki-notice-destination')).length < 100);
   await app.external('topics/appdev');
   assert.equal(app.container.querySelector('.wiki-notice'), null);
-  await click(nav(app.container, '← Back'));
+  await click(backButton(app.container));
   assert.ok(app.container.querySelector('[data-notice="destination"]'), 'back restores what was shown');
   await app.unmount();
 });
 
 test('the Home button and unchanged destinations behave', async () => {
   const app = await launch({ destination: 'topics/bl' });
-  await click(nav(app.container, 'Home'));
+  await click(homeButton(app.container));
   assert.equal(app.shell(), 'home');
-  await click(nav(app.container, 'Home'));
-  assert.equal(historyCount(app.container), 'History (2)', 'clicking Home on Home adds nothing');
+  await click(homeButton(app.container));
+  assert.equal(await historyCount(app.container), 2, 'clicking Home on Home adds nothing');
   assert.deepEqual(app.requested, ['home']);
   await app.unmount();
 });
@@ -180,11 +184,15 @@ test('appearance is a data attribute and does not change content', async () => {
   await app.unmount();
 });
 
-test('focus moves to the new content after navigation, not on first render', async () => {
+test('focus moves to the new view\'s heading after navigation, not on first render', async () => {
   const app = await launch();
-  assert.notEqual(dom.document.activeElement, one(app.container, 'main'));
-  await click(nav(app.container, 'Topics · BusinessLessons'));
-  assert.equal(dom.document.activeElement, one(app.container, 'main'));
+  assert.equal(one(app.container, 'main').contains(dom.document.activeElement as unknown as Node), false, 'nothing steals focus on first render');
+  await click(topicsButton(app.container, 'bl'));
+  const main = one(app.container, 'main');
+  const focused = dom.document.activeElement as unknown as HTMLElement;
+  assert.ok(main.contains(focused), 'focus is inside the new content');
+  assert.match(focused.tagName, /^H[12]$/, 'on its heading, so a screen reader announces where we are');
+  assert.equal(main.getAttribute('aria-labelledby'), focused.id, 'and the region is named by it');
   await app.unmount();
 });
 
@@ -198,7 +206,7 @@ test('a shell that throws from navigate does not break in-session navigation', a
     },
   });
   await settle();
-  await click(nav(m.container, 'Topics · BusinessLessons'));
+  await click(topicsButton(m.container, 'bl'));
   assert.equal(shown(m.container), 'Topics');
   await m.unmount();
 });
