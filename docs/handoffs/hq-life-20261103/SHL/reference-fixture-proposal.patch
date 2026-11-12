@@ -49,7 +49,7 @@ index 1db642d..c792326 100644
  });
 @@ -222,19 +222,20 @@ it('Social draft ↔ Work card open/Back preserves source state; explicit snapsh
  });
- 
+
  it('all eight statuses render with observedAt and fingerprints; mismatch and stale observations never navigate', async () => {
 -  const f = fixture(); const work = REFERENCE_PROVIDERS.find(p => p.domain === 'work')!;
 -  const social = REFERENCE_PROVIDERS.find(p => p.domain === 'social')!;
@@ -72,7 +72,7 @@ index 1db642d..c792326 100644
    expect(outcomes.map(o => o.status)).toEqual(REFERENCE_STATUSES);
    for (const resolution of outcomes) {
 @@ -277,7 +278,7 @@ it('source-owned links enforce dedup and 30 maximum; Planner export/import prese
- 
+
  it('Social links remain visibly unsaved without qualified service capability', async () => {
    const f = fixture([]); const domains = createServiceDomains(() => f.services);
 -  const refs = createReferencePort(REFERENCE_PROVIDERS, { projectId: () => projectId, open: vi.fn(), notice: vi.fn() });
