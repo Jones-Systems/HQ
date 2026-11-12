@@ -286,6 +286,16 @@ mechanics qualification remain pending. This is not a qualified launcher or a
 build result. Full Vitest lifetime bounds remain separate and unproved. No HQ
 compiler, build, local test service or native producer has started.
 
+Design checkpoint `0a9e8057` is composed after a clean merge preflight. Request
+source-version assertions now target the implemented radio rows, prove exact
+IDs and eligibility, then select the newly saved revision. Annotations rendering
+and version changes await React async work, retaining the full ordered choices,
+exact selected target and pinned-version assertion; a promise-identity assertion
+checks the cache key. Taste checks its current assertive failure notice and retry
+action while retaining every no-empty/no-synthetic/no-write oracle. Production
+source is unchanged. These three source repairs have not run locally; the new
+assembled head needs full required CI and later Mini/native qualification.
+
 Contributing conversations and roles, with native identifiers retained privately:
 
 - Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.
