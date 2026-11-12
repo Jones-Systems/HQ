@@ -52,9 +52,9 @@ test('PID reuse and reboot prove stale leases; unavailable process evidence hold
   const old = identity(path.join(f.record.targetPath, 'Contents/MacOS', f.record.appName), 800);
   f.processes.set(old.pid, { ...old, ppid: 0 });
   await f.locked(() => f.engine.state.claimSession(f.record, old));
-  await assert.rejects(f.locked(() => f.engine.state.claimSession(f.record, f.self)), { code: 'busy' });
+  await assert.rejects(f.locked(() => f.engine.state.claimSession(f.record, f.self)), error => error.code === 'busy' && error.refusal.guard === 'session-claim' && error.refusal.ownerRelation === 'other' && error.refusal.liveness === 'live');
   f.setComplete(false);
-  await assert.rejects(f.locked(() => f.engine.state.claimSession(f.record, f.self)), { code: 'recovery-required' });
+  await assert.rejects(f.locked(() => f.engine.state.claimSession(f.record, f.self)), error => error.code === 'recovery-required' && error.refusal.guard === 'session-claim' && error.refusal.liveness === 'unknown');
   f.setComplete(true);
   f.processes.set(old.pid, { ...old, start: 'reused-pid-start', ppid: 0 });
   const lease = await f.locked(() => f.engine.state.claimSession(f.record, f.self));
@@ -289,7 +289,7 @@ test('a live historical retained executable and its child prevent replacement', 
   await assert.rejects(f.engine.state.excludeWriters(f.record, null, [f.self]), { code: 'busy' });
   const child = identity(path.join(f.root, 'detached-service'), 607);
   f.processes.set(child.pid, { ...child, ppid: prior.pid });
-  await assert.rejects(f.engine.state.excludeWriters(f.record, null, [f.self, prior]), { code: 'busy' });
+  await assert.rejects(f.engine.state.excludeWriters(f.record, null, [f.self, prior]), error => error.code === 'busy' && error.refusal.guard === 'writer-process' && error.refusal.writerRelation === 'descendant' && error.refusal.helperRelation === 'unknown');
   const corrupt = { ...historical, priorPath: path.join(f.root, 'unexpected.app') };
   await atomicWrite(path.join(f.record.stateRoot, 'history', `${historical.operationId}.json`), corrupt);
   await assert.rejects(f.engine.state.excludeWriters(f.record, null, [f.self]), { code: 'recovery-required' });

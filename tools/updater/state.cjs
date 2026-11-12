@@ -5,6 +5,18 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { UpdateError, ensure, object, validateProcess, sameProcess, digest, inside, readJson, optionalJson, atomicWrite, syncDirectory, assertNoSymlink, transactionPaths, MAX_RETAINED_OPERATIONS } = require('./contract.cjs');
 
+function annotateRefusal(error, project) {
+  // Diagnostic failure must leave the original safety refusal authoritative.
+  try { error.refusal = Object.freeze(project()); } catch {}
+  return error;
+}
+function ensureRefusal(condition, message, code, project) {
+  try { ensure(condition, message, code); }
+  catch (error) { throw annotateRefusal(error, project); }
+}
+function relation(subject, identity) { return identity ? (sameProcess(subject, identity) ? 'self' : 'other') : 'unknown'; }
+function observed(value) { return ['live', 'dead', 'stale'].includes(value) ? value : 'unknown'; }
+
 function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)) }) {
   const json = filename => readJson(filename, { fs: io });
   const optional = filename => optionalJson(filename, { fs: io });
@@ -30,23 +42,23 @@ function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep =
     const lease = { schemaVersion: 1, installationId: record.installationId, nonce: crypto.randomBytes(16).toString('hex'), process: identity };
     let reaping = false;
     try {
-      try { await io.lstat(reaper); throw new UpdateError('recovery-required', 'Gate reconciliation requires inspection.'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      try { await io.lstat(reaper); throw annotateRefusal(new UpdateError('recovery-required', 'Gate reconciliation requires inspection.'), () => ({ guard: 'gate-reconciliation-present' })); } catch (error) { if (error.code !== 'ENOENT') throw error; }
       try { await io.mkdir(directory, { mode: 0o700 }); } catch (error) {
         if (error.code !== 'EEXIST') throw error;
         await assertNoSymlink(directory, { fs: io });
         const previous = validateLease(await json(ownerFile), record);
         const evidence = await native.observe(previous.process);
-        ensure(evidence === 'dead' || evidence === 'stale', 'Another process owns the installation gate.', evidence === 'live' ? 'busy' : 'recovery-required');
-        try { await io.mkdir(reaper, { mode: 0o700 }); } catch (failure) { if (failure.code === 'EEXIST') throw new UpdateError('busy', 'Gate reconciliation is already running.'); throw failure; }
+        ensureRefusal(evidence === 'dead' || evidence === 'stale', 'Another process owns the installation gate.', evidence === 'live' ? 'busy' : 'recovery-required', () => ({ guard: 'installation-gate-owner', ownerRelation: relation(previous.process, identity), helperRelation: 'unknown', liveness: observed(evidence) }));
+        try { await io.mkdir(reaper, { mode: 0o700 }); } catch (failure) { if (failure.code === 'EEXIST') throw annotateRefusal(new UpdateError('busy', 'Gate reconciliation is already running.'), () => ({ guard: 'gate-reconciliation-contended' })); throw failure; }
         reaping = true;
         await write(path.join(reaper, 'owner.json'), lease);
-        ensure(digest(await json(ownerFile)) === digest(previous), 'Gate ownership changed.', 'busy');
+        ensureRefusal(digest(await json(ownerFile)) === digest(previous), 'Gate ownership changed.', 'busy', () => ({ guard: 'gate-owner-changed' }));
         const evidenceAgain = await native.observe(previous.process);
-        ensure(evidenceAgain === 'dead' || evidenceAgain === 'stale', 'Gate ownership cannot be proved stale.', 'recovery-required');
+        ensureRefusal(evidenceAgain === 'dead' || evidenceAgain === 'stale', 'Gate ownership cannot be proved stale.', 'recovery-required', () => ({ guard: 'gate-owner-liveness', ownerRelation: relation(previous.process, identity), helperRelation: 'unknown', liveness: observed(evidenceAgain) }));
         const archive = path.join(record.stateRoot, `abandoned-gate-${previous.nonce}`);
         await io.rename(directory, archive);
         await syncDirectory(record.stateRoot, { fs: io });
-        try { await io.mkdir(directory, { mode: 0o700 }); } catch (failure) { if (failure.code === 'EEXIST') throw new UpdateError('busy', 'Another bootstrap acquired the gate.'); throw failure; }
+        try { await io.mkdir(directory, { mode: 0o700 }); } catch (failure) { if (failure.code === 'EEXIST') throw annotateRefusal(new UpdateError('busy', 'Another bootstrap acquired the gate.'), () => ({ guard: 'gate-acquisition-race' })); throw failure; }
       }
       await write(ownerFile, lease);
       await syncDirectory(record.stateRoot, { fs: io });
@@ -91,7 +103,7 @@ function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep =
     const previous = await session(record);
     if (previous !== null && !sameProcess(previous.process, identity)) {
       const evidence = await native.observe(previous.process);
-      ensure(evidence === 'dead' || evidence === 'stale', 'The existing HQ session has not exited.', evidence === 'live' ? 'busy' : 'recovery-required');
+      ensureRefusal(evidence === 'dead' || evidence === 'stale', 'The existing HQ session has not exited.', evidence === 'live' ? 'busy' : 'recovery-required', () => ({ guard: 'session-claim', ownerRelation: relation(previous.process, identity), helperRelation: 'unknown', liveness: observed(evidence), writerRelation: 'session' }));
     }
     const lease = { schemaVersion: 1, installationId: record.installationId, nonce: crypto.randomBytes(16).toString('hex'), process: identity };
     await write(path.join(record.stateRoot, 'session.json'), lease);
@@ -106,7 +118,7 @@ function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep =
   }
   async function excludeWriters(record, journal, allowed = []) {
     const table = await native.processTable();
-    ensure(table?.complete === true && typeof table.boot === 'string' && Array.isArray(table.processes), 'Process exclusion evidence is unavailable.', 'recovery-required');
+    ensureRefusal(table?.complete === true && typeof table.boot === 'string' && Array.isArray(table.processes), 'Process exclusion evidence is unavailable.', 'recovery-required', () => ({ guard: 'writer-inventory' }));
     const roots = [record.targetPath, record.stateRoot];
     const history = path.join(record.stateRoot, 'history');
     let names;
@@ -131,13 +143,17 @@ function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep =
       changed = false;
       for (const process of table.processes) if (descendants.has(process.ppid) && !descendants.has(process.pid)) { descendants.add(process.pid); changed = true; }
     }
-    for (const process of table.processes) if (descendants.has(process.pid)) ensure(allowed.some(identity => sameProcess(identity, process)), 'A live HQ app or helper blocks replacement.', 'busy');
+    for (const process of table.processes) if (descendants.has(process.pid)) ensureRefusal(allowed.some(identity => sameProcess(identity, process)), 'A live HQ app or helper blocks replacement.', 'busy', () => ({
+      guard: 'writer-process', ownerRelation: allowed.length ? 'other' : 'unknown',
+      helperRelation: journal?.helper ? (sameProcess(process, journal.helper) ? 'helper' : 'other') : 'unknown',
+      liveness: 'live', writerRelation: roots.some(root => inside(root, process.executable)) ? 'owned-root' : sessionLease && sameProcess(sessionLease.process, process) ? 'session' : 'descendant',
+    }));
     if (sessionLease && !allowed.some(identity => sameProcess(identity, sessionLease.process))) {
       const evidence = await native.observe(sessionLease.process);
-      ensure(evidence === 'dead' || evidence === 'stale', 'A session lease cannot be proved inactive.', evidence === 'live' ? 'busy' : 'recovery-required');
+      ensureRefusal(evidence === 'dead' || evidence === 'stale', 'A session lease cannot be proved inactive.', evidence === 'live' ? 'busy' : 'recovery-required', () => ({ guard: 'writer-session', ownerRelation: allowed.length ? 'other' : 'unknown', helperRelation: journal?.helper ? (sameProcess(sessionLease.process, journal.helper) ? 'helper' : 'other') : 'unknown', liveness: observed(evidence), writerRelation: 'session' }));
     }
     return table;
   }
   return { fs: io, initialize, json, optional, write, acquireGate, withGate, session, claimSession, releaseSession, excludeWriters };
 }
-module.exports = { createState };
+module.exports = { createState, annotateRefusal, ensureRefusal };
