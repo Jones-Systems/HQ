@@ -365,13 +365,15 @@ class Restart(RunCase):
         self.harness.stop()
         with raw_db(self.data / 'hq-social.sqlite3') as db:
             for run_id, status in (('1' * 32, 'queued'), ('2' * 32, 'running')):
-                db.execute("INSERT INTO runs VALUES (?, 'x-studio', ?, 0, '2026-01-01T00:00:00+00:00', NULL, NULL)",
+                db.execute("INSERT INTO runs (id, tool, status, is_example, created_at, finished_at, error) "
+                           "VALUES (?, 'x-studio', ?, 0, '2026-01-01T00:00:00+00:00', NULL, NULL)",
                            (run_id, status))
         self.start_service()
         for run_id in ('1' * 32, '2' * 32):
             seen = self.get(f'/api/runs/{run_id}').json
             self.assertEqual((seen['status'], seen['error']), ('interrupted', INTERRUPTED))
             self.assertRegex(seen['finished_at'], r'^\d{4}-\d\d-\d\dT')
+            self.assertEqual(seen['source_ids'], [])
         untouched = self.get(f'/api/runs/{finished["id"]}').json
         self.assertEqual((untouched['status'], untouched['finished_at']), ('succeeded', finished['finished_at']))
         self.assertEqual([run['id'] for run in self.get('/api/workspace').json['runs']],

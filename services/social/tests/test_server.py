@@ -455,12 +455,20 @@ class Routes(Endpoint):
     def test_brands_are_created_listed_by_name_and_may_repeat(self):
         zed = self.post('/api/brands', {'name': '  Zed  '})
         self.assertEqual(zed.status, 201)
-        self.assertEqual(list(zed.json), ['id', 'name'])
+        self.assertEqual(list(zed.json), ['id', 'name', 'project_id'])
+        self.assertIsNone(zed.json['project_id'])
         self.assertRegex(zed.json['id'], HEX32)
         self.assertEqual(zed.json['name'], 'Zed')
         self.post('/api/brands', {'name': 'alpha'})
         self.post('/api/brands', {'name': 'Zed'})
-        names = [brand['name'] for brand in self.get('/api/workspace').json['brands']]
+        workspace = self.get('/api/workspace').json
+        self.assertEqual(workspace['sources'], [])
+        for brand in workspace['brands']:
+            self.assertEqual(list(brand), ['id', 'name', 'project_id'])
+            self.assertIsNone(brand['project_id'])
+            if brand['id'] != 'default':
+                self.assertRegex(brand['id'], HEX32)
+        names = [brand['name'] for brand in workspace['brands']]
         self.assertEqual(names, ['alpha', 'My workspace', 'Zed', 'Zed'])
 
     def test_brand_errors(self):

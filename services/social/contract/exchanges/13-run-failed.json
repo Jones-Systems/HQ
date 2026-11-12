@@ -27,11 +27,11 @@
       "created_at": "2026-01-15T12:00:07+00:00",
       "finished_at": "2026-01-15T12:00:08+00:00",
       "error": "Synthetic contract failure",
+      "source_ids": [],
       "output": {
         "ok": false,
         "error": "Synthetic contract failure"
-      },
-      "source_ids": []
+      }
     }
   }
 }
