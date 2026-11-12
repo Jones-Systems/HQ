@@ -289,7 +289,8 @@ describe('References', () => {
       const env = await e2e.window.workspace.closure.references();
       const imported = await env.library.importReference(screenshot());
       expect(imported.status).toBe('created');
-      const id = (imported as { id: string }).id;
+      if (imported.status !== 'created') throw new Error('Expected a newly created reference');
+      const id = imported.id;
       const record = env.library.state.references[id]!;
       expect(record.asset).toMatchObject({ digest: PNG_REF.digest, mediaType: 'image/png' });
       // The image went through blob.put, and the library document keeps only its digest.

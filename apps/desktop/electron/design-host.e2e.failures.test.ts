@@ -15,18 +15,20 @@ import { withDesignE2E, type E2EWindow } from '../test-support/design-e2e/harnes
 import { PNG, PNG_REF, SHELL_PROJECT, flowRaw } from '../test-support/design-e2e/fixtures.ts';
 import { DESIGN_BLOB_CAP, DESIGN_VALUE_CAP } from './design-host.ts';
 import {
-  attemptDesign, classifyDesignError, designFeedback, isDesignFailure, type DesignFailure, type DesignFailureContext, type DesignSection,
+  attemptDesign, classifyDesignError, designFeedback, isDesignFailure, toDesignOperationError, DesignOperationError, type DesignFailureContext, type DesignSection,
 } from '../../../modules/design/app/compose/errors.ts';
 import { bridgeResultValue, DesignBridgeConflictError, DesignBridgeError } from '../../../modules/design/app/compose/bridge-documents.ts';
 import { createRequestsStoragePort, createCanvasStorage, createFlowsStorage } from '../../../modules/design/app/storage/index.ts';
-import { addView, type ProjectContent } from '../../../modules/design/projects/src/content.ts';
-import { renameView } from '../../../modules/design/projects/src/content.ts';
+import { addView, renameView, type ProjectContent } from '../../../modules/design/projects/src/content.ts';
 import { projectId, viewId } from '../../../modules/design/projects/src/ids.ts';
 import { CONTENT_SCHEMA } from '../../../modules/design/projects/src/content.ts';
 import { SYNTHETIC_BUTTON } from '../../../modules/design/components/src/fixtures.ts';
 import { addArtboard, emptyArrangement } from '../../../modules/design/canvas/src/arrangement.ts';
 import { artboardId } from '../../../modules/design/canvas/src/contract.ts';
 import { loadArrangement, saveArrangement } from '../../../modules/design/canvas/src/codec.ts';
+import { parseFlow } from '../../../modules/design/flows/src/model.ts';
+import type { FlowDocument } from '../../../modules/design/flows/src/contract.ts';
+import type { DesignServiceParams, DesignServiceRoute } from '@hq/contracts/services';
 import { PROJECTS_KEY_PREFIX } from '../../../modules/design/projects/src/contract.ts';
 
 const ctx = (section: DesignSection, operation: string, write: boolean): DesignFailureContext => ({ section, operation, action: 'save it', write });
@@ -38,7 +40,21 @@ async function rejection(run: () => Promise<unknown>): Promise<unknown> {
   throw new Error('Expected the call to reject');
 }
 const lastReply = (window: E2EWindow) => window.transport.calls.at(-1)?.result;
-const noEffect = (failure: DesignFailure) => expect(failure.outcome).toBe('no-effect');
+/** Pins both the classifier and the landed error envelope against each observed rejection. */
+function observedFailure(error: unknown, context: DesignFailureContext) {
+  const failure = classifyDesignError(error, context);
+  const operation = toDesignOperationError(error, context);
+  expect(operation).toBeInstanceOf(DesignOperationError);
+  expect(operation.name).toBe('DesignOperationError');
+  expect(isDesignFailure(operation)).toBe(true);
+  expect(classifyDesignError(operation, context)).toEqual(failure);
+  expect(classifyDesignError(structuredClone(failure), context)).toEqual(failure);
+  if (failure.outcome === 'unknown-effect') {
+    expect(failure.kind).toBe('unknown');
+    expect(designFeedback(operation).action).toEqual({ kind: 'check', label: 'Check' });
+  }
+  return failure;
+}
 const sha = (bytes: Uint8Array) => `sha256:${createHash('sha256').update(bytes).digest('hex')}` as const;
 
 describe('conflict: a lost compare-and-swap is `conflict` for every writer', () => {
@@ -54,7 +70,7 @@ describe('conflict: a lost compare-and-swap is `conflict` for every writer', () 
       const stale = await rejection(() => records.putDocument(key, { n: 3 }, { expectedRevision: 5 }));
       expect(lastReply(e2e.window)).toEqual({ ok: false, kind: 'conflict' });
       for (const error of [createOnly, stale]) {
-        const failure = classifyDesignError(error, writing('projects', 'projects.rename'));
+        const failure = observedFailure(error, writing('projects', 'projects.rename'));
         expect(failure).toMatchObject({ kind: 'conflict', outcome: 'no-effect', recovery: 'reload', section: 'projects', operation: 'projects.rename' });
         expect(designFeedback(failure)).toMatchObject({ tone: 'danger', action: { kind: 'reload', label: 'Reload' }, persistent: true });
       }
@@ -78,7 +94,7 @@ describe('conflict: a lost compare-and-swap is `conflict` for every writer', () 
       gate.release();
       const error = await racing;
       expect(error).toMatchObject({ name: 'StorageConflictError' });
-      expect(classifyDesignError(error, writing('projects', 'projects.rename'))).toMatchObject({ kind: 'conflict', outcome: 'no-effect', recovery: 'reload' });
+      expect(observedFailure(error, writing('projects', 'projects.rename'))).toMatchObject({ kind: 'conflict', outcome: 'no-effect', recovery: 'reload' });
       const stored = await a.records.getDocument(`design/projects/${PROJECTS_KEY_PREFIX}content/${project}`);
       expect(stored).toMatchObject({ revision: 2 });
       expect((stored!.value as unknown as ProjectContent).views.map((item) => item.title)).toEqual(['Home (A)']);
@@ -98,7 +114,7 @@ describe('conflict: a lost compare-and-swap is `conflict` for every writer', () 
       gate.release();
       const error = await racing;
       expect(error).toMatchObject({ name: 'IntegrityError', reason: 'exists' });
-      expect(classifyDesignError(error, writing('components', 'components.save'))).toMatchObject({ kind: 'conflict', outcome: 'no-effect', recovery: 'reload' });
+      expect(observedFailure(error, writing('components', 'components.save'))).toMatchObject({ kind: 'conflict', outcome: 'no-effect', recovery: 'reload' });
       expect(await libraryA.getSource(winner.componentId, 1)).toEqual(winner);
       expect(await libraryA.revisions(winner.componentId)).toEqual([1]);
     });
@@ -122,7 +138,7 @@ describe('conflict: a lost compare-and-swap is `conflict` for every writer', () 
       gate.release();
       const error = await racing;
       expect(error).toMatchObject({ name: 'CanvasWriteConflictError', reason: 'revision-changed' });
-      expect(classifyDesignError(error, writing('canvas', 'canvas.save'))).toMatchObject({ kind: 'conflict', outcome: 'no-effect', recovery: 'reload' });
+      expect(observedFailure(error, writing('canvas', 'canvas.save'))).toMatchObject({ kind: 'conflict', outcome: 'no-effect', recovery: 'reload' });
       // Without the interleaving, the advisory check reports the change and writes nothing.
       expect(await saveArrangement(canvasB.storage, editedB, loadedB.baseText)).toMatchObject({ status: 'conflict' });
       const stored = await a.records.getDocument(`design.canvas.arrangement.v1/${canvasA.canvasId}`);
@@ -159,12 +175,12 @@ describe('invalid: the host refuses oversize values and blobs, and keys outside 
       // JSON adds two quote characters, so cap - 1 characters is one byte over and cap - 2 is exactly the cap.
       const error = await rejection(() => records.putDocument(key, 'x'.repeat(DESIGN_VALUE_CAP - 1)));
       expect(lastReply(e2e.window)).toEqual({ ok: false, kind: 'invalid' });
-      expect(classifyDesignError(error, writing('projects', 'projects.save'))).toMatchObject({ kind: 'invalid', outcome: 'no-effect', recovery: 'none' });
+      expect(observedFailure(error, writing('projects', 'projects.save'))).toMatchObject({ kind: 'invalid', outcome: 'no-effect', recovery: 'none' });
       expect(existsSync(e2e.storeRoot)).toBe(false);
       expect((await records.putDocument(key, 'x'.repeat(DESIGN_VALUE_CAP - 2))).revision).toBe(1);
       expect(existsSync(e2e.storeRoot)).toBe(true);
       const event = await rejection(() => records.appendEvent('design/requests/size/review', { type: 'requests.event-bytes', payload: 'x'.repeat(DESIGN_VALUE_CAP) }));
-      expect(classifyDesignError(event, writing('requests', 'requests.review'))).toMatchObject({ kind: 'invalid', outcome: 'no-effect' });
+      expect(observedFailure(event, writing('requests', 'requests.review'))).toMatchObject({ kind: 'invalid', outcome: 'no-effect' });
       expect(transport.calls.at(-1)?.result).toEqual({ ok: false, kind: 'invalid' });
       const cache = await transport.call('cache.put', { key: 'design.discovery.catalog', value: 'x'.repeat(DESIGN_VALUE_CAP) });
       expect(cache).toEqual({ ok: false, kind: 'invalid' });
@@ -178,7 +194,7 @@ describe('invalid: the host refuses oversize values and blobs, and keys outside 
       const sentBefore = transport.calls.length;
       const refused = await rejection(() => records.putBlob(oversize));
       expect(transport.calls.length).toBe(sentBefore); // the bridge refused before sending anything
-      expect(classifyDesignError(refused, writing('references', 'references.import'))).toMatchObject({ kind: 'invalid', outcome: 'no-effect', recovery: 'none' });
+      expect(observedFailure(refused, writing('references', 'references.import'))).toMatchObject({ kind: 'invalid', outcome: 'no-effect', recovery: 'none' });
       // A caller that skips the bridge's check is still refused by the host.
       const hostRefusal = await transport.call('blob.put', { bytes: oversize, expectedDigest: sha(oversize) });
       expect(hostRefusal).toEqual({ ok: false, kind: 'invalid' });
@@ -196,12 +212,12 @@ describe('invalid: the host refuses oversize values and blobs, and keys outside 
         `design/projects/${'x'.repeat(256)}`, ' design/projects/x', 'design/projects/x ', 'design/projects/\ud800', 'design/projects/', 'design/taste/other', 'design/taste/journal.v1/x'];
       for (const key of keys) {
         const read = await rejection(() => records.getDocument(key));
-        expect(classifyDesignError(read, reading('projects', 'projects.open')), JSON.stringify(key)).toMatchObject({ kind: 'invalid', outcome: 'no-effect', recovery: 'none' });
+        expect(observedFailure(read, reading('projects', 'projects.open')), JSON.stringify(key)).toMatchObject({ kind: 'invalid', outcome: 'no-effect', recovery: 'none' });
         const write = await rejection(() => records.putDocument(key, {}));
-        expect(classifyDesignError(write, writing('projects', 'projects.save')), JSON.stringify(key)).toMatchObject({ kind: 'invalid', outcome: 'no-effect' });
+        expect(observedFailure(write, writing('projects', 'projects.save')), JSON.stringify(key)).toMatchObject({ kind: 'invalid', outcome: 'no-effect' });
       }
       for (const prefix of ['design/', 'design/connector/', 'design/taste/', 'other/']) {
-        expect(classifyDesignError(await rejection(() => records.listDocuments(prefix)), reading('projects', 'projects.list')).kind, prefix).toBe('invalid');
+        expect(observedFailure(await rejection(() => records.listDocuments(prefix)), reading('projects', 'projects.list')).kind, prefix).toBe('invalid');
       }
       // Every one of those reached the host and was refused; none opened the store or wrote anything.
       expect(transport.calls.every((call) => call.result && !call.result.ok && call.result.kind === 'invalid')).toBe(true);
@@ -209,7 +225,7 @@ describe('invalid: the host refuses oversize values and blobs, and keys outside 
       // Event streams are confined to design/requests/ by the bridge itself, before any send.
       const sent = transport.calls.length;
       for (const stream of ['design/imports', 'design/references/x', 'design/requests/', 'design/requests/../x']) {
-        expect(classifyDesignError(await rejection(() => records.readEvents(stream)), reading('requests', 'requests.open')).kind).toBe('invalid');
+        expect(observedFailure(await rejection(() => records.readEvents(stream)), reading('requests', 'requests.open')).kind).toBe('invalid');
       }
       expect(transport.calls.length).toBe(sent);
       // Unknown routes are refused too.
@@ -224,13 +240,13 @@ describe('invalid: the host refuses oversize values and blobs, and keys outside 
       const flows = createFlowsStorage(records);
       const scope = await rejection(() => flows.putDocument('workspace', '../escape', {}));
       expect(scope).toMatchObject({ name: 'SectionStorageScopeError' });
-      expect(classifyDesignError(scope, writing('flows', 'flows.save'))).toMatchObject({ kind: 'invalid', outcome: 'no-effect', recovery: 'none' });
+      expect(observedFailure(scope, writing('flows', 'flows.save'))).toMatchObject({ kind: 'invalid', outcome: 'no-effect', recovery: 'none' });
       const canvas = await rejection(() => createCanvasStorage(records).readDocument('workspace', 'design/projects/x'));
       expect(canvas).toMatchObject({ name: 'CanvasScopeError' });
-      expect(classifyDesignError(canvas, reading('canvas', 'canvas.open')).kind).toBe('invalid');
+      expect(observedFailure(canvas, reading('canvas', 'canvas.open')).kind).toBe('invalid');
       const requests = await rejection(() => createRequestsStoragePort({ workspace: records }).readDocument('workspace', 'design/projects/x'));
       expect(requests).toMatchObject({ name: 'RequestsStorageScopeError' });
-      expect(classifyDesignError(requests, reading('requests', 'requests.open')).kind).toBe('invalid');
+      expect(observedFailure(requests, reading('requests', 'requests.open')).kind).toBe('invalid');
       expect(transport.calls).toHaveLength(0);
     });
   });
@@ -242,16 +258,16 @@ describe('disabled: routes that are off in the default store keep their reason t
     ['export.preview', { exportedAt }], ['export.save', { exportedAt }], ['import.status', {}], ['storage.diagnostics', {}],
     ['import.repair', { txnId: 'a'.repeat(64) }], ['import.pick', {}],
     ['import.commit', { ops: [{ op: 'put-document', namespace: 'workspace', key: 'design/projects/x', value: {}, expectedRevision: null }] }],
-  ] as const;
+  ] as const satisfies readonly (readonly [DesignServiceRoute, DesignServiceParams[DesignServiceRoute]])[];
 
   it.each(routes)('%s answers `disabled`, which classifies as disabled (a definite no-effect, even for a write route)', async (route, params) => {
     await withDesignE2E(async (e2e) => {
-      const reply = await e2e.window.transport.call(route, params as never);
+      const reply = await e2e.window.transport.call(route, params);
       expect(reply).toEqual({ ok: false, kind: 'unavailable', reason: 'disabled' });
       const error = await rejection(async () => bridgeResultValue(reply, 'unknown'));
       expect(error).toBeInstanceOf(DesignBridgeError);
       expect(error).toMatchObject({ kind: 'unavailable', reason: 'disabled' });
-      const failure = classifyDesignError(error, writing('imports', `imports.${route}`));
+      const failure = observedFailure(error, writing('imports', `imports.${route}`));
       expect(failure).toMatchObject({ kind: 'disabled', outcome: 'no-effect', recovery: 'none', reason: 'disabled' });
       expect(designFeedback(failure)).toMatchObject({ tone: 'info', meta: `imports.${route} · disabled`, inline: 'failed', persistent: false });
       expect(isDesignFailure(failure)).toBe(true);
@@ -274,12 +290,12 @@ describe('unavailable: a closed host refuses reads and writes without touching s
       await e2e.host.close();
       const read = await rejection(() => records.getDocument('design/projects/kept'));
       expect(lastReply(e2e.window)).toEqual({ ok: false, kind: 'unavailable' });
-      expect(classifyDesignError(read, reading('projects', 'projects.open'))).toMatchObject({ kind: 'unavailable', outcome: 'no-effect', recovery: 'retry' });
+      expect(observedFailure(read, reading('projects', 'projects.open'))).toMatchObject({ kind: 'unavailable', outcome: 'no-effect', recovery: 'retry' });
       const write = await rejection(() => records.putDocument('design/projects/kept', { n: 2 }));
-      expect(classifyDesignError(write, writing('projects', 'projects.save'))).toMatchObject({ kind: 'unavailable', outcome: 'no-effect', recovery: 'retry' });
+      expect(observedFailure(write, writing('projects', 'projects.save'))).toMatchObject({ kind: 'unavailable', outcome: 'no-effect', recovery: 'retry' });
       expect((await rejection(() => records.putBlob(PNG)))).toBeInstanceOf(DesignBridgeError);
-      expect(classifyDesignError(await rejection(() => records.putBlob(PNG)), writing('references', 'references.import')).kind).toBe('unavailable');
-      expect(classifyDesignError(await rejection(() => records.readEvents('design/requests/a/review')), reading('requests', 'requests.open')).kind).toBe('unavailable');
+      expect(observedFailure(await rejection(() => records.putBlob(PNG)), writing('references', 'references.import')).kind).toBe('unavailable');
+      expect(observedFailure(await rejection(() => records.readEvents('design/requests/a/review')), reading('requests', 'requests.open')).kind).toBe('unavailable');
       const window = await e2e.reopen();
       expect(await window.records.getDocument('design/projects/kept')).toMatchObject({ revision: 1, value: { n: 1 } });
       expect(await window.records.hasBlob(PNG_REF.digest)).toBe(false);
@@ -291,7 +307,13 @@ describe('unavailable: a closed host refuses reads and writes without touching s
       const env = await e2e.window.workspace.contentFor({ id: 'project-closed', name: 'Closed' });
       await e2e.host.close();
       const error = await rejection(() => env.repository.load(projectId('project-closed')));
-      expect(classifyDesignError(error, reading('projects', 'projects.open'))).toMatchObject({ kind: 'unavailable', outcome: 'no-effect', recovery: 'retry' });
+      expect(observedFailure(error, reading('projects', 'projects.open'))).toMatchObject({ kind: 'unavailable', outcome: 'no-effect', recovery: 'retry' });
+      // An uncached composition call carries the landed typed envelope itself.
+      const composed = await rejection(() => e2e.window.workspace.contentFor({ id: 'project-closed-envelope', name: 'Closed envelope' }));
+      expect(composed).toBeInstanceOf(DesignOperationError);
+      expect(observedFailure(composed, reading('projects', 'projects.open'))).toMatchObject({
+        kind: 'unavailable', outcome: 'no-effect', recovery: 'retry', section: 'projects', operation: 'projects.load',
+      });
     });
   });
 });
@@ -304,12 +326,12 @@ describe('unknown: a write whose reply is lost', () => {
       const error = await rejection(() => records.putDocument('design/projects/lost', { n: 1 }, { expectedRevision: null }));
       expect(error).toMatchObject({ name: 'DesignBridgeError', kind: 'unknown' });
       expect(transport.calls.at(-1)).toMatchObject({ outcome: 'reply-lost' });
-      const failure = classifyDesignError(error, writing('projects', 'projects.create'));
+      const failure = observedFailure(error, writing('projects', 'projects.create'));
       expect(failure).toMatchObject({ kind: 'unknown', outcome: 'unknown-effect', recovery: 'check' });
       expect(designFeedback(failure)).toMatchObject({ tone: 'unknown', inline: 'unknown', action: { kind: 'check', label: 'Check' }, persistent: true });
       // "Check": the write did land, and it must not be blindly repeated as a create.
       expect(await records.getDocument('design/projects/lost')).toMatchObject({ revision: 1, value: { n: 1 } });
-      expect(classifyDesignError(await rejection(() => records.putDocument('design/projects/lost', { n: 1 }, { expectedRevision: null })), writing('projects', 'projects.create')).kind).toBe('conflict');
+      expect(observedFailure(await rejection(() => records.putDocument('design/projects/lost', { n: 1 }, { expectedRevision: null })), writing('projects', 'projects.create')).kind).toBe('conflict');
     });
   });
 
@@ -317,7 +339,7 @@ describe('unknown: a write whose reply is lost', () => {
     await withDesignE2E(async (e2e) => {
       const { records, transport } = e2e.window;
       transport.dropRequest('doc.put');
-      const failure = classifyDesignError(await rejection(() => records.putDocument('design/projects/dropped', {})), writing('projects', 'projects.create'));
+      const failure = observedFailure(await rejection(() => records.putDocument('design/projects/dropped', {})), writing('projects', 'projects.create'));
       expect(failure).toMatchObject({ kind: 'unknown', outcome: 'unknown-effect', recovery: 'check' });
       expect(await records.getDocument('design/projects/dropped')).toBeNull();
     });
@@ -327,13 +349,13 @@ describe('unknown: a write whose reply is lost', () => {
     await withDesignE2E(async (e2e) => {
       const { records, transport } = e2e.window;
       transport.loseReply('blob.put');
-      expect(classifyDesignError(await rejection(() => records.putBlob(PNG)), writing('references', 'references.import')).kind).toBe('unknown');
+      expect(observedFailure(await rejection(() => records.putBlob(PNG)), writing('references', 'references.import')).kind).toBe('unknown');
       expect(await records.putBlob(PNG)).toEqual({ digest: PNG_REF.digest, bytes: PNG.length }); // content-addressed: the retry is the same blob
 
       const stream = 'design/requests/request-lost/review';
       const event = { type: 'requests.event-bytes', payload: { eventId: 'event-lost', decision: 'accept' }, clientEventId: 'event-lost' };
       transport.loseReply('event.append');
-      expect(classifyDesignError(await rejection(() => records.appendEvent(stream, event)), writing('requests', 'requests.review')).kind).toBe('unknown');
+      expect(observedFailure(await rejection(() => records.appendEvent(stream, event)), writing('requests', 'requests.review')).kind).toBe('unknown');
       expect(await records.appendEvent(stream, event)).toEqual({ seq: 1, payload: event.payload }); // the retry returns the original event
       expect((await records.readEvents(stream)).events).toHaveLength(1);
     });
@@ -345,7 +367,7 @@ describe('unknown: a write whose reply is lost', () => {
       const bytes = new TextEncoder().encode('{"requestId":"request-lost","title":"Synthetic"}');
       const key = 'design/requests/request-lost/draft';
       e2e.window.transport.loseReply('doc.put');
-      expect(classifyDesignError(await rejection(() => storage.createDocument('workspace', key, bytes)), writing('requests', 'requests.create')).kind).toBe('unknown');
+      expect(observedFailure(await rejection(() => storage.createDocument('workspace', key, bytes)), writing('requests', 'requests.create')).kind).toBe('unknown');
       expect(await storage.createDocument('workspace', key, bytes)).toBe('exists-identical');
       expect(await storage.createDocument('workspace', key, new TextEncoder().encode('{"requestId":"request-lost","title":"Other"}'))).toBe('exists-different');
     });
@@ -355,7 +377,7 @@ describe('unknown: a write whose reply is lost', () => {
     await withDesignE2E(async (e2e) => {
       const { records, transport } = e2e.window;
       transport.loseReply('doc.get');
-      expect(classifyDesignError(await rejection(() => records.getDocument('design/projects/x')), reading('projects', 'projects.open'))).toMatchObject({ kind: 'unavailable', outcome: 'no-effect', recovery: 'retry' });
+      expect(observedFailure(await rejection(() => records.getDocument('design/projects/x')), reading('projects', 'projects.open'))).toMatchObject({ kind: 'unavailable', outcome: 'no-effect', recovery: 'retry' });
       const result = await attemptDesign(async () => { transport.loseReply('doc.put'); return records.putDocument('design/projects/x', {}); }, writing('projects', 'projects.save'));
       expect(result).toMatchObject({ ok: false, failure: { kind: 'unknown' } });
     });
@@ -373,7 +395,7 @@ describe('read-only and damaged data', () => {
         () => window.records.appendEvent('design/requests/r/review', { type: 'requests.event-bytes', payload: {} })]) {
         const error = await rejection(write);
         expect(error).toMatchObject({ name: 'DesignBridgeError', kind: 'read-only' });
-        expect(classifyDesignError(error, writing('projects', 'projects.save'))).toMatchObject({ kind: 'read-only', outcome: 'no-effect', recovery: 'none' });
+        expect(observedFailure(error, writing('projects', 'projects.save'))).toMatchObject({ kind: 'read-only', outcome: 'no-effect', recovery: 'none' });
       }
       expect(await window.records.getDocument('design/projects/kept')).toMatchObject({ revision: 1, value: { n: 1 } });
     });
@@ -388,7 +410,7 @@ describe('read-only and damaged data', () => {
       const env = await e2e.window.workspace.contentFor({ id: 'project-other', name: 'Other' });
       const error = await rejection(() => env.repository.update(projectId(id), (content, now) => addView(content, { id: viewId('view-x'), title: 'X', kind: 'page' }, now)));
       expect(error).toMatchObject({ name: 'ReadOnlyContentError' });
-      expect(classifyDesignError(error, writing('projects', 'projects.addView'))).toMatchObject({ kind: 'read-only', outcome: 'no-effect', recovery: 'none' });
+      expect(observedFailure(error, writing('projects', 'projects.addView'))).toMatchObject({ kind: 'read-only', outcome: 'no-effect', recovery: 'none' });
       expect(await e2e.window.records.getDocument(key)).toMatchObject({ revision: 1, value: future });
     });
   });
@@ -396,14 +418,18 @@ describe('read-only and damaged data', () => {
   it('a flow that fails validation is refused before any write (a built-in TypeError, so it cannot be told from a bug by name)', async () => {
     await withDesignE2E(async (e2e) => {
       const { repository } = await e2e.window.workspace.flowsFor(SHELL_PROJECT);
-      const error = await rejection(() => repository.save({ ...(flowRaw() as never), platform: 'toaster' }));
+      const parsed = parseFlow(flowRaw());
+      if (!parsed.ok) throw new Error(parsed.errors.join('; '));
+      // Deliberately cross the typed boundary to exercise runtime validation.
+      const invalid = { ...parsed.flow, platform: 'toaster' } as unknown as FlowDocument;
+      const error = await rejection(() => repository.save(invalid));
       expect(error).toBeInstanceOf(TypeError);
       expect(String((error as Error).message)).toMatch(/Refusing to save invalid flow/u);
       expect(e2e.window.transport.calls.filter((call) => call.route === 'doc.put')).toEqual([]);
       expect(await e2e.window.records.listDocuments('design/flows/')).toEqual([]);
       // A well-formed failure either way: validation errors from Components, Flows and Discovery are built-ins, so a
       // write that fails this way is reported as not confirmed (`unknown`) rather than guessed to be `invalid`.
-      expect(isDesignFailure(classifyDesignError(error, writing('flows', 'flows.save')))).toBe(true);
+      expect(observedFailure(error, writing('flows', 'flows.save'))).toMatchObject({ kind: 'unknown', outcome: 'unknown-effect', recovery: 'check' });
     });
   });
 });

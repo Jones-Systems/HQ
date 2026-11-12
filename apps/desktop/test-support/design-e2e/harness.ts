@@ -8,8 +8,8 @@
  *     ->  main-process dispatch (the same `catalog.*` / host split as main.ts)
  *     ->  createDesignHost  ->  openDesignStorage (the default store)  ->  the T9 file store in a temp dir.
  *
- * Tests import this file; it is not part of any build (tsconfig.electron.json only covers `electron/`).
- * Everything is synthetic: temp directories under `os.tmpdir()` (set `TMPDIR=/tmp`) are removed on close.
+ * Tests import this file; test-support/tsconfig.json checks it without emitting production output.
+ * Everything is synthetic: each run owns a unique directory under `os.tmpdir()` and removes it on close.
  */
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -142,7 +142,7 @@ export async function withDesignE2E<T>(run: (e2e: DesignE2E) => Promise<T>, opti
     const host = createDesignHost(() => openDesignStorage({ root: storeRoot, ...(open.readOnly ? { readOnly: true } : {}) }) as unknown as Promise<DesignStore>);
     hosts.push(host);
     const catalog = createCatalogHost(catalogPersistence(join(dir, 'user-data')), async () => null,
-      (async () => { throw new Error('No catalog root is selected in this harness'); }) as CatalogBuilder);
+      (async () => { throw new Error('No catalog root is selected in this harness'); }) satisfies CatalogBuilder);
     // main.ts: `catalog.*` goes to the catalog host once the design host is ready; everything else to the design host.
     const dispatch: Dispatch = async (route, params) => {
       if (route.startsWith('jonesCode.')) return unavailable;
