@@ -56,6 +56,7 @@ it('null injection preserves the fake APIs and labels with workspace-local state
   const workspace = createDesignWorkspace(null);
   const other = createDesignWorkspace(null);
   assert.equal(workspace.bridged, false);
+  assert.equal(other.bridged, false);
   assert.equal(workspace.storageTag, FAKE_TAG);
   for (const key of ['projectsFor', 'componentsFor', 'flowsFor', 'compareFor', 'annotationsEnv', 'canvasFor', 'discoveryEnv', 'tasteEnv', 'importsFor'] as const) {
     assert.equal(typeof workspace[key], 'function', key);
