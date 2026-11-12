@@ -245,7 +245,7 @@ test('Enter on the results page commits at once; Back after typing goes to what 
 
     await typeInto(resultsInput(app.container), 'cash flow');
     await press(resultsInput(app.container), 'Enter');
-    assert.deepEqual(app.requested, ['search?q=pricing', 'search?q=cash flow'], 'Enter does not wait for the idle timer');
+    assert.deepEqual(app.requested, ['search?q=pricing', 'search?q=cash%20flow'], 'Enter does not wait for the idle timer');
     assert.deepEqual(await historyLabels(app.container), ['Search “cash flow”', 'Home'], 'and replaces rather than adds');
 
     await tap(one(app.container, 'button[aria-label="Back"]'));

@@ -335,6 +335,18 @@ correction, not a proved explanation of the cancellation's internal cause. Fresh
 full Foundation CI must establish completion and reach the portable fixture stage.
 Other required families were green on the preceding head.
 
+At `5b5dd41c`, the keyboard fixture finishes and Wiki reports 830 passed,
+one failed, zero cancelled and zero skipped. The focus candidate removes the
+observed cancellation, without proving its internal reporting mechanism. The
+remaining test reaches immediate Enter commit and expects a literal space in
+`search?q=cash flow`; the accepted contract explicitly requires percent encoding
+and its independent round-trip test expects `%20`. INT corrects that one literal
+to `search?q=cash%20flow`, preserving exact request count/order, immediate commit,
+history replacement, Back and cleared-input assertions. No production change,
+retry, timeout or skip is introduced. Fresh full Foundation must still pass,
+including its not-yet-reached portable fixture stage. Other required families
+remain green on the preceding head.
+
 Contributing conversations and roles, with native identifiers retained privately:
 
 - Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.
