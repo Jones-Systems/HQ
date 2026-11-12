@@ -88,7 +88,8 @@ test('preview graph reaches every section cone through its real entry modules', 
 });
 
 test('bare imports are React plus the shared contracts and UI kit, both scanned', () => {
-  assert.deepEqual([...graph.bare].sort(), ['@hq/contracts', '@hq/ui', 'react', 'react-dom/client']);
+  // `react-dom` is the UI kit's `flushSync` for `navigateWithTransition`; renderer-only, no capability.
+  assert.deepEqual([...graph.bare].sort(), ['@hq/contracts', '@hq/ui', 'react', 'react-dom', 'react-dom/client']);
   assert.ok(scanned.includes(contractsEntry));
   assert.ok(scanned.includes(uiEntry));
   assert.ok(scanned.includes(resolve(dirname(uiEntry), 'components/Button.tsx')));

@@ -2,6 +2,9 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { Button, type ButtonSize, type ButtonVariant } from './Button';
 import { cx } from './cx';
 
+/** An SVG check: text glyphs such as ✓ render as empty boxes on hosts without them. */
+const CHECK_ICON = <svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>;
+
 export interface MenuItem {
   readonly id: string;
   readonly label: string;
@@ -117,7 +120,9 @@ export function Menu({ trigger, triggerLabel, items, variant = 'secondary', size
         {trigger}
       </Button>
       {open && (
-        <ul id={menuId} role="menu" aria-labelledby={triggerId} className={cx('hq-menu-list', align === 'end' && 'hq-menu-list--end')} onKeyDown={onMenuKey}>
+        // data-hq-overlay: native views composited above the page (Design's live preview) hide while a menu is open.
+        <ul id={menuId} role="menu" aria-labelledby={triggerId} className={cx('hq-menu-list', align === 'end' && 'hq-menu-list--end')} onKeyDown={onMenuKey}
+          data-hq-overlay="open">
           {items.map((item, index) => (
             <li
               key={item.id}
@@ -130,7 +135,7 @@ export function Menu({ trigger, triggerLabel, items, variant = 'secondary', size
               onClick={() => activate(item)}
               onPointerMove={() => { if (index !== active) setActive(index); }}
             >
-              {item.checked !== undefined && <span className="hq-menu-check" aria-hidden="true">{item.checked ? '✓' : ''}</span>}
+              {item.checked !== undefined && <span className="hq-menu-check" aria-hidden="true">{item.checked && CHECK_ICON}</span>}
               {item.label}
             </li>
           ))}

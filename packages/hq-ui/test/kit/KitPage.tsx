@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Button, Dialog, IconButton, Menu, PreservedContent, SAVE_STATES, SaveIndicator, StateView, StatusChip, Tabs, Toast,
-  ToastRegion, type ContentScheme, type PreservedContentKind, type StatusTone, type ViewState,
+  ToastRegion, type ContentScheme, type PreservedContentKind, type StatusTone, type ToastApi, type ViewState,
 } from '../../src';
+import { MotionFeedbackSection, ReducedMotionToggle } from './MotionFeedbackSection';
 
 export type Appearance = 'light' | 'dark' | 'system';
 
@@ -143,7 +144,9 @@ function resolve(appearance: Appearance, osDark: boolean): ContentScheme {
   return appearance === 'system' ? (osDark ? 'dark' : 'light') : appearance;
 }
 
-export function KitPage({ initial, only }: { initial: Appearance; only?: 'wells' | 'primitives' }) {
+export type KitOnly = 'wells' | 'primitives' | 'motion';
+
+export function KitPage({ initial, only, reducedMotion = false }: { initial: Appearance; only?: KitOnly; reducedMotion?: boolean }) {
   const [appearance, setAppearance] = useState<Appearance>(initial);
   const [osDark, setOsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const setRef = useRef(setAppearance);
@@ -173,14 +176,24 @@ export function KitPage({ initial, only }: { initial: Appearance; only?: 'wells'
             </Button>
           ))}
         </div>
+        <ReducedMotionToggle initial={reducedMotion} />
         <span className="hq-meta" data-kit-resolved>{`appearance ${appearance} · chrome ${resolve(appearance, osDark)}`}</span>
       </header>
-      {only !== 'primitives' && <PreservedSection />}
-      {only !== 'wells' && <PrimitivesSection />}
+      {(only === undefined || only === 'wells') && <PreservedSection />}
+      {(only === undefined || only === 'primitives') && <PrimitivesSection />}
+      {(only === undefined || only === 'motion') && <MotionFeedbackSection />}
     </main>
   );
 }
 
 declare global {
-  interface Window { hqKit?: { setAppearance?: (appearance: Appearance) => void; probe?: () => Promise<unknown> } }
+  interface Window {
+    hqKit?: {
+      setAppearance?: (appearance: Appearance) => void;
+      setReducedMotion?: (on: boolean) => void;
+      /** The toast API bound to the kit's store, for scripted evidence runs. */
+      toast?: ToastApi;
+      probe?: () => Promise<unknown>;
+    };
+  }
 }

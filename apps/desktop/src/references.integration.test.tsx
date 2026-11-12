@@ -16,6 +16,7 @@ import { addDraftLink, UNSAVED_LINKS } from '../../../modules/social/content/lin
 import { createWorkExport } from '../electron/work-export';
 import * as exportClient from './services/work-export';
 import { createServiceDomains, SERVICE_DOMAINS } from './services/domains';
+import { findServiceStatus } from './services/test-support';
 import { REFERENCE_PROVIDERS } from './reference-providers';
 import { createReferencePort, RESOLUTION_MAX_AGE } from './references';
 import { App } from './App';
@@ -117,7 +118,7 @@ it('example has no export port and unavailable does not mount Work; neither cons
   view.unmount(); mounted.mockClear();
   const unavailable = createServiceDomains(() => undefined);
   render(<unavailable.Work {...props()} />);
-  await screen.findByText('Work: Unavailable.');
+  await findServiceStatus('Work', 'Unavailable');
   expect(mounted).not.toHaveBeenCalled(); expect(construct).not.toHaveBeenCalled();
   expect(f.calls.filter(c => c.route === 'export')).toEqual([]); f.noExecution();
 });

@@ -16,8 +16,13 @@ export const APPEARANCE_KEY = 'hq.appearance.v1';
 export const RAIL_KEY = 'hq.rail.v1';
 export const RAIL_MIN = 64;
 export const RAIL_MAX = 280;
-export const RAIL_DEFAULT = 160;
+/** The icon rail: icon over label at the minimum width. */
+export const RAIL_DEFAULT = RAIL_MIN;
+/** Width restored when a never-widened compact rail is toggled open. */
+export const RAIL_EXPANDED_DEFAULT = 200;
 export const RAIL_COMPACT_MAX = 95;
+/** The pre-icon-rail default, saved on every launch whether chosen or not; read as unset. */
+const LEGACY_RAIL_DEFAULT = 160;
 export interface RailState { width: number; expanded: number }
 export function cycleAppearance(appearance: Appearance): Appearance {
   return appearance === 'light' ? 'dark' : appearance === 'dark' ? 'system' : 'light';
@@ -31,13 +36,14 @@ export function toggleRail(state: RailState): RailState {
   return { ...state, width: state.width <= RAIL_COMPACT_MAX ? state.expanded : RAIL_MIN };
 }
 export function readRail(storage: StoragePort): RailState {
-  const fallback = { width: RAIL_DEFAULT, expanded: RAIL_DEFAULT };
+  const fallback = { width: RAIL_DEFAULT, expanded: RAIL_EXPANDED_DEFAULT };
   try {
     const value: unknown = JSON.parse(storage.getItem(RAIL_KEY) ?? 'null');
     if (!value || typeof value !== 'object') return fallback;
     const { width, expanded } = value as Partial<RailState>;
     if (typeof width !== 'number' || !Number.isFinite(width) || width < RAIL_MIN || width > RAIL_MAX
       || typeof expanded !== 'number' || !Number.isFinite(expanded) || expanded <= RAIL_COMPACT_MAX || expanded > RAIL_MAX) return fallback;
+    if (width === LEGACY_RAIL_DEFAULT && expanded === LEGACY_RAIL_DEFAULT) return fallback;
     return { width: Math.round(width), expanded: Math.round(expanded) };
   } catch { return fallback; }
 }
