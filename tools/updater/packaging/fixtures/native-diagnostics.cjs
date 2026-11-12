@@ -12,6 +12,23 @@ const STAGES = Object.freeze({
   main: ['entered', 'main-ready', 'renderer-ready', 'renderer-error', 'healthy', 'failed-health', 'watchdog', 'error'],
 });
 const CATEGORIES = ['wait-timeout', 'subprocess-exit', 'assertion', 'invalid', 'unavailable', 'incompatible', 'recovery-required', 'busy', 'stale-candidate', 'other-error'];
+const GUARDS = ['gate-reconciliation-present', 'installation-gate-owner', 'gate-reconciliation-contended', 'gate-owner-changed', 'gate-owner-liveness', 'gate-acquisition-race', 'profile-singleton', 'session-claim', 'writer-inventory', 'writer-process', 'writer-session'];
+function projectRefusal(value) {
+  if (value === undefined || value === null) return null;
+  try {
+    if (typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid refusal');
+    return {
+      guard: selected(value.guard, GUARDS),
+      launchBinding: selected(value.launchBinding ?? 'unknown', ['present', 'absent', 'unknown']),
+      singleton: selected(value.singleton ?? 'unknown', ['not-attempted', 'accepted', 'refused', 'unknown']),
+      ownerRelation: selected(value.ownerRelation ?? 'unknown', ['self', 'other', 'unknown']),
+      helperRelation: selected(value.helperRelation ?? 'unknown', ['helper', 'other', 'unknown']),
+      liveness: selected(value.liveness ?? 'unknown', ['live', 'dead', 'stale', 'unknown']),
+      writerRelation: selected(value.writerRelation ?? 'unknown', ['owned-root', 'session', 'descendant', 'unknown']),
+    };
+  } catch { return unavailable('invalid-refusal'); }
+}
+
 const unavailable = reason => ({ status: 'unavailable', reason });
 function category(error) {
   if (CATEGORIES.includes(error?.diagnosticCategory)) return error.diagnosticCategory;
@@ -106,7 +123,7 @@ function fixtureReporter(directory, role) {
   return (stage, error) => {
     try {
       if (binding.status !== 'available') return false;
-      exclusiveJson(binding.runRoot, path.join(binding.stateRoot, fixtureName(role, binding.buildSequence, stage)), { stage, category: error ? category(error) : null });
+      exclusiveJson(binding.runRoot, path.join(binding.stateRoot, fixtureName(role, binding.buildSequence, stage)), { stage, category: error ? category(error) : null, refusal: projectRefusal(error?.refusal) });
       return true;
     } catch { return false; }
   };
@@ -140,11 +157,13 @@ function captureFailure({ output, root, production, archive, active, handoff, er
       const name = fixtureName(role, snapshot.buildSequence, stage);
       snapshot.milestones[role + ':' + stage] = readKnown(root, path.join(stateRoot, name), value => ({
         stage: selected(value.stage, [stage]), category: value.category === null ? null : selected(value.category, CATEGORIES),
+        refusal: projectRefusal(value.refusal),
       }), budget);
     }
     if (snapshot.runtimeBuildSequence !== snapshot.buildSequence) for (const stage of STAGES.bootstrap) {
       snapshot.milestones['launching-runtime:bootstrap:' + stage] = readKnown(root, path.join(stateRoot, fixtureName('bootstrap', snapshot.runtimeBuildSequence, stage)), value => ({
         stage: selected(value.stage, [stage]), category: value.category === null ? null : selected(value.category, CATEGORIES),
+        refusal: projectRefusal(value.refusal),
       }), budget);
     }
   }

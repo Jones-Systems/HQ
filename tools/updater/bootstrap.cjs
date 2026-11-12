@@ -3,6 +3,7 @@
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { createTransaction } = require('./transaction.cjs');
+const { annotateRefusal, ensureRefusal } = require('./state.cjs');
 const { ensure, UpdateError, object, validateInstallation, validatePreparedCandidate, validateProcess, sameProcess, receiptOf, digest, recordPath, readBuildReceipt, assertNoSymlink, syncDirectory } = require('./contract.cjs');
 
 let context = null;
@@ -68,6 +69,7 @@ async function run({ app, importMain, bundlePath, adapters = {} }) {
   const self = validateProcess(await native.identity());
   let lease = null;
   let ownsSingleton = false;
+  let singleton = 'not-attempted';
   let gate;
   let journal;
   let handoff = false;
@@ -97,8 +99,10 @@ async function run({ app, importMain, bundlePath, adapters = {} }) {
       const result = await engine.reconcileHealth(record, journal);
       if (result) { record = result.record; journal = result.journal; }
     }
+    singleton = 'unknown';
     ownsSingleton = app.requestSingleInstanceLock();
-    ensure(ownsSingleton, 'An HQ session already owns this profile.', 'busy');
+    singleton = ownsSingleton ? 'accepted' : 'refused';
+    ensureRefusal(ownsSingleton, 'An HQ session already owns this profile.', 'busy', () => ({ guard: 'profile-singleton' }));
     if (launch) {
       ensure(journal, 'No update owns this launch.', 'stale-candidate');
       await state.excludeWriters(record, journal, [self, journal.helper].filter(Boolean));
@@ -142,6 +146,7 @@ async function run({ app, importMain, bundlePath, adapters = {} }) {
     await gate.release();
     gate = null;
   } catch (error) {
+    annotateRefusal(error, () => ({ ...error.refusal, launchBinding: launch ? 'present' : 'absent', singleton }));
     if (gate) await gate.release().catch(() => {});
     if (ownsSingleton) app.releaseSingleInstanceLock();
     if (adapters.onHold) await adapters.onHold({ state: 'held', code: error.code ?? 'recovery-required' });

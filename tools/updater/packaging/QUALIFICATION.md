@@ -2,7 +2,7 @@
 
 Artifact Type: acceptance-record
 Artifact ID: acceptance.hq-updater-source-20261112
-Purpose: Record the compatibility registry and native diagnostic-retention repairs, keeping portable source evidence distinct from native and operational acceptance.
+Purpose: Record compatibility, diagnostic retention and refusal provenance repairs, keeping portable source evidence distinct from native and operational acceptance.
 Consumers: HQ updater maintainer and integration owner
 Authority effect: none
 
@@ -13,8 +13,9 @@ The receiving source is foundation `8945d156585510fbdf1515fad01798f416146b4e`.
 [signing #142](https://github.com/Jones-Systems/HQ/pull/142); signing merge
 `ed7af03c3be21a909bf1a0e7cc1464308724dcec` is an ancestor of this foundation.
 The separate [foundation-to-main PR #2](https://github.com/Jones-Systems/HQ/pull/2)
-retains its combined-runtime acceptance hold. This repair targets foundation;
-it neither promotes that branch to main nor accepts other product lanes.
+retains its combined-runtime acceptance hold. The original #212 repair targets
+foundation; the refusal-provenance child targets #212's branch. Neither promotes
+foundation to main nor accepts other product lanes.
 
 ## Compatibility repair and evidence
 
@@ -115,6 +116,63 @@ on real Node **24.19.0**, with zero failures, cancellations or skips. The actual
 compatibility guard still reports the same epoch and **143 registered sources**;
 the final diff check passes. No production updater, dependency, workflow or
 registry change accompanies this diagnostic repair.
+
+## Bootstrap refusal provenance
+
+The subsequent attempt at exact source
+`eff942d5aae8d4c5610772f11a123e460c8f7ced` produced archive SHA256
+`b691f429ab316fd489cd98b80dd80270fa230fe59c43fc17447c799017db9bb0`.
+Assembly, inventory and prelaunch admission passed; the first fresh lifecycle
+wait still failed before health after 50.4943 seconds. The primary snapshot
+binds an awaiting-health journal at sequence 7 with launchAttempted true,
+helper present, no registered launch/profile-opened/health, and a bootstrap
+`busy` error before main import. This localizes the refusal but does not
+identify its guard. The failed-health scenario remained unreached. Process,
+group, EOF, inventory and lock closure were verified separately. The attempt's
+authorization is consumed; this source repair grants no native rerun.
+
+State and bootstrap now attach finite guard identifiers at existing gate,
+reconciliation, singleton, writer and session refusals. The error object and
+category, guard predicates, retries, gate custody and launch ordering remain
+authoritative and unchanged. Annotation is best effort: an annotation failure
+cannot substitute another error or supply success. The fixture reporter and
+primary-before-drain snapshot project only allowlisted guard, launch-binding,
+singleton, owner/helper relation, liveness and writer-relation enums. Invalid
+provenance becomes unavailable; arbitrary properties and exception text are
+excluded. Existing nofollow, ownership, byte limits, exclusive persistence,
+capture placement and failure-retention rules remain in force.
+
+Owner relation compares the rejected identity with the caller's known identity
+or allowed identities; helper relation uses the already available journal
+helper. Writer relation distinguishes an owned-root executable, a session lease
+and a descendant. Unknown evidence stays `unknown`. In particular, bootstrap
+has not read the journal when gate acquisition refuses, so helper relation is
+unknown at that guard; no additional read or process probe guesses that role.
+
+A deterministic Linux-safe regression uses the existing fresh fixture and real
+helper/transaction/state/bootstrap functions with distinct immutable synthetic
+helper/app identities. A deferred after-launch checkpoint holds the helper's
+gate at durable sequence 7 while bootstrap runs once. The unchanged assertion
+failed on the parent source because the reporter/snapshot omitted the guard;
+separate singleton and writer cases failed for the same missing provenance.
+After repair, those cases discriminate the guards while still refusing before
+registration, main import or health, preserving the journal and gate owner.
+Existing regressions additionally cover session claims with unknown liveness,
+external descendants, a frozen original error, malformed provenance, both
+runtime-build snapshot routes and privacy sentinel exclusion. The barrier is
+released in finally; framework-owned fixture roots are removed after success
+and failure. No real app or process, sleep, protected state or native service
+participates.
+
+The final deduplicated portable command above passed **148 tests** on the
+existing checksum-verified Node **24.19.0** runtime in **14.25 seconds**, with
+zero failures, cancellations or skips. Fresh same-host telemetry admitted one
+serial test process before each check. The actual compatibility guard passed
+with the unchanged epoch above and **143 registered sources**. No registry,
+fingerprint, epoch, deadline, process exclusion or acceptance policy changed.
+The diff check passed and invocation fixture roots closed with no retained
+files. These are portable source results only; the original native failures,
+first-adoption/compatibility limits and parent/integration holds remain.
 
 ## Native acceptance still required
 
