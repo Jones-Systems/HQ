@@ -18,12 +18,40 @@ test('the reader shows namespace, path, commit provenance and ordinary fields', 
   assert.match(field(app.container, 'size'), /^\d+ bytes$/);
 
   const fields = (name: string): string => textOf(one(app.container, `.wiki-fields [data-field-name="${name}"] dd`));
-  assert.equal(fields('title'), 'Pricing');
+  assert.equal(app.container.querySelector('.wiki-fields [data-field-name="title"]'), null, 'a title field that repeats the page title is not a property');
   assert.equal(fields('type'), 'lesson', 'record type is an ordinary field');
   assert.equal(fields('tags'), 'moneystrategy');
   assert.equal(all(app.container, '[data-field-name="tags"] li').length, 2);
   assert.equal(fields('reviewed'), 'true');
   assert.equal(fields('confidence'), '0.8');
+
+  // The header leads with the title; repository, folder and commit are one quiet line.
+  assert.equal(one(app.container, 'h1.wiki-page-title').textContent, 'Pricing');
+  assert.deepEqual(
+    [one(app.container, '.wiki-meta-repo'), one(app.container, '.wiki-meta-folder'), one(app.container, '.wiki-meta-commit')].map((node) => textOf(node)),
+    ['BusinessLessons', 'lessons', `Commit ${COMMIT_BL.slice(0, 7)}`],
+  );
+  assert.equal(one(app.container, '.wiki-meta-commit code').getAttribute('title'), COMMIT_BL);
+  await app.unmount();
+});
+
+test('a title field that differs from the page title stays a property; more than six properties collapse', async () => {
+  const base = createSyntheticService();
+  const page = await base.getPage({ key: PAGES[0]!.key });
+  assert.ok(page.ok);
+  const many = {
+    ...page.value,
+    fields: [{ name: 'title', value: 'Pricing, long form' }, ...Array.from({ length: 7 }, (_, i) => ({ name: `field-${i + 1}`, value: `value ${i + 1}` }))],
+  };
+  const app = await launch({ destination: PRICING, service: override(base, { getPage: () => Promise.resolve({ ok: true, value: many }) }) });
+  assert.equal(textOf(one(app.container, '.wiki-fields [data-field-name="title"] dd')), 'Pricing, long form');
+  assert.equal(all(app.container, '.wiki-fields [data-field-name]').length, 6);
+  const more = byText(app.container, '.wiki-fields button', 'Show all 8 properties');
+  assert.equal(more.getAttribute('aria-expanded'), 'false');
+  await click(more);
+  assert.equal(all(app.container, '.wiki-fields [data-field-name]').length, 8);
+  await click(byText(app.container, '.wiki-fields button', 'Show fewer properties'));
+  assert.equal(all(app.container, '.wiki-fields [data-field-name]').length, 6);
   await app.unmount();
 });
 
@@ -31,7 +59,9 @@ test('a parsed page renders every safe node type and nothing executable', async 
   const egress = trapEgress();
   const app = await launch({ destination: PRICING });
   const parsed = one(app.container, '[data-content="parsed"]');
-  assert.deepEqual(all(parsed, 'h2, h3').map((node) => `${node.tagName}:${node.textContent}`), ['H2:Pricing', 'H3:Models', 'H3:Inert text']);
+  // The document's own leading "Pricing" heading repeats the page title, so it is not shown twice; the rest start at h2.
+  assert.deepEqual(all(parsed, 'h2, h3').map((node) => `${node.tagName}:${node.textContent}`), ['H2:Models', 'H2:Inert text']);
+  assert.deepEqual(all(one(app.container, '.wiki-reader'), 'h1').map((node) => node.textContent), ['Pricing']);
   assert.equal(all(parsed, 'ul > li').length, 3);
   assert.equal(textOf(one(parsed, 'strong')), 'Usage-based');
   assert.equal(textOf(one(parsed, 'em')), 'seat');
@@ -48,7 +78,8 @@ test('a parsed page renders every safe node type and nothing executable', async 
   assert.ok(inert.includes('<script>window.__wikiPwned = true</script>'));
   assert.ok(inert.includes('[click me](javascript:window.__wikiPwned=true)'));
   assert.ok(inert.includes('<a href="https://evil.example/steal">visit</a>'));
-  assert.equal(all(app.container, 'script, style, iframe, object, embed, img, svg, form[action], a, base, link, meta').filter((node) => node.tagName !== 'FORM').length, 0);
+  assert.equal(all(app.container, 'script, style, iframe, object, embed, img, form[action], a, base, link, meta').filter((node) => node.tagName !== 'FORM').length, 0);
+  assert.ok(all(app.container, 'svg').every((node) => node.hasAttribute('data-icon') && node.getAttribute('aria-hidden') === 'true'), 'the only svg elements are the view’s own decorative icons');
   assert.equal(all(app.container, '[href], [src], [srcdoc], [onerror], [onclick], [style]').length, 0, 'no destination attributes, handlers or inline styles');
   assert.equal((globalThis as Record<string, unknown>)['__wikiPwned'], undefined);
   assert.equal((dom as unknown as Record<string, unknown>)['__wikiPwned'], undefined);
@@ -73,13 +104,16 @@ test('missing targets are inert and visibly missing; external URLs are shown but
   const app = await launch({ destination: PRICING });
   const missing = byText(app.container, '.wiki-parsed [data-target="missing"]', 'Churn playbook');
   assert.equal(missing.tagName, 'SPAN');
-  assert.equal(missing.getAttribute('title'), 'Missing target: Churn playbook');
+  assert.equal(missing.getAttribute('aria-description'), 'Missing page: Churn playbook');
+  assert.equal(missing.getAttribute('title'), null, 'no native tooltip competes with the preview');
   const external = one(app.container, '.wiki-parsed [data-target="external"]');
   assert.equal(external.tagName, 'SPAN');
-  assert.equal(textOf(external), 'a pricing study (https://example.com/pricing-study?utm=wiki#results)');
+  assert.equal(textOf(external), 'a pricing study', 'the URL is in the preview and the link list, not in the sentence');
+  const url = 'https://example.com/pricing-study?utm=wiki#results';
+  assert.equal(textOf(one(app.container, '.wiki-outlinks [data-target="external"] + .wiki-external-url')), url, 'the URL stays visible as text');
 
   const before = app.shell();
-  for (const target of [missing, external, one(external, '.wiki-external-url'), ...all(app.container, '.wiki-outlinks [data-target="missing"], .wiki-outlinks [data-target="external"]')]) await click(target);
+  for (const target of [missing, external, one(app.container, '.wiki-outlinks .wiki-external-url'), ...all(app.container, '.wiki-outlinks [data-target="missing"], .wiki-outlinks [data-target="external"]')]) await click(target);
   assert.equal(app.shell(), before);
   assert.deepEqual(app.requested, []);
   assert.deepEqual(egress.calls, [], 'no window.open, fetch or XHR');
@@ -93,16 +127,20 @@ test('an ambiguous link opens disambiguation without a shell request, and back r
   await click(byText(app.container, '.wiki-parsed button[data-target="ambiguous"]', 'Onboarding'));
   const panel = one(app.container, '.wiki-disambiguation');
   assert.match(textOf(panel), /“Onboarding” matches 2 pages/);
-  assert.deepEqual(all(panel, 'button').map((button) => button.textContent), ['lessons/onboarding.mdBusinessLessons', 'guides/onboarding.mdBusinessLessons']);
+  // Each candidate is a card: its title (loaded lazily), repository and path.
+  assert.deepEqual(
+    all(panel, 'button').map((button) => [textOf(one(button, '.wiki-candidate-title')), textOf(one(button, '.wiki-ns')), textOf(one(button, '.wiki-path'))]),
+    [['Onboarding', 'BusinessLessons', 'lessons/onboarding.md'], ['Onboarding', 'BusinessLessons', 'guides/onboarding.md']],
+  );
   assert.deepEqual(app.requested, [], 'disambiguation has no destination form');
 
   await click(all(panel, 'button')[0]!);
   assert.deepEqual(app.requested, ['page/bl/lessons/onboarding.md']);
   assert.equal(textOf(one(app.container, '.wiki-page-title')), 'Onboarding');
 
-  await click(byText(app.container, '.wiki-nav button', '← Back'));
+  await click(one(app.container, 'button[aria-label="Back"]'));
   assert.ok(app.container.querySelector('.wiki-disambiguation'), 'back lands on the disambiguation');
-  await click(byText(app.container, '.wiki-nav button', '← Back'));
+  await click(one(app.container, 'button[aria-label="Back"]'));
   assert.equal(textOf(one(app.container, '.wiki-page-title')), 'Pricing');
   await app.unmount();
 });
@@ -110,9 +148,10 @@ test('an ambiguous link opens disambiguation without a shell request, and back r
 test('out-links list every target kind', async () => {
   const app = await launch({ destination: PRICING });
   const links = one(app.container, '.wiki-outlinks');
-  assert.match(textOf(one(links, 'h3')), /Links from this page \(4\)/);
+  assert.match(textOf(one(links, 'h3')), /Links on this page \(4\)/);
   assert.deepEqual(all(links, 'li').map((item) => one(item, '[data-target]').getAttribute('data-target')), ['page', 'ambiguous', 'missing', 'external']);
-  assert.match(textOf(links), /\(missing: Churn playbook\)/);
+  assert.deepEqual(all(links, '.wiki-rail-subtitle').map((node) => textOf(node)), ['Pages1', 'Ambiguous1', 'Missing1', 'External1'], 'grouped, with counts');
+  assert.equal(textOf(one(links, '[data-group="missing"] [data-target="missing"]')), 'Churn playbook');
   assert.match(textOf(links), /2 candidates/);
   await click(one(links, 'button[data-target="ambiguous"]'));
   assert.ok(app.container.querySelector('.wiki-disambiguation'));
@@ -127,7 +166,7 @@ test('backlinks list who links here, by repository', async () => {
   const app = await launch({ destination: PRICING });
   const backlinks = one(app.container, '.wiki-backlinks');
   assert.deepEqual(all(backlinks, 'li').map((item) => textOf(one(item, 'button'))).sort(), ['Cash flowBusinessLessons', 'OnboardingBusinessLessons']);
-  assert.match(textOf(backlinks), /2 pages link here\./);
+  assert.match(textOf(one(backlinks, 'h3')), /^Linked from \(2\)$/);
   await click(byText(backlinks, 'button', 'Cash flowBusinessLessons'));
   assert.equal(app.shell(), 'page/bl/lessons/cash-flow.md');
   await app.unmount();
@@ -152,6 +191,7 @@ test('truncated backlinks are labelled', async () => {
     }),
   });
   assert.match(textOf(one(app.container, '.wiki-backlinks .wiki-summary')), /Showing 1 of 120 pages that link here\./);
+  assert.match(textOf(one(app.container, '.wiki-backlinks h3')), /^Linked from \(120\)$/);
   await app.unmount();
 });
 
@@ -165,7 +205,10 @@ for (const [path, reason] of [
     const app = await launch({ destination: `page/bl/${path}` });
     const raw = one(app.container, '[data-content="raw"]');
     assert.equal(raw.getAttribute('data-raw-reason'), reason);
-    assert.match(textOf(one(raw, '.wiki-raw-note')), new RegExp(`Shown as raw text \\(${reason}\\)`));
+    const note = one(raw, '.wiki-raw-note');
+    assert.match(textOf(note), /Shown as plain text/);
+    assert.equal(textOf(one(note, '.wiki-raw-reason')), reason, 'the reason code stays visible in muted mono');
+    assert.equal(note.getAttribute('data-tone'), 'info');
     const expected = PAGES.find((page) => page.key.path === path)!.content;
     assert.ok(expected.state === 'raw');
     assert.equal(one(raw, 'pre.wiki-raw-text').textContent, expected.text, 'byte-for-byte verbatim');
@@ -200,8 +243,10 @@ test('reader loading and per-code errors; backlinks fail independently of the pa
 
   for (const { name, result, title } of ERROR_CASES) {
     const page = await launch({ destination: PRICING, service: override(base, { getPage: () => Promise.resolve(result) }) });
-    const alert = byText(page.container, '.wiki-reader [role="alert"]', title);
+    // A missing page names its repository; every other code keeps its own heading.
+    const alert = byText(page.container, '.wiki-reader [role="alert"]', name === 'not-found' ? /^This page isn’t in BusinessLessons/ : title);
     assert.equal(alert.getAttribute('data-reason'), result.error.reason, name);
+    assert.equal(alert.getAttribute('data-code'), result.error.code, name);
     assert.equal(page.container.querySelector('.wiki-page-title'), null);
     assert.ok(page.container.querySelector('.wiki-backlinks li'), `${name}: backlinks still shown`);
     await page.unmount();

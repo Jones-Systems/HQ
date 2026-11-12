@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_QUERY_LENGTH } from '../../contract/src/index.ts';
 import { createSyntheticService } from '../fixtures/synthetic.ts';
+import { createWikiView } from '../src/index.ts';
+import { filterChip, searchInput } from './chrome.ts';
 import { all, byText, click, one, submit, textOf, typeInto } from './render.ts';
 import { ERROR_CASES, deferred, launch, override, release, spy, validating } from './support.ts';
 
-const input = (container: HTMLElement): HTMLInputElement => one(container, 'input[name="q"]') as HTMLInputElement;
-const checkbox = (container: HTMLElement, value: string): HTMLInputElement => one(container, `input[name="repository"][value="${value}"]`) as HTMLInputElement;
+const input = searchInput;
+const pressed = (container: HTMLElement, repo: string): string | null => filterChip(container, repo).getAttribute('aria-pressed');
 
 async function search(container: HTMLElement, query: string): Promise<void> {
   await typeInto(input(container), query);
@@ -26,10 +28,11 @@ test('submitting a query asks the shell for the canonical search destination and
   const samePricing = hits.filter((hit) => textOf(one(hit, '.wiki-hit-title')) === 'Pricing');
   assert.deepEqual(samePricing.map((hit) => textOf(one(hit, '.wiki-ns'))).sort(), ['App Development', 'BusinessLessons'], 'same title, two repositories, never merged');
   for (const hit of hits) {
-    assert.match(textOf(one(hit, '.wiki-hit-meta')), /score \d+\.\d\d/);
+    assert.match(hit.getAttribute('data-score') ?? '', /^\d+\.\d\d$/, 'the score stays on the hit for tests and tools, but is no longer printed');
     assert.ok(textOf(one(hit, '.wiki-snippet')).length > 0);
   }
-  assert.match(textOf(one(app.container, '.wiki-summary')), /Showing 5 of 5 matches\./);
+  assert.equal(textOf(one(app.container, '.wiki-summary')), '5 results');
+  assert.equal(one(app.container, '.wiki-summary').getAttribute('data-total'), '5');
   assert.deepEqual(calls.filter((call) => call.method === 'search').map((call) => call.args), [[{ query: 'pricing' }]], 'all repositories means no namespaces filter');
   await app.unmount();
 });
@@ -38,34 +41,41 @@ test('the repository filter narrows the request and the results', async () => {
   const { service, calls } = spy();
   const app = await launch({ service, destination: 'search?q=pricing' });
   assert.equal(all(app.container, '.wiki-hit').length, 5);
-  await click(checkbox(app.container, 'appdev'));
-  assert.equal(checkbox(app.container, 'appdev').checked, false);
+  await click(filterChip(app.container, 'appdev'));
+  assert.equal(pressed(app.container, 'appdev'), 'false');
+  assert.equal(pressed(app.container, 'all'), 'false', 'All is no longer pressed once a repository is off');
   assert.deepEqual(calls.filter((call) => call.method === 'search').at(-1)?.args, [{ query: 'pricing', namespaces: ['bl'] }]);
   const hits = all(app.container, '.wiki-hit');
   assert.equal(hits.length, 3);
   assert.deepEqual([...new Set(hits.map((hit) => textOf(one(hit, '.wiki-ns'))))], ['BusinessLessons']);
-  assert.deepEqual(calls.filter((call) => call.method === 'resolveAlias').map((call) => (call.args[0] as { namespace: string }).namespace).slice(-1), ['bl']);
+  // Name lookups follow the filter too. The session cache already holds the earlier lookups, so ask for a new query.
+  const lookedUp = (): string[] => calls.filter((call) => call.method === 'resolveAlias').map((call) => (call.args[0] as { namespace: string }).namespace);
+  const seen = lookedUp().length;
+  await search(app.container, 'onboarding');
+  assert.deepEqual(lookedUp().slice(seen), ['bl'], 'only the selected repository is asked about the new name');
 
-  await click(checkbox(app.container, 'appdev'));
-  await click(checkbox(app.container, 'bl'));
-  assert.deepEqual(calls.filter((call) => call.method === 'search').at(-1)?.args, [{ query: 'pricing', namespaces: ['appdev'] }]);
+  await click(filterChip(app.container, 'appdev'));
+  await click(filterChip(app.container, 'bl'));
+  assert.deepEqual(calls.filter((call) => call.method === 'search').at(-1)?.args, [{ query: 'onboarding', namespaces: ['appdev'] }]);
   assert.deepEqual([...new Set(all(app.container, '.wiki-hit').map((hit) => textOf(one(hit, '.wiki-ns'))))], ['App Development']);
-  assert.equal(all(app.container, '.wiki-hit').length, 2);
-  assert.deepEqual(app.requested, [], 'filtering is not a navigation');
+  assert.equal(all(app.container, '.wiki-hit').length > 0, true);
+  assert.deepEqual(app.requested, ['search?q=onboarding'], 'filtering is not a navigation; only the new query was requested');
   await app.unmount();
 });
 
 test('with no repository selected nothing is searched and the reason is shown', async () => {
   const { service, calls } = spy();
   const app = await launch({ service, destination: 'search?q=pricing' });
-  await click(checkbox(app.container, 'appdev'));
-  await click(checkbox(app.container, 'bl'));
+  await click(filterChip(app.container, 'appdev'));
+  await click(filterChip(app.container, 'bl'));
   assert.equal(all(app.container, '[data-state="no-repositories"]').length, 1);
   assert.equal(all(app.container, '.wiki-hit').length, 0);
   const before = calls.length;
-  await click(checkbox(app.container, 'bl'));
-  assert.ok(calls.length > before, 'selecting one again searches again');
-  assert.equal(all(app.container, '.wiki-hit').length, 3);
+  await click(filterChip(app.container, 'appdev'));
+  assert.ok(calls.length > before, 'selecting a repository again searches it (this combination had not been asked for yet)');
+  assert.equal(all(app.container, '.wiki-hit').length, 2);
+  await click(filterChip(app.container, 'bl'));
+  assert.equal(all(app.container, '.wiki-hit').length, 5);
   await app.unmount();
 });
 
@@ -106,10 +116,10 @@ test('truncated results say so; empty results say so', async () => {
   const summary = one(app.container, '.wiki-summary');
   assert.equal(summary.getAttribute('data-truncated'), 'true');
   assert.equal(all(app.container, '.wiki-hit').length, 50);
-  assert.match(textOf(summary), /Showing 50 of 6\d matches\. Results are capped at 50/);
+  assert.match(textOf(summary), /^Showing 50 of 6\d · narrow the search or the repositories$/);
   await search(app.container, 'zzzznothing');
   const empty = one(app.container, '[data-state="empty"]');
-  assert.match(textOf(empty), /No matches for “zzzznothing”\./);
+  assert.match(textOf(empty), /No pages match “zzzznothing”/);
   await app.unmount();
 });
 
@@ -119,15 +129,24 @@ test('exact name matches show resolved pages and keep ambiguity visible', async 
   const disambiguation = one(section, '.wiki-disambiguation');
   assert.match(textOf(disambiguation), /“onboarding \(BusinessLessons\)” matches 2 pages/);
   const candidates = all(disambiguation, '.wiki-candidates button').map((button) => textOf(button));
-  assert.deepEqual(candidates, ['lessons/onboarding.mdBusinessLessons', 'guides/onboarding.mdBusinessLessons']);
+  assert.deepEqual(candidates, ['OnboardingBusinessLessonslessons/onboarding.md', 'OnboardingBusinessLessonsguides/onboarding.md']);
   await click(all(disambiguation, '.wiki-candidates button')[1]!);
   assert.equal(app.shell(), 'page/bl/guides/onboarding.md');
   assert.match(textOf(one(app.container, '.wiki-page-title')), /Onboarding/);
   await app.unmount();
 
   const pricing = await launch({ destination: 'search?q=pricing' });
-  const resolved = all(pricing.container, '.wiki-alias-match button').map((button) => textOf(button)).sort();
-  assert.deepEqual(resolved, ['pricing → lessons/pricing.mdBusinessLessons', 'pricing → research/pricing.mdApp Development']);
+  const goto = all(pricing.container, '[data-section="alias-matches"] .wiki-goto');
+  assert.deepEqual(goto.map((button) => [textOf(one(button, '.wiki-goto-title')), textOf(one(button, '.wiki-ns')), textOf(one(button, '.wiki-hit-folder'))]).sort(), [
+    ['Pricing', 'App Development', 'research'],
+    ['Pricing', 'BusinessLessons', 'lessons'],
+  ]);
+  for (const [index, destination] of ['page/bl/lessons/pricing.md', 'page/appdev/research/pricing.md'].entries()) {
+    const target = all(pricing.container, '[data-section="alias-matches"] .wiki-goto').find((button) => textOf(one(button, '.wiki-ns')) === (index === 0 ? 'BusinessLessons' : 'App Development'))!;
+    await click(target);
+    assert.equal(pricing.requested.at(-1), destination, 'each exact match opens its own page');
+    await click(one(pricing.container, 'button[aria-label="Back"]'));
+  }
   await pricing.unmount();
 });
 
@@ -135,7 +154,7 @@ test('every request the search view makes passes the contract request validators
   const checked = validating(createSyntheticService());
   const app = await launch({ service: checked.service });
   await search(app.container, 'cash flow');
-  await click(checkbox(app.container, 'appdev'));
+  await click(filterChip(app.container, 'appdev'));
   await search(app.container, 'ünï 🙂 query');
   assert.deepEqual(checked.rejected, []);
   await app.unmount();
@@ -175,32 +194,28 @@ test('a failing name lookup is reported without hiding search results', async ()
 });
 
 
-test('search controls collapse without losing the draft or repository filter and restore after remount', async () => {
-  const key = 'hq.wiki.searchbar.v1';
-  const app = await launch();
+test('there is no collapsible search bar: the field and filter are always there, nothing is stored, and the filter survives a remount', async () => {
+  const View = createWikiView(createSyntheticService());
+  const app = await launch({ View, destination: 'search?q=pricing' });
   const store = app.container.ownerDocument.defaultView!.localStorage;
   try {
-    await typeInto(input(app.container), 'unfinished query');
-    await click(checkbox(app.container, 'appdev'));
-    const hide = one(app.container, '[aria-label="Hide Wiki search and filters"]');
-    hide.focus();
-    await click(hide);
-    assert.equal(one(app.container, '#wiki-secondary-search').hidden, true);
-    assert.equal(app.container.ownerDocument.activeElement, hide);
-    assert.ok(one(app.container, '[aria-label="Wiki navigation"]'));
-    await click(one(app.container, '[aria-label="Show Wiki search and filters"]'));
-    assert.equal(input(app.container).value, 'unfinished query');
-    assert.equal(checkbox(app.container, 'appdev').checked, false);
-    await click(one(app.container, '[aria-label="Hide Wiki search and filters"]'));
+    assert.equal(all(app.container, '[aria-label*="Hide Wiki search"], [aria-label*="Show Wiki search"], #wiki-secondary-search').length, 0, 'the old toggle is gone (X14)');
+    assert.equal(input(app.container).value, 'pricing', 'the field holds the active query');
+    await click(filterChip(app.container, 'appdev'));
+    assert.equal(pressed(app.container, 'appdev'), 'false');
+    assert.equal(store.getItem('hq.wiki.searchbar.v1'), null, 'no collapsed state is persisted');
     await app.unmount();
-    const again = await launch();
+
+    const again = await launch({ View, destination: 'search?q=pricing' });
     try {
-      assert.equal(one(again.container, '#wiki-secondary-search').hidden, true);
-      await click(one(again.container, '[aria-label="Show Wiki search and filters"]'));
-      assert.equal(one(again.container, '#wiki-secondary-search').hidden, false);
-    } finally { await again.unmount(); }
+      assert.equal(pressed(again.container, 'appdev'), 'false', 'the repository filter comes back with the session');
+      assert.equal(pressed(again.container, 'bl'), 'true');
+      assert.equal(all(again.container, '.wiki-hit').length, 3);
+    } finally {
+      await again.unmount();
+    }
   } finally {
-    store.removeItem(key);
+    store.removeItem('hq.wiki.searchbar.v1');
     if (app.container.isConnected) await app.unmount();
   }
 });
