@@ -129,7 +129,7 @@ test('exact name matches show resolved pages and keep ambiguity visible', async 
   const disambiguation = one(section, '.wiki-disambiguation');
   assert.match(textOf(disambiguation), /“onboarding \(BusinessLessons\)” matches 2 pages/);
   const candidates = all(disambiguation, '.wiki-candidates button').map((button) => textOf(button));
-  assert.deepEqual(candidates, ['lessons/onboarding.mdBusinessLessons', 'guides/onboarding.mdBusinessLessons']);
+  assert.deepEqual(candidates, ['OnboardingBusinessLessonslessons/onboarding.md', 'OnboardingBusinessLessonsguides/onboarding.md']);
   await click(all(disambiguation, '.wiki-candidates button')[1]!);
   assert.equal(app.shell(), 'page/bl/guides/onboarding.md');
   assert.match(textOf(one(app.container, '.wiki-page-title')), /Onboarding/);

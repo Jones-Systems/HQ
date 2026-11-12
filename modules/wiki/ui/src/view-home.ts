@@ -278,4 +278,3 @@ export function HomeView(props: { readonly ctx: ViewCtx; readonly notice: Destin
         ),
   );
 }
-

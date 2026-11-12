@@ -25,10 +25,10 @@ function BacklinkRow(props: { readonly ctx: ViewCtx; readonly current: PageKey; 
       id: `backlink-${pageId(source)}`,
       kind: 'backlink',
       placement: 'rail',
-      warm: warmPage(ctx, source),
+      ...(entry.excerpt === undefined ? { warm: warmPage(ctx, source) } : {}),
       card: () => h(BacklinkPreview, { ctx, entry, current: props.current }),
       children: (anchor: string) =>
-        h('span', { className: `wiki-backlink-row${anchor}` }, h(PageButton, { ctx, pageKey: source, label: entry.title }), h('code', { className: 'wiki-path' }, source.path)),
+        h('span', { className: `wiki-backlink-row${anchor}` }, h(PageButton, { ctx, pageKey: source, label: entry.title }), h('code', { className: 'wiki-path' }, source.path), entry.via === undefined ? null : h('span', { className: 'wiki-muted wiki-backlink-via' }, `Via ${entry.via.join(', ')}`)),
     }),
   );
 }

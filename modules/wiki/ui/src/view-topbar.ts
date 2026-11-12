@@ -1,7 +1,7 @@
 // Top bar: Back and Forward, the breadcrumb, the search field and the history button. At narrow widths a Browse button
 // opens the sidebar as an overlay. The bar never scrolls; only the content below it does.
 
-import { createElement as h, type ReactElement } from 'react';
+import { createElement as h, useId, useState, type ReactElement } from 'react';
 import type { WikiNamespace } from '../../contract/src/index.ts';
 import type { Crumb } from './chrome.ts';
 import type { ViewCtx } from './context.ts';
@@ -9,6 +9,19 @@ import type { HistoryEntry } from './history.ts';
 import { Icon } from './icons.ts';
 import { HistoryMenu } from './view-history.ts';
 import { SearchBox } from './view-combobox.ts';
+
+function HistoryAction(props: { readonly label: string; readonly icon: 'back' | 'forward'; readonly blocked: boolean; readonly reason: string; readonly onAction: () => void }): ReactElement {
+  const id = useId();
+  const [dismissed, setDismissed] = useState(false);
+  return h('span', { className: 'wiki-nav-action', role: 'group', 'aria-label': props.label, 'aria-disabled': props.blocked || undefined,
+    tabIndex: props.blocked ? 0 : undefined, 'aria-describedby': props.blocked ? id : undefined,
+    'data-dismissed': dismissed ? 'true' : undefined,
+    onMouseEnter: () => setDismissed(false), onFocus: () => setDismissed(false),
+    onKeyDown: (event) => { if (event.key === 'Escape' && props.blocked) { event.preventDefault(); event.stopPropagation(); setDismissed(true); } },
+  },
+    h('button', { type: 'button', className: 'wiki-icon-button', 'aria-label': props.label, disabled: props.blocked, onClick: () => { if (!props.blocked) props.onAction(); } }, h(Icon, { name: props.icon })),
+    props.blocked ? h('span', { id, className: 'wiki-nav-reason', role: 'tooltip' }, props.reason) : null);
+}
 
 function Breadcrumb(props: { readonly crumbs: readonly Crumb[] }): ReactElement {
   return h(
@@ -76,8 +89,8 @@ export function TopBar(props: {
     h(
       'div',
       { className: 'wiki-nav', role: 'group', 'aria-label': 'Wiki navigation' },
-      h('button', { type: 'button', className: 'wiki-icon-button', 'aria-label': 'Back', title: 'Back (Alt+←)', disabled: props.index === 0, onClick: props.onBack }, h(Icon, { name: 'back' })),
-      h('button', { type: 'button', className: 'wiki-icon-button', 'aria-label': 'Forward', title: 'Forward (Alt+→)', disabled: props.index >= props.entries.length - 1, onClick: props.onForward }, h(Icon, { name: 'forward' })),
+      h(HistoryAction, { label: 'Back', icon: 'back', blocked: props.index === 0, reason: 'No earlier Wiki page in this session.', onAction: props.onBack }),
+      h(HistoryAction, { label: 'Forward', icon: 'forward', blocked: props.index >= props.entries.length - 1, reason: 'No later Wiki page in this session.', onAction: props.onForward }),
     ),
     h(Breadcrumb, { crumbs: props.crumbs }),
     h(

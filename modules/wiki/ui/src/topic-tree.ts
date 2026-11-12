@@ -59,12 +59,10 @@ const matchesAll = (text: string, words: readonly string[]): boolean => {
 
 const NO_MATCHES: ReadonlySet<string> = new Set();
 
-/**
- * How a page of `topic` is named in the tree. The one place that decides: today the name comes from the path; a
- * provider that sends titles with a topic's pages could be answered here.
- */
-export function topicPageLabel(_topic: Topic, key: PageKey): string {
-  return pageName(key.path);
+/** Uses the provider's aligned title when present; older providers retain path-derived labels. */
+export function topicPageLabel(topic: Topic, key: PageKey): string {
+  const index = topic.pages.findIndex((page) => pageKeyId(page) === pageKeyId(key));
+  return topic.pageTitles?.[index] ?? pageName(key.path);
 }
 
 /**

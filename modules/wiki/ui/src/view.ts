@@ -186,11 +186,6 @@ function WikiRoot(props: WikiViewProps & { readonly runtime: WikiRuntime }): Rea
         event.preventDefault();
         refs.input.current?.focus();
         refs.input.current?.select();
-      } else if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !typing && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-        event.preventDefault();
-        if (event.key === 'ArrowLeft') {
-          if (k.canBack) k.back();
-        } else if (k.canForward) k.forward();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -285,7 +280,17 @@ function WikiRoot(props: WikiViewProps & { readonly runtime: WikiRuntime }): Rea
 
   return h(
     'div',
-    { ref: rootEl, className: 'wiki-view', role: 'region', 'aria-label': 'Wiki', 'data-appearance': props.appearance === 'dark' ? 'dark' : 'light', 'data-sidebar': sidebarOpen ? 'open' : 'closed' },
+    { ref: rootEl, className: 'wiki-view', role: 'region', 'aria-label': 'Wiki', 'data-appearance': props.appearance === 'dark' ? 'dark' : 'light', 'data-sidebar': sidebarOpen ? 'open' : 'closed',
+      onKeyDown: (event) => {
+        if (event.defaultPrevented || event.nativeEvent.isComposing || isTextTarget(event.target)
+          || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        const next = event.key === 'ArrowLeft' ? nav.index - 1 : event.key === 'ArrowRight' ? nav.index + 1 : -1;
+        if (next < 0 || next >= nav.entries.length) return;
+        // Handle module history before the shell's bubbling ReturnPill listener; at an edge the shell keeps ownership.
+        event.preventDefault();
+        move(next);
+      },
+    },
     h(
       'div',
       { className: 'wiki-frame' },

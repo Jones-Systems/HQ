@@ -12,7 +12,7 @@ const historyCount = async (container: HTMLElement): Promise<number> => (await h
 test('in-session history: back, forward and jumping through the list', async () => {
   const app = await launch();
   await click(topicsButton(app.container, 'bl'));
-  await click(byText(app.container, '.wiki-topic-pages button', 'lessons/pricing.mdBusinessLessons'));
+  await click(byText(app.container, '.wiki-topic-pages button', 'Pricinglessons'));
   assert.deepEqual(app.requested, ['topics/bl', 'page/bl/lessons/pricing.md']);
   assert.equal(await historyCount(app.container), 3);
   assert.equal(shown(app.container), 'Reader');
@@ -116,12 +116,12 @@ test('a long destination the shell cannot persist still navigates in-session (kn
   await click(byText(gap.container, '.wiki-parsed button', 'go deep'));
   assert.deepEqual(gap.requested, [long], 'the view still requests persistence');
   assert.equal(gap.shell(), 'page/bl/start.md', 'the shell refused the long destination');
-  assert.equal(textOf(one(gap.container, '.wiki-crumbs code')), longPath, 'but the view navigated');
+  assert.equal(textOf(one(gap.container, '.wiki-reader [data-field="path"] dd')), longPath, 'but the view navigated');
   assert.equal(await historyCount(gap.container), 2);
   await click(backButton(gap.container));
-  assert.equal(textOf(one(gap.container, '.wiki-crumbs code')), 'start.md', 'in-session history still works');
+  assert.equal(textOf(one(gap.container, '.wiki-reader [data-field="path"] dd')), 'start.md', 'in-session history still works');
   await click(forwardButton(gap.container));
-  assert.equal(textOf(one(gap.container, '.wiki-crumbs code')), longPath);
+  assert.equal(textOf(one(gap.container, '.wiki-reader [data-field="path"] dd')), longPath);
   await gap.unmount();
 });
 

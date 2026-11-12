@@ -78,7 +78,7 @@ test('useResource: cached values show at once; a failed refresh keeps the value 
   let calls = 0;
   const spec = { key: 'n', load: () => (calls++, pending.promise), check: accept };
   const out: Resource<number>[] = [];
-  const m = await mount(Probe, { spec, cache, out });
+  const m = await mount<Parameters<typeof Probe>[0]>(Probe, { spec, cache, out });
   await settle();
   assert.equal(out.at(-1)?.status, 'ready');
   assert.equal(out.at(-1)?.value, 1);
@@ -101,7 +101,7 @@ test('useResource: cached values show at once; a failed refresh keeps the value 
 test('useResource: nothing cached → loading, then error; idle for a null spec', async () => {
   const cache = createWikiCache();
   const out: Resource<number>[] = [];
-  const m = await mount(Probe, { spec: { key: 'x', load: () => Promise.resolve(fail('not-found', 'not-found')), check: accept }, cache, out });
+  const m = await mount<Parameters<typeof Probe>[0]>(Probe, { spec: { key: 'x', load: () => Promise.resolve(fail('not-found', 'not-found')), check: accept }, cache, out });
   assert.equal(out[0]?.status, 'loading');
   await settle();
   assert.equal(out.at(-1)?.status, 'error');
@@ -152,8 +152,12 @@ test('a view keeps its session across remounts: history and recent pages survive
   await first.external('page/bl/lessons/pricing.md');
   await first.unmount();
   const again = await launch({ View, destination: 'page/bl/lessons/pricing.md' });
-  const history = Array.from(again.container.querySelectorAll('.wiki-nav button')).find((button) => /^History/.test(button.textContent ?? ''));
-  assert.equal(history?.textContent, 'History (3)');
+  const history = again.container.querySelector<HTMLButtonElement>('button[aria-label="History"]');
+  assert.ok(history);
+  const { click, all } = await import('./render.ts');
+  await click(history);
+  assert.equal(all(again.container, '.wiki-history-item').length, 3);
+  assert.ok(again.container.querySelector('[data-side="recent"]'), 'recent pages survive the remount');
   await again.unmount();
 });
 

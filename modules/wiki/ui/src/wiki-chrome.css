@@ -740,3 +740,9 @@
     display: none;
   }
 }
+
+.wiki-view .wiki-nav-action { position: relative; display: inline-flex; }
+.wiki-view .wiki-nav-action:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 2px; }
+.wiki-view .wiki-nav-reason { position: absolute; top: 100%; left: 0; width: max-content; max-width: 220px; padding: 8px; background: var(--hq-surface-raised); color: var(--hq-text); border: 1px solid var(--hq-border); z-index: 5; visibility: hidden; }
+.wiki-view .wiki-nav-action:not([data-dismissed]):hover .wiki-nav-reason,
+.wiki-view .wiki-nav-action:not([data-dismissed]):focus .wiki-nav-reason { visibility: visible; }

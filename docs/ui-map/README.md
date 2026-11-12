@@ -17,9 +17,10 @@ Those links require access to that private repository; its content is not copied
 | [Settings › Appearance and dark palettes](settings-appearance.md) | Rail → Settings → Appearance; `hq-open-settings` with `appearance` | Source discovery; unit and App journey tests added, results recorded at integration |
 | [Settings data sources](settings-data-sources.md) | Rail → Settings; Sources summary targets; category navigation | Source discovery; recovered candidate tests and UI evidence unverified |
 | [Settings → Updates](settings-updates.md) | Rail → Settings → Updates; category selection from existing Settings entry points | Source discovery and synthetic checks authored; runtime and native evidence recorded separately |
+| [Wiki reading and discovery](wiki.md) | Wiki rail, palette sections/search, Wiki reference targets, restored logical destinations | Recovery source inventory; all current-head journeys unverified |
 | [Getting started panel](getting-started.md) | First launch in any domain; `hq-show-welcome`; the shell's bottom-left workspace corner | Source discovery, unit and component tests, and real-app captures; native and assistive-technology journeys unverified |
 
-The inventory is intentionally partial. Other Design, Social and Work views, Wiki,
+The inventory is intentionally partial. Other Design, Social and Work views,
 other settings categories, dialogs and native desktop journeys are not fully inventoried. A shared
 component's presence is not evidence that all its consumers were checked.
 

@@ -298,12 +298,11 @@ export interface BacklinkContextState {
 }
 
 /**
- * Where the page of `entry` links to `current`. This is the one place that knows how: today it reads the source page
- * through the shared cache and walks its document; a provider that sends the sentence with the backlink could answer
- * here without the fetch.
+ * Uses an inert provider excerpt when available; older providers fall back to the cached source document.
  */
 export function useBacklinkContext(ctx: ViewCtx, entry: BacklinkEntry, current: PageKey): BacklinkContextState {
-  const page = useResource(pageResource(ctx.service, entry.source), ctx.cache);
+  const page = useResource(entry.excerpt === undefined ? pageResource(ctx.service, entry.source) : null, ctx.cache);
+  if (entry.excerpt !== undefined) return { status: 'ready', context: { kind: 'sentence', segments: [{ text: entry.excerpt, match: false }], mentions: 1 }, raw: false };
   const value = page.value;
   if (value === undefined) return { status: page.status === 'error' ? 'error' : 'loading', context: null, raw: false };
   if (value.content.state !== 'parsed') return { status: 'ready', context: null, raw: true };
