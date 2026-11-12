@@ -1,55 +1,234 @@
-/* Wiki topics browser. Scoped under .wiki-view; motion uses the shared duration and easing tokens. */
+/* Wiki topics browser: repository segmented control, filter, chevron disclosures and page rows. Scoped under
+   .wiki-view; motion uses the shared duration and easing tokens, which are zero under reduced motion. */
+
+.wiki-view .wiki-topics {
+  max-width: 760px;
+}
+
+.wiki-view .wiki-topics-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hq-space-sm) var(--hq-space-lg);
+  margin: 0 0 var(--hq-space-lg);
+}
+
+.wiki-view .wiki-topics .wiki-section-title {
+  margin: 0;
+  font: 650 22px/30px var(--hq-font-family-sans);
+  letter-spacing: -0.015em;
+}
+
+.wiki-view .wiki-segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--hq-border);
+  border-radius: var(--hq-radius-md);
+  background: var(--hq-surface-sunken);
+}
+
+.wiki-view .wiki-segment {
+  min-height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--hq-radius-sm);
+  background: transparent;
+  color: var(--hq-text-muted);
+  font: var(--hq-type-label);
+  cursor: pointer;
+  transition: background-color var(--hq-duration-fast) var(--hq-ease-standard), color var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard), transform var(--hq-duration-instant) var(--hq-ease-standard);
+}
+
+.wiki-view .wiki-segment:hover {
+  color: var(--hq-text);
+}
+
+.wiki-view .wiki-segment:active {
+  transform: scale(var(--hq-motion-scale-press));
+}
+
+.wiki-view .wiki-segment[aria-pressed="true"] {
+  background: var(--hq-surface-raised);
+  box-shadow: var(--hq-shadow-raised);
+  color: var(--hq-text);
+}
+
+.wiki-view .wiki-segment:focus-visible {
+  outline: 2px solid var(--hq-focus);
+  outline-offset: 1px;
+}
+
+.wiki-view .wiki-topics-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hq-space-sm) var(--hq-space-md);
+  margin: 0 0 var(--hq-space-md);
+}
+
+.wiki-view .wiki-topics-filter {
+  flex: 1 1 220px;
+  max-width: 360px;
+}
+
+.wiki-view .wiki-topics-tools .wiki-actions {
+  margin: 0 0 0 auto;
+}
+
+.wiki-view .wiki-topics-count {
+  margin: 0 0 var(--hq-space-sm);
+  color: var(--hq-text-muted);
+  font: var(--hq-type-small);
+}
 
 .wiki-view .wiki-topic-tree {
   margin: 0;
-  padding-left: 22px;
+  padding: 0;
   list-style: none;
 }
 
-.wiki-view .wiki-topic-root {
-  padding-left: 0;
-}
-
 .wiki-view .wiki-topic {
-  margin: 4px 0;
+  margin: 2px 0;
 }
 
 .wiki-view .wiki-topic-head {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 32px;
 }
 
 .wiki-view .wiki-toggle,
 .wiki-view .wiki-toggle-spacer {
-  display: inline-block;
-  width: 24px;
-  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
+  width: 28px;
+  height: 28px;
 }
 
 .wiki-view .wiki-toggle {
   padding: 0;
-  border: 1px solid var(--wiki-border);
-  border-radius: 5px;
-  background: var(--wiki-surface);
-  color: var(--wiki-text);
-  font: inherit;
-  line-height: 1;
+  border: 0;
+  border-radius: var(--hq-radius-sm);
+  background: transparent;
+  color: var(--hq-text-muted);
   cursor: pointer;
+  transition: background-color var(--hq-duration-fast) var(--hq-ease-standard), color var(--hq-duration-fast) var(--hq-ease-standard);
+}
+
+.wiki-view .wiki-toggle:hover {
+  background: var(--hq-surface-hover);
+  color: var(--hq-text);
+}
+
+.wiki-view .wiki-toggle .wiki-toggle-icon {
+  transition: transform var(--hq-duration-base) var(--hq-ease-standard);
+}
+
+.wiki-view .wiki-toggle[aria-expanded="true"] .wiki-toggle-icon {
+  transform: rotate(90deg);
 }
 
 .wiki-view .wiki-topic-label {
-  font-weight: 600;
+  font: 600 14px/20px var(--hq-font-family-sans);
 }
 
+.wiki-view .wiki-topic-head .wiki-badge {
+  font-variant-numeric: tabular-nums;
+}
+
+.wiki-view .wiki-topic-mark {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: var(--hq-accent-soft);
+  color: inherit;
+}
+
+/* Opening animates the height through grid rows; closing is immediate. */
 .wiki-view .wiki-topic-body {
-  margin: 4px 0 6px 32px;
-  padding-left: 12px;
-  border-left: 1px solid var(--wiki-border);
+  display: grid;
+  grid-template-rows: 1fr;
+  margin-left: 13px;
 }
 
-.wiki-view .wiki-topic-body .wiki-topic-tree {
-  padding-left: 0;
+.wiki-view .wiki-topic-body[data-enter="expand"] {
+  animation: wiki-expand var(--hq-duration-base) var(--hq-ease-standard) both;
 }
 
+@keyframes wiki-expand {
+  from { grid-template-rows: 0fr; opacity: 0; }
+  to { grid-template-rows: 1fr; opacity: 1; }
+}
+
+.wiki-view .wiki-topic-inner {
+  min-height: 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--hq-border);
+  overflow: clip;
+  overflow-clip-margin: 4px;
+}
+
+.wiki-view .wiki-topic-pages {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wiki-view .wiki-topic-pages li {
+  padding: 0;
+}
+
+.wiki-view .wiki-topic-page-button {
+  display: flex;
+  align-items: baseline;
+  gap: 4px 10px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--hq-radius-sm);
+  background: none;
+  color: var(--hq-text);
+  font: 400 14px/20px var(--hq-font-family-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--hq-duration-fast) var(--hq-ease-standard);
+}
+
+.wiki-view .wiki-topic-page-button:hover {
+  background: var(--hq-surface-hover);
+}
+
+.wiki-view .wiki-page-name {
+  color: var(--wiki-accent);
+}
+
+.wiki-view .wiki-page-folder {
+  color: var(--hq-text-muted);
+  font: 11.5px/16px var(--hq-font-family-mono);
+}
+
+.wiki-view .wiki-topic-more {
+  padding: 4px 8px;
+  font: var(--hq-type-small);
+}
+
+.wiki-view .wiki-topic-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+}
+
+.wiki-view .wiki-skeleton-label {
+  flex: 0 1 220px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wiki-view .wiki-topic-body[data-enter="expand"] { animation: none; }
+  .wiki-view .wiki-segment:active { transform: none; }
+}

@@ -8,7 +8,8 @@ const topic = (container: HTMLElement, id: string): HTMLElement => one(container
 
 test('topics show a parentId tree with counts and previewed pages', async () => {
   const app = await launch({ destination: 'topics/bl' });
-  assert.match(textOf(one(app.container, '.wiki-section-title')), /Topics · BusinessLessons/);
+  assert.equal(textOf(one(app.container, '.wiki-section-title')), 'Topics');
+  assert.equal(byText(app.container, '.wiki-segment', 'BusinessLessons').getAttribute('aria-pressed'), 'true', 'the repository is the pressed segment');
   const roots = all(app.container, '.wiki-topic-root > .wiki-topic').map((node) => node.getAttribute('data-topic-id'));
   assert.deepEqual(roots, ['finance', 'customers', 'samples', 'archive']);
 
@@ -16,7 +17,12 @@ test('topics show a parentId tree with counts and previewed pages', async () => 
   assert.equal(finance.getAttribute('data-expanded'), 'true');
   assert.equal(textOf(one(finance, '.wiki-topic-head .wiki-topic-label')), 'Finance');
   assert.equal(textOf(one(finance, '.wiki-topic-head .wiki-badge')), '2 pages');
-  assert.deepEqual(all(finance, ':scope > .wiki-topic-body > .wiki-topic-pages > li').map((item) => textOf(item)), ['lessons/pricing.mdBusinessLessons', 'lessons/cash-flow.mdBusinessLessons']);
+  // Rows are named by their file (the contract carries paths only) with the folder muted beside it.
+  assert.deepEqual(
+    all(finance, ':scope > .wiki-topic-body > .wiki-topic-inner > .wiki-topic-pages > li').map((item) => [textOf(one(item, '.wiki-page-name')), textOf(one(item, '.wiki-page-folder'))]),
+    [['Pricing', 'lessons'], ['Cash flow', 'lessons']],
+  );
+  assert.equal(finance.querySelectorAll(':scope > .wiki-topic-body .wiki-topic-pages .wiki-ns').length, 0, 'no repeated repository badge on every row');
   const child = topic(app.container, 'finance-pricing');
   assert.equal(textOf(one(child, '.wiki-badge')), '1 page', 'singular');
   assert.ok(finance.contains(child), 'nested under its parent');
@@ -28,6 +34,7 @@ test('a topic with more pages than its preview says how many are not shown', asy
   const archive = topic(app.container, 'archive');
   assert.equal(archive.getAttribute('data-expanded'), 'true');
   assert.equal(all(archive, '.wiki-topic-pages > li button').length, 50);
+  assert.equal(textOf(one(archive, '.wiki-topic-page-button .wiki-page-name')), 'Entry 01');
   assert.match(textOf(one(archive, '.wiki-topic-pages')), /and \d+ more$/);
   assert.match(textOf(one(archive, '.wiki-badge')), /^6\d pages$/);
   await app.unmount();
@@ -50,7 +57,7 @@ test('topics expand and collapse, individually and all at once', async () => {
 
 test('a previewed page opens in the reader through a logical destination', async () => {
   const app = await launch({ destination: 'topics/bl' });
-  await click(byText(topic(app.container, 'customers'), 'button', 'guides/onboarding.mdBusinessLessons'));
+  await click(byText(topic(app.container, 'customers'), 'button', 'Onboardingguides'));
   assert.deepEqual(app.requested, ['page/bl/guides/onboarding.md']);
   assert.match(textOf(one(app.container, '.wiki-page-title')), /Onboarding/);
   await app.unmount();
@@ -59,13 +66,13 @@ test('a previewed page opens in the reader through a logical destination', async
 test('the repository switcher moves between topic trees without leaking expansion state', async () => {
   const app = await launch({ destination: 'topics/bl' });
   await click(one(topic(app.container, 'finance'), '.wiki-toggle'));
-  await click(byText(app.container, '.wiki-topics .wiki-button', 'App Development'));
+  await click(byText(app.container, '.wiki-segment', 'App Development'));
   assert.deepEqual(app.requested, ['topics/appdev']);
-  assert.match(textOf(one(app.container, '.wiki-section-title')), /Topics · App Development/);
   assert.deepEqual(all(app.container, '.wiki-topic-root > .wiki-topic').map((node) => node.getAttribute('data-topic-id')), ['app-shell', 'data']);
   assert.ok(topic(app.container, 'data').contains(topic(app.container, 'data-sync')));
-  assert.equal(byText(app.container, '.wiki-topics .wiki-button', 'App Development').getAttribute('aria-pressed'), 'true');
-  await click(byText(app.container, '.wiki-topics .wiki-button', 'BusinessLessons'));
+  assert.equal(byText(app.container, '.wiki-segment', 'App Development').getAttribute('aria-pressed'), 'true');
+  assert.equal(byText(app.container, '.wiki-segment', 'BusinessLessons').getAttribute('aria-pressed'), 'false');
+  await click(byText(app.container, '.wiki-segment', 'BusinessLessons'));
   assert.equal(topic(app.container, 'finance').getAttribute('data-expanded'), 'true', 'a fresh tree starts at its default');
   await app.unmount();
 });
@@ -113,7 +120,7 @@ test('a topic list with a parent cycle still renders every topic once', async ()
 test('topic requests are valid logical requests', async () => {
   const checked = validating(createSyntheticService());
   const app = await launch({ destination: 'topics/bl', service: checked.service });
-  await click(byText(app.container, '.wiki-topics .wiki-button', 'App Development'));
+  await click(byText(app.container, '.wiki-segment', 'App Development'));
   assert.deepEqual(checked.rejected, []);
   await app.unmount();
 });

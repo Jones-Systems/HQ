@@ -1,10 +1,11 @@
 // Shared presentational pieces. Everything user-visible is a React text child.
 
-import { createElement as h, type ReactElement, type ReactNode } from 'react';
+import { createElement as h, useEffect, type ReactElement, type ReactNode } from 'react';
 import type { PageKey, WikiError } from '../../contract/src/index.ts';
 import type { ViewCtx } from './context.ts';
-import { describeError, namespaceLabel } from './format.ts';
-import type { Loaded } from './load.ts';
+import { describeError, namespaceLabel, pageName } from './format.ts';
+import { useResource, type Loaded } from './load.ts';
+import { pageResource } from './resources.ts';
 
 export function Loading(props: { readonly what: string }): ReactElement {
   return h('p', { className: 'wiki-loading', role: 'status', 'data-state': 'loading' }, `Loading ${props.what}…`);
@@ -50,7 +51,31 @@ export function PageButton(props: { readonly ctx: ViewCtx; readonly pageKey: Pag
   );
 }
 
-/** Candidates for an ambiguous name. Titles are not part of the contract here, so paths identify them. */
+function moveFocus(list: HTMLElement, from: Element | null, step: 1 | -1 | 'first' | 'last'): void {
+  const items = Array.from(list.querySelectorAll<HTMLElement>('button.wiki-candidate'));
+  if (items.length === 0) return;
+  const index = from === null ? -1 : items.findIndex((item) => item === from || item.contains(from));
+  const next = step === 'first' ? 0 : step === 'last' ? items.length - 1 : Math.min(items.length - 1, Math.max(0, index + step));
+  items[next]?.focus();
+}
+
+/** One candidate: its title (loaded lazily through the shared page cache), repository and path. */
+function Candidate(props: { readonly ctx: ViewCtx; readonly pageKey: PageKey }): ReactElement {
+  const { ctx, pageKey } = props;
+  const page = useResource(pageResource(ctx.service, pageKey), ctx.cache);
+  const title = page.value?.title ?? ctx.session.titleOf(pageKey) ?? pageName(pageKey.path);
+  useEffect(() => {
+    if (page.value !== undefined) ctx.session.rememberTitle(pageKey, page.value.title);
+  }, [ctx.session, pageKey, page.value]);
+  return h(
+    'button',
+    { type: 'button', className: 'wiki-candidate', 'data-target': 'page', onClick: () => ctx.openPage(pageKey) },
+    h('span', { className: 'wiki-candidate-title' }, title),
+    h('span', { className: 'wiki-candidate-meta' }, h('span', { className: 'wiki-ns' }, namespaceLabel(pageKey.namespace)), h('code', { className: 'wiki-path' }, pageKey.path)),
+  );
+}
+
+/** Candidates for an ambiguous name as a card list. ↑ and ↓ move between them, Enter opens one. */
 export function Disambiguation(props: {
   readonly ctx: ViewCtx;
   readonly label: string;
@@ -61,12 +86,20 @@ export function Disambiguation(props: {
   return h(
     'section',
     { className: 'wiki-disambiguation', 'aria-label': 'Disambiguation' },
-    props.heading === false ? null : h('h2', { className: 'wiki-section-title' }, 'Which page did you mean?'),
+    props.heading === false ? null : h('h1', { className: 'wiki-section-title', tabIndex: -1 }, 'Which page did you mean?'),
     h('p', { className: 'wiki-muted' }, `“${props.label}” matches ${candidates.length} pages. Choose one.`),
     h(
       'ul',
-      { className: 'wiki-candidates' },
-      candidates.map((candidate) => h('li', { key: `${candidate.namespace}/${candidate.path}` }, h(PageButton, { ctx, pageKey: candidate }))),
+      {
+        className: 'wiki-candidates',
+        onKeyDown: (event) => {
+          const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : event.key === 'Home' ? 'first' : event.key === 'End' ? 'last' : null;
+          if (step === null) return;
+          event.preventDefault();
+          moveFocus(event.currentTarget, document.activeElement, step);
+        },
+      },
+      candidates.map((candidate) => h('li', { key: `${candidate.namespace}/${candidate.path}` }, h(Candidate, { ctx, pageKey: candidate }))),
     ),
   );
 }
