@@ -276,7 +276,7 @@ export function ToolWorkbench({ tool }: { readonly tool: ToolId }) {
       <Dialog
         open={confirming !== null} role="alertdialog" onClose={() => setConfirming(null)}
         title="The last run's outcome is unknown"
-        description="The Social service may already have created it. Check the possible matches first. Running again creates another run."
+        description="The Social service may already have created it. Check the possible matches first. Creating another run may duplicate the original."
         actions={<>
           <Button onClick={() => setConfirming(null)}>Cancel</Button>
           <Button variant="primary" onClick={() => {
