@@ -14,7 +14,7 @@ function CompareViewContent({ context, navigate }: DesignSectionProps) {
   const workspace = useDesignWorkspace();
   const project = useDesignProject(context);
   const [tool, setTool] = useState<DrawTool | null>(null);
-  const controller = workspace.bridged ? use(workspace.compareFor(project)) : workspace.compareFor(project);
+  const controller = use(workspace.compareFor(project));
   return <SectionFrame lane="T4 compare + T5 annotations" entry="compare/src/view › CompareWorkspace (renderOverlay → annotations overlay)"
     scope={<ProjectScope project={project} navigate={navigate} />} tags={workspace.bridged ? [workspace.storageTag] : [FAKE_TAG, SYNTHETIC_TAG]}
     notes={workspace.bridged ? ['Capture and live preview capabilities are unavailable'] : ['synthetic captures and labelled fake previews (no host surface)', 'marks need a static capture; live previews cannot be annotated']}>

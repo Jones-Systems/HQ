@@ -66,7 +66,10 @@ import { createCanvasProviderAdapter, type CanvasProviderAdapter } from './canva
 import { FAKE_TAG, SYNTHETIC_TAG } from './labels.ts';
 import type { CanvasDocumentPort } from './storage-seam.ts';
 import { bindFlowToProject, createProjectScreenPreviews, createProjectVersionsProvider, type FlowBindingReport, type ProjectScreenPreviews, type ProjectVersionsProvider } from './project-versions.ts';
-import type { AnnotationTarget } from './annotation-session.ts';
+import { openAnnotationSession, type AnnotationTarget } from './annotation-session.ts';
+import { createProjectCompareCatalog } from './compare-catalog.ts';
+import { createProjectContentEvents } from './content-events.ts';
+export const fakeContentEvents = createProjectContentEvents();
 import type { RevisionRead } from './revision-cache.ts';
 
 export type { AnnotationTarget } from './annotation-session.ts';
@@ -289,7 +292,7 @@ export const projectsFor = perProject(async (project) => {
   }
   const ids = sequentialIds(`compose-${project.id}`);
   const registry = createProvisionalLocalRegistry({ storage: env.storage, clock: env.clock, ids });
-  const { controller, ready } = createProjectsSection({ registry, storage: env.storage, thumbnails: env.thumbnails, catalog: readPort, clock: env.clock, ids });
+  const { controller, ready } = createProjectsSection({ registry, storage: env.storage, thumbnails: env.thumbnails, catalog: readPort, clock: env.clock, ids, onContentChange: (id) => fakeContentEvents.notify(id) });
   await ready;
   return controller;
 });
@@ -404,39 +407,34 @@ export const canvasFor = perProject(async (project): Promise<CanvasEnv | null> =
 
 // ----------------------------------------------------- compare (T4) and annotations (T5)
 
-const compareControllers = new Map<string, CompareController>();
+
 
 /** One controller per project, kept so panel widths and links survive remounts. Compare's own labelled fake catalog and previews. */
-export function compareFor(project: ProjectContext): CompareController {
-  const existing = compareControllers.get(project.id);
-  if (existing) return existing;
-  if (createdInProjects(project.id)) {
-    // The sample catalog belongs to the example project; a project created in Projects starts with no panels.
-    const empty = createCompareController(createComparison(comparisonId(`${project.id}-compare`), compareProjectId(project.id), []), {
-      catalog: { async listViews() { return []; }, async getVersion() { return null; }, async listVersions() { return []; } },
+export const compareFor = perProject(async (project): Promise<CompareController> => {
+  const env = await contentFor(project);
+  if (!env.example) {
+    return createCompareController(createComparison(comparisonId(`${project.id}-compare`), compareProjectId(project.id), []), {
+      catalog: createProjectCompareCatalog(env.repository, env.content.projectId),
       preview: createFakePreview({ pages: () => 1 }), captures: createFakeCaptureImages(), storage: createFakeCompareStorage(),
     });
-    compareControllers.set(project.id, empty);
-    return empty;
   }
-  const data = sampleCatalogData();
+  const sample = sampleCatalogData();
+  // Bind the labelled sample to this composition project rather than the fixture's sample-project id.
+  const data = { ...sample, views: sample.views.map((view) => ({ ...view, projectId: compareProjectId(project.id) })),
+    versions: sample.versions.map((version) => ({ ...version, projectId: compareProjectId(project.id) })) };
   const version = (id: string) => {
     const found = data.versions.find((item) => item.versionId === id);
     if (!found) throw new Error(`synthetic compare catalog lacks ${id}`);
     return found;
   };
   const phone = presetById('phone')!.viewport;
-  const controller = createCompareController(createComparison(comparisonId(`${project.id}-compare`), compareProjectId(project.id), [
+  return createCompareController(createComparison(comparisonId(`${project.id}-compare`), compareProjectId(project.id), [
     { id: panelId('a'), role: 'baseline', source: staticSource(version('home-v1').captures[0]!), viewport: phone, width: 380 },
     { id: panelId('b'), role: 'candidate', source: staticSource(version('home-v2').captures[0]!), viewport: phone, width: 420 },
     { id: panelId('c'), source: liveSource(version('pricing-v1')), viewport: phone, width: 320 },
-  ]), {
-    catalog: createFakeCompareCatalog(data), preview: createFakePreview({ pages: (id) => (id === 'pricing-v1' ? 2 : 3) }),
-    captures: createFakeCaptureImages(), storage: createFakeCompareStorage(),
-  });
-  compareControllers.set(project.id, controller);
-  return controller;
-}
+  ]), { catalog: createFakeCompareCatalog(data), preview: createFakePreview({ pages: (id) => id === 'pricing-v1' ? 2 : 3 }),
+    captures: createFakeCaptureImages(), storage: createFakeCompareStorage() });
+});
 
 /** Annotation controllers keyed by exact version id, over one in-memory store. Marks never cross versions. */
 export interface AnnotationsEnv {
@@ -481,13 +479,27 @@ export const annotationTargetFor = perProject(async (project): Promise<Annotatio
 });
 
 /** The target plus its controller with the frame already set, memoised so React can suspend on one promise. */
-export const annotationSessionFor = perProject(async (project) => {
-  const target = await annotationTargetFor(project);
-  if (target === null) return null;
-  const controller = await annotationsEnv().controllerFor(target.version);
-  controller.setFrame(target.frame);
-  return { target, controller };
-});
+const annotationSessions = new Map<string, Promise<Awaited<ReturnType<typeof openAnnotationSession>>>>();
+export function annotationSessionFor(project: ProjectContext, read?: RevisionRead) {
+  const key = JSON.stringify([project.id, read?.selection ?? null, read?.revision ?? fakeContentEvents.revision(project.id)]);
+  let session = annotationSessions.get(key);
+  if (!session) {
+    session = (async () => {
+      const env = await contentFor(project);
+      const loaded = await env.repository.load(env.content.projectId);
+      if (loaded.status !== 'ok') throw new Error(`Project content unavailable: ${loaded.status}`);
+      const opened = await openAnnotationSession({ content: loaded.content, read: null,
+        controllerFor: (id) => annotationsEnv().controllerFor(id), ...(read?.selection ? { version: read.selection } : {}) });
+      if (!opened) return null;
+      const version = loaded.content.versions.find((item) => item.id === opened.target.version)!;
+      const ref = version.thumbnail;
+      const thumbnailUrl = ref ? await verifiedDataUrl(ref, await env.thumbnails.readThumbnail(ref, new AbortController().signal), 2 * 1024 * 1024) : null;
+      return { ...opened, target: { ...opened.target, thumbnailUrl } };
+    })();
+    annotationSessions.set(key, session);
+  }
+  return session;
+}
 
 // ----------------------------------------------------------------- taste (T7), imports (T13)
 

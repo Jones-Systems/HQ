@@ -160,3 +160,7 @@ compare with the connector's canonicalisation.
 Limits: everything here is exercised against labelled fakes. It is not evidence
 of a live receiver, a host catalog, thread launch, the Electron runtime or a Mac
 installation, and the rendered checks cover markup, not layout.
+
+## Recovery source presentation
+
+Recovery composition exposes a request rail and Requests / Returned tabs, source-version reasons, the four-step draft/review flow and Runs cards. Simulation remains labelled and example-only; connected sends retain confirmation. No current recovery-head runtime or layout qualification is claimed. See [core view map](../../../docs/ui-map/design-core.md).

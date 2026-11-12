@@ -36,6 +36,7 @@ export interface RequestContext {
 
 export interface RequestsWorkbenchProps {
   readonly mode: 'requests' | 'runs';
+  readonly contentRevision?: number;
   readonly ports: WorkbenchPorts;
   readonly compareSlot: ComponentType<CompareSlotProps>;
   readonly children: (session: RequestSession, context: RequestContext) => ReactNode;
@@ -48,11 +49,11 @@ const NO_SESSIONS: readonly RequestSession[] = [];
  * The Requests and Runs page: the project's requests as a list with status chips, the selected request beside it,
  * and, in Requests, a Returned tab for work that came back across all of them.
  */
-export function RequestsWorkbench({ mode, ports, compareSlot, children }: RequestsWorkbenchProps) {
+export function RequestsWorkbench({ mode, ports, compareSlot, children, contentRevision = 0 }: RequestsWorkbenchProps) {
   const toast = useToast();
   const panelId = useId();
   const requests = useLoadable(ports.loadRequests, 'requests');
-  const versions = useLoadable(ports.loadVersions, 'versions');
+  const versions = useLoadable(ports.loadVersions, `versions:${contentRevision}`);
   const [created, setCreated] = useState<readonly RequestSession[]>([]);
   const [chosenId, setChosenId] = useState<string | null>(() => ports.readSelected());
   const [tab, setTab] = useState<TabId>('requests');

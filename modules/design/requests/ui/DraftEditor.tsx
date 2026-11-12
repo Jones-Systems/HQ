@@ -196,4 +196,3 @@ function Clarification({ session, disabled, hold, id, question, answer, dismisse
     </>}
   </li>;
 }
-

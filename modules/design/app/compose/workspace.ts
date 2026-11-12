@@ -23,17 +23,18 @@ function freshContent(contentFor: ContentFor) {
   return async (project: ProjectContext): Promise<ProjectContent> => {
     const env = await contentFor(project);
     const loaded = await env.repository.load(env.content.projectId);
-    return loaded.status === 'ok' ? loaded.content : env.content;
+    if (loaded.status !== 'ok') throw new Error(`Project content unavailable: ${loaded.status}`);
+    return loaded.content;
   };
 }
 
 export function createDesignWorkspace(documents: WorkspaceRecords | null, ports: DesignRuntimePorts = {}) {
   // One change feed per composition: every project-content writer notifies it, cached readers subscribe.
-  const contentEvents = createProjectContentEvents();
+  const contentEvents = documents === null ? fake.fakeContentEvents : createProjectContentEvents();
   const closure = createClosureWorkspace(documents, ports.runsConnection);
   const interactive = createInteractiveWorkspace(documents, closure.requests, ports, contentEvents);
   const activeProject = createActiveProjectStore();
-  if (documents === null) return { ...fake, closure, interactive, contentEvents, activeProject, retry: (_projectId: string) => undefined, readContent: freshContent(fake.contentFor), bridged: false as const, storageTag: fakeStorageTag };
+  if (documents === null) return { ...fake, closure, interactive, contentEvents, activeProject, retry: (projectId: string) => contentEvents.notify(projectId), readContent: freshContent(fake.contentFor), bridged: false as const, storageTag: fakeStorageTag };
   const bridged = createBridgedWorkspace(documents, { contentEvents });
   return { ...bridged, closure, interactive, activeProject, readContent: freshContent(bridged.contentFor) };
 }

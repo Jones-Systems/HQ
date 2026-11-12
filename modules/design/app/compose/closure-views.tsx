@@ -1,3 +1,4 @@
+import { useToast } from '@hq/ui';
 import { use, useMemo, type ComponentType, type ReactNode } from 'react';
 import type { DesignSectionProps } from '../../ui/contract.ts';
 import type { RequestsSectionProps } from '../sections/requests/View.tsx';
@@ -52,8 +53,8 @@ function RequestPicker({ props, mode, children }: {
     openProjects: () => navigate({ nav: 'projects', section: 'projects' }),
     openRequests: () => navigate({ nav: 'requests', section: 'requests' }),
     openRuns: () => navigate({ nav: 'runs', section: 'connector' }),
-  }), [env, project, workspace, state, navigate]);
-  return <RequestsWorkbench mode={mode} ports={ports} compareSlot={env.compareSlot}>{children}</RequestsWorkbench>;
+  }), [env, project, workspace, state, navigate, revision]);
+  return <RequestsWorkbench contentRevision={revision} mode={mode} ports={ports} compareSlot={env.compareSlot}>{children}</RequestsWorkbench>;
 }
 
 async function projectRequests(env: RequestsEnvironment, projectId: string) {

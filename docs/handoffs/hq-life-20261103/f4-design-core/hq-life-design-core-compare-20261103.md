@@ -1,3 +1,5 @@
+> Historical lane record. Recovery uses ordinary ancestry merges and source-only checks; earlier install, execution, rewrite and capture instructions are superseded by the recovery capsule. Private historical paths are omitted. See [recovery source receipt](recovery-core-20261112.md).
+
 # Handoff: Design › Review › Compare (lane F4, builder B3)
 
 Paused on request before the build was finished. The code is built, committed as WIP and unit/DOM tested. The full check
@@ -79,7 +81,7 @@ lists labels only. The assertions were moved to `view-dom.test.ts` (after openin
 
 ## Visual evidence
 
-Screenshots (all in `/tmp/f4-evidence/compare/after/`, not in the repo; 38 files):
+Screenshots (all in `[retained private path omitted]`, not in the repo; 38 files):
 
 - `light-1440-*`: states 01 to 11 (side by side, details open, swipe 50/25/75, divider focused by keyboard, add-panel menu,
   mid-transition add, done, unsaved, saved), 12 empty state for a project created in Projects, 15 swipe disabled with its
@@ -88,7 +90,7 @@ Screenshots (all in `/tmp/f4-evidence/compare/after/`, not in the repo; 38 files
 - Not done: 1024×768 at all; the reduced-motion run (no `getAnimations()` check, no screenshots); dark or 1280 versions of
   states 12 and 15 to 17.
 
-Before shots are `/tmp/f4-evidence/before/{light,dark}-06-compare.png`.
+Before shots are `[retained private path omitted]`.
 
 ## What's left, in priority order
 
@@ -101,10 +103,10 @@ Before shots are `/tmp/f4-evidence/before/{light,dark}-06-compare.png`.
    `node_modules/.bin/vitest run --config modules/design/annotations/vitest.config.ts`;
    `node_modules/.bin/vitest run apps/desktop`.
 2. Start the dev server and open the unviewed shots:
-   `nice -n 10 npx vite --config apps/desktop/vite.config.ts --port 5183 --strictPort --host 127.0.0.1 > /tmp/f4-compare/vite.log 2>&1 &`.
+   `nice -n 10 npx vite --config apps/desktop/vite.config.ts --port 5183 --strictPort --host 127.0.0.1 > [retained private path omitted] 2>&1 &`.
    Look at `dark-1440-*` and `light-1280-*`. Run 1024×768:
-   `F4_SCHEME=light F4_W=1024 F4_H=768 F4_TAG=light-1024 nice -n 10 node /tmp/f4-tools/cdp.mjs /tmp/f4-compare/states.mjs`.
-   Expect to tune the toolbar wrap and the header wrap at that width. Copy `/tmp/f4-tools/last-console.log` after each run.
+   `F4_SCHEME=light F4_W=1024 F4_H=768 F4_TAG=light-1024 nice -n 10 node [retained private path omitted] [retained private path omitted]`.
+   Expect to tune the toolbar wrap and the header wrap at that width. Copy `[retained private path omitted]` after each run.
 3. Reduced motion: write a small scenario using `open(page, { reduced: true })` from `lib.mjs`. Click Details, add a panel,
    remove one, double-click the divider, and assert `document.getAnimations().length === 0` right after each. Take one shot.
    Fix anything that animates.
@@ -129,11 +131,11 @@ Before shots are `/tmp/f4-evidence/before/{light,dark}-06-compare.png`.
 
 ## Only outside the repo
 
-- Evidence harness (task-owned, not repo code): `/tmp/f4-compare/lib.mjs` (open, seedExample, helpers), `states.mjs` (full state
+- Evidence harness (task-owned, not repo code): `[retained private path omitted]` (open, seedExample, helpers), `states.mjs` (full state
   walk, env `F4_SCHEME`, `F4_W`, `F4_H`, `F4_TAG`, `F4_FULL`), `extras.mjs` (swipe disabled reason, viewport mismatch, Match
   viewports), `created.mjs` (project created in Projects, empty state), `dbg-focus.mjs`, older `first.mjs`, `swipe1.mjs`,
-  `dbg2.mjs`, `dbg-projects.mjs`. They drive `/tmp/f4-tools/cdp.mjs`, which I did not edit.
-- Commit message drafts in `/tmp/f4-compare/` (`msg-*.txt`, `wip-*.txt`) and console logs `console-dark-1440.log`,
+  `dbg2.mjs`, `dbg-projects.mjs`. They drive `[retained private path omitted]`, which I did not edit.
+- Commit message drafts in `[retained private path omitted]` (`msg-*.txt`, `wip-*.txt`) and console logs `console-dark-1440.log`,
   `console-light-1280.log`.
 - The dev server on port 5183 is stopped.
 - Not in the repo, only in the thread history: the reasoning above about the harness hang and the focus-ring specificity.

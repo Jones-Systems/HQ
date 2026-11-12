@@ -1,3 +1,5 @@
+> Historical lane record; recovery scope and checks supersede its execution instructions. See [recovery source receipt](f4-design-core/recovery-core-20261112.md).
+
 # F4 handoff — Design core views (2026-11-03)
 
 Lane F4 makes the HQ Design module's core views alive and complete: Projects (the project gallery and a
@@ -27,7 +29,7 @@ deployed. The only installs were `npm ci` runs inside builder worktrees.
 
 | What | Branch | Worktree | Head |
 | --- | --- | --- | --- |
-| Lane (lead) | `work/hq-life-design-core-20261103` | `/home/malcolmjones/.t3/worktrees/HQ/work-hq-life-design-core-20261103` | the commit that last changed this file; the lead's code ends at `d90f846` |
+| Lane (lead) | `work/hq-life-design-core-20261103` | `[retained private path omitted]` | the commit that last changed this file; the lead's code ends at `d90f846` |
 | Base | `work/hq-foundation` `0cd50ab` + lane F1 `work/hq-life-system-20261103` `284393d` (fast-forward) | — | — |
 | Builders | see [builder handoffs](#builder-handoffs) | created by T3 from `origin/work/hq-life-design-core-20261103` at `be4a0b2` | — |
 
@@ -151,7 +153,7 @@ Found during the build:
    the design-sections rows for every touched cone (app, app-sections, ui, projects, canvas, compare,
    requests, annotations). The commands are in `.github/workflows/design-sections.yml` `HQD_INVENTORY`.
 6. **After evidence:** 1440×900 light and dark, 1280×800, 1024×768, and reduced motion, using
-   `/tmp/f4-tools/cdp.mjs` scenarios. Curate into `evidence/design-core-20261103/after/` and update the
+   `[retained private path omitted]` scenarios. Curate into `evidence/design-core-20261103/after/` and update the
    evidence README.
 7. **UI map:** add `docs/ui-map/design-core.md` (entry points, states, journeys, evidence state) and an
    index row in `docs/ui-map/README.md`.
@@ -203,17 +205,17 @@ Found during the build:
 
 ## Exists only outside the repository
 
-- `/tmp/f4-tools/`: the CDP screenshot harness (`cdp.mjs`) and scenarios (`before.mjs`, `flow-handoff.mjs`,
+- `[retained private path omitted]`: the CDP screenshot harness (`cdp.mjs`) and scenarios (`before.mjs`, `flow-handoff.mjs`,
   `flow-projects.mjs`, `check-foundation.mjs`). Task-owned; not committed.
-- `/tmp/f4-evidence/before/`: the full before set (18 view shots and 12 flow shots); 8 are curated in the
-  repo. `/tmp/f4-evidence/foundation/`: 3 foundation-check shots.
+- `[retained private path omitted]`: the full before set (18 view shots and 12 flow shots); 8 are curated in the
+  repo. `[retained private path omitted]`: 3 foundation-check shots.
 - Builder evidence, none of it curated or committed yet:
-  - Canvas (B2): `/tmp/f4-evidence/canvas/` (54 after shots, run logs, a probe shot). Its scenarios are in
-    `/tmp/f4-tools/`: `canvas-after.mjs`, `canvas-after-b.mjs` and `canvas-probe.mjs`.
-  - Compare (B3): `/tmp/f4-evidence/compare/after/` (38 shots); its harness is `/tmp/f4-compare/`.
+  - Canvas (B2): `[retained private path omitted]` (54 after shots, run logs, a probe shot). Its scenarios are in
+    `[retained private path omitted]`: `canvas-after.mjs`, `canvas-after-b.mjs` and `canvas-probe.mjs`.
+  - Compare (B3): `[retained private path omitted]` (38 shots); its harness is `[retained private path omitted]`.
   - Projects (B1) and Requests (B4) produced no screenshots.
-- Leftover headless Chromium profiles from the harness, `/tmp/f4-chrome-*`, are safe to delete.
-- `/tmp/f4-fd/`: read-only copies of the Frontend-Development guidance at `71c2c70`.
+- Leftover headless Chromium profiles from the harness, `[retained private path omitted]`, are safe to delete.
+- `[retained private path omitted]`: read-only copies of the Frontend-Development guidance at `71c2c70`.
 - Thread-only coordination:
   - F7: X1, X2 and X14 answered.
   - F5: said it is not editing `SectionOutlet.tsx`, and named the shared hunks above.
@@ -225,14 +227,14 @@ Found during the build:
 B1, B3 and B4 committed their work (prefix `WIP:`), pushed their branches and wrote handoffs on them at
 `docs/handoffs/hq-life-20261103/f4-design-core/<branch>.md`. B2 was cancelled; see the note below the table.
 The links below are pinned to the pushed heads.
-Each worktree is `/home/malcolmjones/.t3/worktrees/HQ/<branch with / replaced by ->`. No builder branch is
+Each worktree is `[retained private path omitted] with / replaced by ->`. No builder branch is
 merged anywhere, and no builder opened a PR.
 
 | Builder | Branch and head | State at pause |
 | --- | --- | --- |
 | F4-B1 Projects gallery and project screen | `work/hq-life-design-core-projects-20261103` at `f3369a4` ([handoff](https://github.com/Jones-Systems/HQ/blob/f3369a4ae8ede1c37598c8310a9feb79c9d719b0/docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-projects-20261103.md)) | One WIP commit, `ffd00b5`. It adds `view-model.ts` and new view modules (`ui.ts`, `chevron.ts`, `controls.ts`, `forms.ts`, `frame.ts`) and rewrites the gallery, detail, section and hooks views. Never type-checked, run or tested: `npm ci` never ran in that worktree. `projects.css`, the `ProjectsView.tsx` wiring, tests and screenshots are not started. |
-| F4-B2 Canvas | `work/hq-life-design-core-canvas-20261103` at `78a207f`. No handoff file: the builder was cancelled (see the note below the table). | Six commits, without the `WIP:` prefix; their messages are the builder's record. They cover eased camera moves (`e615b8d`); an icon toolbar that explains unavailable actions (`d7e758b`); capture cards, selection and drop feedback, save status and a source banner (`966c360`); version thumbnails and flow frames from composition renderers that re-read the source (`c9cf0ce`); load caches that survive a development remount (`500fd95`); and polish for frames, artboards and the inspector width (`78a207f`). Canvas node tests passed 50/50 at 14:39Z, before the last two commits. Whether `tsc` and vitest ran after its `npm ci` is unknown. 54 screenshots are in `/tmp/f4-evidence/canvas/after/`: light and dark; 1270, 1440 and 1800 wide; reduced motion; save and source failures with recovery; a new project and a new version. |
-| F4-B3 Compare | `work/hq-life-design-core-compare-20261103` at `a1beafd` ([handoff](https://github.com/Jones-Systems/HQ/blob/a1beafddd95e116672ace8b82835e837bbb9203a/docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-compare-20261103.md)) | All seven targets built, including Side by side / Swipe with a slider divider and compact panel headers. Compare `tsc` is clean and Compare vitest passes 97/97. Other cones were not run. 38 screenshots are in `/tmp/f4-evidence/compare/after/`. 1024×768 and reduced motion were not captured, and touch drag was never tried on a touch device. |
+| F4-B2 Canvas | `work/hq-life-design-core-canvas-20261103` at `78a207f`. No handoff file: the builder was cancelled (see the note below the table). | Six commits, without the `WIP:` prefix; their messages are the builder's record. They cover eased camera moves (`e615b8d`); an icon toolbar that explains unavailable actions (`d7e758b`); capture cards, selection and drop feedback, save status and a source banner (`966c360`); version thumbnails and flow frames from composition renderers that re-read the source (`c9cf0ce`); load caches that survive a development remount (`500fd95`); and polish for frames, artboards and the inspector width (`78a207f`). Canvas node tests passed 50/50 at 14:39Z, before the last two commits. Whether `tsc` and vitest ran after its `npm ci` is unknown. 54 screenshots are in `[retained private path omitted]`: light and dark; 1270, 1440 and 1800 wide; reduced motion; save and source failures with recovery; a new project and a new version. |
+| F4-B3 Compare | `work/hq-life-design-core-compare-20261103` at `a1beafd` ([handoff](https://github.com/Jones-Systems/HQ/blob/a1beafddd95e116672ace8b82835e837bbb9203a/docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-compare-20261103.md)) | All seven targets built, including Side by side / Swipe with a slider divider and compact panel headers. Compare `tsc` is clean and Compare vitest passes 97/97. Other cones were not run. 38 screenshots are in `[retained private path omitted]`. 1024×768 and reduced motion were not captured, and touch drag was never tried on a touch device. |
 | F4-B4 Requests, Returned and Runs | `work/hq-life-design-core-requests-20261103` at `9b68e15` ([handoff](https://github.com/Jones-Systems/HQ/blob/9b68e1524c8c5723103044610137750c570a13ca/docs/handoffs/hq-life-20261103/f4-design-core/hq-life-design-core-requests-20261103.md)) | Two WIP commits: `45e220d` (source) and `646b93f` (tests). All six targets are written: the example loop, the request list and new-request picker, the stepper with freeze blockers, the Returned tab, Runs cards, and notices and toasts. Never compiled, run or captured: `npm ci` never ran in that worktree. New tests not started. |
 
 **F4-B2 was cancelled without writing a handoff.**
@@ -243,7 +245,7 @@ merged anywhere, and no builder opened a PR.
   was clean, so nothing was lost. The lead pushed the branch as the builder left it. The cancel stopped its dev
   server (port 5182) and the screenshot run.
 - Its thread timeline stopped updating at 14:39Z, so later check results are not recorded there.
-- Its last browser-run logs are in `/tmp/f4-evidence/canvas/logs/`. They were written after the screenshots
+- Its last browser-run logs are in `[retained private path omitted]`. They were written after the screenshots
   in `after/`.
   - Light run A passed 13 of 13 steps and light run B passed 2 of 2.
   - Dark run A failed 10 of 13 steps. The toolbar buttons were never found, and a dynamically imported module

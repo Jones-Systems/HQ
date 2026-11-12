@@ -1,6 +1,8 @@
 import { withSectionErrorBoundary } from './SectionErrorBoundary.tsx';
 import { use, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Button } from '@hq/ui';
+import { Button, Presence, Skeleton, FieldError, fieldErrorProps, InlineNotice, useToast, useReducedMotion } from '@hq/ui';
+import { ActionButton } from '../../../projects/src/views/controls.ts';
+import type { ProjectsUi } from '../../../projects/src/views/ui.ts';
 import type { DesignSectionProps } from '../../../ui/contract.ts';
 import { ProjectsSection } from '../../../projects/src/index.ts';
 import '../../../projects/src/projects.css';
@@ -9,6 +11,8 @@ import { findPreview, openPreviewSource, previewKind, previewUnavailableReason, 
 import { interactiveTarget } from '../runtime-ports.ts';
 import { InteractivePanel } from './InteractivePanel.tsx';
 import { SectionFrame } from './SectionFrame.tsx';
+
+const projectsUi: ProjectsUi = { Presence, Skeleton, FieldError, fieldErrorProps, InlineNotice, useToast, useReducedMotion };
 
 function ProjectsViewContent({ context, navigate }: DesignSectionProps) {
   const workspace = useDesignWorkspace();
@@ -44,21 +48,21 @@ function ProjectsViewContent({ context, navigate }: DesignSectionProps) {
     try { await action(); } catch (failure) { setError(failure instanceof Error ? failure.message : 'Project folders are unavailable.'); }
     finally { setBusy(false); }
   }
-  return <SectionFrame lane="T2 projects" entry="projects/src › ProjectsSection" tags={[workspace.storageTag, status.tag]}>
-    <InteractivePanel context={context} navigate={navigate} />
-    {native && <section aria-label="Project folders">
+  const folders = native && <section aria-label="Project folders">
       <div className="hqp-toolbar">
-        <Button disabled={busy} onClick={() => void run(native.chooseRoot)}>Choose projects folder</Button>
-        <Button variant="secondary" disabled={busy || native.roots().length === 0} onClick={() => void run(native.refresh)}>Refresh</Button>
-        <Button variant="ghost" disabled={busy || native.roots().length === 0} onClick={() => void run(native.forget)}>Forget folder</Button>
+        <ActionButton label="Choose projects folder" reason={busy ? 'Wait for the folder update to finish.' : undefined} onClick={() => void run(native.chooseRoot)} />
+        <ActionButton label="Refresh" reason={busy ? 'Wait for the folder update to finish.' : native.roots().length === 0 ? 'Choose a projects folder first.' : undefined} onClick={() => void run(native.refresh)} />
+        <ActionButton label="Forget folder" variant="ghost" reason={busy ? 'Wait for the folder update to finish.' : native.roots().length === 0 ? 'Choose a projects folder first.' : undefined} onClick={() => void run(native.forget)} />
       </div>
       {native.roots().length === 0
         ? <p>Choose a projects folder to see repositories on this device. Your saved workspace projects appear below.</p>
         : <p>{native.roots().map((root) => root.label).join(', ')} · Read-only source catalog. Forgetting removes access from HQ; your source files stay in place.</p>}
       {busy && <p role="status">Updating project folders…</p>}
       {error && <p role="alert">{error}</p>}
-    </section>}
-    {entry && <section aria-label={`${entry.displayName} source details`} className="hqp-detail">
+    </section>;
+  return <SectionFrame lane="T2 projects" entry="projects/src › ProjectsSection" tags={[workspace.storageTag, status.tag]}>
+
+    {entry && <section aria-label={`${entry.displayName} source details`} className="hqp-source-details">
       <Button ref={close} variant="secondary" onClick={() => { setSelected(null); trigger.current?.focus(); }}>Close source details</Button>
       <h2>{entry.displayName}</h2>
       <p>Read-only source project · {entry.hostLabel}</p>
@@ -69,11 +73,12 @@ function ProjectsViewContent({ context, navigate }: DesignSectionProps) {
         <dt>Catalog status</dt><dd>{entry.freshness.status}</dd>
       </dl>
       {previewItem && interactiveTarget(previewItem)
-        ? <Button disabled={preview.busy || preview.held || !workspace.interactive.available || !workspace.interactive.selectProjectAvailable} onClick={() => void openPreviewSource(workspace.interactive, selected!)}>Open {previewKind(previewItem).toLowerCase()}</Button>
+        ? <ActionButton label={`Open ${previewKind(previewItem).toLowerCase()}`} reason={preview.busy ? 'Wait for the preview operation to finish.' : preview.held ? 'The preview is held. Resolve its current notice before opening another source.' : !workspace.interactive.available || !workspace.interactive.selectProjectAvailable ? 'Source selection is unavailable in this workspace.' : undefined} onClick={() => void openPreviewSource(workspace.interactive, selected!)} />
         : <p role="status">{previewUnavailableReason(previewItem)}</p>}
       <p>Source discovery provides repository details. Create a workspace project below to organize design views and versions.</p>
     </section>}
-    <ProjectsSection controller={controller} gallery={{ onOpenSource: (item, button) => { trigger.current = button; setSelected({ hostId: item.hostId, sourceProjectId: item.sourceProjectId }); } }} />
+    <ProjectsSection controller={controller} ui={projectsUi} actions={{ openCanvas: () => navigate({ nav: 'review', section: 'canvas' }), compare: () => navigate({ nav: 'review', section: 'compare' }) }} gallery={{ folders, onOpenSource: (item, button) => { trigger.current = button; setSelected({ hostId: item.hostId, sourceProjectId: item.sourceProjectId }); } }} />
+    <InteractivePanel context={context} navigate={navigate} />
   </SectionFrame>;
 }
 

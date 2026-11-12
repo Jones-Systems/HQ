@@ -1,9 +1,11 @@
+> Historical lane record. Recovery uses ordinary ancestry merges and source-only checks; earlier install, execution, rewrite and capture instructions are superseded by the recovery capsule. Private historical paths are omitted. See [recovery source receipt](recovery-core-20261112.md).
+
 # F4 Design core views: Requests, Returned, Runs (builder B4) — handoff
 
 Paused on request from the F4 lead, relayed from the HQ coordinator. **Nothing here has been compiled, tested or run in a browser.** The code was written whole and reviewed by reading only, because `node_modules` was missing in this worktree and the host load stayed at 30 to 68 against the "wait below 14" rule. Treat every file as unverified until the checks below pass.
 
 - Branch: `work/hq-life-design-core-requests-20261103` (from `origin/work/hq-life-design-core-20261103`), pushed, no PR opened.
-- Worktree: `/home/malcolmjones/.t3/worktrees/HQ/work-hq-life-design-core-requests-20261103`
+- Worktree: `[retained private path omitted]`
 - Base: `be4a0b2` (Add the Design core flow assessment and before evidence)
 - WIP commits, in order:
   - `45e220d` WIP: Make Requests, Returned and Runs alive in the Design handoff (25 source and CSS files)
@@ -24,7 +26,7 @@ Legend: **written** means the code exists and is committed but has never been co
 | 6 | `role="alert"` and detached messages replaced by InlineNotice or toasts; empty states with actions | Written. |
 | Tests | Update existing assertions; add tests for the example-mode loop, disabled-version reasons, freeze blockers, Returned tab | Existing render and lifecycle tests updated (not run). **New tests not started.** |
 | Checks | tsc ×3, node tests, vitest ×3, `vitest run apps/desktop` | **Not run.** Needs `npm ci --no-audit --no-fund` first. |
-| Visual evidence | Screenshots under `/tmp/f4-evidence/requests/after/`, reduced-motion run | **Not started.** No dev server was ever started; port 5184 is free. |
+| Visual evidence | Screenshots under `[retained private path omitted]`, reduced-motion run | **Not started.** No dev server was ever started; port 5184 is free. |
 
 ## What exists
 
@@ -69,7 +71,7 @@ All paths under `modules/design/`.
    - freeze blockers: `aria-describedby`, guarded click and form submit
    - Returned tab: chip counts, groups, `data-hq-presence` on new rows, item moves group after a decision
    - `stepProgress` and `requestStatus` as framework-free `node --test` tests
-5. **Visual evidence** (target list in the task): dev server on port 5184 only, `mkdir -p /tmp/f4-requests` first, copy `/tmp/f4-tools/flow-handoff.mjs`, update selectors for the list, tabs and button labels, capture to `/tmp/f4-evidence/requests/after/`: 1440×900 light and dark, 1280×800, 1024×768, each loop step, one empty state, one `prefers-reduced-motion: reduce` run. Check `/tmp/f4-tools/last-console.log` for errors per run. Stop the server afterwards.
+5. **Visual evidence** (target list in the task): dev server on port 5184 only, `mkdir -p [retained private path omitted]` first, copy `[retained private path omitted]`, update selectors for the list, tabs and button labels, capture to `[retained private path omitted]`: 1440×900 light and dark, 1280×800, 1024×768, each loop step, one empty state, one `prefers-reduced-motion: reduce` run. Check `[retained private path omitted]` for errors per run. Stop the server afterwards.
 6. `node_modules/.bin/vitest run apps/desktop` once, and the connector tests if anything Runs depends on is touched.
 7. Replace the WIP commits with small focused ones going forward (do not rewrite pushed history; add commits on top), then push and report.
 
@@ -93,6 +95,6 @@ All paths under `modules/design/`.
 ## Only uncommitted, only in /tmp, or only in this thread
 
 - **Uncommitted:** nothing. The working tree is clean after the WIP commits and this file.
-- **In /tmp:** nothing of mine. `/tmp/f4-requests/` and `/tmp/f4-evidence/requests/` were never created, so there are no after screenshots and no scenario scripts. The before evidence is committed under `docs/design/hq-visual-system/evidence/design-core-20261103/before/` (assessment in `docs/design/hq-visual-system/design-flow-assessment-20261103.md`). Shared tools `/tmp/f4-tools/` are untouched.
-- **Only in the thread:** the reasoning above. Full prior transcript: `/home/malcolmjones/.claude/projects/-home-malcolmjones--t3-worktrees-HQ-work-hq-life-design-core-requests-20261103/150ada05-3b86-4fdb-abad-3ec76ab08255.jsonl`.
+- **In /tmp:** nothing of mine. `[retained private path omitted]` and `[retained private path omitted]` were never created, so there are no after screenshots and no scenario scripts. The before evidence is committed under `docs/design/hq-visual-system/evidence/design-core-20261103/before/` (assessment in `docs/design/hq-visual-system/design-flow-assessment-20261103.md`). Shared tools `[retained private path omitted]` are untouched.
+- **Only in the thread:** the reasoning above. Full prior transcript: `[retained private path omitted]`.
 - **Processes:** no vite server was started (port 5184 is free). The background load-waiter finished on its own.

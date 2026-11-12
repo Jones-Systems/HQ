@@ -38,11 +38,24 @@ describe('example workspace project created in Projects', () => {
     const canvas = await canvasFor(project);
     assert.ok(canvas);
     assert.equal(canvas.registry.catalog(canvas.projectId).flatMap(({ items }) => items).some((item) => /synthetic/iu.test(item.title)), false);
-    assert.equal(compareFor(project).getSnapshot().comparison.panels.length, 0);
+    assert.equal((await compareFor(project)).getSnapshot().comparison.panels.length, 0);
     assert.equal(await annotationSessionFor(project), null);
 
     const seeded = await contentFor(shell);
     assert.equal(seeded.example, true);
     assert.ok(seeded.content.versions.length >= 4);
+  });
+});
+
+
+describe('example Compare registry binding', () => {
+  it('keeps its sample panels and discoverable catalog after Projects lists the example', async () => {
+    const project = { id: 'compare-registry-example', name: 'Compare example' };
+    await projectsFor(project);
+    assert.equal((await contentFor(project)).example, true);
+    const compare = await compareFor(project);
+    assert.equal(compare.getSnapshot().comparison.panels.length, 3);
+    await compare.loadCatalog();
+    assert.ok(compare.getSnapshot().versions.size > 0);
   });
 });
