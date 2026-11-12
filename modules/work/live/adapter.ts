@@ -1,9 +1,11 @@
 import {
   PlannerPortError, REPLAY_FEATURE,
-  type Anchor, type ApplyResult, type CheckResult, type HistoryEntry, type PlannerError, type PlannerPort,
-  type PlannerRecovery, type PlannerRecoveryError, type RecoveryIntent, type SettingsWriteResult, type Snapshot, type WriteResult,
+  type Anchor, type ApplyResult, type CheckResult, type HistoryEntry, type PlannerError, type PlannerHealth, type PlannerPort,
+  type PlannerRecovery, type PlannerRecoveryError, type RecoveryIntent, type SettingsWriteResult, type Snapshot, type UnavailableReason,
+  type WriteResult,
 } from '../core/port';
 import { parseIntent } from './intent';
+import { probePlanner } from './health';
 import {
   ENTITY_ID_PATTERN, isServiceResponse, REQUEST_ID_PATTERN,
   type PlannerTransport, type ServiceResponse, type WorkMutationCall, type WorkParams, type WorkRoute, type WorkServiceParams,
@@ -60,6 +62,8 @@ export interface PlannerLive {
   port: PlannerPort;
   recovery: PlannerRecovery;
   ledger: LedgerView;
+  /** One explicit connection check over this adapter's transport. It reads only `GET /api/version`; deliberately not part of the port. */
+  health(): Promise<PlannerHealth>;
 }
 
 type WriteOutput = WriteResult | SettingsWriteResult;
@@ -69,7 +73,14 @@ function fail(error: PlannerRecoveryError): never {
 }
 
 const invalid = (field: string, message: string): PlannerError => ({ kind: 'invalid', errors: [{ field, message }] });
+const unavailable = (reason: UnavailableReason): PlannerError => ({ kind: 'unavailable', reason });
 const is2xx = (status: number) => status >= 200 && status < 300;
+
+/** Why a received non-2xx answer means the Planner cannot be used: refused (403, 421) or failing (5xx); otherwise null. */
+function unusable(status: number): UnavailableReason | null {
+  if (status === 403 || status === 421) return 'refused';
+  return status >= 500 && status <= 599 ? 'server_error' : null;
+}
 
 /** A received non-2xx answer to a write, and whether it provably had no effect. */
 function writeFailure(response: { status: number; body: unknown }, requestId: string): { error: PlannerError; noEffect: boolean } {
@@ -77,7 +88,7 @@ function writeFailure(response: { status: number; body: unknown }, requestId: st
   const unknown = { error: { kind: 'unknown', requestId } as PlannerError, noEffect: false };
   const err = decodeError(response.body);
   if (status === 404) return { error: { kind: 'not_found' }, noEffect: true };
-  if (status === 403 || status === 421) return { error: { kind: 'unavailable' }, noEffect: true };
+  if (status === 403 || status === 421) return { error: unavailable('refused'), noEffect: true };
   if (status === 400 || status === 413 || status === 415) {
     const errors = err ? fieldErrors(err.body) : null;
     return { error: { kind: 'invalid', errors: errors ?? [{ field: 'body', message: err?.message ?? `The Planner refused the request (${status}).` }] }, noEffect: true };
@@ -118,14 +129,18 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
     if (features) observedFeatures = [...features];
   }
 
-  /** A read: any failure to get a well-formed 200 is `unavailable`, except a 404. */
+  /**
+   * A read: any failure to get a well-formed 2xx is `unavailable` with its reason, except a 404 for an item. No answer
+   * is `unreachable`; 403 and 421 are `refused`; 5xx is `server_error`; any other status (a 404 for the board or the
+   * version included) or a malformed body is `incompatible`.
+   */
   async function read<R extends WorkRoute, T>(route: R, params: WorkParams[R], decode: (body: unknown) => T | null): Promise<T> {
     const response = await call(route, params);
-    if (!response.ok) return fail({ kind: 'unavailable' });
-    if (response.status === 404) return fail({ kind: 'not_found' });
-    if (!is2xx(response.status)) return fail({ kind: 'unavailable' });
+    if (!response.ok) return fail(unavailable('unreachable'));
+    if (response.status === 404 && (route === 'item' || route === 'history')) return fail({ kind: 'not_found' });
+    if (!is2xx(response.status)) return fail(unavailable(unusable(response.status) ?? 'incompatible'));
     const value = decode(response.body);
-    return value === null ? fail({ kind: 'unavailable' }) : value;
+    return value === null ? fail(unavailable('incompatible')) : value;
   }
 
   async function readSnapshot(): Promise<Snapshot> {
@@ -192,14 +207,16 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
       if (entry.state !== 'unresolved' || !entry.applyAuthorized) return fail({ kind: 'unknown', requestId });
     }
     entry.applyAuthorized = false;
-    const lost: PlannerRecoveryError = mode === 'lookup' ? { kind: 'unavailable' } : { kind: 'unknown', requestId };
+    // A lookup that gets no usable answer is unavailable; a resend that does not is unknown, as it may have landed.
+    const unknown: PlannerRecoveryError = { kind: 'unknown', requestId };
+    const lost = (reason: UnavailableReason): PlannerRecoveryError => mode === 'lookup' ? unavailable(reason) : unknown;
     const response = await call('replay', { mode, requestId, original: entry.call, sentAfterVersion: entry.sentAfterVersion });
-    if (!response.ok) return fail(response.kind === 'unavailable' ? { kind: 'unavailable' } : lost);
+    if (!response.ok) return fail(response.kind === 'unavailable' ? unavailable('unreachable') : lost('unreachable'));
     if (is2xx(response.status)) {
       const decoded = decodeReplay(response.body);
-      if (!decoded) return fail(lost);
+      if (!decoded) return fail(lost('incompatible'));
       if (decoded.outcome === 'not_applied') {
-        if (mode !== 'lookup') return fail(lost);
+        if (mode !== 'lookup') return fail(unknown);
         entry.applyAuthorized = entry.state === 'unresolved';
         return { outcome: 'not_applied' };
       }
@@ -215,11 +232,29 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
       return fail({ kind: 'replay_indeterminate', requestId, reason: err.body.sent_after_version == null ? 'no_baseline' : 'evicted' });
     }
     if (response.status === 422 && err?.error === 'request_id_reused') return fail({ kind: 'request_id_reused' });
-    if (mode === 'lookup') return fail({ kind: 'unavailable' });
+    // A baseline newer than the store: nothing can be proved about the write at this address. The entry stays held.
+    if (response.status === 400 && await baselineAhead(entry)) return fail({ kind: 'replay_indeterminate', requestId, reason: 'store_changed' });
+    // A lookup is unavailable only when the Planner cannot be used; any other refusal leaves the write unknown.
+    if (mode === 'lookup') {
+      const reason = unusable(response.status);
+      return fail(reason ? unavailable(reason) : unknown);
+    }
     // A resend that the service refused rolled back: the original never landed and still has not.
     const { error, noEffect } = writeFailure(response, requestId);
     if (noEffect && error.kind !== 'unavailable') forget(requestId);
     return fail(error);
+  }
+
+  /**
+   * Whether the store's version is now below the entry's recorded baseline. The service answers 400 to a replay whose
+   * `sent_after_version` is above its own version, as after a store swap or restore. One read of `GET /api/version`
+   * decides, so any other 400 keeps its ordinary mapping. It never writes and observes nothing.
+   */
+  async function baselineAhead(entry: LedgerEntry): Promise<boolean> {
+    const response = await call('version', {});
+    if (!response.ok || !is2xx(response.status)) return false;
+    const version = decodeVersion(response.body);
+    return version !== null && version.stateVersion < entry.sentAfterVersion;
   }
 
   /** A settled intent asked again: a read-only lookup of its recorded response. Never a resend. */
@@ -253,7 +288,7 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
     if (!response.ok) {
       if (response.kind === 'unavailable') {
         forget(requestId);
-        return fail({ kind: 'unavailable' });
+        return fail(unavailable('unreachable'));
       }
       return fail({ kind: 'unknown', requestId });
     }
@@ -348,7 +383,7 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
     },
   };
 
-  return { port, recovery, ledger: view };
+  return { port, recovery, ledger: view, health: () => probePlanner(transport) };
 }
 
 /** The live PlannerPort alone. Prefer `createPlannerLive`, whose recovery resolves unknown writes safely. */
