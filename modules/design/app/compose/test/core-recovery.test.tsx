@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { Suspense } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { DesignSectionProps } from '../../../ui/contract.ts';
 import { createDesignWorkspace } from '../workspace.ts';
@@ -32,15 +32,23 @@ it('Try again invalidates the active project before remounting its failed sectio
 
 it('Annotations offers the session choices and pins the selected version', async () => {
   const workspace = createDesignWorkspace(null);
-  const initial = await workspace.annotationSessionFor(props.context);
+  const revision = workspace.contentEvents.revision(props.context.id);
+  const pending = workspace.annotationSessionFor(props.context);
+  expect(workspace.annotationSessionFor(props.context, { revision })).toBe(pending);
+  const initial = await pending;
   expect(initial).not.toBeNull();
-  render(<DesignWorkspaceContext.Provider value={workspace}><Suspense fallback={<p>Loading annotations</p>}>
-    <AnnotationsView {...props} />
-  </Suspense></DesignWorkspaceContext.Provider>);
+  await act(async () => {
+    render(<DesignWorkspaceContext.Provider value={workspace}><Suspense fallback={<p>Loading annotations</p>}>
+      <AnnotationsView {...props} />
+    </Suspense></DesignWorkspaceContext.Provider>);
+  });
   const picker = await screen.findByRole('combobox', { name: 'Annotation version' });
-  expect(picker.querySelectorAll('option')).toHaveLength(initial!.choices.length);
+  expect(Array.from(picker.querySelectorAll('option'), (option) => ({ id: option.value, label: option.textContent })))
+    .toEqual(initial!.choices.map((choice) => ({ id: choice.id, label: `${choice.view ? `${choice.view} · ` : ''}${choice.label}` })));
+  expect((picker as HTMLSelectElement).value).toBe(initial!.target.version);
   const next = initial!.choices.find((choice) => choice.id !== initial!.target.version)!;
-  fireEvent.change(picker, { target: { value: next.id } });
+  await act(async () => { fireEvent.change(picker, { target: { value: next.id } }); });
   await waitFor(() => expect((screen.getByRole('combobox', { name: 'Annotation version' }) as HTMLSelectElement).value).toBe(next.id));
+  expect(screen.getByText(`pinned to ${next.id}`)).toBeTruthy();
   expect((await workspace.annotationSessionFor(props.context, { selection: next.id }))!.target.version).toBe(next.id);
 });
