@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState, type Dispatch } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState, type Dispatch } from 'react';
 import type { CanvasId, CanvasStoragePort, ProjectId } from '../contract.ts';
 import { emptyArrangement } from '../arrangement.ts';
 import { decodeArrangement, loadArrangement, saveArrangement } from '../codec.ts';
@@ -10,12 +10,15 @@ export type SaveStatus =
   | { readonly kind: 'pending' }
   | { readonly kind: 'read-only'; readonly message: string }
   | { readonly kind: 'conflict' }
-  | { readonly kind: 'error'; readonly message: string };
+  /** `stage` says whether opening the saved layout or writing the current one failed. Either way nothing was lost. */
+  | { readonly kind: 'error'; readonly message: string; readonly stage: 'load' | 'save' };
 
 export interface CanvasDocument {
   readonly state: CanvasState;
   readonly dispatch: Dispatch<CanvasAction>;
   readonly status: SaveStatus;
+  /** Try again after an error: reopen the saved layout, or write the current one. Repeating either is safe. */
+  readonly retry: () => void;
 }
 
 export const AUTOSAVE_DELAY_MS = 400;
@@ -28,6 +31,7 @@ export const AUTOSAVE_DELAY_MS = 400;
 export function useCanvasDocument(storage: CanvasStoragePort, canvas: CanvasId, project: ProjectId, session?: CanvasSession): CanvasDocument {
   const [state, dispatch] = useReducer(reduceCanvas, undefined, () => createCanvasState(emptyArrangement(canvas, project), { readOnly: true }));
   const [status, setStatus] = useState<SaveStatus>({ kind: 'loading' });
+  const [attempt, setAttempt] = useState({ load: 0, save: 0 });
   const base = useRef<{ text: string | null; arrangement: unknown } | null>(null);
   const initialSession = useRef(session);
 
@@ -50,10 +54,10 @@ export function useCanvasDocument(storage: CanvasStoragePort, canvas: CanvasId, 
       if (initialSession.current) dispatch({ type: 'restore-session', session: initialSession.current });
       setStatus({ kind: 'saved' });
     }, (error: unknown) => {
-      if (current) setStatus({ kind: 'error', message: error instanceof Error ? error.message : 'Could not load the canvas' });
+      if (current) setStatus({ kind: 'error', stage: 'load', message: error instanceof Error ? error.message : 'Could not load the canvas' });
     });
     return () => { current = false; };
-  }, [storage, canvas, project]);
+  }, [storage, canvas, project, attempt.load]);
 
   const committed = state.history.present;
   const saving = useRef<Promise<void>>(Promise.resolve());
@@ -73,11 +77,17 @@ export function useCanvasDocument(storage: CanvasStoragePort, canvas: CanvasId, 
         base.current = { text: result.baseText, arrangement: committed };
         if (current) setStatus({ kind: 'saved' });
       }).catch((error: unknown) => {
-        if (current) setStatus({ kind: 'error', message: error instanceof Error ? error.message : 'Could not save the canvas' });
+        if (current) setStatus({ kind: 'error', stage: 'save', message: error instanceof Error ? error.message : 'Could not save the canvas' });
       });
     }, AUTOSAVE_DELAY_MS);
     return () => { current = false; clearTimeout(timer); };
-  }, [storage, committed, state.readOnly]);
+  }, [storage, committed, state.readOnly, attempt.save]);
 
-  return { state, dispatch, status };
+  const stage = status.kind === 'error' ? status.stage : null;
+  const retry = useCallback(() => {
+    if (stage === 'load') setAttempt((current) => ({ ...current, load: current.load + 1 }));
+    else if (stage === 'save') setAttempt((current) => ({ ...current, save: current.save + 1 }));
+  }, [stage]);
+
+  return { state, dispatch, status, retry };
 }
