@@ -64,15 +64,21 @@ function checkScalar(value: unknown, path: string): WikiError | null {
   return invalid('wrong-type', 'field values must be strings, numbers, booleans or lists of those', path);
 }
 
+/** A frontmatter field name: a short plain identifier, never a prototype key. */
+export function checkFieldName(name: unknown, path: string): WikiError | null {
+  if (typeof name !== 'string') return invalid('wrong-type', 'field name must be a string', path);
+  if (name.length === 0 || name.length > MAX_FIELD_NAME_LENGTH || !FIELD_NAME.test(name) || RESERVED_FIELD_NAMES.includes(name)) {
+    return invalid('invalid-format', 'field name must be a short plain identifier', path);
+  }
+  return null;
+}
+
 export function checkPageField(value: unknown, path: string): WikiError | null {
   if (!isRecord(value)) return invalid('wrong-type', 'field must be an object', path);
   const keys = checkKeys(value, ['name', 'value'], ['name', 'value'], path);
   if (keys !== null) return keys;
-  const name = value['name'];
-  if (typeof name !== 'string') return invalid('wrong-type', 'field name must be a string', `${path}.name`);
-  if (name.length === 0 || name.length > MAX_FIELD_NAME_LENGTH || !FIELD_NAME.test(name) || RESERVED_FIELD_NAMES.includes(name)) {
-    return invalid('invalid-format', 'field name must be a short plain identifier', `${path}.name`);
-  }
+  const name = checkFieldName(value['name'], `${path}.name`);
+  if (name !== null) return name;
   const fieldValue = value['value'];
   if (Array.isArray(fieldValue)) {
     if (fieldValue.length > MAX_FIELD_LIST_ITEMS) return invalid('out-of-range', `lists are limited to ${MAX_FIELD_LIST_ITEMS} items`, `${path}.value`);

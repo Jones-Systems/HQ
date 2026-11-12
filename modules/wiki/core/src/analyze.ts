@@ -2,6 +2,7 @@
 // (built once per commit) and `getPage` (parsed again on demand) can never disagree about a page.
 
 import {
+  MAX_BACKLINK_VIA,
   MAX_FIELD_VALUE_LENGTH,
   MAX_LABEL_LENGTH,
   MAX_OUT_LINKS,
@@ -14,12 +15,29 @@ import {
   type PageField,
   type RawReason,
 } from '../../contract/src/index.ts';
-import { collectLinks, documentText, firstH1, resolveDocument, type DraftDocument, type LinkRef, type RawLink } from './draft.ts';
+import { collectLinks, documentText, firstH1, resolveDocument, type BodyLink, type DraftDocument, type LinkRef, type RawLink } from './draft.ts';
 import { parseFrontmatter } from './frontmatter.ts';
 import { parseMarkdown } from './markdown.ts';
 import type { SourceProfile } from './profile.ts';
 import { resolveLink, targetId, type PageDirectory } from './resolver.ts';
-import { cleanLabel, fileStem, normalizeAlias } from './text.ts';
+import type { LinkOrigin } from './snapshot.ts';
+import { cleanLabel, compareUnits, fileStem, normalizeAlias } from './text.ts';
+
+/**
+ * The origin recorded for a link written in the page body (anything else is a relationship field name).
+ * A relationship field that is itself named `body` reports the same origin; the two cannot be told apart in `via`.
+ */
+export const BODY_ORIGIN = 'body';
+
+/** A link of one page: where it was read from and, for body links, the block that holds it. */
+export interface PageLink extends LinkRef {
+  /** `BODY_ORIGIN`, or the relationship field the link was read from, as the profile names it. */
+  readonly origin: string;
+  /** True for a link written in the page body (kept apart from `origin` so a field named `body` stays a field). */
+  readonly fromBody: boolean;
+  /** Cleaned text of the body block holding the link (excerpt cap); empty for field links and empty blocks. */
+  readonly context: string;
+}
 
 export interface PageAnalysis {
   readonly byteLength: number;
@@ -32,7 +50,7 @@ export interface PageAnalysis {
   readonly rawText: string | null;
   readonly draft: DraftDocument | null;
   /** Relationship-field links first, then body links, in document order. */
-  readonly links: readonly LinkRef[];
+  readonly links: readonly PageLink[];
   /** Names the page answers to: title, alias fields, file stem. */
   readonly names: readonly string[];
   /** Topic labels from the profile's topic fields. */
@@ -170,7 +188,7 @@ export function analyzePage(path: string, bytes: Uint8Array, profile: SourceProf
 
   const parsed = parseMarkdown(front.body);
   let draft: DraftDocument | null = null;
-  let bodyLinks: readonly LinkRef[];
+  let bodyLinks: readonly BodyLink[];
   if (parsed.ok) {
     bodyLinks = collectLinks(parsed.doc);
     if (rawReason === null) {
@@ -189,11 +207,11 @@ export function analyzePage(path: string, bytes: Uint8Array, profile: SourceProf
   const aliasValues = profile.fieldMappings.aliases.flatMap((name) => fieldValues(fields, name)).map((v) => cleanLabel(v));
   const names = dedupeCapped([title, ...aliasValues, stem], MAX_NAMES);
 
-  const relationshipLinks: LinkRef[] = [];
+  const relationshipLinks: PageLink[] = [];
   for (const name of profile.fieldMappings.relationships) {
     for (const value of fieldValues(fields, name)) {
       const target = wikiTarget(value);
-      if (target !== '') relationshipLinks.push({ text: cleanLabel(target), link: { kind: 'wiki', target } });
+      if (target !== '') relationshipLinks.push({ text: cleanLabel(target), link: { kind: 'wiki', target }, origin: name, fromBody: false, context: '' });
     }
   }
 
@@ -217,7 +235,7 @@ export function analyzePage(path: string, bytes: Uint8Array, profile: SourceProf
     rawReason,
     rawText: rawReason === null ? null : text,
     draft,
-    links: [...relationshipLinks, ...bodyLinks],
+    links: [...relationshipLinks, ...bodyLinks.map((link): PageLink => ({ ...link, origin: BODY_ORIGIN, fromBody: true }))],
     names,
     topics,
     titleText: names.join('\n'),
@@ -225,18 +243,58 @@ export function analyzePage(path: string, bytes: Uint8Array, profile: SourceProf
   };
 }
 
-/** A resolved link as the index keeps it: the unique targets, uncapped, in discovery order. */
-export function resolveTargets(analysis: PageAnalysis, dir: PageDirectory, path: string): LinkTarget[] {
+/** The origins to report: at most MAX_BACKLINK_VIA, sorted; `body` is kept first when the cap bites. */
+function capOrigins(origins: ReadonlySet<string>): string[] {
+  const fields = [...origins].filter((origin) => origin !== BODY_ORIGIN).sort(compareUnits);
+  const kept = origins.has(BODY_ORIGIN) ? [BODY_ORIGIN, ...fields.slice(0, MAX_BACKLINK_VIA - 1)] : fields.slice(0, MAX_BACKLINK_VIA);
+  return kept.sort(compareUnits);
+}
+
+interface Provenance {
+  readonly origins: Set<string>;
+  excerpt: string | null;
+  bodySeen: boolean;
+}
+
+export interface ResolvedLinks {
+  /** The unique targets, uncapped, in discovery order. */
+  readonly targets: LinkTarget[];
+  /** One entry per unique `page` target other than the page itself, sorted by target path. */
+  readonly origins: LinkOrigin[];
+}
+
+/**
+ * Resolve every link of an analysed page. `targets` is what the index keeps as the page's links;
+ * `origins` records, per target page, where the page links to it from and the block of its first body
+ * link (the first body link wins even when its block is empty, in which case there is no excerpt).
+ */
+export function resolveLinks(analysis: PageAnalysis, dir: PageDirectory, path: string): ResolvedLinks {
   const seen = new Set<string>();
-  const out: LinkTarget[] = [];
+  const targets: LinkTarget[] = [];
+  const provenance = new Map<string, Provenance>();
   for (const ref of analysis.links) {
     const target = resolveLink(dir, ref.link, path);
     const id = targetId(target);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push(target);
+    if (!seen.has(id)) {
+      seen.add(id);
+      targets.push(target);
+    }
+    if (target.kind !== 'page' || target.key.path === path) continue;
+    let entry = provenance.get(target.key.path);
+    if (entry === undefined) {
+      entry = { origins: new Set(), excerpt: null, bodySeen: false };
+      provenance.set(target.key.path, entry);
+    }
+    entry.origins.add(ref.origin);
+    if (ref.fromBody && !entry.bodySeen) {
+      entry.bodySeen = true;
+      entry.excerpt = ref.context === '' ? null : ref.context;
+    }
   }
-  return out;
+  const origins = [...provenance.entries()]
+    .sort((a, b) => compareUnits(a[0], b[0]))
+    .map(([target, entry]): LinkOrigin => ({ path: target, via: capOrigins(entry.origins), excerpt: entry.excerpt }));
+  return { targets, origins };
 }
 
 function describe(target: LinkTarget): string {
