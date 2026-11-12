@@ -261,6 +261,31 @@ same-workspace content memoization and zero calls to an available native
 transport. The durable failure/no-fallback cases remain unchanged. The next CI
 run must qualify this source correction.
 
+At `ef1d0395`, Foundation build and root Vitest pass. The following Wiki Node
+step reports three failed tests and a file cancellation with an unresolved
+promise; its portable fixture stage is not reached. Design inventory, typecheck
+and Node app tests pass, exposing three view-test failures. Social, Planner and
+CLI with real synthetic Planner E2E remain green. Native/package jobs stay held
+and skipped, without acceptance evidence.
+
+Wiki checkpoint `f6746f5f` is composed after a clean merge preflight. Its reader
+oracle admits exactly page, backlink and two intended chrome-status reads, with
+exact arguments; stale-search assertions use accepted heading and filter chips,
+retaining response-order and namespace checks. The keyboard fixture restores its
+fake clock before teardown and guarantees cleanup on an assertion failure. The
+exact unresolved await is not yet established; this source candidate must pass
+all keyboard cases before the cancellation can be called corrected. No timeout,
+retry, skip or assertion weakening is introduced. The separate Design repair
+continues against its three observed failures.
+
+A production-Vite source proof now bounds one invocation to six simultaneous
+compiler domains under explicit per-pool controls and a fresh six-job budget.
+The private build-only controller extends the serial TypeScript subset with this
+route. Its source hashes are verified; process/input-custody review and executable
+mechanics qualification remain pending. This is not a qualified launcher or a
+build result. Full Vitest lifetime bounds remain separate and unproved. No HQ
+compiler, build, local test service or native producer has started.
+
 Contributing conversations and roles, with native identifiers retained privately:
 
 - Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.
