@@ -86,3 +86,9 @@ Root ran Git's merge-tree calculation against foundation `8945d15`, without chan
 | Work live successor (#198) | desktop Electron `services.ts` |
 
 These results guide later owner-scoped integration. They do not authorize taking over open PRs or reverting newer contracts.
+
+## Receiving coordinator source assembly
+
+The receiving coordinator integrated the Work persistence, Social admission and Planner/Wiki checkpoints with ordinary local merge commits and no textual conflicts. Work-local construction/channel registration is added through the existing authorized/health-gated main-process handler. INT also applied the exact retained Design capability contract hunk so its Design backend owner can consume it without writing shared contracts. These are untested source changes; the Mini heavy slot and pending baseline remain held. The current open crash-handling and updater PRs were read before the main-process change; their source remains independently owned.
+
+B4 tooling, additive Wiki contract and Work queue/health source successors are running in isolated Mini worktrees. The Design backend task stopped cleanly after a local Taste merge because its export-storage path was misstated. Its successor must use the actual `modules/design/app/storage/design-export.ts` and the `modules/design/app/compose` root. Design host matrix files remain a separate writer cone.
