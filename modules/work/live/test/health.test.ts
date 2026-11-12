@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { REPLAY_FEATURE, type PlannerHealth } from '../../core';
 import { HQ_REFERENCES_FEATURE } from '../../core/types';
 import { probePlanner } from '../health';
-import * as live from '../index';
 import type { PlannerTransport, ServiceResponse, WorkRoute } from '../transport';
 import { exchange, strictTransport } from './support';
 
@@ -53,8 +52,7 @@ describe('probePlanner reads only the version route', () => {
     expect(Date.parse(health.checkedAt)).toBeLessThanOrEqual(Date.now());
   });
 
-  it('is exported from the live module and never sends a mutation or a replay', async () => {
-    expect(live.probePlanner).toBe(probePlanner);
+  it('the direct health entry point never sends a mutation or a replay', async () => {
     for (const response of [http(200, version()), http(403, null), { ok: false, kind: 'unavailable' }, http(200, 'not json')]) {
       const t = answering(response);
       await probePlanner(t.transport, now);

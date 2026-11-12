@@ -1,4 +1,5 @@
 import type { WorkPersistence } from '../durability';
+import { PlannerPortError } from '../port';
 import type { WorkLocalPersistence } from '../../live/durable';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DURABLE_SCHEMA, durableDrafts, registerWorkDurability, resetWorkDurability } from '../durability';
@@ -563,3 +564,85 @@ describe('ordinary pending writes across a restart', () => {
 type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends (<T>() => T extends Y ? 1 : 2) ? true : false;
 type Assert<T extends true> = T;
 export type PersistenceBinding = Assert<Equal<WorkPersistence, WorkLocalPersistence>>;
+
+describe('reused queued request hold across restart', () => {
+  it('stops before send if recovery holds the store while the sending marker is saving', async () => {
+    const p = memoryPersistence();
+    const h = await open(p);
+    p.set(document({ unconfirmed: [unconfirmed('collision', { op: 'create', fields: { title: 'Unknown' } })] }));
+    await h.store.load();
+    await h.goOffline();
+    await h.store.patch(h.byTitle('A').id, { notes: 'a' });
+    await h.store.patch(h.byTitle('B').id, { notes: 'b' });
+    const original = structuredClone(h.store.getState().queued);
+    await vi.waitFor(() => expect(p.last()?.queued).toEqual(original));
+    const saving = gate();
+    p.control.saveGate = saving.opened;
+    h.net.up();
+    const flushing = h.store.flushQueued();
+    await vi.waitFor(() => expect(h.store.getState().queued[0]?.state).toBe('sending'));
+    h.stub.recovery.check = async () => { throw new PlannerPortError({ kind: 'request_id_reused' }); };
+    expect(await h.store.checkUnconfirmed('collision')).toBe('stopped');
+    saving.open();
+    await flushing;
+    expect(h.net.writes()).toEqual([]);
+    expect(h.store.getState().queued).toEqual(original);
+    expect(h.store.getState().held).toMatchObject({ requestId: 'collision' });
+    await vi.waitFor(() => expect(p.last()?.queued).toEqual(original));
+    await h.store.flushQueued();
+    expect(h.net.writes()).toEqual([]);
+    h.store.dismissUnconfirmed('collision');
+    expect(h.store.getState().held).toBeNull();
+    await h.store.flushQueued();
+    expect(h.net.writes()).toHaveLength(2);
+    expect(new Set(h.net.writes().map((call) => call.args.at(-1))).size).toBe(2);
+    expect(h.stored('A').notes).toBe('a');
+    expect(h.stored('B').notes).toBe('b');
+  });
+
+  it('restores rejected A as a hold on B, without sending or allocating identities until A is discarded', async () => {
+    const p = memoryPersistence();
+    const h = await open(p);
+    await h.store.load();
+    const [a, b] = [h.byTitle('A'), h.byTitle('B')];
+    await h.goOffline();
+    await h.store.patch(a.id, { notes: 'a' });
+    await h.store.patch(b.id, { notes: 'b' });
+    h.net.failNext('patch', { kind: 'request_id_reused' });
+    await h.reconnect();
+    const heldQueue = structuredClone(h.store.getState().queued);
+    const rejectedId = heldQueue[0]!.requestId;
+    await vi.waitFor(() => expect(p.last()?.queued).toEqual(heldQueue));
+
+    // A fresh hub and store read the serialized v1 document, over the same Planner.
+    resetWorkDurability();
+    const newRequestId = vi.fn(counter('restart-', 8));
+    const restarted = createWorkStore(h.net.port, { now: h.now, persistence: p.persistence, newRequestId });
+    const before = h.net.writes().length;
+    await restarted.load();
+    await restarted.flushQueued();
+    await restarted.flushQueued();
+    h.net.down();
+    await restarted.poll();
+    h.net.up();
+    await restarted.poll();
+    await restarted.flushQueued();
+    expect(restarted.getState().held).toMatchObject({ requestId: rejectedId });
+    expect(restarted.getState().queued).toEqual(heldQueue);
+    expect(h.net.writes()).toHaveLength(before);
+    expect(newRequestId).not.toHaveBeenCalled();
+    expect(h.stored('A').notes).not.toBe('a');
+    expect(h.stored('B').notes).not.toBe('b');
+
+    await restarted.resolveQueued(heldQueue[0]!.queueId, 'discard');
+    await restarted.flushQueued();
+    expect(restarted.getState().held).toBeNull();
+    expect(restarted.getState().queued).toEqual([]);
+    expect(h.net.writes()).toHaveLength(before + 1);
+    const sent = h.net.writes().at(-1)!;
+    expect(sent.args[0]).toBe(b.id);
+    expect(sent.args.at(-1)).not.toBe(rejectedId);
+    expect(newRequestId).toHaveBeenCalledTimes(1);
+    expect(h.stored('B').notes).toBe('b');
+  });
+});

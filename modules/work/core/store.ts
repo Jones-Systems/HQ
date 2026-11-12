@@ -838,6 +838,7 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
   /** Sends the head entry of its target through the ordinary path, once its compare and swap passes. */
   async function sendHead(queueId: string): Promise<FlushStep> {
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (state.held) return 'stop';
       const entry = queuedEntry(queueId);
       if (!entry || entry.state !== 'queued') return 'skipped';
       const decision = decide(entry);
@@ -860,6 +861,13 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
       changeEntry(queueId, (q) => ({ ...q, state: 'sending', requestId, write }));
       // The `sending` state is on this device before the send, so a restart cannot lose track of it.
       if (slot) await slot.settle();
+      // A recovery answer can hold the store while the durable marker is saving.
+      // Nothing was sent: restore the original queued identity before stopping.
+      if (state.held) {
+        changeEntry(queueId, () => entry);
+        if (slot) await slot.settle();
+        return 'stop';
+      }
       let result: WriteResult | SettingsResult;
       try {
         result = await send(write, requestId);
@@ -913,6 +921,7 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
 
   /** The first queued write of each target that is waiting to be sent; a conflict or rejection holds its target. */
   function nextSendable(tried: ReadonlySet<string>): QueuedWrite | null {
+    if (state.held) return null;
     const seen = new Set<string>();
     for (const entry of state.queued) {
       const target = queueTarget(entry.write)!;
@@ -925,9 +934,10 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
 
   async function flush(refreshFirst: boolean): Promise<void> {
     if (slot) await ensureRestored();
+    if (state.held) return;
     if (refreshFirst && !(await refresh())) return;
     flushDue = false;
-    if (isOffline()) return;
+    if (isOffline() || state.held) return;
     const tried = new Set<string>();
     let sent = 0;
     for (;;) {
@@ -991,7 +1001,13 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
       }
       const restored = queued.length + unconfirmed.length;
       flushDue = queued.some((q) => q.state === 'queued');
-      set({ queued: [...queued, ...state.queued], unconfirmed: [...unconfirmed, ...state.unconfirmed], durable: slot!.status() });
+      // Rejected reused IDs already survive in the v1 document; they remain a
+      // store-wide hold until explicitly discarded, including after restart.
+      const rejected = queued.find((q) => q.state === 'rejected' && q.error?.kind === 'request_id_reused');
+      set({
+        queued: [...queued, ...state.queued], unconfirmed: [...unconfirmed, ...state.unconfirmed], durable: slot!.status(),
+        held: state.held ?? (rejected ? { requestId: rejected.requestId, reason: 'The Planner reports this request ID was already used for a different change.' } : null),
+      });
       if (restored) notify('info', `Restored ${plural(restored, 'change')} kept on this device.`);
       if (stored.dropped) notify('warning', `Ignored ${plural(stored.dropped, 'unreadable change')} kept on this device.`);
     })();

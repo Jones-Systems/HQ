@@ -544,8 +544,10 @@ describe('each answer to a queued send', () => {
     expect(noticeTexts(h).filter((text) => text.startsWith('Sent'))).toEqual(['Sent 1 queued change.']);
   });
 
-  it('request_id_reused: holds the store as today, rejects the entry and stops the flush', async () => {
-    const h = await setup();
+  it('request_id_reused: holds A and B across repeated flushes and reconnect until explicit discard', async () => {
+    let id = 0;
+    const newRequestId = vi.fn(() => `held-request-${++id}`);
+    const h = await setup({ store: { newRequestId } });
     const [a, b] = [h.byTitle('A'), h.byTitle('B')];
     await h.goOffline();
     await h.store.patch(a.id, { notes: 'a' });
@@ -557,9 +559,28 @@ describe('each answer to a queued send', () => {
     expect(h.store.getState().held).toMatchObject({ requestId: sentId });
     expect(h.store.getState().queued.map((q) => q.state)).toEqual(['rejected', 'queued']);
     expect(h.net.writes()).toHaveLength(1);
-    // Discarding the rejected write releases the hold it caused.
-    h.store.discardQueued(h.store.getState().queued[0]!.queueId);
+    const heldQueue = structuredClone(h.store.getState().queued);
+    const identities = newRequestId.mock.calls.length;
+    await h.store.flushQueued();
+    await h.store.flushQueued();
+    await h.goOffline();
+    await h.reconnect();
+    await h.store.flushQueued();
+    expect(h.store.getState().held).toMatchObject({ requestId: sentId });
+    expect(h.store.getState().queued).toEqual(heldQueue);
+    expect(h.net.writes()).toHaveLength(1);
+    expect(newRequestId).toHaveBeenCalledTimes(identities);
+    expect(h.stored('A').notes).not.toBe('a');
+    expect(h.stored('B').notes).not.toBe('b');
+    // Only discarding the rejected A releases its hold and lets B drain once.
+    await h.store.resolveQueued(heldQueue[0]!.queueId, 'discard');
+    await h.store.flushQueued();
     expect(h.store.getState().held).toBeNull();
+    expect(h.net.writes()).toHaveLength(2);
+    expect(requestIdOf(h.net.writes()[1]!)).not.toBe(sentId);
+    expect(h.net.writes()[1]!.args[0]).toBe(b.id);
+    expect(h.stored('B').notes).toBe('b');
+    expect(h.store.getState().queued).toEqual([]);
   });
 });
 
