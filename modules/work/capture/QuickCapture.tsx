@@ -6,7 +6,7 @@ import {
 } from '../core';
 import { reportWrite } from '../board/actions';
 import type { Feedback } from '../board/feedback';
-import { DRAFT_LABEL, DRAFT_SCOPE_NOTE, type DraftStore } from './drafts';
+import { DRAFT_LABEL, draftScopeNote, useDrafts, type DraftStore } from './drafts';
 import { ChipPicker } from '../detail/ChipPicker';
 import { landCapture } from './landing';
 import { suggestDate } from './suggest';
@@ -36,6 +36,8 @@ export interface QuickCaptureProps {
  */
 export function QuickCapture({ open, onClose, store, state, feedback, drafts, initialStatus = 'inbox', now }: QuickCaptureProps) {
   const id = useId();
+  const draftState = useDrafts(drafts);
+  const draftBlocked = draftState.durability === 'loading' || draftState.durability === 'blocked';
   const titleRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState('');
   const [status, setStatus] = useState<Status>(initialStatus);
@@ -69,8 +71,11 @@ export function QuickCapture({ open, onClose, store, state, feedback, drafts, in
 
   const keepAsDraft = (keepOpen: boolean) => {
     if (!title.trim()) { setError('A title is required.'); return; }
-    drafts.add(fields());
-    feedback.push({ message: `Kept “${title.trim()}” as an HQ draft`, meta: `${DRAFT_LABEL} · send it with Send drafts`, tone: 'info' });
+    if (busy) return;
+    if (draftBlocked) { setError(draftScopeNote(draftState)); return; }
+    try { drafts.add(fields()); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not keep this draft. Keep your text open.'); return; }
+    feedback.push({ message: `Kept “${title.trim()}” as an HQ draft`, meta: `${DRAFT_LABEL} · ${draftScopeNote(drafts.getState())}`, tone: 'info' });
     reset(keepOpen);
   };
 
@@ -180,7 +185,7 @@ export function QuickCapture({ open, onClose, store, state, feedback, drafts, in
         {unavailable && (
           <div className="work-banner work-banner--offline" role="alert">
             <StatusChip tone="unavailable" label="Planner unreachable" detail="nothing was saved" />
-            <span>You can keep this capture as an HQ draft. {DRAFT_SCOPE_NOTE}</span>
+            <span id={`${id}-draft-reason`}>You can keep this capture as an HQ draft. {draftScopeNote(draftState)}</span>
           </div>
         )}
 
@@ -189,7 +194,7 @@ export function QuickCapture({ open, onClose, store, state, feedback, drafts, in
           <span className="work-capture-actions">
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
             {unavailable
-              ? <Button variant="primary" type="submit">Keep as HQ draft</Button>
+              ? <Button variant="primary" type="submit" aria-disabled={draftBlocked || busy} aria-describedby={`${id}-draft-reason`}>Keep as HQ draft</Button>
               : <Button variant="primary" type="submit" busy={busy} busyLabel="Saving">Save</Button>}
           </span>
         </footer>
