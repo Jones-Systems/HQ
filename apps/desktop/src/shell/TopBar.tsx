@@ -41,7 +41,7 @@ export function TopBar(props: TopBarProps) {
   const section = settingsOpen ? 'Settings' : DOMAIN_LABELS[domain];
   const leaf = settingsOpen ? null : destinationLabel(props.destination);
   return (
-    <header className="shell-topbar">
+    <header className="shell-topbar" aria-label="HQ workspace">
       <span className="shell-brand"><span className="shell-mark">HQ</span></span>
       <ProjectSwitcher current={props.project} recent={props.recentProjects} fallback={props.fallbackProject} domain={domain}
         onSelect={props.onSelectProject} onBrowse={props.onBrowseProjects} />

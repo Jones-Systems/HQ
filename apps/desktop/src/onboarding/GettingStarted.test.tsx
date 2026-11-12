@@ -56,7 +56,9 @@ beforeEach(() => {
     config,
     wikiAdmin: { call: vi.fn(async () => ({ ok: true, value: { sources: world.wiki.map(state => ({ state })) } })) },
     social: { call: vi.fn(async () => ({ ok: world.socialReachable, status: 200 })) },
-    work: { call: vi.fn(async () => ({ ok: world.workReachable, status: 200 })) },
+    work: { call: vi.fn(async () => world.workReachable
+      ? { ok: true, status: 200, body: { state_version: 7, api: 2, features: ['requests.replay', 'hq-references-v1', 'items.batch_create'] }, replayed: false }
+      : { ok: false, kind: 'unavailable' }) },
   } });
 });
 afterEach(() => {
@@ -321,9 +323,19 @@ describe('checklist', () => {
     mount({ extra: <Recheck /> });
     await findCard();
     await waitFor(() => expect(item('Connect Work (Planner)').dataset.done).toBe('true'));
+    let finish!: () => void;
+    const pending = new Promise<void>(resolve => { finish = resolve; });
+    const call = window.hqServices!.work.call;
+    vi.spyOn(window.hqServices!.work, 'call').mockImplementationOnce(async () => {
+      await pending;
+      return call('version', {});
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Recheck Work' }));
+    await waitFor(() => expect(item('Connect Work (Planner)').textContent).toContain('Checking…'));
     expect(item('Connect Work (Planner)').dataset.done).toBe('true');
-    await waitFor(() => expect(screen.getAllByText(/^Reachable · observed /).length).toBeGreaterThan(0));
+    expect(live()).toBe('');
+    await act(async () => { finish(); });
+    await waitFor(() => expect(screen.getAllByText(/^Reachable · Planner API 2 · observed /).length).toBeGreaterThan(0));
     expect(item('Connect Work (Planner)').dataset.done).toBe('true');
     expect(live()).toBe('');
   });

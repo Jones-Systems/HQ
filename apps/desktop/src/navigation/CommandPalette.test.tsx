@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommandPalette } from './CommandPalette';
 import { OPEN_PALETTE_EVENT, SHOW_WELCOME_EVENT } from './commands';
@@ -40,7 +40,7 @@ describe('opening', () => {
   });
 
   it('opens with ⌘K on macOS and ignores Ctrl+K there', () => {
-    render(<TestShell mac />);
+    render(<TestShell mac initial={{ domain: 'work' }} />);
     ctrlK();
     expect(dialog()).toBeNull();
     fireEvent.keyDown(document.body, { key: 'k', metaKey: true });
@@ -50,9 +50,9 @@ describe('opening', () => {
 
   it('opens on the hq-open-command-palette event', () => {
     render(<TestShell initial={{ domain: 'work' }} />);
-    window.dispatchEvent(new Event(OPEN_PALETTE_EVENT));
+    act(() => { window.dispatchEvent(new Event(OPEN_PALETTE_EVENT)); });
     expect(dialog()).not.toBeNull();
-    window.dispatchEvent(new Event(OPEN_PALETTE_EVENT));
+    act(() => { window.dispatchEvent(new Event(OPEN_PALETTE_EVENT)); });
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
   });
 
@@ -63,7 +63,7 @@ describe('opening', () => {
     expect(screen.getByRole('dialog', { name: 'Design palette' })).toBeTruthy();
     // While Design’s dialog is open the shell palette stays shut, from anywhere and via the event.
     ctrlK(rail('Work'));
-    window.dispatchEvent(new Event(OPEN_PALETTE_EVENT));
+    act(() => { window.dispatchEvent(new Event(OPEN_PALETTE_EVENT)); });
     expect(dialog()).toBeNull();
   });
 
@@ -79,7 +79,7 @@ describe('opening', () => {
     document.body.insertAdjacentHTML('beforeend', '<div role="dialog" aria-modal="true" aria-label="Other"></div>');
     ctrlK();
     expect(dialog()).toBeNull();
-    window.dispatchEvent(new Event(OPEN_PALETTE_EVENT));
+    act(() => { window.dispatchEvent(new Event(OPEN_PALETTE_EVENT)); });
     expect(dialog()).toBeNull();
   });
 
@@ -320,6 +320,26 @@ describe('settings, appearance and help commands', () => {
 });
 
 describe('search across HQ', () => {
+  it('renders titles and kind labels across domains while keeping internal reference IDs out of the list', async () => {
+    const results = [
+      { domain: 'social' as const, kind: 'draft', entityId: 'd-9', title: 'Autumn blend notes' },
+      { domain: 'design' as const, kind: 'project', entityId: 'p-1', title: 'Autumn menu design' },
+      { domain: 'work' as const, kind: 'item', entityId: 'abc123', title: 'Autumn tasting card' },
+    ].map(value => ({ version: 1 as const, projectId: 'hq-local', ...value,
+      returnDestination: { domain: value.domain, destination: 'home' } }));
+    render(<CommandPalette domain="social" destinations={{ design: 'home', social: 'home', work: 'home', wiki: 'home' }}
+      settingsOpen={false} projectId="hq-local" appearance="system" mac={false}
+      references={{ find: vi.fn(async () => results), open: vi.fn() }}
+      onNavigate={vi.fn()} onOpenSettings={vi.fn()} onAppearance={vi.fn()} />);
+    ctrlK(); type('autumn');
+    const list = screen.getByRole('listbox');
+    await within(list).findByRole('option', { name: 'Autumn blend notes Social draft' });
+    expect(within(list).getByRole('option', { name: 'Autumn menu design Design project' })).toBeTruthy();
+    expect(within(list).getByRole('option', { name: 'Autumn tasting card Work card' })).toBeTruthy();
+    expect(list.textContent).not.toMatch(/p-1|abc123|d-9/u);
+    expect(combobox().getAttribute('aria-activedescendant')).not.toMatch(/p-1|abc123|d-9/u);
+  });
+
   it('searches the reference port after a pause, grouped by domain with plain kind labels and no ids', async () => {
     const find = vi.fn(async (query: string) => cards.filter(card => card.title.toLowerCase().includes(query)).map(card => ({
       version: 1 as const, domain: 'work' as const, projectId: 'hq-local', kind: 'item', entityId: card.id, title: card.title, returnDestination: { domain: 'work' as const, destination: `item/${card.id}` },
@@ -337,7 +357,7 @@ describe('search across HQ', () => {
     expect(find).toHaveBeenCalledWith('venue', { projectId: 'hq-local', limit: 20 });
     expect(screen.queryByText('Searching…')).toBeNull();
     const group = within(list).getByRole('group', { name: 'In Work' });
-    expect(within(group).getAllByRole('option').map(option => option.textContent)).toEqual(['Book the venueWork card', 'Venue floor planWork card']);
+    expect(within(group).getAllByRole('option').map(option => option.textContent)).toEqual(['Venue floor planWork card', 'Book the venueWork card']);
     expect(list.textContent).not.toMatch(/aa59fe21|cc02/u);
     expect(within(list).getByRole('option', { name: 'Search Wiki for “venue”' })).toBeTruthy();
   });
@@ -385,7 +405,9 @@ describe('search across HQ', () => {
     render(<TestShell initial={{ domain: 'work' }} providers={[workProvider(cards)]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     ctrlK(); type('order');
-    await screen.findByRole('option', { name: /Order sample packs/u });
+    const result = await screen.findByRole('option', { name: 'Order sample packs Work card' });
+    fireEvent.mouseMove(result);
+    expect(activeOption()).toBe(result);
     keys('Enter');
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Settings page' })).toBeNull());
     expect(location()).toBe('work:item/bb01');
@@ -400,11 +422,13 @@ describe('search across HQ', () => {
   });
 
   it('a failing provider contributes nothing: the palette says so and keeps offering the Wiki search', async () => {
-    const failing = workProvider([], async () => { throw new Error('planner down'); });
+    const find = vi.fn(async () => { throw new Error('planner down'); });
+    const failing = workProvider([], find);
     render(<TestShell initial={{ domain: 'social' }} providers={[failing]} />);
-    ctrlK(); type('venue');
-    await screen.findByText('No results for “venue”');
-    expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual(['Search Wiki for “venue”']);
+    ctrlK(); type('zzqx');
+    await screen.findByText('No results for “zzqx”');
+    expect(find).toHaveBeenCalledExactlyOnceWith('zzqx', { projectId: 'hq-local', limit: 20 });
+    expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual(['Search Wiki for “zzqx”']);
   });
 
   it('shows an inline note without breaking the palette when the whole search rejects', async () => {

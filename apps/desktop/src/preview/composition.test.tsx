@@ -70,7 +70,8 @@ it.each(['default', 'empty'] as const)('mounts the shared shell with %s fixtures
   await user.click(card!);
   const title = await screen.findByRole('textbox', { name: 'Card title' });
   await user.clear(title); await user.type(title, 'Preview edited item'); await user.tab();
-  expect(await screen.findByText('Preview edited item')).toBeTruthy();
+  expect(await screen.findByRole('article', { name: 'Preview edited item' })).toBeTruthy();
+  expect(title).toHaveProperty('value', 'Preview edited item');
   const rail = within(screen.getByRole('navigation', { name: 'Domains' }));
   fireEvent.click(rail.getByRole('button', { name: 'Design' }));
   expect(screen.getByRole('region', { name: 'Design unavailable' }).textContent).toContain('Open the desktop app');
