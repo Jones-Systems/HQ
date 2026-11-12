@@ -320,6 +320,21 @@ remain required. The separate P2 admission finding stays recorded/unselected.
 Task-local exact-runtime preparation and descendant-boundary research proceed;
 no HQ compiler, build, local test service or native producer has started.
 
+At `6e933a2d`, the diagnostic returns from the first ArrowDown, then stops
+before the next key call or cleanup label. The bounded region contains selection,
+active-descendant and exact focus assertions; no entered next await is identified.
+Source tracing confirms the fixture dispatches typing and keys without focusing
+the field, while the component correctly preserves existing keyboard focus.
+
+Checkpoint `3eab0ff8` supplies that missing user-focus precondition before typing.
+It checks exact-field identity before and after ArrowDown as a boolean, preserving
+the same identity requirement without formatting DOM objects on a failed check.
+It never refocuses after the key. All four keyboard fixtures and behavior oracles
+remain; the 54 temporary trace labels are removed. This is an evidenced fixture
+correction, not a proved explanation of the cancellation's internal cause. Fresh
+full Foundation CI must establish completion and reach the portable fixture stage.
+Other required families were green on the preceding head.
+
 Contributing conversations and roles, with native identifiers retained privately:
 
 - Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.
