@@ -94,18 +94,18 @@ New section errors must set `this.name` and either be added to `classifyDesignEr
 
 | name | kind |
 | --- | --- |
-| `StoreError` with `code: 'conflict'` (bridge), `StorageConflictError`, `CanvasWriteConflictError`, `FreezeConflictError`, `IntegrityError` with `reason: 'exists'` | conflict |
-| `ContentError`, `VersionMutationError`, `InvalidIdError`, `ValidationError`, `CanonicalJsonError`, `CanonicalizationError`, `NonCanonicalBytesError`, `DispatchTransitionError`, `NamespaceClassError`, `OutboxRecordError`, storage scope errors | invalid |
+| `StoreError` with `code: 'conflict'` (bridge), `StorageConflictError`, `CanvasWriteConflictError`, `FreezeConflictError`, `TasteConflictError`, `IntegrityError` with `reason: 'exists'` | conflict |
+| `ContentError`, `VersionMutationError`, `InvalidIdError`, `ValidationError`, `CanonicalJsonError`, `CanonicalizationError`, `NonCanonicalBytesError`, `DispatchTransitionError`, `NamespaceClassError`, `OutboxRecordError`, `TasteInvalidInputError`, storage scope errors | invalid |
 | `SendBlockedError`, `FreezeBlockedError` (reason `blocked`; the description is the store's own reasons), `ExportProjectionError` (reason `blocked`) | invalid |
 | `ReadOnlyContentError`, `ReadOnlyRequestError` | read-only |
-| `UnsupportedSchemaError` (reason `unsupported-schema`), `reason: 'unsupported-stored-schema'`: saved by a newer HQ | read-only |
+| `UnsupportedSchemaError` (reason `unsupported-schema`), `TasteReadOnlyError` and any error with `reason: 'unsupported-stored-schema'`: saved by a newer HQ. `TasteReadOnlyError` with reason `store-read-only` keeps the neutral wording | read-only |
 | `ExportDisabledError`, `DesignBridgeError` with `reason: 'disabled'` | disabled |
 | `TasteUnavailableError` | unavailable |
 | `SourceUnavailableError` (reason `source-offline`: the source, not storage, is unreachable) | unavailable |
-| `PreviewError` with `reason: 'too-large'` | too-large |
+| `PreviewError` with `reason: 'too-large'`, `TasteJournalFullError` (reason `journal-full`) | too-large |
 | `PreviewError` with `reason: 'aborted'`, `AbortError` during a read | cancelled |
 | `StaleDraftError`, `TasteProjectBindingError` (reason `project-binding`) | stale |
-| `reason: 'corrupt-stored-record'`, `IntegrityError` with `reason: 'mismatch'` | corrupt |
+| `reason: 'corrupt-stored-record'`, `IntegrityError` with `reason: 'mismatch'`, `TasteJournalFaultError` (reason is the journal's fail-closed reason) | corrupt |
 | `OutcomeUnknownError`, `AbortError` during a write | unknown |
 
 `DesignBridgeError` is also recognised by its name, in case a second bundle chunk carries its own copy of
@@ -150,6 +150,62 @@ routes:
 - an unknown reason;
 - a reason paired with any kind other than `unavailable`;
 - a transport rejection.
+
+## 2a. Taste (`taste.*`)
+
+Source: `taste/src/project-service.ts`, `compose/taste-failures.ts`.
+
+`createProjectTasteContribution` returns a client bound to one project. `reportTasteFailures(client, report)` wraps it
+for a view: each rejection is classified with the context below, passed to `report` as `designFeedback`, then
+rethrown unchanged. A success reports `null` for that operation, which clears its notice.
+
+| operation | client call | `write` | action text |
+| --- | --- | --- | --- |
+| `taste.load` | `snapshot` | no | `load your taste ratings` |
+| `taste.save` | `submit` (ratings, notes, counterevidence, project contribution) | yes | `save to your taste journal` |
+| `taste.export` | `exportProfile` | no | `export your taste profile` |
+
+What rejects, and how it classifies:
+
+| situation | error | kind |
+| --- | --- | --- |
+| Client bound to another project (`snapshot`, `exportProfile`) | `TasteProjectBindingError` | stale (`project-binding`) |
+| Journal unreadable, or its stored envelope is malformed | `TasteUnavailableError` | unavailable |
+| Stored schema is a later `hq.design.taste-journal/vN` (N > 1), on read and on write | `TasteReadOnlyError` | read-only (`unsupported-stored-schema`) |
+| Journal verified with a fault, on export | `TasteJournalFaultError` | corrupt (the fail-closed reason) |
+| Save lost the revision compare-and-set (host `conflict`) | `TasteConflictError` | conflict |
+| The save would take the journal past the store's size cap (2,000,000 bytes). The store says `too-large`; the desktop host says a bare `invalid`, which the client reads as full when the document it sent is over the cap | `TasteJournalFullError` | too-large (`journal-full`: "Your taste journal is full, so nothing was saved.") |
+| Host refused any other save as invalid, read-only or unavailable | `TasteInvalidInputError`, `TasteReadOnlyError` (`store-read-only`), `TasteUnavailableError` | invalid, read-only, unavailable |
+| Export options malformed, or an ID that is not a valid identifier | `TasteInvalidInputError` | invalid |
+
+Wording follows section 1. Only `TasteReadOnlyError` with reason `unsupported-stored-schema` says the journal was saved
+by a newer HQ; `store-read-only` keeps the neutral read-only sentence. A save that rejects for a reason this table does
+not list classifies as `unknown` (Check), and an unlisted read failure as `unavailable` (Retry); `taste.load`, whose
+unavailable failure carries no reason, shares the toast id `design.storage.unavailable`.
+
+A save whose outcome is unknown (transport lost, no typed refusal) does not reject. It resolves
+`{ status: 'fail-closed', reason: 'sync-failed' }`, which `TastePanel` shows as unconfirmed with an idempotent Retry of
+the same `clientEventId`. Domain refusals (`stale-supersede`, `already-rated`, `project-mismatch`, ...) also resolve
+as `rejected` results that the panel explains. Neither goes through `reportTasteFailures`. A journal that verified with a fault resolves a
+snapshot with `journal.state: 'fail-closed'` (read-only, verified prefix kept), which the panel also shows.
+
+After a typed rejection the panel stays conservative (it says the save "may or may not have reached the journal", and its
+Retry is idempotent) while the notice carries the definite outcome, for example "nothing was saved".
+
+### Subject identity
+
+Version IDs are unique only inside their project (deterministic `capture-<digest>` and imported IDs repeat), so a
+Design version is rated under a project-qualified subject. `projectVersionSubject(projectId, versionId, label)` gives
+`{ id: 'pv1:<project length>:<project><version>', kind: 'version', label, versionId }`, and a view passes that
+subject to `TastePanel`. A bound client also qualifies a plain version subject on write, and refuses a subject
+qualified for another project (`project-mismatch`).
+
+Journals saved before qualification stay readable and are never rewritten:
+
+- Project-scope entries are attributed to their project. The bound client presents their version subjects
+  qualified, so a rating made earlier is found, and can be re-rated, from the same version.
+- General-scope entries with a plain version ID name no project and cannot be attributed. They are kept and counted
+  in general taste, and match no project's version, so they never merge with another project's rating.
 
 ## 3. Project content events (`content-events.ts`)
 
