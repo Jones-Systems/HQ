@@ -8940,3 +8940,107 @@ Workbench geometry tests cover host fit, zoom conversion, `dontSetVisibleSize` o
 }
 ```
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#task.source-registry-host-landing.001" -->
+
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.recovery-outcome.001" -->
+## User flows and backend recovery amendment
+
+Complete the twelve retained frontend/backend lanes as source, then verify one assembled head on the Apple Silicon Mini. This amendment encodes the reconciled planning result and its independent review; the current checkpoint ledger, branches, commits and pending effects live in `docs/work-notes/hq-userflows-resume-20261112.md`. It amends this shared plan rather than introducing another shared plan. Its authority effect is none.
+
+Existing private Wiki, real-posting, export-enablement, generation-source, component-runner, live-send, native qualification, signing, installation, deployment, held Planner/browser PR and foundation-to-main gates remain. Original PR branches stay untouched. Successors use new isolated branches, merge retained refs and preserve ancestry; they never rebase them. The integration-owner binding is a merge gate, not a source implementation gate.
+
+Product defaults remain Plan week at `board/week` in the existing navigation order; Social and Work links remain workspace-scoped; Wiki revision history remains excluded. Flow-assessment findings are original design input, not newly selected review repairs.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.recovery-outcome.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#arch.recovery-writers.001" -->
+## Recovery writers and shared grants
+
+Each capsule has one isolated worktree and one Git owner. Module builders report needed desktop hunks to the single shell writer; they never restore shared primitives by copying files from retained lanes.
+
+| Writer | Exclusive source ownership |
+| --- | --- |
+| SHL | `packages/hq-ui/**`; desktop renderer `shell`, `navigation`, `onboarding`, `services`, `connections`; `PresentationShell.tsx`, `modules.tsx`, `references*.ts`, `reference-providers.ts`, `state.ts`, `styles.css`; `preview/composition*.tsx`; `social-work.integration.test.tsx`; `settings/DataSources.tsx` |
+| WSP | Desktop Electron `services*`, `work-local*`, `preload*`, `r3-preload.test.ts`; `modules/work/live/**`, `modules/work/core/port.ts`, `services/README.md` |
+| INT | `packages/contracts/**`, Electron `main.ts`, root manifests/lockfile, workflows, acceptance runner registration and acceptance README, except the SHL inherited dependency hunk below |
+| External owners | Main-process crash handling, updater packaging registry, and the existing storage/evidence stack retain their own custody |
+
+Exact grants and order:
+
+- INT reconciles the existing Work-local contract hunk first, then the Design capabilities route and capability record types. WSP's already-published contracts hunk is consumed once, not duplicated.
+- INT adds Work-local channel construction/registration in Electron `main.ts`, reconciling the current crash-handling successor whichever lands second.
+- SHL alone carries the inherited `react-dom` hunk in the UI package manifest and root lockfile, without unrelated dependency changes.
+- SHL applies the Social example-seed project hunk, then Work `registerWorkDurability` before `setWorkSessionPort`, after the respective module checkpoints.
+- SET-V owns `ServiceSettings.tsx` and `App.settings.test.tsx` plus its Settings cone. SHL applies Planner-health wording to `DataSources.tsx` and `services/data-source-status.ts` after SET-V.
+- Design shared composition files `workspace`, `fake-workspace`, `bridged-workspace` and `closure-views` have sequential writers DSN-B → DSN-S → DSN-C. `TasteView.tsx` takes typed notices before restyling; DSN-C owns the Annotations version picker over existing `session.choices`.
+- WIK-VAL may edit `modules/wiki/core/scripts/**`, its core README, matching tests, the package test glob and core tsconfig include. The older `modules/wiki/scripts` spelling is invalid. No core runtime edit is needed: the landed Git source already exposes injectable `spawn` and `exec` seams.
+- INT owns workflow hooks for local-checks, dev-preview discovery and newly reported Design inventory rows. Module writers supply the requested exact hunk and owning inventory row.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#arch.recovery-writers.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#task.recovery-capsules.001" -->
+## Recovery source capsules
+
+Each finish line is a pushed source checkpoint, distinct from tested behavior or source delivery. Reuse refs are recorded in the Work Note. Capsule owners read the original lane handoff and merge retained source into a successor rather than replacing current contracts.
+
+| Capsule | Cone and source finish line |
+| --- | --- |
+| SHL | Shared shell cone: retained status/scope spine, kit using `navigateWithTransition`, mounted palette, Back pill, onboarding and shortcuts; settle Alt+Left ownership; example-mode reference providers; publish a checkpoint consumed by module capsules. |
+| WSP | Work persistence spine: reconcile Electron service encoding; retain the live persistence port; hand the contracts and main construction/channel hunks to INT. Renderer wiring and offline queue are later capsules. |
+| SOC-R | Social listener backlog and two affected test files: retain 20 clients, eight accepts and twelve refusals, explicit worker-exception propagation and no retries; verification establishes before/after behavior. |
+| PLN-W | Planner validation/contract vectors/reference tests, CLI schema/reference tests/docs and Work contract pins: accept Wiki target and return destinations without restoring old composite validation or modifying held projection/captures. Verify the existing generator-derived copies and digests under the serial verifier. |
+| WIK-VAL | Actual core validation scripts and granted discovery/configuration hunks: count both Git execution seams, derive counts from Git listing/batch starts, preserve the closed report schema and landed batch allowlist; synthetic corpora only. |
+| WIK-CTR | Wiki contract, nine retained runtime files and retained core/app tests: additive `via`, `excerpt`, `pageTitles`; truthful README. Preserve the index-rules version bump and resulting one-time stored snapshot rebuild. |
+| B4-T | `tools/ci/local-checks*`, `tools/dev-preview/**`, `docs/dev-preview.md`: complete the local mirror and add a Darwin preview route reusing the existing native runner route. Request a helper extraction from INT only if needed; no acceptance-stack edits by this writer. |
+| DSN-B | Design Taste failures/capabilities/export-port source, non-UI Taste backend, desktop export storage and Design host: typed failures and scope, labelled fake capabilities answer, export status/error mapping and port, picker rights basis. Export enablement stays excluded. Author contract hunks for INT. |
+| DSN-M | Two Design host E2E files and desktop test support: adapt all 42 retained cases to the landed typed-failure contract and add the typechecked test configuration. |
+| DSN-S | Design References, Imports, Flows, Discovery, Components, composition sources and Taste Sources: integrate six retained views, fix the in-lane Flows typecheck, Imports rights choice and `ImportsState.cause`, Taste subjects through `projectVersionSubject`, labelled example-only Discovery adapter and its guard test. Runs after DSN-B for shared composition. |
+| DSN-C | Design Projects, Canvas, Compare, Requests and UI, `active-project.ts` and core views: preserve `contentEvents`, `retry`, `importsFor`, restore `activeProject`, make Try again call `workspace.retry`, add Annotations choice picker and fix the two retained fake-workspace defects. Runs after DSN-S for shared composition. |
+| SOC-V | `modules/social/**`: integrate retained screens with `portErrorNotice`; report four desktop integration hunks to SHL. |
+| SOC-X | Social service and additive gated core/live methods: the merged Social spec's planned brand-to-project, sources registry and publishing simulator extensions, off by default. This is planned extension source, not repair of unselected review findings. |
+| SET-V | Desktop Settings/appearance except `DataSources.tsx`, plus its two granted integration files: compose the redesign on the shell checkpoint, preserving existing Updates behavior and tests. |
+| WIK-V | Wiki UI and app `domain.ts`, `index.ts`, `wiki-domain.css`: resolve retained conflicts preserving the current gate and export, finish remaining Wiki screens and behavior-test source. |
+| WRK-Q | Work store/durability/index and queue tests, live adapter/health/wire, desktop Planner fixture and two integration tests: finish queue/health/E2E source, prove the structural persistence-port match, receive focused correctness review before integration and provide SHL's wiring hunk. |
+| WRK-V1 | Work views/board/nav/capture/detail/theme/motion: integrate frame, board and list/detail while keeping pinned shell-test names. |
+| WRK-V2 | Remaining Work view files: finish calendar, Plan week and review, with queue-state wording from WRK-Q. |
+| VAL-S | New Social/Wiki/references/services acceptance scenarios and synthetic results/Wiki/Social fixtures with tests: implement `social-save-and-unknown`, `reference-round-trips`, `wiki-committed-corpus`, `unavailable-service-ui`; request runner registration from INT. Other held/gap rows keep their dispositions. |
+
+Before merging retained source, confirm the exact base with ancestry and calculate textual conflicts. Expected sets: Design core's four composition files; Wiki/Settings desktop modules, Wiki domain and UI index; Work persistence's Electron services. Additional conflicts stop that affected merge for reconciliation. Module capsules consume the published shell checkpoint and check shared-file diffs against it. Design composition writers are serial in the stated order; WRK-Q consumes WSP. B4-T and DSN-B, then WIK-CTR, are independently eligible while shell is prepared. SOC-V, SET-V, WIK-V and WRK-V1 consume SHL. WRK-V1 and WRK-V2 never concurrently write the same module paths.
+
+Re-read external main/crash, updater and storage/evidence PR heads before touching overlapping contracts or acceptance source. The evidence stack overlaps the acceptance README and host-gallery/preview fixtures, not the new scenario files, results fixture or runner. Every new Design test file needs a single inventory owner. DSN-B checks the possible Taste duplicate-write finding by reading the existing panel and records its disposition without automatically repairing it.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#task.recovery-capsules.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#arch.recovery-execution.001" -->
+## Recovery execution and verification
+
+Source work proceeds before heavy verification. Each fresh Mini admission permits at most two new source agents, then a new sample for another batch; no starts on a hold. No laptop builds. The originating coordinator retains reconciliation of its unknown baseline launch under its exact request identity; a different parent does not replay or replace it. The updater campaign retains the heavy slot until its exact closure and explicit release. Slot order and baseline reconciliation both precede verification.
+
+One serial verifier and one test process total run on the Mini. Queue: foundation baseline → Social repair → Planner/Wiki → Work spine with INT wiring → shell → dependency-ordered modules → assembled head. Prepare exact CI Node/Python versions task-locally; report differences rather than silently substituting host versions. Use the qualified participating compiler controller/lock, fresh long/final-short CPU samples, storage floor, bounded descendants and proved process/EOF closure. An updater-specific controller is not generic build coverage.
+
+Darwin execution already exists in `tests/acceptance/run.mjs`; the dev-preview prerequisite wrapper needs its Darwin port. Reuse the sandboxed runner; never disable the Electron sandbox. Synthetic checks do not prove private corpus or live-provider qualification. Keep export port source without enablement, publishing simulation behind its disabled flag, Discovery example-only, and Wiki validation without private runs.
+
+Hidden impacts remain explicit: the Wiki index rebuild; already-enabled Imports making repair/diagnostic routes reachable; both Design import scans for new UI package imports; packaging-registry drift after host/main edits; validation test cost and Work E2E Planner starts under existing job timeouts. Decide the Wiki worker-host follow-on from measured main-thread stalls on the first Mini build rather than inventing an unmeasured architecture.
+
+Merge waits for the accepted integration-owner binding, required current-head CI, freshness, review/thread readiness and direct readback. Foundation-to-main and operational/activation holds remain. No source checkpoint, passing fixture or native checkpoint closes the broader outcome.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#arch.recovery-execution.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ac.recovery-assembled-head.001" -->
+## Recovery acceptance at one assembled head
+
+Bind evidence to the assembled source head and its fresh Mini build:
+
+- Real local Planner Wiki reference save, open and return.
+- Offline queue persistence/restart and unknown outcome without duplicate intent.
+- Social save, failure and unknown states against the real local service.
+- Committed synthetic Wiki indexing, recovery, backlinks and reference status.
+- First-run and reopened onboarding, remembered domain destinations and readable references with a return route.
+- Keyboard ownership, reduced motion, light/dark/system appearance and narrow-window layouts.
+- Toasts alongside the native Design preview, and Work/Social comparisons with established mockups.
+- Complete required fast CI, Design inventory ownership, explicit skips/gaps/holds, and execution time separated from queue time.
+
+Browser captures supplement native preload/persistence/restart/overlay evidence. Private or held scenarios remain unqualified until their exact gates are satisfied.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ac.recovery-assembled-head.001" -->
+
+<!-- codex-section:begin id="spec.hq-integration-parallel-execution#ctx.recovery-findings.001" -->
+## Retained review dispositions
+
+The separately selected Social burst repair is in scope, retaining its original P3 severity and unchanged admission assertions. Original flow-assessment findings remain design inputs. Other recorded review findings retain their severity and are not automatic repair assignments: Social non-finite-number handling and other service P2/P3 findings; Taste's possible duplicate write and P3/P4 findings; Imports and matrix findings; tooling/storage follow-ups and load-sensitive assertions; Wiki assessment, reference-provider, excerpt-window, contract and validation-tool findings; Work baseline/older-state/quit-drain/hash findings; shell tone and project-link comparisons. Existing landed findings remain landed; no new repair is inferred from this summary. The original lane handoffs/reviews remain the detailed finding sources. Private assessment aggregates stay unpublished.
+<!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.recovery-findings.001" -->
