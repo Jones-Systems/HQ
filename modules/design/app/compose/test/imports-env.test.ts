@@ -269,6 +269,8 @@ describe('durable Imports env over the bridge', () => {
     assert.equal(env.capabilities.pickSource, undefined);
     const controller = createImportsController(env.deps, importsProject(project.id), env.capabilities);
     await controller.refresh();
+    assert.equal(classifyDesignError(controller.getState().cause, IMPORTS_CONTEXTS.read).operation, 'imports.read');
+    assert.equal(double.calls.length, 0, 'unregistered documents never acquire transport authority');
     assert.equal(controller.getState().status, 'error');
     // The typed failure's description joins its message, so the panel shows what was kept.
     assert.equal(controller.getState().message, 'Imports are not available in this build. Nothing was changed.');
@@ -344,6 +346,13 @@ describe('typed Imports failures reach the view', () => {
     f.double.failWith((route) => { if (route === 'doc.list') throw lost; });
     await f.controller.refresh();
     const state = f.controller.getState();
+    assert.equal(f.double.count('doc.list'), 2, 'one manifest read and one conflict read, with no retry');
+    assert.equal(f.double.count('doc.get'), 0, 'failed listings never reach document reads');
+    assert.equal(f.commitCount(), 0);
+    assert.equal(f.double.count('doc.put'), 0);
+    assert.equal(f.double.documents.size, 0);
+    assert.deepEqual(f.notified, []);
+    assert.equal(classifyDesignError(state.cause, IMPORTS_CONTEXTS.read).kind, 'unavailable');
     assert.equal(state.status, 'error');
     // Reads are typed too: a lost read is unavailable (nothing changed), with a Retry.
     const feedback = feedbackOf(state.cause);
