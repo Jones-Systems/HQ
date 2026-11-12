@@ -1,8 +1,9 @@
 import {
   PlannerPortError, REPLAY_FEATURE,
   type Anchor, type ApplyResult, type CheckResult, type HistoryEntry, type PlannerError, type PlannerPort,
-  type PlannerRecovery, type PlannerRecoveryError, type SettingsWriteResult, type Snapshot, type WriteResult,
+  type PlannerRecovery, type PlannerRecoveryError, type RecoveryIntent, type SettingsWriteResult, type Snapshot, type WriteResult,
 } from '../core/port';
+import { parseIntent } from './intent';
 import {
   ENTITY_ID_PATTERN, isServiceResponse, REQUEST_ID_PATTERN,
   type PlannerTransport, type ServiceResponse, type WorkMutationCall, type WorkParams, type WorkRoute, type WorkServiceParams,
@@ -23,6 +24,10 @@ import {
 // (lookup), and then an explicit apply (resend), allowed only once after this adapter's own check proved it
 // `not_applied`. Without `requests.replay`, a recorded intent or a baseline, nothing is sent and the outcome stays
 // indeterminate. The service still rechecks every replay against its own record.
+//
+// A durable queue keeps an unresolved intent across a restart by exporting it as plain JSON and adopting it into a new
+// session. Adoption registers it as unresolved with no Apply authorized and sends nothing, so it is resolved exactly as
+// an intent recorded by this session: only through an explicit Check, then an explicit Apply.
 
 /** Unresolved intents the ledger holds. Past it, a new write is refused before it is sent; none is forgotten. */
 export const UNRESOLVED_LIMIT = 200;
@@ -311,6 +316,27 @@ export function createPlannerLive(transport: PlannerTransport): PlannerLive {
     release(requestId) {
       const entry = ledger.get(requestId);
       if (entry) settle(entry);
+    },
+    /** An unresolved intent as plain JSON, a copy the caller may keep; null when unknown, settled or retired. */
+    exportIntent(requestId): RecoveryIntent | null {
+      const entry = ledger.get(requestId);
+      if (!entry || entry.state !== 'unresolved') return null;
+      return { v: 1, requestId: entry.call.params.requestId, sentAfterVersion: entry.sentAfterVersion, call: JSON.parse(JSON.stringify(entry.call)) };
+    },
+    /**
+     * Registers an exported intent as unresolved, with no Apply authorized, and sends nothing; it never moves the
+     * observed version, so later first sends keep their own baseline. The same unresolved intent again is a no-op that
+     * returns true. False for an invalid value, an ID held by a different intent or a settled or retired one, and at
+     * `UNRESOLVED_LIMIT`.
+     */
+    adoptIntent(value): boolean {
+      const intent = parseIntent(value);
+      if (!intent || retired.has(intent.requestId)) return false;
+      const existing = ledger.get(intent.requestId);
+      if (existing) return existing.state === 'unresolved' && existing.key === intent.key && existing.sentAfterVersion === intent.sentAfterVersion;
+      if ([...ledger.values()].filter((e) => e.state === 'unresolved').length >= UNRESOLVED_LIMIT) return false;
+      ledger.set(intent.requestId, { call: deepFreeze(intent.call), key: intent.key, sentAfterVersion: intent.sentAfterVersion, state: 'unresolved', applyAuthorized: false });
+      return true;
     },
   };
 
