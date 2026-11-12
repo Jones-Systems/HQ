@@ -267,7 +267,7 @@ export function ProjectDetail({ controller, snapshot, actions = {}, focusTitle =
   }
   if (!content) {
     return h('section', { ref: root, className: 'hqp-project', 'data-project': active.projectId }, header,
-      h(ui.InlineNotice, { tone: active.status === 'error' ? 'danger' : 'info', title: active.status === 'error' ? "Couldn't open this project" : 'Opened read-only', live: 'polite' }, active.reason));
+      h(ui.InlineNotice, { tone: active.status === 'error' ? 'danger' : 'info', title: active.status === 'error' ? "Couldn't open this project" : 'Opened read-only', live: 'polite' }, 'reason' in active ? active.reason : undefined));
   }
 
   const controls = detailFilterControls(content, memory.filters);
