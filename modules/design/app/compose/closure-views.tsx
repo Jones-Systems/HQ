@@ -1,13 +1,14 @@
-import { Button, StatusChip, useToast } from '@hq/ui';
-import { use, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import { use, useMemo, type ComponentType, type ReactNode } from 'react';
 import type { DesignSectionProps } from '../../ui/contract.ts';
 import type { RequestsSectionProps } from '../sections/requests/View.tsx';
 import type { RunsSectionProps } from '../sections/runs/View.tsx';
 import type { ReferencesSection } from '../sections/references/View.tsx';
 import type { RequestSession } from '../../requests/src/session.ts';
-import type { ProjectContent } from '../../projects/src/content.ts';
 import type { RequestsEnvironment } from '../sections/requests/env.ts';
-import { brandId } from '../../requests/src/validate.ts';
+import { ValidationError, brandId } from '../../requests/src/validate.ts';
+import { NO_SOURCE_REVISION_REASON } from '../../requests/ui/model.ts';
+import type { SourceVersionChoice } from '../../requests/ui/SourceVersionPicker.tsx';
+import { RequestsWorkbench, type RequestContext, type WorkbenchPorts } from '../sections/requests/Workbench.tsx';
 import { useDesignProject, useDesignWorkspace } from './workspace-context.tsx';
 import { ProjectScope } from './views/ProjectScope.tsx';
 import { useProjectContentRevision } from './content-revision.ts';
@@ -16,70 +17,43 @@ import { withSectionErrorBoundary } from './views/SectionErrorBoundary.tsx';
 import { designModule as importsModule } from '../../imports/design-module.ts';
 import { sendToTaste, useHandoffQueue } from './sources/taste-handoff.ts';
 
-function RequestPicker({ props, create, children }: {
+/** The project's requests and versions, wired to the Requests and Runs page. Reading is local; only Create writes. */
+function RequestPicker({ props, mode, children }: {
   readonly props: DesignSectionProps;
-  readonly create: boolean;
-  readonly children: (session: RequestSession) => ReactNode;
+  readonly mode: 'requests' | 'runs';
+  readonly children: (session: RequestSession, context: RequestContext) => ReactNode;
 }) {
   const workspace = useDesignWorkspace();
   const project = useDesignProject(props.context);
   const env = workspace.closure.requests;
   const revision = useProjectContentRevision(workspace, project.id);
-  const { content } = use<{ readonly content: ProjectContent }>(workspace.contentFor(project, { revision }));
-  const [sessions, setSessions] = useState<readonly RequestSession[]>([]);
-  const [selected, setSelected] = useState<RequestSession | null>(null);
-  const [versionId, setVersionId] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    let active = true;
-    void projectRequests(env, project.id).then((found) => {
-      if (active) { setSessions(found); setSelected(found.find((session) => session.state.requestId === props.state.read()) ?? null); }
-    }).catch(() => { if (active) setError('Requests unavailable. Stored data was not replaced.'); });
-    return () => { active = false; };
-  }, [env, project.id, props.state]);
-  const choose = (session: RequestSession | null) => {
-    setSelected(session);
-    if (session) props.state.write(session.state.requestId);
-  };
-  const add = async () => {
-    const version = content.versions.find((item) => item.id === versionId);
-    if (!version?.capture.sourceRevision) return;
-    setBusy(true); setError(null);
-    try {
-      const session = await env.create({ title: 'New request', sources: [{ projectId: brandId(project.id),
+  const { state, navigate } = props;
+  const ports = useMemo<WorkbenchPorts>(() => ({
+    loadRequests: () => projectRequests(env, project.id),
+    // Versions are read again each time, so one added in Projects appears without a reload.
+    async loadVersions() {
+      const content = await workspace.readContent(project);
+      const titles = new Map<string, string>(content.views.map((view) => [view.id, view.title]));
+      return content.versions.map((version): SourceVersionChoice => ({
+        id: version.id, viewId: version.viewId, viewTitle: titles.get(version.viewId) ?? 'Untitled view', label: version.label,
+        ordinal: version.ordinal, detail: `${version.capture.route} · ${version.capture.viewport.w}×${version.capture.viewport.h}`,
+        unavailableReason: version.capture.sourceRevision ? null : NO_SOURCE_REVISION_REASON,
+      }));
+    },
+    async createRequest(versionId) {
+      const content = await workspace.readContent(project);
+      const version = content.versions.find((item) => item.id === versionId);
+      if (!version?.capture.sourceRevision) throw new ValidationError('source', 'This version has no source revision.');
+      return env.create({ title: 'New request', sources: [{ projectId: brandId(project.id),
         viewId: brandId(version.viewId), versionId: brandId(version.id), sourceRevision: version.capture.sourceRevision }] });
-      setSessions((current) => [...current, session]); choose(session);
-    } catch { setError('Request creation failed or its outcome is unknown. Reopen to reconcile before trying again.'); }
-    finally { setBusy(false); }
-  };
-  return <div className="hqd-request-page">
-    <header className="hqd-page-heading">
-      <div><h1>{create ? 'Requests' : 'Runs'}</h1>
-        <p>{create ? 'Shape a request from a saved project version.' : 'Review frozen requests and their returned work.'}</p></div>
-      <StatusChip tone="neutral" label="On this device" />
-    </header>
-    <div className="hqd-request-picker">
-    {error && <p role="alert">{error}</p>}
-    <label className="hqd-field">Request <select value={selected?.state.requestId ?? ''} disabled={busy} onChange={(event) => choose(sessions.find((session) => session.state.requestId === event.target.value) ?? null)}>
-      <option value="">Choose a request</option>
-      {sessions.map((session) => <option key={session.state.requestId} value={session.state.requestId}>{session.state.draft?.title || session.state.requestId}</option>)}
-    </select></label>
-    {create && <div className="hqd-request-create">
-      <label className="hqd-field">Source version <select value={versionId} onChange={(event) => setVersionId(event.target.value)}>
-        <option value="">Choose a saved source version</option>
-        {content.versions.filter((version) => version.capture.sourceRevision).map((version) => <option key={version.id} value={version.id}>{version.label}</option>)}
-      </select></label>
-      <Button variant="primary" busy={busy} busyLabel="Creating request" disabled={busy || error !== null || !versionId} onClick={() => { void add(); }}>Create request</Button>
-      {content.versions.every((version) => !version.capture.sourceRevision) && <p>Save a project version with a source revision before creating a request.</p>}
-    </div>}
-    </div>
-    {selected ? children(selected) : <div className="hqd-empty-state">
-      <h2>{sessions.length === 0 ? 'No requests yet' : 'Choose a request'}</h2>
-      <p>{sessions.length === 0 ? (create ? 'Choose a source version above to start your first request.' : 'Create and freeze a request in Requests to see it here.') : 'Choose a request to continue.'}</p>
-      <p className="hqd-safety-note">Navigation sends nothing.</p>
-    </div>}
-  </div>;
+    },
+    readSelected: () => state.read(),
+    writeSelected: (requestId) => state.write(requestId),
+    openProjects: () => navigate({ nav: 'projects', section: 'projects' }),
+    openRequests: () => navigate({ nav: 'requests', section: 'requests' }),
+    openRuns: () => navigate({ nav: 'runs', section: 'connector' }),
+  }), [env, project, workspace, state, navigate]);
+  return <RequestsWorkbench mode={mode} ports={ports} compareSlot={env.compareSlot}>{children}</RequestsWorkbench>;
 }
 
 async function projectRequests(env: RequestsEnvironment, projectId: string) {
@@ -97,7 +71,8 @@ export function mountRequests(Section: ComponentType<RequestsSectionProps>): Com
     const workspace = useDesignWorkspace();
     const project = useDesignProject(props.context);
     return <SectionFrame lane="Requests" entry="app/sections/requests/View.tsx" tags={[workspace.storageTag]} scope={<ProjectScope project={project} navigate={props.navigate} />}>
-      <RequestPicker key={project.id} props={props} create>{(session) => <Section env={workspace.closure.requests} session={session}
+      <RequestPicker key={project.id} props={props} mode="requests">{(session, context) => <Section env={workspace.closure.requests} session={session}
+        example={!workspace.bridged} focusTitle={context.focusTitle} sourceLabel={context.sourceLabel} onOpenReturned={context.openReturned}
         navigation={{ navigate: (intent) => { if (intent.type === 'open-runs') props.navigate({ nav: 'runs', section: 'connector' }); } }} />}</RequestPicker>
     </SectionFrame>;
   });
@@ -109,7 +84,8 @@ export function mountRuns(Section: ComponentType<RunsSectionProps>): ComponentTy
     const env = use(workspace.closure.runs());
     const project = useDesignProject(props.context);
     return <SectionFrame lane="Runs" entry="app/sections/runs/View.tsx" tags={[workspace.storageTag]} scope={<ProjectScope project={project} navigate={props.navigate} />}>
-      <RequestPicker key={project.id} props={props} create={false}>{(session) => <Section env={env} session={session} now={workspace.closure.requests.clock.now()} />}</RequestPicker>
+      <RequestPicker key={project.id} props={props} mode="runs">{(session) => <Section env={env} session={session} now={workspace.closure.requests.clock.now()}
+        onOpenRequests={() => props.navigate({ nav: 'requests', section: 'requests' })} />}</RequestPicker>
     </SectionFrame>;
   });
 }

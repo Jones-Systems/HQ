@@ -50,22 +50,5 @@
 .hqd-compose-note ul { margin: 4px 0 0; padding-left: 18px; }
 .hqd-compose-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 8px; font-size: 12px; }
 
-.hqd-request-page { max-width: 1040px; margin: 0 auto; display: grid; gap: 24px; }
-.hqd-page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.hqd-chrome .hqd-page-heading h1 { margin: 0; font: var(--hq-type-display, 600 24px/30px system-ui); letter-spacing: -.025em; }
-.hqd-chrome .hqd-page-heading p { margin: 6px 0 0; color: var(--hqd-muted); font-size: 13px; line-height: 1.5; }
-.hqd-request-picker { display: grid; gap: 16px; padding: 20px; border: 1px solid var(--hqd-line); border-radius: 12px; background: var(--hqd-surface); }
-.hqd-field { display: grid; gap: 7px; min-width: 0; color: var(--hqd-muted); font-size: 12px; font-weight: 500; }
-.hqd-request-picker .hqd-field select { width: 100%; min-height: 36px; }
-.hqd-request-create { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
-.hqd-request-create .hqd-field { flex: 1 1 260px; }
-.hqd-request-create p { flex-basis: 100%; margin: 0; color: var(--hqd-muted); font-size: 12px; }
-.hqd-empty-state { display: grid; justify-items: center; gap: 8px; padding: 48px 24px; border: 1px dashed var(--hqd-line); border-radius: 12px; text-align: center; }
-.hqd-empty-state h2 { margin: 0; font-size: 16px; font-weight: 600; }
-.hqd-chrome .hqd-empty-state p { margin: 0; color: var(--hqd-muted); max-width: 440px; line-height: 1.6; }
-.hqd-chrome .hqd-safety-note { font-size: 12px; }
-.hqd-request-section { display: grid; gap: 16px; }
-.hqd-section-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 8px; background: var(--hq-info-soft, var(--hqd-selected)); }
-.hqd-section-notice p { flex: 1 1 240px; margin: 0; font-size: 12px; line-height: 1.6; }
-.hqd-return-provenance { margin: 0; color: var(--hqd-muted); font-size: 12px; line-height: 1.6; }
-.hqd-packet-list { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+/* The Requests and Runs page (`.hqd-request-*`, `.hqd-page-heading`, `.hqd-empty-state`, `.hqd-section-notice` and the
+ * return chips) is styled by sections/requests/request-page.css, which loads with those sections. */
