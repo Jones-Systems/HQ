@@ -40,12 +40,12 @@ it('binds the dialog to the parent window with the rights wording, and reads the
   const [window, options] = showOpenDialog.mock.calls[0]!;
   expect(window).toBe(parent);
   expect(options).toEqual({
-    title: 'Choose design files you made', buttonLabel: 'Import as my work', message: 'Only choose files you made. HQ records you as their owner.',
+    title: 'Choose design files', buttonLabel: 'Import selected files', message: 'Choose files covered by the rights statement you selected in HQ.',
     properties: ['openFile', 'multiSelections'], filters: [{ name: 'PNG images', extensions: ['png'] }],
   });
-  expect([IMPORT_DIALOG_TITLE, IMPORT_DIALOG_BUTTON]).toEqual(['Choose design files you made', 'Import as my work']);
-  // The wording matches the one basis the renderer records, `owned`: it must not invite licensed or permitted files.
-  expect(IMPORT_DIALOG_MESSAGE).toBe('Only choose files you made. HQ records you as their owner.');
+  expect([IMPORT_DIALOG_TITLE, IMPORT_DIALOG_BUTTON]).toEqual(['Choose design files', 'Import selected files']);
+  // The native dialog repeats the explicit UI statement without inventing an ownership claim.
+  expect(IMPORT_DIALOG_MESSAGE).toBe('Choose files covered by the rights statement you selected in HQ.');
   expect(IMPORT_DIALOG_MESSAGE).not.toMatch(/right to use|licen[cs]e|permission|public domain/iu);
   // Nothing stays attached to the window once the pick is over.
   expect([parent.listenerCount('close'), parent.listenerCount('closed')]).toEqual([0, 0]);

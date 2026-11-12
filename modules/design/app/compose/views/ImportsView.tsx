@@ -36,13 +36,11 @@ export function ImportsView({ context, navigate }: DesignSectionProps) {
   const { deps, capabilities: baseCapabilities } = workspace.importsFor(context, syntheticSource);
   const [rights, setRights] = useState<RightsDraft>({ basis: '', holder: '', license: '', attribution: '' });
   const selectedRights = useMemo(() => selectedImportRights(rights), [rights]);
-  // The retained native dialog still claims owned files only. The desktop owner must update it before releasing other bases.
-  const dialogCompatible = !workspace.bridged || selectedRights?.basis === 'owned';
   const capabilities = useMemo(() => ({
     ...baseCapabilities,
-    pickSource: baseCapabilities.pickSource && selectedRights && dialogCompatible
+    pickSource: baseCapabilities.pickSource && selectedRights
       ? withImportRights(baseCapabilities.pickSource, selectedRights) : undefined,
-  }), [baseCapabilities, selectedRights, dialogCompatible]);
+  }), [baseCapabilities, selectedRights]);
   const changeRights = (patch: Partial<RightsDraft>) => setRights((current) => ({ ...current, ...patch }));
   // Where References lives follows its descriptor, so a placement change needs no edit here.
   const crossLink = useMemo<ImportsCrossLink>(() => ({
@@ -59,11 +57,10 @@ export function ImportsView({ context, navigate }: DesignSectionProps) {
       <label>Rights basis<select value={rights.basis} onChange={(event) => changeRights({ basis: event.target.value as RightsDraft['basis'] })}>
         <option value="">Choose a rights basis</option>
         <option value="owned">Owned</option>
-        <option value="licensed" disabled={workspace.bridged}>Licensed</option>
-        <option value="permission" disabled={workspace.bridged}>Permission</option>
-        <option value="public-domain" disabled={workspace.bridged}>Public domain</option>
+        <option value="licensed">Licensed</option>
+        <option value="permission">Permission</option>
+        <option value="public-domain">Public domain</option>
       </select></label>
-      {workspace.bridged && <p role="status">Licensed, permission and public-domain selection are not available with this file picker yet.</p>}
       <label>Rights holder<input maxLength={300} value={rights.holder} onChange={(event) => changeRights({ holder: event.target.value })} /></label>
       {rights.basis === 'licensed' && <label>License (required)<input maxLength={300} value={rights.license} onChange={(event) => changeRights({ license: event.target.value })} /></label>}
       <label>Attribution (optional)<input maxLength={300} value={rights.attribution} onChange={(event) => changeRights({ attribution: event.target.value })} /></label>

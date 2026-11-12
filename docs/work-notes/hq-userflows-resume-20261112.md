@@ -30,19 +30,31 @@ Coordination transfer is accepted. The receiving coordinator owns this clean lin
 
 The Fable initial plan, independent Astra concept review and a verified continuation in the original Fable session are complete. The reconciled plan accepts the review corrections: restore B4 tooling, B5 validation and missing native-journey source; preserve all Design ports; assign one writer per shared file; reuse the existing Darwin runner; allow one serial test process total on the Mini. The accepted plan is encoded in the existing progressive Engineering Spec's recovery amendment. Source checkpoints below supersede historical active/done labels in the planning result.
 
-Both existing builder turns ended before the pending scope corrections could be delivered. No new child follow-up was started. Successors must receive the corrected Wiki tool location and the expanded shell integration grants explicitly.
+The original builder turns ended before their scope corrections. New successors received explicit corrected cones; the original unpublished Wiki validation commit remains preserved and outside successor ancestry.
 
 ### Source checkpoints
 
-| Capsule | Branch | Pushed head | Evidence and remaining work |
-| --- | --- | --- | --- |
-| Social admission | `work/hq-recovery-social-burst-20261112` | `fa2728a9d8ed90abd7b6980c905d805fed5c96a0` | Exactly listener backlog plus two affected test files; AST/diff checks only. Controlled before/after, focused tests, full Social discovery and Ubuntu advisory CI unrun. |
-| Work persistence spine | `work/hq-recovery-work-spine-20261112` | `cd1371e12182db9aaa09f7a7c809f8f07fd8f042` | Retains current foundation and #198 ancestry. Static-only checkpoint. Main-process construction/channel handler still requires coordinator integration. Offline queue and renderer wiring excluded. |
-| Planner–Wiki compatibility | `work/hq-recovery-planner-wiki-20261112` | `a4d5e0c371c03fce0bd2e2de058ba429ff063f45` | Domain fields, coverage, vector copies and hashes ported onto current validation. All 52 old cases and 27 exchanges retained; 14 Wiki cases added. Static syntax/hash/copy checks only. Generator check, behavioral tests and real roundtrip unrun. |
-| Shell/navigation | `work/hq-recovery-shell-20261112` | `734d1f3e8e666052c93fd58dc5944c39456fe2cf` | Pushed and clean, source only. Shell spine, kit, navigation/palette and onboarding are integrated. Remaining: Work Alt+Left ownership, Wiki shortcuts and example/live reference-provider integration; expanded shared grants need a successor. Receipt: `apps/desktop/src/shell/RECOVERY.md`. |
-| Wiki validation | `work/hq-recovery-wiki-validation-20261112` | unpublished `3860d239c655b99c4c33fa8d82d1362b73382e74` | Clean source checkpoint in the earlier typo cone `modules/wiki/scripts`; exec/spawn counting and owned-child cleanup are ported. No runtime/private execution. Publication is held on inferred commit-identity metadata; preserve the original commit/tree and existing owner request. A successor must reconcile actual `core/scripts` placement under a new explicit grant, without rewriting the retained commit. Receipt: `docs/handoffs/hq-life-20261103/b5-backend-wiki-integration/wiki-validation-recovery-20261112.md`. |
+All rows below are source-only and pushed unless explicitly marked otherwise. Static checks are recorded in each capsule receipt; builds, typechecks, tests and native behavior remain unrun.
 
-No recovery PR has been opened. All runtime tests, builds and app launches remain unrun in this campaign. Source checkpoints are not accepted implementations.
+| Capsule | Pushed source head | Composition / remaining qualification |
+| --- | --- | --- |
+| Social listener | `fa2728a9d8ed90abd7b6980c905d805fed5c96a0` | Composed; unchanged 20-client/8-accepted/12-refused oracle awaits controlled execution. |
+| Work persistence spine | `cd1371e12182db9aaa09f7a7c809f8f07fd8f042` | Composed; coordinator added authorized, health-gated main construction/channel registration. Shell registration remains. |
+| Planner–Wiki | `a4d5e0c371c03fce0bd2e2de058ba429ff063f45` | Composed; generator-derived pins/copies await full generator check and real local roundtrip. |
+| Shell/reference checkpoint | `367cfb2159b85927bd04720c57d809e0970640ed` | Composed; module desktop hunks and fixture proposal remain for one shell owner. |
+| Local checks / Darwin preview | `060e1f40320631ec94f64e451f7ea0ba8ee8e841` | Composed; exact Foundation/Design tooling hooks added without inventory/fan-in changes. |
+| Wiki additive contract | `586959e21e233829c7998533929edf9709921d2b` | Composed; conditional index rebuild retained; excerpt-window finding unselected. |
+| Corrected Wiki validation | `5a8cbe89673d105b6f391c10d68f42ebf9ed12c6` | Composed in `modules/wiki/core/scripts`; both Git seams and closed lifecycle reporting. Original unpublished `3860d239c655b99c4c33fa8d82d1362b73382e74` remains untouched, unpublished and outside successor ancestry. |
+| Design ports | `b619d411ba0324fa781496474f186b60c05d1098` | Composed; capabilities, labelled fake answer and export port source; export stays disabled. Storage is `modules/design/app/storage/design-export.ts`. |
+| Design host matrix | `a56209885c16c4fcbbb9b60bb4f5c72c7012614a` | Composed, 42 retained cases; Foundation alone owns execution. Root typecheck includes dedicated test-support config. No desktop inventory row or parser broadening. |
+| Work queue / health | `bf30a4d7bd7b3b871e2ef0976495206b89e1c617` | Composed after independent fix-scoped review cleared both new P1s; regressions unrun. Prior P2 cleanup race and other recorded findings remain unselected and unwaived. |
+| Social views | `fe2faa3e59e2f64548fe5e442d17556c5419b223` | Composed; four desktop hunks remain with shell owner. |
+| Work frame / board / list / detail | `85d681b20bd1b61ca0868bca3bcd1b9bf699e3a6` | Composed; edge-card Alt+Left reservation authored, runtime unverified. Calendar/Plan/Review successor active. |
+| Settings / appearance | `3b7ae2f5db797ab12fe5650f7bfca86e13a6189d` | Composed on shell; Updates behavior retained; off-cone evidence and preview bytes preserved. Shell follow-up remains. |
+| Six Design Sources views | `c06e5dcc0c7f106cef4406f57f1d9082a5a11bfa` | Composed; coordinator reconciles native rights wording with explicit UI rights choice. Core-view successor follows this source. |
+| Four native journeys | `91ff491a4a184af8ae9ae8394d358369d6de2f30` | Composed; INT applies proposed runner/fixture/README source hunks. Native execution remains unqualified. |
+
+No recovery PR has been opened. Ordinary local merges preserve retained ancestry and are not foundation merges. Source checkpoints are not accepted behavior.
 
 ### Remaining source work
 
@@ -54,11 +66,13 @@ Product defaults remain: Plan week at `board/week` within the existing navigatio
 
 ### Mini verification admission
 
-The updater campaign's HQ-A3 unsigned Phase B still owns the heavy slot. Its fulfilled allocation answer gives this source-verification lane the next slot only after A3 closure and reconciliation of the unknown baseline launch. Native/signing/main holds remain. No duplicate slot request or verifier is authorized by elapsed time.
+The updater campaign explicitly closed its unsigned preparation producers/groups/EOF, verified lock release and released the next one serial source-verification slot. Its signing/native work waits for this campaign's explicit closure/return. This release does not resolve the unknown baseline launch or qualify a generic source compiler controller.
 
-Baseline launch request `hq-recovery-mini-baseline-20261112-r1` repeatedly returned “Remote delegation is durably pending reconciliation.” No task handle or child thread was returned. Reconcile the identical request in the owning parent context; never invent a handle, replay it as a new task or assume no effect. Exact input bytes and native evidence are carried in the handoff.
+The original baseline delegate request still returns “Remote delegation is durably pending reconciliation” with no task/child/admission identity. The originating parent retried its exact retained inputs after slot release; no authoritative no-effect or effect fence was returned. An empty task projection does not prove no effect. Do not start a replacement verifier. App-owned reconciliation or an authoritative fence for that exact request is required before heavy execution.
 
-Fresh admission is required for each new batch. The last observed Mini CPU sample was 96.19%, with normal memory pressure and no swap traffic; it admitted zero starts/tests. B4 tooling was therefore NOT launched. Historical low-load samples do not reserve capacity.
+A separate Wiki UI source launch in the receiving coordinator also returned durable pending reconciliation. Its identical retry has no task handle; do not launch another Wiki UI builder or mutate its intended branch. This source-only uncertainty is distinct from the baseline effect. Exact inputs and error evidence are retained privately, outside public source.
+
+Fresh same-host samples admitted the scoped source batches (at most two starts each), with normal memory pressure and zero swap traffic. They authorize no builds/tests or future reservation. Preserve the existing qualified lock identity without recreating it, and qualify ordinary source launch mechanics before compiler work.
 
 Once admitted, one serial verifier uses task-local CI versions Node 24.19.0/Python 3.13.5, the qualified participating compiler controller and lock, fresh CPU/storage checks, and one host-wide test process. Queue: foundation baseline → Social repair → Planner–Wiki → wired Work spine → shell → dependency-ordered modules → assembled head. Existing alternate Node/Python versions are not identical CI evidence.
 
@@ -89,10 +103,14 @@ These results guide later owner-scoped integration. They do not authorize taking
 
 ## Receiving coordinator source assembly
 
-The receiving coordinator integrated the Work persistence, Social admission and Planner/Wiki checkpoints with ordinary local merge commits and no textual conflicts. Work-local construction/channel registration is added through the existing authorized/health-gated main-process handler. INT also applied the exact retained Design capability contract hunk so its Design backend owner can consume it without writing shared contracts. These are untested source changes; the Mini heavy slot and pending baseline remain held. The current open crash-handling and updater PRs were read before the main-process change; their source remains independently owned.
+The source ledger above is composed in the exclusive coordinator branch using ordinary merges. Shared Work-local contracts are consumed once; main construction/channel registration and retained Design capability contracts were added by INT. External crash/updater and evidence PR heads were read before overlapping main/acceptance work; those independently owned branches remain untouched.
 
-B4 tooling, additive Wiki contract and Work queue/health source successors are running in isolated Mini worktrees. The Design backend task stopped cleanly after a local Taste merge because its export-storage path was misstated. Its successor must use the actual `modules/design/app/storage/design-export.ts` and the `modules/design/app/compose` root. Design host matrix files remain a separate writer cone.
+The root `typecheck` script includes the DSN-M strict desktop test-support configuration. Independent placement judgment corrects the old inventory proposal: Foundation root Vitest is the sole required executable owner of all 42 desktop matrix cases. Existing 20-row Design inventory, parser and fan-in remain unchanged. The separate batching timeout/policy discrepancy is recorded, not silently repaired or treated as measured compliance.
 
-Tooling checkpoint `060e1f40320631ec94f64e451f7ea0ba8ee8e841` and additive Wiki contract `586959e21e233829c7998533929edf9709921d2b` are pushed and now combined locally with ordinary merge ancestry. INT added the requested dev-preview fixture glob to Foundation and the local-checks suite to the Design inventory runner check, preserving all existing globs, pins, triggers and fan-in. Syntax-only checks in the source receipts are not executed tests. The shared snapshot's linked `.github/AGENTS.md` is absent; HQ's actual required-check policy and the supplied shared test/scratch/performance practices govern these exact hooks.
+INT owns the exact Imports native dialog wording and corresponding assertions, plus removal of the temporary bridged-rights restriction once the dialog refers to the explicit UI statement. This closes the DSN-B/DSN-S handoff without enabling export or generation. New source regressions preserve incomplete-statement refusal and licensed-basis validation; no test execution is claimed.
 
-Work queue/health checkpoint `8548eb89283bd9f44608da9489ae23db133da885` is pushed and clean but not integrated: its independent Sol/max correctness review is still required. Corrected Design backend and matrix, shell integration, and Wiki validation successors retain their isolated writer cones. The unpublished original Wiki validation commit and its identity-metadata owner request remain untouched.
+INT applies the VAL-S runner registration, Social/Planner fixture controls and additive README documentation, preserving existing gaps/held dispositions, checkpoint/routine read-only Social fixtures and mutation oracles. The external host-gallery/preview stack is not imported or edited.
+
+Two source-review P1s were selected and fixed: the missing health export assertion now follows the direct-health import contract; a request-ID rejection hold now blocks repeated/reconnected drains, survives restore and gates dispatch after persistence. Independent re-review found no new scoped issues. The P2 E2E cleanup race remains unselected; neither reliable cleanup nor production queue activation is qualified by these source tests. Original B1 findings retain their dispositions.
+
+Remaining active source capsules are Design core views, remaining Work planning views and gated Social extensions. Wiki UI launch identity is unresolved. Final shell source wiring follows completed module checkpoints. All layout, accessibility, native, emitted-store, cleanup, root execution and exact-version verification obligations remain open.

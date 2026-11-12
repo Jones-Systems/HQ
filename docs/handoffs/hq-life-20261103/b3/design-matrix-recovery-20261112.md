@@ -27,55 +27,23 @@ uses the Design app's ES2024 libraries and emits nothing. It has NOT been
 executed by TypeScript. The Vitest config roots at the repository and selects only
 the two matrix files, with one worker and no file parallelism.
 
-## Exact shared requests for INT
+## Required-CI placement after independent source judgment
 
-These are requested hunks, NOT applied changes. INT owns shared configuration,
-workflow and inventory integration. Each matrix file has exactly one intended
-Design inventory owner: the new `desktop-design-host` row below. No new test
-cases/files beyond the retained two are introduced.
+Foundation is the sole executable owner of
+`apps/desktop/electron/design-host.e2e.failures.test.ts` and
+`apps/desktop/electron/design-host.e2e.sections.test.ts`: 27 failure cases and
+15 section cases. Root Vitest discovery already includes both. Root `typecheck`
+now includes `tsc -p apps/desktop/test-support/tsconfig.json --noEmit` for
+semantic checking; that command remains unrun in this source campaign.
 
-1. Add `apps/desktop/tsconfig.json` as the inventory cone entry:
+These desktop host integration tests are outside the Design module/package
+inventory. Do not add a desktop inventory row, cone wrapper or parser allowlist.
+Existing Design coverage and fan-in remain unchanged. The dedicated serial
+Vitest config remains available for focused qualification; it is not a second
+required CI execution. This corrects the original proposed placement explicitly.
 
-```json
-{ "extends": "./test-support/tsconfig.json" }
-```
-
-2. Append this command to root `package.json`'s existing `typecheck` script:
-
-```text
- && tsc -p apps/desktop/test-support/tsconfig.json --noEmit
-```
-
-No change to `tsconfig.json`, `tsconfig.electron.json` or
-`tsconfig.design-host.json` is needed: test support must not enter production emit.
-
-3. In `.github/workflows/design-sections.yml`, increment `HQD_EXPECTED_ROWS`
-once (20 -> 21 absent other capsules), and append exactly this inventory row:
-
-```text
-desktop-design-host|apps/desktop|root|-|test-support/vitest.config.ts|repo|electron/design-host.e2e.*.test.ts|-
-```
-
-In its directory classification case, before the rejecting fallback, add:
-
-```bash
-apps/desktop) rest=desktop; kind=desktop ;;
-```
-
-Extend only the test-file coverage grep's scope to these two desktop files:
-
-```text
-^(modules/design/|packages/design-|apps/desktop/electron/design-host\.e2e\.(failures|sections)\.test\.ts$)
-```
-
-4. In `tools/ci/design-sections.mjs`, extend the existing directory acceptance
-condition to permit exactly `section.dir === 'apps/desktop'` in addition to the
-existing modules/packages regex. Keep every other validator and the fan-in gate.
-The row's config declares the exact required include literal
-`apps/desktop/electron/design-host.e2e.*.test.ts`. These are portable in-process
-host/storage tests; Foundation root Vitest also already discovers them. INT
-should account for that overlap when coordinating check placement and timing;
-never silently omit either file or weaken inventory ownership.
+A focused serial pass alone will not qualify Foundation's actual root execution.
+The emitted-store parity and native limitations below remain separate.
 
 ## Static evidence and later verification
 

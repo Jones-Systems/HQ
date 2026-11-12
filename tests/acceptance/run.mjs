@@ -13,6 +13,10 @@ import { bindHostGallery } from './fixtures/host-gallery.mjs';
 import { setupFixtures } from './fixtures/setup.mjs';
 import { assertNoServiceMutations } from './fixtures/http.mjs';
 import { row, scenarioGaps, fullOutcome, selectedOutcome, routineOutcome, replaceRow } from './fixtures/results.mjs';
+import { socialScenario } from './scenarios/social.mjs';
+import { referenceScenario } from './scenarios/references.mjs';
+import { wikiScenario } from './scenarios/wiki.mjs';
+import { unavailableServiceScenario } from './scenarios/services.mjs';
 import { workScenarios } from './scenarios/work.mjs';
 import { localFolderScenario, galleryScenario } from './scenarios/sources.mjs';
 
@@ -45,6 +49,7 @@ let runtime;
 let cdp;
 let fixtures;
 let workCaptureBoundary;
+let socialSaveBoundary;
 let activeRow;
 let buildInventory;
 const prerequisite = [{ id: 'built-native-app', status: 'pass' }];
@@ -74,7 +79,7 @@ try {
   await access(main);
   await access(join(repo, 'apps/desktop/dist/index.html'));
   report.harness = {};
-  for (const path of ['run.mjs', 'runtime.mjs', 'build-inventory.mjs', 'fixtures/setup.mjs', 'fixtures/http.mjs', 'fixtures/remote-gallery.mjs', 'fixtures/host-gallery.mjs', 'scenarios/sources.mjs', 'scenarios/ui.mjs', 'scenarios/work.mjs']) report.harness[path] = createHash('sha256').update(await readFile(join(repo, 'tests/acceptance', path))).digest('hex');
+  for (const path of ['run.mjs', 'runtime.mjs', 'build-inventory.mjs', 'fixtures/setup.mjs', 'fixtures/http.mjs', 'fixtures/remote-gallery.mjs', 'fixtures/host-gallery.mjs', 'scenarios/sources.mjs', 'scenarios/ui.mjs', 'scenarios/work.mjs', 'fixtures/results.mjs', 'fixtures/wiki.mjs', 'fixtures/social.mjs', 'scenarios/social.mjs', 'scenarios/references.mjs', 'scenarios/wiki.mjs', 'scenarios/services.mjs']) report.harness[path] = createHash('sha256').update(await readFile(join(repo, 'tests/acceptance', path))).digest('hex');
   buildInventory = await collectBuildInventory(repo);
   await evidenceRun.write('build-inventory.json', JSON.stringify(buildInventory, null, 2) + '\n');
   report.build = {};
@@ -86,7 +91,7 @@ try {
     delete env.DISPLAY;
   }
   const fixtureStarted = performance.now();
-  fixtures = await setupFixtures(runtime, repo, env.HQ_USER_DATA_DIR, { scenarios: !checkpoint && !galleryOnly, localFolders: !checkpoint && !galleryOnly && !routine, observe: partial => { fixtures = partial; } });
+  fixtures = await setupFixtures(runtime, repo, env.HQ_USER_DATA_DIR, { recovery: !checkpoint && !galleryOnly && !routine, scenarios: !checkpoint && !galleryOnly, localFolders: !checkpoint && !galleryOnly && !routine, observe: partial => { fixtures = partial; } });
   if (fixtures.work.loseNextCreateResponse) {
     const armCapture = fixtures.work.loseNextCreateResponse.bind(fixtures.work);
     fixtures.work.loseNextCreateResponse = () => {
@@ -98,7 +103,7 @@ try {
   }
   if (hostBinding) fixtures.hostGallery = await bindHostGallery(hostBinding);
   report.timings.fixtureSetupMs = Math.round(performance.now() - fixtureStarted);
-  report.fixturePrerequisites = { work: checkpoint || galleryOnly ? 'read-only-loopback' : 'real-owned-Planner-and-recording-proxy', social: 'read-only-loopback', wiki: fixtures.wiki.commits, durableClientIntent: 'not-provided-session-only-RW9-G3' };
+  report.fixturePrerequisites = { work: checkpoint || galleryOnly ? 'read-only-loopback' : 'real-owned-Planner-and-recording-proxy', social: !checkpoint && !galleryOnly && !routine ? 'real-owned-Social-synthetic-data-and-recording-proxy' : 'read-only-loopback', wiki: fixtures.wiki.commits, durableClientIntent: 'not-provided-session-only-RW9-G3' };
   // Darwin uses owned process groups, without Linux PID/user namespaces.
   const wrapped = darwin
     ? (command, args, options = {}) => runtime.spawn(command, args, { cwd: repo, env, ...options })
@@ -188,9 +193,15 @@ try {
   await capture('after-restart');
   if (!checkpoint) {
     const context = { fixtures, profile: env.HQ_USER_DATA_DIR, cdp: () => cdp, until, domain, begin, passed,
+      beginSocialSaves: () => {
+        assert.equal(socialSaveBoundary, undefined, 'Social intent boundary recorded once');
+        assertNoServiceMutations(fixtures.social.ledger, 'Social before intentional save');
+        socialSaveBoundary = fixtures.social.ledger.length;
+        report.socialSaveBoundary = socialSaveBoundary;
+      },
       held: detail => finish('held', detail), stopApp, launchApp, restartApp, capture };
     // Each independent scenario retains its own first failure; no behavior retries.
-    for (const scenario of [...(galleryOnly ? [] : [workScenarios, ...(routine ? [] : [localFolderScenario]), galleryScenario]), ...(hostBinding ? [ctx => galleryScenario(ctx, fixtures.hostGallery)] : [])]) {
+    for (const scenario of [...(galleryOnly ? [] : [workScenarios, ...(routine ? [] : [localFolderScenario]), galleryScenario]), ...(!galleryOnly && !routine ? [socialScenario, referenceScenario, wikiScenario, unavailableServiceScenario] : []), ...(hostBinding ? [ctx => galleryScenario(ctx, fixtures.hostGallery)] : [])]) {
       try { await scenario(context); }
       catch (error) {
         if (cancelled) throw error;
@@ -231,7 +242,16 @@ try {
     if (fixtures) {
       try {
         if (fixtures.work) assertNoServiceMutations(fixtures.work.ledger.slice(0, workCaptureBoundary), 'Work before intentional capture');
-        if (fixtures.social) assertNoServiceMutations(fixtures.social.ledger, 'Social throughout native invocation');
+        if (fixtures.social) {
+          assertNoServiceMutations(fixtures.social.ledger.slice(0, socialSaveBoundary), 'Social before intentional save');
+          if (socialSaveBoundary !== undefined) {
+            const writes = fixtures.social.ledger.slice(socialSaveBoundary).filter(entry => entry.method !== 'GET');
+            assert.deepEqual(writes.map(entry => [entry.method, entry.path, entry.status]),
+              [['POST', '/api/content', 201], ['POST', '/api/content', 422], ['POST', '/api/content', 200]],
+              'Only the three deliberate Social save attempts are admitted');
+            assert.equal(writes[2].responseLost, true);
+          }
+        }
       } catch (error) {
         report.outcome = 'failed';
         replaceRow(report.rows, row('unsolicited-service-mutations', 'fail', [{ id: 'read-only-service-ledgers', status: 'fail' }], [error.message]));
