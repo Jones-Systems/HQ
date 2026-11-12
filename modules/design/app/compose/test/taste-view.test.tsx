@@ -127,7 +127,12 @@ describe('Taste production composition', () => {
     if (failed === 'journal') {
       fireEvent.change(await screen.findByLabelText('Version to rate'), { target: { value: FIRST } });
       await screen.findByText('Taste is unavailable right now.');
-    } else await screen.findByText('Section unavailable. Stored data was not replaced.');
+    } else {
+      const notice = await screen.findByRole('alert');
+      expect(notice.textContent).toContain('This section could not be shown');
+      expect(notice.textContent).toContain('Stored data was not replaced. The rest of Design keeps working.');
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+    }
     expect(screen.queryByText('No saved versions for this project yet.')).toBeNull();
     expect(screen.queryByText('No ratings yet.')).toBeNull();
     expect(screen.queryByText('Synthetic landing page · v2')).toBeNull();
