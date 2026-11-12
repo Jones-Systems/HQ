@@ -31,7 +31,7 @@ const dateBase = {
 export const planningDate = object(dateBase, ['id', 'kind', 'precision', 'value', 'time', 'end_time', 'tz', 'note']);
 // The length lookahead preserves parseReference’s UTF-16 limits, including astral text.
 const referenceText = (max = 160): Schema => ({ type: 'string', minLength: 1, maxLength: max, pattern: `^(?=[\\s\\S]{1,${max}}$)(?!\\s)(?![\\s\\S]*\\s$)[^\\u0000-\\u001f\\u007f]+$` });
-const referenceDomain = enumeration(['design', 'social', 'work']);
+const referenceDomain = enumeration(['design', 'social', 'work', 'wiki']);
 export const referenceEnvelope = object({
   version: { const: 1 }, domain: referenceDomain, projectId: referenceText(), kind: referenceText(), entityId: referenceText(), title: referenceText(300),
   returnDestination: object({ domain: referenceDomain, destination: { ...referenceText(512), pattern: `^(?![a-zA-ZſK][a-zA-Z0-9ſK+.-]*:|[/\\\\]{2})${referenceText(512).pattern!.slice(1)}` } }),
