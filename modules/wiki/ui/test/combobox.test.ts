@@ -82,132 +82,80 @@ test('the suggestion list is Go to matches, then hits, then Search all, with the
 });
 
 test('combobox keys: arrows move and wrap, Enter opens the active option, Enter alone and Ctrl+Enter search, Escape closes then clears', async () => {
-  console.error('[combobox-await] keyboard:start');
-  console.error('[combobox-await] ctrl-enter:launch:before');
   const app = await launch();
-  console.error('[combobox-await] ctrl-enter:launch:after');
   const clock = fakeClock();
   try {
     const field = searchInput(app.container);
-    console.error('[combobox-await] ctrl-enter:suggest:before');
+    field.focus();
     await suggest(app, clock, 'pricing');
-    console.error('[combobox-await] ctrl-enter:suggest:after');
     const count = options(app.container).length;
     const selected = (): number => options(app.container).findIndex((row) => row.getAttribute('aria-selected') === 'true');
 
-    console.error('[combobox-await] ctrl-enter:down-first:before');
+    assert.equal(dom.document.activeElement === (field as unknown), true, 'keyboard navigation starts in this search field');
     await press(field, 'ArrowDown');
-    console.error('[combobox-await] ctrl-enter:down-first:after');
     assert.equal(selected(), 0);
     assert.equal(field.getAttribute('aria-activedescendant'), options(app.container)[0]!.id, 'focus stays in the field; the active option is announced by id');
-    assert.equal(dom.document.activeElement, field as unknown);
-    console.error('[combobox-await] ctrl-enter:up-wrap:before');
+    assert.equal(dom.document.activeElement === (field as unknown), true, 'ArrowDown preserves focus in the same search field');
     await press(field, 'ArrowUp');
-    console.error('[combobox-await] ctrl-enter:up-wrap:after');
     assert.equal(selected(), count - 1, 'Up from the first option wraps to the last');
-    console.error('[combobox-await] ctrl-enter:down-wrap:before');
     await press(field, 'ArrowDown');
-    console.error('[combobox-await] ctrl-enter:down-wrap:after');
     assert.equal(selected(), 0, 'Down from the last wraps to the first');
-    console.error('[combobox-await] ctrl-enter:down-next:before');
     await press(field, 'ArrowDown');
-    console.error('[combobox-await] ctrl-enter:down-next:after');
     assert.equal(selected(), 1);
 
     // Ctrl+Enter always runs the full search, even with an option active.
-    console.error('[combobox-await] ctrl-enter:press:before');
     const allowed = await press(field, 'Enter', { ctrlKey: true });
-    console.error('[combobox-await] ctrl-enter:press:after');
     assert.equal(allowed, false, 'Enter is handled, not left to submit a form twice');
     assert.deepEqual(app.requested, ['search?q=pricing']);
     assert.equal(options(app.container).length, 0, 'running a search closes the list');
   } finally {
-    console.error('[combobox-await] ctrl-enter:restore:before');
     clock.restore();
-    console.error('[combobox-await] ctrl-enter:restore:after');
-    console.error('[combobox-await] ctrl-enter:unmount:before');
     await app.unmount();
-    console.error('[combobox-await] ctrl-enter:unmount:after');
   }
 
-  console.error('[combobox-await] active-enter:launch:before');
   const second = await launch();
-  console.error('[combobox-await] active-enter:launch:after');
   const timers = fakeClock();
   try {
     const field = searchInput(second.container);
-    console.error('[combobox-await] active-enter:suggest:before');
     await suggest(second, timers, 'pricing');
-    console.error('[combobox-await] active-enter:suggest:after');
-    console.error('[combobox-await] active-enter:down-first:before');
     await press(field, 'ArrowDown');
-    console.error('[combobox-await] active-enter:down-first:after');
-    console.error('[combobox-await] active-enter:press:before');
     await press(field, 'Enter');
-    console.error('[combobox-await] active-enter:press:after');
     assert.deepEqual(second.requested, ['page/bl/lessons/pricing.md'], 'Enter on an active Go to option opens that page');
     assert.equal(options(second.container).length, 0);
   } finally {
-    console.error('[combobox-await] active-enter:restore:before');
     timers.restore();
-    console.error('[combobox-await] active-enter:restore:after');
-    console.error('[combobox-await] active-enter:unmount:before');
     await second.unmount();
-    console.error('[combobox-await] active-enter:unmount:after');
   }
 
-  console.error('[combobox-await] plain-enter:launch:before');
   const third = await launch();
-  console.error('[combobox-await] plain-enter:launch:after');
   const more = fakeClock();
   try {
     const field = searchInput(third.container);
-    console.error('[combobox-await] plain-enter:suggest:before');
     await suggest(third, more, 'pricing');
-    console.error('[combobox-await] plain-enter:suggest:after');
-    console.error('[combobox-await] plain-enter:press:before');
     await press(field, 'Enter');
-    console.error('[combobox-await] plain-enter:press:after');
     assert.deepEqual(third.requested, ['search?q=pricing'], 'Enter with nothing active runs the full search');
   } finally {
-    console.error('[combobox-await] plain-enter:restore:before');
     more.restore();
-    console.error('[combobox-await] plain-enter:restore:after');
-    console.error('[combobox-await] plain-enter:unmount:before');
     await third.unmount();
-    console.error('[combobox-await] plain-enter:unmount:after');
   }
 
-  console.error('[combobox-await] escape:launch:before');
   const fourth = await launch();
-  console.error('[combobox-await] escape:launch:after');
   const last = fakeClock();
   try {
     const field = searchInput(fourth.container);
-    console.error('[combobox-await] escape:suggest:before');
     await suggest(fourth, last, 'pricing');
-    console.error('[combobox-await] escape:suggest:after');
     assert.equal(options(fourth.container).length > 0, true);
-    console.error('[combobox-await] escape:close:before');
     await press(field, 'Escape');
-    console.error('[combobox-await] escape:close:after');
     assert.equal(options(fourth.container).length, 0, 'the first Escape closes the list');
     assert.equal(field.value, 'pricing', 'and keeps what was typed');
     assert.equal(field.getAttribute('aria-expanded'), 'false');
-    console.error('[combobox-await] escape:clear:before');
     await press(field, 'Escape');
-    console.error('[combobox-await] escape:clear:after');
     assert.equal(searchInput(fourth.container).value, '', 'the second Escape clears the field');
     assert.deepEqual(fourth.requested, []);
   } finally {
-    console.error('[combobox-await] escape:restore:before');
     last.restore();
-    console.error('[combobox-await] escape:restore:after');
-    console.error('[combobox-await] escape:unmount:before');
     await fourth.unmount();
-    console.error('[combobox-await] escape:unmount:after');
   }
-  console.error('[combobox-await] keyboard:done');
 });
 
 test('choosing a suggestion with the pointer works and does not blur the field first', async () => {
