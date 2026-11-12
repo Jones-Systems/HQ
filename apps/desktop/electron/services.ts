@@ -33,7 +33,7 @@ function referenceEnvelope(value: unknown): boolean {
 }
 interface Encoded { method: 'GET' | 'POST' | 'PATCH' | 'PUT'; path: string; body?: string; requestId?: string; loss: 'unavailable' | 'unknown'; maxResponse?: number }
 export const WORK_METHODS = { state: 'GET', version: 'GET', item: 'GET', history: 'GET', create: 'POST', patch: 'PATCH', move: 'POST', archive: 'POST', restore: 'POST', reviewed: 'POST', settings: 'PUT', replay: 'POST', export: 'GET' } as const satisfies Record<WorkServiceRoute, string>;
-export const SOCIAL_PATHS = { workspace: '/api/workspace', sample: '/api/sample/', run: '/api/runs/', saveContent: '/api/content', addBrand: '/api/brands', submitRun: '/api/runs' } as const satisfies Record<SocialServiceRoute, string>;
+export const SOCIAL_PATHS = { workspace: '/api/workspace', sample: '/api/sample/', run: '/api/runs/', saveContent: '/api/content', addBrand: '/api/brands', submitRun: '/api/runs', setBrandProject: '/api/brands/', source: '/api/sources/', saveSource: '/api/sources', archiveSource: '/api/sources/', publishingConnect: '/api/publishing/connections', publishingDisconnect: '/api/publishing/connections/', publishingRequest: '/api/publishing/requests', publishingCancel: '/api/publishing/requests/', publishingApprove: '/api/publishing/requests/' } as const satisfies Record<SocialServiceRoute, string>;
 /** Fixed ordering recursively makes persisted originals independent of object insertion order. */
 function canonical(v: unknown): string {
   if (Array.isArray(v)) return '[' + v.map(canonical).join(',') + ']';
@@ -84,18 +84,44 @@ export function encodeOriginal(call: WorkMutationCall): Encoded | null { return 
 const workspaceRead = (): Encoded => ({ method: 'GET', path: SOCIAL_PATHS.workspace, loss: 'unavailable', maxResponse: LIMITS.socialWorkspace });
 export function encodeSocial(route: unknown, p: unknown): Encoded | null {
   if (typeof route !== 'string' || !Object.hasOwn(SOCIAL_PATHS, route) || !record(p) || !jsonValue(p)) return null;
-  let path = SOCIAL_PATHS[route as SocialServiceRoute];
+  let path: string = SOCIAL_PATHS[route as SocialServiceRoute];
+  let payload = p;
   if (route === 'workspace') return keys(p, []) ? workspaceRead() : null;
-  if (route === 'run') return keys(p, ['id']) && id(p.id) ? { method: 'GET', path: path + p.id, loss: 'unavailable' } : null;
+  if (route === 'run' || route === 'source') return keys(p, ['id']) && id(p.id) ? { method: 'GET', path: path + p.id, loss: 'unavailable' } : null;
   if (route === 'sample') return keys(p, ['tool']) && typeof p.tool === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(p.tool) ? { method: 'GET', path: path + p.tool, loss: 'unavailable' } : null;
   if (route === 'addBrand' && (!keys(p, ['name']) || typeof p.name !== 'string')) return null;
-  if (route === 'submitRun' && (!keys(p, ['tool', 'input', 'is_example']) || typeof p.tool !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(p.tool) || !record(p.input) || typeof p.is_example !== 'boolean')) return null;
+  if (route === 'submitRun' && (!keys(p, ['tool', 'input', 'is_example'], ['source_ids']) || typeof p.tool !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(p.tool) || !record(p.input) || typeof p.is_example !== 'boolean' || ('source_ids' in p && (!Array.isArray(p.source_ids) || p.source_ids.length > 20 || !p.source_ids.every(id))))) return null;
+  if (route === 'setBrandProject') {
+    if (!keys(p, ['id', 'project_id']) || !(p.id === 'default' || id(p.id)) || !(p.project_id === null || (typeof p.project_id === 'string' && p.project_id.length >= 1 && p.project_id.length <= 160 && p.project_id.trim() === p.project_id && !/[\u0000-\u001f\u007f-\u009f]/u.test(p.project_id)))) return null;
+    path += p.id + '/project'; payload = { project_id: p.project_id };
+  }
+  if (route === 'saveSource') {
+    const nonblank = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+    if (!keys(p, ['name', 'kind', 'file_name', 'text', 'as_of']) || !nonblank(p.name, 120) || !nonblank(p.file_name, 255)
+      || /[/\\\u0000-\u001f\u007f-\u009f]/u.test(p.file_name)
+      || typeof p.kind !== 'string' || !['feed-items', 'tiktok-niche', 'tiktok-manifest', 'tiktok-records', 'seo-config', 'seo-packet', 'search-panel', 'search-entities', 'search-inventory', 'search-answers', 'reddit-bundle', 'creator-batch'].includes(p.kind)
+      || typeof p.text !== 'string' || /[\uD800-\uDFFF]/u.test(p.text) || Buffer.byteLength(p.text) < 1 || Buffer.byteLength(p.text) > 1_500_000 || typeof p.as_of !== 'string') return null;
+  }
+  if (route === 'archiveSource') {
+    if (!keys(p, ['id', 'archived']) || !id(p.id) || (p.archived !== 0 && p.archived !== 1)) return null;
+    path += p.id + '/archive'; payload = { archived: p.archived };
+  }
+  if (route === 'publishingConnect' && (!keys(p, ['channel', 'label']) || typeof p.channel !== 'string'
+    || !['X', 'LinkedIn', 'TikTok', 'Instagram', 'Facebook', 'Reddit'].includes(p.channel)
+    || typeof p.label !== 'string' || !p.label.trim() || p.label.length > 80)) return null;
+  if (route === 'publishingRequest' && (!keys(p, ['draft_id', 'draft_version', 'connection_id']) || !id(p.draft_id) || !id(p.connection_id) || !integer(p.draft_version) || p.draft_version < 1)) return null;
+  if (route === 'publishingDisconnect' || route === 'publishingCancel' || route === 'publishingApprove') {
+    const approve = route === 'publishingApprove';
+    if (!keys(p, approve ? ['id', 'content_sha256'] : ['id']) || !id(p.id) || (approve && (typeof p.content_sha256 !== 'string' || p.content_sha256.length !== 64 || !/^[a-f0-9]{64}$/.test(p.content_sha256)))) return null;
+    path += p.id + (approve ? '/approve' : route === 'publishingCancel' ? '/cancel' : '/disconnect');
+    payload = approve ? { content_sha256: p.content_sha256 } : {};
+  }
   if (route === 'saveContent') {
     if (!keys(p, ['title', 'body', 'brand_id', 'channel', 'planned_date', 'archived'], ['id', 'version', 'planning_slot', 'links']) || !['title', 'body', 'brand_id', 'channel', 'planned_date'].every(k => typeof p[k] === 'string') || !/^$|^\d{4}-\d{2}-\d{2}$/.test(p.planned_date as string) || (p.archived !== 0 && p.archived !== 1) || (('id' in p || 'version' in p) && (!id(p.id) || !integer(p.version)))) return null;
     if ('links' in p && (!Array.isArray(p.links) || p.links.length > 30 || p.links.some(link => !referenceEnvelope(link)))) return null;
     if ('planning_slot' in p && p.planning_slot !== null && (!record(p.planning_slot) || !keys(p.planning_slot, ['start', 'duration_minutes', 'timezone']) || typeof p.planning_slot.start !== 'string' || !integer(p.planning_slot.duration_minutes) || typeof p.planning_slot.timezone !== 'string')) return null;
   }
-  const body = canonical(p);
+  const body = canonical(payload);
   return Buffer.byteLength(body) <= LIMITS.social ? { method: 'POST', path, body, loss: 'unknown' } : null;
 }
 export interface HttpCall extends Encoded { headers: Record<string, string> }
@@ -159,7 +185,7 @@ export function createServices(config: ServiceConfig, transport: Transport = sen
         if (!tokens.has(base.origin)) return unavailable();
       }
       const response = await socialRequest(base, encoded, tokens.get(base.origin));
-      if ((route === 'saveContent' || route === 'addBrand') && response.ok && response.status === 403 && record(response.body) && response.body.error === 'Reload the workspace before saving') {
+      if ((typeof route === 'string' && ['saveContent', 'addBrand', 'setBrandProject', 'saveSource', 'archiveSource', 'publishingConnect', 'publishingDisconnect', 'publishingRequest', 'publishingCancel'].includes(route)) && response.ok && response.status === 403 && record(response.body) && response.body.error === 'Reload the workspace before saving') {
         tokens.delete(base.origin);
         const refresh = await socialRequest(base, workspaceRead());
         if (!refresh.ok || refresh.status < 200 || refresh.status >= 300 || !tokens.has(base.origin)) return response;
