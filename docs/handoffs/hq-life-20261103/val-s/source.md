@@ -99,7 +99,7 @@ new runner mode or permission to discharge held acceptance rows.
 +import { unavailableServiceScenario } from './scenarios/services.mjs';
  import { workScenarios } from './scenarios/work.mjs';
  import { localFolderScenario, galleryScenario } from './scenarios/sources.mjs';
- 
+
 @@ -45,6 +49,7 @@
  let cdp;
  let fixtures;
@@ -174,12 +174,12 @@ new runner mode or permission to discharge held acceptance rows.
 +++ b/tests/acceptance/README.md
 @@ -128,7 +128,7 @@
  real stdlib Python Planner, but no Electron or display. Run it serially before N:
- 
+
  ```sh
 -node --test --test-concurrency=1 tests/acceptance/build-inventory.test.mjs tests/acceptance/fixtures/fixtures.test.mjs tests/acceptance/fixtures/scenarios.test.mjs tests/acceptance/fixtures/host-gallery.test.mjs tests/acceptance/cleanup.test.mjs
 +node --test --test-concurrency=1 tests/acceptance/build-inventory.test.mjs tests/acceptance/fixtures/fixtures.test.mjs tests/acceptance/fixtures/scenarios.test.mjs tests/acceptance/fixtures/social.test.mjs tests/acceptance/fixtures/host-gallery.test.mjs tests/acceptance/cleanup.test.mjs
  ```
- 
+
  `fixtures/http.mjs` supplies only fixed Work/Social shell reads on ephemeral
 @@ -238,6 +238,36 @@
  cleanup failure fails the run and preserves any original error. The lifecycle
@@ -215,7 +215,7 @@ new runner mode or permission to discharge held acceptance rows.
 +journeys. It tests real Social response loss/rejection, route denial, partial
 +startup/failure cleanup, peer preservation, Wiki restoration and result holds.
 +All tests and native journeys remain unrun for this source checkpoint.
- 
+
  ## Selected T7 scenarios
- 
+
 ```
