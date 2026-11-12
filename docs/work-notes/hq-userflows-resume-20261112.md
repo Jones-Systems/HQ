@@ -253,6 +253,14 @@ compiler lock, run HQ compilers/tests, install dependencies or launch the app.
 This is controller qualification, not the foundation baseline or assembled-head
 acceptance. The existing native and integration-owner holds remain.
 
+At `21059e1f`, Design's app section reaches one failure: its old selection test
+requires the composed fake functions to be the legacy global functions, contrary
+to the repaired workspace store/feed isolation. INT replaces that identity oracle
+with the same API and fake-label checks, workspace-local function/store ownership,
+same-workspace content memoization and zero calls to an available native
+transport. The durable failure/no-fallback cases remain unchanged. The next CI
+run must qualify this source correction.
+
 Contributing conversations and roles, with native identifiers retained privately:
 
 - Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.
