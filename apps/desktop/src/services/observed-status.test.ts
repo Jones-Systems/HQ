@@ -193,3 +193,13 @@ describe('describe: one status for every surface', () => {
     store.reset(); expect(store.getSnapshot()).toEqual({ social: null, work: null, wiki: null });
   });
 });
+
+it('shares Planner health wording and timestamp, then clears it on later observed traffic', () => {
+  const { store, toast } = fixture();
+  store.record('work', 'reachable', { text: 'Refused · start the Planner with --allowed-host for this address', tone: 'bad', indicator: 'warning' });
+  const wording = () => describeSource('work', { config: NOT_CHECKED, observed: store.getSnapshot().work });
+  expect(wording()).toMatchObject({ label: 'Refused', tone: 'bad', indicator: 'warning', detail: 'start the Planner with --allowed-host for this address · observed 14:02' });
+  store.recordResponse('work', ok);
+  expect(wording()).toMatchObject({ label: 'Reachable', detail: 'observed 14:02' });
+  expect(toast.success).not.toHaveBeenCalled(); expect(toast.warning).not.toHaveBeenCalled();
+});

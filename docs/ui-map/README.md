@@ -14,6 +14,7 @@ Those links require access to that private repository; its content is not copied
 | [Work presentation](work.md) | Work domain, status board and planning calendar; existing evidence harness | Synthetic gutters, empty state, scroll and calendar checks |
 | [Social calendar and empty state](social-calendar.md) | Social Calendar/Library; shared evidence harness | Synthetic calendar parity and representative StateView checks |
 | [Settings › Appearance and dark palettes](settings-appearance.md) | Rail → Settings → Appearance; `hq-open-settings` with `appearance` | Source discovery; unit and App journey tests added, results recorded at integration |
+| [Settings data sources](settings-data-sources.md) | Rail → Settings; Sources summary targets; category navigation | Source discovery; recovered candidate tests and UI evidence unverified |
 | [Settings → Updates](settings-updates.md) | Rail → Settings → Updates; category selection from existing Settings entry points | Source discovery and synthetic checks authored; runtime and native evidence recorded separately |
 | [Getting started panel](getting-started.md) | First launch in any domain; `hq-show-welcome`; the shell's bottom-left workspace corner | Source discovery, unit and component tests, and real-app captures; native and assistive-technology journeys unverified |
 
