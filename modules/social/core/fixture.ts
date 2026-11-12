@@ -1,7 +1,9 @@
+import { fixtureExtensions } from './fixture-extensions';
+import type { ExtendedSocialWorkspacePort } from './extensions';
 import {
   FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX, PortFailure,
   type Brand, type Draft, type PortError, type PortMethod, type RunRecord,
-  type SocialWorkspacePort, type ToolId, type WorkspaceSnapshot,
+  type ToolId, type WorkspaceSnapshot,
 } from './port';
 import { FIXTURE_EXAMPLES, FIXTURE_TOOLS, fictionalSeed, fixtureId, type FixtureRun, type FixtureSeed } from './fixtures/workspace';
 import { MESSAGES, checkBrandName, checkDraft, checkRunSubmission, isRunId, isToolId } from './validate';
@@ -54,7 +56,7 @@ export interface FixtureControls {
 }
 
 export interface FixtureWorkspace {
-  readonly port: SocialWorkspacePort;
+  readonly port: ExtendedSocialWorkspacePort;
   readonly controls: FixtureControls;
 }
 
@@ -82,7 +84,7 @@ export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWor
   const content: Draft[] = seed.content.map(({ links, planning_slot, ...draft }) => ({ ...draft,
     ...(references ? { links: links ?? [] } : {}), ...(timeboxes ? { planning_slot: planning_slot ?? null } : {}),
   }));
-  const runs: FixtureRun[] = [...seed.runs];
+  const runs: FixtureRun[] = seed.runs.map(r => ({ ...r, record: { ...r.record, ...(features.includes('hq-sources-v1') ? { source_ids: r.record.source_ids ?? [] } : {}) } }));
   let counter = 0x1000;
   const failures = new Map<PortMethod, PortError>();
   let loseSubmit: { accepted: boolean } | null = null;
@@ -98,11 +100,11 @@ export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWor
     }
   }
 
-  function snapshotRuns(): RunRecord[] {
+  function snapshotRuns(limit = SNAPSHOT_RUN_LIMIT): RunRecord[] {
     return runs
       .map((run, index) => ({ run: run.record, index }))
       .sort((a, b) => (a.run.created_at === b.run.created_at ? b.index - a.index : a.run.created_at < b.run.created_at ? 1 : -1))
-      .slice(0, SNAPSHOT_RUN_LIMIT)
+      .slice(0, limit)
       .map(({ run }) => run);
   }
 
@@ -111,7 +113,9 @@ export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWor
     return structuredClone(terminal && run.output !== undefined ? { ...run.record, output: run.output } : run.record);
   }
 
-  const port: SocialWorkspacePort = {
+  const extensions = fixtureExtensions({ features, brands, content, runs: () => snapshotRuns(Number.MAX_SAFE_INTEGER), now, id: () => fixtureId('c', counter++) });
+  const port: ExtendedSocialWorkspacePort = {
+    ...extensions.methods,
     async snapshot(): Promise<WorkspaceSnapshot> {
       await enter('snapshot');
       return structuredClone({
@@ -121,6 +125,7 @@ export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWor
         tools: [...FIXTURE_TOOLS],
         features: [...features],
         observedAt: now(),
+        ...extensions.snapshot(),
       });
     },
 
@@ -175,9 +180,10 @@ export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWor
       return readRun(found);
     },
 
-    async submitRun(tool: ToolId, input, isExample): Promise<RunRecord> {
+    async submitRun(tool: ToolId, input, isExample, options): Promise<RunRecord> {
       const attemptedAt = now();
       await enter('submitRun');
+      if (options) extensions.checkSources(options.sourceIds);
       const accept = (): RunRecord => {
         const checked = checkRunSubmission(tool, input, isExample);
         if (!checked.ok) fail(checked.error);
@@ -186,6 +192,7 @@ export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWor
         }
         const record: RunRecord = {
           id: fixtureId('e', counter++), tool: checked.value.tool, status: 'queued',
+          ...(features.includes('hq-sources-v1') ? { source_ids: [...(options?.sourceIds ?? [])] } : {}),
           is_example: checked.value.isExample ? 1 : 0, created_at: now(), finished_at: null, error: null,
         };
         runs.push({ record });

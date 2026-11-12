@@ -86,7 +86,7 @@ class ReadyLine(Launched):
         port = int(READY.match(line)['port'])
         status, body = get(port)
         self.assertEqual(status, 200)
-        self.assertEqual(json.loads(body)['features'], ['hq-editorial-timebox-v1', 'hq-references-v1'])
+        self.assertEqual(json.loads(body)['features'], ['hq-editorial-timebox-v1', 'hq-references-v1', 'hq-brand-project-v1', 'hq-sources-v1'])
         process_two, line_two = self.launch('--port', '0', data=self.scratch / 'second')
         self.assertNotEqual(READY.match(line_two)['port'], str(port))
 
@@ -119,9 +119,9 @@ class ReadyLine(Launched):
         self.assertEqual(response.status, 200)
         connection.close()
 
-    def test_publishing_defaults_to_off_and_only_off_exists(self):
+    def test_publishing_defaults_to_off_and_refuses_unknown_providers(self):
         self.launch('--port', '0', '--publishing', 'off')
-        refused = run('--data', str(self.scratch / 'other'), '--publishing', 'simulator')
+        refused = run('--data', str(self.scratch / 'other'), '--publishing', 'network')
         self.assertEqual(refused.returncode, 2)
         self.assertIn('invalid choice', refused.stderr)
         self.assertFalse((self.scratch / 'other').exists())

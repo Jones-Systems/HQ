@@ -46,7 +46,12 @@ def _v1(db: sqlite3.Connection) -> None:
 
 
 #: Forward-only, additive. Index N upgrades user_version N to N + 1.
-MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (_v1,)
+def _v2(db: sqlite3.Connection) -> None:
+    db.execute("ALTER TABLE runs ADD COLUMN source_ids TEXT NOT NULL DEFAULT '[]'")
+    db.execute('CREATE TABLE extensions (kind TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(kind, id))')
+
+
+MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (_v1, _v2)
 
 
 def _dumps(value: Any) -> str:
@@ -64,7 +69,7 @@ def _draft(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def _run(row: sqlite3.Row) -> dict[str, Any]:
-    return {key: row[key] for key in ('id', 'tool', 'status', 'is_example', 'created_at', 'finished_at', 'error')}
+    return {key: row[key] for key in ('id', 'tool', 'status', 'is_example', 'created_at', 'finished_at', 'error')} | {'source_ids': json.loads(row['source_ids'])}
 
 
 class Store:
@@ -125,8 +130,8 @@ class Store:
     def brands(self) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._db.execute(
-                'SELECT id, name FROM brands ORDER BY name COLLATE NOCASE, name, id').fetchall()
-        return [{'id': row['id'], 'name': row['name']} for row in rows]
+                'SELECT id, name, project_id FROM brands ORDER BY name COLLATE NOCASE, name, id').fetchall()
+        return [{'id': row['id'], 'name': row['name'], 'project_id': row['project_id']} for row in rows]
 
     def brand_ids(self) -> set[str]:
         with self._lock:
@@ -135,7 +140,7 @@ class Store:
     def add_brand(self, brand_id: str, name: str) -> dict[str, Any]:
         with self._transaction():
             self._db.execute('INSERT INTO brands (id, name, project_id) VALUES (?, ?, NULL)', (brand_id, name))
-        return {'id': brand_id, 'name': name}
+        return {'id': brand_id, 'name': name, 'project_id': None}
 
     # ------------------------------------------------------------------ drafts
 
@@ -201,13 +206,13 @@ class Store:
             return self._db.execute(
                 "SELECT COUNT(*) FROM runs WHERE status IN ('queued', 'running')").fetchone()[0]
 
-    def insert_run(self, run_id: str, tool: str, is_example: bool, created_at: str) -> dict[str, Any]:
+    def insert_run(self, run_id: str, tool: str, is_example: bool, created_at: str, source_ids: list[str] | None = None) -> dict[str, Any]:
         with self._transaction():
             self._db.execute(
-                "INSERT INTO runs (id, tool, status, is_example, created_at, finished_at, error)"
-                " VALUES (?, ?, 'queued', ?, ?, NULL, NULL)", (run_id, tool, 1 if is_example else 0, created_at))
+                "INSERT INTO runs (id, tool, status, is_example, created_at, finished_at, error, source_ids)"
+                " VALUES (?, ?, 'queued', ?, ?, NULL, NULL, ?)", (run_id, tool, 1 if is_example else 0, created_at, _dumps(source_ids or [])))
         return {'id': run_id, 'tool': tool, 'status': 'queued', 'is_example': 1 if is_example else 0,
-                'created_at': created_at, 'finished_at': None, 'error': None}
+                'created_at': created_at, 'finished_at': None, 'error': None, 'source_ids': source_ids or []}
 
     def mark_running(self, run_id: str) -> None:
         with self._transaction():
@@ -226,3 +231,34 @@ class Store:
                 "UPDATE runs SET status = 'interrupted', error = ?, finished_at = ?"
                 " WHERE status IN ('queued', 'running')", (MESSAGES['interrupted'], finished_at))
         return cursor.rowcount
+
+    def set_brand_project(self, identifier, project):
+        from .errors import NotFoundError
+        with self._transaction() as db:
+            if db.execute('UPDATE brands SET project_id = ? WHERE id = ?', (project, identifier)).rowcount != 1:
+                raise NotFoundError('Brand not found')
+        return next(row for row in self.brands() if row['id'] == identifier)
+
+    def extension_rows(self, kind):
+        with self._lock:
+            return [json.loads(row[0]) for row in self._db.execute(
+                'SELECT payload FROM extensions WHERE kind = ? ORDER BY rowid DESC', (kind,))]
+
+    def put_extension(self, kind, row):
+        with self._transaction() as db:
+            db.execute('INSERT INTO extensions(kind,id,payload) VALUES (?,?,?) '
+                       'ON CONFLICT(kind,id) DO UPDATE SET payload=excluded.payload', (kind, row['id'], _dumps(row)))
+
+    def source_runs(self, source_id):
+        with self._lock:
+            return [row[0] for row in self._db.execute(
+                'SELECT id FROM runs WHERE EXISTS (SELECT 1 FROM json_each(runs.source_ids) WHERE value = ?) '
+                'ORDER BY created_at DESC, rowid DESC LIMIT 20', (source_id,))]
+
+    def next_outbox_sequence(self):
+        with self._transaction() as db:
+            row = db.execute("SELECT payload FROM extensions WHERE kind='sequence' AND id='outbox'").fetchone()
+            value = (json.loads(row[0])['value'] if row else 0) + 1
+            db.execute("INSERT INTO extensions(kind,id,payload) VALUES ('sequence','outbox',?) "
+                       'ON CONFLICT(kind,id) DO UPDATE SET payload=excluded.payload', (_dumps({'value': value}),))
+            return value

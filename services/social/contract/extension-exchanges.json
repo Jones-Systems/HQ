@@ -1,0 +1,10 @@
+{
+  "schema": "hq.social.extension-expectations/v1",
+  "provenance": "Authored expected exchanges; not captured runtime evidence",
+  "exchanges": [
+    {"mode":"off", "method":"POST", "path":"/api/publishing/connections", "body":{"channel":"X","label":"Synthetic"}, "status":404, "response":{"error":"Route not found"}},
+    {"mode":"off", "method":"POST", "path":"/api/brands/default/project", "body":{"project_id":"project-example"}, "status":200, "response":{"id":"default","name":"My workspace","project_id":"project-example"}},
+    {"mode":"off", "method":"POST", "path":"/api/brands/default/project", "body":{"project_id":null}, "status":200, "response":{"id":"default","name":"My workspace","project_id":null}},
+    {"mode":"off", "method":"POST", "path":"/api/sources", "body":{"name":"Example","kind":"feed-items","file_name":"example.json","text":"{}","as_of":""}, "status":400, "response":{"error":"Source shape does not match feed-items"}}
+  ]
+}

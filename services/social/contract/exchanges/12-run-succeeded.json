@@ -17,7 +17,7 @@
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
-      "Content-Length": "297"
+      "Content-Length": "313"
     },
     "body": {
       "id": "00000000000000000000000000000003",
@@ -36,7 +36,8 @@
             "notes": "Contract example"
           }
         }
-      }
+      },
+      "source_ids": []
     }
   }
 }

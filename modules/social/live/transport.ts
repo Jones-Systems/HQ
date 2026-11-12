@@ -8,7 +8,7 @@
  * path, headers, workspace token (including its single 403 refresh), timeouts and size caps.
  */
 
-export const SOCIAL_SERVICE_ROUTES = ['workspace', 'sample', 'run', 'saveContent', 'addBrand', 'submitRun'] as const;
+export const SOCIAL_SERVICE_ROUTES = ['workspace', 'sample', 'run', 'saveContent', 'addBrand', 'submitRun', 'setBrandProject', 'source', 'saveSource', 'archiveSource', 'publishingConnect', 'publishingDisconnect', 'publishingRequest', 'publishingCancel', 'publishingApprove'] as const;
 export type SocialServiceRoute = (typeof SOCIAL_SERVICE_ROUTES)[number];
 
 /** Parameters per route. Mutation parameters are the exact JSON request body the service reads. */
@@ -18,7 +18,16 @@ export interface SocialServiceParams {
   readonly run: { readonly id: string };
   readonly saveContent: Readonly<Record<string, unknown>>;
   readonly addBrand: { readonly name: string };
-  readonly submitRun: { readonly tool: string; readonly input: Record<string, unknown>; readonly is_example: boolean };
+  readonly submitRun: { readonly tool: string; readonly input: Record<string, unknown>; readonly is_example: boolean; readonly source_ids?: readonly string[] };
+  readonly setBrandProject: { id: string; project_id: string | null };
+  readonly source: { id: string };
+  readonly saveSource: import('../core/extensions').SaveSource;
+  readonly archiveSource: { id: string; archived: 0 | 1 };
+  readonly publishingConnect: { channel: string; label: string };
+  readonly publishingDisconnect: { id: string };
+  readonly publishingRequest: { draft_id: string; draft_version: number; connection_id: string };
+  readonly publishingCancel: { id: string };
+  readonly publishingApprove: { id: string; content_sha256: string };
 }
 
 /**

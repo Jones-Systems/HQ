@@ -1,6 +1,9 @@
+import { FEATURE_HQ_BRAND_PROJECT } from '../core/port';
+import { FEATURE_HQ_SOURCES, FEATURE_HQ_PUBLISHING, validProjectId, type ExtendedSocialWorkspacePort } from '../core/extensions';
+import { guardSource, guardSourceContent, guardConnection, guardPublish } from './extension-guards';
 import {
   MESSAGES, PortFailure, checkBrandName, checkDraft, checkRunSubmission, isJsonObject, isRunId, isToolId,
-  type Brand, type Draft, type PortError, type RunRecord, type SocialWorkspacePort, type WorkspaceSnapshot,
+  type Brand, type Draft, type PortError, type RunRecord, type WorkspaceSnapshot,
 } from '../core';
 import { errorText, guardBrand, guardDraft, guardRun, guardSample, guardWorkspace } from './guards';
 import type { ServiceResponse, SocialServiceParams, SocialServiceRoute, SocialServiceTransport } from './transport';
@@ -12,7 +15,7 @@ import type { ServiceResponse, SocialServiceParams, SocialServiceRoute, SocialSe
  * is `unavailable` on a read route and `unknown` on a mutation route, whose effect is not proved.
  */
 
-const READ_ROUTES: ReadonlySet<SocialServiceRoute> = new Set(['workspace', 'sample', 'run']);
+const READ_ROUTES: ReadonlySet<SocialServiceRoute> = new Set(['workspace', 'sample', 'run', 'source']);
 
 export interface LiveSocialPortOptions {
   /** Client clock for `observedAt` and `attemptedAt`. */
@@ -47,7 +50,7 @@ function isEnvelope(value: unknown): value is ServiceResponse {
   return value.ok === false && (value.kind === 'unavailable' || value.kind === 'unknown');
 }
 
-export function createLiveSocialPort(transport: SocialServiceTransport, options: LiveSocialPortOptions = {}): SocialWorkspacePort {
+export function createLiveSocialPort(transport: SocialServiceTransport, options: LiveSocialPortOptions = {}): ExtendedSocialWorkspacePort {
   const clock = options.now ?? (() => new Date());
   const stamp = () => clock().toISOString();
   // Capabilities from the last snapshot gate optional fields. Null until a snapshot is read.
@@ -81,7 +84,26 @@ export function createLiveSocialPort(transport: SocialServiceTransport, options:
     return workspace;
   }
 
+  function requireFeature(feature: string) {
+    if (!features?.includes(feature)) fail({ kind: 'invalid', message: `Capability not available: ${feature}` });
+  }
   return {
+    async setBrandProject(id, project_id) {
+      requireFeature(FEATURE_HQ_BRAND_PROJECT);
+      if (!validProjectId(project_id)) fail({ kind: 'invalid', message: 'Project ID must be 1–160 characters with no surrounding spaces' });
+      return guarded(await call('setBrandProject', { id, project_id }), value => {
+        const brand = guardBrand(value);
+        return brand && brand.project_id !== undefined && validProjectId(brand.project_id) ? brand : null;
+      });
+    },
+    async source(id) { requireFeature(FEATURE_HQ_SOURCES); return guarded(await call('source', { id }), guardSourceContent); },
+    async saveSource(input) { requireFeature(FEATURE_HQ_SOURCES); return guarded(await call('saveSource', input), guardSource); },
+    async setSourceArchived(id, archived) { requireFeature(FEATURE_HQ_SOURCES); return guarded(await call('archiveSource', { id, archived }), guardSource); },
+    async connectChannel(channel, label) { requireFeature(FEATURE_HQ_PUBLISHING); return guarded(await call('publishingConnect', { channel, label }), guardConnection); },
+    async disconnectChannel(id) { requireFeature(FEATURE_HQ_PUBLISHING); return guarded(await call('publishingDisconnect', { id }), guardConnection); },
+    async requestPublish(draft_id, draft_version, connection_id) { requireFeature(FEATURE_HQ_PUBLISHING); return guarded(await call('publishingRequest', { draft_id, draft_version, connection_id }), guardPublish); },
+    async cancelPublish(id) { requireFeature(FEATURE_HQ_PUBLISHING); return guarded(await call('publishingCancel', { id }), guardPublish); },
+    async approvePublish(id, content_sha256) { requireFeature(FEATURE_HQ_PUBLISHING); return guarded(await call('publishingApprove', { id, content_sha256 }), guardPublish); },
     async snapshot(): Promise<WorkspaceSnapshot> {
       return { ...(await readWorkspace()), observedAt: stamp() };
     },
@@ -122,11 +144,12 @@ export function createLiveSocialPort(transport: SocialServiceTransport, options:
       return guarded(await call('run', { id }), guardRun);
     },
 
-    async submitRun(tool, input, isExample): Promise<RunRecord> {
+    async submitRun(tool, input, isExample, options): Promise<RunRecord> {
+      if (options) requireFeature(FEATURE_HQ_SOURCES);
       const checked = checkRunSubmission(tool, input, isExample);
       if (!checked.ok) fail(checked.error);
       // EXECUTION class: one call, never retried. A lost or malformed result is `unknown`.
-      return guarded(await call('submitRun', { tool: checked.value.tool, input: checked.value.input, is_example: checked.value.isExample }), guardRun);
+      return guarded(await call('submitRun', { tool: checked.value.tool, input: checked.value.input, is_example: checked.value.isExample, ...(options ? { source_ids: options.sourceIds } : {}) }), guardRun);
     },
   };
 }

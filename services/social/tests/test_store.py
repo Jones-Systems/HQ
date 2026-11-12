@@ -43,7 +43,7 @@ class StoreCase(ScratchTestCase):
 class Schema(StoreCase):
     def test_a_new_store_is_current_and_seeds_the_default_brand(self):
         self.assertEqual(self.store.schema_version, len(store_module.MIGRATIONS))
-        self.assertEqual(self.store.brands(), [{'id': 'default', 'name': 'My workspace'}])
+        self.assertEqual(self.store.brands(), [{'id': 'default', 'name': 'My workspace', 'project_id': None}])
         self.assertEqual(self.store.brand_ids(), {'default'})
 
     def test_the_database_file_is_private(self):
@@ -56,7 +56,7 @@ class Schema(StoreCase):
         self.assertEqual(columns['brands'], ['id', 'name', 'project_id'])
         self.assertEqual(columns['content'], ['id', 'title', 'body', 'brand_id', 'channel', 'planned_date',
                                               'planning_slot', 'links', 'archived', 'version', 'updated_at'])
-        self.assertEqual(columns['runs'], ['id', 'tool', 'status', 'is_example', 'created_at', 'finished_at', 'error'])
+        self.assertEqual(columns['runs'], ['id', 'tool', 'status', 'is_example', 'created_at', 'finished_at', 'error', 'source_ids'])
 
     def test_reopening_keeps_data_and_does_not_reseed(self):
         self.save(title='Kept')
@@ -85,7 +85,7 @@ class Schema(StoreCase):
         with mock.patch.object(store_module, 'MIGRATIONS', (*store_module.MIGRATIONS, v2)):
             upgraded = Store(self.path)
             self.addCleanup(upgraded.close)
-            self.assertEqual(upgraded.schema_version, 2)
+            self.assertEqual(upgraded.schema_version, len(store_module.MIGRATIONS))
             self.assertEqual([item['title'] for item in upgraded.drafts()], ['Survives'])
             with raw_db(self.path) as db:
                 self.assertIn('note', [row[1] for row in db.execute('PRAGMA table_info(content)')])

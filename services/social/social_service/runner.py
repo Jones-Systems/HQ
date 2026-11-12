@@ -113,7 +113,7 @@ class RunManager:
     def run_dir(self, run_id: str) -> Path:
         return self._runs_dir / run_id
 
-    def submit(self, run: RunInput) -> dict[str, Any]:
+    def submit(self, run: RunInput, source_ids: list[str] | None = None) -> dict[str, Any]:
         """Queue a run, or raise ConflictError when eight are already queued or running."""
         with self._submit_lock:
             if self._store.active_run_count() >= self._max_active:
@@ -127,7 +127,7 @@ class RunManager:
             directory.mkdir(parents=True, mode=0o700)
             try:
                 (directory / 'input.json').write_text(payload, encoding='utf-8')
-                record = self._store.insert_run(run_id, run.tool, run.is_example, self._clock())
+                record = self._store.insert_run(run_id, run.tool, run.is_example, self._clock(), source_ids)
             except BaseException:
                 self._discard(directory)
                 raise

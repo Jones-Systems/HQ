@@ -47,7 +47,16 @@ export function createWireStub(options: FixtureOptions & { readonly advertise?: 
       case 'run': return port.run(p.id as string);
       case 'saveContent': return port.saveDraft(p as never);
       case 'addBrand': return port.addBrand(p.name as string);
-      case 'submitRun': return port.submitRun(p.tool as never, p.input as Record<string, unknown>, p.is_example as boolean);
+      case 'submitRun': return port.submitRun(p.tool as never, p.input as Record<string, unknown>, p.is_example as boolean, p.source_ids ? { sourceIds: p.source_ids as string[] } : undefined);
+      case 'setBrandProject': return port.setBrandProject(p.id as string, p.project_id as string | null);
+      case 'source': return port.source(p.id as string);
+      case 'saveSource': return port.saveSource(p as never);
+      case 'archiveSource': return port.setSourceArchived(p.id as string, p.archived as 0 | 1);
+      case 'publishingConnect': return port.connectChannel(p.channel as never, p.label as string);
+      case 'publishingDisconnect': return port.disconnectChannel(p.id as string);
+      case 'publishingRequest': return port.requestPublish(p.draft_id as string, p.draft_version as number, p.connection_id as string);
+      case 'publishingCancel': return port.cancelPublish(p.id as string);
+      case 'publishingApprove': return port.approvePublish(p.id as string, p.content_sha256 as string);
       default: throw new Error(`Route not in the closed set: ${String(route)}`);
     }
   }
