@@ -1,5 +1,6 @@
 import {
-  EXAMPLE_SOURCE_KINDS, JUDGMENTS, MAX_LABEL_LENGTH, MAX_TEXT_LENGTH, SUBJECT_KINDS, isIdentifier,
+  EXAMPLE_SOURCE_KINDS, JUDGMENTS, MAX_LABEL_LENGTH, MAX_TEXT_LENGTH, SUBJECT_KINDS, isIdentifier, isSubjectIdentifier,
+  parseQualifiedSubjectId, qualifySubjectId,
   type ClaimedRating, type RatingTarget, type RatingValue, type TasteEvent, type TasteScope, type TasteSubject,
 } from './contract.ts';
 
@@ -27,6 +28,10 @@ function label(value: unknown): value is string {
 
 function idOrNull(value: unknown): value is string | null {
   return value === null || isIdentifier(value);
+}
+
+function subjectIdOrNull(value: unknown): value is string | null {
+  return value === null || isSubjectIdentifier(value);
 }
 
 function oneOf<T extends string>(values: readonly T[], value: unknown): value is T {
@@ -57,7 +62,7 @@ export function parseTarget(value: unknown): RatingTarget | null {
 
 export function parseSubject(value: unknown): TasteSubject | null {
   if (!record(value) || !exactKeys(value, ['id', 'kind', 'label'], ['versionId'])) return null;
-  if (!isIdentifier(value.id) || !oneOf(SUBJECT_KINDS, value.kind) || !label(value.label)) return null;
+  if (!isSubjectIdentifier(value.id) || !oneOf(SUBJECT_KINDS, value.kind) || !label(value.label)) return null;
   if ('versionId' in value && !isIdentifier(value.versionId)) return null;
   return value as unknown as TasteSubject;
 }
@@ -87,14 +92,14 @@ export function parseTasteEvent(value: unknown): TasteEvent | null {
     }
     case 'note.added':
       if (!exactKeys(value, ['type', 'noteId', 'scope', 'subjectId', 'about', 'text'])) return null;
-      if (!isIdentifier(value.noteId) || !parseScope(value.scope) || !idOrNull(value.subjectId)
+      if (!isIdentifier(value.noteId) || !parseScope(value.scope) || !subjectIdOrNull(value.subjectId)
         || !idOrNull(value.about) || !text(value.text, MAX_TEXT_LENGTH)) return null;
       return value as unknown as TasteEvent;
     case 'counterevidence.added': {
       if (!exactKeys(value, ['type', 'counterevidenceId', 'scope', 'judgment', 'target', 'subjectId', 'contradicts', 'text'])) return null;
       const target = parseTarget(value.target);
       if (!isIdentifier(value.counterevidenceId) || !parseScope(value.scope) || !oneOf(JUDGMENTS, value.judgment)
-        || !target || !judgmentFitsTarget(value.judgment, target) || !idOrNull(value.subjectId)
+        || !target || !judgmentFitsTarget(value.judgment, target) || !subjectIdOrNull(value.subjectId)
         || !idOrNull(value.contradicts) || !text(value.text, MAX_TEXT_LENGTH)) return null;
       return value as unknown as TasteEvent;
     }
@@ -122,6 +127,20 @@ export function sameScope(a: TasteScope, b: TasteScope): boolean {
 
 export function sameTarget(a: RatingTarget, b: RatingTarget): boolean {
   return a.kind === b.kind && (a.kind === 'overall' || (b.kind === 'aspect' && a.aspect === b.aspect));
+}
+
+/**
+ * The identity a subject has inside `scope`, used for rating slots and for counting distinct subjects.
+ * - A qualified ID is already global.
+ * - A plain version ID inside a project scope can only mean that project's version, so it takes the same identity
+ *   as the qualified ID. Journals written before qualification stay attributed to their project.
+ * - A plain version ID in general scope names no project: it was written before qualification and cannot be
+ *   attributed. It keeps its plain ID, which no qualified ID equals, so it never merges with any project's version.
+ * - Every other subject keeps its ID (references and similar are shared across projects).
+ */
+export function subjectKey(scope: TasteScope, subject: Pick<TasteSubject, 'id' | 'kind'>): string {
+  if (subject.kind !== 'version' || scope.kind !== 'project' || parseQualifiedSubjectId(subject.id) !== null) return subject.id;
+  return qualifySubjectId(scope.projectId, subject.id);
 }
 
 export function scopeKey(scope: TasteScope): string {

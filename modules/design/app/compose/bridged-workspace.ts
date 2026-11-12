@@ -1,3 +1,5 @@
+import { capabilitiesReader } from './capabilities.ts';
+import { createDesignExportPort } from './design-export-port.ts';
 /** Durable section composition. Construction and navigation never seed workspace documents. */
 import type { ProjectContext } from '@hq/contracts';
 import type { WorkspaceDocuments, WorkspaceRecords } from '../storage/index.ts';
@@ -214,6 +216,6 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
   // The call behind Try again, Retry and Reload for reads. It marks the project's content as possibly changed: failed
   // builds (and a failed discovery) are built again on the next read, and healthy stateful values are kept.
   const retry = (projectId: string): void => contentEvents.notify(projectId);
-  return { bridged: true as const, storageTag, contentEvents, retry, contentFor, projectsFor, componentsFor, flowsFor, compareFor, annotationsEnv,
+  return { bridged: true as const, storageTag, readCapabilities: capabilitiesReader(bridgeTransportFor(documents)), designExport: createDesignExportPort(bridgeTransportFor(documents)), contentEvents, retry, contentFor, projectsFor, componentsFor, flowsFor, compareFor, annotationsEnv,
     annotationSessionFor, canvasFor, discoveryEnv, tasteFor, importsFor };
 }

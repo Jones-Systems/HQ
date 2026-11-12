@@ -2,10 +2,10 @@ import {
   GENESIS_HASH,
   type AssessmentView, type ExampleView, type JournalHead, type JournalRecord, type Judgment, type ProfileExport,
   type ProfileExportOptions, type ProfileNote, type ProfileScope, type ProjectId, type RatingSummary, type RatingTarget,
-  type SampleLimit, type Sha256Hex, type TasteProfile, type TasteScope,
+  type SampleLimit, type Sha256Hex, type TasteProfile, type TasteScope, type TasteSubject,
 } from './contract.ts';
 import { canonicalize } from './jcs.ts';
-import { sameTarget, scopeKey, targetKey } from './events.ts';
+import { sameTarget, scopeKey, subjectKey, targetKey } from './events.ts';
 
 /** Pure projection of verified journal records into taste state and profiles. */
 
@@ -21,9 +21,9 @@ export interface TasteState {
   readonly contributions: ReadonlyMap<string, boolean>;
 }
 
-/** One rating slot: a re-rating supersedes the current value in the same slot. */
-export function assessmentKey(scope: TasteScope, subjectId: string, judgment: Judgment, target: RatingTarget): string {
-  return JSON.stringify([scopeKey(scope), subjectId, judgment, targetKey(target)]);
+/** One rating slot: a re-rating supersedes the current value in the same slot. `subject` is a `subjectKey`. */
+export function assessmentKey(scope: TasteScope, subject: string, judgment: Judgment, target: RatingTarget): string {
+  return JSON.stringify([scopeKey(scope), subject, judgment, targetKey(target)]);
 }
 
 export function projectTaste(records: readonly JournalRecord[]): TasteState {
@@ -70,12 +70,13 @@ export function projectTaste(records: readonly JournalRecord[]): TasteState {
 }
 
 export function currentAssessment(
-  state: TasteState, scope: TasteScope, subjectId: string, judgment: Judgment, target: RatingTarget,
+  state: TasteState, scope: TasteScope, subject: Pick<TasteSubject, 'id' | 'kind'>, judgment: Judgment, target: RatingTarget,
 ): AssessmentView | null {
-  const key = assessmentKey(scope, subjectId, judgment, target);
+  const key = assessmentKey(scope, subjectKey(scope, subject), judgment, target);
   let current: AssessmentView | null = null;
   for (const item of state.assessments) {
-    if (item.supersededBy === null && assessmentKey(item.scope, item.subject.id, item.judgment, item.target) === key) current = item;
+    if (item.supersededBy === null
+      && assessmentKey(item.scope, subjectKey(item.scope, item.subject), item.judgment, item.target) === key) current = item;
   }
   return current;
 }
@@ -133,7 +134,7 @@ export function buildProfile(state: TasteState, scope: TasteScope, threshold = D
     };
   }).sort(compareSummaries);
 
-  const subjects = new Set(inScope.filter((item) => item.supersededBy === null).map((item) => item.subject.id));
+  const subjects = new Set(inScope.filter((item) => item.supersededBy === null).map((item) => subjectKey(item.scope, item.subject)));
   return {
     schema: 'hq.design.taste-profile/v1',
     scope: resolved,

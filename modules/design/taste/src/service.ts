@@ -3,6 +3,7 @@ import {
   type AppendResult, type JournalRecord, type ProfileExport, type ProfileExportOptions, type ProjectId,
   type Sha256Hex, type TasteClientPort, type TasteCommand, type TasteEvent, type TasteSnapshot,
 } from './contract.ts';
+import { TasteInvalidInputError } from './errors.ts';
 import { parseScope, parseTasteEvent, sameScope } from './events.ts';
 import type { AppendPrecondition, TasteJournal } from './journal.ts';
 import { DEFAULT_SAMPLE_THRESHOLD, buildProfile, currentAssessment, exportProfile, projectTaste, type TasteState } from './profile.ts';
@@ -52,7 +53,7 @@ function precondition(event: TasteEvent): AppendPrecondition {
     switch (event.type) {
       case 'assessment.recorded': {
         if (used(event.assessmentId)) return 'id-reused';
-        const current = currentAssessment(state, event.scope, event.subject.id, event.judgment, event.target);
+        const current = currentAssessment(state, event.scope, event.subject, event.judgment, event.target);
         if (event.supersedes === null) return current ? 'already-rated' : null;
         return current?.assessmentId === event.supersedes ? null : 'stale-supersede';
       }
@@ -110,7 +111,7 @@ export class TasteService implements TasteClientPort {
 
   async exportProfile(options: ProfileExportOptions): Promise<ProfileExport> {
     const parsed = parseExportOptions(options);
-    if (!parsed) throw new TypeError('Invalid export options');
+    if (!parsed) throw new TasteInvalidInputError('Invalid export options');
     return exportProfile(this.#state(), parsed, this.#options.sha256, this.#options.sampleThreshold ?? DEFAULT_SAMPLE_THRESHOLD);
   }
 }

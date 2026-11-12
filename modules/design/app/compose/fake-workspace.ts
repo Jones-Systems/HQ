@@ -1,3 +1,7 @@
+import { fakeDesignCapabilities } from './capabilities.ts';
+import { createDesignExportPort } from './design-export-port.ts';
+export const readCapabilities = fakeDesignCapabilities;
+export const designExport = createDesignExportPort(null);
 /**
  * Unbridged composition: the original labelled in-memory fakes and synthetic fixtures.
  * Kept separate from the durable workspace so failed bridge operations cannot select these ports.
