@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useId, useRef, type FormEvent } from 'react';
 import { Button, StatusChip } from '@hq/ui';
 import { reportWrite } from '../board';
-import { DRAFT_LABEL, DRAFT_SCOPE_NOTE, landCapture, suggestDate } from '../capture';
+import { DRAFT_LABEL, draftScopeNote, useDrafts, landCapture, suggestDate } from '../capture';
 import { DATE_KIND_LABEL, DEFAULT_SETTINGS, formatValue, LIMITS, plannerToday, type NewItemFields, type WorkState } from '../core';
 import { PlusIcon } from './icons';
 import { useWorkUi, type WorkSession } from './session';
@@ -28,6 +28,8 @@ export const ToolbarCapture = forwardRef<HTMLInputElement, ToolbarCaptureProps>(
   const fieldRef = useRef<HTMLDivElement>(null);
   const { capture } = useWorkUi(session.ui);
   const { ui, store, feedback, drafts } = session;
+  const draftState = useDrafts(drafts);
+  const draftBlocked = draftState.durability === 'loading' || draftState.durability === 'blocked';
   const busy = capture.sending;
   const settings = state.confirmed?.settings ?? DEFAULT_SETTINGS;
   const today = plannerToday(settings, now?.());
@@ -44,9 +46,14 @@ export const ToolbarCapture = forwardRef<HTMLInputElement, ToolbarCaptureProps>(
   const fields = (): NewItemFields => ({ title: capture.text, status: 'inbox', ...(capture.date ? { dates: [capture.date] } : {}) });
 
   const keepAsDraft = () => {
+    if (ui.getState().capture.sending) return;
     if (!title) { ui.setCapture({ error: 'A title is required.' }); return; }
-    drafts.add(fields());
-    feedback.push({ message: `Kept “${title}” as an HQ draft`, meta: `${DRAFT_LABEL} · send it with Send drafts`, tone: 'info' });
+    try { drafts.add(fields()); }
+    catch (cause) {
+      ui.setCapture({ error: cause instanceof Error ? cause.message : 'Could not keep this draft. Keep your text open.' });
+      return;
+    }
+    feedback.push({ message: `Kept “${title}” as an HQ draft`, meta: `${DRAFT_LABEL} · ${draftScopeNote(drafts.getState())}`, tone: 'info' });
     ui.setCapture({ text: '', date: null, unavailable: false, error: null });
   };
 
@@ -124,8 +131,8 @@ export const ToolbarCapture = forwardRef<HTMLInputElement, ToolbarCaptureProps>(
         {capture.unavailable && (
           <div className="work-banner work-banner--offline" role="alert">
             <StatusChip tone="unavailable" label="Planner unreachable" detail="nothing was saved" />
-            <span>You can keep this capture as an HQ draft. {DRAFT_SCOPE_NOTE}</span>
-            <Button size="sm" variant="primary" type="submit">Keep as HQ draft</Button>
+            <span id={`${id}-draft-reason`}>You can keep this capture as an HQ draft. {draftScopeNote(draftState)}</span>
+            <Button size="sm" variant="primary" type="submit" aria-disabled={draftBlocked || capture.sending} aria-describedby={`${id}-draft-reason`}>Keep as HQ draft</Button>
           </div>
         )}
         <p className="hq-meta wd-capture-note" id={`${id}-note`}>{TOOLBAR_CAPTURE_NOTE}</p>

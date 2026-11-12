@@ -63,7 +63,7 @@ Additional pushed checkpoints composed by the coordinator:
 | Final shell wiring | `3bb13af3b3872bf52ad04606be9d0540d84810b3` | Social seed/scope, durability registration, Planner-health observations, Settings and reference fixtures composed. Capture must still adopt durable drafts. |
 | Gated Social extensions | `90a3098684f4824508f16ea674388afbeeb218b5` | Service/client source composed with publishing off. Additive shared routes and closed desktop encoder integration remain pending. |
 
-No recovery PR has been opened. Ordinary local merges preserve retained ancestry and are not foundation merges. Source checkpoints are not accepted behavior.
+Recovery PR [#213](https://github.com/Jones-Systems/HQ/pull/213) is open and non-draft against `work/hq-foundation`. Ordinary local merges preserve retained ancestry and are not foundation merges. Source checkpoints are not accepted behavior.
 
 ### Remaining source work
 
@@ -139,6 +139,12 @@ The updater requested the heavy slot back for its distinct authorized attempt. T
 ## Current state and contributing threads
 
 The assembled source checkpoint `2c5313d9f4d696e169c2ae472ee9c5923edccc0c` was pushed and its remote SHA read back. Foundation remains `8945d156585510fbdf1515fad01798f416146b4e`. The scoped native-scenario P1 successor is pushed at `17539f43f5f5aea040fd9c178ad6245eb35e3c54`; independent fix review is pending. Durable capture is pushed at `8e7d3b32192fd203b4c81119728faaef23742bbe`; independent correctness review and the explicit toolbar caller adaptation precede composition. The Social shared bridge owner is implementing the additive contracts and encoder. These checkpoints have no passing behavior evidence.
+
+Subsequent source fan-in: independent native review cleared the four original P1s and their source was composed. Its additional P1 counted-Library selector is corrected in source with zero/nonzero badge regressions; fix review remains pending. Independent durable-capture review found no new P0/P1 and allowed conditional composition, now done. Its two P2 findings remain recorded/unselected in the specification. INT applied the explicit toolbar refusal/status caller hunk and authored unrun regressions; this does not waive those findings or establish fresh core/adapter restart recovery. Independent Social bridge review cleared `7e97082fd1cf03bed1cec8d363217ac04f488aaf` as a source candidate; INT applied the exhaustive absent-feature zero-call test hunk. All behavior remains unqualified.
+
+First hosted Foundation run on PR head `b8f8198b4f1fa000fbd01ffc5ff3a56734ef1222` failed during typecheck, before tests: shared Social route drift, three shell/test typing issues, Projects view typing and fixture extension typing. INT corrected the bounded shell and fixture issues; Projects successor `55578f34b7326684ddf10046dcc3fb345929adb4` is composed. No assertions, required discovery or compiler checks were weakened. CI on the next assembled head is still required. The app's link operation returned an error, but a native PR-list readback confirms #213 is attached; no duplicate PR was created.
+
+Pinned compiler research found supported Rolldown Tokio and Rayon per-pool controls, but no complete aggregate worker bound. Native TypeScript, libuv/NAPI and conditional JavaScript-worker paths require qualification too. Setting individual pools to one is only a candidate, not proof of the required total. The Mini execution and unknown-effect holds remain.
 
 Contributing conversations and roles, with native identifiers retained privately:
 
