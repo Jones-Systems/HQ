@@ -1,13 +1,20 @@
-import { useId, useState, type KeyboardEvent } from 'react';
-import { Button, Dialog, SaveIndicator, StatusChip, type ReferencePort } from '@hq/ui';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Button, Dialog, FieldError, InlineNotice, StatusChip, useToast, type ReferencePort } from '@hq/ui';
 import {
-  CHANNELS, FEATURE_HQ_REFERENCES, FEATURE_HQ_BRAND_PROJECT, LIMITS, MESSAGES, codePoints,
-  type Brand, type Channel, type DraftEditor as Editor, type SocialSession, type SocialWorkspacePort,
+  CHANNELS, FEATURE_HQ_REFERENCES, FEATURE_HQ_BRAND_PROJECT, LIMITS, MESSAGES, codePoints, portErrorNotice,
+  type Brand, type Channel, type DraftEditor as Editor, type DraftFields, type SocialSession, type SocialWorkspacePort,
 } from '../core';
+import { SocialIcon, shortTime } from '../ui';
 import { errorText, invalidField, reconcileUnknownSave, saveStateOf, type Reconciliation } from './actions';
+import { Checks } from './composer/Checks';
+import { ChannelPreview } from './composer/ChannelPreview';
+import { LimitRing } from './composer/LimitRing';
+import { SaveBar, SaveStatus } from './composer/SaveBar';
+import { ILLUSTRATIVE_LIMITS, draftChecks, runOrigin } from './composer/channel';
 import { DraftLinks } from './DraftLinks';
 import { referenceSavePort, UNSAVED_LINKS } from './links';
 import { dateLabel } from './model';
+import './composer/composer.css';
 
 export interface DraftEditorProps {
   readonly projectId?: string;
@@ -23,17 +30,34 @@ export interface DraftEditorProps {
   readonly onSaved?: (draftId: string) => void;
   readonly onClose: () => void;
   readonly onOpenDraft: (draftId: string) => void;
+  /** Back to the list without closing the editor; shown where the list and the composer cannot sit side by side. */
+  readonly onBack?: () => void;
 }
 
+/** What follows "Saved", for example "v4 · 2:31 PM". */
 function savedAtLabel(editor: Editor): string | undefined {
   if (!editor.base) return undefined;
   const time = new Date(editor.base.updated_at);
-  const clock = Number.isNaN(time.getTime()) ? '' : ` at ${time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  return `· version ${editor.base.version}${clock}`;
+  return Number.isNaN(time.getTime()) ? `v${editor.base.version}` : `v${editor.base.version} · ${shortTime(editor.base.updated_at)}`;
 }
 
-export function DraftEditor({ session, port, editorKey, editor, brands, features, paused, onSaved, onClose, onOpenDraft, projectId, references }: DraftEditorProps) {
+/** The control that takes each field's focus when the service rejects it. */
+const FIELD_SUFFIX: { readonly [K in keyof DraftFields]?: string } = {
+  title: 'title', body: 'body', channel: 'channel', brand_id: 'brand', planned_date: 'planned',
+};
+
+function shortcutHint(): string {
+  return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/u.test(navigator.userAgent) ? '⌘ S' : 'Ctrl S';
+}
+
+export function DraftEditor({ session, port, editorKey, editor, brands, features, paused, onSaved, onClose, onOpenDraft, onBack, projectId, references }: DraftEditorProps) {
   const id = useId();
+  const toast = useToast();
+  const shown = useRef(true);
+  useEffect(() => {
+    shown.current = true;
+    return () => { shown.current = false; };
+  }, []);
   const [linkError, setLinkError] = useState('');
   const brandProject = features.includes(FEATURE_HQ_BRAND_PROJECT) ? brands.find((brand) => brand.id === editor.fields.brand_id)?.project_id : undefined;
   const mismatch = Boolean(references && projectId && brandProject && projectId !== brandProject);
@@ -43,10 +67,22 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
   const [copied, setCopied] = useState<'copied' | 'select' | null>(null);
   const [loadNote, setLoadNote] = useState<string | null>(null);
   const { fields, status, error } = editor;
+  const notice = error ? portErrorNotice(error, 'save') : null;
   const field = invalidField(error);
+  const fieldSuffix = field ? FIELD_SUFFIX[field] : undefined;
   const busy = status === 'saving';
   const isNew = !editor.base;
   const linksUnsupported = (fields.links?.length ?? 0) > 0 && !features.includes(FEATURE_HQ_REFERENCES);
+  const brandName = brands.find((brand) => brand.id === fields.brand_id)?.name ?? 'Unknown brand';
+  const { title, body, channel } = fields;
+  const checks = useMemo(() => draftChecks({ title, body, channel }), [title, body, channel]);
+  const origin = runOrigin(fields.links);
+  const limit = ILLUSTRATIVE_LIMITS[fields.channel];
+
+  // A rejected field takes focus, so the person lands on what needs fixing with their text kept.
+  useEffect(() => {
+    if (status === 'error' && error?.kind === 'invalid' && fieldSuffix) document.getElementById(`${id}-${fieldSuffix}`)?.focus();
+  }, [status, error, fieldSuffix, id]);
 
   const edit = (patch: Parameters<SocialSession['editDraft']>[1]) => {
     setReconciliation(null);
@@ -59,7 +95,12 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
     setLinkError('');
     setReconciliation(null);
     const saved = await session.saveEditor(referenceSavePort(port, features), editorKey);
-    if (saved) onSaved?.(saved.id);
+    if (saved) {
+      // The save bar says Saved in place, so a toast would only cover its buttons. One appears only when the editor
+      // closed before the save finished and nothing on screen would otherwise say how it ended. It never says posted.
+      if (!shown.current) toast.show({ id: `social-draft-saved:${saved.id}`, tone: 'success', title: `Saved “${saved.title}”`, meta: `Version ${saved.version} · nothing was posted` });
+      onSaved?.(saved.id);
+    }
     return saved;
   }
 
@@ -96,7 +137,7 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
     setLoadNote(null);
     if (await session.reopenLatest(port, editorKey)) return;
     const load = session.getState().workspace;
-    setLoadNote(`Could not load their version. ${load.status === 'error' ? `${errorText(load.error)} ` : ''}Your text is kept here.`);
+    setLoadNote(`Could not load their version. ${load.status === 'error' ? `${errorText(load.error, 'load')} ` : ''}Your text is kept here.`);
   }
 
   function onKeyDown(event: KeyboardEvent) {
@@ -106,56 +147,38 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
     }
   }
 
-  const describedBy = (name: string) => [`${id}-${name}-hint`, field === name ? `${id}-error` : null].filter(Boolean).join(' ');
+  const describedBy = (name: string) => [`${id}-${name}-hint`, field && FIELD_SUFFIX[field] === name ? `${id}-error` : null].filter(Boolean).join(' ');
+  const fieldMessage = error?.kind === 'invalid' && fieldSuffix ? errorText(error) : undefined;
+  const conflicted = status === 'conflict' || reconciliation?.kind === 'changed';
+  const unsaveable = !paused && (error?.kind === 'unknown' && reconciliation?.kind !== 'not-applied');
+  const saveDisabled = Boolean(paused) || unsaveable;
 
-  return (
-    <section className="soc-editor" aria-labelledby={`${id}-heading`} onKeyDown={onKeyDown}>
-      <header className="soc-editor-bar">
-        <h2 id={`${id}-heading`}>{isNew ? 'New draft' : 'Edit draft'}</h2>
-        <SaveIndicator
-          state={saveStateOf(editor)}
-          savedAt={savedAtLabel(editor)}
-          onRetry={status === 'error' && error?.kind !== 'invalid' && error?.kind !== 'unknown' ? () => void save() : undefined}
-          onCheck={async () => setReconciliation(await reconcileUnknownSave(session, port, editorKey))}
-        />
-        <span className="soc-editor-actions">
-          {!isNew && (
-            <Button variant="secondary" size="sm" onClick={() => void toggleArchive()} disabled={Boolean(paused)}>
-              {fields.archived === 1 ? 'Restore' : 'Archive'}
-            </Button>
-          )}
-          <Button variant="primary" size="sm" busy={busy} busyLabel="Saving…" onClick={() => void save()} disabled={Boolean(paused) || (error?.kind === 'unknown' && reconciliation?.kind !== 'not-applied')} aria-keyshortcuts="Control+S Meta+S">
-            Save
-          </Button>
-          <Button variant="ghost" size="sm" disabled={busy} onClick={() => (status === 'editing' && !isNew && saveStateOf(editor) === 'saved' ? onClose() : setConfirm('discard'))}>
-            Close
-          </Button>
-        </span>
-      </header>
-
+  const notices = (
+    <>
       {paused && <p className="soc-note soc-note--warning" role="note">{paused}</p>}
-
-      {(status === 'conflict' || reconciliation?.kind === 'changed') && (
-        <div className="soc-banner soc-banner--danger" role="alert">
-          <strong>Changed elsewhere.</strong>
-          <span> Someone saved this draft in another window. Nothing was overwritten, and your text is kept here.</span>
-          <span className="soc-banner-actions">
-            <Button size="sm" variant="secondary" onClick={() => setConfirm('load-theirs')}>Load their version</Button>
-            <Button size="sm" variant="secondary" onClick={() => void saveCopy()}>Save mine as a copy</Button>
-            <Button size="sm" variant="ghost" onClick={() => void copyText()}>Copy my text</Button>
-          </span>
+      {linkError && <p className="soc-note soc-note--danger" role="alert">{linkError}</p>}
+      {conflicted && (
+        <InlineNotice
+          tone="warning" title="Changed elsewhere."
+          actions={[
+            { label: 'Load their version', onAction: () => setConfirm('load-theirs') },
+            { label: 'Save mine as a copy', onAction: () => void saveCopy() },
+            { label: 'Copy my text', onAction: () => void copyText() },
+          ]}
+        >
+          Someone saved this draft in another window. Nothing was overwritten, and your text is kept here.
           {copied === 'copied' && <span role="status"> Copied.</span>}
-          {copied === 'select' && <span role="status"> Copying is unavailable here; select the text below and copy it.</span>}
+          {copied === 'select' && <span role="status"> Copying is unavailable here; select the text above and copy it.</span>}
           {loadNote && <span role="status"> {loadNote}</span>}
-        </div>
+        </InlineNotice>
       )}
-
-      {error && status === 'error' && (
-        <p id={`${id}-error`} className="soc-note soc-note--danger" role="alert">
-          <strong>Not saved.</strong> {errorText(error)} Your text is kept in this session.
-        </p>
+      {notice && status === 'error' && error?.kind !== 'unknown' && !fieldMessage && (
+        <InlineNotice tone={notice.tone} title={notice.title}>{notice.message}</InlineNotice>
       )}
-
+      {error && status === 'error' && fieldMessage && <p className="soc-note soc-note--danger">Fix the highlighted field. Your text is kept in this session.</p>}
+      {notice && status === 'error' && error?.kind === 'unknown' && (
+        <InlineNotice tone={notice.tone} title={notice.title}>{notice.message}</InlineNotice>
+      )}
       {reconciliation && (
         <p className="soc-note" role="status">
           {reconciliation.kind === 'applied' && 'Checked: your save was stored.'}
@@ -170,72 +193,144 @@ export function DraftEditor({ session, port, editorKey, editor, brands, features
           )}
         </p>
       )}
+    </>
+  );
 
-      {linkError && <p role="alert">{linkError}</p>}
-      <fieldset className="soc-fields" disabled={mismatch} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
-        <div className="soc-field soc-field--wide">
-          <label htmlFor={`${id}-title`}>Title</label>
+  // A clean, saved draft closes at once; anything else asks before its text is dropped.
+  const close = () => (status === 'editing' && !isNew && saveStateOf(editor) === 'saved' ? onClose() : setConfirm('discard'));
+
+  return (
+    <section className="soc-cmp" aria-labelledby={`${id}-heading`} onKeyDown={onKeyDown}>
+      <header className="soc-cmp-head">
+        {onBack && (
+          <Button className="soc-cmp-back" size="sm" variant="ghost" aria-label="Back to all drafts" onClick={onBack}><SocialIcon name="chevron-left" />All drafts</Button>
+        )}
+        <h2 id={`${id}-heading`}>{isNew ? 'New draft' : 'Edit draft'}</h2>
+        <span className="soc-cmp-where">{brandName} · {fields.channel}</span>
+        <Button className="soc-cmp-close" size="sm" variant="ghost" aria-label="Close" title="Close this draft" disabled={busy} onClick={close}><SocialIcon name="close" /></Button>
+      </header>
+
+      {origin && (
+        <div className="soc-origin" role="group" aria-label="Where this draft came from">
+          <span className="soc-origin-icon" aria-hidden="true"><SocialIcon name="sparkle" /></span>
+          <div className="soc-origin-text">
+            <strong>From run · {origin.tool}{origin.asOf ? ` · ${origin.asOf}` : ''}</strong>
+            <span>
+              {origin.example ? 'Built from example data. ' : ''}
+              {linksUnsupported ? 'The link to the run stays in this draft but cannot be stored yet.'
+                : isNew ? 'The link to the run is saved with the draft when you save.' : 'The link to the run is saved with the draft.'}
+            </span>
+          </div>
+          {origin.example && <span className="sx-tag sx-tag--example">Example data</span>}
+        </div>
+      )}
+
+      <fieldset className="soc-cmp-compose" disabled={mismatch}>
+        <div className="soc-field soc-field--title">
+          <div className="soc-field-line">
+            <label htmlFor={`${id}-title`}>Title</label>
+            <small id={`${id}-title-hint`} className="soc-field-count">{codePoints(fields.title)} / {LIMITS.title} characters</small>
+          </div>
           <input
-            id={`${id}-title`} value={fields.title} onChange={(event) => edit({ title: event.target.value })}
+            id={`${id}-title`} value={fields.title} onChange={(event) => edit({ title: event.target.value })} placeholder="A short title for finding this draft"
             aria-invalid={field === 'title' || undefined} aria-describedby={describedBy('title')} readOnly={busy}
           />
-          <small id={`${id}-title-hint`} className="hq-meta">{codePoints(fields.title)} / {LIMITS.title} characters</small>
+          {field === 'title' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
         </div>
 
-        <div className="soc-field">
-          <label htmlFor={`${id}-brand`}>Brand</label>
-          <select id={`${id}-brand`} value={fields.brand_id} onChange={(event) => edit({ brand_id: event.target.value })} aria-invalid={field === 'brand_id' || undefined} aria-describedby={describedBy('brand_id')} disabled={busy}>
-            {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
-          </select>
-          <small id={`${id}-brand_id-hint`} className="hq-meta">Brands come from the Social workspace.</small>
-        </div>
-
-        <div className="soc-field">
-          <label htmlFor={`${id}-channel`}>Channel</label>
-          <select id={`${id}-channel`} value={fields.channel} onChange={(event) => edit({ channel: event.target.value as Channel })} aria-invalid={field === 'channel' || undefined} aria-describedby={describedBy('channel')} disabled={busy}>
-            {CHANNELS.map((channel) => <option key={channel} value={channel}>{channel}</option>)}
-          </select>
-          <small id={`${id}-channel-hint`} className="hq-meta">Nothing is posted to this channel.</small>
-        </div>
-
-        <div className="soc-field">
-          <label htmlFor={`${id}-planned`}>Planned date</label>
-          <span className="soc-inline">
-            <input
-              id={`${id}-planned`} type="date" value={fields.planned_date} onChange={(event) => edit({ planned_date: event.target.value })}
-              aria-invalid={field === 'planned_date' || undefined} aria-describedby={describedBy('planned_date')} readOnly={busy}
-            />
-            {fields.planned_date && <Button size="sm" variant="ghost" onClick={() => edit({ planned_date: '' })} disabled={busy}>Clear date</Button>}
-          </span>
-          <small id={`${id}-planned_date-hint`} className="hq-meta">
-            {fields.planned_date ? `Planned for ${dateLabel(fields.planned_date)}. ` : 'No planned date. '}
-            An editorial planning label only: it never posts, and it is separate from Work's planning dates.
-          </small>
-        </div>
-
-        <div className="soc-field soc-field--wide">
+        <div className="soc-field soc-field--body">
           <label htmlFor={`${id}-body`}>Body</label>
           <textarea
-            id={`${id}-body`} rows={10} value={fields.body} onChange={(event) => edit({ body: event.target.value })}
+            id={`${id}-body`} rows={5} value={fields.body} onChange={(event) => edit({ body: event.target.value })} placeholder="Write the post…"
             aria-invalid={field === 'body' || undefined} aria-describedby={describedBy('body')} readOnly={busy}
           />
-          <small id={`${id}-body-hint`} className="hq-meta">{codePoints(fields.body)} / {LIMITS.body} characters · one body for every channel</small>
+          {field === 'body' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
+          <LimitRing id={`${id}-body-hint`} count={codePoints(fields.body)} limit={limit} channel={fields.channel} />
         </div>
+
+        <div className="soc-cmp-details">
+          <div className="soc-field">
+            <label htmlFor={`${id}-brand`}>Brand</label>
+            <select id={`${id}-brand`} value={fields.brand_id} onChange={(event) => edit({ brand_id: event.target.value })} aria-invalid={field === 'brand_id' || undefined} aria-describedby={describedBy('brand')} disabled={busy}>
+              {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
+            </select>
+            {field === 'brand_id' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
+            <small id={`${id}-brand-hint`} className="hq-sr-only">Brands come from the Social workspace.</small>
+          </div>
+
+          <div className="soc-field">
+            <label htmlFor={`${id}-channel`}>Channel</label>
+            <select id={`${id}-channel`} value={fields.channel} onChange={(event) => edit({ channel: event.target.value as Channel })} aria-invalid={field === 'channel' || undefined} aria-describedby={describedBy('channel')} disabled={busy}>
+              {CHANNELS.map((channel) => <option key={channel} value={channel}>{channel}</option>)}
+            </select>
+            {field === 'channel' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
+            <small id={`${id}-channel-hint`} className="soc-hint">Nothing is posted to this channel.</small>
+          </div>
+
+          <div className="soc-field soc-field--date">
+            <label htmlFor={`${id}-planned`}>Planned date</label>
+            <span className="soc-inline">
+              <input
+                id={`${id}-planned`} type="date" value={fields.planned_date} onChange={(event) => edit({ planned_date: event.target.value })}
+                aria-invalid={field === 'planned_date' || undefined} aria-describedby={describedBy('planned')} readOnly={busy}
+              />
+              {fields.planned_date && <Button size="sm" variant="ghost" onClick={() => edit({ planned_date: '' })} disabled={busy}>Clear date</Button>}
+            </span>
+            {field === 'planned_date' && <FieldError id={`${id}-error`} announce>{fieldMessage}</FieldError>}
+            <small id={`${id}-planned-hint`} className="soc-hint">
+              {fields.planned_date ? `Planned for ${dateLabel(fields.planned_date)}. ` : 'No planned date. '}
+              An editorial planning label only: it never posts, and it is separate from Work's planning dates.
+            </small>
+          </div>
+        </div>
+        <div className="soc-cmp-preview">
+          <h3 className="soc-side-title">Channel preview</h3>
+          <ChannelPreview fields={fields} brandName={brandName} />
+        </div>
+        <Checks checks={checks} headingId={`${id}-checks`} />
       </fieldset>
 
       {references && projectId ? <DraftLinks session={session} port={port} editorKey={editorKey} editor={editor} features={features} projectId={projectId} references={references} paused={paused} /> : (fields.links?.length ?? 0) > 0 && (
         <section className="soc-links" aria-labelledby={`${id}-links`}>
-          <h3 id={`${id}-links`}>Linked across HQ</h3>
-          <ul>
+          <div className="soc-links-head"><h3 id={`${id}-links`}>Linked across HQ</h3></div>
+          <ul className="soc-link-list">
             {fields.links!.map((link) => (
-              <li key={`${link.domain}/${link.kind}/${link.entityId}`}>
-                <span>{link.title}</span> <span className="hq-meta">{link.domain} · {link.kind}{link.sourceRevision ? ` · as of ${link.sourceRevision}` : ''}</span>
+              <li key={`${link.domain}/${link.kind}/${link.entityId}`} className="soc-link">
+                <span className="soc-link-icon" aria-hidden="true"><SocialIcon name="link" /></span>
+                <div className="soc-link-body">
+                  <span className="soc-link-title">{link.title}</span>
+                  <span className="soc-link-meta">{link.kind} in {link.domain}</span>
+                </div>
               </li>
             ))}
           </ul>
-          {linksUnsupported && <><StatusChip tone="warning" label="Not saved" /><p>{UNSAVED_LINKS}</p></>}
+          {linksUnsupported && <div className="soc-links-unsupported"><StatusChip tone="warning" label="Not saved" /><p>{UNSAVED_LINKS}</p></div>}
         </section>
       )}
+
+      <SaveBar
+        notices={notices}
+        status={(
+          <SaveStatus
+            state={saveStateOf(editor)}
+            savedAt={savedAtLabel(editor)}
+            onRetry={status === 'error' && error?.kind !== 'invalid' && error?.kind !== 'unknown' ? () => void save() : undefined}
+            onCheck={async () => setReconciliation(await reconcileUnknownSave(session, port, editorKey))}
+          />
+        )}
+        actions={(
+          <>
+            {!isNew && (
+              <Button variant="ghost" onClick={() => void toggleArchive()} disabled={Boolean(paused)}>
+                {fields.archived === 1 ? 'Restore' : 'Archive'}
+              </Button>
+            )}
+            <Button variant="primary" busy={busy} busyLabel="Saving…" onClick={() => void save()} disabled={saveDisabled} aria-keyshortcuts="Control+S Meta+S" title="Save the draft to the library. It is never posted.">
+              Save draft<kbd className="soc-kbd" aria-hidden="true">{shortcutHint()}</kbd>
+            </Button>
+          </>
+        )}
+      />
 
       <Dialog
         open={confirm === 'discard'} onClose={() => setConfirm(null)} role="alertdialog"

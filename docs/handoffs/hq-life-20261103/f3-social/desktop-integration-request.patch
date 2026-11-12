@@ -1,0 +1,115 @@
+diff --git a/apps/desktop/src/preview/composition.test.tsx b/apps/desktop/src/preview/composition.test.tsx
+index a0149c9..d35dbc2 100644
+--- a/apps/desktop/src/preview/composition.test.tsx
++++ b/apps/desktop/src/preview/composition.test.tsx
+@@ -10,7 +10,7 @@ import { createReferencePort } from '../references';
+ import { DEFAULT_STATE, navigationKey } from '../state';
+ import userEvent from '@testing-library/user-event';
+ import { resetWorkSessions, setWorkSessionPort } from '../../../../modules/work/nav';
+-import { resetSocialSessions } from '../../../../modules/social/core';
++import { FIXTURE_IDS, FIXTURE_WORK_ITEM_ID, resetSocialSessions, type SocialWorkspacePort } from '../../../../modules/social/core';
+ 
+ const props: ModulePort = { context: { id: 'preview-test', name: 'Synthetic preview' }, destination: 'home', appearance: 'light', desktop: { platform: 'browser', versions: { electron: null } }, navigate: vi.fn() };
+ afterEach(() => { cleanup(); resetWorkSessions(); setWorkSessionPort(null); resetSocialSessions(); window.localStorage.clear(); vi.restoreAllMocks(); });
+@@ -27,6 +27,20 @@ it('renders example Work and Social without any global service bridge', async ()
+   expect(await UNCONFIGURED.work.call()).toEqual({ ok: false, kind: 'unavailable' });
+ });
+ 
++it('opens the Social example in the project it is shown in, so its sample links are not read as another project', async () => {
++  const social = vi.fn((projectId: string) => seed('default').social(projectId));
++  const { Social } = createServiceDomains(() => UNCONFIGURED, { social });
++  render(<Social {...props} destination={`library/${FIXTURE_IDS.steepingThread}`} />);
++  expect(await screen.findByDisplayValue('Steeping times thread')).toBeTruthy();
++  expect(social).toHaveBeenCalledWith('preview-test');
++  const port = social.mock.results[0]!.value as SocialWorkspacePort;
++  const draft = (await port.snapshot()).content.find((item) => item.id === FIXTURE_IDS.steepingThread)!;
++  expect(draft.links?.map((link) => [link.domain, link.projectId, link.entityId])).toEqual([
++    ['social', 'preview-test', FIXTURE_IDS.exampleRun], ['work', 'preview-test', FIXTURE_WORK_ITEM_ID],
++  ]);
++  expect(screen.queryByText(/Another project: links are read-only/u)).toBeNull();
++});
++
+ it('keeps missing production bridges unavailable', async () => {
+   const { Work, Social } = createServiceDomains(() => undefined);
+   render(<><Work {...props} /><Social {...props} /></>);
+diff --git a/apps/desktop/src/preview/composition.tsx b/apps/desktop/src/preview/composition.tsx
+index b201122..e47e4c3 100644
+--- a/apps/desktop/src/preview/composition.tsx
++++ b/apps/desktop/src/preview/composition.tsx
+@@ -4,8 +4,7 @@ import { EXAMPLE_SETTINGS } from '../../../../modules/work/core/fixtures/example
+ import { createSocialReferenceProvider } from '../../../../modules/social/references';
+ import { createLiveSocialPort } from '../../../../modules/social/live';
+ import { bridgeTransport, createPlannerLive } from '../../../../modules/work/live';
+-import { createWorkbenchFixture } from '../../../../modules/social/workbench/fixtures/examples';
+-import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES } from '../../../../modules/social/core';
++import { createExampleWorkspace } from '../../../../modules/social/nav';
+ import type { ComponentType } from 'react';
+ import type { DomainId, ModulePort } from '@hq/contracts';
+ import type { ReferenceProvider } from '@hq/contracts/references';
+@@ -25,7 +24,7 @@ export function seed(entry: PreviewEntry) {
+     planner: () => entry === 'empty'
+       ? createFixturePlanner({ items: [], settings: { ...EXAMPLE_SETTINGS } }).port
+       : examplePlanner(),
+-    social: () => createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port,
++    social: (projectId: string) => createExampleWorkspace(projectId),
+   };
+ }
+ 
+diff --git a/apps/desktop/src/services/domains.tsx b/apps/desktop/src/services/domains.tsx
+index 14b18c8..f356cf1 100644
+--- a/apps/desktop/src/services/domains.tsx
++++ b/apps/desktop/src/services/domains.tsx
+@@ -3,15 +3,13 @@ import type { ModulePort } from '@hq/contracts';
+ import type { HqServices, ServiceDomain } from '@hq/contracts/services';
+ import { createWorkExportClient } from './work-export';
+ import { WorkModule, setWorkSessionPort, examplePlanner } from '@hq/work';
+-import { SocialDomain } from '../../../../modules/social/nav';
++import { SocialDomain, createExampleWorkspace } from '../../../../modules/social/nav';
+ import { createLiveSocialPort } from '../../../../modules/social/live';
+-import { createWorkbenchFixture } from '../../../../modules/social/workbench/fixtures/examples';
+-import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES } from '../../../../modules/social/core';
+ import { bridgeTransport, createPlannerLive } from '../../../../modules/work/live';
+ import { serviceStatus } from './data-source-status';
+ 
+ type Services = Pick<HqServices, 'social' | 'work'> & { config: Pick<HqServices['config'], 'status'> };
+-type Examples = { planner?: () => import('../../../../modules/work/core/port').PlannerPort; social?: () => import('../../../../modules/social/core/port').SocialWorkspacePort };
++type Examples = { planner?: () => import('../../../../modules/work/core/port').PlannerPort; social?: (projectId: string) => import('../../../../modules/social/core/port').SocialWorkspacePort };
+ 
+ type Selection = 'live' | 'example' | 'unavailable';
+ export const RELOAD_NOTE = 'Endpoint changes apply after HQ reloads.';
+@@ -37,16 +35,17 @@ export function createServiceDomains(getServices: () => Services | undefined, ex
+   let socialChoice: ReturnType<typeof chooseSocial> | undefined;
+   let workChoice: Promise<Selection> | undefined;
+   let workExport: ReturnType<typeof createWorkExportClient> | undefined;
+-  async function chooseSocial() {
++  /** `projectId` is the project the example workspace is first shown in; its sample links point there. */
++  async function chooseSocial(projectId: string) {
+     const services = getServices();
+     const selection = await selectService(services, 'social');
+     const port = selection === 'live' ? createLiveSocialPort(services!.social)
+-      : selection === 'example' ? (examples?.social?.() ?? createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port) : null;
++      : selection === 'example' ? (examples?.social?.(projectId) ?? createExampleWorkspace(projectId)) : null;
+     return { selection, port };
+   }
+   function Social(props: ModulePort) {
+     const [choice, setChoice] = useState<Awaited<ReturnType<typeof chooseSocial>> | null>(null);
+-    useEffect(() => { let mounted = true; socialChoice ??= chooseSocial(); void socialChoice.then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
++    useEffect(() => { let mounted = true; socialChoice ??= chooseSocial(props.context.id); void socialChoice.then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
+     return choice ? <Surface domain="Social" selection={choice.selection}>{choice.port && <SocialDomain {...props} port={choice.port} example={choice.selection === 'example'} />}</Surface> : <p role="status">Checking Social configuration…</p>;
+   }
+   async function chooseWork(): Promise<Selection> {
+diff --git a/apps/desktop/src/social-work.integration.test.tsx b/apps/desktop/src/social-work.integration.test.tsx
+index 12528a8..68de738 100644
+--- a/apps/desktop/src/social-work.integration.test.tsx
++++ b/apps/desktop/src/social-work.integration.test.tsx
+@@ -203,8 +203,9 @@ describe('Social and Work mounted in the T0 shell', () => {
+     expect(await screen.findByRole('navigation', { name: 'Design' })).toBeTruthy();
+ 
+     await openSocial();
++    expect(screen.getByRole('button', { name: /^Example workspace/u })).toBeTruthy();
+     expect(screen.getByText(/^Fictional example workspace/u)).toBeTruthy();
+-    expect(screen.getByText(/^No account connection, posting, live collection or scheduling\./u)).toBeTruthy();
++    expect(within(screen.getByRole('region', { name: 'What Social can do here' })).getByText(/^No account connection, posting, live collection or scheduling\./u)).toBeTruthy();
+ 
+     await openWork();
+     expect(screen.getByText(/^Fictional example planning, kept in memory for this session only\./u)).toBeTruthy();

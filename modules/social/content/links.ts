@@ -2,7 +2,7 @@ import { parseReference, type ReferenceEnvelope } from '@hq/contracts';
 import { referenceKey, type ReferenceUndo } from '@hq/ui';
 import { FEATURE_HQ_REFERENCES, MAX_DRAFT_LINKS, MESSAGES, PortFailure, type SocialSession, type SocialWorkspacePort, workspaceSnapshot } from '../core';
 
-export const UNSAVED_LINKS = 'not saved — needs Social service support';
+export const UNSAVED_LINKS = 'Links are not saved: the Social service needs an update before it can store them. They stay in this draft.';
 
 /** A claimed successful save must echo the links; otherwise keep the existing unknown-save path. */
 export function referenceSavePort(port: SocialWorkspacePort, features: readonly string[]): SocialWorkspacePort {

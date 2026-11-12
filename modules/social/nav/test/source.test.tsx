@@ -82,6 +82,8 @@ describe('Social workspace source selection', () => {
     await overview();
     expect(socialWorkspace().source).toBe('fixture');
     expect(screen.getByText(BANNER)).toBeTruthy();
+    // The visible label is the page header's status pill; the full note is in its panel.
+    expect(screen.getByRole('button', { name: /^Example workspace/u })).toBeTruthy();
   });
 
   it.each<[string, unknown]>([
@@ -103,6 +105,7 @@ describe('Social workspace source selection', () => {
     await overview();
     expect(socialWorkspace().source).toBe('live');
     expect(screen.queryByText(BANNER)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Example workspace/u })).toBeNull();
     expect(stub.callsTo('workspace')).toHaveLength(1);
   });
 
@@ -123,11 +126,15 @@ describe('Social workspace source selection', () => {
     const call = vi.fn<SocialServiceTransport['call']>(async () => ({ ok: false, kind: 'unavailable' }) satisfies ServiceResponse);
     installBridge({ call });
     const { user } = mount();
-    expect(await screen.findByText('The Social service is unreachable')).toBeTruthy();
+    const notice = await screen.findByRole('status');
+    expect(within(notice).getByText('Social service unreachable')).toBeTruthy();
+    // A configured live service that can't be reached points at its settings.
+    expect(within(notice).getByRole('button', { name: 'Open Social settings' })).toBeTruthy();
     expect(screen.queryByText(BANNER)).toBeNull();
     expect(screen.queryByText('Larkspur Tea Co.')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByText('The Social service is unreachable')).toBeTruthy();
+    await user.click(within(notice).getByRole('button', { name: 'Try again' }));
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2));
+    expect(within(await screen.findByRole('status')).getByText('Social service unreachable')).toBeTruthy();
     expect(socialWorkspace().source).toBe('live');
     expect(call.mock.calls.map(([route]) => route)).toEqual(['workspace', 'workspace']);
     expect(screen.queryByText(BANNER)).toBeNull();

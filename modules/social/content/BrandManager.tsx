@@ -39,7 +39,7 @@ export function BrandManager({ session, port, snapshot, paused }: BrandManagerPr
       await session.load(port);
     } catch (reason) {
       const portError = portErrorOf(reason);
-      setError(portError ? errorText(portError) : 'The brand could not be added.');
+      setError(portError ? errorText(portError, 'brand') : 'The brand could not be added.');
     } finally {
       setBusy(false);
     }

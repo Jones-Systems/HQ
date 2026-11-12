@@ -27,6 +27,8 @@ export interface FixtureOptions {
   readonly features?: readonly string[];
   readonly clock?: () => Date;
   readonly seed?: FixtureSeed;
+  /** The HQ project the default seed's brand and sample links point into. Ignored when `seed` is given. */
+  readonly projectId?: string;
   /** Awaited before every call, for loading-state demos. */
   readonly delay?: () => Promise<void>;
 }
@@ -40,8 +42,11 @@ export interface FixtureControls {
   failNext(method: PortMethod, error: PortError): void;
   /** While unavailable, every call rejects `unavailable` with no effect. */
   setUnavailable(unavailable: boolean): void;
-  /** One worker step: finish the running run, else start the oldest queued one. */
-  advanceRuns(outcome?: RunOutcome): RunRecord | null;
+  /**
+   * One worker step: finish the running run, else start the oldest queued one. With `runId`, only that run steps
+   * (finish it if running, start it if queued) and any other run is left as it is; null if it is neither.
+   */
+  advanceRuns(outcome?: RunOutcome, runId?: string): RunRecord | null;
   /** Service restart: queued and running runs become interrupted and are never retried. */
   restart(): void;
   /** Read-only copy of the stored state, for assertions. */
@@ -71,7 +76,7 @@ export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWor
   const brandProjects = features.includes(FEATURE_HQ_BRAND_PROJECT);
   const clock = options.clock ?? (() => new Date());
   const now = () => serviceTimestamp(clock());
-  const seed = structuredClone(options.seed ?? fictionalSeed());
+  const seed = structuredClone(options.seed ?? fictionalSeed(options.projectId));
 
   const brands: Brand[] = seed.brands.map(({ project_id, ...brand }) => (brandProjects ? { ...brand, project_id: project_id ?? null } : brand));
   const content: Draft[] = seed.content.map(({ links, planning_slot, ...draft }) => ({ ...draft,
@@ -220,8 +225,8 @@ export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWor
     setUnavailable(value) {
       unavailable = value;
     },
-    advanceRuns(outcome = { ok: true }) {
-      const running = runs.find((run) => run.record.status === 'running');
+    advanceRuns(outcome = { ok: true }, runId) {
+      const running = runs.find((run) => run.record.status === 'running' && (runId === undefined || run.record.id === runId));
       if (running) {
         running.record = {
           ...running.record,
@@ -232,7 +237,7 @@ export function createFixtureWorkspace(options: FixtureOptions = {}): FixtureWor
         running.output = outcome.output ?? (outcome.ok ? { ok: true, summary: 'Fictional fixture result.' } : undefined);
         return structuredClone(running.record);
       }
-      const queued = runs.filter((run) => run.record.status === 'queued')
+      const queued = runs.filter((run) => run.record.status === 'queued' && (runId === undefined || run.record.id === runId))
         .sort((a, b) => (a.record.created_at < b.record.created_at ? -1 : a.record.created_at > b.record.created_at ? 1 : 0))[0];
       if (!queued) return null;
       queued.record = { ...queued.record, status: 'running' };
