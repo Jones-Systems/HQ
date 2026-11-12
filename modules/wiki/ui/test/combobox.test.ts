@@ -106,9 +106,9 @@ test('combobox keys: arrows move and wrap, Enter opens the active option, Enter 
     assert.equal(allowed, false, 'Enter is handled, not left to submit a form twice');
     assert.deepEqual(app.requested, ['search?q=pricing']);
     assert.equal(options(app.container).length, 0, 'running a search closes the list');
-    await app.unmount();
   } finally {
     clock.restore();
+    await app.unmount();
   }
 
   const second = await launch();

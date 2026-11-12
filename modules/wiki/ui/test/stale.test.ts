@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { WikiService } from '../../contract/src/index.ts';
 import { createSyntheticService } from '../fixtures/synthetic.ts';
+import { filterChip } from './chrome.ts';
 import { all, byText, click, one, textOf } from './render.ts';
 import { deferred, launch, override, release, type Deferred } from './support.ts';
 
@@ -38,7 +39,7 @@ test('an older search response arriving after a newer one is discarded', async (
   assert.ok(titles.includes('Cash flow'));
   await release(searches.all[0]!, await base.search({ query: 'archive' }));
   assert.deepEqual(all(app.container, '.wiki-hit-title').map((node) => node.textContent), titles, 'the stale archive results never replace the newer ones');
-  assert.equal(textOf(one(app.container, '.wiki-search .wiki-section-title')), 'Search: “cash”');
+  assert.equal(textOf(one(app.container, '.wiki-search .wiki-section-title')), 'Results for “cash”');
   await app.unmount();
 });
 
@@ -59,9 +60,22 @@ test('an older response arriving before the newer one is also never shown', asyn
 test('toggling the repository filter supersedes the request in flight', async () => {
   const base = createSyntheticService();
   const searches = controlled<SearchResponse>();
-  const app = await launch({ destination: 'search?q=pricing', service: override(base, { search: () => searches.next().promise }) });
-  await click(one(app.container, 'input[name="repository"][value="appdev"]'));
+  const requests: Parameters<WikiService['search']>[0][] = [];
+  const app = await launch({
+    destination: 'search?q=pricing',
+    service: override(base, {
+      search: (request) => {
+        requests.push(request);
+        return searches.next().promise;
+      },
+    }),
+  });
+  assert.equal(filterChip(app.container, 'appdev').getAttribute('aria-pressed'), 'true');
+  await click(filterChip(app.container, 'appdev'));
+  assert.equal(filterChip(app.container, 'appdev').getAttribute('aria-pressed'), 'false');
+  assert.equal(filterChip(app.container, 'bl').getAttribute('aria-pressed'), 'true');
   assert.equal(searches.all.length, 2);
+  assert.deepEqual(requests, [{ query: 'pricing' }, { query: 'pricing', namespaces: ['bl'] }]);
   await release(searches.all[1]!, await base.search({ query: 'pricing', namespaces: ['bl'] }));
   await release(searches.all[0]!, await base.search({ query: 'pricing' }));
   assert.equal(all(app.container, '.wiki-hit').length, 3, 'only the bl-filtered response is shown');
