@@ -19,7 +19,7 @@ it('starts on the compact icon rail with the project, location and skip link in 
   const rail = screen.getByRole('complementary', { name: 'HQ navigation' });
   expect(rail.className).toContain('is-compact');
   expect(screen.getByRole('separator', { name: 'Primary navigation width' }).getAttribute('aria-valuenow')).toBe('64');
-  const banner = within(screen.getByRole('banner'));
+  const banner = within(screen.getByRole('banner', { name: 'HQ workspace' }));
   expect(banner.getByRole('button', { name: 'Project: Local projects' })).toBeTruthy();
   expect(banner.getByText('Design').getAttribute('aria-current')).toBe('location');
   fireEvent.click(screen.getByRole('link', { name: 'Skip to content' }));
@@ -40,7 +40,7 @@ it('names the location and what the project means in each domain', () => {
   media();
   window.localStorage.setItem(navigationKey('hq-local'), JSON.stringify({ ...DEFAULT_STATE, domain: 'work', destinations: { ...DEFAULT_STATE.destinations, work: 'status-board' } }));
   render(<App />);
-  const banner = within(screen.getByRole('banner'));
+  const banner = within(screen.getByRole('banner', { name: 'HQ workspace' }));
   expect(banner.getByText('Status board').getAttribute('aria-current')).toBe('location');
   expect(banner.getByText('Work isn’t project-scoped')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));

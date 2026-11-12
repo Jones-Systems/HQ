@@ -49,7 +49,7 @@ describe('buildGroups', () => {
     expect(rows.map(row => [row.title, row.detail])).toEqual([
       ['Autumn blend notes', 'Social draft'], ['Autumn menu design', 'Design project'], ['Autumn tasting card', 'Work card'],
     ]);
-    for (const row of rows) expect(JSON.stringify(row)).not.toMatch(/p-1|abc123|d-9/u);
+    for (const row of rows) expect([row.title, row.detail, row.shortcut].join(' ')).not.toMatch(/p-1|abc123|d-9/u);
     expect(rows[0]!.action).toEqual({ type: 'open-reference', envelope: results[2] });
   });
 

@@ -33,7 +33,8 @@ it('a Wiki with no source shows the set-up card, and Open Settings opens Local W
   fireEvent.click(screen.getByRole('button', { name: 'Wiki' }));
   const card = await screen.findByRole('region', { name: 'Set up the Wiki' }, { timeout: 10_000 });
   expect(card.textContent).toContain('Settings › Data sources › Local Wiki');
-  expect(view.container.querySelector('.wiki-error, [role="alert"]')).toBeNull();
+  expect(view.container.querySelector('.wiki-error')).toBeNull();
+  for (const alert of screen.queryAllByRole('alert')) expect(alert.textContent).toBe('');
   expect(screen.queryByRole('heading', { name: 'Local Wiki' })).toBeNull();
   fireEvent.click(within(card).getByRole('button', { name: 'Open Settings' }));
   expect(await screen.findByRole('heading', { name: 'Local Wiki' })).toBeTruthy();

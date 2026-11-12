@@ -175,10 +175,15 @@ it('Social draft ↔ Work card open/Back preserves source state; explicit snapsh
   } }));
   render(<App />);
   const body = await screen.findByLabelText('Body');
+  const writesBefore = f.social.callsTo('saveContent').length;
   const originalBody = body.getAttribute('value') ?? (body instanceof HTMLTextAreaElement ? body.value : '');
-  fireEvent.change(screen.getByLabelText('Serialized HQ reference'), { target: { value: JSON.stringify(target) } });
+  const links = within(screen.getByRole('region', { name: 'Draft links' }));
+  fireEvent.click(links.getByRole('button', { name: 'Advanced' }));
+  expect(links.getByRole('button', { name: 'Advanced' }).getAttribute('aria-expanded')).toBe('true');
+  fireEvent.change(links.getByRole('textbox', { name: 'Serialized HQ reference' }), { target: { value: JSON.stringify(target) } });
   fireEvent.click(screen.getByRole('button', { name: 'Add reference' }));
   await waitFor(() => expect(f.social.service.controls.inspect().content.find(d => d.id === FIXTURE_IDS.autumnBlend)?.links).toEqual([target]));
+  expect(f.social.callsTo('saveContent')).toHaveLength(writesBefore + 1);
   fireEvent.change(body, { target: { value: `${originalBody} Synthetic unsaved text.` } });
   const beforeOpen = JSON.stringify(f.social.service.controls.inspect());
   const cardBefore = JSON.stringify((await f.planner.port.snapshot()).items);
@@ -203,6 +208,7 @@ it('Social draft ↔ Work card open/Back preserves source state; explicit snapsh
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Capture to Inbox' })).toHaveProperty('value', 'Keep this capture'));
   expect(f.calls.filter(c => c.route === 'export')).toEqual([]);
   expect(JSON.stringify((await f.planner.port.snapshot()).items)).toBe(cardBefore);
+  expect(f.social.callsTo('saveContent')).toHaveLength(writesBefore + 1);
   // Target edits never silently change the source envelope.
   await f.planner.port.patch(f.item.id, linked.item!.revision, { title: 'Updated target title' }, 'fixture-target-edit-001');
   vi.setSystemTime(Date.now() + RESOLUTION_MAX_AGE + 1000);
@@ -212,10 +218,15 @@ it('Social draft ↔ Work card open/Back preserves source state; explicit snapsh
   await screen.findByText('Changed', { exact: true });
   expect(f.social.service.controls.inspect().content.find(d => d.id === FIXTURE_IDS.autumnBlend)?.links).toEqual([target]);
   const targetBytes = JSON.stringify((await f.planner.port.snapshot()).items);
-  fireEvent.click(screen.getByRole('button', { name: 'Update snapshot Synthetic reference card' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Update title Synthetic reference card' }));
   await waitFor(() => expect(f.social.service.controls.inspect().content.find(d => d.id === FIXTURE_IDS.autumnBlend)?.links?.[0]?.title).toBe('Updated target title'));
+  expect(f.social.service.controls.inspect().content.find(d => d.id === FIXTURE_IDS.autumnBlend)?.links).toEqual([
+    { ...target, title: 'Updated target title', sourceRevision: String(linked.item!.revision + 1) },
+  ]);
+  expect(f.social.callsTo('saveContent')).toHaveLength(writesBefore + 2);
   fireEvent.click(screen.getByRole('button', { name: 'Unlink Updated target title' }));
   await waitFor(() => expect(f.social.service.controls.inspect().content.find(d => d.id === FIXTURE_IDS.autumnBlend)?.links).toEqual([]));
+  expect(f.social.callsTo('saveContent')).toHaveLength(writesBefore + 3);
   expect(JSON.stringify((await f.planner.port.snapshot()).items)).toBe(targetBytes);
   expect(f.calls.filter(c => c.route === 'export')).toEqual([]); f.noExecution();
   vi.useRealTimers();
