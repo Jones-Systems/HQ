@@ -26,7 +26,7 @@ The prior thread is context; this work resumes its paused source assignment. Pri
 
 ## Recovery checkpoint and handoff
 
-Coordination transfer is accepted. The receiving coordinator owns this clean linked worktree and its Git operations exclusively, with a new active native goal covering the full accepted source, verification and delivery outcome. The origin's native goal remains paused; its existing delegated task collection and exact unknown-baseline reconciliation remain with that origin. Task-management rights and merge authority do not transfer through the handoff.
+Coordination transfer is accepted. The receiving coordinator owns this linked worktree and its Git operations exclusively. Its matching native goal covers the full accepted source, verification and delivery outcome, but currently reads blocked; the owner-directed resume returned busy because a run is already active. Ordinary source work continues under the owner's renewed instruction without claiming that the native goal resumed. The origin's native goal remains paused; its existing delegated task collection and exact unknown-baseline reconciliation remain with that origin. Task-management rights and merge authority do not transfer through the handoff.
 
 The Fable initial plan, independent Astra concept review and a verified continuation in the original Fable session are complete. The reconciled plan accepts the review corrections: restore B4 tooling, B5 validation and missing native-journey source; preserve all Design ports; assign one writer per shared file; reuse the existing Darwin runner; allow one serial test process total on the Mini. The accepted plan is encoded in the existing progressive Engineering Spec's recovery amendment. Source checkpoints below supersede historical active/done labels in the planning result.
 
@@ -135,3 +135,18 @@ The native-scenario source review found four selected P1s: Social selectors/save
 The static Mini launch capsule is not qualified. In addition to unresolved baseline effect, the pinned Vite/Rolldown Rust build threads need supported bounded controls; Go GOMAXPROCS alone is insufficient. No runtime download, lock acquisition, build or test was performed by the preparation task. Its private capsule remains outside public source.
 
 The updater requested the heavy slot back for its distinct authorized attempt. The coordinator returned a continuing hold: unknown baseline effects prevent safe overlap or a closure claim. No live work was preempted, no signing/native attempt was authorized here, and no original approval was broadened.
+
+## Current state and contributing threads
+
+The assembled source checkpoint `2c5313d9f4d696e169c2ae472ee9c5923edccc0c` was pushed and its remote SHA read back. Foundation remains `8945d156585510fbdf1515fad01798f416146b4e`. The scoped native-scenario P1 successor is pushed at `17539f43f5f5aea040fd9c178ad6245eb35e3c54`; independent fix review is pending. Durable capture is pushed at `8e7d3b32192fd203b4c81119728faaef23742bbe`; independent correctness review and the explicit toolbar caller adaptation precede composition. The Social shared bridge owner is implementing the additive contracts and encoder. These checkpoints have no passing behavior evidence.
+
+Contributing conversations and roles, with native identifiers retained privately:
+
+- Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.
+- Complete HQ User Flows and Backend: origin recovery, accepted plan fan-in, retained baseline reconciliation.
+- Accepted Fable planning and Astra concept-review sessions: initial recovery plan and independent architecture review, reconciled in the original planner session.
+- HQ source-capsule builders: shell, Work, Social, Design, Wiki contracts/validation, Settings, tooling and acceptance source; their revision-bound receipts are listed above.
+- HQ Work queue correctness and fix-scoped re-review: two selected P1 dispositions; native fixture review and re-review: four selected scenario P1s.
+- HQ run ownership and pending delegate reconciliation investigation: installed-source investigation; no runtime reconciliation or effect fence proved.
+
+Referenced historical context: HQ User Flows and Backend Buildout and its twelve saved lane handoffs. The App Installation and Background Updates conversation supplies resource custody/closure evidence and a separate source-overlap boundary; its installation authority is not transferred here. Public artifacts omit native conversation/session identifiers and private operation details.
