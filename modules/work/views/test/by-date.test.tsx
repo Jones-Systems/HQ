@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-libra
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { addDays, type Item } from '../../core';
-import { BY_DATE_INERT } from '../ByDate';
+import { BY_DATE_BANNER, BY_DATE_INERT } from '../ByDate';
 import { VIEW_TODAY, viewItems } from '../fixtures';
 import { lastWrite, setup } from './harness';
 
@@ -97,5 +97,48 @@ describe('By date board', () => {
     expect(lastWrite(rec)!.method).toBe('move');
     expect(lastWrite(rec)!.args.slice(0, 4)).toEqual(['ex-shed-paint', 1, 'on_hold', { place: 'top' }]);
     expect(rec.writes().some((w) => w.method === 'patch')).toBe(false);
+  });
+
+  it('uses the shared page header and board look: a titled header with a count, one quiet read-only note and no banner', async () => {
+    await setup({ view: 'by-date' });
+    const heading = screen.getByRole('heading', { level: 2, name: 'By date' });
+    const header = heading.closest('header')!;
+    expect(within(header).getByText('12 open cards')).toBeTruthy();
+    // The read-only explanation is a quiet line inside the header, not a full-width banner.
+    const note = within(header).getByRole('note');
+    expect(note.textContent).toContain(BY_DATE_BANNER);
+    expect(document.querySelector('.wv-bydate .wv-banner')).toBeNull();
+    // Columns and cards are the Status board's: same card, chip and count classes.
+    const column = document.querySelector<HTMLElement>('[data-group="week"]')!;
+    expect(column.querySelector('.wv-count.wk-count')!.textContent).toBe('2');
+    const card = within(column).getByRole('article', { name: /^Repaint the garden shed/ });
+    expect(card.classList.contains('work-card')).toBe(true);
+    expect(card.querySelector('.work-chips .wk-chip')).not.toBeNull();
+  });
+
+  it('has no Done control and no drag ghost: pointer drags are inert and nothing is written', async () => {
+    const { rec } = await setup({ view: 'by-date' });
+    expect(screen.queryByRole('button', { name: /^Mark “.*” done$/ })).toBeNull();
+    const card = screen.getByRole('article', { name: /^Repaint the garden shed/ });
+    const first = { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 100, clientY: 100 };
+    fireEvent.pointerDown(card, first);
+    fireEvent.pointerMove(window, { ...first, clientX: 140 });
+    fireEvent.pointerMove(window, { ...first, clientX: 600, clientY: 160 });
+    fireEvent.pointerUp(window, { ...first, clientX: 600, clientY: 160 });
+    expect(document.querySelector('.work-drag-ghost')).toBeNull();
+    expect(card.closest('[data-group]')!.getAttribute('data-group')).toBe('week');
+    // Alt+arrow still announces that the board is read-only, and the key is handled (default prevented).
+    const key = new KeyboardEvent('keydown', { key: 'ArrowRight', altKey: true, bubbles: true, cancelable: true });
+    await act(async () => { card.dispatchEvent(key); });
+    expect(key.defaultPrevented).toBe(true);
+    expect(screen.getAllByRole('status').some((s) => s.textContent?.startsWith(BY_DATE_INERT))).toBe(true);
+    expect(rec.writes()).toEqual([]);
+  });
+
+  it('reads one way at narrow widths: columns reflow with no tabs and no horizontal scroller', async () => {
+    await setup({ view: 'by-date' });
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(document.querySelector('.work-columns')).toBeNull();
+    expect(document.querySelectorAll('[data-board-kind="by-date"] > .wv-col')).toHaveLength(4);
   });
 });
