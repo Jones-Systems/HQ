@@ -1,5 +1,5 @@
-import { Button, StatusChip } from '@hq/ui';
-import { use, useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { Button, StatusChip, useToast } from '@hq/ui';
+import { use, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
 import type { DesignSectionProps } from '../../ui/contract.ts';
 import type { RequestsSectionProps } from '../sections/requests/View.tsx';
 import type { RunsSectionProps } from '../sections/runs/View.tsx';
@@ -12,6 +12,8 @@ import { useDesignWorkspace } from './workspace-context.tsx';
 import { useProjectContentRevision } from './content-revision.ts';
 import { SectionFrame } from './views/SectionFrame.tsx';
 import { withSectionErrorBoundary } from './views/SectionErrorBoundary.tsx';
+import { designModule as importsModule } from '../../imports/design-module.ts';
+import { sendToTaste, useHandoffQueue } from './sources/taste-handoff.ts';
 
 function RequestPicker({ props, create, children }: {
   readonly props: DesignSectionProps;
@@ -112,8 +114,19 @@ export function mountReferences(Section: typeof ReferencesSection): ComponentTyp
   return withSectionErrorBoundary(function ReferencesMount({ context, navigate }) {
     const workspace = useDesignWorkspace();
     const env = use(workspace.closure.references());
+    const toast = useToast();
+    const queue = useHandoffQueue();
+    // Cards already waiting in Taste say so. Only references count; other kinds share the queue.
+    const queued = useMemo(() => queue.filter((item) => item.kind === 'reference').map((item) => item.id), [queue]);
     return <SectionFrame lane="References" entry="app/sections/references/View.tsx" tags={[workspace.storageTag]}>
-      <Section env={env} currentProject={context} onShowProjects={() => navigate({ nav: 'projects', section: 'projects' })} />
+      <Section env={env} currentProject={context} onShowProjects={() => navigate({ nav: 'projects', section: 'projects' })}
+        queuedForTaste={queued}
+        onSendToTaste={(reference) => sendToTaste({
+          id: reference.id, kind: 'reference', label: reference.title, detail: reference.detail, from: 'references',
+          // Only an image the view already shows as a data: URL goes along; a blob: or other URL would not render in Taste.
+          ...(reference.imageUrl?.startsWith('data:') ? { imageUrl: reference.imageUrl } : {}),
+        }, navigate, toast)}
+        onOpenImports={() => navigate({ nav: importsModule.nav, section: importsModule.id })} />
     </SectionFrame>;
   });
 }
