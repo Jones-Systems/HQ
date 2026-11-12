@@ -100,18 +100,24 @@ Interpretations made where the plan was silent:
   untrusted on read: exact keys, sorted unique pages, valid paths and link targets are re-checked, and a
   corrupt or stale snapshot triggers a rebuild. `stats` are aggregate counters only. The rules version
   (`INDEX_RULES_VERSION`, part of the profile key) is **2**: a snapshot written by version 1 has another key
-  and no `linkOrigins`, so it is rejected and rebuilt. `linkOrigins` is re-validated strictly: it must match
+  and no `linkOrigins`, so it is rejected and rebuilt on the next refresh. The desktop persists these
+  snapshots under `wiki/index-v1`: this is a once-per-store upgrade cost for each configured namespace,
+  provided the version-2 snapshot is successfully written and its commit/profile remain unchanged.
+  A failed store write, changed commit/profile or invalid snapshot can require another rebuild; an
+  in-memory-only store rebuilds after restart. This is not a source-corpus migration or an eager rebuild
+  of every stored commit. `linkOrigins` is re-validated strictly: it must match
   the page's own `page` link targets exactly (self excluded, none missing, none extra), sorted by path with no
   repeats; each `via` has 1..8 field-name-valid entries, strictly ascending; each excerpt is null or a
   single-line label of at most 160 units. The same corpus gives a byte-identical snapshot.
-  **Size.** `linkOrigins` costs about 180–200 bytes of serialised snapshot per unique (source, target) page
+  **Historical synthetic size measurements** (retained from `0a5f819`; not rerun for recovery).
+  `linkOrigins` cost about 180–200 bytes of serialised snapshot per unique (source, target) page
   pair (the target path again, `via`, and an excerpt of up to 160 units; a block that links several targets
   repeats its excerpt for each). On the two checked-in synthetic fixture corpora the snapshots grew from 7,256
   to 8,339 bytes (+14.9%, 9 pages, 6 pairs) and from 3,753 to 4,664 bytes (+24.3%, 5 pages, 5 pairs). On
   generated corpora of 500 and 5,000 pages (about 6.6 pairs per page, a 20-word vocabulary so the term tables are
   tiny) they grew from 962,424 to 1,622,159 bytes (+68.6%) and from 9,699,912 to 16,419,598 bytes (+69.3%).
-  The generated percentages are an upper bound: real prose has far larger term tables, so the relative cost is
-  lower, while the absolute cost per pair stays about the same.
+  These generated corpora had tiny term tables; the relative overhead depends on corpus shape.
+  These figures do not establish a bound or a measurement for private corpora or this recovery head.
 - **Hostile input.** Block containers nest at most 24 deep (overflow degrades the page to raw
   `markdown-unsupported`); inline scanning has step, destination, delimiter-run and emphasis-depth
   budgets, reference lookups skip bracket text longer than any definition label (1998 code units),
