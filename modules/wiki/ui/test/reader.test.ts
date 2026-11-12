@@ -221,12 +221,15 @@ for (const [path, reason] of [
   });
 }
 
-test('reader requests are logical keys the contract accepts, and only getPage and getBacklinks are used', async () => {
+test('reader requests use logical keys, with only page, backlinks and chrome status reads', async () => {
   const checked = validating(createSyntheticService());
   const { service, calls } = spy(checked.service);
   const app = await launch({ destination: PRICING, service });
-  assert.deepEqual(calls.map((call) => call.method).sort(), ['getBacklinks', 'getPage']);
+  assert.deepEqual(calls.map((call) => call.method).sort(), ['getBacklinks', 'getPage', 'indexStatus', 'listSources']);
   assert.deepEqual(calls.find((call) => call.method === 'getPage')?.args, [{ key: { namespace: 'bl', path: 'lessons/pricing.md' } }]);
+  assert.deepEqual(calls.find((call) => call.method === 'getBacklinks')?.args, [{ key: { namespace: 'bl', path: 'lessons/pricing.md' } }]);
+  assert.deepEqual(calls.find((call) => call.method === 'indexStatus')?.args, []);
+  assert.deepEqual(calls.find((call) => call.method === 'listSources')?.args, []);
   assert.deepEqual(checked.rejected, []);
   await app.unmount();
 });
