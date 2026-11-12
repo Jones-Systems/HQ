@@ -12,7 +12,7 @@ it('keeps settings accessible without a bridge and reads only sanitized configur
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
   expect(screen.getByRole('region', { name: 'Settings page' })).toBeTruthy();
   expect(screen.queryByRole('dialog')).toBeNull();
-  expect(within(screen.getByRole('region', { name: 'Settings page' })).getAllByText(/unavailable/i).length).toBeGreaterThan(0);
+  expect((await within(screen.getByRole('region', { name: 'Settings page' })).findAllByText(/unavailable/i)).length).toBeGreaterThan(0);
   first.unmount();
   const status = vi.fn(async () => ({ configured: true, policy: 'ok' as const, transport: 'https' as const }));
   const set = vi.fn(); const socialCall = vi.fn(); const workCall = vi.fn();
@@ -90,13 +90,13 @@ it('shares the existing appearance preference between Settings and the rail', ()
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} }); window.localStorage.clear();
   render(<App />); fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
   fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-  const options = screen.getByRole('group', { name: 'Color theme' });
-  fireEvent.click(within(options).getByRole('button', { name: 'Dark' }));
+  const options = screen.getByRole('radiogroup', { name: 'Color theme' });
+  fireEvent.click(within(options).getByRole('radio', { name: 'Dark' }));
   expect(window.localStorage.getItem('hq.appearance.v1')).toBe('dark');
   expect(document.documentElement.dataset.theme).toBe('dark');
   expect(screen.getByRole('button', { name: 'Appearance: Dark' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Appearance: Dark' }));
-  expect(within(options).getByRole('button', { name: 'System' }).getAttribute('aria-pressed')).toBe('true');
+  expect(within(options).getByRole('radio', { name: 'System' }).getAttribute('aria-checked')).toBe('true');
   expect(document.documentElement.dataset.theme).toBe('light');
 });
 it('opens a specific source, keeps Escape within an address edit, and closes on ordinary Escape or domain navigation', async () => {

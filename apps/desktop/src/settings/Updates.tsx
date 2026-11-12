@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Button } from '@hq/ui';
+import { InlineNotice, Skeleton, useToast } from '@hq/ui';
 import type { UpdateErrorCode, UpdatePhase, UpdateResult, UpdateStatus, UpdatesPort } from '@hq/contracts/updates';
+import { BUSY_REASON } from './actions';
+import { ActionButton, Panel, Row, SettingsHeading } from './parts';
 import './updates.css';
 
 type UpdateAction = 'check' | 'download' | 'cancel-download' | 'preferences' | 'schedule' | 'cancel-scheduled';
@@ -32,6 +34,16 @@ const ERROR_MESSAGES: Record<UpdateErrorCode, string> = {
   cancelled: 'The download was cancelled. No installation was scheduled by this action.',
   permission: 'HQ could not access its update files. The update was not completed.',
   'recovery-required': 'Installation is on hold. Read the recovery status before proceeding.',
+};
+
+const UNSUPPORTED = 'Updates aren’t available for this installation.';
+const DONE_TOASTS: Partial<Record<UpdateAction, { title: string; description?: string }>> = {
+  check: { title: 'Update check finished' },
+  download: { title: 'Download started', description: 'You can keep working while it downloads.' },
+  'cancel-download': { title: 'Download cancelled', description: 'No installation was scheduled.' },
+  schedule: { title: 'Installation scheduled', description: 'HQ installs this update on the next launch.' },
+  'cancel-scheduled': { title: 'Scheduled installation cancelled' },
+  preferences: { title: 'Update preferences saved' },
 };
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -67,8 +79,11 @@ function phaseDescription(status: UpdateStatus) {
   }
 }
 
-export function Updates({ port = window.hqUpdates }: { port?: UpdatesPort }) {
-  const id = useId();
+export function Updates({ port = window.hqUpdates, headingId }: { port?: UpdatesPort; headingId?: string }) {
+  const ownId = useId();
+  const id = ownId;
+  const heading = headingId ?? `${id}-heading`;
+  const toast = useToast();
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [loading, setLoading] = useState(Boolean(port));
   const [statusUnknown, setStatusUnknown] = useState(false);
@@ -149,11 +164,20 @@ export function Updates({ port = window.hqUpdates }: { port?: UpdatesPort }) {
         setStatus(result.status);
         setStatusUnknown(false);
       }
-      if (!result.ok && intent === latestIntent.current) setMessage(ERROR_MESSAGES[result.code]);
+      if (!result.ok && intent === latestIntent.current) {
+        setMessage(ERROR_MESSAGES[result.code]);
+        if (result.code === 'cancelled') toast.info('Download cancelled', { description: 'No installation was scheduled.' });
+        else toast.error('Update action failed', { description: ERROR_MESSAGES[result.code], ...(action === 'check' ? { action: { label: 'Retry', onAction: () => void run('check', () => port!.check()) } } : {}) });
+      } else if (result.ok && intent === latestIntent.current) {
+        const candidate = result.status.candidate;
+        if (action === 'check') toast.success(result.status.phase === 'available' && candidate ? `HQ ${candidate.version} is available` : 'No update available');
+        else if (DONE_TOASTS[action]) toast.success(DONE_TOASTS[action]!.title, DONE_TOASTS[action]!.description ? { description: DONE_TOASTS[action]!.description! } : {});
+      }
     } catch {
       if (lifecycle.current === generation && intent === latestIntent.current) {
         setStatusUnknown(true);
         setMessage('HQ could not confirm the result. Refresh the status before taking another action.');
+        toast.unknown("Couldn't confirm the update action", { description: 'HQ could not confirm the result. Nothing was retried.', action: { label: 'Check', onAction: () => refresh.current() } });
       }
     } finally {
       if (lifecycle.current === generation) {
@@ -165,47 +189,41 @@ export function Updates({ port = window.hqUpdates }: { port?: UpdatesPort }) {
 
   const busy = pending.length > 0;
   const supported = Boolean(port && status?.supported && status.phase !== 'unavailable');
-  const disabled = !supported || loading || statusUnknown || busy;
   const transferring = status?.phase === 'downloading' || status?.phase === 'verifying';
-  const cancelDisabled = !supported || statusUnknown || pending.some(action => action !== 'download');
+  // Unavailable actions stay visible and say why; the action that is running shows its own busy state instead.
+  const unavailable = !supported ? UNSUPPORTED : loading ? 'Loading update status…' : statusUnknown ? 'Refresh the update status first.' : null;
+  const reasonFor = (own: UpdateAction) => unavailable ?? (pending.some(action => action !== own) ? BUSY_REASON : null);
+  const cancelReason = !supported ? UNSUPPORTED : statusUnknown ? 'Refresh the update status first.' : pending.some(action => action !== 'download' && action !== 'cancel-download') ? BUSY_REASON : null;
   const candidate = status?.candidate;
   const progress = status?.progress;
   const percentage = progress && progress.total > 0 ? Math.min(100, Math.max(0, Math.round(progress.received / progress.total * 100))) : undefined;
   const progressText = progress ? `${formatBytes(progress.received)}${progress.total > 0 ? ` of ${formatBytes(progress.total)}` : ' downloaded'}` : 'Waiting for download progress…';
+  const checking = pending.includes('check') || status?.phase === 'checking';
 
-  return <section className="updates-settings" aria-labelledby={`${id}-heading`}>
-    <div className="settings-section-heading">
-      <h2 id={`${id}-heading`}>Updates</h2>
-      <p>Prepare an update while you keep working. You choose the exact update to install on a later launch.</p>
-      <p>Checking, downloading and scheduling leave HQ open and remote work running.</p>
-    </div>
+  return <div className="updates-settings">
+    <SettingsHeading id={heading} title="Updates">Prepare an update while you keep working. You choose the exact update to install on a later launch. Checking, downloading and scheduling leave HQ open and remote work running.</SettingsHeading>
 
-    {!port ? <div className="settings-group"><div className="settings-row"><div className="settings-row-copy">
-      <h3>Updates unavailable</h3>
-      <p role="status">Update controls and installed identity are unavailable in this window. Browser previews and development windows do not install updates.</p>
-    </div></div></div> : <>
-      {!status && loading && <p role="status">Loading update status…</p>}
-      {message && <div className="updates-notice" role="alert"><p>{message}</p></div>}
-      {statusUnknown && <div className="updates-actions"><Button size="sm" disabled={loading || busy} busy={loading} busyLabel="Refreshing…" onClick={() => refresh.current()}>Refresh update status</Button></div>}
+    {!port ? <Panel><Row title="Updates unavailable" description={<span role="status">Update controls and installed identity are unavailable in this window. Browser previews and development windows do not install updates.</span>} /></Panel> : <>
+      {!status && loading && <Panel busy aria-label="Update status">
+        <Row title={<Skeleton width="120px" />} description={<Skeleton width="45%" />} />
+        <p className="settings-row-note" role="status">Loading update status…</p>
+      </Panel>}
+      {(message || statusUnknown) && <InlineNotice tone={statusUnknown ? 'unknown' : 'danger'} title={statusUnknown ? 'Update result not confirmed' : 'Update action failed'}
+        actions={statusUnknown ? [{ label: 'Refresh update status', onAction: () => refresh.current(), busy: loading, busyLabel: 'Refreshing…' }] : []}>{message ?? 'Refresh the status before taking another action.'}</InlineNotice>}
 
       {status && <>
-        <div className="settings-group">
-          <div className="settings-row">
-            <div className="settings-row-copy"><h3>Installed HQ</h3><p>Version {status.installed.version}</p></div>
-            <div className="settings-row-control"><Button size="sm" disabled={disabled || transferring || status.phase === 'checking'} busy={pending.includes('check') || status.phase === 'checking'} busyLabel="Checking…" onClick={() => void run('check', () => port.check())}>Check for updates</Button></div>
-          </div>
+        <Panel>
+          <Row title="Installed HQ" description={`Version ${status.installed.version}`}
+            control={<ActionButton size="sm" busy={checking} busyLabel="Checking…" reason={reasonFor('check') ?? (transferring ? 'An update is already being prepared.' : null)} onClick={() => void run('check', () => port.check())}>Check for updates</ActionButton>} />
           <dl className="updates-details">
             <div><dt>Source</dt><dd>{status.installed.sourceSha ? <code>{status.installed.sourceSha}</code> : 'Not recorded for this installation'}</dd></div>
             <div><dt>Channel</dt><dd>{status.installed.channel === 'preview' ? 'Preview' : 'Stable'}</dd></div>
             <div><dt>Last checked</dt><dd><Timestamp value={status.lastCheckedAt} empty="Not checked yet" /></dd></div>
           </dl>
-        </div>
+        </Panel>
 
-        <div className="settings-group">
-          <div className="settings-row"><div className="settings-row-copy">
-            <h3>{status.phase === 'idle' && !status.lastCheckedAt ? 'Ready to check' : PHASE_LABELS[status.phase]}</h3>
-            <p role="status">{phaseDescription(status)}</p>
-          </div></div>
+        <Panel>
+          <Row title={status.phase === 'idle' && !status.lastCheckedAt ? 'Ready to check' : PHASE_LABELS[status.phase]} description={<span role="status">{phaseDescription(status)}</span>} />
           {candidate && <div className="updates-candidate">
             <h4>HQ {candidate.version}</h4>
             <dl className="updates-details">
@@ -213,33 +231,29 @@ export function Updates({ port = window.hqUpdates }: { port?: UpdatesPort }) {
               <div><dt>Download</dt><dd>{formatBytes(candidate.size)}</dd></div>
               <div><dt>Published</dt><dd><Timestamp value={candidate.publishedAt} empty="Unknown" /></dd></div>
             </dl>
-            {status.phase === 'available' && <div className="updates-actions"><Button size="sm" variant="primary" disabled={disabled} busy={pending.includes('download')} busyLabel="Starting download…" onClick={() => void run('download', () => port.download(candidate.candidateId))}>Download update</Button></div>}
-            {status.phase === 'ready' && <div className="updates-actions"><Button size="sm" variant="primary" disabled={disabled} busy={pending.includes('schedule')} busyLabel="Scheduling…" aria-describedby={`${id}-install-note`} onClick={() => void run('schedule', () => port.schedule(candidate.candidateId))}>Install on next launch</Button></div>}
+            {status.phase === 'available' && <div className="updates-actions"><ActionButton size="sm" variant="primary" busy={pending.includes('download')} busyLabel="Starting download…" reason={reasonFor('download')} onClick={() => void run('download', () => port.download(candidate.candidateId))}>Download update</ActionButton></div>}
+            {status.phase === 'ready' && <div className="updates-actions"><ActionButton size="sm" variant="primary" busy={pending.includes('schedule')} busyLabel="Scheduling…" aria-describedby={`${id}-install-note`} reason={reasonFor('schedule')} onClick={() => void run('schedule', () => port.schedule(candidate.candidateId))}>Install on next launch</ActionButton></div>}
             {(status.phase === 'ready' || status.phase === 'scheduled') && <p id={`${id}-install-note`} className="updates-install-note">Keep working now. Installation starts on the next launch after this session ends. On macOS, an ad-hoc signed update may prompt for Keychain access again.</p>}
           </div>}
           {transferring && <div className="updates-transfer">
             <progress aria-label={status.phase === 'verifying' ? 'Update verification' : 'Update download'} max={100} value={status.phase === 'verifying' ? undefined : percentage} aria-valuetext={status.phase === 'verifying' ? 'Verifying downloaded update' : percentage === undefined ? progressText : `${percentage}% · ${progressText}`} />
             <p>{status.phase === 'verifying' ? 'The download is not ready to install until verification finishes.' : `${percentage === undefined ? '' : `${percentage}% · `}${progressText}`}</p>
-            <div className="updates-actions"><Button size="sm" disabled={cancelDisabled} busy={pending.includes('cancel-download')} busyLabel="Cancelling…" onClick={() => void run('cancel-download', () => port.cancelDownload())}>Cancel download</Button></div>
+            <div className="updates-actions"><ActionButton size="sm" busy={pending.includes('cancel-download')} busyLabel="Cancelling…" reason={cancelReason} onClick={() => void run('cancel-download', () => port.cancelDownload())}>Cancel download</ActionButton></div>
           </div>}
-          {status.phase === 'scheduled' && <div className="updates-cancel"><Button size="sm" disabled={disabled} busy={pending.includes('cancel-scheduled')} busyLabel="Cancelling…" onClick={() => void run('cancel-scheduled', () => port.cancelScheduled())}>Cancel scheduled installation</Button></div>}
-          {status.error && <div className="updates-notice updates-notice--inline" role="alert"><p>{status.error.message}</p></div>}
+          {status.phase === 'scheduled' && <div className="updates-cancel"><ActionButton size="sm" busy={pending.includes('cancel-scheduled')} busyLabel="Cancelling…" reason={reasonFor('cancel-scheduled')} onClick={() => void run('cancel-scheduled', () => port.cancelScheduled())}>Cancel scheduled installation</ActionButton></div>}
+          {status.error && <div className="settings-row-notice"><InlineNotice tone="danger" variant="bar" title={status.error.message} /></div>}
           {status.recovery && <div className="updates-recovery" role="status"><h4>Recovery</h4><p>{status.recovery.message}</p><p className="updates-recovery-state">State: {status.recovery.state}</p></div>}
-        </div>
+        </Panel>
 
-        <div className="settings-group" role="group" aria-label="Update preferences">
-          <div className="settings-row">
-            <div className="settings-row-copy"><h3><label htmlFor={`${id}-automatic`}>Check for updates automatically</label></h3><p id={`${id}-automatic-note`}>Check periodically while HQ is open. You can also check manually.</p>
-              {status.preferences.automaticChecks && status.nextCheckAt && <p>Next check: <Timestamp value={status.nextCheckAt} empty="Not scheduled" /></p>}
-            </div>
-            <div className="settings-row-control"><input id={`${id}-automatic`} type="checkbox" aria-describedby={`${id}-automatic-note`} checked={status.preferences.automaticChecks} disabled={disabled} onChange={event => { const automaticChecks = event.target.checked; void run('preferences', () => port.setPreferences({ ...status.preferences, automaticChecks })); }} /></div>
-          </div>
-          <div className="settings-row">
-            <div className="settings-row-copy"><h3><label htmlFor={`${id}-background`}>Download updates in the background</label></h3><p id={`${id}-background-note`}>Download available updates automatically. Installation still requires your choice of an exact update.</p></div>
-            <div className="settings-row-control"><input id={`${id}-background`} type="checkbox" aria-describedby={`${id}-background-note`} checked={status.preferences.backgroundDownload} disabled={disabled} onChange={event => { const backgroundDownload = event.target.checked; void run('preferences', () => port.setPreferences({ ...status.preferences, backgroundDownload })); }} /></div>
-          </div>
-        </div>
+        <Panel role="group" aria-label="Update preferences">
+          <Row title={<label htmlFor={`${id}-automatic`}>Check for updates automatically</label>}
+            description={<><span id={`${id}-automatic-note`}>Check periodically while HQ is open. You can also check manually.</span>{status.preferences.automaticChecks && status.nextCheckAt && <> Next check: <Timestamp value={status.nextCheckAt} empty="Not scheduled" /></>}</>}
+            control={<input id={`${id}-automatic`} type="checkbox" aria-describedby={`${id}-automatic-note`} checked={status.preferences.automaticChecks} disabled={Boolean(unavailable) || busy} onChange={event => { const automaticChecks = event.target.checked; void run('preferences', () => port.setPreferences({ ...status.preferences, automaticChecks })); }} />} />
+          <Row title={<label htmlFor={`${id}-background`}>Download updates in the background</label>}
+            description={<span id={`${id}-background-note`}>Download available updates automatically. Installation still requires your choice of an exact update.</span>}
+            control={<input id={`${id}-background`} type="checkbox" aria-describedby={`${id}-background-note`} checked={status.preferences.backgroundDownload} disabled={Boolean(unavailable) || busy} onChange={event => { const backgroundDownload = event.target.checked; void run('preferences', () => port.setPreferences({ ...status.preferences, backgroundDownload })); }} />} />
+        </Panel>
       </>}
     </>}
-  </section>;
+  </div>;
 }
