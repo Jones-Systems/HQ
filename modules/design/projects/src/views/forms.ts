@@ -111,7 +111,7 @@ export function AddVersionForm({ controller, content, defaultView, onClose, onAd
 }) {
   const ui = useProjectsUi();
   const toast = ui.useToast();
-  const [viewId, setViewId] = useState(() => content.views.find((view) => view.id === defaultView)?.id ?? content.views[0]?.id ?? '');
+  const [viewId, setViewId] = useState<string>(() => content.views.find((view) => view.id === defaultView)?.id ?? content.views[0]?.id ?? '');
   const [label, setLabel] = useState('');
   const [route, setRoute] = useState('/');
   const [preset, setPreset] = useState(VIEWPORT_PRESETS[0]!.id);

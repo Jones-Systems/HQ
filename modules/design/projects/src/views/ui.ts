@@ -73,7 +73,7 @@ export const FALLBACK_UI: ProjectsUi = Object.freeze({
   InlineNotice: ({ tone, title, children, actions = [], className }: NoticeLikeProps) => h('div', { className: ['hq-notice', `hq-notice--${tone}`, className].filter(Boolean).join(' '), role: tone === 'danger' ? 'alert' : 'status' },
     h('div', { className: 'hq-notice-text' }, h('strong', { className: 'hq-notice-title' }, title), children ? h('span', { className: 'hq-notice-description' }, children) : null),
     actions.length > 0 ? h('div', { className: 'hq-notice-actions' }, actions.map((action) => h('button', { key: action.label, type: 'button', className: 'hq-btn hq-btn--sm hq-btn--ghost', onClick: action.onAction }, action.label))) : null),
-  fieldErrorProps: (id, error) => (error ? { 'aria-invalid': true, 'aria-describedby': id } : {}),
+  fieldErrorProps: (id: string, error: unknown) => (error ? { 'aria-invalid': true, 'aria-describedby': id } : {}),
   useToast: () => NO_TOAST,
   useReducedMotion: () => false,
 });

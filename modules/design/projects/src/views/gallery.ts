@@ -117,7 +117,7 @@ function GroupHeader({ controller, block }: { controller: ProjectsController; bl
       group.label, h('span', { className: 'hqp-count' }, String(group.total))));
 }
 
-function Cell({ block, reflowing, visible, children }: { block: GridBlock; reflowing: boolean; visible: boolean; children: ReactNode }) {
+function Cell({ block, reflowing, visible, children }: { block: GridBlock; reflowing: boolean; visible: boolean; children?: ReactNode }) {
   // Only a cell that appears while the list reflows fades in; scrolling cells and the first layout appear at once.
   const [entering] = useState(reflowing);
   const tile = block.type === 'tile';
@@ -131,7 +131,7 @@ function Cell({ block, reflowing, visible, children }: { block: GridBlock; reflo
   }, children);
 }
 
-function StatePanel({ title, role, children }: { title: string; role?: 'status' | 'alert'; children: ReactNode }) {
+function StatePanel({ title, role, children }: { title: string; role?: 'status' | 'alert'; children?: ReactNode }) {
   return h('section', { className: 'hqp-state', role }, h('h2', null, title), children);
 }
 
