@@ -47,3 +47,11 @@ export function fullOutcome(rows) {
   return new Set(rows.map(r => r.id)).size === rows.length && SCENARIOS.every(id => rows.some(r => r.id === id && r.status === 'pass')) && rows.every(r => r.status === 'pass')
     ? 'passed' : rows.some(r => r.status === 'fail') ? 'failed' : 'platform-or-integration-gap';
 }
+
+// Registration is owned by INT; these IDs do not change existing gap/held rows.
+export const RECOVERY_SCENARIOS = Object.freeze([
+  'social-save-and-unknown', 'reference-round-trips', 'wiki-committed-corpus', 'unavailable-service-ui',
+]);
+export function recoveryOutcome(rows) {
+  return subsetOutcome(rows, [...SHELL_ROWS, ...RECOVERY_SCENARIOS], 'recovery-passed');
+}
