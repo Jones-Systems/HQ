@@ -9,7 +9,7 @@ export async function socialScenario(context) {
   assert.equal(typeof social.armSave, 'function', 'real synthetic Social fixture must be registered');
   const posts = () => social.ledger.filter(entry => entry.method !== 'GET');
   await context.domain('Social');
-  await ui.click('Library', 'nav[aria-label="Social"]');
+  await clickRecoveryControl(context, recoveryUi.socialLibraryButton, 'Social Library');
   await context.until(() => ui.evaluate(recoveryUi.socialLibraryReady), 'Social library ready');
   assertNoServiceMutations(social.ledger, 'Social before intentional save');
   context.beginSocialSaves();

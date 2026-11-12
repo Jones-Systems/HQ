@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 const socialSaveButton = `document.querySelectorAll('.soc-cmp .soc-savebar-actions button[aria-keyshortcuts="Control+S Meta+S"]')`;
 
 export const recoveryUi = {
+  socialLibraryButton: `[...document.querySelectorAll('nav[aria-label="Social"] .sd-nav-label')].filter(label => label.textContent.trim() === 'Library').map(label => label.closest('button')).filter(button => button && !button.hidden && button.getAttribute('aria-hidden') !== 'true')`,
   socialLibraryReady: `!!document.querySelector('.soc-lib-empty, .soc-lib-list')`,
   socialNewDraftScope: `document.querySelector('.soc-lib-empty') ? '.soc-lib-empty' : '.sx-page > header'`,
   socialSaveButton,

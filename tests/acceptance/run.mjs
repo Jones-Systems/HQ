@@ -79,7 +79,7 @@ try {
   await access(main);
   await access(join(repo, 'apps/desktop/dist/index.html'));
   report.harness = {};
-  for (const path of ['run.mjs', 'runtime.mjs', 'build-inventory.mjs', 'fixtures/setup.mjs', 'fixtures/http.mjs', 'fixtures/remote-gallery.mjs', 'fixtures/host-gallery.mjs', 'scenarios/sources.mjs', 'scenarios/ui.mjs', 'scenarios/work.mjs', 'fixtures/results.mjs', 'fixtures/wiki.mjs', 'fixtures/social.mjs', 'scenarios/social.mjs', 'scenarios/references.mjs', 'scenarios/wiki.mjs', 'scenarios/services.mjs']) report.harness[path] = createHash('sha256').update(await readFile(join(repo, 'tests/acceptance', path))).digest('hex');
+  for (const path of ['run.mjs', 'runtime.mjs', 'build-inventory.mjs', 'fixtures/setup.mjs', 'fixtures/http.mjs', 'fixtures/remote-gallery.mjs', 'fixtures/host-gallery.mjs', 'scenarios/sources.mjs', 'scenarios/ui.mjs', 'scenarios/work.mjs', 'fixtures/results.mjs', 'fixtures/wiki.mjs', 'fixtures/social.mjs', 'fixtures/recovery-ui.mjs', 'scenarios/social.mjs', 'scenarios/references.mjs', 'scenarios/wiki.mjs', 'scenarios/services.mjs']) report.harness[path] = createHash('sha256').update(await readFile(join(repo, 'tests/acceptance', path))).digest('hex');
   buildInventory = await collectBuildInventory(repo);
   await evidenceRun.write('build-inventory.json', JSON.stringify(buildInventory, null, 2) + '\n');
   report.build = {};

@@ -28,6 +28,24 @@ function driver(window) {
   };
 }
 
+test('Social Library navigation selects its label despite zero and nonzero count badges', () => withDom(async window => {
+  const { document } = window, context = driver(window);
+  for (const count of [0, 7]) {
+    document.body.innerHTML = `<nav aria-label="Social"><button><span class="sd-nav-label">Library</span><span>${count}</span></button><button><span class="sd-nav-label">Calendar</span><span>0</span></button></nav>`;
+    const button = document.querySelector('button');
+    let navigations = 0; button.onclick = () => navigations++;
+    await clickRecoveryControl(context, recoveryUi.socialLibraryButton, 'Social Library');
+    assert.equal(navigations, 1);
+    button.disabled = true;
+    await assert.rejects(clickRecoveryControl(context, recoveryUi.socialLibraryButton, 'Social Library'));
+    assert.equal(navigations, 1);
+    button.disabled = false;
+    button.after(button.cloneNode(true));
+    await assert.rejects(clickRecoveryControl(context, recoveryUi.socialLibraryButton, 'Social Library'));
+    assert.equal(navigations, 1, 'ambiguous labels never navigate');
+  }
+}));
+
 test('Social accepts empty and populated Library; shortcut-decorated Save draft blocks unknown intent', () => withDom(async window => {
   const { document } = window, context = driver(window);
   for (const className of ['soc-lib-empty', 'soc-lib-list']) {
