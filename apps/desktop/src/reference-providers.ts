@@ -7,10 +7,11 @@ import { createLiveSocialPort } from '../../../modules/social/live';
 import { createWorkReferenceProvider } from '@hq/work';
 import { createWikiClient, createWikiReferenceProvider } from '@hq/wiki';
 import { bridgeTransport, createPlannerLive } from '../../../modules/work/live';
+import { WORKSPACE_SCOPE } from './references';
 
-// Social and Work retain their service workspace binding; Design reads use the selected composition.
-// Failed bridges stay unavailable, never an example-store fallback.
-const projectId = 'hq-local';
+// Social and Work retain their service workspace binding (the reference port treats that scope as always current);
+// Design reads use the selected composition. Failed bridges stay unavailable, never an example-store fallback.
+const projectId = WORKSPACE_SCOPE;
 const now = () => new Date();
 const social = createLiveSocialPort({
   call: (route, params) => globalThis.window?.hqServices?.social.call(route, params)
