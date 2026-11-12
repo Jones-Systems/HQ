@@ -42,7 +42,7 @@ describe('quick capture (RV-2)', () => {
     expect(created.dates).toEqual([]);
     expect(env.order('inbox')[0]).toBe(created.id);
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(screen.getByText('Captured “Label the jam jars” to Inbox')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Captured “Label the jam jars” to Inbox' })).toBeTruthy();
   });
 
   it('a date-like word only offers a suggestion; the title is saved exactly as typed', async () => {

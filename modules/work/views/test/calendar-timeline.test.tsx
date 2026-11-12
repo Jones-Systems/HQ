@@ -40,7 +40,7 @@ describe('Calendar moves', () => {
     await user.click(await screen.findByRole('button', { name: 'Undo' }));
     await waitFor(() => expect(rec.writes()).toHaveLength(2));
     expect(lastWrite(rec)!.args.slice(0, 3)).toEqual(['ex-shed-paint', 2, { dates: [{ ...SHED_DEADLINE, value: '2026-10-24' }] }]);
-    expect(await screen.findByText('Undone.')).toBeTruthy();
+    expect(await screen.findByRole('group', { name: /^Undone: Moved “Repaint the garden shed”/u })).toBeTruthy();
   });
 
   it('menu offers one day earlier, one day later and one week later for a day date', async () => {

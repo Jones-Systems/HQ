@@ -117,11 +117,11 @@ interface Handlers {
 /** One Work toast as a shared toast: its tone, words, provenance line and (when it applies) its one action. */
 function feedbackInput(item: WorkToast, canUndo: boolean, handlers: Handlers): ToastInput {
   const unknown = item.tone === 'unknown' || (item.tone === 'warning' && item.message === UNCONFIRMED_TOAST);
-  const base = { title: item.message, meta: item.meta ?? PLANNING_ONLY_META, onDismiss: handlers.dismissed };
+  const base = { duration: 8000, title: item.message, meta: item.meta ?? PLANNING_ONLY_META, onDismiss: handlers.dismissed };
   if (unknown) {
-    return { ...base, tone: 'unknown', action: { label: CHECK_LABEL, onAction: handlers.check } };
+    return { ...base, tone: 'unknown', duration: Infinity, action: { label: CHECK_LABEL, onAction: handlers.check } };
   }
-  if (item.tone === 'danger') return { ...base, tone: 'danger' };
+  if (item.tone === 'danger') return { ...base, tone: 'danger', duration: Infinity };
   // A refused or failed write stays until it is dismissed, so what was kept is never missed.
   if (item.tone === 'warning') return { ...base, tone: 'warning', duration: Infinity };
   return {

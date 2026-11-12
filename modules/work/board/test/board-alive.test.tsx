@@ -33,8 +33,10 @@ function spyOnAnimate() {
     configurable: true, writable: true,
     value: function (this: HTMLElement, keyframes: Keyframe[], options: KeyframeAnimationOptions) {
       const listeners = new Map<string, () => void>();
-      calls.push({ target: this, keyframes, options, finish: () => listeners.get('finish')?.() });
-      return { addEventListener: (type: string, fn: () => void) => { listeners.set(type, fn); }, cancel: () => listeners.get('cancel')?.() };
+      let resolveFinished!: () => void;
+      const finished = new Promise<void>((resolve) => { resolveFinished = resolve; });
+      calls.push({ target: this, keyframes, options, finish: () => { listeners.get('finish')?.(); resolveFinished(); } });
+      return { finished, addEventListener: (type: string, fn: () => void) => { listeners.set(type, fn); }, cancel: () => listeners.get('cancel')?.() };
     },
   });
   return calls;
@@ -65,7 +67,7 @@ describe('the Done control (D-1)', () => {
     await screen.findByRole('button', { name: 'Undo' });
     expect(writes(env.calls).map(moveShape)).toEqual([{ method: 'move', args: ['it-kite', 1, 'done', { place: 'top' }] }]);
     expect(env.order('done')).toEqual(['it-kite', 'it-bike']);
-    expect(screen.getByText('Moved “Sketch a kite frame” to Done')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Moved “Sketch a kite frame” to Done' })).toBeTruthy();
     // The card stays in the board, now under Done and without the control.
     expect(within(document.querySelector('[data-drop-status="done"]')!).getByText('Sketch a kite frame')).toBeTruthy();
     expect(done('Sketch a kite frame')).toBeNull();
@@ -260,6 +262,7 @@ describe('drag physics (D-2)', () => {
   });
 
   it('Escape in a plain environment (no animation support) also leaves nothing behind', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: undefined });
     const env = await setup();
     render(<Host store={env.store} feedback={env.feedback} />);
     const layout = syntheticLayout();
@@ -295,6 +298,7 @@ describe('drag physics (D-2)', () => {
     const env = await setup();
     render(<Host store={env.store} feedback={env.feedback} />);
     const animations = spyOnAnimate();
+    const layout = syntheticLayout();
     card('it-kite').focus();
     const event = new KeyboardEvent('keydown', { key: 'ArrowRight', altKey: true, bubbles: true, cancelable: true });
     await act(async () => { card('it-kite').dispatchEvent(event); });
@@ -305,6 +309,7 @@ describe('drag physics (D-2)', () => {
     expect(document.activeElement).toBe(card('it-kite'));
     // The moved card glides (list motion runs a transform animation on its slot).
     expect(animations.some((a) => a.target === card('it-kite').closest('li') && JSON.stringify(a.keyframes).includes('translate('))).toBe(true);
+    layout.mockRestore();
   });
 
   it('shakes the card once when a move is refused', async () => {

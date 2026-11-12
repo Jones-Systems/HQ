@@ -58,6 +58,10 @@ describe.each(['board', 'list'])('Work feedback on %s', (destination) => {
     await act(async () => { await vi.advanceTimersByTimeAsync(7999); });
     expect(within(container.querySelector('.hq-toast-list')!).getByText('Updated bicycle horizon')).toBeTruthy();
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    const leaving = within(container.querySelector('.hq-toast-list')!).getByText('Updated bicycle horizon').closest('li')!;
+    expect(leaving.getAttribute('data-hq-presence')).toBe('exit');
+    expect(leaving.hasAttribute('inert')).toBe(true);
+    fireEvent.animationEnd(leaving);
     expect(within(container.querySelector('.hq-toast-list')!).queryByText('Updated bicycle horizon')).toBeNull();
     expect(session.store.getState().undo).toHaveLength(1);
     await act(async () => { fireEvent.keyDown(container.querySelector('.wd-domain')!, { key: 'z', [modifier]: true }); });
@@ -75,9 +79,13 @@ describe.each(['board', 'list'])('Work feedback on %s', (destination) => {
     act(() => {
       session.feedback.push({ message: 'Unknown save result', tone: 'warning' });
       session.feedback.push({ message: 'Saving is paused', tone: 'danger' });
+      session.feedback.push({ message: 'Awaiting confirmation', tone: 'unknown' });
     });
     await act(async () => { await vi.advanceTimersByTimeAsync(16_000); });
     expect(within(container.querySelector('.hq-toast-list')!).getByText('Unknown save result')).toBeTruthy();
     expect(within(container.querySelector('.hq-toast-list')!).getByText('Saving is paused')).toBeTruthy();
+    const unknown = screen.getByRole('group', { name: 'Awaiting confirmation' });
+    expect(within(unknown).getByRole('button', { name: 'Check' })).toBeTruthy();
+    expect(within(unknown).queryByRole('button', { name: /Retry|Apply/u })).toBeNull();
   });
 });
