@@ -146,6 +146,35 @@ First hosted Foundation run on PR head `b8f8198b4f1fa000fbd01ffc5ff3a56734ef1222
 
 Pinned compiler research found supported Rolldown Tokio and Rayon per-pool controls, but no complete aggregate worker bound. Native TypeScript, libuv/NAPI and conditional JavaScript-worker paths require qualification too. Setting individual pools to one is only a candidate, not proof of the required total. The Mini execution and unknown-effect holds remain.
 
+### Latest source and hosted CI disposition
+
+This paragraph supersedes earlier pending source-review labels. Independent review
+cleared the toolbar durable-draft caller and the counted Social Library selector
+at `580a72a4`; no new findings were reported. The earlier four scenario P1s remain
+source-cleared. Durable-capture P2s, final Planner PATCH-ledger P2, E2E cleanup P2
+and original B1 findings remain recorded, unselected and unwaived.
+
+Hosted Foundation on `9fc113c2` passed its build/typecheck, then failed root Vitest:
+190 files passed and 19 failed; 3436 tests passed and 45 failed. Required CLI with
+real synthetic Planner E2E and Planner contract/Python/Node checks passed on that
+head. This is historical evidence, not passing evidence for its successors.
+
+Source successors `f1a8904e` (Social schema/contract), `642e2399` (Work UI) and
+`2fb0dc62` (shell/onboarding) are composed through ordinary merges. Their receipts
+record per-failure diagnosis. INT adds the shared Portal and exact board hunk,
+inert/accessibility-hidden toast exits with guarded actions and active F8 focus,
+the motion test's DOM environment, and a Node URL constructor for the real-Planner
+fixture path. Social's load-error assertion follows the existing typed notice.
+No required discovery, package boundary, mutation oracle or failure assertion is
+removed. These source repairs and their new regressions await exact-head CI;
+no local tests, compilers, builds or native execution ran.
+
+The latest exact origin retry still returned no baseline handle. Both unknown
+delegations remain unresolved; no replacement or no-effect fence exists. Compiler
+source research identified TypeScript's single-threaded option and ruled out the
+unselected parallel-plugin path, but aggregate compiler concurrency remains
+unqualified. All Mini, activation and integration-owner holds remain in force.
+
 Contributing conversations and roles, with native identifiers retained privately:
 
 - Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.
