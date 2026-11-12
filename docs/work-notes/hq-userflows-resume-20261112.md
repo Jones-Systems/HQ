@@ -49,10 +49,19 @@ All rows below are source-only and pushed unless explicitly marked otherwise. St
 | Design host matrix | `a56209885c16c4fcbbb9b60bb4f5c72c7012614a` | Composed, 42 retained cases; Foundation alone owns execution. Root typecheck includes dedicated test-support config. No desktop inventory row or parser broadening. |
 | Work queue / health | `bf30a4d7bd7b3b871e2ef0976495206b89e1c617` | Composed after independent fix-scoped review cleared both new P1s; regressions unrun. Prior P2 cleanup race and other recorded findings remain unselected and unwaived. |
 | Social views | `fe2faa3e59e2f64548fe5e442d17556c5419b223` | Composed; four desktop hunks remain with shell owner. |
-| Work frame / board / list / detail | `85d681b20bd1b61ca0868bca3bcd1b9bf699e3a6` | Composed; edge-card Alt+Left reservation authored, runtime unverified. Calendar/Plan/Review successor active. |
+| Work frame / board / list / detail | `85d681b20bd1b61ca0868bca3bcd1b9bf699e3a6` | Composed; edge-card Alt+Left reservation authored, runtime unverified. Calendar/Plan/Review successor is composed below. |
 | Settings / appearance | `3b7ae2f5db797ab12fe5650f7bfca86e13a6189d` | Composed on shell; Updates behavior retained; off-cone evidence and preview bytes preserved. Shell follow-up remains. |
-| Six Design Sources views | `c06e5dcc0c7f106cef4406f57f1d9082a5a11bfa` | Composed; coordinator reconciles native rights wording with explicit UI rights choice. Core-view successor follows this source. |
+| Six Design Sources views | `c06e5dcc0c7f106cef4406f57f1d9082a5a11bfa` | Composed; coordinator reconciles native rights wording with explicit UI rights choice. Core-view successor is composed below. |
 | Four native journeys | `91ff491a4a184af8ae9ae8394d358369d6de2f30` | Composed; INT applies proposed runner/fixture/README source hunks. Native execution remains unqualified. |
+
+Additional pushed checkpoints composed by the coordinator:
+
+| Capsule | Pushed source head | Remaining work |
+| --- | --- | --- |
+| Work planning views | `79e9d49cfcd5a767407b28a52a5025903317e315` | Calendar/Timeline, Plan week and Review/Archive source; runtime and layout unverified. |
+| Design core views | `82b41530a6388423b3cff8d68d20c92401d6f7b0` | Core screens, active project, retry and Annotations picker composed; INT reconciled four status/run-markup test assertions, keeping provenance and no-dispatch oracles. |
+| Final shell wiring | `3bb13af3b3872bf52ad04606be9d0540d84810b3` | Social seed/scope, durability registration, Planner-health observations, Settings and reference fixtures composed. Capture must still adopt durable drafts. |
+| Gated Social extensions | `90a3098684f4824508f16ea674388afbeeb218b5` | Service/client source composed with publishing off. Additive shared routes and closed desktop encoder integration remain pending. |
 
 No recovery PR has been opened. Ordinary local merges preserve retained ancestry and are not foundation merges. Source checkpoints are not accepted behavior.
 
@@ -113,4 +122,16 @@ INT applies the VAL-S runner registration, Social/Planner fixture controls and a
 
 Two source-review P1s were selected and fixed: the missing health export assertion now follows the direct-health import contract; a request-ID rejection hold now blocks repeated/reconnected drains, survives restore and gates dispatch after persistence. Independent re-review found no new scoped issues. The P2 E2E cleanup race remains unselected; neither reliable cleanup nor production queue activation is qualified by these source tests. Original B1 findings retain their dispositions.
 
-Remaining active source capsules are Design core views, remaining Work planning views and gated Social extensions. Wiki UI launch identity is unresolved. Final shell source wiring follows completed module checkpoints. All layout, accessibility, native, emitted-store, cleanup, root execution and exact-version verification obligations remain open.
+Remaining source work is capture durable-draft adoption, the Social shared encoder/contracts and four selected native-scenario P1 corrections. Wiki UI launch identity is unresolved. The previously active view/shell capsules are now composed. All layout, accessibility, native, emitted-store, cleanup, root execution and exact-version verification obligations remain open.
+
+## Orchestration investigation and current source ownership
+
+The owner explicitly requested renewed reconciliation and a separate investigation. The source/read-only investigation inspected the installed Jones Code revision. It found no exposed origin-journal lookup or authoritative fence for the two unknown remote-delegation requests. Repeated no-handle failures are consistent with local reservation/projection failure, but actual origin records are needed; neither execution nor no effect is proved. A foreign-looking generation name can be normal shared-producer metadata and does not establish cross-routing. Retained service-tier observations likewise do not prove the current turn's effective setting.
+
+Fresh native readback shows the receiving coordinator's current run running, with its later run only queued. The exclusive coordinator worktree, branch, clean head and Git owner were reverified before resuming ordinary source composition under the owner's renewed instruction. This does not settle either unknown launch, grant Mini execution or certify the previously rejected native owner-input operation. The origin was asked only for another exact-request reconciliation, preserving its paused goal and retained duties.
+
+The native-scenario source review found four selected P1s: Social selectors/save controls do not match the current screens; Work detail is a textarea; the Back pill includes a keyboard hint; and offline capture deliberately remains editable while its send is guarded. An isolated source fix is assigned. The new P2 Planner PATCH final-ledger gap is recorded and unselected; no automatic repair is assigned. A separate Work capture/nav owner is adopting the existing durable-drafts slot with explicit restore/mutation/save-failure rules. All new regressions remain unrun.
+
+The static Mini launch capsule is not qualified. In addition to unresolved baseline effect, the pinned Vite/Rolldown Rust build threads need supported bounded controls; Go GOMAXPROCS alone is insufficient. No runtime download, lock acquisition, build or test was performed by the preparation task. Its private capsule remains outside public source.
+
+The updater requested the heavy slot back for its distinct authorized attempt. The coordinator returned a continuing hold: unknown baseline effects prevent safe overlap or a closure claim. No live work was preempted, no signing/native attempt was authorized here, and no original approval was broadened.
