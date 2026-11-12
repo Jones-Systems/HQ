@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
-import { createPortal } from 'react-dom';
-import { animateElement, prefersReducedMotion, StateView, useListMotion } from '@hq/ui';
+import { animateElement, Portal, prefersReducedMotion, StateView, useListMotion } from '@hq/ui';
 import {
   DEFAULT_SETTINGS, EMPTY_FILTERS, activeFilterCount, isLive, plannerToday, STATUS_IDS, STATUS_LABEL, STATUSES,
   type Filters, type Item, type Status, type WorkState, type WorkStore,
@@ -432,15 +431,14 @@ function BoardSurface({
           </>
         )}
       </div>
-      {ghostItem && createPortal(
+      {ghostItem && <Portal>
         <div className="work-ui work-drag-ghost" ref={dragging.ghostRef} aria-hidden="true" data-settling={dragging.drag ? undefined : 'true'}>
           <div className={`work-card work-card--ghost${ghostItem.motivation ? ` work-card--why-${ghostItem.motivation}` : ''}`}>
             <CardFace item={ghostItem} today={today} />
           </div>
           <span className="work-drag-badge">{badge.current}</span>
-        </div>,
-        document.body,
-      )}
+        </div>
+      </Portal>}
       <p className="hq-sr-only" role="status" aria-live="polite">{announcement}</p>
     </div>
   );

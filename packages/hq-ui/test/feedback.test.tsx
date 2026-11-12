@@ -96,11 +96,17 @@ describe('ToastViewport', () => {
     expect(document.activeElement?.textContent).toBe('Undo');
     fireEvent.keyDown(window, { key: 'F8' });
     expect(document.activeElement).toBe(elsewhere);
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    const leaving = screen.getByRole('group', { name: 'Archived card' }).closest('li')!;
+    const undoButton = screen.getByRole('button', { name: 'Undo' });
+    fireEvent.click(undoButton);
     expect(undo).toHaveBeenCalledTimes(1);
     expect(store.getSnapshot().map((record) => record.title)).toEqual(['Moved card']);
-    const leaving = screen.getByRole('group', { name: 'Archived card' }).closest('li')!;
     expect(leaving.hasAttribute('inert')).toBe(true);
+    expect(leaving.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect((undoButton as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(undoButton);
+    expect(undo).toHaveBeenCalledTimes(1);
     const dismiss = within(screen.getByRole('group', { name: 'Moved card' })).getByRole('button', { name: 'Dismiss notification' });
     dismiss.focus();
     fireEvent.keyDown(dismiss, { key: 'Escape' });
@@ -115,6 +121,19 @@ describe('ToastViewport', () => {
     expect(screen.getByRole('group', { name: "Couldn't save" }).contains(document.activeElement)).toBe(true);
     fireEvent.keyDown(window, { key: 'F8' });
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it('refuses a removed action before React commits and skips its retained slot with F8', () => {
+    mount();
+    const toast = createToastApi(store);
+    const undo = vi.fn();
+    act(() => { toast.info('Still here'); toast.show({ id: 'gone', title: 'Removed', action: { label: 'Undo', onAction: undo } }); });
+    const button = screen.getByRole('button', { name: 'Undo' });
+    act(() => { store.dismiss('gone'); fireEvent.click(button); });
+    expect(undo).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: 'F8' });
+    expect(screen.getByRole('group', { name: 'Still here' }).contains(document.activeElement)).toBe(true);
+    expect(screen.getByRole('status').textContent).toContain('Removed');
   });
 
   it('announces every toast raised together, and a folded repeat again', () => {

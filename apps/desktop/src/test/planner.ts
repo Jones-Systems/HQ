@@ -2,12 +2,12 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL as NodeURL } from 'node:url';
 
 // Test-only: a disposable real Planner (services/planner) on loopback, its SQLite file under the OS temporary
 // directory and never the checkout. Every test that starts one owns it and calls `dispose()`.
 
-const SERVICE_DIR = fileURLToPath(new URL('../../../../services/planner/', import.meta.url));
+const SERVICE_DIR = fileURLToPath(new NodeURL('../../../../services/planner/', import.meta.url));
 const STARTUP_MS = 10_000;
 const GRACE_MS = 2_000;
 const BANNER = /Planning hub on (http:\/\/\S+?\/)(?:\s|$)/;

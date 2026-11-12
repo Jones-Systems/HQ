@@ -140,7 +140,8 @@ export function ToastViewport({ label = 'Notifications', hotkey = 'F8', visible 
         leaveToasts();
         return;
       }
-      const target = root.querySelector<HTMLElement>('.hq-toast-slot:last-of-type button');
+      const slots = root.querySelectorAll<HTMLElement>('.hq-toast-slot:not([aria-hidden="true"])');
+      const target = [...slots].at(-1)?.querySelector<HTMLElement>('button:not(:disabled)');
       if (!target) return;
       event.preventDefault();
       returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -175,6 +176,8 @@ export function ToastViewport({ label = 'Notifications', hotkey = 'F8', visible 
           <ToastItem key={record.id} record={record} leaving={!live.has(record.id)} onExited={onExited}
             onDismiss={() => store.dismiss(record.id, 'user')} onKeyboardDismiss={() => dismissFromKeyboard(record)}
             onAction={() => {
+              // Store removal can precede React's next render: a retained handler has no remaining authority.
+              if (!store.getSnapshot().some((current) => current.id === record.id && current.revision === record.revision)) return;
               record.action?.onAction();
               if (record.action?.dismiss !== false) store.dismiss(record.id, 'action');
             }} />
@@ -203,11 +206,12 @@ function ToastItem({ record, leaving, onExited, onDismiss, onKeyboardDismiss, on
   useEffect(() => { if (startedLeaving.current) onExited(record.id); }, [onExited, record.id]);
   if (!presence.mounted) return null;
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (leaving) return;
     if (event.key === 'Escape' && record.dismissible) { event.stopPropagation(); onKeyboardDismiss(); }
   };
   const glyph = record.tone === 'loading' ? <span className="hq-spinner" /> : GLYPHS[record.tone];
   return (
-    <li ref={presence.ref} {...presence.props} className="hq-toast-slot" data-toast-id={record.id} inert={leaving || undefined}>
+    <li ref={presence.ref} {...presence.props} className="hq-toast-slot" data-toast-id={record.id} inert={leaving || undefined} aria-hidden={leaving || undefined}>
       <div className={cx('hq-toast', `hq-toast--${record.tone}`)} data-tone={record.tone} onKeyDown={onKeyDown}
         role="group" aria-label={record.title}>
         {glyph && <span className="hq-toast-glyph" aria-hidden="true">{glyph}</span>}
@@ -220,9 +224,9 @@ function ToastItem({ record, leaving, onExited, onDismiss, onKeyboardDismiss, on
           {record.meta && <span className="hq-meta">{record.meta}</span>}
         </div>
         {record.action && (
-          <Button size="sm" variant="secondary" onClick={onAction} aria-keyshortcuts={record.action.keyshortcuts}>{record.action.label}</Button>
+          <Button size="sm" variant="secondary" disabled={leaving} onClick={() => { if (!leaving) onAction(); }} aria-keyshortcuts={record.action.keyshortcuts}>{record.action.label}</Button>
         )}
-        {record.dismissible && <IconButton size="sm" variant="ghost" label="Dismiss notification" onClick={onDismiss} icon={DISMISS_ICON} />}
+        {record.dismissible && <IconButton size="sm" variant="ghost" label="Dismiss notification" disabled={leaving} onClick={() => { if (!leaving) onDismiss(); }} icon={DISMISS_ICON} />}
       </div>
     </li>
   );

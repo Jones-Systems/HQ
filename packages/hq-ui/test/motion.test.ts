@@ -1,4 +1,6 @@
+// @vitest-environment happy-dom
 import { readFileSync } from 'node:fs';
+import { URL as NodeURL } from 'node:url';
 import { cleanup, render } from '@testing-library/react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +8,7 @@ import { HQ_TOKEN_NAMES } from '../src/tokens';
 import { MOTION_DURATIONS, MOTION_EASINGS } from '../src/motion/motion';
 import { useListMotion } from '../src/motion/useListMotion';
 
-const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+const read = (path: string) => readFileSync(new NodeURL(path, import.meta.url), 'utf8');
 const json = JSON.parse(read('../src/tokens/hq-tokens.json')) as {
   motion: Record<string, string>;
   'motion-reduced': { values: Record<string, string> };

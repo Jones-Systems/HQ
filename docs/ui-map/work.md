@@ -1,5 +1,12 @@
 # Work presentation
 
+Shared recovery correction (source only): the board drag ghost now uses the
+UI kit's body-mounted `Portal`; its package boundary remains unchanged. Exiting
+shared toasts retain their visual animation but hide from accessibility, disable
+actions and reject stale action handlers. F8 targets the newest active toast.
+Focused regression source covers portal ownership/cleanup and stale Undo/exit
+focus. Current-head execution, native drag, focus and visual evidence are unverified.
+
 ## Recovery source discovery (2026-11-12, unverified)
 
 The recovery frame mounts compact capture, always-visible labelled filters,

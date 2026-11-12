@@ -422,7 +422,7 @@ describe('Overview', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy();
     const notice = screen.getByRole('status');
     expect(within(notice).getByText('Social service unreachable')).toBeTruthy();
-    expect(within(notice).getByText(/^Nothing was changed\./u)).toBeTruthy();
+    expect(within(notice).getByText(/^The Social service is unreachable\. Nothing was changed\. Check again when it is running\./u)).toBeTruthy();
     // The example workspace has no settings to fix.
     expect(within(notice).queryByRole('button', { name: 'Open Social settings' })).toBeNull();
     expect(screen.getByRole('button', { name: /^Offline/u })).toBeTruthy();
