@@ -10,6 +10,8 @@ export interface Snapshot {
   observedAt: string;
   /** Service capabilities; `[]` on today's Planner. */
   features: string[];
+  /** The advertised Planner API version, when the service names one. */
+  api?: number;
 }
 
 export interface WriteResult {
@@ -29,6 +31,17 @@ export interface SettingsWriteResult { settings: Settings; stateVersion: number 
 
 export type Anchor = { after_id: string } | { before_id: string } | { place: 'top' | 'bottom' };
 
+/** Why the Planner could not be used. An `unavailable` error without a reason means `unreachable`. */
+export type UnavailableReason =
+  /** Nothing answered: a refused connection, an unknown host, a timeout, or no Planner address in this window. */
+  | 'unreachable'
+  /** The Planner answered but refused this client (HTTP 403 or 421), for example a Host not in `--allowed-host`. */
+  | 'refused'
+  /** The Planner answered a read with a server error (HTTP 5xx). */
+  | 'server_error'
+  /** Something answered that is not a Planner this HQ can use: an unexpected status or a malformed body. */
+  | 'incompatible';
+
 export type PlannerError =
   | { kind: 'invalid'; errors: FieldError[] }
   | { kind: 'revision_conflict'; current: Item }
@@ -36,9 +49,34 @@ export type PlannerError =
   | { kind: 'request_id_reused' }
   | { kind: 'not_found' }
   /** Known not delivered: no effect. */
-  | { kind: 'unavailable' }
+  | { kind: 'unavailable'; reason?: UnavailableReason }
   /** Possibly delivered: resolve only through the replay-aware recovery, never by an ordinary re-send. */
   | { kind: 'unknown'; requestId: string };
+
+/** A Planner capability this HQ uses that the connected Planner does not advertise. */
+export type PlannerLimit =
+  /** No `requests.replay`: an unconfirmed change cannot be checked or applied safely, only read back. */
+  | 'no_replay'
+  /** No `hq-references-v1`: HQ links cannot be saved on items. */
+  | 'no_hq_references'
+  /** No `items.batch_create`. HQ's Work views do not need it; agents using the CLI do. */
+  | 'no_batch';
+
+/** The answer of one explicit connection check. It reads only `GET /api/version` and never writes. */
+export type PlannerHealth =
+  | {
+    /** `ready`: every capability HQ uses is advertised. `limited`: reachable, but see `limits`. */
+    status: 'ready' | 'limited';
+    checkedAt: string;
+    /** The advertised Planner API version, or null when the service names none. */
+    api: number | null;
+    stateVersion: number;
+    features: string[];
+    limits: PlannerLimit[];
+    /** The replay-record retention, when advertised. */
+    retention: { max: number; evictedThroughVersion: number } | null;
+  }
+  | { status: 'unavailable'; checkedAt: string; reason: UnavailableReason; httpStatus?: number };
 
 /** Why a possibly applied write cannot be resolved by replay. */
 export type IndeterminateReason =
@@ -49,7 +87,12 @@ export type IndeterminateReason =
   /** The Planner does not advertise `requests.replay`. */
   | 'unsupported'
   /** This client holds no recorded intent for the request ID, for example after a restart. */
-  | 'no_intent';
+  | 'no_intent'
+  /**
+   * The Planner's state version is now older than the one recorded before the send, so the store at this address may
+   * have been replaced or restored. Nothing can be proved about the write there.
+   */
+  | 'store_changed';
 
 /**
  * A recovery-only outcome: whether the write was applied cannot be determined. Nothing was changed by asking.
@@ -104,6 +147,25 @@ export interface PlannerRecovery {
   apply(requestId: string): Promise<ApplyResult>;
   /** Stops tracking the request. Its effect stays unknown. */
   release(requestId: string): void;
+  /**
+   * The recorded intent of an unresolved request, so a durable queue can keep it across a restart; null when none is
+   * held or it is already settled. The value is plain JSON and opaque outside the adapter that produced it.
+   */
+  exportIntent?(requestId: string): RecoveryIntent | null;
+  /**
+   * Re-registers an exported intent after a restart, so Check and Apply work for it again. It sends nothing. False
+   * when the value is malformed, or a different intent already holds that request ID; the outcome then stays unknown.
+   */
+  adoptIntent?(intent: unknown): boolean;
+}
+
+/** One unresolved write as the adapter recorded it before its first send. `call` is adapter-owned JSON. */
+export interface RecoveryIntent {
+  readonly v: 1;
+  readonly requestId: string;
+  /** The state version observed before the first send: the replay baseline, never raised afterwards. */
+  readonly sentAfterVersion: number;
+  readonly call: unknown;
 }
 
 export const PLANNER_RECOVERY_KEYS = ['check', 'apply', 'release'] as const satisfies readonly (keyof PlannerRecovery)[];
