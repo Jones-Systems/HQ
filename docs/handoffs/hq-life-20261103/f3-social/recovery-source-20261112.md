@@ -17,7 +17,7 @@ The source includes Overview, Sources import desk, Channels, workbench catalog/t
 ## Four desktop integration requests for SHL
 
 Exact retained source delta: [desktop-integration-request.patch](desktop-integration-request.patch).
-This patch is a handoff, not an applied desktop change. Its preimage is the retained lane's merge base; SHL must compose it with current shell code, preserving observation/status and reference-provider behavior.
+This zero-context patch is a handoff, not an applied desktop change. Its preimage is the retained lane's merge base; SHL must compose it with current shell code, preserving observation/status and reference-provider behavior.
 
 1. `preview/composition.tsx`: replace the direct workbench fixture seed with `createExampleWorkspace(projectId)` from Social nav, so example simulation and project-scoped links use the same module factory.
 2. `preview/composition.test.tsx`: retain the Social example project test and imports; assert both Social/Work sample links use the shown project and do not display the another-project warning.
@@ -27,7 +27,7 @@ This patch is a handoff, not an applied desktop change. Its preimage is the reta
 ## Static checks and verification debt
 
 - Git merge-tree textual conflict preflight; no module conflict.
-- Diff whitespace checks and exact write-cone inspection.
+- Diff whitespace checks and exact write-cone inspection. The initial staged check flagged context-only spaces in the handoff patch; regenerated it with zero context and rechecked.
 - Byte/blob identity of all four preserved desktop files against the shell base.
 - Static inspection of receipt copy ownership, unknown-outcome wording, shared error mapping, responsive rules and retained guards.
 - Existing unknown/no-resubmit, copy, calendar and save tests retained. Updated wording assertions for the shared mapping; added forbidden/not-found refusal navigation cases preserving the one-submission assertion.
