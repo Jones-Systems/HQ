@@ -6,6 +6,7 @@ import {
 import { useEnv } from './env';
 import { currentPeriodEntries, UPCOMING_DAYS, upcomingEntries } from './moves';
 import { ago, DateChip, ItemRow, MotivationPill, Quiet, SectionHead, StatusMark, cx } from './parts';
+import './glance.css';
 
 // Glance (RV-4): what matters now, what's coming, and what needs sorting,
 // without opening anything. Every link here only navigates.

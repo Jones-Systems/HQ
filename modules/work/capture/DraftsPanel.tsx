@@ -4,7 +4,8 @@ import type { WorkStore } from '../core';
 import { isTyping } from '../board/actions';
 import type { Feedback } from '../board/feedback';
 import { DRAFT_LABEL, DRAFT_SCOPE_NOTE, useDrafts, type DraftStore } from './drafts';
-import '../board/board.css';
+import '../theme';
+import '../board/feedback.css';
 import './capture.css';
 
 /** HQ drafts awaiting an explicit Send drafts. Nothing here sends on its own, including on reconnect (RW-10). */

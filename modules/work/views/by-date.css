@@ -1,0 +1,16 @@
+/* By date board. */
+.wv-bydate { display: grid; gap: var(--hq-space-md); }
+.wv-board { display: grid; gap: var(--hq-space-md); grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); align-items: start; }
+.wv-col { display: grid; gap: var(--hq-space-xs); background: var(--hq-surface-sunken); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); padding: var(--hq-space-sm); }
+.wv-col-head { display: flex; align-items: baseline; }
+.wv-col-name { font: var(--hq-type-heading); }
+.wv-col-list { display: grid; gap: var(--hq-space-xs); }
+.wv-col-empty { color: var(--hq-text-subtle); font: var(--hq-type-small); padding: var(--hq-space-sm); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-sm); }
+.wv-card { display: grid; gap: var(--hq-space-xs); background: var(--hq-surface-raised); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-md); padding: var(--hq-space-sm); cursor: default; }
+.wv-card-head { display: flex; align-items: center; gap: var(--hq-space-xs); }
+.wv-card-title { font: var(--hq-type-heading); min-width: 0; flex: 1; }
+.wv-card-meta, .wv-card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
+
+@media (max-width: 760px) {
+  .wv-board { grid-template-columns: minmax(0, 1fr); }
+}

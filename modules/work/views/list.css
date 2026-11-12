@@ -1,0 +1,7 @@
+/* List. */
+.wv-table-wrap { overflow: auto; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); background: var(--hq-surface); }
+.wv-table { width: 100%; border-collapse: collapse; }
+.wv-table th, .wv-table td { padding: var(--hq-space-xs) var(--hq-space-sm); border-bottom: 1px solid var(--hq-border); text-align: start; vertical-align: middle; white-space: nowrap; }
+.wv-table td.wv-col-title { white-space: normal; display: flex; align-items: center; gap: var(--hq-space-xs); min-width: 220px; }
+.wv-th-sort { font: var(--hq-type-label); color: var(--hq-text-muted); background: none; border: 0; padding: 0; cursor: pointer; }
+.wv-table th[aria-sort="ascending"] .wv-th-sort, .wv-table th[aria-sort="descending"] .wv-th-sort { color: var(--hq-text); }

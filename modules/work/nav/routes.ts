@@ -3,7 +3,7 @@ import type { PlanningViewId, WorkDestination } from '../views';
 
 /**
  * Work destinations (spec.hq-social-work#iface.domain-module.001, with T4 P-8): `home` (Board), `glance`, `board`,
- * `board/by-date`, `list`, `calendar`, `calendar/<YYYY-MM>`, `timeline`, `review`, `archive`, `settings` and
+ * `board/by-date`, `board/week` (Plan week, flow assessment 2026-11-03), `list`, `calendar`, `calendar/<YYYY-MM>`, `timeline`, `review`, `archive`, `settings` and
  * `item/<itemId>`. `lists` is an alias of `board/by-date`; `item/<itemId>` opens the card detail over the last page;
  * `board/plan/<listBoardId>` is reserved for D-3. Destinations are module-local strings the shell stores per domain;
  * parsing one never writes or starts anything.
@@ -28,6 +28,7 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { page: 'board', label: 'Status board', destination: 'board', group: 'boards' },
   { page: 'by-date', label: 'By date', destination: 'board/by-date', group: 'boards' },
+  { page: 'week', label: 'Plan week', destination: 'board/week', group: 'boards' },
   { page: 'glance', label: 'Glance', destination: 'glance', group: 'views' },
   { page: 'list', label: 'List', destination: 'list', group: 'views' },
   { page: 'calendar', label: 'Calendar', destination: 'calendar', group: 'views' },
@@ -43,7 +44,7 @@ export const PAGE_LABELS: { readonly [P in WorkPage]: string } = {
 };
 
 const SIMPLE: Readonly<Record<string, Exclude<WorkPage, 'plan' | 'calendar'>>> = {
-  home: 'board', board: 'board', 'board/by-date': 'by-date', lists: 'by-date',
+  home: 'board', board: 'board', 'board/by-date': 'by-date', lists: 'by-date', 'board/week': 'week',
   glance: 'glance', list: 'list', timeline: 'timeline', review: 'review', archive: 'archive', settings: 'settings',
 };
 
@@ -74,6 +75,7 @@ export function pageDestination(route: Exclude<WorkRoute, { kind: 'item' }>): st
   switch (route.page) {
     case 'board': return 'board';
     case 'by-date': return 'board/by-date';
+    case 'week': return 'board/week';
     case 'calendar': return route.month ? `calendar/${route.month}` : 'calendar';
     case 'plan': return `board/plan/${route.planId}`;
     default: return route.page;
@@ -86,5 +88,5 @@ export function itemDestination(itemId: string): string {
 
 /** A view link (for example a Glance status pill) as a destination. Navigation only; it never writes. */
 export function viewLinkDestination(to: WorkDestination): string {
-  return to.view === 'board' ? 'board' : to.view === 'by-date' ? 'board/by-date' : to.view;
+  return to.view === 'board' ? 'board' : to.view === 'by-date' ? 'board/by-date' : to.view === 'week' ? 'board/week' : to.view;
 }

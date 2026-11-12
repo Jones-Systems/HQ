@@ -1,43 +1,6 @@
-/* Work board, shared Work roles and toasts. Built only from @hq/ui tokens: each Work role aliases a T2 role that
-   already has a light and a dark value, so both themes and their contrast come from T2. Every coloured role is
-   paired with a word or a shape (iface.ui-kit.001 domain roles). No inline styles: the app CSP forbids them. */
-
-.work-ui {
-  --work-st-inbox: var(--hq-text-subtle);
-  --work-st-considering: var(--hq-warning);
-  --work-st-next: var(--hq-info);
-  --work-st-active: var(--hq-success);
-  --work-st-on_hold: var(--hq-text-muted);
-  --work-st-done: var(--hq-accent-strong);
-  --work-st-dropped: var(--hq-danger);
-  --work-dk-target: var(--hq-info);
-  --work-dk-deadline: var(--hq-danger);
-  --work-dk-start: var(--hq-success);
-  --work-dk-event: var(--hq-accent-strong);
-  --work-why-need: var(--hq-danger);
-  --work-why-want: var(--hq-success);
-  --work-why-exploring: var(--hq-info);
-  color: var(--hq-text);
-  font: var(--hq-type-body);
-  box-sizing: border-box;
-}
-.work-ui *, .work-ui *::before, .work-ui *::after { box-sizing: border-box; }
-.work-ui :focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
-
-.work-icon { width: var(--hq-size-icon-md); height: var(--hq-size-icon-md); flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.work-icon--sm { width: var(--hq-size-icon-sm); height: var(--hq-size-icon-sm); }
-
-/* ---------- Shared fields (board, detail, capture) ---------- */
-.work-field { display: grid; gap: var(--hq-space-3xs); min-width: 0; }
-.work-field-label { font: var(--hq-type-meta); font-weight: var(--hq-font-weight-medium); color: var(--hq-text-muted); }
-.work-field-error { margin: 0; font: var(--hq-type-small); color: var(--hq-danger); }
-.work-input {
-  min-height: var(--hq-size-control-md); padding: 0 var(--hq-space-sm); border: 0; border-radius: var(--hq-radius-sm);
-  background: var(--hq-input-bg); color: var(--hq-text); box-shadow: inset 0 0 0 1px var(--hq-input-edge); font: var(--hq-type-body);
-}
-.work-input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--hq-input-edge-invalid); }
-.work-input:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: 0; }
-textarea.work-input { min-height: 140px; padding: var(--hq-space-sm); resize: vertical; }
+/* Work status board: frame, columns, cards and drag. Shared Work roles, fields and the module base live in
+   ../theme/work-theme.css; sync banners and toasts in ./feedback.css. Every coloured role is paired with a word or
+   a shape (iface.ui-kit.001 domain roles). No inline styles: the app CSP forbids them. */
 
 /* ---------- Board frame ---------- */
 .work-board { display: flex; flex-direction: column; min-height: 100%; gap: var(--hq-space-md); min-width: 0; }
@@ -74,14 +37,6 @@ textarea.work-input { min-height: 140px; padding: var(--hq-space-sm); resize: ve
 .work-col-list { display: grid; gap: var(--hq-space-xs); margin: 0; padding: 0; list-style: none; min-height: var(--hq-space-xl); }
 .work-card-slot { display: grid; gap: var(--hq-space-xs); }
 
-.work-st-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--work-st-inbox); }
-.work-st-dot--considering { background: var(--work-st-considering); }
-.work-st-dot--next { background: var(--work-st-next); }
-.work-st-dot--active { background: var(--work-st-active); }
-.work-st-dot--on_hold { background: transparent; box-shadow: inset 0 0 0 2px var(--work-st-on_hold); }
-.work-st-dot--done { background: var(--work-st-done); border-radius: 2px; }
-.work-st-dot--dropped { background: linear-gradient(135deg, transparent 42%, var(--work-st-dropped) 42% 58%, transparent 58%); box-shadow: inset 0 0 0 1.5px var(--work-st-dropped); }
-
 .work-add {
   display: flex; align-items: center; gap: var(--hq-space-2xs); min-height: var(--hq-size-control-md);
   padding: 0 var(--hq-space-sm); border: 0; border-radius: var(--hq-radius-sm); background: transparent;
@@ -111,23 +66,11 @@ textarea.work-input { min-height: 140px; padding: var(--hq-space-sm); resize: ve
 .work-card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs) var(--hq-space-sm); }
 
 .work-chips { display: flex; flex-wrap: wrap; gap: var(--hq-space-2xs); }
-.work-chip {
-  display: inline-flex; align-items: center; gap: var(--hq-space-3xs); min-height: 22px; padding: 0 var(--hq-space-xs);
-  border-radius: var(--hq-radius-pill); background: var(--hq-surface-sunken); color: var(--hq-text);
-  font: var(--hq-type-meta); font-weight: var(--hq-font-weight-medium); white-space: nowrap;
-}
-.work-chip--why-need { box-shadow: inset 0 0 0 1px var(--work-why-need); color: var(--work-why-need); background: var(--hq-danger-soft); }
-.work-chip--why-want { box-shadow: inset 0 0 0 1px var(--work-why-want); color: var(--work-why-want); background: var(--hq-success-soft); }
-.work-chip--why-exploring { box-shadow: inset 0 0 0 1px var(--work-why-exploring); color: var(--work-why-exploring); background: var(--hq-info-soft); }
-.work-chip--date { box-shadow: inset 0 0 0 1px var(--hq-border-control); }
+/* Card chips are the theme .wk-chip family. The detail date list still colours its kind label with these. */
 .work-chip--dk-target { color: var(--work-dk-target); }
 .work-chip--dk-deadline { color: var(--work-dk-deadline); }
 .work-chip--dk-start { color: var(--work-dk-start); }
 .work-chip--dk-event { color: var(--work-dk-event); }
-.work-chip--coarse { background: transparent; box-shadow: none; outline: 1px dashed currentColor; outline-offset: -1px; }
-.work-chip--overdue { background: var(--hq-danger-soft); color: var(--hq-danger); box-shadow: inset 0 0 0 1px var(--hq-danger); }
-.work-chip--passed { color: var(--hq-text-muted); }
-.work-chip--priority-high { color: var(--hq-danger); box-shadow: inset 0 0 0 1px var(--hq-danger); background: transparent; }
 
 .work-badge { display: inline-flex; align-items: center; gap: var(--hq-space-3xs); font: var(--hq-type-meta); color: var(--hq-text-muted); }
 .work-badge--area { font-weight: var(--hq-font-weight-medium); color: var(--hq-text); }
@@ -144,31 +87,5 @@ textarea.work-input { min-height: 140px; padding: var(--hq-space-sm); resize: ve
 .work-drag-title { font: var(--hq-type-label); font-weight: var(--hq-font-weight-semibold); }
 .work-drag-badge { justify-self: start; padding: 0 var(--hq-space-xs); border-radius: var(--hq-radius-pill); background: var(--hq-accent-strong); color: var(--hq-on-accent); font: var(--hq-type-meta); font-weight: var(--hq-font-weight-semibold); }
 
-/* ---------- Sync, banners and toasts ---------- */
-.work-sync { display: grid; gap: var(--hq-space-xs); }
-.work-sync:empty { display: none; }
-.work-banner {
-  display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm) var(--hq-space-md);
-  padding: var(--hq-space-sm) var(--hq-space-md); border-radius: var(--hq-radius-md); background: var(--hq-surface-raised);
-  box-shadow: inset 0 0 0 1px var(--hq-border-strong); font: var(--hq-type-small);
-}
-.work-banner--offline { background: var(--hq-warning-soft); box-shadow: inset 0 0 0 1px var(--hq-warning); }
-.work-banner--held { background: var(--hq-danger-soft); box-shadow: inset 0 0 0 1px var(--hq-danger); }
-.work-unconfirmed { display: grid; gap: var(--hq-space-xs); padding: var(--hq-space-sm) var(--hq-space-md); border-radius: var(--hq-radius-md); outline: 1px dashed var(--hq-warning); outline-offset: -1px; }
-.work-unconfirmed-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm); }
-.work-unconfirmed-head > .hq-btn { margin-left: auto; }
-.work-unconfirmed-list { display: grid; gap: var(--hq-space-xs); margin: 0; padding: 0; list-style: none; }
-.work-unconfirmed-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm); }
-.work-unconfirmed-text { display: grid; gap: var(--hq-space-3xs); flex: 1 1 280px; }
-.work-unconfirmed-actions { display: flex; gap: var(--hq-space-xs); }
-.work-possibly-saved { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); font: var(--hq-type-small); color: var(--hq-text-muted); }
-.work-save-unconfirmed { display: inline-flex; align-items: center; gap: var(--hq-space-xs); }
-
-.work-toast--warning { box-shadow: inset 3px 0 0 var(--hq-warning), var(--hq-shadow-overlay); }
-.work-toast--danger { box-shadow: inset 3px 0 0 var(--hq-danger), var(--hq-shadow-overlay); }
-
-@media (prefers-reduced-motion: reduce) {
-  .work-ui *, .work-drag-ghost { transition: none !important; animation: none !important; }
-}
 
 .work-board > .hq-state { padding-inline: 0; padding-block: var(--hq-space-lg); }

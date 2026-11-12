@@ -8,7 +8,8 @@ import { reportWrite } from '../board/actions';
 import type { Feedback } from '../board/feedback';
 import { DRAFT_LABEL, DRAFT_SCOPE_NOTE, type DraftStore } from './drafts';
 import { suggestDate } from './suggest';
-import '../board/board.css';
+import '../theme';
+import '../board/feedback.css';
 import './capture.css';
 
 /** Shown in the capture footer: capturing writes one planning record and starts nothing. */

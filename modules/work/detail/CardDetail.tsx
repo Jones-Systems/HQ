@@ -14,7 +14,9 @@ import { sharedDetailState, useDetailState, type DetailState, type TextField } f
 import { createEditor, fieldWords, NOTES_DEBOUNCE_MS } from './edits';
 import { References } from './References';
 import { HqLinks } from './HqLinks';
+import '../theme';
 import '../board/board.css';
+import '../board/feedback.css';
 import './detail.css';
 
 export interface CardDetailProps {
@@ -190,7 +192,7 @@ export function CardDetail({ store, state, feedback, itemId, onClose, now, detai
               title={option.hint}
               onClick={() => void changeStatus(store, feedback, item, option.id)}
             >
-              <span className={`work-st-dot work-st-dot--${option.id}`} aria-hidden="true" />{option.label}
+              <span className={`wk-dot wk-dot--${option.id}`} aria-hidden="true" />{option.label}
             </button>
           ))}
         </div>

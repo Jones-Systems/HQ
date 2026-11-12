@@ -1,0 +1,23 @@
+/* Work sync state, banners and toasts. Token-only colours; no inline styles. */
+/* ---------- Sync, banners and toasts ---------- */
+.work-sync { display: grid; gap: var(--hq-space-xs); }
+.work-sync:empty { display: none; }
+.work-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm) var(--hq-space-md);
+  padding: var(--hq-space-sm) var(--hq-space-md); border-radius: var(--hq-radius-md); background: var(--hq-surface-raised);
+  box-shadow: inset 0 0 0 1px var(--hq-border-strong); font: var(--hq-type-small);
+}
+.work-banner--offline { background: var(--hq-warning-soft); box-shadow: inset 0 0 0 1px var(--hq-warning); }
+.work-banner--held { background: var(--hq-danger-soft); box-shadow: inset 0 0 0 1px var(--hq-danger); }
+.work-unconfirmed { display: grid; gap: var(--hq-space-xs); padding: var(--hq-space-sm) var(--hq-space-md); border-radius: var(--hq-radius-md); outline: 1px dashed var(--hq-warning); outline-offset: -1px; }
+.work-unconfirmed-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm); }
+.work-unconfirmed-head > .hq-btn { margin-left: auto; }
+.work-unconfirmed-list { display: grid; gap: var(--hq-space-xs); margin: 0; padding: 0; list-style: none; }
+.work-unconfirmed-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm); }
+.work-unconfirmed-text { display: grid; gap: var(--hq-space-3xs); flex: 1 1 280px; }
+.work-unconfirmed-actions { display: flex; gap: var(--hq-space-xs); }
+.work-possibly-saved { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); font: var(--hq-type-small); color: var(--hq-text-muted); }
+.work-save-unconfirmed { display: inline-flex; align-items: center; gap: var(--hq-space-xs); }
+
+.work-toast--warning { box-shadow: inset 3px 0 0 var(--hq-warning), var(--hq-shadow-overlay); }
+.work-toast--danger { box-shadow: inset 3px 0 0 var(--hq-danger), var(--hq-shadow-overlay); }
