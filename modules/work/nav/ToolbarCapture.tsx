@@ -66,6 +66,7 @@ export const ToolbarCapture = forwardRef<HTMLInputElement, ToolbarCaptureProps>(
         return;
       }
       reportWrite(feedback, outcome, `Captured “${sent.trim()}” to Inbox`);
+      if (outcome.status === 'failed') return;
       if (outcome.status === 'saved') landCapture(from, sent.trim());
       // Text typed while the create was in flight stays; only what was sent is cleared.
       ui.setCapture(ui.getState().capture.text === sent ? { text: '', date: null, unavailable: false, error: null } : { unavailable: false, error: null });

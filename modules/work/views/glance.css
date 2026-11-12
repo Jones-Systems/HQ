@@ -31,3 +31,9 @@ button.wv-strip-pill { cursor: pointer; }
 .wv-agenda-group.is-overdue .wv-agenda-dayname { color: var(--hq-danger); }
 .wv-agenda-group.is-today .wv-agenda-dayname { color: var(--hq-text); }
 .wv-attn { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--hq-space-2xs); }
+
+.wv-glance-now-row { display: flex; align-items: center; gap: var(--hq-space-xs); min-width: 0; }
+.wv-glance-now-row > .wv-row { flex: 1; min-width: 0; }
+.wv-glance-now-row .wk-done { opacity: 0; }
+.wv-glance-now-row:hover .wk-done, .wv-glance-now-row:focus-within .wk-done { opacity: 1; }
+@media (hover: none) { .wv-glance-now-row .wk-done { opacity: 1; } }

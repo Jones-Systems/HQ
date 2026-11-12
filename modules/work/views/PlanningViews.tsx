@@ -59,7 +59,7 @@ const SKELETONS: Record<PlanningViewId, SkeletonShape> = {
   glance: 'grid', list: 'rows', calendar: 'grid', timeline: 'rows', review: 'rows', archive: 'rows', 'by-date': 'columns', week: 'columns',
 };
 
-const UNKNOWN_TEXT = 'Save result unknown. It will be checked by re-sending the same request; nothing is retried blindly.';
+const UNKNOWN_TEXT = 'Save result unknown. Check asks the Planner whether this request was saved; nothing is re-sent blindly.';
 
 /** Words for a failed write (kept for existing callers; the views report through `reportWrite`). Unavailable and order conflicts are reported by the store's own notices. */
 export function failureText(error: PlannerError): string | null {

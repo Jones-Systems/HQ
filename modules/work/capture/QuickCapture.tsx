@@ -7,6 +7,8 @@ import {
 import { reportWrite } from '../board/actions';
 import type { Feedback } from '../board/feedback';
 import { DRAFT_LABEL, DRAFT_SCOPE_NOTE, type DraftStore } from './drafts';
+import { ChipPicker } from '../detail/ChipPicker';
+import { landCapture } from './landing';
 import { suggestDate } from './suggest';
 import '../theme';
 import '../board/feedback.css';
@@ -55,6 +57,7 @@ export function QuickCapture({ open, onClose, store, state, feedback, drafts, in
   const today = plannerToday(settings, now?.());
   const offline = state.save.kind === 'offline' || (state.load === 'unavailable' && !state.confirmed);
   const suggestion = date ? null : suggestDate(title, today);
+  useEffect(() => { if (!offline) setUnavailable(false); }, [offline]);
 
   const fields = (): NewItemFields => ({ title, status, ...(date ? { dates: [date] } : {}) });
 
@@ -77,6 +80,7 @@ export function QuickCapture({ open, onClose, store, state, feedback, drafts, in
     if (offline) { setUnavailable(true); return; }
     setBusy(true);
     try {
+      const from = titleRef.current?.getBoundingClientRect();
       const outcome = await store.create(fields());
       if (outcome.status === 'failed' && outcome.error.kind === 'unavailable') {
         setUnavailable(true);
@@ -87,6 +91,8 @@ export function QuickCapture({ open, onClose, store, state, feedback, drafts, in
         return;
       }
       reportWrite(feedback, outcome, `Captured “${title.trim()}” to ${STATUS_LABEL[status]}`);
+      if (outcome.status === 'failed') return;
+      if (outcome.status === 'saved' && status === 'inbox') landCapture(from, title.trim());
       reset(keepOpen);
     } finally {
       setBusy(false);
@@ -117,7 +123,7 @@ export function QuickCapture({ open, onClose, store, state, feedback, drafts, in
       title="Capture"
       description={`Adds to the top of ${STATUS_LABEL[status]}. Only a title is needed.`}
       initialFocusRef={titleRef}
-      className="work-ui work-capture"
+      className="work-ui work-capture hq-enter-scale"
     >
       <form className="work-capture-form" onSubmit={onSubmit} aria-describedby={`${id}-footer`}>
         <label className="work-field" htmlFor={`${id}-title`}>
@@ -145,12 +151,11 @@ export function QuickCapture({ open, onClose, store, state, feedback, drafts, in
         )}
 
         <div className="work-capture-row">
-          <label className="work-field" htmlFor={`${id}-status`}>
+          <div className="work-field">
             <span className="work-field-label">Status</span>
-            <select id={`${id}-status`} className="work-input" value={status} onChange={(event) => setStatus(event.target.value as Status)}>
-              {STATUSES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-            </select>
-          </label>
+            <ChipPicker label="Status" value={status} options={STATUSES.map((option) => ({ id: option.id, label: option.label }))}
+              onChange={(next) => { if (next) setStatus(next); }} />
+          </div>
           <div className="work-field">
             <span className="work-field-label">Date</span>
             {date ? (
@@ -160,11 +165,11 @@ export function QuickCapture({ open, onClose, store, state, feedback, drafts, in
               </span>
             ) : addingDate ? (
               <span className="work-capture-date">
-                <select aria-label="Date kind" className="work-input" value={dateKind} onChange={(event) => setDateKind(event.target.value as DateKind)}>
-                  {DATE_KINDS.map((kind) => <option key={kind} value={kind}>{DATE_KIND_LABEL[kind]}</option>)}
-                </select>
+                <ChipPicker label="Date kind" value={dateKind} options={DATE_KINDS.map((kind) => ({ id: kind, label: DATE_KIND_LABEL[kind] }))}
+                  onChange={(next) => { if (next) setDateKind(next); }} />
                 <input aria-label="Day" type="date" className="work-input" value={dateValue} onChange={(event) => setDateValue(event.target.value)} />
-                <Button size="sm" onClick={applyDate} disabled={!dateValue}>Add</Button>
+                <Button size="sm" onClick={() => { if (dateValue) applyDate(); }} aria-disabled={!dateValue} aria-describedby={!dateValue ? `${id}-date-reason` : undefined}>Add</Button>
+                {!dateValue && <span className="hq-meta" id={`${id}-date-reason`}>Choose a day before adding this date.</span>}
               </span>
             ) : (
               <Button size="sm" variant="ghost" onClick={() => setAddingDate(true)}>Add a date (optional)</Button>
@@ -180,7 +185,7 @@ export function QuickCapture({ open, onClose, store, state, feedback, drafts, in
         )}
 
         <footer className="work-capture-foot">
-          <span className="hq-meta" id={`${id}-footer`}>{CAPTURE_FOOTER}{!unavailable && ' Shift+Enter saves and adds another.'}</span>
+          <span className="hq-meta" id={`${id}-footer`}>{CAPTURE_FOOTER}{!unavailable && <> <kbd className="wk-kbd">↵</kbd> Save · <kbd className="wk-kbd">⇧↵</kbd> Save &amp; add another.</>}</span>
           <span className="work-capture-actions">
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
             {unavailable

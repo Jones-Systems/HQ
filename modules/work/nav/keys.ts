@@ -25,12 +25,14 @@ export function useNumberKeys(root: RefObject<HTMLElement | null>, open: (destin
     const element = root.current;
     if (!element) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.target instanceof Node) || !element.contains(event.target)) return;
       const destination = numberKeyTarget(event);
       if (destination === null) return;
       event.preventDefault();
       open(destination);
     };
-    element.addEventListener('keydown', onKeyDown);
-    return () => element.removeEventListener('keydown', onKeyDown);
+    // Document bubble runs after scoped React handlers have reserved triage keys.
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
   }, [root, open]);
 }

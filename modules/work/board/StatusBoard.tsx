@@ -293,6 +293,8 @@ function BoardSurface({
 
   const onCardKey = (item: Item) => (event: KeyboardEvent<HTMLElement>) => {
     if (event.target !== event.currentTarget) return;
+    if (event.altKey && !event.ctrlKey && !event.metaKey
+      && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) event.preventDefault();
     const key = cardKey(event, item.status);
     if (!key) return;
     event.preventDefault();

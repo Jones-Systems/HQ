@@ -532,3 +532,18 @@ describe('scroll affordance and keyboard hint', () => {
     expect(container.querySelectorAll('.work-skeleton-card').length).toBeGreaterThan(4);
   });
 });
+
+
+describe('shell Back chord ownership', () => {
+  it('reserves Alt+Left at Inbox without a move or navigation', async () => {
+    const env = await setup();
+    render(<Host store={env.store} feedback={env.feedback} />);
+    const target = card('it-kite');
+    expect(target).toBeTruthy();
+    const event = new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true, cancelable: true });
+    await act(async () => { target.dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(true);
+    expect(writes(env.calls)).toEqual([]);
+    expect(env.order('inbox')).toContain('it-kite');
+  });
+});
