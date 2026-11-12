@@ -2,7 +2,7 @@
 
 Artifact Type: acceptance-record
 Artifact ID: acceptance.hq-updater-source-20261112
-Purpose: Record the package compatibility repair and distinguish portable source evidence from native and operational acceptance.
+Purpose: Record the compatibility registry and native diagnostic-retention repairs, keeping portable source evidence distinct from native and operational acceptance.
 Consumers: HQ updater maintainer and integration owner
 Authority effect: none
 
@@ -59,6 +59,63 @@ adapters are synthetic. It does not execute macOS installation or prove a
 cryptographic signature. Root renderer compilation and full source discovery
 remain the receiving PR's required CI obligations.
 
+## Native failure and diagnostic retention
+
+Root independently qualified the unchanged inventory source at candidate
+`493035cf60355735816a3a95448f6cfc00f7544b`: one ARM64 compile and one production
+adapter call returned `complete:true`, processCount 935, exit 0, with child,
+process-group, EOF and owned-root closure. This is a source/host-point proof;
+fresh complete inventory is required for each later native journey.
+
+The subsequently authorized single ARM64 package/journey attempt at that source
+produced strictly verified archive SHA256
+`35620cef47c18ab8cb9465e953cfc4fb644af600844d1dfffb3dbf28b56de53a`.
+Storage admission and complete prelaunch inventory passed. Installer exit 0
+proved handoff only: the first lifecycle commit wait failed after 49.86 seconds
+of native execution, with **0/10 checks** and the second scenario unreached.
+Process, group, EOF and lock custody closed and source remained clean. This
+archive is evidence for that failed source-point attempt, not a package for
+the diagnostic repair or a native-ready candidate. Its causal records were
+removed during guarded cleanup, so the native cause remains **unproved**.
+Preserve the original failed result; no timeout, production algorithm or
+compatibility guard is changed by this repair.
+
+The portable VM seam reproduced code-zero installer handoff followed by a
+noncommitted journal and the unchanged 45-second wait. Before this fix it
+failed because cleanup inventory began without a primary diagnostic snapshot.
+The harness now writes one exclusive `native-smoke-primary-failure.json` in
+the invocation's package output, outside `hq-native-*`, **before** drain/removal.
+It binds source/tree/archive, active scenario/journey/build sequence, projected
+journal phase/sequence/resume state/reason, launch/profile/health flags and
+finite fixture helper/bootstrap/main/renderer milestones or explicit unavailable
+results. A synthetic bootstrap wrapper observes the unmodified production
+function, including failures before main import. Installer stderr is reduced
+to an observed boolean; arbitrary stderr/error text, paths, full installation
+records and profile contents are excluded.
+
+Only exact known records are read: UID-owned regular files with O_NOFOLLOW,
+nonsymlink ancestors and bounded input (64 KiB per input, conservatively 32 KiB
+total input and at most 32 KiB output). Missing, malformed, oversized, unsafe or
+over-budget inputs become finite unavailable categories without fallback scans.
+Fixture checkpoints and the primary snapshot use exclusive creation. If
+capture/persistence fails or an existing snapshot collides, scratch remains
+owned and retained; complete process closure guards still run and are never
+bypassed. The primary snapshot stays unchanged; the separate post-cleanup
+failure receipt reports capture availability and scratch removal. The original
+exception/nonpass is preserved. Neither this snapshot nor successful cleanup
+establishes a native root cause or turns the run into a pass.
+
+Focused portable regressions cover snapshot-before-drain/removal, the still
+failing 45-second wait, privacy sentinel exclusion, finite pre-main errors,
+missing/malformed/oversized/symlink/aggregate-limit inputs, exclusive evidence,
+and retention on capture error with complete native closure. These use fakes
+and temporary files, with no real Electron, process launch, signing or macOS
+operation. The final deduplicated updater/package union passes **144 tests**
+on real Node **24.19.0**, with zero failures, cancellations or skips. The actual
+compatibility guard still reports the same epoch and **143 registered sources**;
+the final diff check passes. No production updater, dependency, workflow or
+registry change accompanies this diagnostic repair.
+
 ## Native acceptance still required
 
 The previous [ARM64 native package job](https://github.com/Jones-Systems/HQ/actions/runs/39981843129/job/120510857410)
@@ -67,13 +124,16 @@ failed at process-inventory `path-before`, errno 2, zero path result and
 admission and the unknown-process cleanup fence remain unchanged. The earlier
 unqualified artifacts and retained scratch are not adopted or removed here.
 
-The next permitted native step is an allocated Apple Silicon inventory preflight
-using this candidate's unchanged `process-inventory.c` and `native.cjs` parser.
+The next native operation requires a new explicitly bound Apple Silicon capsule
+and slot. Inventory preflight uses the unchanged `process-inventory.c` and
+`native.cjs` parser; the diagnostic source requires a newly bound package.
 Bind exact source and helper hashes, one owned build/output directory, a shared
 serial compiler lock, fresh same-host CPU/memory and filesystem admission,
 bounded compilation/execution, and exact cleanup ownership before starting.
 Publish only `complete`/count or the adapter's closed `inventoryFailure` record;
 never publish raw process inventory. Missing evidence holds with zero app launches.
+The earlier native attempt consumed its single authorization; this source
+publication grants no new native attempt or disposable signing operation.
 
 Only complete inventory admits the packaged synthetic journey matrix in
 [`native-smoke.cjs`](native-smoke.cjs): fresh install, first health, exact
@@ -86,6 +146,13 @@ profile; verify all owned processes drained and scratch cleanup completed.
 An unknown process result retains scratch and stops the run. No installed HQ
 profile or running application participates. Intel qualification is not a
 completion requirement.
+
+Named foundation integration custody remains unproved and PR #212 stays held;
+PR #2 stays draft under its cross-owner/main hold. The independent compatibility
+judgment supports the registry repair and conservative cross-epoch refusal as
+source evidence only. Initial cross-epoch migration remains forbidden by the
+accepted specification; first-adoption P1, real-profile compatibility, old quit/
+unsaved-work and permission continuity remain separate unproved boundaries.
 
 ## Three-app signing and permission continuity
 

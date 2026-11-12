@@ -10,6 +10,7 @@ const { stampBundle, signAndVerify, archiveMetrics, command, contained } = requi
 const { scenarioPlan } = require('./native-scenario-plan.cjs');
 const { admitNativeStorage } = require('./native-storage.cjs');
 const { withOwnedDirectory } = require('./owned-directory.cjs');
+const { captureFailure, category } = require('./fixtures/native-diagnostics.cjs');
 const { createNativeAdapter } = require('../native.cjs');
 const { createTransaction } = require('../transaction.cjs');
 const { recordPath, validateInstallation, readBuildReceipt, atomicWrite } = require('../contract.cjs');
@@ -19,10 +20,10 @@ const read = file => JSON.parse(fs.readFileSync(file, 'utf8'));
 async function until(label, condition, timeout = 45000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) { const result = await condition(); if (result) return result; await sleep(150); }
-  throw new Error(`Native smoke timed out: ${label}`);
+  throw Object.assign(new Error(`Native smoke timed out: ${label}`), { diagnosticCategory: 'wait-timeout' });
 }
 
-async function syntheticClone(source, destination, receipt) {
+async function syntheticClone(source, destination, receipt, diagnosticBinding) {
   fs.cpSync(source, destination, { recursive: true, dereference: false, verbatimSymlinks: true, errorOnExist: true, force: false });
   const appRoot = path.join(destination, 'Contents/Resources/app');
   const pkg = read(path.join(appRoot, 'package.json'));
@@ -30,8 +31,10 @@ async function syntheticClone(source, destination, receipt) {
   fs.writeFileSync(path.join(appRoot, 'build-receipt.json'), `${JSON.stringify(receipt)}\n`);
   const bootstrap = fs.readFileSync(path.join(appRoot, 'local-bootstrap.cjs'), 'utf8');
   assert.ok(bootstrap.includes("import('./apps/desktop/dist-electron/main.js')"));
-  fs.writeFileSync(path.join(appRoot, 'local-bootstrap.cjs'), bootstrap.replace("import('./apps/desktop/dist-electron/main.js')", "import('./synthetic-native/native-main.cjs')"));
+  assert.ok(bootstrap.includes("require('./tools/updater/bootstrap.cjs')"));
+  fs.writeFileSync(path.join(appRoot, 'local-bootstrap.cjs'), bootstrap.replace("import('./apps/desktop/dist-electron/main.js')", "import('./synthetic-native/native-main.cjs')").replace("require('./tools/updater/bootstrap.cjs')", "require('./synthetic-native/native-bootstrap.cjs')"));
   fs.cpSync(path.join(__dirname, 'fixtures'), path.join(appRoot, 'synthetic-native'), { recursive: true, errorOnExist: true });
+  fs.writeFileSync(path.join(appRoot, 'synthetic-native/diagnostic-binding.json'), JSON.stringify(diagnosticBinding), { flag: 'wx', mode: 0o600 });
   fs.renameSync(path.join(appRoot, 'tools/updater/helper.cjs'), path.join(appRoot, 'tools/updater/helper-implementation.cjs'));
   fs.copyFileSync(path.join(__dirname, 'fixtures/native-helper.cjs'), path.join(appRoot, 'tools/updater/helper.cjs'));
   stampBundle(destination, receipt);
@@ -43,7 +46,8 @@ async function smoke({ output = process.env.HQ_PACKAGE_OUTPUT, scratchParent = p
   output = fs.realpathSync(output);
   fs.mkdirSync(scratchParent, { recursive: true }); scratchParent = fs.realpathSync(scratchParent);
   const source = path.join(output, 'HQ.app'), evidence = read(path.join(output, 'package-evidence.json'));
-  let activeRoot;
+  let activeRoot, active, handoff;
+  let primaryRequired = false, primaryPersisted = false;
   const native = createNativeAdapter({ spawn: (file, args, options) => spawn(file, options.env.ELECTRON_RUN_AS_NODE === '1' ? args : [...args, '--use-mock-keychain'], { ...options, env: { ...options.env, ...(activeRoot ? { HOME: path.join(activeRoot, 'synthetic-home'), TMPDIR: path.join(activeRoot, 'tmp') } : {}) } }) });
   const production = await readBuildReceipt(source);
   assert.equal(production.bundleId, PRODUCT.bundleId);
@@ -80,9 +84,10 @@ async function smoke({ output = process.env.HQ_PACKAGE_OUTPUT, scratchParent = p
         result.storage = admitNativeStorage({ sourceBundle: source, outputDirectory: activeRoot, bundleCopies });
         const run = (executable, args, environment = {}) => new Promise((resolve, reject) => {
           const child = spawn(executable, args, { stdio: ['ignore', 'ignore', 'pipe'], env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: path.join(activeRoot, 'synthetic-home'), TMPDIR: path.join(activeRoot, 'tmp'), LANG: 'en_US.UTF-8', ...environment } });
-          let stderr = '';
-          child.stderr.on('data', bytes => { stderr = (stderr + bytes.toString()).slice(-4096); });
-          child.once('error', reject); child.once('exit', (code, signal) => code === 0 ? resolve() : reject(new Error(`Synthetic launch exited ${code ?? signal}: ${stderr}`)));
+          handoff = { status: 'started', code: null, stderrObserved: false };
+          child.stderr.on('data', () => { handoff.stderrObserved = true; });
+          child.once('error', error => { handoff.status = 'spawn-error'; reject(error); });
+          child.once('exit', code => { handoff.status = 'exited'; handoff.code = code; code === 0 ? resolve() : reject(Object.assign(new Error('Synthetic launch failed'), { diagnosticCategory: 'subprocess-exit' })); });
         });
         fs.mkdirSync(path.join(activeRoot, 'synthetic-home')); fs.mkdirSync(path.join(activeRoot, 'tmp'));
         for (const scenario of plan) {
@@ -93,7 +98,8 @@ async function smoke({ output = process.env.HQ_PACKAGE_OUTPUT, scratchParent = p
           await engine.state.initialize(record);
           for (const step of scenario.steps) {
             fs.mkdirSync(path.dirname(step.candidate.bundlePath), { recursive: true });
-            await syntheticClone(source, step.candidate.bundlePath, step.receipt); sampleDisk();
+            active = { scenario: scenario.name, journey: step.journey, buildSequence: step.receipt.buildSequence, stateRoot: record.stateRoot };
+            await syntheticClone(source, step.candidate.bundlePath, step.receipt, { runRoot: activeRoot, stateRoot: record.stateRoot, buildSequence: step.receipt.buildSequence }); sampleDisk();
           }
           const scenarioEvidence = { name: scenario.name, checks: [] };
           result.scenarios.push(scenarioEvidence);
@@ -112,6 +118,8 @@ async function smoke({ output = process.env.HQ_PACKAGE_OUTPUT, scratchParent = p
           };
           for (let index = 0; index < scenario.steps.length; index++) {
             const step = scenario.steps[index], prior = record.installed;
+            active = { scenario: scenario.name, journey: step.journey, buildSequence: step.receipt.buildSequence, stateRoot: record.stateRoot };
+            handoff = null;
             if (step.journey === 'fresh') {
               const next = scenario.steps[index + 1];
               if (next?.journey === 'next-launch') await atomicWrite(path.join(record.stateRoot, 'smoke-control.json'), { mode: 'schedule', candidate: next.candidate });
@@ -169,6 +177,9 @@ async function smoke({ output = process.env.HQ_PACKAGE_OUTPUT, scratchParent = p
         await drain(activeRoot);
       } catch (error) {
         actionFailure = error;
+        primaryRequired = true;
+        try { captureFailure({ output, root: activeRoot, production, archive: evidence.archive, active, handoff, error }); primaryPersisted = true; }
+        catch { process.stderr.write('Primary native diagnostic unavailable; exact scratch retained.\n'); }
         throw error;
       } finally {
         // These are newly created synthetic apps inside this invocation's root; real HQ/Jones paths never qualify.
@@ -180,6 +191,7 @@ async function smoke({ output = process.env.HQ_PACKAGE_OUTPUT, scratchParent = p
     }, { signals, async remove(root, options) {
       assert.equal(root, activeRoot);
       if ((await ownProcesses(root)).length) throw new Error('Synthetic process remains live; native scratch is retained');
+      if (primaryRequired && !primaryPersisted) throw new Error('Primary native diagnostic unavailable; exact scratch retained');
       fs.rmSync(root, options);
     } });
     assert.equal(fs.existsSync(activeRoot), false);
@@ -188,10 +200,11 @@ async function smoke({ output = process.env.HQ_PACKAGE_OUTPUT, scratchParent = p
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } catch (error) {
     if (error.storage) result.storage = error.storage;
-    fs.writeFileSync(path.join(output, 'native-smoke-failure.json'), `${JSON.stringify({ ...result, failure: { name: error.name, message: error.message }, scratchRemoved: activeRoot ? !fs.existsSync(activeRoot) : true }, null, 2)}\n`);
+    try { fs.writeFileSync(path.join(output, 'native-smoke-failure.json'), `${JSON.stringify({ ...result, failure: { category: category(error) }, primarySnapshot: primaryPersisted ? 'persisted' : 'unavailable', scratchRemoved: activeRoot ? !fs.existsSync(activeRoot) : true }, null, 2)}\n`, { flag: 'wx', mode: 0o600 }); }
+    catch { process.stderr.write('Post-cleanup native receipt unavailable.\n'); }
     throw error;
   } finally { process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', terminate); }
 }
 
-if (require.main === module) smoke().catch(error => { process.stderr.write(`${error.stack}\n`); process.exitCode = 1; });
+if (require.main === module) smoke().catch(error => { process.stderr.write(`Native smoke failed (${category(error)}).\n`); process.exitCode = 1; });
 module.exports = { smoke, syntheticClone };
