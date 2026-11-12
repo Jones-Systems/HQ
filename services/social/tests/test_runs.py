@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from unittest import mock
 
 from support import ROOT, ServiceTestCase, raw_db
@@ -203,19 +204,21 @@ class Refusals(RunCase):
 
     def test_concurrent_submissions_cannot_exceed_the_limit(self):
         statuses, barrier = [], threading.Barrier(20)
+        self.addCleanup(self.release)
 
         def submit():
-            barrier.wait()
-            statuses.append(self.harness.submit('x-studio', {'mode': 'block', 'gate': str(self.gate)}).status)
+            barrier.wait(timeout=10)
+            return self.harness.submit('x-studio', {'mode': 'block', 'gate': str(self.gate)}).status
 
-        threads = [threading.Thread(target=submit) for _ in range(20)]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
-        self.addCleanup(self.release)
+        with ThreadPoolExecutor(max_workers=20) as clients:
+            futures = [clients.submit(submit) for _ in range(20)]
+            for client, future in enumerate(futures):
+                with self.subTest(client=client):
+                    statuses.append(future.result(timeout=25))
+        self.assertEqual(len(statuses), 20)
         self.assertEqual((statuses.count(201), statuses.count(409)), (8, 12))
         self.assertEqual(len(self.get('/api/workspace').json['runs']), 8)
+        self.assertEqual(len(list((self.data / 'runs').iterdir())), 8)
 
 
 class Failures(RunCase):
