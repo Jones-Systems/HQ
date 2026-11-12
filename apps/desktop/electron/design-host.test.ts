@@ -1,3 +1,5 @@
+import { DESIGN_HELD_FEATURES as RENDERER_HELD_FEATURES } from '../../../modules/design/app/compose/capabilities.ts';
+import { DESIGN_HELD_FEATURES } from './design-host';
 import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -222,4 +224,26 @@ it('design.capabilities returns a fresh held list on every call', async () => {
   first.value.held[0]!.reason = 'tampered';
   expect(await host.call('design.capabilities', {})).toMatchObject({ value: { held: heldFeatures } });
   await host.close();
+});
+
+it('keeps the host and renderer held-feature vocabulary identical', () => {
+  expect(RENDERER_HELD_FEATURES).toEqual(DESIGN_HELD_FEATURES);
+});
+it('separates pre-save export failures from unknown save effects and cancellation', async () => {
+  const store = fake(); store.exportBundle.status.state = 'enabled';
+  const save = vi.fn().mockResolvedValue({ saved: false }), host = createDesignHost(async () => store, save);
+  const params = { exportedAt: '2026-01-01T00:00:00Z' };
+  for (const [error, kind] of [[Object.assign(new Error(), { name: 'ExportProjectionError' }), 'invalid'], [new Error(), 'unavailable']] as const) {
+    store.exportBundle.preview.mockRejectedValueOnce(error); store.exportBundle.build.mockRejectedValueOnce(error);
+    expect(await host.call('export.preview', params)).toEqual({ ok: false, kind });
+    expect(await host.call('export.save', params)).toEqual({ ok: false, kind });
+  }
+  expect(save).not.toHaveBeenCalled();
+  store.exportBundle.build.mockResolvedValue({ ok: true, value: { bytes: new Uint8Array([1]) } });
+  expect(await host.call('export.save', params)).toEqual({ ok: true, value: { saved: false } });
+  save.mockResolvedValueOnce({ saved: true });
+  expect(await host.call('export.save', params)).toEqual({ ok: true, value: { saved: true } });
+  save.mockRejectedValueOnce(new Error('lost'));
+  expect(await host.call('export.save', params)).toEqual({ ok: false, kind: 'unknown' });
+  expect(save).toHaveBeenCalledTimes(3); await host.close();
 });

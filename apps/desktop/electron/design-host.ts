@@ -9,6 +9,9 @@ import { jsonValue, keys, record } from './services.js';
 
 type NodeResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly kind: 'unavailable'; readonly reason: string };
 const publicResult = (result: NodeResult): DesignStorageResult<unknown> => result.ok ? result : result.reason === 'disabled' ? disabled() : { ok: false, kind: 'unavailable' };
+function exportBuildFailure(error: unknown): DesignStorageResult<never> {
+  return { ok: false, kind: error instanceof Error && error.name === 'ExportProjectionError' ? 'invalid' : 'unavailable' };
+}
 interface WorkspaceRecords {
   getDocument(key: string): Promise<StoredDocument | null>;
   putDocument(key: string, value: JsonValue, options?: { readonly expectedRevision?: number | null }): Promise<StoredDocument>;
@@ -185,14 +188,21 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
           return { ok: true, value: { txnId: p.txnId, repaired: true } };
         }
         case 'storage.diagnostics': return current.transactions.status.accepted ? publicResult(await current.transactions.diagnostics()) : disabled();
-        case 'export.preview': return current.exportBundle.status.state === 'disabled' ? disabled() : publicResult(await current.exportBundle.preview(p.exportedAt as string));
+        case 'export.preview': {
+          if (current.exportBundle.status.state === 'disabled') return disabled();
+          try { return publicResult(await current.exportBundle.preview(p.exportedAt as string)); }
+          catch (error) { return exportBuildFailure(error); }
+        }
         case 'export.save': {
           if (current.exportBundle.status.state === 'disabled') return disabled();
           if (!save) return { ok: false, kind: 'unavailable' };
-          const result = await current.exportBundle.build(p.exportedAt as string);
+          let result: NodeResult;
+          try { result = await current.exportBundle.build(p.exportedAt as string); }
+          catch (error) { return exportBuildFailure(error); }
           if (!result.ok) return publicResult(result);
           if (!record(result.value) || !(result.value.bytes instanceof Uint8Array)) return { ok: false, kind: 'unavailable' };
-          return { ok: true, value: await save(result.value.bytes, { defaultPath: 'design-export.json', filters: [{ name: 'Design bundle', extensions: ['json'] }] }) };
+          try { return { ok: true, value: await save(result.value.bytes, { defaultPath: 'design-export.json', filters: [{ name: 'Design bundle', extensions: ['json'] }] }) }; }
+          catch { return { ok: false, kind: 'unknown' }; }
         }
         case 'cache.put': return { ok: true, value: await current.cache.putDocument(p.key as string, p.value as JsonValue) };
         case 'blob.put': return { ok: true, value: await current.transactions.workspace.putBlob(p.bytes as Uint8Array, { expectedDigest: p.expectedDigest as BlobDigest }) };

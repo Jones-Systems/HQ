@@ -126,7 +126,7 @@ message (section 12 shows how).
 | `imports.undo` | yes | The atomic commit that undoes an import. |
 | `imports.resolve` | yes | The atomic commit that takes the incoming file or keeps the current one. |
 | `imports.edit` | yes | The atomic commit that saves an owner edit of an imported record. |
-| `imports.export` | no | Backup or export. Always `disabled` in this build (section 12). |
+| `imports.export` | no | Imports bundle backup; unavailable over the durable bridge (section 12). Separate host export uses section 13. |
 
 A commit is named by the event it appends to the `imports` stream: `import.applied` is `imports.apply`,
 `import.undone` is `imports.undo`, `conflict.resolved` is `imports.resolve`. A batch with no event is an owner
@@ -263,10 +263,23 @@ so shared surfaces should build destinations from the descriptor (`nav`, `id`) r
 
 ## 5. Capabilities in this build
 
-*Planned with the Imports workstream.* A read-only host query will report which Design features this build has
-enabled: Imports storage, the file picker and export, plus the held ones (generation sources, the component
-runner). Shared surfaces such as the palette can then hide or label commands that would only fail with
-`disabled`. Until it lands, a `disabled` failure is the signal.
+`readDesignCapabilities(transport)` calls `design.capabilities` with `{}`. It awaits the lazy store open
+and recovery; failure to open is `unavailable`. The route reads advertised state only, not documents or
+a native dialog. Exact reply keys are `imports`, `pick`, `export`, `held`:
+
+- `imports`: `enabled` when transactions are accepted, otherwise `disabled`.
+- `pick`: `enabled` when a picker is injected, otherwise `disabled`.
+- `export`: `enabled` when the store advertises export on AND a save function is injected; otherwise `disabled`.
+- `held`: exactly these entries, in this order, each with `status: 'held'`:
+  `generation-sources / external-access-held`, `component-runner / native-qualification-pending`,
+  `jones-code-live-send / live-effects-held` (feature / reason).
+
+The renderer validates this closed vocabulary, exact record keys and all states, and returns a frozen
+copy. Malformed/lost replies are `unavailable`; valid refusals retain typed classification. Context:
+`storage`, operation `design.capabilities`, write `false`. No retry or fake fallback occurs.
+`workspace.readCapabilities()` returns `{ tag, capabilities }`: bridge-backed results carry the workspace
+tag; the in-memory fake carries `FAKE_TAG`, synthetic imports/pick enabled and export disabled. A document-only
+workspace without a bridge rejects `disabled`, rather than fabricating host capability evidence.
 
 ## 6. Current project
 
@@ -423,7 +436,7 @@ In the in-memory fake workspace it stays the labelled synthetic env. Bridged mod
 | Conflicts | A write that lost a race throws `StorageConflictError`, which classifies as `conflict`. Nothing was written. A plan that went stale before it was applied is the same `conflict`. |
 | Unknown outcome | A commit whose reply was lost is `unknown` (it may have landed). Views offer `Check`, which re-reads history, never a blind retry. |
 | Disabled | A host that does not accept imports answers `{ ok: false, kind: 'unavailable', reason: 'disabled' }`. That is `disabled` with outcome no effect, on every Imports operation. |
-| Backup and export | Not available in this build. `saveBundle` is undefined and the storage port's bundle reads (`listBlobs`, `listStreams`, and `listDocuments` of the whole store) fail with `disabled`, reason `disabled`, message "Backup and export are not available in this build". Nothing is read into a bundle and nothing is written. The host's `export.*` routes stay disabled. A backup draft over the durable store therefore stays empty and is never saved. |
+| Backup and export | Not available in this build. `saveBundle` is undefined and the storage port's bundle reads (`listBlobs`, `listStreams`, and `listDocuments` of the whole store) fail with `disabled`, reason `disabled`, message "Backup and export are not available in this build". Nothing is read into a bundle and nothing is written. The separate host-level `export.*` port reports the host's actual gated status (section 13); no production construction is enabled by this preparatory source change. A backup draft over the durable store therefore stays empty and is never saved. |
 
 ### How a view gets the typed failure
 
@@ -496,3 +509,40 @@ Importing a PNG makes it a project version, so Projects, Gallery, Compare and An
   the batch fails before it is sent, for example a read-only project or a batch over the size cap.
 - A commit is capped at 64 MiB of canonical bytes by the host. A batch over the cap fails as `too-large` with
   reason `import-total`, before anything is sent.
+
+## 13. Host export port (`design-export-port.ts`)
+
+`workspace.designExport` exposes `preview(exportedAt)` and `save(exportedAt)` through the existing
+bridge transport. The fake/document-only composition rejects `disabled`. There is no export UI in
+this capsule; the Projects/Sources view owners decide its placement. Export enablement and its
+qualification remain held; this port does not change any construction's flag.
+
+| Operation | Route | Write | Result |
+| --- | --- | --- | --- |
+| `storage.export-preview` | `export.preview` | no | `{ documents, blobs, events, omitted: [{ category, count, unit, reason }] }` |
+| `storage.export-save` | `export.save` | yes | `{ saved }`; `false` means canceled, with nothing saved |
+
+Both use section `storage`. Before IPC, `exportedAt` must match
+`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$` and have a finite parsed date.
+Replies have exact record keys, non-negative safe integer counts, nonempty category/reason text and
+units `documents|streams|blobs|events|records`. Reports are copied and frozen. Invalid local input is
+`invalid` with no effect. A malformed or lost preview is `unavailable`; a malformed or lost save is
+`unknown`, with Check and no retry. A host `disabled` or `invalid` refusal remains definite no-effect.
+Projection throws before save map to `invalid`; other preview/build throws map to `unavailable`.
+Only an injected save failure maps to `unknown`. Engine unavailable reasons other than `disabled`
+are deliberately flattened to public `unavailable` at the host boundary.
+
+`createDesignExport(runtime, enabled)` now advertises the explicit flag truthfully. The default is still
+disabled, and all production/candidate callers retain their existing arguments.
+
+### Explicit picker rights through the existing port
+
+`withImportRights(pickSource, rights)` wraps an existing zero-argument Imports picker. It validates
+and copies the explicit statement before invoking the picker, preserves cancellation and source/item
+identity, and replaces only each item's rights. It accepts `owned`, `licensed`, `permission`, and
+`public-domain`; holder and optional license/attribution follow the existing mapper's bounded-text
+rules, and `licensed` requires license text. It never infers rights from bytes or filenames.
+The original picker still defaults to `owned` when called directly. The view owner must collect the
+statement before enabling Pick and wrap its existing port; the native dialog's current owned-only
+wording must also be reconciled before presenting alternate bases. These out-of-cone changes are
+requested in the recovery receipt; they are not implemented or qualified here.
