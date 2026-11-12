@@ -14,6 +14,7 @@ import { MotionPlayer } from './MotionPlayer.tsx';
 import { PropsPanel } from './PropsPanel.tsx';
 import { SandboxFrame } from './SandboxFrame.tsx';
 import { TokenBoard } from './TokenBoard.tsx';
+import { VariantStrip } from './VariantStrip.tsx';
 
 /**
  * Server-rendered markup checks. They prove the produced DOM attributes and
@@ -50,17 +51,71 @@ describe('SandboxFrame', () => {
   });
 });
 
+describe('VariantStrip', () => {
+  it('puts Base first, then each saved variant, with exactly one radio checked', async () => {
+    const { source, variants } = await button();
+    const html = renderToStaticMarkup(<VariantStrip source={source} variants={variants} variantId={'danger-pill' as VariantId} onSelect={() => {}} />);
+    expect(html).toContain('role="radiogroup"');
+    expect(html.match(/role="radio"/gu)).toHaveLength(SYNTHETIC_BUTTON_VARIANTS.length + 1);
+    expect(html.match(/aria-checked="true"/gu)).toHaveLength(1);
+    expect(html).toMatch(/<button[^>]*aria-checked="true"[^>]*data-variant="danger-pill"/u);
+    expect(html.indexOf('data-variant="~base"')).toBeLessThan(html.indexOf('data-variant="primary"'));
+    expect(html).toContain('declared defaults');
+    // Prop-diff chips: what each variant sets, in declared prop order.
+    expect(html).toContain('label: Delete');
+    expect(html).toContain('radius: 24');
+    expect(html).toContain('>Neutral small<');
+  });
+
+  it('selects Base when no variant is chosen or the chosen one is unknown', async () => {
+    const { source, variants } = await button();
+    for (const chosen of [null, 'missing' as VariantId]) {
+      const html = renderToStaticMarkup(<VariantStrip source={source} variants={variants} variantId={chosen} onSelect={() => {}} />);
+      expect(html).toMatch(/<button[^>]*aria-checked="true"[^>]*data-variant="~base"/u);
+      expect(html.match(/aria-checked="true"/gu)).toHaveLength(1);
+    }
+  });
+
+  it('shows only Base when a component has no saved variants', async () => {
+    const { source } = await button();
+    const html = renderToStaticMarkup(<VariantStrip source={source} variants={null} variantId={null} onSelect={() => {}} />);
+    expect(html.match(/role="radio"/gu)).toHaveLength(1);
+    expect(html).toContain('No saved variants');
+  });
+});
+
 describe('PropsPanel', () => {
-  it('lists Defaults plus each variant and marks the selected one', async () => {
+  it('shows a row per prop with its type, constraint hint and overridden dot, and Reset all only when something is overridden', async () => {
     const { source, variants } = await button();
     const input = resolveRenderInput(source, variants, 'danger-pill' as VariantId, { label: 'Remove' }, tokens);
     const html = renderToStaticMarkup(<PropsPanel source={source} variants={variants} variantId={'danger-pill' as VariantId}
-      overrides={{ label: 'Remove' }} resolved={input.props} onSelectVariant={() => {}} onOverrides={() => {}} />);
-    expect(html.match(/type="radio"/gu)).toHaveLength(SYNTHETIC_BUTTON_VARIANTS.length + 1);
-    expect(html).toMatch(/<input type="radio"[^>]*checked=""[^>]*\/>Danger pill/u);
+      overrides={{ label: 'Remove' }} resolved={input.props} onOverrides={() => {}} />);
+    expect(html).not.toContain('type="radio"');
     expect(html).toContain('value="Remove"');
     expect(html.match(/data-overridden="true"/gu)).toHaveLength(1);
+    expect(html.match(/aria-label="Overridden"/gu)).toHaveLength(1);
+    expect(html).toContain('0–24, step 1');
+    expect(html).toContain('≤ 60 chars');
+    expect(html).toContain('primary · neutral · danger');
+    expect(html).not.toContain('on or off');
+    expect(html).toContain('>Reset all<');
     expect(html).toContain('never change it');
+    const clean = renderToStaticMarkup(<PropsPanel source={source} variants={variants} variantId={null}
+      overrides={{}} resolved={resolveRenderInput(source, variants, null, {}, tokens).props} onOverrides={() => {}} />);
+    expect(clean).not.toContain('Reset all');
+    expect(clean).not.toContain('aria-label="Overridden"');
+  });
+
+  it('holds the full props table and each variant’s overrides in a Spec disclosure', async () => {
+    const { source, variants } = await button();
+    const html = renderToStaticMarkup(<PropsPanel source={source} variants={variants} variantId={'danger-pill' as VariantId}
+      overrides={{}} resolved={resolveRenderInput(source, variants, 'danger-pill' as VariantId, {}, tokens).props} onOverrides={() => {}} />);
+    const spec = /<details class="hqc-spec">([\s\S]*?)<\/details>/u.exec(html)?.[1] ?? '';
+    expect(spec).toContain('<summary>Spec</summary>');
+    for (const name of Object.keys(SYNTHETIC_BUTTON.props)) expect(spec).toContain(`>${name}</th>`);
+    expect(spec).toContain('Variant overrides');
+    expect(spec).toContain('label: Delete · tone: danger · radius: 24');
+    expect(spec).toMatch(/<tr aria-current="true"><th scope="row">Danger pill/u);
   });
 });
 
@@ -90,6 +145,8 @@ describe('MotionPlayer', () => {
     const keyframes = study.tracks.reduce((count, track) => count + track.keyframes.length, 0);
     expect(html.match(/class="hqc-key"/gu)).toHaveLength(keyframes);
     expect(html).not.toContain('<iframe');
-    expect(html).toContain('HELD');
+    expect(html).toContain('Preview held');
+    expect(html).toContain('Proxy · the component itself is held');
+    expect(html.match(/data-target=/gu)).toHaveLength(2);
   });
 });

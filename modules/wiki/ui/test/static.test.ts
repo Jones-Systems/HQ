@@ -12,9 +12,12 @@ function stripComments(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/(^|[^:'"`])\/\/.*$/gmu, '$1');
 }
 
-test('production source is erasable TypeScript (.ts only, no JSX, no CSS-in-JS)', () => {
+const stylesheets = files.filter((name) => name.endsWith('.css'));
+
+test('production source is erasable TypeScript (.ts only, no JSX, no CSS-in-JS) plus wiki-*.css files', () => {
   assert.ok(files.length >= 10);
-  for (const name of files) assert.ok(name.endsWith('.ts') || name === 'wiki-view.css', name);
+  for (const name of files) assert.ok(name.endsWith('.ts') || /^wiki-[a-z-]+\.css$/u.test(name), name);
+  assert.ok(stylesheets.includes('wiki-view.css'), 'the base stylesheet exists');
 });
 
 const FORBIDDEN: readonly [string, RegExp][] = [
@@ -63,16 +66,66 @@ test('imports are limited to react, relative src files and the accepted contract
   }
 });
 
-test('the stylesheet uses wiki- classes and shared appearance roles without loading resources', () => {
+/** Every rule head with its enclosing at-rule (null at the top level). Comments are removed first. */
+function ruleHeads(css: string): { readonly head: string; readonly parent: string | null }[] {
+  const heads: { head: string; parent: string | null }[] = [];
+  const stack: string[] = [];
+  let buffer = '';
+  for (const ch of css.replace(/\/\*[\s\S]*?\*\//gu, '')) {
+    if (ch === '{') {
+      const head = buffer.trim();
+      heads.push({ head, parent: stack.at(-1) ?? null });
+      stack.push(head);
+      buffer = '';
+    } else if (ch === '}') {
+      stack.pop();
+      buffer = '';
+    } else if (ch === ';') {
+      buffer = '';
+    } else {
+      buffer += ch;
+    }
+  }
+  assert.equal(stack.length, 0, 'balanced braces');
+  return heads;
+}
+
+const AT_RULES = /^@(?:media|supports|container|starting-style)\b|^@keyframes wiki-[a-z0-9-]+$/u;
+const KEYFRAME_SELECTOR = /^(?:from|to|\d+(?:\.\d+)?%)(?:\s*,\s*(?:from|to|\d+(?:\.\d+)?%))*$/u;
+
+test('the base stylesheet maps the shared appearance roles', () => {
   const css = readFileSync(new URL('wiki-view.css', SRC), 'utf8');
   assert.match(css, /--wiki-bg:\s*var\(--hq-surface\)/u);
   assert.match(css, /--wiki-text:\s*var\(--hq-text\)/u);
   assert.match(css, /--wiki-accent:\s*var\(--hq-accent-text\)/u);
-  assert.equal(/@import|url\(/iu.test(css), false, 'no remote or file loads');
-  const selectors = css.replace(/\/\*[\s\S]*?\*\//gu, '').match(/[^{}]+(?=\{)/gu) ?? [];
-  for (const selector of selectors) {
-    for (const part of selector.split(',').map((item) => item.trim()).filter((item) => item.length > 0)) {
-      assert.match(part, /^(?:\.wiki-|:root|@media)/u, `selector ${part} is not wiki- scoped`);
-    }
-  }
 });
+
+for (const file of stylesheets) {
+  test(`${file}: wiki- scoped selectors, wiki- keyframes, no resource loads`, () => {
+    const css = readFileSync(new URL(file, SRC), 'utf8');
+    assert.equal(/@import|url\(|@font-face/iu.test(css), false, 'no remote or file loads');
+    for (const { head, parent } of ruleHeads(css)) {
+      if (parent !== null && parent.startsWith('@keyframes')) {
+        assert.match(head, KEYFRAME_SELECTOR, `keyframe selector ${head} in ${parent}`);
+        continue;
+      }
+      if (head.startsWith('@')) {
+        assert.match(head, AT_RULES, `at-rule ${head} is not allowed`);
+        continue;
+      }
+      for (const part of head.split(',').map((item) => item.trim()).filter((item) => item.length > 0)) {
+        assert.match(part, /^(?:\.wiki-|:root)/u, `selector ${part} is not wiki- scoped`);
+      }
+    }
+  });
+
+  test(`${file}: motion is timed by the shared duration tokens`, () => {
+    const css = readFileSync(new URL(file, SRC), 'utf8').replace(/\/\*[\s\S]*?\*\//gu, '');
+    for (const match of css.matchAll(/\b(transition(?:-duration)?|animation(?:-duration)?)\s*:\s*([^;}]+)/gu)) {
+      const [, property, value] = match as unknown as [string, string, string];
+      if (/^\s*none\s*$/u.test(value)) continue;
+      assert.match(value, /var\(--hq-duration-[a-z]+\)/u, `${property}: ${value.trim()} uses a token duration`);
+      assert.equal(/(?<![\w-])\d+(?:\.\d+)?m?s\b/u.test(value.replace(/var\([^)]*\)/gu, '')), false, `${property}: ${value.trim()} has a raw duration`);
+    }
+  });
+}

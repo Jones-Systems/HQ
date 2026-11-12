@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   WORK_SERVICE_ROUTES,
-  type ServiceResponse, type WorkMutationCall, type WorkServiceParams, type WorkServiceTransport,
+  type ServiceResponse, type WorkLocalJson, type WorkLocalParams, type WorkLocalResult, type WorkLocalRoute,
+  type WorkLocalTransport, type WorkLocalValues, type WorkMutationCall, type WorkServiceParams, type WorkServiceTransport,
 } from '../transport';
+import { WORK_LOCAL_ROUTES as SHARED_WORK_LOCAL_ROUTES } from '@hq/contracts/services';
+import type * as Shared from '@hq/contracts/services';
 
 // A synthetic compile-time binding of Work's transport boundary to the shape Design froze in the shared services.ts at
 // dccb4987b83ef77ffbd714bd2d58c3801e664fc7. It states the shape independently rather than importing or copying the
-// shared file; `npm run typecheck` fails if the local mirror drifts. Identity with the shared file itself, on the
-// combined base, remains integration work.
+// shared file; `npm run typecheck` fails if the local mirror drifts. The Work-local assertions below also bind
+// the device-document mirror directly to the shared types.
 
 type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends (<T>() => T extends Y ? 1 : 2) ? true : false;
 type Assert<T extends true> = T;
@@ -42,6 +45,34 @@ export type Bound = [
   )>>,
   Assert<Equal<Parameters<WorkServiceTransport['call']>, [route: (typeof WORK_SERVICE_ROUTES)[number], params: WorkServiceParams[(typeof WORK_SERVICE_ROUTES)[number]]]>>,
 ];
+
+// The device-document mirror, stated independently and then held identical to the shared `services.ts` now that both
+// sit on one base. A test may import the shared file; Work production code may not (ac.work-domain.001).
+type Json = null | boolean | number | string | readonly Json[] | { readonly [key: string]: Json };
+type Refusal = 'conflict' | 'invalid' | 'too_large' | 'unavailable';
+
+export type BoundLocal = [
+  Assert<Equal<WorkLocalRoute, 'load' | 'save'>>,
+  Assert<Equal<WorkLocalParams['load'], Record<string, never>>>,
+  Assert<Equal<WorkLocalParams['save'], { readonly binding: string; readonly expectedRevision: number; readonly value: Json }>>,
+  Assert<Equal<WorkLocalValues['load'], { readonly binding: string; readonly revision: number; readonly value: Json | null }>>,
+  Assert<Equal<WorkLocalValues['save'], { readonly revision: number }>>,
+  Assert<Equal<WorkLocalResult<number>, { readonly ok: true; readonly value: number } | { readonly ok: false; readonly kind: Refusal }>>,
+  Assert<Equal<Parameters<WorkLocalTransport['call']>, [route: WorkLocalRoute, params: WorkLocalParams[WorkLocalRoute]]>>,
+  Assert<Equal<WorkLocalJson, Shared.JsonValue>>,
+  Assert<Equal<WorkLocalRoute, Shared.WorkLocalRoute>>,
+  Assert<Equal<WorkLocalParams, Shared.WorkLocalParams>>,
+  Assert<Equal<WorkLocalValues, Shared.WorkLocalValues>>,
+  Assert<Equal<WorkLocalResult<unknown>, Shared.WorkLocalResult<unknown>>>,
+  Assert<Equal<WorkLocalTransport, Shared.WorkLocalTransport>>,
+];
+
+describe('canonical Work local shape', () => {
+  it('has the shared route list', () => {
+    const routes: readonly WorkLocalRoute[] = SHARED_WORK_LOCAL_ROUTES;
+    expect(routes).toEqual(['load', 'save']);
+  });
+});
 
 describe('canonical Work transport shape', () => {
   it('has the shared route list, in order', () => {

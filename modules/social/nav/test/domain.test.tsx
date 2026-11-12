@@ -7,6 +7,7 @@ import {
   FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_REFERENCES, FIXTURE_IDS, FIXTURE_OTHER_PROJECT_ID, FIXTURE_PROJECT_ID,
   recordCalls, resetSocialSessions, socialSession, type FixtureOptions, type RecordedPort,
 } from '../../core';
+import { DELIVERED_LIMITS } from '../../workbench';
 import { createWorkbenchFixture, type WorkbenchFixture } from '../../workbench/fixtures/examples';
 import { ACCOUNT_CHANNELS, NAV_ITEMS, PUBLISHING_NEEDS, SOURCES_PROPOSED, SWITCH_PROJECT_REASON, SocialDomain, parseSocialDestination } from '..';
 
@@ -28,7 +29,7 @@ interface Setup {
   readonly remount: () => void;
 }
 
-function setup({ destination = 'home', features, delay }: { destination?: string; features?: string[]; delay?: FixtureOptions['delay'] } = {}): Setup {
+function setup({ destination = 'home', features, delay, example = true }: { destination?: string; features?: string[]; delay?: FixtureOptions['delay']; example?: boolean } = {}): Setup {
   const fixture = createWorkbenchFixture({ ...(features ? { features } : {}), ...(delay ? { delay } : {}), clock: NOW });
   const recorded = recordCalls(fixture.port);
   const navigate = vi.fn<(destination: string) => void>();
@@ -44,7 +45,7 @@ function setup({ destination = 'home', features, delay }: { destination?: string
       navigate: (next) => { navigate(next); setWhere(next); },
     };
     // A new key remounts the domain, as the shell does on every domain switch.
-    return <SocialDomain key={generation} {...port} port={recorded.port} example now={NOW} />;
+    return <SocialDomain key={generation} {...port} port={recorded.port} example={example} now={NOW} />;
   }
   render(<Shell />);
   return { fixture, recorded, navigate, user: userEvent.setup(), destination: () => current, remount: () => bump() };
@@ -108,12 +109,40 @@ describe('secondary navigation', () => {
     expect(effects(s)).toHaveLength(0);
   });
 
-  it('lists the T3 pages in order, with Sources proposed and Channels & accounts under Later', async () => {
+  it('opens a new section at its top, wherever the last one was scrolled to', async () => {
+    const s = setup();
+    await overview();
+    const main = document.querySelector('.sd-main') as HTMLElement;
+    main.scrollTop = 240;
+    expect(main.scrollTop).toBe(240);
+    await s.user.click(side().getByRole('button', { name: 'Sources' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Sources' })).toBeTruthy();
+    expect(main.scrollTop).toBe(0);
+  });
+
+  it('lands focus on the new page heading when the control that moved it leaves with the old page', async () => {
+    const s = setup();
+    await overview();
+    await s.user.click(screen.getByRole('button', { name: /Packet 1 has no sources/u }));
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Run history' });
+    await vi.waitFor(() => expect(document.activeElement).toBe(heading));
+    // The sidebar keeps its own focus: changing pages from there never jumps to the heading.
+    const library = side().getByRole('button', { name: 'Library' });
+    await s.user.click(library);
+    await screen.findByRole('heading', { level: 1, name: 'Library' });
+    expect(document.activeElement).toBe(library);
+  });
+
+  it('lists the T3 pages in order, with Channels & accounts under Later', async () => {
     setup();
     await overview();
     const nav = within(screen.getByRole('navigation', { name: 'Social' }));
-    const names = nav.getAllByRole('button').map((button) => button.textContent);
-    expect(names).toStrictEqual(['Overview', 'SourcesProposed', 'Workbenches', 'Library', 'Calendar', 'Run history', 'Channels & accounts']);
+    // Accessible names stay the page names; icons and counts are decorative (aria-hidden).
+    const names = nav.getAllByRole('button').map((button) => button.querySelector('.sd-nav-label')?.textContent);
+    expect(names).toStrictEqual(['Overview', 'Sources', 'Workbenches', 'Library', 'Calendar', 'Run history', 'Channels & accounts']);
+    // Sources is a working import desk now; only its saved-source registry is proposed, and the page says so.
+    expect(nav.getByRole('button', { name: 'Sources' }).querySelector('.sd-tag')).toBeNull();
+    expect(nav.getByRole('button', { name: 'Library' }).querySelector('.sd-nav-count')?.textContent).toBe('4');
     expect(within(nav.getByRole('group', { name: 'Later' })).getByRole('button').textContent).toBe('Channels & accounts');
     expect(NAV_ITEMS.map((item) => item.destination)).toStrictEqual(['overview', 'sources', 'workbenches', 'library', 'calendar', 'runs', 'channels']);
     expect(nav.getByRole('button', { name: 'Overview' }).getAttribute('aria-current')).toBe('page');
@@ -158,10 +187,10 @@ describe('brand switcher', () => {
     const s = setup();
     await overview();
     await s.user.selectOptions(side().getByLabelText('Brand'), FIXTURE_IDS.harbor);
-    expect(screen.getByText('Harbor Lane Bakery', { selector: '.sd-page-head p' })).toBeTruthy();
-    const comingUp = within(screen.getByRole('region', { name: 'Coming up' }));
-    expect(comingUp.getByText('Sourdough starter open day')).toBeTruthy();
-    expect(comingUp.queryByText('Autumn blend tasting notes')).toBeNull();
+    expect(screen.getByText('Harbor Lane Bakery', { selector: '.sx-head-description' })).toBeTruthy();
+    const nextUp = within(screen.getByRole('region', { name: 'Next up' }));
+    expect(nextUp.getByText('Sourdough starter open day')).toBeTruthy();
+    expect(nextUp.queryByText('Autumn blend tasting notes')).toBeNull();
 
     const view = socialSession(CONTEXT.id).getState().view;
     expect((view.library as { brand: string }).brand).toBe(FIXTURE_IDS.harbor);
@@ -232,14 +261,19 @@ describe('Overview', () => {
     expect(strip.getByRole('note').textContent).toBe('Delivered limits No account connection, posting, live collection or scheduling. Workbenches analyze only the material you supply, offline.');
   });
 
-  it('lists coming up, needs attention, recent research and links across HQ, each with its freshness', async () => {
+  it('lists next up, needs attention, recent research and links across HQ, with one freshness source: the sync pill', async () => {
     const s = setup();
     await overview();
-    for (const name of ['Coming up', 'Needs attention', 'Recent research', 'Linked across HQ']) {
-      expect(within(screen.getByRole('region', { name })).getByText(/^As of /u)).toBeTruthy();
+    for (const name of ['Next up', 'Needs attention', 'Recent research', 'Linked across HQ']) {
+      expect(screen.getByRole('region', { name })).toBeTruthy();
     }
-    const comingUp = within(screen.getByRole('region', { name: 'Coming up' }));
-    expect(comingUp.getAllByRole('button').map((button) => button.querySelector('strong')?.textContent)).toStrictEqual(['Autumn blend tasting notes', 'Sourdough starter open day']);
+    // The page repeats no freshness line: the header's sync pill carries it.
+    expect(screen.queryAllByText(/^As of /u)).toHaveLength(0);
+    expect(screen.getByRole('button', { name: /^Example workspace/u })).toBeTruthy();
+
+    const nextUp = within(screen.getByRole('region', { name: 'Next up' }));
+    expect(nextUp.getAllByRole('listitem').map((item) => item.querySelector('.sx-row-title')?.textContent)).toStrictEqual(['Autumn blend tasting notes', 'Sourdough starter open day']);
+    expect(nextUp.queryByText('Past')).toBeNull();
 
     const attention = within(screen.getByRole('region', { name: 'Needs attention' }));
     expect(attention.getByText('Failed')).toBeTruthy();
@@ -249,13 +283,53 @@ describe('Overview', () => {
     const recent = within(screen.getByRole('region', { name: 'Recent research' }));
     expect(recent.getAllByRole('listitem')).toHaveLength(5);
     expect(recent.getByText('Example data')).toBeTruthy();
-
-    const links = within(screen.getByRole('region', { name: 'Linked across HQ' }));
-    expect(links.getByText('Plan the cupping hour')).toBeTruthy();
-    expect(links.getAllByText('Not checked')).toHaveLength(2);
-    await s.user.click(links.getByRole('button', { name: 'Open run' }));
+    await s.user.click(recent.getByRole('button', { name: /^Signal inbox/u }));
     expect(s.destination()).toBe(`runs/${FIXTURE_IDS.exampleRun}`);
     expect(effects(s)).toHaveLength(0);
+  });
+
+  it('links across HQ: opens a run in this workspace, and says why a record in another area cannot open without the reference service', async () => {
+    const s = setup();
+    await overview();
+    const links = within(screen.getByRole('region', { name: 'Linked across HQ' }));
+    expect(links.getByText('Plan the cupping hour')).toBeTruthy();
+    // The run is read from this workspace's own snapshot; the Work card needs the shell's reference service.
+    expect(links.getByText('Available')).toBeTruthy();
+    expect(links.getByText('Not checked')).toBeTruthy();
+    const card = links.getByRole('button', { name: 'Open Plan the cupping hour' }) as HTMLButtonElement;
+    expect(card.disabled).toBe(true);
+    expect(document.getElementById(card.getAttribute('aria-describedby')!)!.textContent).toMatch(/needs the HQ reference service/u);
+    // Says what Open does, and that other projects are read-only; the stale "arrives with HQ references" copy is gone.
+    expect(links.getByText(/Open goes to the record in its own area/u)).toBeTruthy();
+    expect(links.getByText(/Links into another project are read-only/u)).toBeTruthy();
+    expect(screen.queryByText(/arrives with HQ references/u)).toBeNull();
+    await s.user.click(links.getByRole('button', { name: 'Open Signal inbox · Neighborhood tea' }));
+    expect(s.destination()).toBe(`runs/${FIXTURE_IDS.exampleRun}`);
+    expect(effects(s)).toHaveLength(0);
+  });
+
+  it('shows the nearest past dates, labelled Past, when nothing is planned from today on', async () => {
+    const fixture = createWorkbenchFixture({ clock: () => new Date('2026-12-01T12:00:00Z') });
+    const recorded = recordCalls(fixture.port);
+    render(<SocialDomain context={CONTEXT} destination="home" appearance="light" desktop={{ platform: 'browser', versions: { electron: null } }} navigate={() => {}} port={recorded.port} example now={() => new Date('2026-12-01T12:00:00Z')} />);
+    await overview();
+    const nextUp = within(screen.getByRole('region', { name: 'Next up' }));
+    expect(nextUp.getByText('Past')).toBeTruthy();
+    // Most recent past date first.
+    expect(nextUp.getAllByRole('listitem').map((item) => item.querySelector('.sx-row-title')?.textContent)).toStrictEqual(['Sourdough starter open day', 'Autumn blend tasting notes']);
+    expect(nextUp.getByText(/Nothing is planned from today on/u)).toBeTruthy();
+  });
+
+  it('sorts needs attention by consequence: unsaved drafts, then failed runs, then interrupted ones', async () => {
+    socialSession(FIXTURE_PROJECT_ID).openEditor(FIXTURE_IDS.steepingThread, null, {
+      title: 'Half-written thread', body: 'Draft text', brand_id: FIXTURE_IDS.larkspur, channel: 'X', planned_date: '', archived: 0,
+    });
+    setup();
+    await overview();
+    const attention = within(screen.getByRole('region', { name: 'Needs attention' }));
+    expect(attention.getAllByRole('listitem').map((item) => item.querySelector('.sx-row-title')?.textContent))
+      .toStrictEqual(['Half-written thread', 'SEO workbench', 'Reddit opportunities']);
+    expect(attention.getAllByRole('listitem').map((item) => item.querySelector('.hq-status-label')?.textContent)).toStrictEqual(['Unsaved changes', 'Failed', 'Interrupted']);
   });
 
   it('lists unsaved drafts from this session under Needs attention', async () => {
@@ -281,19 +355,48 @@ describe('Overview', () => {
     expect(effects(s)).toHaveLength(0);
   });
 
+  it('opens an unsaved stored draft, and a new unsaved draft, in the Library editor that holds the text', async () => {
+    const session = socialSession(FIXTURE_PROJECT_ID);
+    session.openEditor(FIXTURE_IDS.steepingThread, null, {
+      title: 'Half-written thread', body: 'Draft text', brand_id: FIXTURE_IDS.larkspur, channel: 'X', planned_date: '', archived: 0,
+    });
+    session.openEditor('new', null, {
+      title: 'Brand new idea', body: 'Just started', brand_id: FIXTURE_IDS.larkspur, channel: 'General', planned_date: '', archived: 0,
+    });
+    const s = setup();
+    await overview();
+    const attention = () => within(screen.getByRole('region', { name: 'Needs attention' }));
+    await s.user.click(attention().getByRole('button', { name: /^Half-written thread/u }));
+    expect(s.destination()).toBe(`library/${FIXTURE_IDS.steepingThread}`);
+    await s.user.click(side().getByRole('button', { name: 'Overview' }));
+    await overview();
+    await s.user.click(attention().getByRole('button', { name: /^Brand new idea/u }));
+    expect(s.destination()).toBe('library/new');
+    expect(effects(s)).toHaveLength(0);
+  });
+
   it('shows Offline with the last synced time and Unknown for active runs when the service is unreachable', async () => {
     const s = setup();
     await overview();
     s.fixture.controls.setUnavailable(true);
     await act(() => socialSession(CONTEXT.id).load(s.recorded.port));
-    expect(screen.getByText(/The Social service is unreachable\. Showing the last synced data\./u)).toBeTruthy();
-    expect(screen.getAllByText('Offline').length).toBe(4);
+    // The page keeps its data and adds no stale line of its own: the frame says Offline once, in the pill and the bar under the title.
+    expect(screen.getByRole('button', { name: /^Offline · last synced / })).toBeTruthy();
+    expect(screen.queryByText(/The Social service is unreachable\. Showing the last synced data\./u)).toBeNull();
+    expect(screen.getByRole('region', { name: 'Needs attention' })).toBeTruthy();
+    expect(screen.queryAllByText(/^As of /u)).toHaveLength(0);
     const attention = within(screen.getByRole('region', { name: 'Needs attention' }));
     expect(attention.getAllByText('Unknown')).toHaveLength(2);
     expect(attention.getAllByText(/don't start it again until its status is known/u)).toHaveLength(2);
+    // Unknown is the last tier: failed and interrupted runs come first.
+    expect(attention.getAllByRole('listitem').map((item) => item.querySelector('.hq-status-label')?.textContent)).toStrictEqual(['Failed', 'Interrupted', 'Unknown', 'Unknown']);
     s.fixture.controls.setUnavailable(false);
-    await s.user.click(screen.getByRole('button', { name: 'Check again' }));
-    expect(await screen.findAllByText(/^As of /u)).toHaveLength(4);
+    // The frame's bar under the title says what is paused and holds Check again; the pill keeps the limits.
+    const bar = screen.getByText(/^Offline · last synced .+ · changes paused$/u).closest('.hq-notice') as HTMLElement;
+    await s.user.click(within(bar).getByRole('button', { name: 'Check again' }));
+    expect(await screen.findByRole('button', { name: /^Example workspace/u })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Offline/u })).toBeNull();
+    expect(screen.queryByText(/changes paused/u)).toBeNull();
     expect(s.recorded.callsOf('execution')).toHaveLength(0);
   });
 
@@ -305,27 +408,101 @@ describe('Overview', () => {
     expect(links.getByText(/needs Social service support \(hq-references-v1\)/u)).toBeTruthy();
   });
 
-  it('shows loading, then an error with Try again, before any snapshot', async () => {
+  it('shows loading, then the page frame with an inline error and Try again, before any snapshot', async () => {
     let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let gate = new Promise<void>((resolve) => { release = resolve; });
     const s = setup({ delay: () => gate });
     expect(screen.getByText('Loading the Social workspace…')).toBeTruthy();
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+    expect(side().getByRole('option', { name: 'Loading brands…' })).toBeTruthy();
     s.fixture.controls.failNext('snapshot', { kind: 'unavailable' });
     await act(async () => release());
-    expect(await screen.findByText('The Social service is unreachable')).toBeTruthy();
-    await s.user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    // No full-screen error: the page keeps its header, the sidebar and the sync pill; the failure is inline.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy();
+    const notice = screen.getByRole('status');
+    expect(within(notice).getByText('Social service unreachable')).toBeTruthy();
+    expect(within(notice).getByText(/^The Social service is unreachable\. Nothing was changed\. Check again when it is running\./u)).toBeTruthy();
+    // The example workspace has no settings to fix.
+    expect(within(notice).queryByRole('button', { name: 'Open Social settings' })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Offline/u })).toBeTruthy();
+    expect(side().getByRole('option', { name: 'Brands unavailable' })).toBeTruthy();
+    expect(side().getByRole('button', { name: 'Overview' }).getAttribute('aria-current')).toBe('page');
+
+    // Try again holds the failure in place (busy) instead of flipping back to the loading shape.
+    gate = new Promise<void>((resolve) => { release = resolve; });
+    await s.user.click(within(notice).getByRole('button', { name: 'Try again' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy();
+    expect(screen.queryByText('Loading the Social workspace…')).toBeNull();
+    await act(async () => release());
     expect(await overview()).toBeTruthy();
+    expect(screen.queryByText('Social service unreachable')).toBeNull();
+    expect(s.recorded.callsOf('execution')).toHaveLength(0);
+  });
+
+  it('offers Social settings when a configured service is unreachable before any snapshot', async () => {
+    const opened = vi.fn<(source: unknown) => void>();
+    const listener = (event: Event) => opened((event as CustomEvent).detail?.source);
+    window.addEventListener('hq-open-settings', listener);
+    try {
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const s = setup({ delay: () => gate, example: false });
+      s.fixture.controls.failNext('snapshot', { kind: 'unavailable' });
+      await act(async () => release());
+      const notice = await screen.findByRole('status');
+      await s.user.click(within(notice).getByRole('button', { name: 'Open Social settings' }));
+      expect(opened).toHaveBeenCalledWith('social');
+      expect(effects(s)).toHaveLength(0);
+    } finally {
+      window.removeEventListener('hq-open-settings', listener);
+    }
+  });
+
+  it('keeps the page and adds one offline bar under the title while the service is unreachable', async () => {
+    const s = setup({ destination: 'library' });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Library' })).toBeTruthy();
+    expect(screen.queryByText(/changes paused$/u)).toBeNull();
+    s.fixture.controls.setUnavailable(true);
+    await act(() => socialSession(CONTEXT.id).load(s.recorded.port));
+
+    // The page and its data stay; one bar says what is shown and what is paused, with Check again beside it.
+    expect(screen.getByRole('heading', { level: 1, name: 'Library' })).toBeTruthy();
+    const bar = screen.getByText(/^Offline · last synced .+ · changes paused$/u).closest('.hq-notice') as HTMLElement;
+    expect(bar).toBeTruthy();
+    expect(bar.getAttribute('role')).toBeNull(); // The domain's toast announces the change; the bar doesn't repeat it.
+    expect(screen.getAllByText('Autumn blend tasting notes').length).toBeGreaterThan(0);
+
+    s.fixture.controls.setUnavailable(false);
+    await s.user.click(within(bar).getByRole('button', { name: 'Check again' }));
+    await vi.waitFor(() => expect(screen.queryByText(/changes paused$/u)).toBeNull());
+    expect(s.recorded.callsOf('execution')).toHaveLength(0);
+  });
+
+  it('says a failed refresh shows older data without claiming changes are paused', async () => {
+    const s = setup({ destination: 'library' });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Library' })).toBeTruthy();
+    s.fixture.controls.failNext('snapshot', { kind: 'forbidden' });
+    await act(() => socialSession(CONTEXT.id).load(s.recorded.port));
+    expect(screen.getByText(/^Not refreshed · showing data from /u)).toBeTruthy();
+    await s.user.click(screen.getByRole('button', { name: /^Not refreshed/u }));
+    const status = within(screen.getByRole('group', { name: 'Social workspace status' }));
+    expect(status.getByText('The workspace could not be refreshed')).toBeTruthy();
+    expect(status.queryByText(/pause/u)).toBeNull();
+    expect(effects(s)).toHaveLength(0);
   });
 });
 
-describe('Sources (reserved)', () => {
-  it('says it is proposed and needs the source registry, and is not built on fixtures', async () => {
+describe('Sources (import desk; saved sources proposed)', () => {
+  it('says saved sources are proposed and need the source registry, and is not built on fixtures', async () => {
     const s = setup({ destination: 'sources/fixture-source' });
     expect(screen.getByRole('heading', { level: 1, name: 'Sources' })).toBeTruthy();
     expect(screen.getByText(SOURCES_PROPOSED)).toBeTruthy();
     expect(SOURCES_PROPOSED.startsWith('Proposed — needs the Social service source registry')).toBe(true);
     expect(screen.getByText(/The source “fixture-source” can't be shown: there is no source registry yet\./u)).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
+    // Nothing is listed as saved: the page has no files until one is checked this session.
+    expect(screen.queryByRole('heading', { name: 'This session' })).toBeNull();
     await s.user.click(screen.getByRole('button', { name: 'Open workbenches' }));
     expect(s.destination()).toBe('workbenches');
     expect(effects(s)).toHaveLength(0);
@@ -336,9 +513,16 @@ describe('Channels & accounts', () => {
   it('is an honest capability page whose controls have no external effect', async () => {
     const s = setup({ destination: 'channels' });
     expect(screen.getByRole('heading', { level: 1, name: 'Channels & accounts' })).toBeTruthy();
-    for (const channel of ACCOUNT_CHANNELS) expect(screen.getByRole('heading', { level: 2, name: channel })).toBeTruthy();
+    // One matrix: a row per channel, a column per capability. Only text checks and analysis exist today.
+    const matrix = within(screen.getByRole('table', { name: 'What HQ Social can do for each channel today' }));
+    expect(matrix.getAllByRole('columnheader').map((header) => header.textContent)).toStrictEqual([
+      'Channel', 'Text checks & analysis', 'Account connection', 'Collection', 'Publishing & scheduling', 'Connect',
+    ]);
+    for (const channel of ACCOUNT_CHANNELS) expect(matrix.getByRole('rowheader', { name: channel })).toBeTruthy();
+    expect(screen.getAllByText('Available')).toHaveLength(ACCOUNT_CHANNELS.length);
     expect(screen.getAllByText('Planned')).toHaveLength(ACCOUNT_CHANNELS.length * 3);
     for (const item of PUBLISHING_NEEDS) expect(screen.getByText(item)).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'What publishing would need' })).toBeTruthy();
 
     const connect = screen.getAllByRole('button', { name: 'Connect account…' });
     expect(connect).toHaveLength(ACCOUNT_CHANNELS.length);
@@ -348,17 +532,25 @@ describe('Channels & accounts', () => {
     expect(s.destination()).toBe('channels');
     expect(effects(s)).toHaveLength(0);
 
-    // Honesty copy: nothing reads as connected, posted, published, scheduled or live.
-    const text = document.querySelector('.sd-page')!.textContent!;
-    expect(text).not.toMatch(/\b(connected|posted|published|scheduled|live)\b/iu);
+    // Honesty copy: nothing reads as connected, posted, published, scheduled or live. The header's status panel
+    // repeats the delivered limits, the one sentence that names those capabilities, only to deny them.
+    const text = document.querySelector('.sd-channels')!.textContent!;
+    expect(text).toContain(DELIVERED_LIMITS);
+    expect(text.replace(DELIVERED_LIMITS, '')).not.toMatch(/\b(connected|posted|published|scheduled|live)\b/iu);
   });
 });
 
 describe('mounted sections', () => {
-  it('mounts the workbench section, with its limits banner, for workbench and run destinations', async () => {
-    setup({ destination: 'workbenches' });
+  it('mounts the workbench section, with its limits in the page header status, for workbench and run destinations', async () => {
+    const s = setup({ destination: 'workbenches' });
     expect(await screen.findByRole('heading', { level: 1, name: 'Workbenches' })).toBeTruthy();
-    expect(screen.getByText('Delivered limits')).toBeTruthy();
+    const status = screen.getByRole('button', { name: /^Example workspace/u });
+    expect(status.getAttribute('aria-expanded')).toBe('false');
+    await s.user.click(status);
+    const panel = within(screen.getByRole('group', { name: 'Social workspace status' }));
+    expect(panel.getByText('Delivered limits')).toBeTruthy();
+    expect(panel.getByText(/^Fictional example workspace/u)).toBeTruthy();
+    expect(effects(s)).toHaveLength(0);
     cleanup();
     resetSocialSessions();
     setup({ destination: 'runs' });

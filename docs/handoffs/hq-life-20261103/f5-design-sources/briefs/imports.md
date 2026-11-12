@@ -1,0 +1,17 @@
+# F5 builder: Imports view (Requests → Imports) — bulk import and export
+
+Your branch: `work/hq-life-design-sources-imports-20261103`. Your port: 5283. Evidence: `/tmp/hq-f5-evidence/imports/`.
+
+Owned paths: `modules/design/imports/src/ImportsPanel.ts`, `modules/design/imports/src/imports.css`, `modules/design/imports/src/controller.ts` (view state only, never importer semantics), tests under `modules/design/imports/test/` that the `imports` row claims, and `modules/design/app/compose/views/ImportsView.tsx`. Do not touch the importer, bundle, mappers, media or contract semantics. Do not touch `apps/desktop/**`: open PRs #170, #171, #174 and #175 own the host and backend picker work there. Keep `ImportsPanel.ts` JSX-free and createElement-based, because node tests render it. Import its CSS from `ImportsView.tsx`.
+
+Today: "Import and export" stacks Import (Choose files… → a plan summary → Apply import), History (with Undo) and "Backup and export" (radio choices → Create bundle). One persistent message line sits at the bottom. The steps are implicit, Apply shows no progress, and nothing animates. The name collides with References' "Import screenshots". In this build the picker returns a synthetic two-screen source. Before capture: `/tmp/hq-f5-evidence/before/imports-light-1280.png`.
+
+Build:
+1. A three-step flow, Choose → Review → Done, shown as a compact stepper whose current step is highlighted. Transitions between steps use `Presence` (rise/collapse). Choose is a drop-target-styled card: a dashed edge, the supported types and the button. If the controller cannot pick, show a calm unavailable state. Real drag and drop is not wired in this build, so do not pretend it is. Review lists plan rows that enter with `hq-stagger`, each with a tone icon plus a word (new, update, conflict, skip, rejected). Conflicts use a segmented "Keep mine / Take incoming" choice. Apply import shows busy on its button with a verb ("Importing"), an indeterminate progress bar and `StatusIndicator busy`. Done summarises what landed.
+2. Feedback through F1: success comes from `useToast()`, for example "Imported 2 screens", with an Undo action that calls the controller's undo for that import. A rejection or error appears as an `InlineNotice` in the step where it happened, plus `toast.error`. An unconfirmed outcome gets `toast.unknown` with Check. Remove the bottom message line, keeping its information in the toast and the inline notice.
+3. History becomes a vertical timeline with relative time and the exact time in a tooltip or `<time>`. Undone entries are visibly struck and labelled. Undo gives a busy state, then a success toast.
+4. Backup and export: radio cards for the three choices, with their descriptions. The private-draft confirmation stays inline. Saving to disk is unavailable in this build, so show it as a `StatusIndicator` or a quiet notice. Present the export receipt (digest, size, included, left out) as a compact receipt card. Add a copy-digest button that handles a missing clipboard without throwing.
+5. A cross-link in the header: "Adding single screenshots? Use References → Import screenshots". `ImportsView` wires it to `navigate` using `modules/design/references/design-module.ts`'s `nav` and `id`; do not hardcode the nav.
+6. Responsive at 572px, with a calm two-column layout at ≥900px: steps on the left, history on the right.
+
+Keep every existing test passing. Add node tests for any new pure helpers (step derivation, relative time formatting) where the `imports` row claims them.

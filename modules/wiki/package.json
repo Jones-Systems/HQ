@@ -6,7 +6,7 @@
   "exports": { ".": "./app/src/index.ts" },
   "engines": { "node": ">=22.18.0" },
   "scripts": {
-    "test": "node --test \"contract/test/*.test.ts\" \"core/test/*.test.ts\" \"ui/test/*.test.ts\" \"app/test/*.test.ts\"",
+    "test": "node --test \"contract/test/*.test.ts\" \"core/test/*.test.ts\" \"core/scripts/test/*.test.ts\" \"ui/test/*.test.ts\" \"app/test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

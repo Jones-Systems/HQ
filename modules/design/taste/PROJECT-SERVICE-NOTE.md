@@ -131,3 +131,18 @@ preview or server was executed by this capsule. Ordinary source/diff review
 does not prove passing behavior. No active commit hooks were present at
 preflight; hooks must remain enabled when committing. Publication and delivery
 belong to the integration owner.
+
+## Later changes (lane B3, 2026-11-03)
+
+Source: `subject-identity` and typed-error work in `src/contract.ts`, `src/events.ts`, `src/profile.ts`,
+`src/project-service.ts` and `src/errors.ts`; the rules are in `README.md` ("Subject identity and older journals").
+
+- A put that is rejected with proof that nothing was written now rejects typed, instead of resolving
+  `sync-failed`: `TasteConflictError` for a lost compare-and-set, and `TasteReadOnlyError`, `TasteInvalidInputError`
+  or `TasteUnavailableError` for a host refusal. A lost acknowledgement or any unrecognised failure still resolves
+  `fail-closed` / `sync-failed`.
+- A stored document with a later `hq.design.taste-journal/vN` schema rejects as `TasteReadOnlyError` on reads and
+  saves. Other unusable envelopes stay `TasteUnavailableError`. Exporting a journal that verified with a fault
+  rejects as `TasteJournalFaultError` (still a `TasteUnavailableError`).
+- Version subjects are project-qualified, so one version ID reused by two projects no longer shares a rating slot
+  or a distinct-subject count. Older journals are not rewritten.

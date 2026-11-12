@@ -182,13 +182,16 @@ export function classifyDesignError(error: unknown, context: DesignFailureContex
   if (record(error) && error.name === 'PreviewError' && error.reason === 'aborted') return failure('cancelled');
   // An abort after a write was issued may still have taken effect.
   if (named(error, 'AbortError')) return failure(context.write ? 'unknown' : 'cancelled');
-  if (named(error, 'StorageConflictError', 'CanvasWriteConflictError', 'FreezeConflictError')) return failure('conflict');
+  if (named(error, 'StorageConflictError', 'CanvasWriteConflictError', 'FreezeConflictError', 'TasteConflictError')) return failure('conflict');
   if (record(error) && error.code === 'conflict') return failure('conflict');
   // Definite refusals: the store checked before writing or sending anything.
   if (named(error, 'SendBlockedError', 'FreezeBlockedError')) return failure('invalid', 'blocked', blockedText(error));
   if (named(error, 'ExportProjectionError')) return failure('invalid', 'blocked');
   if (named(error, 'ExportDisabledError')) return failure('disabled', 'disabled');
   if (named(error, 'ReadOnlyContentError', 'ReadOnlyRequestError')) return failure('read-only');
+  if (named(error, 'TasteReadOnlyError')) return failure('read-only', record(error) && typeof error.reason === 'string' ? error.reason : undefined);
+  if (named(error, 'TasteJournalFaultError')) return failure('corrupt', record(error) && typeof error.reason === 'string' ? error.reason : undefined);
+  if (named(error, 'TasteJournalFullError')) return failure('too-large', 'journal-full', 'Your taste journal is full, so nothing was saved.');
   if (named(error, 'OutcomeUnknownError')) return failure('unknown');
   if (named(error, 'StaleDraftError')) return failure('stale');
   if (named(error, 'TasteProjectBindingError')) return failure('stale', 'project-binding');
@@ -199,7 +202,7 @@ export function classifyDesignError(error: unknown, context: DesignFailureContex
   if (record(error) && error.name === 'PreviewError' && error.reason === 'too-large') return failure('too-large');
   if (named(error, 'ContentError', 'VersionMutationError', 'InvalidIdError', 'ValidationError', 'SectionStorageScopeError', 'CanvasScopeError',
     'RequestsStorageScopeError', 'DiscoveryCacheScopeError', 'CanonicalJsonError', 'CanonicalizationError', 'NonCanonicalBytesError',
-    'DispatchTransitionError', 'NamespaceClassError', 'OutboxRecordError')) return failure('invalid');
+    'DispatchTransitionError', 'NamespaceClassError', 'OutboxRecordError', 'TasteInvalidInputError')) return failure('invalid');
   if (named(error, 'UnsupportedSchemaError')) return failure('read-only', 'unsupported-schema');
   if (named(error, 'IntegrityError')) return failure(record(error) && error.reason === 'exists' ? 'conflict' : 'corrupt');
   return failure(context.write ? 'unknown' : 'unavailable');

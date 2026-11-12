@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { WIKI_SERVICE_METHODS, type WikiService } from '../../contract/src/index.ts';
 import { createSyntheticService } from '../fixtures/synthetic.ts';
+import { backButton, filterChip, forwardButton, historyButton, historyItems, homeButton, topicsButton } from './chrome.ts';
 import { all, byText, click, one, submit, typeInto } from './render.ts';
 import { launch, spy, trapEgress, validating } from './support.ts';
 
@@ -26,20 +27,19 @@ function sealed(base: WikiService): WikiService {
 
 async function walkthrough(service: WikiService, log: string[]): Promise<void> {
   const app = await launch({ service });
-  const nav = (label: string | RegExp): HTMLElement => byText(app.container, '.wiki-nav button', label);
   await typeInto(one(app.container, 'input[name="q"]'), 'pricing');
   await submit(one(app.container, 'form'));
-  await click(one(app.container, 'input[name="repository"][value="appdev"]'));
+  await click(filterChip(app.container, 'appdev'));
   await click(byText(app.container, '.wiki-hit-title', 'Pricing'));
   await click(byText(app.container, '.wiki-parsed button[data-target="ambiguous"]', 'Onboarding'));
   await click(all(app.container, '.wiki-candidates button')[0]!);
-  await click(nav('Topics · BusinessLessons'));
-  await click(nav('Topics · App Development'));
-  await click(nav('← Back'));
-  await click(nav('Forward →'));
-  await click(nav(/^History/));
-  await click(all(app.container, '.wiki-history li button')[0]!);
-  await click(nav('Home'));
+  await click(topicsButton(app.container, 'bl'));
+  await click(topicsButton(app.container, 'appdev'));
+  await click(backButton(app.container));
+  await click(forwardButton(app.container));
+  await click(historyButton(app.container));
+  await click(historyItems(app.container)[0]!);
+  await click(homeButton(app.container));
   log.push(...app.requested);
   await app.unmount();
 }

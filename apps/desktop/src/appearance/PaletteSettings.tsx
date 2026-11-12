@@ -5,6 +5,7 @@ import {
 } from '@hq/ui';
 import { isEdited } from './palette-state';
 import type { PaletteController } from './usePalette';
+import { ActionButton, Disclosure, Icon, Panel, Row, useDisclosure } from '../settings/parts';
 import './appearance.css';
 
 const PRIMARY_GROUPS = ['Backgrounds', 'Buttons and accent', 'Selection', 'Text'] as const;
@@ -79,13 +80,17 @@ function PalettePreview({ colors }: { colors: PaletteColors }) {
   </div>;
 }
 
-/** Settings › Appearance: dark palette presets and colour editing. Applying is immediate; light mode is unchanged. */
+/** Settings › Appearance: dark palette presets and, behind "Customize colours", the colour editor. Applying is immediate; light mode is unchanged. */
 export function PaletteSettings({ palette, dark }: { palette: PaletteController; dark: boolean }) {
   const preset = PALETTE_PRESETS[palette.state.preset];
   const [confirmReset, setConfirmReset] = useState(false);
   const cards = useRef(new Map<PaletteId, HTMLButtonElement>());
-  useEffect(() => { setConfirmReset(false); }, [palette.state.preset]);
   const edited = isEdited(palette.state, palette.state.preset);
+  const customize = useDisclosure(edited);
+  const { open: customizing } = customize;
+  useEffect(() => { setConfirmReset(false); }, [palette.state.preset]);
+  const [seen, setSeen] = useState(palette.state.preset);
+  if (seen !== palette.state.preset) { setSeen(palette.state.preset); if (edited && !customizing) customize.toggle(); }
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
     if (!step) return;
@@ -93,14 +98,10 @@ export function PaletteSettings({ palette, dark }: { palette: PaletteController;
     const next = PALETTE_IDS[(PALETTE_IDS.indexOf(palette.state.preset) + step + PALETTE_IDS.length) % PALETTE_IDS.length]!;
     palette.select(next); cards.current.get(next)?.focus();
   };
-  return <div className="settings-group palette-settings">
-    <div className="settings-row palette-heading">
-      <div className="settings-row-copy">
-        <h3>Dark palette</h3>
-        <p>Used whenever HQ is dark. Every palette has the same buttons and selection; only the colors change. Light mode keeps the standard light colors.</p>
-        {!dark && <p className="palette-note">HQ is light right now. Choose Dark, or System on a dark device, to see this palette across HQ.</p>}
-      </div>
-    </div>
+  return <Panel className="palette-settings">
+    <Row title="Dark palette" description="Used whenever HQ is dark. Every palette has the same buttons and selection; only the colors change. Light mode keeps the standard light colors.">
+      {!dark && <p className="palette-note settings-row-note">HQ is light right now. Choose Dark, or System on a dark device, to see this palette across HQ.</p>}
+    </Row>
     <div className="palette-body">
       <div className="palette-presets" role="radiogroup" aria-label="Dark palette" onKeyDown={onKeyDown}>
         {PALETTE_IDS.map(id => {
@@ -120,28 +121,35 @@ export function PaletteSettings({ palette, dark }: { palette: PaletteController;
       </div>
       <PalettePreview colors={palette.colors} />
       {!palette.saved && <p className="palette-save-failed" role="alert">Palette changes apply now but could not be saved. Local storage is unavailable, so they will be lost when HQ restarts.</p>}
-      <section className="palette-editor" aria-label={`${preset.name} colors`}>
-        <div className="palette-editor-head">
-          <h4>{preset.name} colors</h4>
-          <Button size="sm" disabled={!edited} onClick={() => setConfirmReset(true)}>Reset {preset.name}</Button>
-        </div>
-        {confirmReset && <div className="palette-confirm" role="group" aria-label={`Confirm reset of ${preset.name}`}>
-          <p>Restore {preset.name} to its original colors? Edits to other palettes stay.</p>
-          <span className="palette-confirm-actions">
-            <Button size="sm" variant="primary" onClick={() => { palette.resetPreset(); setConfirmReset(false); }}>Restore original colors</Button>
-            <Button size="sm" onClick={() => setConfirmReset(false)}>Cancel</Button>
-          </span>
-        </div>}
-        {PRIMARY_GROUPS.map(group => <fieldset key={group} className="palette-group">
-          <legend>{group}</legend>
-          {PALETTE_ROLES.filter(role => PALETTE_ROLE_INFO[role].group === group).map(role => <ColorRow key={role} palette={palette} role={role} />)}
-        </fieldset>)}
-        <details className="palette-more">
-          <summary>More colors</summary>
-          <p>Hover, pressed, disabled, focus and status colors. Overlays, tints and text-selection highlights follow these colors automatically.</p>
-          <div className="palette-group">{PALETTE_ROLES.filter(role => PALETTE_ROLE_INFO[role].group === 'More colors').map(role => <ColorRow key={role} palette={palette} role={role} />)}</div>
-        </details>
-      </section>
     </div>
-  </div>;
+    <Row title="Customize colors" description={edited ? `${preset.name} has your edits.` : `Fine-tune every color of ${preset.name}.`}
+      control={<ActionButton ref={customize.trigger} size="sm" variant="ghost" aria-expanded={customizing} aria-controls="palette-editor" onClick={customize.toggle}>
+        <span>{customizing ? 'Hide colors' : 'Customize colors'}</span><Icon name="chevron" className="settings-chevron" />
+      </ActionButton>}>
+      <Disclosure open={customizing} id="palette-editor" label={`${preset.name} colors`}>
+        <section className="palette-editor" aria-label={`${preset.name} colors`}>
+          <div className="palette-editor-head">
+            <h4>{preset.name} colors</h4>
+            <Button size="sm" disabled={!edited} onClick={() => setConfirmReset(true)}>Reset {preset.name}</Button>
+          </div>
+          {confirmReset && <div className="palette-confirm" role="group" aria-label={`Confirm reset of ${preset.name}`}>
+            <p>Restore {preset.name} to its original colors? Edits to other palettes stay.</p>
+            <span className="palette-confirm-actions">
+              <Button size="sm" variant="primary" onClick={() => { palette.resetPreset(); setConfirmReset(false); }}>Restore original colors</Button>
+              <Button size="sm" onClick={() => setConfirmReset(false)}>Cancel</Button>
+            </span>
+          </div>}
+          {PRIMARY_GROUPS.map(group => <fieldset key={group} className="palette-group">
+            <legend>{group}</legend>
+            {PALETTE_ROLES.filter(role => PALETTE_ROLE_INFO[role].group === group).map(role => <ColorRow key={role} palette={palette} role={role} />)}
+          </fieldset>)}
+          <details className="palette-more">
+            <summary>More colors</summary>
+            <p>Hover, pressed, disabled, focus and status colors. Overlays, tints and text-selection highlights follow these colors automatically.</p>
+            <div className="palette-group">{PALETTE_ROLES.filter(role => PALETTE_ROLE_INFO[role].group === 'More colors').map(role => <ColorRow key={role} palette={palette} role={role} />)}</div>
+          </details>
+        </section>
+      </Disclosure>
+    </Row>
+  </Panel>;
 }

@@ -1,5 +1,5 @@
 import {
-  checkDraft, draftFields, FEATURE_HQ_REFERENCES, isDirty, workspaceSnapshot,
+  checkDraft, draftFields, FEATURE_HQ_REFERENCES, isDirty, portErrorNotice, workspaceSnapshot,
   type Draft, type DraftEditor, type DraftFields, type PortError, type SocialSession, type SocialWorkspacePort,
 } from '../core';
 import type { SaveState } from '@hq/ui';
@@ -109,15 +109,6 @@ function sentence(message: string): string {
   return /[.!?]$/u.test(message) ? message : `${message}.`;
 }
 
-export function errorText(error: PortError | { kind: 'blocked'; message: string }): string {
-  switch (error.kind) {
-    case 'invalid':
-    case 'conflict':
-    case 'blocked':
-      return sentence(error.message);
-    case 'not_found': return 'This draft is no longer in the workspace.';
-    case 'forbidden': return 'The Social service refused this change. Reload the workspace and try again.';
-    case 'unavailable': return 'The Social service is unreachable. Nothing was changed.';
-    case 'unknown': return 'The result is unknown: the Social service may or may not have saved it. Check before trying again.';
-  }
+export function errorText(error: PortError | { kind: 'blocked'; message: string }, action: import('../core').PortAction = 'save'): string {
+  return error.kind === 'blocked' ? sentence(error.message) : portErrorNotice(error, action).message;
 }

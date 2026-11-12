@@ -1,14 +1,19 @@
-import { Button, SaveIndicator, StatusChip } from '@hq/ui';
+import { createContext, useContext, type ReactNode } from 'react';
+import { Button, InlineNotice, StatusChip, StatusIndicator, type StatusTone } from '@hq/ui';
 import {
   formatClock, STATUS_LABEL, UNCONFIRMED_SCOPE_NOTE,
   type UnconfirmedWrite, type WorkState, type WorkStore, type WriteOp,
 } from '../core';
+import './feedback.css';
 
 // Save and freshness state for the Work surfaces (RW-5, RW-9, RX-5). An
 // unconfirmed write is never shown as saved and is never re-sent on its own.
 // Check asks the Planner whether it was saved and applies nothing. Only when that
 // proves it never landed may the user Apply it, which the Planner applies at most
 // once. A look-alike item is a flag, never proof.
+//
+// Where each state shows (flow assessment, "Feedback and states"): the save and connection state is one
+// StatusIndicator in the Work top bar; held and unconfirmed writes are InlineNotices on the page they affect.
 
 export const OFFLINE_BANNER = 'Planner service unreachable · changes paused';
 export const POSSIBLY_SAVED_NOTE = 'A similar item appeared since. It may be this change, but that is not proof either way.';
@@ -50,22 +55,71 @@ export function describeWrite(write: WriteOp, state: WorkState): string {
   }
 }
 
-/** The compact save state for a header: Saving…, Saved · time, N unconfirmed, or Offline · not saving. */
-export function SaveState({ store, state }: { store: WorkStore; state: WorkState }) {
+// ------------------------------------------------------------ the one save and connection indicator
+
+export interface SyncIndicatorModel {
+  readonly tone: StatusTone;
+  readonly label: string;
+  readonly detail?: string;
+  /** In progress: the indicator shows a spinner in place of its shape. */
+  readonly busy?: boolean;
+  /** The one text action: Check asks the Planner (and sends nothing); Try again reads the Planner once more. */
+  readonly action?: { readonly kind: 'check' | 'retry'; readonly label: string };
+}
+
+/**
+ * The top-bar indicator as a pure mapping from Work state: Saving…, Saved · 10:42, N unconfirmed · Check, or
+ * Offline · last synced 10:42 · changes paused. `null` while idle, so a calm board shows nothing. Offline is
+ * judged from the store's own save state, and with no snapshot yet the page's full-page state speaks instead.
+ */
+export function syncIndicator(state: WorkState, zone: string | undefined = zoneOf(state)): SyncIndicatorModel | null {
+  const synced = state.lastSyncedAt ? formatClock(state.lastSyncedAt, zone) : null;
   const { save } = state;
+  if (save.kind === 'offline' || (state.load === 'unavailable' && state.confirmed !== null)) {
+    return {
+      tone: 'danger', label: 'Offline',
+      detail: `${synced ? `last synced ${synced}` : 'not synced yet'} · changes paused`,
+      action: { kind: 'retry', label: 'Try again' },
+    };
+  }
   switch (save.kind) {
-    case 'saving': return <SaveIndicator state="saving" />;
-    case 'saved': return <SaveIndicator state="saved" savedAt={`· ${formatClock(save.at, zoneOf(state))}`} />;
-    case 'unconfirmed': return (
-      <span className="work-save-unconfirmed">
-        <SaveIndicator state="unknown" onCheck={() => void store.reconcile()} />
-        <span className="hq-meta">{save.count} unconfirmed</span>
-      </span>
-    );
-    case 'offline': return <StatusChip tone="unavailable" label="Offline" detail="not saving" />;
+    case 'unconfirmed': return { tone: 'unknown', label: `${save.count} unconfirmed`, action: { kind: 'check', label: 'Check' } };
+    case 'saving': return { tone: 'neutral', label: 'Saving…', busy: true };
+    case 'saved': return { tone: 'success', label: 'Saved', detail: formatClock(save.at, zone) };
     default: return null;
   }
 }
+
+/**
+ * Set by the Work top bar, which already carries the indicator and the offline state. Surfaces that would repeat
+ * them (the board header's save state, the offline bar) stay quiet inside it and speak when mounted alone.
+ */
+export const TopBarStatusContext = createContext(false);
+
+export function TopBarStatus({ children }: { children: ReactNode }) {
+  return <TopBarStatusContext.Provider value={true}>{children}</TopBarStatusContext.Provider>;
+}
+
+/** The save and connection state as a StatusIndicator. */
+export function SyncIndicator({ store, state }: { store: WorkStore; state: WorkState }) {
+  const model = syncIndicator(state);
+  if (!model) return null;
+  const { action } = model;
+  return (
+    <StatusIndicator
+      tone={model.tone} label={model.label} detail={model.detail} busy={model.busy}
+      action={action ? { label: action.label, onAction: () => void (action.kind === 'check' ? store.reconcile() : store.poll()) } : undefined}
+    />
+  );
+}
+
+/** The compact save state for a page header. Inside the Work top bar it stays quiet: the bar shows it once. */
+export function SaveState({ store, state }: { store: WorkStore; state: WorkState }) {
+  const inBar = useContext(TopBarStatusContext);
+  return inBar ? null : <SyncIndicator store={store} state={state} />;
+}
+
+// ------------------------------------------------------------ notices on the page
 
 function UnconfirmedRow({ entry, store, state }: { entry: UnconfirmedWrite; store: WorkStore; state: WorkState }) {
   const flagged = entry.possiblySavedIds
@@ -95,34 +149,43 @@ function UnconfirmedRow({ entry, store, state }: { entry: UnconfirmedWrite; stor
   );
 }
 
-/** Offline, held and unconfirmed banners, plus the last-synced freshness line. */
+/**
+ * Problems with writes, in context: the held queue and the unconfirmed list, each a compact InlineNotice that keeps
+ * the board readable below it. The offline notice shows here only when no Work top bar already says so.
+ */
 export function SyncBanners({ store, state }: { store: WorkStore; state: WorkState }) {
-  // Before any snapshot the board's own unavailable view says this; the banner is for a stale, shown board.
+  const inBar = useContext(TopBarStatusContext);
+  // Before any snapshot the page's own unavailable view says this; the notice is for a stale, shown board.
   const offline = state.confirmed !== null && (state.save.kind === 'offline' || state.load === 'unavailable');
   const synced = state.lastSyncedAt ? formatClock(state.lastSyncedAt, zoneOf(state)) : null;
+  if (!(offline && !inBar) && !state.held && state.unconfirmed.length === 0) return null;
   return (
     <div className="work-sync">
-      {offline && (
-        <div className="work-banner work-banner--offline" role="status">
-          <StatusChip tone="unavailable" label="Offline" detail={synced ? `last synced ${synced}` : 'not synced yet'} />
-          <span>{OFFLINE_BANNER}. What you see may be out of date.</span>
-          <Button size="sm" onClick={() => void store.poll()}>Try again</Button>
-        </div>
+      {offline && !inBar && (
+        <InlineNotice
+          tone="warning" variant="bar" live="polite"
+          title={`Offline · ${synced ? `last synced ${synced}` : 'not synced yet'}`}
+          actions={[{ label: 'Try again', onAction: () => void store.poll() }]}
+        >
+          {`${OFFLINE_BANNER}. What you see may be out of date.`}
+        </InlineNotice>
       )}
       {state.held && (
-        <div className="work-banner work-banner--held" role="alert">
-          <StatusChip tone="danger" label="Queue held" />
-          <span>{state.held.reason} Nothing more is checked or sent until you stop tracking it.</span>
-          <Button size="sm" variant="ghost" onClick={() => store.dismissUnconfirmed(state.held!.requestId)}>Stop tracking</Button>
-        </div>
+        <InlineNotice
+          tone="danger" variant="bar" title="Queue held"
+          actions={[{ label: 'Stop tracking', onAction: () => store.dismissUnconfirmed(state.held!.requestId) }]}
+        >
+          {`${state.held.reason} Nothing more is checked or sent until you stop tracking it.`}
+        </InlineNotice>
       )}
       {state.unconfirmed.length > 0 && (
         <section className="work-unconfirmed" aria-label="Unconfirmed changes">
-          <header className="work-unconfirmed-head">
-            <StatusChip tone="unknown" label={`${state.unconfirmed.length} unconfirmed`} />
-            <span className="hq-meta">{UNCONFIRMED_SCOPE_NOTE}</span>
-            <Button size="sm" onClick={() => void store.reconcile()} disabled={Boolean(state.held)}>Check now</Button>
-          </header>
+          <InlineNotice
+            tone="unknown" variant="bar" live="off" title={`${state.unconfirmed.length} unconfirmed`}
+            actions={state.held ? [] : [{ label: 'Check now', onAction: () => void store.reconcile() }]}
+          >
+            {UNCONFIRMED_SCOPE_NOTE}
+          </InlineNotice>
           <ul className="work-unconfirmed-list">
             {state.unconfirmed.map((entry) => <UnconfirmedRow key={entry.requestId} entry={entry} store={store} state={state} />)}
           </ul>

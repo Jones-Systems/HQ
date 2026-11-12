@@ -1,17 +1,20 @@
 """The HTTP surface against a real loopback server: guards in order, routes and the error envelope."""
 
 import contextlib
+import http.client
 import io
 import json
 import re
 import socket
+import threading
 import unittest
 from unittest import mock
 
-from support import ServiceTestCase, raw_exchange
+from support import ScratchTestCase, ServiceTestCase, raw_exchange, read_reply
 
 from social_service import server as server_module
 from social_service import timebox, tools
+from social_service.service import SocialService
 
 HEX32 = re.compile('[0-9a-f]{32}')
 UNRECOGNIZED = 'Unrecognized host'
@@ -24,6 +27,38 @@ SECURITY = {
     'referrer-policy': 'no-referrer',
     'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
 }
+
+
+class ListenerBurst(ScratchTestCase):
+    def test_twenty_connections_wait_for_accept_then_all_receive_responses(self):
+        service = SocialService(self.new_directory(), start_runs=False)
+        self.addCleanup(service.close)
+        server = server_module.create_server(service, '127.0.0.1', 0)
+        self.addCleanup(server.server_close)
+        port = server.server_address[1]
+
+        with contextlib.ExitStack() as cleanup:
+            connections = []
+            # Do not accept until the entire burst is queued in the real listener.
+            for _ in range(20):
+                connection = http.client.HTTPConnection('127.0.0.1', port, timeout=2)
+                cleanup.callback(connection.close)
+                connection.connect()
+                connections.append(connection)
+
+            thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True)
+            thread.start()
+            try:
+                for connection in connections:
+                    connection.request('GET', '/api/workspace', headers={'Connection': 'close'})
+                replies = [read_reply(connection) for connection in connections]
+                self.assertEqual(len(replies), 20)
+                self.assertEqual([reply.status for reply in replies], [200] * 20)
+                self.assertTrue(all(reply.json['csrf'] == service.token for reply in replies))
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+            self.assertFalse(thread.is_alive(), 'The burst listener must stop before cleanup')
 
 
 class Endpoint(ServiceTestCase):
@@ -166,7 +201,7 @@ class TokenGuard(Endpoint):
             with self.subTest(token=token):
                 reply = self.post('/api/brands', {'name': 'x'}, token=token if token is not None else False)
                 self.assertRefused(reply, 403, RELOAD)
-        self.assertEqual(self.get('/api/workspace').json['brands'], [{'id': 'default', 'name': 'My workspace'}])
+        self.assertEqual(self.get('/api/workspace').json['brands'], [{'id': 'default', 'name': 'My workspace', 'project_id': None}])
 
     def test_the_workspace_hands_out_the_token_that_works(self):
         token = self.get('/api/workspace').json['csrf']
@@ -361,10 +396,10 @@ class Routes(Endpoint):
         reply = self.get('/api/workspace')
         self.assertEqual(reply.status, 200)
         data = reply.json
-        self.assertEqual(list(data), ['brands', 'content', 'runs', 'tools', 'features', 'csrf'])
-        self.assertEqual(data['brands'], [{'id': 'default', 'name': 'My workspace'}])
+        self.assertEqual(list(data), ['brands', 'content', 'runs', 'tools', 'features', 'csrf', 'sources'])
+        self.assertEqual(data['brands'], [{'id': 'default', 'name': 'My workspace', 'project_id': None}])
         self.assertEqual((data['content'], data['runs']), ([], []))
-        self.assertEqual(data['features'], ['hq-editorial-timebox-v1', 'hq-references-v1'])
+        self.assertEqual(data['features'], ['hq-editorial-timebox-v1', 'hq-references-v1', 'hq-brand-project-v1', 'hq-sources-v1'])
 
     def test_tools_are_the_eight_in_hq_order(self):
         data = self.get('/api/workspace').json
@@ -376,22 +411,23 @@ class Routes(Endpoint):
 
     def test_features_without_zone_data_do_not_advertise_timeboxes(self):
         self.restart(timezones=False)
-        self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1'])
+        self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1', 'hq-brand-project-v1', 'hq-sources-v1'])
 
     def test_the_service_detects_missing_zone_data_for_itself(self):
         with mock.patch.object(timebox, '_zone_names', return_value=frozenset()):
             self.restart(timezones=None)
-            self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1'])
+            self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1', 'hq-brand-project-v1', 'hq-sources-v1'])
             reply = self.post('/api/content', {'title': 'x', 'planned_date': '2026-10-22',
                                                'planning_slot': {'start': '09:00', 'duration_minutes': 30, 'timezone': 'UTC'}})
             self.assertRefused(reply, 400, 'Unknown time zone')
         self.restart(timezones=None)
-        self.assertEqual(self.get('/api/workspace').json['features'], ['hq-editorial-timebox-v1', 'hq-references-v1'])
+        self.assertEqual(self.get('/api/workspace').json['features'], ['hq-editorial-timebox-v1', 'hq-references-v1', 'hq-brand-project-v1', 'hq-sources-v1'])
 
-    def test_future_features_are_not_advertised_yet(self):
+    def test_persisted_extensions_are_advertised_but_publishing_stays_off(self):
         features = self.get('/api/workspace').json['features']
-        for later in ('hq-brand-project-v1', 'hq-sources-v1', 'hq-publishing-simulator-v1'):
-            self.assertNotIn(later, features)
+        self.assertIn('hq-brand-project-v1', features)
+        self.assertIn('hq-sources-v1', features)
+        self.assertNotIn('hq-publishing-simulator-v1', features)
 
     def test_samples_for_every_tool_equal_hq_examples(self):
         for tool in tools.TOOL_IDS:
@@ -419,12 +455,20 @@ class Routes(Endpoint):
     def test_brands_are_created_listed_by_name_and_may_repeat(self):
         zed = self.post('/api/brands', {'name': '  Zed  '})
         self.assertEqual(zed.status, 201)
-        self.assertEqual(list(zed.json), ['id', 'name'])
+        self.assertEqual(list(zed.json), ['id', 'name', 'project_id'])
+        self.assertIsNone(zed.json['project_id'])
         self.assertRegex(zed.json['id'], HEX32)
         self.assertEqual(zed.json['name'], 'Zed')
         self.post('/api/brands', {'name': 'alpha'})
         self.post('/api/brands', {'name': 'Zed'})
-        names = [brand['name'] for brand in self.get('/api/workspace').json['brands']]
+        workspace = self.get('/api/workspace').json
+        self.assertEqual(workspace['sources'], [])
+        for brand in workspace['brands']:
+            self.assertEqual(list(brand), ['id', 'name', 'project_id'])
+            self.assertIsNone(brand['project_id'])
+            if brand['id'] != 'default':
+                self.assertRegex(brand['id'], HEX32)
+        names = [brand['name'] for brand in workspace['brands']]
         self.assertEqual(names, ['alpha', 'My workspace', 'Zed', 'Zed'])
 
     def test_brand_errors(self):

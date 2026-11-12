@@ -269,6 +269,8 @@ describe('durable Imports env over the bridge', () => {
     assert.equal(env.capabilities.pickSource, undefined);
     const controller = createImportsController(env.deps, importsProject(project.id), env.capabilities);
     await controller.refresh();
+    assert.equal(classifyDesignError(controller.getState().cause, IMPORTS_CONTEXTS.read).operation, 'imports.read');
+    assert.equal(double.calls.length, 0, 'unregistered documents never acquire transport authority');
     assert.equal(controller.getState().status, 'error');
     // The typed failure's description joins its message, so the panel shows what was kept.
     assert.equal(controller.getState().message, 'Imports are not available in this build. Nothing was changed.');
@@ -344,10 +346,38 @@ describe('typed Imports failures reach the view', () => {
     f.double.failWith((route) => { if (route === 'doc.list') throw lost; });
     await f.controller.refresh();
     const state = f.controller.getState();
+    assert.equal(f.double.count('doc.list'), 2, 'one manifest read and one conflict read, with no retry');
+    assert.equal(f.double.count('doc.get'), 0, 'failed listings never reach document reads');
+    assert.equal(f.commitCount(), 0);
+    assert.equal(f.double.count('doc.put'), 0);
+    assert.equal(f.double.documents.size, 0);
+    assert.deepEqual(f.notified, []);
+    assert.equal(classifyDesignError(state.cause, IMPORTS_CONTEXTS.read).kind, 'unavailable');
     assert.equal(state.status, 'error');
     // Reads are typed too: a lost read is unavailable (nothing changed), with a Retry.
     const feedback = feedbackOf(state.cause);
     assert.deepEqual([feedback.status, feedback.action?.kind, feedback.meta], ['Unavailable', 'retry', 'imports.read']);
     assert.ok(state.message !== null && state.message.length > 0);
+  });
+
+  it('a failed explicit history read preserves an unknown write for a later read-only Check', async () => {
+    const f = setup();
+    f.pick(pngFile('home.png'));
+    await f.controller.choose();
+    f.double.loseNextCommitReply();
+    await f.controller.apply();
+    assert.equal(f.controller.getState().outcome?.checkable, true);
+    const writes = f.commitCount();
+    f.double.failWith((route) => { if (route === 'doc.list') throw new Error('History unavailable'); });
+    await f.controller.refresh();
+    assert.equal(f.controller.getState().status, 'error');
+    assert.equal(f.controller.getState().outcome?.tone, 'unknown');
+    assert.equal(f.controller.getState().outcome?.checkable, true);
+    f.double.failWith(null);
+    await f.controller.check();
+    assert.equal(f.controller.getState().status, 'applied');
+    assert.equal(f.controller.getState().outcome?.title, 'The import had landed');
+    assert.equal(f.controller.getState().outcome?.reconciles, true);
+    assert.equal(f.commitCount(), writes, 'history refresh and Check never repeat the unknown write');
   });
 });

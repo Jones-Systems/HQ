@@ -128,7 +128,7 @@ B is the portable fixture, report and cleanup group. It uses Node, Git and the
 real stdlib Python Planner, but no Electron or display. Run it serially before N:
 
 ```sh
-node --test --test-concurrency=1 tests/acceptance/build-inventory.test.mjs tests/acceptance/fixtures/fixtures.test.mjs tests/acceptance/fixtures/scenarios.test.mjs tests/acceptance/fixtures/host-gallery.test.mjs tests/acceptance/cleanup.test.mjs
+node --test --test-concurrency=1 tests/acceptance/build-inventory.test.mjs tests/acceptance/fixtures/fixtures.test.mjs tests/acceptance/fixtures/scenarios.test.mjs tests/acceptance/fixtures/social.test.mjs tests/acceptance/fixtures/host-gallery.test.mjs tests/acceptance/cleanup.test.mjs
 ```
 
 `fixtures/http.mjs` supplies only fixed Work/Social shell reads on ephemeral
@@ -238,6 +238,36 @@ Cleanup attempts every registered resource even after an earlier cleanup fails;
 cleanup failure fails the run and preserves any original error. The lifecycle
 tests cover success, deliberate failure, partial child startup, both handled
 signals, an open HTTP socket, concurrent peers and injected cleanup failure.
+
+## Recovery scenario source (VAL-S)
+
+Full and selected invocations additionally register `social-save-and-unknown`,
+`reference-round-trips`, `wiki-committed-corpus`, and `unavailable-service-ui`.
+Run them only on the serial verifier's fresh assembled Mini build. Source and
+syntax checks do not qualify native behavior. Routine and checkpoint modes keep
+their read-only Social fixture and existing outcome meanings. Existing held/gap
+rows remain; selected/full success does not follow from adding source.
+
+Recovery uses the real repository Social service with owned synthetic SQLite
+state behind a recording proxy. Only workspace reads and draft saves are
+forwarded; runs, posting and unknown routes fail closed. One explicit save is
+rejected before forwarding; one applied update loses its response. Native UI
+must keep the unknown save blocked until explicit read reconciliation, without
+repeating it. The real Planner proxy additionally allows item/history reads
+and item PATCH for the one explicit reference save. Navigation may never write.
+
+Wiki uses only the existing checked-in synthetic corpus committed into owned
+bare repositories. One repository is temporarily parked inside runtime scratch,
+then restored for restart recovery; private sources and remote freshness are
+unqualified. The final scenario stops only the invocation-owned Planner and
+Social children and checks unavailable UI. Runtime cleanup owns all children,
+sockets and scratch on success, failure and cancellation.
+
+Add `tests/acceptance/fixtures/social.test.mjs` to the serial portable B command
+and its existing fast CI discovery; do not execute it concurrently with native
+journeys. It tests real Social response loss/rejection, route denial, partial
+startup/failure cleanup, peer preservation, Wiki restoration and result holds.
+All tests and native journeys remain unrun for this source checkpoint.
 
 ## Selected T7 scenarios
 

@@ -5,7 +5,7 @@ export type ServiceResponse<B = unknown> =
   | { readonly ok: true; readonly status: number; readonly body: B; readonly replayed: boolean }
   | { readonly ok: false; readonly kind: 'unavailable' | 'unknown' };
 
-export const SOCIAL_SERVICE_ROUTES = ['workspace', 'sample', 'run', 'saveContent', 'addBrand', 'submitRun'] as const;
+export const SOCIAL_SERVICE_ROUTES = ['workspace', 'sample', 'run', 'saveContent', 'addBrand', 'submitRun', 'setBrandProject', 'source', 'saveSource', 'archiveSource', 'publishingConnect', 'publishingDisconnect', 'publishingRequest', 'publishingCancel', 'publishingApprove'] as const;
 export type SocialServiceRoute = (typeof SOCIAL_SERVICE_ROUTES)[number];
 /** Structurally identical to the Social live transport. Main validates the closed body keys. */
 export interface SocialServiceParams {
@@ -14,7 +14,23 @@ export interface SocialServiceParams {
   readonly run: { readonly id: string };
   readonly saveContent: Readonly<Record<string, unknown>>;
   readonly addBrand: { readonly name: string };
-  readonly submitRun: { readonly tool: string; readonly input: Record<string, unknown>; readonly is_example: boolean };
+  readonly setBrandProject: { id: string; project_id: string | null };
+  readonly source: { id: string };
+  readonly saveSource: {
+    name: string;
+    kind: 'feed-items' | 'tiktok-niche' | 'tiktok-manifest' | 'tiktok-records' | 'seo-config' | 'seo-packet'
+      | 'search-panel' | 'search-entities' | 'search-inventory' | 'search-answers' | 'reddit-bundle' | 'creator-batch';
+    file_name: string;
+    text: string;
+    as_of: string;
+  };
+  readonly archiveSource: { id: string; archived: 0 | 1 };
+  readonly publishingConnect: { channel: string; label: string };
+  readonly publishingDisconnect: { id: string };
+  readonly publishingRequest: { draft_id: string; draft_version: number; connection_id: string };
+  readonly publishingCancel: { id: string };
+  readonly publishingApprove: { id: string; content_sha256: string };
+  readonly submitRun: { readonly tool: string; readonly input: Record<string, unknown>; readonly is_example: boolean; readonly source_ids?: readonly string[] };
 }
 export interface SocialServiceTransport {
   call<R extends SocialServiceRoute>(route: R, params: SocialServiceParams[R]): Promise<ServiceResponse>;
@@ -43,6 +59,23 @@ export interface WorkServiceTransport {
   call<R extends WorkServiceRoute>(route: R, params: WorkServiceParams[R]): Promise<ServiceResponse>;
 }
 
+export const WORK_LOCAL_ROUTES = ['load', 'save'] as const;
+export type WorkLocalRoute = (typeof WORK_LOCAL_ROUTES)[number];
+export interface WorkLocalParams {
+  readonly load: Record<string, never>;
+  /** `binding` comes from `load`. `expectedRevision` must equal the stored revision (0 when nothing is stored). */
+  readonly save: { readonly binding: string; readonly expectedRevision: number; readonly value: JsonValue };
+}
+export interface WorkLocalValues {
+  readonly load: { readonly binding: string; readonly revision: number; readonly value: JsonValue | null };
+  readonly save: { readonly revision: number };
+}
+export type WorkLocalResult<T> = { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly kind: 'conflict' | 'invalid' | 'too_large' | 'unavailable' };
+export interface WorkLocalTransport {
+  call<R extends WorkLocalRoute>(route: R, params: WorkLocalParams[R]): Promise<WorkLocalResult<WorkLocalValues[R]>>;
+}
+
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 export interface StoredDocument {
   readonly namespace: string;
@@ -54,7 +87,7 @@ export interface StoredDocument {
 }
 export type DesignStorageResult<T> = { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly kind: 'conflict' | 'invalid' | 'read-only' | 'unavailable' | 'unknown'; readonly reason?: 'disabled' };
-export const DESIGN_SERVICE_ROUTES = ['doc.get', 'doc.put', 'doc.list', 'cache.get', 'cache.put', 'blob.put', 'blob.get', 'blob.has', 'event.append', 'event.read', 'import.commit', 'import.status', 'import.repair', 'storage.diagnostics', 'export.preview', 'export.save', 'catalog.roots', 'catalog.chooseRoot', 'catalog.forget', 'catalog.snapshot', 'catalog.preview', 'import.pick'] as const;
+export const DESIGN_SERVICE_ROUTES = ['doc.get', 'doc.put', 'doc.list', 'cache.get', 'cache.put', 'blob.put', 'blob.get', 'blob.has', 'event.append', 'event.read', 'import.commit', 'import.status', 'import.repair', 'storage.diagnostics', 'export.preview', 'export.save', 'catalog.roots', 'catalog.chooseRoot', 'catalog.forget', 'catalog.snapshot', 'catalog.preview', 'import.pick', 'design.capabilities'] as const;
 export type DesignServiceRoute = (typeof DESIGN_SERVICE_ROUTES)[number];
 export type ImportPickResult = { readonly status: 'canceled' }
   | { readonly status: 'rejected'; readonly reason: 'unavailable' | 'invalid-selection' | 'too-many-files' | 'not-regular-file' | 'file-too-large' | 'total-too-large' | 'invalid-png' | 'file-changed' | 'read-limit' }
@@ -131,6 +164,7 @@ export interface HqServices {
   readonly wiki?: Readonly<import('./wiki.js').WikiServiceTransport>;
   readonly social: Readonly<SocialServiceTransport>;
   readonly work: Readonly<WorkServiceTransport>;
+  readonly workLocal?: Readonly<WorkLocalTransport>;
   readonly design: Readonly<DesignServiceTransport>;
   readonly config: Readonly<ServiceConfigTransport>;
 }

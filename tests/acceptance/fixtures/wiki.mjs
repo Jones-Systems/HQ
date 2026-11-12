@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export const SYNTHETIC_REMOTE = 'https://example.invalid/synthetic/wiki.git';
@@ -46,5 +46,15 @@ export async function createWikiCorpus(runtime, repo, profile) {
   }
   await mkdir(join(profile, 'wiki'), { recursive: true });
   await writeFile(join(profile, 'wiki/config.json'), JSON.stringify({ version: 1, sources }));
-  return { commits, sources };
+  const absent = new Set();
+  async function setAvailable(namespace, available) {
+    if (!['bl', 'appdev'].includes(namespace) || typeof available !== 'boolean') throw new Error('Invalid synthetic Wiki control');
+    const source = join(root, `${namespace}.git`), parked = join(root, `${namespace}.parked`);
+    if (available && absent.has(namespace)) { await rename(parked, source); absent.delete(namespace); }
+    if (!available && !absent.has(namespace)) { await rename(source, parked); absent.add(namespace); }
+  }
+  runtime.own('restore synthetic Wiki repositories', async () => {
+    for (const namespace of [...absent]) await setAvailable(namespace, true);
+  });
+  return { commits, sources, setAvailable };
 }

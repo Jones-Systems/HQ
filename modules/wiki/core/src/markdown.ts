@@ -1,13 +1,13 @@
 // Markdown entry points: total functions over arbitrary text (they never throw for hostile input).
 
-import { Overflow, collectLinks, type DraftDocument, type LinkRef } from './draft.ts';
+import { Overflow, collectLinks, type BodyLink, type DraftDocument } from './draft.ts';
 import { parseBlockDocument } from './markdown-block.ts';
 import { normalizeRefLabel, parseInline } from './markdown-inline.ts';
 
 export type MarkdownParse =
   | { readonly ok: true; readonly doc: DraftDocument }
   /** A structural bound was exceeded: the page becomes raw text; `links` come from a flat scan. */
-  | { readonly ok: false; readonly links: readonly LinkRef[] };
+  | { readonly ok: false; readonly links: readonly BodyLink[] };
 
 function splitLines(text: string): string[] {
   return text.split(/\r\n|\r|\n/);
@@ -31,9 +31,10 @@ const PREFIX = /^(?:[ \t]*>)*[ \t]*(?:(?:[-+*]|\d{1,9}[.)])[ \t]+)*/;
 /**
  * Best-effort link discovery for text the structured parser refused: skips fenced and indented
  * code, strips quote/list prefixes and reads inline links paragraph by paragraph. Used so a raw
- * page still contributes links and backlinks.
+ * page still contributes links and backlinks. A link's `context` is the flattened text of the paragraph
+ * the scan read it from (never the raw source line, which would still carry Markdown syntax).
  */
-export function scanLinks(body: string): LinkRef[] {
+export function scanLinks(body: string): BodyLink[] {
   const lines = splitLines(body);
   const defs = new Map<string, string>();
   for (const line of lines) {
@@ -43,7 +44,7 @@ export function scanLinks(body: string): LinkRef[] {
       if (label !== '' && !defs.has(label)) defs.set(label, (match[2] ?? match[3]) as string);
     }
   }
-  const out: LinkRef[] = [];
+  const out: BodyLink[] = [];
   const ctx = { defs, budget: { nodes: 0 } };
   let fence: string | null = null;
   let paragraph: string[] = [];

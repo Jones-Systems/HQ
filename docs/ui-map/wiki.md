@@ -1,0 +1,20 @@
+# Wiki reading and discovery (partial)
+
+All entries below are **unverified** on the recovery candidate. Source discovery and unrun test source establish no behavior, layout or native qualification. The accepted layout is [Wiki design](../../modules/wiki/ui/design-20261103.md); retain its gutters, reading measure, token motion and narrow transitions.
+
+| Entry / initial state | Actions and expected observation | Source / shared consumers |
+| --- | --- | --- |
+| Wiki rail; restored `home` | Source setup gate shows one setup card or silent-host notice; Check again / Try again reads status again; Settings requests the supplied route. Configured Home shows repository status, recent pages and topic discovery. | `app/src/domain.ts`, `ui/src/setup.ts`, `status.ts`, `view-home.ts`, `view-sidebar.ts` |
+| Palette Wiki Home, namespaces or topics; `topics/bl`, `topics/appdev` | Select repository, filter by topic/title/path, expand a branch and open a page. Tree arrows/Home/End move focus; Escape clears filter. Repository state stays separate. | `destinations.ts`, `view-topics.ts`, `topic-tree.ts`; palette owns cross-domain shortcuts |
+| Wiki search; palette Wiki query; `search?q=pricing` | Type in combobox, choose a suggestion or commit full results; filter namespaces and open an ambiguous candidate. Back restores logical destination; no work launches. | `view-combobox.ts`, `search-data.ts`, `view-search.ts`, `common.ts` |
+| Wiki reference target or restored `page/bl/lessons/pricing.md` | Read title/properties/provenance, outline, backlinks and out-links. Page link opens reader; ambiguous opens choices; missing/external text stays inert. Provider excerpt/via/title fields are additive; old responses retain fallbacks. | `view-reader.ts`, `render-ast.ts`, `view-links.ts`, `view-preview.ts`, `view-outline.ts`; app reference provider remains base-identical |
+| Reader failure / cached failed refresh / backlink failure | Retry reads again; cached article remains while an inline notice explains the failure. Settings appears only when injected; not-found offers search and eligible Back. | `load.ts`, `cache.ts`, `recovery.ts`, `outage.ts`, `feedback.ts`; shared by Home/search/reader/topics |
+| Module history / return reference | Back/Forward and session-history list restore visited logical destinations; Alt+arrows within Wiki consume only a possible move, leaving history-edge shell return available. `/` focuses search outside editing fields; shell owns Cmd+K. Disabled history controls retain focus/hover reasons. | `view.ts`, `view-topbar.ts`, `view-history.ts`; shell ReturnPill/native listener order unverified |
+
+## Synthetic prerequisites and evidence gap
+
+Committed invented fixtures are in `modules/wiki/ui/fixtures/synthetic.ts`. UI tests use the disposable happy-dom host in `ui/test/{dom,render,support}.ts`; app setup tests use an injected synthetic bridge. These are test entry points, not a qualified browser/native launch recipe. The historical W1/W2 external harness and captures are not imported or asserted available. A fresh native/build/capture route must be admitted by the serial verifier; no setup, server or reset command ran here.
+
+The later executor must own its fixture session, scratch and exact cleanup, preserve evidence outside disposable scratch and bind every result to source/build, route, input state, viewport/text settings, date and capture location. Do not reset shared storage. Private corpus/configuration and account data remain excluded.
+
+Exercise all routes above with light/dark/system appearance, narrow/intermediate/wide windows and breakpoint neighbors; long titles/paths/properties, 200% text, spacing stress and 320 CSS-pixel reflow. Check first/last scroll gutters, outline and preview positioning/fallbacks, reduced motion, focus after navigation, overlay dismissal, inert rendering and assistive-technology announcements. Inspect representative shared feedback/cache/preview consumers separately; none were driven here. Gallery completion requires a later real presentation export and capture, never source-generated screenshots.

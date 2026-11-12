@@ -42,6 +42,8 @@ HTTP_ERRORS = {408: 'Request timed out', 414: 'Request target too long', 431: 'R
 
 class ThreadingHTTPServer(BaseThreadingHTTPServer):
     daemon_threads = True
+    # Pending TCP connections need room for bursts; the runner separately caps active runs at eight.
+    request_queue_size = 128
 
     def handle_error(self, request: Any, client_address: Any) -> None:
         # Clients that reset, vanish or time out are routine on a long-running service; anything else is a bug.
@@ -137,6 +139,8 @@ class SocialApp:
                 raise NotFoundError('Route not found') from None
             if method == 'GET':
                 return self._get(path)
+            if path.startswith('/api/publishing') and self.service.extensions.publishing == 'off':
+                raise NotFoundError('Route not found')
             data = self._read_object(headers, read_body)
             return self._post(path, data)
         except ApiError as error:
@@ -185,7 +189,7 @@ class SocialApp:
         run = _RUN_ROUTE.fullmatch(path)
         if run:
             return Response(*self.service.get_run(run.group(1)))
-        raise NotFoundError('Route not found')
+        return Response(*self.service.extensions.route('GET', path, {}))
 
     def _post(self, path: str, data: dict[str, Any]) -> Response:
         if path == '/api/content':
@@ -194,7 +198,7 @@ class SocialApp:
             return Response(*self.service.add_brand(data))
         if path == '/api/runs':
             return Response(*self.service.submit_run(data))
-        raise NotFoundError('Route not found')
+        return Response(*self.service.extensions.route('POST', path, data))
 
 
 def make_handler(app: SocialApp) -> type[BaseHTTPRequestHandler]:

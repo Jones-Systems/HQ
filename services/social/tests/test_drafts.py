@@ -285,7 +285,7 @@ class WithoutZoneData(DraftCase):
         self.restart(timezones=False, clock=ticking_clock())
 
     def test_timeboxes_are_not_advertised(self):
-        self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1'])
+        self.assertEqual(self.get('/api/workspace').json['features'], ['hq-references-v1', 'hq-brand-project-v1', 'hq-sources-v1'])
 
     def test_any_non_null_slot_is_an_unknown_time_zone(self):
         self.refused({'title': 'x', 'planned_date': '2026-10-22', 'planning_slot': SLOT}, 'Unknown time zone')

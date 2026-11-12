@@ -92,6 +92,23 @@ export function scheduleDay(year: number, month: number, today: string): string 
   return dayNum(first) <= dayNum(today) && dayNum(today) <= dayNum(last) ? today : first;
 }
 
+export type TrayGroupId = 'focus' | 'next' | 'inbox';
+
+/**
+ * The Calendar tray's three groups (flow assessment P-2). Inbox captures are not planned work yet, so they stay
+ * apart whatever their horizon; of the rest, horizon Now is this week's focus and everything else is Next.
+ * Every undated item lands in exactly one group, in the order given.
+ */
+export function trayGroups<T extends Pick<Item, 'status' | 'horizon'>>(undated: readonly T[]): Record<TrayGroupId, T[]> {
+  const groups: Record<TrayGroupId, T[]> = { focus: [], next: [], inbox: [] };
+  for (const item of undated) {
+    if (item.status === 'inbox') groups.inbox.push(item);
+    else if (item.horizon === 'now') groups.focus.push(item);
+    else groups.next.push(item);
+  }
+  return groups;
+}
+
 /** Keyboard deltas for a focused day chip (Planner `onChipKey`). */
 export const CHIP_KEY_DAYS: Readonly<Record<string, number>> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 

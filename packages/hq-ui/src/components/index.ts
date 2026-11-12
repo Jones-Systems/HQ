@@ -1,6 +1,7 @@
 export { Button, IconButton, type ButtonProps, type ButtonSize, type ButtonVariant, type IconButtonProps } from './Button';
 export { Dialog, focusableWithin, type DialogProps } from './Dialog';
 export { Menu, type MenuItem, type MenuProps } from './Menu';
+export { Portal } from './Portal';
 export {
   CONTENT_SCHEMES, PRESERVED_CONTENT_ATTRIBUTE, PRESERVED_CONTENT_KINDS, PreservedContent, setContentScheme,
   type ContentScheme, type PreservedContentKind, type PreservedContentProps,

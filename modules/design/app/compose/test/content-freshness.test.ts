@@ -439,9 +439,11 @@ describe('a failed build is kept until the next change or retry, then built agai
   it('the fake workspace accepts retry and changes nothing', async () => {
     const fake = createDesignWorkspace(null);
     const before = fake.contentFor(alpha);
+    await before;
+    const revision = fake.contentEvents.revision(alpha.id);
     assert.equal(fake.retry(alpha.id), undefined);
     assert.equal(fake.contentFor(alpha), before);
-    assert.equal(fake.contentEvents.revision(alpha.id), 0);
+    assert.equal(fake.contentEvents.revision(alpha.id), revision);
   });
 });
 

@@ -78,8 +78,9 @@ describe('Social descriptor in the T0 registry', () => {
     await switchDomain('Social');
     expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy();
     expect(side().getByRole('button', { name: 'Overview' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('button', { name: /^Example workspace/u })).toBeTruthy();
     expect(screen.getByText(/^Fictional example workspace/u)).toBeTruthy();
-    expect(screen.getByText(/^No account connection, posting, live collection or scheduling\./u)).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'What Social can do here' })).getByText(/^No account connection, posting, live collection or scheduling\./u)).toBeTruthy();
     expect(recorded.callsOf('execution')).toHaveLength(0);
   });
 

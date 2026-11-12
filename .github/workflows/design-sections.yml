@@ -85,7 +85,7 @@ jobs:
         with:
           node-version: '24.19.0'
       - name: Check Design batch runner
-        run: node --test tools/ci/design-sections.test.mjs
+        run: node --test tools/ci/design-sections.test.mjs tools/ci/local-checks.test.mjs
       - name: Require every cone and assign each test file to exactly one runner
         id: inventory
         env:

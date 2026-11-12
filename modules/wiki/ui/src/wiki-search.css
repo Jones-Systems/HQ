@@ -1,0 +1,287 @@
+/* Wiki search results page: live query field, repository chips, "Go to" matches, hits and the progress line. Scoped under
+   .wiki-view; motion uses the shared duration, easing and stagger tokens. */
+
+.wiki-view .wiki-linklist,
+.wiki-view .wiki-candidates,
+.wiki-view .wiki-hits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wiki-view .wiki-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hq-space-md);
+  max-width: 860px;
+}
+
+.wiki-view .wiki-search-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hq-space-2xs);
+}
+
+.wiki-view .wiki-search .wiki-section-title {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font: var(--hq-type-display);
+  letter-spacing: var(--hq-type-display-tracking);
+}
+
+.wiki-view .wiki-search .wiki-summary {
+  margin: 0;
+  color: var(--hq-text-muted);
+  font: var(--hq-type-body);
+}
+
+.wiki-view .wiki-query {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.wiki-view .wiki-query-icon {
+  position: absolute;
+  left: var(--hq-space-md);
+  width: 18px;
+  height: 18px;
+  color: var(--hq-text-muted);
+  pointer-events: none;
+}
+
+.wiki-view .wiki-query-input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: var(--hq-size-control-lg);
+  padding: 0 var(--hq-space-md) 0 36px;
+  font: 400 15px/22px var(--hq-font-family-sans);
+  transition: border-color var(--hq-duration-fast) var(--hq-ease-standard);
+}
+
+.wiki-view .wiki-query-input:hover {
+  border-color: var(--hq-border-control-hover);
+}
+
+.wiki-view .wiki-query-input:focus-visible {
+  border-color: var(--hq-focus);
+  outline: 2px solid var(--hq-focus);
+  outline-offset: 1px;
+}
+
+.wiki-view .wiki-repo-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hq-space-sm);
+}
+
+/* ---- Go to ---- */
+
+.wiki-view .wiki-alias-matches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hq-space-xs);
+}
+
+.wiki-view .wiki-goto {
+  display: flex;
+  align-items: center;
+  gap: var(--hq-space-sm);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--hq-space-sm) var(--hq-space-md);
+  border: 1px solid var(--hq-border);
+  border-radius: var(--hq-radius-lg);
+  background: var(--hq-surface-raised);
+  color: var(--hq-text);
+  font: var(--hq-type-body);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--hq-duration-fast) var(--hq-ease-standard), background-color var(--hq-duration-fast) var(--hq-ease-standard), transform var(--hq-duration-fast) var(--hq-ease-standard);
+}
+
+.wiki-view .wiki-goto:hover {
+  border-color: var(--hq-border-control-hover);
+  background: var(--hq-surface-hover);
+}
+
+.wiki-view .wiki-goto:active {
+  transform: scale(var(--hq-motion-scale-press));
+}
+
+.wiki-view .wiki-goto-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--hq-accent-text);
+  vertical-align: baseline;
+}
+
+.wiki-view .wiki-goto-title {
+  min-width: 0;
+  overflow: hidden;
+  font: var(--hq-type-heading);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wiki-view .wiki-goto .wiki-ns {
+  flex: none;
+  margin-left: 0;
+}
+
+.wiki-view .wiki-goto-arrow {
+  flex: none;
+  margin-left: auto;
+  width: 16px;
+  height: 16px;
+  color: var(--hq-text-muted);
+  vertical-align: baseline;
+}
+
+.wiki-view .wiki-alias-matches .wiki-disambiguation {
+  margin: 0;
+}
+
+/* ---- Hits ---- */
+
+.wiki-view .wiki-results {
+  position: relative;
+}
+
+.wiki-view .wiki-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: 2px;
+  overflow: hidden;
+  border-radius: var(--hq-radius-pill);
+  background: var(--hq-accent-soft);
+}
+
+.wiki-view .wiki-progress::before {
+  content: "";
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: var(--hq-radius-pill);
+  background: var(--hq-accent);
+  animation: wiki-progress calc(var(--hq-duration-slower) * 4) var(--hq-ease-standard) infinite;
+}
+
+@keyframes wiki-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+/* Under reduced motion the duration token is zero, so the bar simply rests as a short line; the media query makes it
+   the full width for the OS setting as well. */
+@media (prefers-reduced-motion: reduce) {
+  .wiki-view .wiki-progress::before {
+    width: 100%;
+    animation: none;
+    transform: none;
+  }
+}
+
+.wiki-view .wiki-hits {
+  padding-top: var(--hq-space-xs);
+}
+
+.wiki-view .wiki-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--hq-space-md) var(--hq-space-xs);
+  border-bottom: 1px solid var(--hq-border);
+}
+
+.wiki-view .wiki-hit:last-child {
+  border-bottom: 0;
+}
+
+/* The first eight hits rise in with a stagger when they appear; later swaps do not move. */
+.wiki-view .wiki-hit:nth-child(-n+8) {
+  animation: wiki-rise var(--hq-duration-slow) var(--hq-ease-enter) both;
+}
+
+.wiki-view .wiki-hit:nth-child(2) { animation-delay: var(--hq-motion-stagger); }
+.wiki-view .wiki-hit:nth-child(3) { animation-delay: calc(var(--hq-motion-stagger) * 2); }
+.wiki-view .wiki-hit:nth-child(4) { animation-delay: calc(var(--hq-motion-stagger) * 3); }
+.wiki-view .wiki-hit:nth-child(5) { animation-delay: calc(var(--hq-motion-stagger) * 4); }
+.wiki-view .wiki-hit:nth-child(6) { animation-delay: calc(var(--hq-motion-stagger) * 5); }
+.wiki-view .wiki-hit:nth-child(7) { animation-delay: calc(var(--hq-motion-stagger) * 6); }
+.wiki-view .wiki-hit:nth-child(8) { animation-delay: calc(var(--hq-motion-stagger) * 7); }
+
+.wiki-view .wiki-hit-title {
+  align-self: flex-start;
+  color: var(--hq-text);
+  font: var(--hq-type-title);
+  letter-spacing: var(--hq-type-title-tracking);
+  text-decoration: none;
+}
+
+.wiki-view .wiki-hit-title:hover {
+  color: var(--hq-accent-text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+}
+
+.wiki-view .wiki-hit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hq-space-sm);
+  color: var(--hq-text-muted);
+}
+
+.wiki-view .wiki-hit-meta .wiki-ns {
+  margin-left: 0;
+}
+
+.wiki-view .wiki-hit-folder {
+  color: var(--hq-text-muted);
+  font: 11px/16px var(--hq-font-family-mono);
+}
+
+.wiki-view .wiki-snippet {
+  max-width: 72ch;
+  margin: var(--hq-space-2xs) 0 0;
+  color: var(--hq-text-muted);
+  font: var(--hq-type-body);
+}
+
+.wiki-view .wiki-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hq-space-md);
+  margin: var(--hq-space-xs) 0;
+}
+
+.wiki-view .wiki-ready {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hq-space-md);
+}
+
+.wiki-view .wiki-search .wiki-notice {
+  margin: 0;
+}
+
+.wiki-view .wiki-search .wiki-notice--empty {
+  margin: var(--hq-space-3xl) auto;
+}
+
+.wiki-view .wiki-alias-matches,
+.wiki-view .wiki-disambiguation {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.wiki-view .wiki-empty {
+  margin: var(--hq-space-sm) 0;
+  color: var(--hq-text-muted);
+}

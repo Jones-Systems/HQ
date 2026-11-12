@@ -16,7 +16,8 @@ import { addDraftLink, UNSAVED_LINKS } from '../../../modules/social/content/lin
 import { createWorkExport } from '../electron/work-export';
 import * as exportClient from './services/work-export';
 import { createServiceDomains, SERVICE_DOMAINS } from './services/domains';
-import { REFERENCE_PROVIDERS } from './reference-providers';
+import { findServiceStatus } from './services/test-support';
+import { createReferenceProviders, REFERENCE_PROVIDERS } from './reference-providers';
 import { createReferencePort, RESOLUTION_MAX_AGE } from './references';
 import { App } from './App';
 import { MODULES } from './modules';
@@ -72,7 +73,7 @@ function fixture(features: readonly string[] = [FEATURE_HQ_REFERENCES]) {
     expect(social.callsTo('submitRun')).toEqual([]);
     expect(calls.filter(c => !['state', 'version', 'history', 'patch', 'export'].includes(c.route))).toEqual([]);
   };
-  return { services, social, planner, item, envelope, calls, saved, exported, noExecution, setSaved: (value: boolean) => { saveResult = value; } };
+  return { services, social, planner, item, envelope, calls, saved, exported, noExecution, providers: createReferenceProviders(createServiceDomains(() => services).referenceReads), setSaved: (value: boolean) => { saveResult = value; } };
 }
 beforeEach(() => {
   resetWorkSessions(); resetViewMemory(); resetSocialSessions(); localStorage.clear();
@@ -117,7 +118,7 @@ it('example has no export port and unavailable does not mount Work; neither cons
   view.unmount(); mounted.mockClear();
   const unavailable = createServiceDomains(() => undefined);
   render(<unavailable.Work {...props()} />);
-  await screen.findByText('Work: Unavailable.');
+  await findServiceStatus('Work', 'Unavailable');
   expect(mounted).not.toHaveBeenCalled(); expect(construct).not.toHaveBeenCalled();
   expect(f.calls.filter(c => c.route === 'export')).toEqual([]); f.noExecution();
 });
@@ -140,8 +141,8 @@ it('actual forwarded export port strips unexpected paths and bytes before return
 it('registered providers read fresh source revisions, preserve source bytes and expose Design support limits', async () => {
   const f = fixture(); expect(MODULES.work).toBe(SERVICE_DOMAINS.Work);
   expect(REFERENCE_PROVIDERS.map(p => p.domain)).toEqual(['design', 'social', 'work', 'wiki']);
-  const work = REFERENCE_PROVIDERS.find(p => p.domain === 'work')!;
-  const social = REFERENCE_PROVIDERS.find(p => p.domain === 'social')!;
+  const work = f.providers.find(p => p.domain === 'work')!;
+  const social = f.providers.find(p => p.domain === 'social')!;
   const before = JSON.stringify((await f.planner.port.snapshot()).items);
   const first = await work.resolve(f.envelope); expect(first).toMatchObject({ status: 'available', latestRevision: f.envelope.sourceRevision });
   expect(Number.isFinite(Date.parse(first.observedAt))).toBe(true);
@@ -151,13 +152,13 @@ it('registered providers read fresh source revisions, preserve source bytes and 
   expect(await work.resolve(f.envelope)).toMatchObject({ status: 'changed', latestRevision: String(f.item.revision + 1) });
   const found = await social.find('Autumn', { projectId, limit: 30 }); expect(found).toHaveLength(1);
   expect(await social.resolve(found[0]!)).toMatchObject({ status: 'available' });
-  const design = REFERENCE_PROVIDERS.find(p => p.domain === 'design')!;
+  const design = f.providers.find(p => p.domain === 'design')!;
   // This test renderer has no Design bridge at module construction: all reads unavailable.
   expect(await design.resolve({ ...f.envelope, domain: 'design', kind: 'project' })).toMatchObject({ status: 'unavailable' });
   // Registered Design's projection supports section-only destinations and never claims project identity.
   expect(design.kinds).toContain('project');
   const nav = { projectId: () => projectId, open: vi.fn(), notice: vi.fn() };
-  const port = createReferencePort(REFERENCE_PROVIDERS, nav);
+  const port = createReferencePort(f.providers, nav);
   expect(await port.resolve({ ...f.envelope, kind: 'unregistered' })).toMatchObject({ status: 'unknown' });
   expect(nav.open).not.toHaveBeenCalled(); f.noExecution();
 });
@@ -174,10 +175,15 @@ it('Social draft ↔ Work card open/Back preserves source state; explicit snapsh
   } }));
   render(<App />);
   const body = await screen.findByLabelText('Body');
+  const writesBefore = f.social.callsTo('saveContent').length;
   const originalBody = body.getAttribute('value') ?? (body instanceof HTMLTextAreaElement ? body.value : '');
-  fireEvent.change(screen.getByLabelText('Serialized HQ reference'), { target: { value: JSON.stringify(target) } });
+  const links = within(screen.getByRole('region', { name: 'Draft links' }));
+  fireEvent.click(links.getByRole('button', { name: 'Advanced' }));
+  expect(links.getByRole('button', { name: 'Advanced' }).getAttribute('aria-expanded')).toBe('true');
+  fireEvent.change(links.getByRole('textbox', { name: 'Serialized HQ reference' }), { target: { value: JSON.stringify(target) } });
   fireEvent.click(screen.getByRole('button', { name: 'Add reference' }));
   await waitFor(() => expect(f.social.service.controls.inspect().content.find(d => d.id === FIXTURE_IDS.autumnBlend)?.links).toEqual([target]));
+  expect(f.social.callsTo('saveContent')).toHaveLength(writesBefore + 1);
   fireEvent.change(body, { target: { value: `${originalBody} Synthetic unsaved text.` } });
   const beforeOpen = JSON.stringify(f.social.service.controls.inspect());
   const cardBefore = JSON.stringify((await f.planner.port.snapshot()).items);
@@ -202,38 +208,45 @@ it('Social draft ↔ Work card open/Back preserves source state; explicit snapsh
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Capture to Inbox' })).toHaveProperty('value', 'Keep this capture'));
   expect(f.calls.filter(c => c.route === 'export')).toEqual([]);
   expect(JSON.stringify((await f.planner.port.snapshot()).items)).toBe(cardBefore);
+  expect(f.social.callsTo('saveContent')).toHaveLength(writesBefore + 1);
   // Target edits never silently change the source envelope.
   await f.planner.port.patch(f.item.id, linked.item!.revision, { title: 'Updated target title' }, 'fixture-target-edit-001');
   vi.setSystemTime(Date.now() + RESOLUTION_MAX_AGE + 1000);
   fireEvent.click(within(screen.getByRole('navigation', { name: 'Domains' })).getByRole('button', { name: 'Social' }));
   await screen.findByLabelText('Body');
   fireEvent.click(screen.getByRole('button', { name: 'Check references' }));
-  await screen.findByText('Changed', { exact: true });
+  await screen.findByText('Changed since linked', { exact: true });
   expect(f.social.service.controls.inspect().content.find(d => d.id === FIXTURE_IDS.autumnBlend)?.links).toEqual([target]);
   const targetBytes = JSON.stringify((await f.planner.port.snapshot()).items);
-  fireEvent.click(screen.getByRole('button', { name: 'Update snapshot Synthetic reference card' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Update title Synthetic reference card' }));
   await waitFor(() => expect(f.social.service.controls.inspect().content.find(d => d.id === FIXTURE_IDS.autumnBlend)?.links?.[0]?.title).toBe('Updated target title'));
+  expect(f.social.service.controls.inspect().content.find(d => d.id === FIXTURE_IDS.autumnBlend)?.links).toEqual([
+    { ...target, title: 'Updated target title', sourceRevision: String(linked.item!.revision + 1) },
+  ]);
+  expect(f.social.callsTo('saveContent')).toHaveLength(writesBefore + 2);
   fireEvent.click(screen.getByRole('button', { name: 'Unlink Updated target title' }));
   await waitFor(() => expect(f.social.service.controls.inspect().content.find(d => d.id === FIXTURE_IDS.autumnBlend)?.links).toEqual([]));
+  expect(f.social.callsTo('saveContent')).toHaveLength(writesBefore + 3);
   expect(JSON.stringify((await f.planner.port.snapshot()).items)).toBe(targetBytes);
   expect(f.calls.filter(c => c.route === 'export')).toEqual([]); f.noExecution();
   vi.useRealTimers();
 });
 
 it('all eight statuses render with observedAt and fingerprints; mismatch and stale observations never navigate', async () => {
-  const f = fixture(); const work = REFERENCE_PROVIDERS.find(p => p.domain === 'work')!;
-  const social = REFERENCE_PROVIDERS.find(p => p.domain === 'social')!;
+  const f = fixture(); const work = f.providers.find(p => p.domain === 'work')!;
+  let social = f.providers.find(p => p.domain === 'social')!;
   const outcomes = [await work.resolve(f.envelope)];
   const edited = await f.planner.port.patch(f.item.id, f.item.revision, { title: 'Changed' }, 'fixture-status-edit');
   outcomes.push(await work.resolve(f.envelope));
   await f.planner.port.setArchived(f.item.id, edited.item!.revision, true, 'fixture-status-archive');
   outcomes.push(await work.resolve(f.envelope), await work.resolve({ ...f.envelope, entityId: 'missing-item' }));
   const moved = fixture([FEATURE_HQ_BRAND_PROJECT]);
+  social = moved.providers.find(p => p.domain === 'social')!;
   outcomes.push(await social.resolve(socialEnvelope()));
   moved.social.service.controls.failNext('snapshot', { kind: 'forbidden' }); outcomes.push(await social.resolve(socialEnvelope()));
   moved.social.service.controls.setUnavailable(true); outcomes.push(await social.resolve(socialEnvelope()));
   const open = vi.fn(); const notice = vi.fn();
-  const port = createReferencePort(REFERENCE_PROVIDERS, { projectId: () => projectId, open, notice });
+  const port = createReferencePort(f.providers, { projectId: () => projectId, open, notice });
   outcomes.push(await port.resolve({ ...f.envelope, kind: 'unregistered' }));
   expect(outcomes.map(o => o.status)).toEqual(REFERENCE_STATUSES);
   for (const resolution of outcomes) {
@@ -276,7 +289,7 @@ it('source-owned links enforce dedup and 30 maximum; Planner export/import prese
 
 it('Social links remain visibly unsaved without qualified service capability', async () => {
   const f = fixture([]); const domains = createServiceDomains(() => f.services);
-  const refs = createReferencePort(REFERENCE_PROVIDERS, { projectId: () => projectId, open: vi.fn(), notice: vi.fn() });
+  const refs = createReferencePort(f.providers, { projectId: () => projectId, open: vi.fn(), notice: vi.fn() });
   render(<domains.Social {...props(`library/${FIXTURE_IDS.autumnBlend}`)} references={refs} />);
   await screen.findByText(UNSAVED_LINKS);
   expect(screen.getByRole('button', { name: 'Link to…' }).hasAttribute('disabled')).toBe(true);

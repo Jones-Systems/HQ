@@ -196,3 +196,46 @@ test('session keep-alive restores camera, selection and focus, dropping unknown 
   assert.deepEqual(invalid.camera, fresh().camera);
   assert.equal(invalid.focusId, null);
 });
+
+test('button, preset, fit and keyboard zoom moves are eased; wheel, pan and drag stay direct', () => {
+  const middle = { x: 500, y: 350 };
+  const wheelZoom: CanvasAction = { type: 'wheel', anchor: middle, input: { deltaX: 0, deltaY: -20, deltaMode: 0, ctrlKey: true, metaKey: false, shiftKey: false } };
+  const direct = run(fresh(), wheelZoom, { type: 'pan', dx: 10, dy: 10 }, { type: 'zoom-at', anchor: middle, factor: 1.1 }, { type: 'camera', camera: { x: 5, y: 5, zoom: 1 } });
+  assert.equal(direct.cameraEase, 0, 'direct input never counts as an eased move');
+  assert.equal(run(fresh(), key('ArrowRight', { altKey: true })).cameraEase, 0, 'keyboard panning is direct');
+
+  const eased = run(fresh(), { type: 'zoom-at', anchor: middle, factor: 1.25, ease: true });
+  assert.equal(eased.cameraEase, 1);
+  assert.ok(close(eased.camera.zoom, 1.25), 'the state holds the target at once; only the view takes time');
+  assert.equal(run(eased, { type: 'zoom-to', zoom: 1, ease: true }).cameraEase, 2);
+  assert.equal(run(fresh(), { type: 'fit', target: 'all', ease: true }).cameraEase, 1);
+  assert.equal(run(fresh(), { type: 'select', ids: [B] }, { type: 'fit', target: 'selection', ease: true }).cameraEase, 1);
+  assert.equal(run(fresh(), key('=')).cameraEase, 1, 'a keyboard zoom step eases');
+  assert.equal(run(fresh(), key(')', { shiftKey: true, code: 'Digit0' }), key('!', { shiftKey: true, code: 'Digit1' })).cameraEase, 1, 'a reset that changes nothing does not count');
+  let walked = fresh();
+  let moves = 0;
+  for (let step = 0; step < 4; step += 1) {
+    const next = run(walked, key('Tab'));
+    if (next.camera !== walked.camera) moves += 1;
+    walked = next;
+  }
+  assert.ok(moves >= 1, 'the walk reveals at least one off-screen node');
+  assert.equal(walked.cameraEase, moves, 'each camera move made to reveal a focused node eases');
+
+  const afterWheel = run(eased, wheelZoom);
+  assert.equal(afterWheel.cameraEase, 1, 'a direct move after an eased one leaves the count alone');
+});
+
+test('an eased move that does not change the camera does not count', () => {
+  const fitted = run(fresh(), { type: 'fit', target: 'all', ease: true });
+  assert.equal(run(fitted, { type: 'fit', target: 'all', ease: true }), fitted);
+  assert.equal(run(fresh(), { type: 'fit', target: 'all' }).cameraEase, 0, 'the same move without the flag is direct');
+});
+
+test('loading a record resets the eased-move count and the camera is not part of the record', () => {
+  const eased = run(fresh(), { type: 'zoom-to', zoom: 2, ease: true });
+  const loaded = run(eased, { type: 'load', arrangement: sampleArrangement() });
+  assert.equal(loaded.cameraEase, 0);
+  assert.deepEqual(loaded.camera, eased.camera);
+  assert.equal(encodeArrangement(committedArrangement(eased)), encodeArrangement(committedArrangement(fresh())), 'easing never reaches the stored record');
+});

@@ -1,9 +1,34 @@
 /* Settings › Appearance › Dark palette. Colours come only from --hq-* roles; the preview sets its own roles inline
    from validated palette values (data-hq-token-scope). Selection uses the shared filled treatment, never a stripe. */
-.palette-heading { padding-bottom: 12px; }
-.settings-page .palette-note { margin-top: 8px; }
+.settings-page .palette-note { margin-top: 0; }
 .palette-body { display: grid; gap: 16px; padding: 0 18px 18px; min-width: 0; }
 .settings-group > .palette-body { border-top: 0; }
+.palette-settings .settings-disclosure { padding: 0 18px 18px; }
+.palette-settings .palette-editor { padding-top: 4px; }
+
+/* Theme tiles: a miniature rail and panel drawn with each layer's own colour roles (see ThemeTiles). */
+.theme-tiles-wrap { padding: 4px 18px 18px; }
+.theme-tiles { display: flex; flex-wrap: wrap; gap: 16px; }
+.theme-tile { display: grid; gap: 8px; justify-items: start; padding: 0; border: 0; border-radius: var(--hq-radius-lg); background: transparent; color: var(--hq-text); text-align: left; cursor: pointer; }
+.theme-tile-art { position: relative; display: block; width: 132px; height: 84px; overflow: hidden; box-sizing: border-box; border: 1px solid var(--hq-border-strong); border-radius: var(--hq-radius-lg); transition: box-shadow var(--hq-duration-base) var(--hq-ease-standard); }
+.theme-tile:hover .theme-tile-art { border-color: var(--hq-border-control-hover); }
+.theme-tile[aria-checked="true"] .theme-tile-art { box-shadow: 0 0 0 2px var(--hq-focus); border-color: transparent; }
+.theme-tile:focus-visible { outline: none; }
+.theme-tile:focus-visible .theme-tile-art { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: 4px; }
+.theme-tile-layer { position: absolute; inset: 0; display: grid; grid-template-columns: 26px minmax(0, 1fr); background: var(--hq-canvas); color: var(--hq-text); }
+.theme-tile-layer.is-split { clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+.theme-tile-rail { display: grid; align-content: start; gap: 5px; padding: 9px 6px; background: var(--hq-nav); border-right: 1px solid var(--hq-border); }
+.theme-tile-rail i { display: block; height: 5px; border-radius: 2px; background: var(--hq-text-muted); }
+.theme-tile-rail i:first-child { height: 7px; background: var(--hq-surface-selected); box-shadow: inset 0 0 0 1px var(--hq-border); }
+.theme-tile-panel { display: grid; align-content: start; gap: 6px; padding: 10px; background: var(--hq-surface); }
+.theme-tile-panel b { display: block; width: 58%; height: 7px; border-radius: 2px; background: var(--hq-text); }
+.theme-tile-panel u { display: block; width: 90%; height: 4px; border-radius: 2px; background: var(--hq-text-muted); text-decoration: none; }
+.theme-tile-panel u + u { width: 70%; }
+.theme-tile-panel s { display: block; width: 30px; height: 10px; margin-top: 2px; border-radius: 3px; background: var(--hq-accent); text-decoration: none; }
+.theme-tile-copy { display: grid; gap: 1px; }
+.theme-tile-label { font: var(--hq-type-label); color: var(--hq-text); }
+.theme-tile[aria-checked="true"] .theme-tile-label { font-weight: var(--hq-font-weight-semibold); }
+.theme-tile-note { max-width: 132px; color: var(--hq-text-muted); font: var(--hq-type-meta); }
 
 .palette-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; min-width: 0; }
 .palette-card {
@@ -66,4 +91,5 @@
 }
 @media (forced-colors: active) {
   .palette-card[aria-checked="true"], .palette-preview-item.is-selected { outline: 2px solid Highlight; outline-offset: -2px; }
+  .theme-tile[aria-checked="true"] .theme-tile-art { outline: 2px solid Highlight; }
 }

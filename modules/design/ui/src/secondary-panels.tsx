@@ -70,11 +70,19 @@ export function SecondaryPanel({ name, label, initial, max = 560, side = 'end', 
       element.style.setProperty('z-index', '2');
       element.style.setProperty('padding', '2px 6px');
     }} aria-label={action} title={action} aria-expanded={!collapsed} aria-controls={id} onClick={flip}>
-      {collapsed ? (side === 'start' ? '›' : '‹') : (side === 'start' ? '‹' : '›')}
+      <Chevron direction={collapsed === (side === 'start') ? 'right' : 'left'} />
     </Button>
     <div ref={body} id={id} hidden={collapsed}>{children}</div>
     {side === 'start' && grip}
   </div>;
+}
+
+const CHEVRONS = { up: 'm4 10 4-4 4 4', down: 'm4 6 4 4 4-4', left: 'm10 4-4 4 4 4', right: 'm6 4 4 4-4 4' } as const;
+
+/** Drawn rather than typed: arrow glyphs are missing from some hosts' fonts and render as empty boxes. */
+function Chevron({ direction }: { direction: keyof typeof CHEVRONS }) {
+  return <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5"
+    strokeLinecap="round" strokeLinejoin="round"><path d={CHEVRONS[direction]} /></svg>;
 }
 
 export function SecondaryBar({ name, label, children }: { name: string; label: string; children?: ReactNode }) {
@@ -88,7 +96,7 @@ export function SecondaryBar({ name, label, children }: { name: string; label: s
     return !current;
   });
   return <div data-secondary-bar={name}>
-    <Button size="sm" variant="ghost" aria-label={action} title={action} aria-expanded={open} aria-controls={id} onClick={change}>{open ? '⌃' : '⌄'}</Button>
+    <Button size="sm" variant="ghost" aria-label={action} title={action} aria-expanded={open} aria-controls={id} onClick={change}><Chevron direction={open ? 'up' : 'down'} /></Button>
     <div id={id} hidden={!open}>{children}</div>
   </div>;
 }

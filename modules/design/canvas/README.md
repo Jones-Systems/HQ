@@ -5,7 +5,7 @@ Section T3 of `spec.hq-design` (`#task.canvas.001`, `#test.canvas.001`). It prov
 The section has three parts:
 
 - **Framework-free model** (`src/index.ts`). It covers camera geometry, the arrangement record and its operations, snapping, history, input normalization, the provider registry, the inspector model, the strict codec and persistence, and the pure `reduceCanvas` controller. Node 24 runs it directly.
-- **React view** (`src/view/index.ts` and `src/view/canvas.css`). `CanvasWorkspace` combines a toolbar, `CanvasView`, the `Inspector` and save status. `useCanvasDocument` loads the arrangement and autosaves it.
+- **React view** (`src/view/index.ts` and `src/view/canvas.css`). `CanvasWorkspace` combines the `Toolbar`, `CanvasView`, the `Inspector` and the save state. `useCanvasDocument` loads the arrangement and autosaves it.
 - **Labelled fakes** (`src/fakes.ts`). These are an in-memory storage port, a synthetic provider and sequential IDs, each marked `FAKE`. The model entry does not export them.
 
 `harness/` is a removable review page that runs on the fakes. The product never imports it.
@@ -39,6 +39,14 @@ The section has three parts:
 | Ctrl/⌘ + Z, Shift+Ctrl/⌘ + Z, Ctrl + Y | Undo / redo |
 | Ctrl/⌘ + `]` / `[` (Shift: to front/back) | Change layer order |
 
+## Camera, toolbar and frames
+
+- **The camera is three CSS numbers** (`--hq-canvas-x`, `--hq-canvas-y`, `--hq-canvas-zoom`, registered with `@property`) on the canvas root. The world transform, grid, selection frames and artboard names are all derived from them in `canvas.css`, so one animated value moves everything together.
+- **Which moves glide.** Zoom in and out, the 100% preset, Fit all and Fit selection (buttons and their keys) ask for an eased move: the reducer counts them in `cameraEase` (memory only, never saved) and `useCameraMotion` plays them over `--hq-duration-slow` with `--hq-ease-standard`, keeping the centre of the view still while zooming about it. Wheel, pinch, pan and drag stay direct, and direct input stops a move in flight and starts from the camera on screen. Reduced motion is instant.
+- **Toolbar.** History, Insert and View groups of icon buttons. An action that cannot run keeps its place, does nothing, and says why on hover and keyboard focus (`aria-disabled` with `aria-describedby`).
+- **Frames.** Each item is a card: the renderer's body, and a caption strip with the title and a second line (size and provenance by default). Frames too small on screen drop the caption, and tiny ones show no text. Capture pixels are never animated.
+- **Feedback.** The save state is a status indicator plus a toast saying what was kept; Retry appears only where repeating is safe.
+
 ## Composition ports (root wiring)
 
 `CanvasWorkspace` takes these props:
@@ -47,7 +55,8 @@ The section has three parts:
 - `storage: CanvasStoragePort`, an adapter over the durable store's `workspace` namespace
 - `registry: ProviderRegistry`, with providers from components (HQD-09), flows (HQD-10) and an adapter over project views/versions (HQD-01)
 - `ids: IdPort`
-- optional per-provider `renderers`
+- optional per-provider `renderers`: a function returning the body of an item's frame, or `{ body, meta }` to also replace the caption's second line. The frame adds the title caption itself, so a renderer never draws over its own capture
+- optional `banner`: a node shown above the canvas for problems with where items come from, so a failing source never replaces what loaded
 - optional `session` and `onSessionChange` for keep-alive
 
 The section imports nothing from other sections.
@@ -62,4 +71,4 @@ npx vitest run --config modules/design/canvas/vitest.config.ts
 npx tsc -p modules/design/canvas/tsconfig.json
 ```
 
-The node tests are geometry and reducer checks. The vitest checks are React server-render markup checks. Neither proves rendered layout. Rendered browser-mode geometry needs a real browser (`harness/`). Native Electron capture and installed-runtime behavior are not covered here.
+The node tests are geometry, reducer and stylesheet checks. The vitest checks are React server-render markup checks, plus DOM checks (happy-dom) for the toolbar and the camera motion. Neither proves rendered layout or that a browser animates the camera. Rendered browser-mode geometry needs a real browser (`harness/`). Native Electron capture and installed-runtime behavior are not covered here.

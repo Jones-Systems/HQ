@@ -1,14 +1,10 @@
 import { open } from 'node:fs/promises';
 import { createImportPicker, type ImportPickerDependencies, type ImportPickerDialogOptions, type ImportPickerResult } from './import-picker.js';
 
-/**
- * Native PNG picker for Imports. The dialog is the explicit rights statement: the owner is told to choose only files
- * they made, and that HQ records them as the owner. The renderer records the `owned` basis, and only that basis,
- * because of it. Licensed, permitted or public-domain files need a choice in the Imports UI first.
- */
-export const IMPORT_DIALOG_TITLE = 'Choose design files you made';
-export const IMPORT_DIALOG_BUTTON = 'Import as my work';
-export const IMPORT_DIALOG_MESSAGE = 'Only choose files you made. HQ records you as their owner.';
+/** The Imports UI collects the explicit rights statement before opening this native picker. */
+export const IMPORT_DIALOG_TITLE = 'Choose design files';
+export const IMPORT_DIALOG_BUTTON = 'Import selected files';
+export const IMPORT_DIALOG_MESSAGE = 'Choose files covered by the rights statement you selected in HQ.';
 
 export interface ImportPickDialogOptions extends ImportPickerDialogOptions {
   title: string;

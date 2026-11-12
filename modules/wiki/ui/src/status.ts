@@ -1,100 +1,131 @@
-// Whether the Wiki can show anything yet, read when the module mounts. Two states get one calm screen each instead of
-// the views' error panels: not set up (no repository is configured) and a silent host (neither read is answered).
-// Anything else, including a partial failure, is left to the views.
+// What the Wiki knows about its repositories, read once by the root: the sidebar, the footer chip and Home all show the
+// same answer. Per-repository state comes from the index status, with the source descriptor as a fallback.
 
-import { Fragment, createElement as h, useEffect, useState, type ReactElement, type ReactNode } from 'react';
-import type { IndexStatus, SourceDescriptor, WikiError, WikiResult, WikiService } from '../../contract/src/index.ts';
-import { describeError } from './format.ts';
+import {
+  NAMESPACES,
+  type IndexStatus,
+  type SourceDescriptor,
+  type WikiError,
+  type WikiNamespace,
+} from '../../contract/src/index.ts';
+import type { ViewCtx } from './context.ts';
+import type { StatusTone } from './feedback.ts';
+import { isOutage, namespaceLabel } from './format.ts';
+import { useResource, type Resource } from './load.ts';
+import { indexStatusResource, sourcesResource } from './resources.ts';
 
-export type WikiSetup =
-  | { readonly kind: 'ready' }
-  | { readonly kind: 'not-configured' }
-  | { readonly kind: 'unreachable'; readonly error: WikiError };
+export type RepoState = 'ready' | 'stale' | 'building' | 'unavailable' | 'unknown' | 'loading';
 
-/**
- * The host's index status lists only configured namespaces, so an answered status with none (and no listed source)
- * means nothing is set up. Both reads failing with `unavailable` means the host did not answer.
- */
-export function classifyWikiSetup(sources: WikiResult<readonly SourceDescriptor[]>, index: WikiResult<IndexStatus>): WikiSetup {
-  if (index.ok) return index.value.namespaces.length === 0 && (!sources.ok || sources.value.length === 0) ? { kind: 'not-configured' } : { kind: 'ready' };
-  if (!sources.ok && sources.error.code === 'unavailable' && index.error.code === 'unavailable') return { kind: 'unreachable', error: index.error };
-  return { kind: 'ready' };
+export interface RepoRow {
+  readonly namespace: WikiNamespace;
+  readonly label: string;
+  readonly state: RepoState;
+  /** Status word shown next to the shape: Ready, Stale, Indexing, Unavailable. */
+  readonly word: string;
+  readonly tone: StatusTone;
+  readonly pageCount: number | null;
+  readonly source: SourceDescriptor | null;
 }
 
-export interface WikiSetupGateProps {
-  readonly service: WikiService;
-  readonly appearance: 'light' | 'dark';
-  /** Asks the shell to open Settings at Data sources › Local Wiki. Null: the card names the place and offers no button. */
-  readonly openSettings: (() => void) | null;
-  /** The Wiki view, shown while the check runs and whenever the Wiki is set up and answering. */
-  readonly children?: ReactNode;
+export interface OverallStatus {
+  readonly word: string;
+  readonly tone: StatusTone;
+  readonly busy: boolean;
 }
 
-const WHERE = 'Settings › Data sources › Local Wiki';
-
-function Frame(props: { readonly appearance: 'light' | 'dark'; readonly children?: ReactNode }): ReactElement {
-  return h('div', { className: 'wiki-view', role: 'region', 'aria-label': 'Wiki', 'data-appearance': props.appearance === 'dark' ? 'dark' : 'light' }, props.children);
+export interface WikiStatus {
+  readonly sources: Resource<readonly SourceDescriptor[]>;
+  readonly index: Resource<IndexStatus>;
+  readonly rows: readonly RepoRow[];
+  /** Nothing is known yet and a request is still running. */
+  readonly loading: boolean;
+  /** Something about the repositories is known (a value is shown). */
+  readonly known: boolean;
+  /** The Wiki is not set up or its host does not answer, and nothing has loaded: one calm "Connect" state. */
+  readonly notConnected: boolean;
+  readonly overall: OverallStatus;
+  /** The failure of the first request that has one (a value may still be shown next to it). */
+  readonly error: WikiError | null;
+  /** Asks both reads again, whatever the cache holds. */
+  readonly retry: () => void;
 }
 
-function SettingsButton(props: { readonly openSettings: (() => void) | null; readonly primary: boolean }): ReactElement | null {
-  if (props.openSettings === null) return null;
-  return h('button', { type: 'button', className: props.primary ? 'wiki-button wiki-button-primary' : 'wiki-button', onClick: props.openSettings }, 'Open Settings');
-}
+const WORDS: Readonly<Record<Exclude<RepoState, 'loading' | 'unknown'>, { readonly word: string; readonly tone: StatusTone }>> = {
+  ready: { word: 'Ready', tone: 'ok' },
+  stale: { word: 'Stale', tone: 'warning' },
+  building: { word: 'Indexing', tone: 'pending' },
+  unavailable: { word: 'Unavailable', tone: 'danger' },
+};
 
-/**
- * Shows the view unless the check finds the Wiki not set up or its host silent. The check runs on mount and again on
- * Check again / Try again; a check that is overtaken or outlived by its component publishes nothing.
- */
-export function WikiSetupGate(props: WikiSetupGateProps): ReactElement {
-  const { service, openSettings } = props;
-  const [state, setState] = useState<WikiSetup | null>(null);
-  const [round, setRound] = useState(0);
-
-  useEffect(() => {
-    let current = true;
-    Promise.all([service.listSources(), service.indexStatus()]).then(
-      ([sources, index]) => classifyWikiSetup(sources, index),
-      (): WikiSetup => ({ kind: 'ready' }),
-    ).then((next) => {
-      if (current) setState(next);
-    });
-    return () => {
-      current = false;
-    };
-  }, [service, round]);
-  const again = () => setRound((value) => value + 1);
-
-  if (state?.kind === 'not-configured') {
-    return h(
-      Frame,
-      { appearance: props.appearance },
-      h(
-        'section',
-        { className: 'wiki-home', 'aria-label': 'Set up the Wiki', 'data-wiki-setup': 'not-configured' },
-        h(
-          'article',
-          { className: 'wiki-card' },
-          h('header', { className: 'wiki-card-head' }, h('h2', { className: 'wiki-card-title' }, 'Set up the Wiki')),
-          h('p', null, 'No Wiki repository is set up on this device yet, so there is nothing to read or search.'),
-          h('p', { className: 'wiki-muted' }, `Add a repository in ${WHERE}.`),
-          h('div', { className: 'wiki-actions' }, h(SettingsButton, { openSettings, primary: true }), h('button', { type: 'button', className: 'wiki-button', onClick: again }, 'Check again')),
-        ),
-      ),
-    );
+function fromDescriptor(source: SourceDescriptor): RepoState {
+  switch (source.freshness.graph.state) {
+    case 'current':
+      return 'ready';
+    case 'stale':
+      return 'stale';
+    case 'indexing':
+      return 'building';
+    default:
+      return 'unavailable';
   }
-  if (state?.kind === 'unreachable') {
-    const { error } = state;
-    return h(
-      Frame,
-      { appearance: props.appearance },
-      h(
-        'div',
-        { className: 'wiki-notice', role: 'status', 'data-wiki-setup': 'unreachable', 'data-code': error.code, 'data-reason': error.reason },
-        h('strong', null, describeError(error).title),
-        h('p', null, error.message),
-        h('div', { className: 'wiki-actions' }, h('button', { type: 'button', className: 'wiki-button', onClick: again }, 'Try again'), h(SettingsButton, { openSettings, primary: false })),
-      ),
-    );
-  }
-  return h(Fragment, null, props.children);
 }
+
+function row(namespace: WikiNamespace, sources: Resource<readonly SourceDescriptor[]>, index: Resource<IndexStatus>): RepoRow {
+  const entry = index.value?.namespaces.find((candidate) => candidate.namespace === namespace) ?? null;
+  const descriptor = sources.value?.find((candidate) => candidate.namespace === namespace) ?? entry?.source ?? null;
+  const label = namespaceLabel(namespace);
+  let state: RepoState;
+  if (entry !== null) state = entry.state;
+  else if (descriptor !== null) state = fromDescriptor(descriptor);
+  else if (sources.status === 'loading' || index.status === 'loading') state = 'loading';
+  else if (index.error !== null && isOutage(index.error)) state = 'unavailable';
+  else state = 'unknown';
+  const pageCount = entry === null || entry.state === 'unavailable' ? null : entry.pageCount;
+  if (state === 'loading') return { namespace, label, state, word: 'Checking', tone: 'neutral', pageCount, source: descriptor };
+  if (state === 'unknown') return { namespace, label, state, word: 'Unknown', tone: 'neutral', pageCount, source: descriptor };
+  return { namespace, label, state, ...WORDS[state], pageCount, source: descriptor };
+}
+
+export function useWikiStatus(ctx: ViewCtx): WikiStatus {
+  const sources = useResource(sourcesResource(ctx.service), ctx.cache);
+  const index = useResource(indexStatusResource(ctx.service), ctx.cache);
+  const rows = NAMESPACES.map((namespace) => row(namespace, sources, index));
+  const known = sources.value !== undefined || index.value !== undefined;
+  const loading = !known && (sources.status === 'loading' || index.status === 'loading');
+
+  const hostSilent =
+    sources.value === undefined && index.value === undefined && sources.error !== null && index.error !== null && isOutage(sources.error) && isOutage(index.error);
+  const notSetUp =
+    index.value !== undefined &&
+    index.value.namespaces.every((entry) => entry.state === 'unavailable' && entry.source === null) &&
+    (sources.value === undefined || sources.value.length === 0);
+  const notConnected = hostSilent || notSetUp;
+
+  const failing = (sources.error !== null && isOutage(sources.error)) || (index.error !== null && isOutage(index.error));
+  let overall: OverallStatus;
+  if (loading) overall = { word: 'Checking', tone: 'neutral', busy: true };
+  else if (notConnected) overall = { word: 'Not connected', tone: 'neutral', busy: false };
+  else if (failing || rows.some((item) => item.state === 'unavailable')) overall = { word: 'Unavailable', tone: 'danger', busy: false };
+  else if (rows.some((item) => item.state === 'stale')) overall = { word: 'Stale', tone: 'warning', busy: false };
+  else if (rows.some((item) => item.state === 'building')) overall = { word: 'Indexing', tone: 'pending', busy: true };
+  else if (rows.every((item) => item.state === 'ready')) overall = { word: 'Ready', tone: 'ok', busy: false };
+  else overall = { word: 'Unknown', tone: 'neutral', busy: false };
+
+  return {
+    sources,
+    index,
+    rows,
+    loading,
+    known,
+    notConnected,
+    overall,
+    error: sources.error ?? index.error,
+    retry: () => {
+      sources.retry();
+      index.retry();
+    },
+  };
+}
+
+export { WikiSetupGate, classifyWikiSetup } from './setup.ts';
+export type { WikiSetup, WikiSetupGateProps } from './setup.ts';

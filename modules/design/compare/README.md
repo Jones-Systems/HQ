@@ -46,3 +46,7 @@ npx vite --config modules/design/compare/demo/vite.config.ts   # local demo at h
 The root `npm test` does not include this section yet. Tests use the root's vitest so they can join the root include later unchanged.
 
 Evidence classes: the model, controller and persistence tests are behavioral unit checks. `view.test.ts` uses `react-dom/server` and proves the rendered markup and attributes only. Browser layout, scrolling and drag need a real browser run of the demo. Real preview, real capture bytes, Electron behavior and native evidence remain unverified until root S2 integration.
+
+## Recovery source presentation
+
+Recovery composition adds compact capture headers, details, Side by side / Swipe, a keyboard slider divider, panel transitions and inline save feedback. The active Design project scopes its catalog. No current recovery-head runtime or layout qualification is claimed. See [core view map](../../../docs/ui-map/design-core.md).

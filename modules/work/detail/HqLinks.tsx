@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { parseReference, type ReferenceEnvelope } from '@hq/contracts';
-import { Button, LinkList, LinkPicker, referenceKey, type ReferenceEntry, type ReferencePort, type ReferenceUndo, type ReturnContext } from '@hq/ui';
+import { Button, FieldError, LinkList, LinkPicker, referenceKey, type ReferenceEntry, type ReferencePort, type ReferenceUndo, type ReturnContext } from '@hq/ui';
 import { HQ_REFERENCES_FEATURE, LIMITS, type Item, type ReferenceInput, type WorkState, type WorkStore } from '../core';
 import type { Editor } from './edits';
 
@@ -18,6 +18,7 @@ export interface HqLinksProps {
 /** Source-owned mutations reuse the detail editor and the Planner's revision/Undo machinery. */
 export function HqLinks({ item, projectId, port, returnTo, state, store, editor, now }: HqLinksProps) {
   const [picker, setPicker] = useState(false);
+  const [advanced, setAdvanced] = useState(false);
   const [paste, setPaste] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -71,7 +72,7 @@ export function HqLinks({ item, projectId, port, returnTo, state, store, editor,
     || entry.resolution?.status === 'moved';
   const readOnlyEntries = entries.filter(mismatch);
   const localEntries = entries.filter((entry) => !mismatch(entry));
-  return <div onDragOver={(event) => { if (writable) event.preventDefault(); }} onDrop={(event) => {
+  return <div className="work-hqlinks" data-advanced={advanced ? 'open' : 'closed'} onDragOver={(event) => { if (writable) event.preventDefault(); }} onDrop={(event) => {
     event.preventDefault(); event.stopPropagation();
     if (!writable) return;
     try { void add(JSON.parse(event.dataTransfer.getData('application/json') || event.dataTransfer.getData('text/plain'))); }
@@ -87,14 +88,29 @@ export function HqLinks({ item, projectId, port, returnTo, state, store, editor,
       } : {})} />
     {readOnlyEntries.length > 0 && <LinkList entries={readOnlyEntries} projectId={projectId} {...(now ? { now: now().getTime() } : {})} />}
     {!enabled && <p className="hq-meta">HQ links are read-only: Planner does not advertise hq-references-v1.</p>}
-    {enabled && <>
+    {enabled && <div className="work-hqlinks-actions">
       <Button size="sm" disabled={!writable || !port || item.references.length >= LIMITS.references} onClick={() => setPicker(true)}>Link to…</Button>
-      <label className="work-field"><span>Paste reference JSON</span><textarea className="work-input" value={paste} disabled={!writable} onChange={(event) => setPaste(event.target.value)} /></label>
-      <Button size="sm" disabled={!writable || !paste || item.references.length >= LIMITS.references} onClick={() => {
-        try { void add(JSON.parse(paste)); } catch { setError('Invalid reference JSON.'); }
-      }}>Add reference</Button>
-    </>}
+    </div>}
+    {(enabled || entries.length > 0) && (
+      // Raw identifiers and the paste box are for diagnosing a link, not for everyday use, so they sit behind this
+      // disclosure. Collapsed, each link shows its title, state and freshness; open, it also shows where it points.
+      <details className="work-advanced" onToggle={(event) => setAdvanced(event.currentTarget.open)}>
+        <summary>Advanced</summary>
+        <div className="work-advanced-body">
+          <p className="hq-meta">
+            {entries.length > 0 && 'Each link above now also shows its domain, kind, IDs and snapshot revision. '}
+            {enabled && 'Paste a serialized HQ reference to link it directly.'}
+          </p>
+          {enabled && <>
+            <label className="work-field"><span className="work-field-label">Paste reference JSON</span><textarea className="work-input" value={paste} disabled={!writable} spellCheck={false} onChange={(event) => setPaste(event.target.value)} /></label>
+            <Button size="sm" disabled={!writable || !paste || item.references.length >= LIMITS.references} onClick={() => {
+              try { void add(JSON.parse(paste)); } catch { setError('Invalid reference JSON.'); }
+            }}>Add reference</Button>
+          </>}
+        </div>
+      </details>
+    )}
     {port && <LinkPicker open={picker && writable} projectId={projectId} port={port} existing={targets} onClose={() => setPicker(false)} onSelect={(envelope) => void add(envelope)} />}
-    {error && <p role="alert">{error}</p>}
+    <FieldError id={`${item.id}-hq-links-error`} announce>{error}</FieldError>
   </div>;
 }

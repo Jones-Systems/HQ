@@ -1,0 +1,116 @@
+# B1-T verification log (raw), copied from the builder's scratch at the 2026-11-03 pause.
+# One line per check: label, check, exit code, CPU sampled before it, and the runner's count line.
+# verify/pr-N = foundation 0cd50ab + that PR head (--no-ff). a5-succ/a4-succ = successor branches.
+# comp-pre = composite before 441009f; comp-full = composite at 441009f (interrupted in 'acc').
+base-foundation py exit=0 cpu_before=69.11% | Ran 72 tests in 3.732s OK 
+base-foundation node exit=0 cpu_before=69.08% | 
+base-foundation gen exit=0 cpu_before=65.52% | Verified 27 real HTTP exchanges.
+base-foundation cli exit=0 cpu_before=66.35% | 
+base-foundation work exit=0 cpu_before=68.1% |  Test Files 5 passed (5)  Tests 175 passed (175) 
+base-foundation DONE
+base-foundation (corrected from logs): node tests 29 pass 29; cli tests 85 pass 85 fail 0 skipped 0 todo 0
+pr80 merge CLEAN head=375e777c2d9e2e7fdb7cd1757711a239383c43e6
+pr80 py exit=0 cpu_before=74.12% | Ran 72 tests in 4.341s OK 
+pr80 node exit=0 cpu_before=60.37% | ℹ tests 29 ℹ pass 29 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr80 gen exit=0 cpu_before=69.78% | Verified 27 real HTTP exchanges and SHA256SUMS.
+pr80 cli exit=0 cpu_before=68.51% | ℹ tests 85 ℹ pass 85 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr80 work exit=0 cpu_before=39.81% |  Test Files 5 passed (5)  Tests 175 passed (175) 
+pr80 DONE
+pr80 worktree status: 0 changed paths
+pr81 merge CLEAN head=110ac39a7b67a99e5c0109493b261df6ccd020cb
+pr81 py exit=0 cpu_before=50.15% | Ran 81 tests in 3.739s OK 
+pr81 node exit=0 cpu_before=53.85% | ℹ tests 29 ℹ pass 29 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr81 gen exit=0 cpu_before=73.52% | Verified 27 real HTTP exchanges.
+pr81 cli exit=0 cpu_before=70.32% | ℹ tests 85 ℹ pass 85 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr81 work exit=0 cpu_before=41.18% |  Test Files 5 passed (5)  Tests 175 passed (175) 
+pr81 DONE
+pr81 worktree status: 0 changed paths
+pr84 merge CLEAN head=c0bd67c048ccab4ada9fe4f5437c470f847a769e
+pr84 py exit=0 cpu_before=84.81% | Ran 84 tests in 7.344s OK 
+pr84 node exit=0 cpu_before=59.06% | ℹ tests 29 ℹ pass 29 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr84 gen exit=0 cpu_before=53.44% | Verified 27 real HTTP exchanges.
+pr84 cli exit=0 cpu_before=58.26% | ℹ tests 85 ℹ pass 85 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr84 work exit=0 cpu_before=76.87% |  Test Files 5 passed (5)  Tests 175 passed (175) 
+pr84 DONE
+pr84 worktree status: 0 changed paths
+pr89 merge CLEAN head=264e73c5fad9872d7a4c40363df7844c78215c9d
+pr89 py exit=0 cpu_before=57.37% | Ran 96 tests in 4.304s OK 
+pr89 node exit=0 cpu_before=55.52% | ℹ tests 29 ℹ pass 29 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr89 gen exit=0 cpu_before=61.23% | Verified 27 real HTTP exchanges.
+pr89 cli exit=0 cpu_before=51.89% | ℹ tests 85 ℹ pass 85 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr89 work exit=0 cpu_before=66.98% |  Test Files 5 passed (5)  Tests 175 passed (175) 
+pr89 DONE
+pr89 worktree status: 0 changed paths
+pr94 merge CLEAN head=1d09d5d473b65f08c54ba3cf6635674a1d62138d
+pr94 py exit=0 cpu_before=61.11% | Ran 74 tests in 3.944s OK 
+pr94 node exit=0 cpu_before=76.4% | ℹ tests 29 ℹ pass 29 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr94 gen exit=0 cpu_before=77.6% | Verified 27 real HTTP exchanges.
+pr94 cli exit=0 cpu_before=76.21% | ℹ tests 90 ℹ pass 87 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 3 
+pr94 work exit=0 cpu_before=81.67% |  Test Files 5 passed (5)  Tests 175 passed (175) 
+pr94 DONE
+pr94 worktree status: 0 changed paths
+pr82 merge CLEAN head=995b52503df9f4eb3ef071555427b8afe1fda92f
+pr82 py exit=0 cpu_before=71.96% | Ran 72 tests in 5.403s OK 
+pr82 node exit=0 cpu_before=82.86% | ℹ tests 29 ℹ pass 29 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr82 gen exit=0 cpu_before=62.58% | Verified 27 real HTTP exchanges.
+pr82 cli exit=0 cpu_before=74.42% | ℹ tests 93 ℹ pass 93 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr82 work exit=0 cpu_before=73.89% |  Test Files 5 passed (5)  Tests 175 passed (175) 
+pr82 DONE
+pr82 worktree status: 0 changed paths
+pr86 merge CLEAN head=6465f65681f0a99dd7eda615d6cc9616d79afec2
+pr86 py exit=0 cpu_before=79.49% | Ran 72 tests in 4.141s OK 
+pr86 node exit=0 cpu_before=73.33% | ℹ tests 29 ℹ pass 29 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr86 gen exit=0 cpu_before=65.12% | Verified 27 real HTTP exchanges.
+pr86 cli exit=0 cpu_before=66.67% | ℹ tests 93 ℹ pass 93 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr86 work exit=0 cpu_before=45.63% |  Test Files 5 passed (5)  Tests 175 passed (175) 
+pr86 DONE
+pr86 worktree status: 0 changed paths
+pr102 merge CLEAN head=fcfdd6674f5ad4fc62e72a8dcceee904a1bec595
+pr102 py exit=0 cpu_before=54.83% | Ran 72 tests in 4.320s OK 
+pr102 node exit=0 cpu_before=45.57% | ℹ tests 41 ℹ pass 41 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr102 gen exit=0 cpu_before=63.69% | Verified 27 real HTTP exchanges.
+pr102 cli exit=0 cpu_before=58.75% | ℹ tests 85 ℹ pass 85 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr102 work exit=0 cpu_before=57.28% |  Test Files 5 passed (5)  Tests 175 passed (175) 
+pr102 DONE
+pr102 worktree status: 0 changed paths
+pr93 merge CLEAN head=af21fabd0feec7c296c1e509ae4455ebebdc59f1
+pr93 py exit=0 cpu_before=49.06% | Ran 72 tests in 7.225s OK 
+pr93 node exit=0 cpu_before=63.66% | ℹ tests 45 ℹ pass 45 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr93 gen exit=0 cpu_before=76.8% | Verified 27 real HTTP exchanges.
+pr93 cli exit=0 cpu_before=57.33% | ℹ tests 85 ℹ pass 85 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr93 work exit=0 cpu_before=73.08% |  Test Files 5 passed (5)  Tests 175 passed (175) 
+pr93 DONE
+pr93 worktree status: 0 changed paths
+pr83 merge CLEAN head=b50ddaed3376453fca9f4b1063bf0e1a51ec1522
+pr83 py exit=0 cpu_before=71.11% | Ran 72 tests in 3.373s OK 
+pr83 node exit=0 cpu_before=64.87% | ℹ tests 29 ℹ pass 29 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr83 gen exit=0 cpu_before=77.56% | Verified 27 real HTTP exchanges.
+pr83 cli exit=0 cpu_before=67.69% | ℹ tests 85 ℹ pass 85 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+pr83 work exit=0 cpu_before=56.29% |  Test Files 5 passed (5)  Tests 175 passed (175) 
+pr83 DONE
+pr83 worktree status: 0 changed paths
+VERIFY-ALL DONE
+a5-succ node exit=0 cpu_before=76.04% | ℹ tests 50 ℹ pass 50 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+a5-succ py exit=0 cpu_before=82.08% | Ran 72 tests in 7.472s OK 
+a5-succ DONE
+a5-succ node exit=0 cpu_before=60.81% | ℹ tests 50 ℹ pass 50 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+a5-succ gen exit=0 cpu_before=81.53% | Verified 27 real HTTP exchanges.
+a5-succ cli exit=0 cpu_before=58.01% | ℹ tests 85 ℹ pass 85 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+a5-succ DONE
+a4-succ-pre py exit=0 cpu_before=73.97% | Ran 72 tests in 3.218s OK 
+a4-succ-pre node exit=0 cpu_before=84.42% | ℹ tests 29 ℹ pass 29 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+a4-succ-pre gen exit=0 cpu_before=76.43% | Verified 42 real HTTP exchanges and SHA256SUMS.
+a4-succ-pre cli exit=0 cpu_before=59.22% | ℹ tests 85 ℹ pass 85 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+a4-succ-pre DONE
+a4-succ-pre work exit=1 cpu_before=47.35% |  Test Files 1 failed | 4 passed (5)  Tests 1 failed | 174 passed (175) 
+a4-succ-pre DONE
+a4-succ work exit=0 cpu_before=75.88% |  Test Files 5 passed (5)  Tests 198 passed (198) 
+a4-succ DONE
+comp-pre py exit=0 cpu_before=41.07% | Ran 119 tests in 3.332s OK 
+comp-pre node exit=0 cpu_before=44.55% | ℹ tests 62 ℹ pass 62 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 
+comp-pre gen exit=0 cpu_before=63.49% | Verified 27 real HTTP exchanges and SHA256SUMS.
+comp-pre cli exit=0 cpu_before=64.42% | ℹ tests 106 ℹ pass 103 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 3 
+comp-pre DONE
+comp-full build exit=0 cpu_before=57.19% | apps/desktop/dist-electron/preview-agent/agent.js  8.25 kB │ gzip: 3.63 kB  ✓ built in 219ms 
+comp-full vitest exit=1 cpu_before=71.52% |  Test Files 1 failed | 116 passed (117)  Tests 1 failed | 1872 passed (1873) 
+comp-full wiki exit=0 cpu_before=64.01% | ℹ tests 506 ℹ pass 506 ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 

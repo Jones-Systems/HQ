@@ -9,7 +9,10 @@ import { StorageConflictError } from '../../../projects/src/contract.ts';
 import { ReadOnlyContentError } from '../../../projects/src/repository.ts';
 import { ContentError, VersionMutationError } from '../../../projects/src/content.ts';
 import { IntegrityError } from '../../../components/src/workspace/library.ts';
-import { TasteProjectBindingError, TasteUnavailableError } from '../../../taste/src/project-service.ts';
+import {
+  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteJournalFullError, TasteProjectBindingError, TasteReadOnlyError,
+  TasteUnavailableError,
+} from '../../../taste/src/project-service.ts';
 import { SourceUnavailableError } from '../../../discovery/src/contract.ts';
 import { PreviewError } from '../../../discovery/src/previews.ts';
 import {
@@ -49,6 +52,12 @@ const CASES: readonly (readonly [string, unknown, string])[] = [
   ['stale draft', new StaleDraftError('stale'), 'stale'],
   ['taste project binding', new TasteProjectBindingError(), 'stale'],
   ['taste storage', new TasteUnavailableError(), 'unavailable'],
+  ['taste conflict', new TasteConflictError(), 'conflict'],
+  ['taste invalid input', new TasteInvalidInputError('Invalid export options'), 'invalid'],
+  ['taste newer journal', new TasteReadOnlyError('unsupported-stored-schema'), 'read-only'],
+  ['taste read-only store', new TasteReadOnlyError('store-read-only'), 'read-only'],
+  ['taste journal fault (not "unavailable" though it extends that class)', new TasteJournalFaultError('incomplete-tail'), 'corrupt'],
+  ['taste journal full', new TasteJournalFullError(), 'too-large'],
   ['discovery source offline', new SourceUnavailableError(), 'unavailable'],
   ['preview too large', new PreviewError('too-large', 'big'), 'too-large'],
   ['preview aborted', new PreviewError('aborted', 'stop'), 'cancelled'],
@@ -76,6 +85,34 @@ const CASES: readonly (readonly [string, unknown, string])[] = [
 describe('classifyDesignError', () => {
   it('maps every known section error to its kind without importing sections into the contract', () => {
     for (const [label, error, kind] of CASES) assert.equal(classifyDesignError(error, write).kind, kind, label);
+  });
+
+  it('classifies every Taste failure, keeping the machine reason for the meta line', () => {
+    const context = { section: 'taste', operation: 'taste.save', action: 'save to your taste journal', write: true } as const;
+    const taste = (error: unknown) => { const { kind, outcome, reason } = classifyDesignError(error, context); return [kind, outcome, reason]; };
+    assert.deepEqual(taste(new TasteConflictError()), ['conflict', 'no-effect', undefined]);
+    assert.deepEqual(taste(new TasteInvalidInputError('x')), ['invalid', 'no-effect', undefined]);
+    assert.deepEqual(taste(new TasteProjectBindingError()), ['stale', 'no-effect', 'project-binding']);
+    assert.deepEqual(taste(new TasteUnavailableError()), ['unavailable', 'no-effect', undefined]);
+    assert.deepEqual(taste(new TasteReadOnlyError('unsupported-stored-schema')), ['read-only', 'no-effect', 'unsupported-stored-schema']);
+    assert.deepEqual(taste(new TasteReadOnlyError('store-read-only')), ['read-only', 'no-effect', 'store-read-only']);
+    assert.deepEqual(taste(new TasteJournalFaultError('hash-mismatch')), ['corrupt', 'no-effect', 'hash-mismatch']);
+    assert.deepEqual(taste(new TasteJournalFullError()), ['too-large', 'no-effect', 'journal-full']);
+    // A full journal is not "refused": it reads as too large, with its own sentence and status.
+    const full = classifyDesignError(new TasteJournalFullError(), context);
+    assert.equal(full.description, 'Your taste journal is full, so nothing was saved.');
+    assert.deepEqual([designFeedback(full).status, designFeedback(full).action, designFeedback(full).meta], ['Too large', undefined, 'taste.save · journal-full']);
+    // An unrecognised write failure stays an unknown effect.
+    assert.deepEqual(taste(new Error('socket hang up')), ['unknown', 'unknown-effect', undefined]);
+    assert.equal(designFeedback(classifyDesignError(new TasteReadOnlyError('unsupported-stored-schema'), context)).meta, 'taste.save · unsupported-stored-schema');
+  });
+
+  it('says a Taste journal was saved by a newer HQ only when that is the reason', () => {
+    const context = { section: 'taste', operation: 'taste.load', action: 'load your taste ratings', write: false } as const;
+    assert.equal(classifyDesignError(new TasteReadOnlyError('unsupported-stored-schema'), context).description,
+      'It was saved by a newer version of HQ, so it opens read-only. Nothing was changed.');
+    assert.equal(classifyDesignError(new TasteReadOnlyError('store-read-only'), context).description,
+      'It is open read-only here, so nothing was changed.');
   });
 
   it('never offers a blind retry when a write may have happened, for any classified failure', () => {

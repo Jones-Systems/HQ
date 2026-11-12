@@ -22,14 +22,14 @@ test('sections render simulated and owner-reported returns distinctly after rest
   assert.ok(html.includes(SIMULATION_LABEL));
   assert.ok(html.includes('hq-status-label'));
   assert.ok(html.includes('hqd-section-notice'));
-  assert.ok(html.includes('1 simulated returns'));
-  assert.ok(html.includes('1 owner-reported returns'));
-  assert.ok(html.includes('0 natively verified returns'));
+  assert.match(html, /hq-status-label">Simulated<\/b><span class="hq-status-detail">1<\/span>/u);
+  assert.match(html, /hq-status-label">Owner-reported<\/b><span class="hq-status-detail">1<\/span>/u);
+  assert.match(html, /hq-status-label">Natively verified<\/b><span class="hq-status-detail">0<\/span>/u);
   assert.ok(html.includes('Owner-reported'));
   const runHtml = renderToStaticMarkup(<RunsSection env={rebuilt.runs} session={fresh} now={d.clock.now()} />);
   assert.ok(runHtml.includes(SIMULATION_LABEL));
   assert.ok(runHtml.includes('hq-btn'));
-  assert.ok(runHtml.includes('hqd-packet-list'));
+  assert.ok(runHtml.includes('hqr-cards'));
   assert.ok(runHtml.includes('Simulation is not native verification'));
   assert.equal(d.writes.length, before, 'rendering cannot dispatch');
 });

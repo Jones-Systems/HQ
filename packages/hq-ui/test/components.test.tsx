@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  Button, Dialog, IconButton, Menu, Splitter, SAVE_STATES, SaveIndicator, STATUS_TONES, StateView, StatusChip, Tabs, Toast, ToastRegion, TOAST_AUTO_DISMISS_MS, VIEW_STATES,
+  Button, Dialog, IconButton, Menu, Portal, Splitter, SAVE_STATES, SaveIndicator, STATUS_TONES, StateView, StatusChip, Tabs, Toast, ToastRegion, TOAST_AUTO_DISMISS_MS, VIEW_STATES,
 } from '../src';
 
 // Happy-dom has no layout or colour engine: these prove roles, names and keyboard paths in each chrome scheme.
@@ -11,6 +11,15 @@ import {
 describe.each(['light', 'dark'] as const)('primitives in %s chrome', (theme) => {
   beforeEach(() => { document.documentElement.dataset.theme = theme; });
   afterEach(() => { cleanup(); delete document.documentElement.dataset.theme; });
+
+  it('Portal escapes view clipping and removes its overlay when its owner unmounts', () => {
+    const { container, unmount } = render(<div><Portal><span>Drag overlay</span></Portal></div>);
+    const overlay = screen.getByText('Drag overlay');
+    expect(overlay.parentElement).toBe(document.body);
+    expect(container.contains(overlay)).toBe(false);
+    unmount();
+    expect(screen.queryByText('Drag overlay')).toBeNull();
+  });
 
   it('Button activates with Enter and Space, stays focusable but inert while busy, and never submits', async () => {
     const user = userEvent.setup();
@@ -379,8 +388,9 @@ describe('selectable menu items', () => {
     const [title, date, unavailable] = screen.getAllByRole('menuitemradio');
     expect(title!.getAttribute('aria-checked')).toBe('true');
     expect(date!.getAttribute('aria-checked')).toBe('false');
-    expect(title!.querySelector('[aria-hidden="true"]')?.textContent).toBe('✓');
-    expect(date!.querySelector('[aria-hidden="true"]')?.textContent).toBe('');
+    expect(title!.querySelector('[aria-hidden="true"] svg')).toBeTruthy();
+    expect(date!.querySelector('[aria-hidden="true"]')?.childElementCount).toBe(0);
+    expect(title!.textContent).toBe('Title');
     await user.keyboard('{End}');
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Reset' }));
     await user.keyboard('{ArrowUp}{Enter}');

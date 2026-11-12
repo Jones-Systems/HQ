@@ -21,8 +21,9 @@ test('home lists both repositories with display names, provenance and freshness'
   assert.match(field(bl, 'contentFreshness'), /Unknown \(not checked against the remote\)/);
   assert.equal(one(bl, '[data-field="contentFreshness"] [data-freshness]').getAttribute('data-freshness'), 'unknown');
   const blPages = PAGES.filter((page) => page.key.namespace === 'bl').length;
-  assert.match(textOf(bl), new RegExp(`${blPages} pages indexed`));
+  assert.equal(textOf(one(bl, '.wiki-card-count')), `${blPages} pages`);
   assert.equal(one(bl, '[data-index-state]').getAttribute('data-index-state'), 'ready');
+  assert.equal(textOf(one(bl, '[data-index-state]')), 'Ready', 'the status is a word, not colour alone');
 
   assert.equal(field(appdev, 'commit'), COMMIT_APPDEV.slice(0, 12));
   assert.match(field(appdev, 'graphFreshness'), /^stale \(built from 0a1b2c3d4e5f\)$/);
@@ -88,7 +89,7 @@ test('an unavailable source is reported per repository', async () => {
     }),
   });
   const [, appdev] = all(app.container, '.wiki-card') as [HTMLElement, HTMLElement];
-  assert.equal(one(appdev, '[data-index-state]').textContent, 'source unavailable');
+  assert.equal(textOf(one(appdev, '[data-index-state]')), 'Unavailable');
   assert.match(textOf(appdev), /No source information is available/);
   await app.unmount();
 });
