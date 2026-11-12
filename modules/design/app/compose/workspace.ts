@@ -30,11 +30,14 @@ function freshContent(contentFor: ContentFor) {
 
 export function createDesignWorkspace(documents: WorkspaceRecords | null, ports: DesignRuntimePorts = {}) {
   // One change feed per composition: every project-content writer notifies it, cached readers subscribe.
-  const contentEvents = documents === null ? fake.fakeContentEvents : createProjectContentEvents();
+  const contentEvents = createProjectContentEvents();
   const closure = createClosureWorkspace(documents, ports.runsConnection);
   const interactive = createInteractiveWorkspace(documents, closure.requests, ports, contentEvents);
   const activeProject = createActiveProjectStore();
-  if (documents === null) return { ...fake, closure, interactive, contentEvents, activeProject, retry: (projectId: string) => contentEvents.notify(projectId), readContent: freshContent(fake.contentFor), bridged: false as const, storageTag: fakeStorageTag };
+  if (documents === null) {
+    const memory = fake.createFakeWorkspace(contentEvents);
+    return { ...fake, ...memory, closure, interactive, contentEvents, activeProject, retry: (_projectId: string): void => {}, readContent: freshContent(memory.contentFor), bridged: false as const, storageTag: fakeStorageTag };
+  }
   const bridged = createBridgedWorkspace(documents, { contentEvents });
   return { ...bridged, closure, interactive, activeProject, readContent: freshContent(bridged.contentFor) };
 }
