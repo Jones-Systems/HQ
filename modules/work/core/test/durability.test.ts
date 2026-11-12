@@ -1,3 +1,5 @@
+import type { WorkPersistence } from '../durability';
+import type { WorkLocalPersistence } from '../../live/durable';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DURABLE_SCHEMA, durableDrafts, registerWorkDurability, resetWorkDurability } from '../durability';
 import { createFixturePlanner } from '../fixtures/adapter';
@@ -215,8 +217,7 @@ describe('the durable hub', () => {
     if (outcome.status !== 'unconfirmed') throw new Error('expected unconfirmed');
     const recorded = h.stub.held.get(outcome.requestId);
     expect(recorded).toBeDefined();
-    await vi.waitFor(() => expect(p.last()!.unconfirmed).toHaveLength(1));
-    expect(p.last()!.unconfirmed).toEqual([expect.objectContaining({ requestId: outcome.requestId, state: 'unconfirmed', intent: recorded })]);
+    await vi.waitFor(() => expect(p.last()!.unconfirmed).toEqual([expect.objectContaining({ requestId: outcome.requestId, state: 'unconfirmed', intent: recorded })]));
     expect('intent' in h.store.getState().unconfirmed[0]!).toBe(false);
     h.stub.held.set(outcome.requestId, { ...recorded!, sentAfterVersion: 99 }); // later changes do not rewrite it
     await h.store.reconcile();
@@ -463,19 +464,19 @@ describe('several stores on one persistence', () => {
     expect(p.last()!.queued).toHaveLength(1);
   });
 
-  it('keeps stored entries nobody has claimed yet when another store saves first', async () => {
+  it('claims retained entries before a first send and keeps unclaimed drafts', async () => {
     const p = memoryPersistence();
     const h = await open(p);
     const a = h.fixture.control.stored().find((item) => item.title === 'A')!;
     const entry = queued({ op: 'patch', id: a.id, revision: 1, patch: { notes: 'waiting for its store' } }, a);
     p.set(document({ queued: [entry], drafts: [{ text: 'a draft' }] }));
     h.faults.next('lose-response');
-    await h.store.create({ title: 'Unconfirmed before any load' }); // saves without claiming
+    await h.store.create({ title: 'Unconfirmed before any load' }); // first send claims before its durable marker
     await vi.waitFor(() => expect(p.last()!.unconfirmed).toHaveLength(1));
     expect(p.last()!.queued).toEqual([entry]);
     expect(p.last()!.drafts).toEqual([{ text: 'a draft' }]);
     h.net.down();
-    await h.store.load(); // now it claims them
+    await h.store.load(); // an explicit read preserves the already claimed entries
     expect(h.store.getState().queued).toEqual([entry]);
     expect(h.store.getState().unconfirmed).toHaveLength(1);
   });
@@ -527,3 +528,38 @@ describe('the drafts slot', () => {
     expect(broken.document()).toEqual({ schema: 'other' });
   });
 });
+
+describe('ordinary pending writes across a restart', () => {
+  it('settles an unknown marker before dispatch and never repeats it after restore', async () => {
+    const p = memoryPersistence();
+    const h = await open(p);
+    await h.store.load();
+    const disk = gate();
+    p.control.saveGate = disk.opened;
+    const held = h.net.hold('create');
+    const writing = h.store.create({ title: 'Pending capture' });
+    await vi.waitFor(() => expect(p.control.started).toBeGreaterThan(0));
+    expect(h.net.writes()).toEqual([]);
+    disk.open();
+    await held.reached;
+    const checkpoint = structuredClone(p.document());
+    expect(checkpoint).toMatchObject({ unconfirmed: [{ state: 'unconfirmed', intent: null, write: { op: 'create', fields: { title: 'Pending capture' } } }] });
+    const restoredDisk = memoryPersistence(checkpoint);
+    const restored = createWorkStore(h.net.port, { persistence: restoredDisk.persistence });
+    const writes = h.net.writes().length;
+    await restored.load();
+    await restored.poll();
+    expect(h.net.writes()).toHaveLength(writes);
+    const entry = restored.getState().unconfirmed[0]!;
+    expect(restored.canApply(entry.requestId)).toBe(false);
+    expect(await restored.retryUnconfirmed(entry.requestId)).toBe('refused');
+    held.release();
+    expect(await writing).toMatchObject({ status: 'saved' });
+    await vi.waitFor(() => expect(p.last()!.unconfirmed).toEqual([]));
+  });
+});
+
+// Both persistence owners independently declare exactly these two methods.
+type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends (<T>() => T extends Y ? 1 : 2) ? true : false;
+type Assert<T extends true> = T;
+export type PersistenceBinding = Assert<Equal<WorkPersistence, WorkLocalPersistence>>;

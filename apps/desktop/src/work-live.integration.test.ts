@@ -7,7 +7,10 @@ import type { ServiceResponse } from '@hq/contracts/services';
 import { createServices, sendHttp, type HttpCall, type Transport } from '../electron/services';
 import { openServiceConfig } from '../electron/service-config';
 import { bridgeTransport, createPlannerLive, type PlannerLive } from '../../../modules/work/live';
-import { createWorkStore, REPLAY_FEATURE, type Item, type Settings, type WorkStore, type WriteOutcome } from '../../../modules/work/core';
+import { createWorkStore, REPLAY_FEATURE, type Item, type Settings, type WorkStore, type WriteOutcome, type WorkPersistence } from '../../../modules/work/core';
+import { createWorkLocal } from '../electron/work-local';
+import type { WorkLocalTransport } from '../../../modules/work/live/transport';
+import { workLocalPersistence } from '../../../modules/work/live/durable';
 import { startPlanner, type PlannerOptions, type TestPlanner } from './test/planner';
 
 // The Work live path against a real disposable Planner, through the real stack: endpoint settings, the main-process
@@ -17,7 +20,13 @@ import { startPlanner, type PlannerOptions, type TestPlanner } from './test/plan
 // starts from `planner()` and `connect()`.
 
 const cleanups: (() => Promise<void>)[] = [];
-afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+afterEach(async () => {
+  const errors: unknown[] = [];
+  for (const cleanup of cleanups.splice(0).reverse()) {
+    try { await cleanup(); } catch (error) { errors.push(error); }
+  }
+  if (errors.length) throw new AggregateError(errors, 'Planner test cleanup failed');
+});
 
 async function planner(options?: PlannerOptions): Promise<TestPlanner> {
   const started = await startPlanner(options);
@@ -44,7 +53,7 @@ interface Client {
 }
 
 /** A client as the desktop wires it: its own endpoint settings, bridge, adapter and store. */
-async function connect(target: TestPlanner): Promise<Client> {
+async function connect(target: TestPlanner, persistence?: WorkPersistence, http: Transport = sendHttp): Promise<Client> {
   const userData = await mkdtemp(join(tmpdir(), 'hq-work-live-'));
   cleanups.push(() => rm(userData, { recursive: true, force: true }));
   const config = await openServiceConfig(userData);
@@ -57,12 +66,12 @@ async function connect(target: TestPlanner): Promise<Client> {
     const exchange: Exchange = { call };
     exchanges.push(exchange);
     if (fault?.where === 'request') return { ok: false, kind: 'unknown' };
-    const response = await sendHttp(endpoint, call);
+    const response = await http(endpoint, call);
     exchange.response = response;
     return fault ? { ok: false, kind: 'unknown' } : response;
   };
   const live = createPlannerLive(bridgeTransport({ call: createServices(config, transport).work }));
-  const store = createWorkStore(live.port, { recovery: live.recovery });
+  const store = createWorkStore(live.port, { recovery: live.recovery, persistence });
   return {
     store, live, exchanges,
     lose: (where, match) => { faults.push({ where, match }); },
@@ -402,7 +411,7 @@ describe('a write whose answer or request is lost', () => {
     expect(titled(await rawItems(target), 'Apply lost')).toHaveLength(1);
   });
 
-  it('a Planner restarted on an empty data file at the same port: Check currently reports the Planner unavailable', async () => {
+  it('a Planner restarted on an empty data file at the same port: Check reports store_changed without resending', async () => {
     const target = await planner();
     const client = await seeded(target, ['One', 'Two', 'Three']);
     client.lose('answer', isCreate);
@@ -415,15 +424,114 @@ describe('a write whose answer or request is lost', () => {
     expect(target.port).toBe(port);
     expect((await rawState(target)).state_version).toBeLessThan(intent.sentAfterVersion);
     expect(await rawItems(target)).toEqual([]);
-    // Today the lookup is answered 400 (a baseline newer than the store), which the adapter reports as unavailable
-    // (G7): the Check is `stopped` and the board shows an offline banner. The lead is adding a `store_changed` reason.
-    expect(await client.store.checkUnconfirmed(requestId)).toBe('stopped');
+    expect(await client.store.checkUnconfirmed(requestId)).toBe('indeterminate');
     const lookup = client.exchanges.filter(e => replayMode('lookup')(e.call)).at(-1)!;
     expect(lookup.response).toMatchObject({ ok: true, status: 400, body: { error: 'invalid' } });
-    expect(client.store.getState().save).toEqual({ kind: 'offline' });
-    expect(client.store.getState().unconfirmed).toMatchObject([{ requestId, state: 'unconfirmed' }]);
-    expect(client.store.getState().unconfirmed[0]).not.toHaveProperty('recovery');
+    expect(client.store.getState().unconfirmed).toMatchObject([{ requestId, state: 'awaiting_decision', recovery: { kind: 'indeterminate', reason: 'store_changed' } }]);
+    expect(client.store.canApply(requestId)).toBe(false);
     expect(client.sent(replayMode('resend'))).toBe(0);
     expect(await rawItems(target)).toEqual([]);
+  });
+});
+
+
+/** Fresh main/renderer adapters over the same device directory model a renderer restart. */
+async function devicePersistence(target: TestPlanner) {
+  const root = await mkdtemp(join(tmpdir(), 'hq-work-device-'));
+  cleanups.push(() => rm(root, { recursive: true, force: true }));
+  return () => workLocalPersistence(createWorkLocal({ root, endpoint: () => target.url }) as WorkLocalTransport);
+}
+
+describe('durable queue against the real Planner', () => {
+  it('restores an offline edit and flushes it exactly once after reconnect', async () => {
+    const target = await planner();
+    const disk = await devicePersistence(target);
+    const first = await connect(target, disk());
+    await first.store.load();
+    saved(await first.store.create({ title: 'Before' }));
+    const id = stored(first, 'Before').id;
+    await target.stop();
+    await first.store.poll();
+    expect(await first.store.patch(id, { title: 'Kept offline' })).toMatchObject({ queued: { queueId: expect.any(String) } });
+    // Wait for the coalesced device save before opening a fresh adapter.
+    await vi.waitFor(async () => expect(await disk().load()).toMatchObject({ queued: [{ state: 'queued' }] }));
+    const restarted = await connect(target, disk());
+    await restarted.store.load();
+    expect(restarted.store.getState().queued).toHaveLength(1);
+    await target.start();
+    await restarted.store.poll();
+    expect(restarted.store.getState().queued).toEqual([]);
+    expect(one(await rawItems(target), 'Kept offline')).toMatchObject({ id, revision: 2 });
+    const patches = restarted.sent(c => c.method === 'PATCH');
+    expect(patches).toBe(1);
+    await restarted.store.poll();
+    expect(restarted.sent(c => c.method === 'PATCH')).toBe(patches);
+  });
+
+  it('holds an offline edit when another client changed the same field', async () => {
+    const target = await planner();
+    const disk = await devicePersistence(target);
+    const mine = await connect(target, disk());
+    await mine.store.load();
+    saved(await mine.store.create({ title: 'Shared' }));
+    const id = stored(mine, 'Shared').id;
+    const theirs = await connect(target);
+    await theirs.store.load();
+    await target.stop();
+    await mine.store.poll();
+    await mine.store.patch(id, { title: 'Mine' });
+    await target.start();
+    saved(await theirs.store.patch(id, { title: 'Theirs' }));
+    await mine.store.poll();
+    expect(mine.store.getState().queued).toMatchObject([{ state: 'conflict', conflict: { fields: ['title'] } }]);
+    expect(mine.sent(c => c.method === 'PATCH')).toBe(0);
+    expect(one(await rawItems(target), 'Theirs').revision).toBe(2);
+    const queueId = mine.store.getState().queued[0]!.queueId;
+    expect(await mine.store.resolveQueued(queueId, 'keep_mine')).toMatchObject({ status: 'saved' });
+    expect(one(await rawItems(target), 'Mine').revision).toBe(3);
+    expect(mine.sent(c => c.method === 'PATCH')).toBe(1);
+  });
+
+  it.each(['request', 'answer'] as const)('restores a lost %s and requires Check before any Apply', async where => {
+    const target = await planner();
+    const disk = await devicePersistence(target);
+    const first = await connect(target, disk());
+    await first.store.load();
+    first.lose(where, isCreate);
+    const result = await first.store.create({ title: 'Uncertain capture' });
+    expect(result.status).toBe('unconfirmed');
+    if (result.status !== 'unconfirmed') throw new Error('Expected unknown outcome');
+    const { requestId } = result;
+    await vi.waitFor(async () => expect(await disk().load()).toMatchObject({ unconfirmed: [{ requestId, intent: { requestId } }] }));
+    const restarted = await connect(target, disk());
+    await restarted.store.load();
+    await restarted.store.poll();
+    expect(restarted.store.getState().unconfirmed).toHaveLength(1);
+    expect(restarted.sent(isCreate)).toBe(0);
+    expect(await restarted.store.retryUnconfirmed(requestId)).toBe('refused');
+    expect(restarted.sent(replayMode('resend'))).toBe(0);
+    expect(await restarted.store.checkUnconfirmed(requestId)).toBe(where === 'answer' ? 'confirmed' : 'not_applied');
+    if (where === 'request') expect(await restarted.store.retryUnconfirmed(requestId)).toBe('confirmed');
+    expect(titled(await rawItems(target), 'Uncertain capture')).toHaveLength(1);
+    expect(await restarted.store.retryUnconfirmed(requestId)).toBe('missing');
+    expect(restarted.sent(replayMode('resend'))).toBe(where === 'request' ? 1 : 0);
+  });
+});
+
+describe('explicit Planner health through main HTTP', () => {
+  it('reports ready and then unreachable without sending writes', async () => {
+    const target = await planner();
+    const client = await connect(target);
+    expect(await client.live.health()).toMatchObject({ status: 'ready', api: 2 });
+    await target.stop();
+    expect(await client.live.health()).toMatchObject({ status: 'unavailable', reason: 'unreachable' });
+    expect(client.exchanges.every(e => isVersion(e.call))).toBe(true);
+  });
+
+  it('reports the Planner Host refusal', async () => {
+    const target = await planner();
+    const client = await connect(target, undefined, (endpoint, call) => sendHttp(endpoint, { ...call, headers: { ...call.headers, Host: 'unapproved.example' } }));
+    expect(await client.live.health()).toMatchObject({ status: 'unavailable', reason: 'refused', httpStatus: 421 });
+    expect(client.exchanges.every(e => isVersion(e.call))).toBe(true);
   });
 });

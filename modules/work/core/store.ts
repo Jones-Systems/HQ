@@ -288,6 +288,8 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
   let restoring: Promise<void> | null = null;
   /** Entries whose outcome a caller of `resolveQueued` is waiting for. */
   const outcomes = new Map<string, QueueOutcome | null>();
+  const pendingDurable = new Map<string, DurableUnconfirmed>();
+  let persistedPending = state.pending;
   let persistedQueued: QueuedWrite[] = state.queued;
   let persistedUnconfirmed: UnconfirmedWrite[] = state.unconfirmed;
   let persistedText = JSON.stringify({ queued: [], unconfirmed: [] });
@@ -361,13 +363,18 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
     for (const listener of listeners) listener();
   }
 
-  /** Hands the durable entries to the persistence after a change to `queued` or `unconfirmed`. */
+  /** Pending sends are stored as unknown outcomes: a restart never repeats them automatically. */
   function persist() {
-    if (!slot || (state.queued === persistedQueued && state.unconfirmed === persistedUnconfirmed)) return;
+    if (!slot || (state.pending === persistedPending && state.queued === persistedQueued && state.unconfirmed === persistedUnconfirmed)) return;
+    persistedPending = state.pending;
+    for (const id of pendingDurable.keys()) if (!state.pending.some((p) => p.requestId === id)) pendingDurable.delete(id);
     persistedQueued = state.queued;
     persistedUnconfirmed = state.unconfirmed;
     for (const id of [...intents.keys()]) if (!state.unconfirmed.some((u) => u.requestId === id)) intents.delete(id);
-    const unconfirmed: DurableUnconfirmed[] = state.unconfirmed.map((u) => ({ ...u, intent: intents.get(u.requestId) ?? null }));
+    const unconfirmed: DurableUnconfirmed[] = [
+      ...pendingDurable.values(),
+      ...state.unconfirmed.map((u) => ({ ...u, intent: intents.get(u.requestId) ?? null })),
+    ];
     const text = JSON.stringify({ queued: state.queued, unconfirmed });
     if (text === persistedText) return;
     persistedText = text;
@@ -498,10 +505,13 @@ export function createWorkStore(port: PlannerPort, options: WorkStoreOptions = {
    * `unavailable` (known not delivered) is queued instead of failing.
    */
   async function dispatchWrite<R extends WriteResult | SettingsResult = WriteResult>(write: WriteOp, onSaved?: (result: WriteResult) => UndoAction | null, label?: string, keep?: Item | Settings): Promise<WriteOutcome<R>> {
+    if (slot) await ensureRestored();
     const requestId = nextRequestId();
     const baseVersion = state.confirmed?.stateVersion ?? 0;
     const attemptedAt = stamp();
+    if (slot) pendingDurable.set(requestId, { requestId, write: clone(write), attemptedAt, baseVersion, state: 'unconfirmed', possiblySavedIds: [], intent: null });
     set({ pending: [...state.pending, { requestId, write }] });
+    if (slot) await slot.settle();
     try {
       const result = await send(write, requestId) as R;
       savedAt = stamp();
