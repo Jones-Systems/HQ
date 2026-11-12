@@ -1,12 +1,15 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { Menu } from '@hq/ui';
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { Menu, useListMotion } from '@hq/ui';
 import {
-  DATE_KIND_LABEL, formatShort, formatValue, HORIZON_LABEL, isLive, isOpen, matchesFilters, sortByPosition,
+  DATE_KIND_IDS, DATE_KIND_LABEL, formatShort, formatValue, HORIZON_LABEL, isLive, isOpen, matchesFilters, sortByPosition,
   type Horizon, type Item,
 } from '../core';
+import { flash } from '../motion';
+import { PageHeader } from '../theme';
+import { shake, slideIn } from './calendar-motion';
 import { isPending, useCssVars, useEnv, useRemembered } from './env';
 import { stepHorizon, timelineGeometry, timelineScale, TIMELINE_LANES } from './moves';
-import { cx, KindMark, MoreIcon, MotivationPill, ViewHint } from './parts';
+import { cx, KindMark, MoreIcon, MotivationPill } from './parts';
 import './timeline.css';
 
 // Timeline (RV-4): horizon lanes across eight quarters. A row changes horizon
@@ -14,8 +17,17 @@ import './timeline.css';
 // is one `{ horizon }` patch with Undo. Coarse dates draw as the period they
 // name, and a bar joins a start date to a later target or deadline only when
 // the owner set both ends.
+//
+// Presentation (flow assessment X-4, X-8): the page header names the view and the range; moving the range slides the
+// quarters in the direction of travel; a row that changes lane glides there (shared list motion) and flashes; the lane
+// under a dragged row lights up; a refused move shakes the row once. Under reduced motion none of this moves.
 
 const laneKey = (horizon: Horizon | null) => horizon ?? 'none';
+const KEY_BY_KIND: Record<(typeof DATE_KIND_IDS)[number], string> = { target: 'Target', deadline: 'Deadline', start: 'Start', event: 'Event' };
+
+/** One background layer per quarter boundary, in percent of the eight quarters, so the lines match the ticks exactly. */
+const gridLayers = (lefts: readonly number[]) => lefts.slice(1)
+  .map((left) => `linear-gradient(var(--hq-border), var(--hq-border)) ${left.toFixed(3)}% 0 / 1px 100% no-repeat`).join(', ');
 
 function Placed({ className, left, width, title, children }: { className: string; left: number; width?: number; title?: string; children?: ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -27,14 +39,19 @@ export function TimelineView() {
   const env = useEnv();
   const { today, state } = env;
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [landed, setLanded] = useState<{ id: string } | null>(null);
   const [offset, setOffset] = useRemembered('timeline.offset', 0);
   const dragging = useRef<string | null>(null);
+  const over = useRef<Element | null>(null);
+  const slid = useRef(offset);
   const root = useRef<HTMLDivElement>(null);
-  const timeline = useRef<HTMLDivElement>(null);
   const items = state.items.filter((it) => isLive(it) && isOpen(it) && matchesFilters(it, env.filters));
+  const lanes = TIMELINE_LANES.map((lane) => ({ lane, items: sortByPosition(items.filter((it) => (it.horizon ?? null) === lane.id)) }));
+  // Rows glide between lanes when a horizon changes: one ref on the grid measures every row.
+  const timeline = useListMotion<HTMLDivElement>(lanes.flatMap((l) => l.items.map((it) => it.id)));
   const scale = timelineScale(today, offset);
   const todayVisible = scale.today >= 0 && scale.today <= 100;
-  useCssVars(timeline, { '--wv-today': `${scale.today}%` });
+  useCssVars(timeline, { '--wv-today': `${scale.today}%`, '--wv-grid': gridLayers(scale.quarters.map((q) => q.left)) });
   const quarterLabel = (value: string) => `${value.slice(5)} ${value.slice(0, 4)}`;
 
   useEffect(() => {
@@ -43,13 +60,35 @@ export function TimelineView() {
     if (row && document.activeElement !== row) row.focus();
   }, [focusId, state.items]);
 
-  const setHorizon = (id: string, horizon: Horizon | null): Promise<unknown> => {
+  // Moving the range slides every plane (ticks, today line, marks) from the side the new quarters come from.
+  useLayoutEffect(() => {
+    const before = slid.current;
+    slid.current = offset;
+    if (before === offset) return;
+    timeline.current?.querySelectorAll('.wv-tl-plane').forEach((plane) => slideIn(plane, offset - before));
+  }, [offset, timeline]);
+
+  const rowOf = (id: string) => [...(root.current?.querySelectorAll<HTMLElement>('[data-row-id]') ?? [])].find((el) => el.dataset.rowId === id)?.closest('.wv-tl-row') ?? null;
+  // The moved row flashes where it landed. The write is projected at once, so the row is in its new lane within a frame.
+  useEffect(() => {
+    if (!landed) return undefined;
+    const handle = requestAnimationFrame(() => flash(rowOf(landed.id)));
+    return () => cancelAnimationFrame(handle);
+  }, [landed]);
+
+  const setHorizon = async (id: string, horizon: Horizon | null): Promise<boolean> => {
     const item = state.items.find((it) => it.id === id);
-    if (!item || item.horizon === horizon) {
-      if (item) env.announce('Same horizon');
-      return Promise.resolve();
+    if (!item) return false;
+    if (item.horizon === horizon) {
+      env.announce('Same horizon');
+      shake(rowOf(id));
+      return false;
     }
-    return env.run(env.store.patch(id, { horizon }), `“${item.title}” is now ${horizon ? HORIZON_LABEL[horizon] : 'without a horizon'}.`);
+    const saved = env.run(env.store.patch(id, { horizon }), `“${item.title}” is now ${horizon ? HORIZON_LABEL[horizon] : 'without a horizon'}.`);
+    setLanded({ id });
+    const ok = await saved;
+    if (!ok) shake(rowOf(id));
+    return ok;
   };
 
   const onRowKey = (event: KeyboardEvent<HTMLDivElement>, item: Item) => {
@@ -69,35 +108,72 @@ export function TimelineView() {
     void setHorizon(item.id, next).finally(() => setFocusId((f) => (f === item.id ? null : f)));
   };
 
+  // ---- drag: arm on dragstart, light up the lane under the pointer, disarm on drop or dragend
+  const setOver = (next: Element | null) => {
+    if (over.current === next) return;
+    over.current?.removeAttribute('data-over');
+    next?.setAttribute('data-over', 'true');
+    over.current = next;
+  };
+  const beginDrag = (item: Item, event: DragEvent) => {
+    dragging.current = item.id;
+    event.dataTransfer?.setData('text/plain', item.title);
+    // Marked after the browser has taken its drag image, so the image shows the row as it was.
+    window.setTimeout(() => { if (dragging.current === item.id) root.current?.setAttribute('data-wk-dragging', 'row'); }, 0);
+  };
+  const endDrag = (): string | null => {
+    const id = dragging.current;
+    dragging.current = null;
+    setOver(null);
+    root.current?.removeAttribute('data-wk-dragging');
+    return id;
+  };
+
   return (
     // A drag that ends anywhere, dropped or cancelled, disarms; a later unrelated drop must not move the item.
-    <div ref={root} className="wv-tl-wrap" onDragEnd={() => { dragging.current = null; }}>
-      <ViewHint>Drag a row to another lane to change its horizon, or press Alt+↑ or Alt+↓, or M for its menu. Bars appear only between a start date and a later target or deadline you set.</ViewHint>
-      <div className="wv-tl-nav">
-        <div className="wv-seg" role="group" aria-label="Timeline navigation">
-          <button type="button" className="wv-seg-btn" onClick={() => setOffset(offset - 4)}>Earlier</button>
-          <button type="button" className="wv-seg-btn" onClick={() => setOffset(0)}>Today</button>
-          <button type="button" className="wv-seg-btn" onClick={() => setOffset(offset + 4)}>Later</button>
-        </div>
-        <span className="wv-tl-range" role="status" aria-label="Timeline range" aria-live="polite" aria-atomic="true">{quarterLabel(scale.quarters[0]!.value)} – {quarterLabel(scale.quarters.at(-1)!.value)}</span>
-      </div>
-      <div className="wv-tl-scroll" role="region" aria-label="Horizon timeline" tabIndex={0}>
-      <div ref={timeline} className={cx('wv-tl', todayVisible && 'has-today')}>
-        <div className="wv-tl-row wv-tl-header">
-          <div className="wv-tl-label wv-tl-corner"><span>Horizon</span><span className="wv-muted">open items</span></div>
-          <div className="wv-tl-track wv-tl-scale">
-            {scale.quarters.map((q, index) => (
-              <Placed key={q.value} className={cx('wv-tl-tick', q.value.endsWith('Q1') && 'is-year')} left={q.left} width={q.width}>
-                <span>{index === 0 || q.value.endsWith('Q1') ? q.value.replace('-', ' · ') : q.value.slice(5)}</span>
-              </Placed>
-            ))}
-            {todayVisible && <Placed className="wv-tl-today" left={scale.today} title="Today"><span>Today</span></Placed>}
+    <div
+      ref={root}
+      className="wv-tl-wrap"
+      onDragEnd={() => { endDrag(); }}
+      onDragOver={(event: DragEvent) => {
+        if (dragging.current) setOver(event.target instanceof Element ? event.target.closest('.wv-tl-lane') : null);
+      }}
+    >
+      <PageHeader
+        title="Timeline"
+        meta={(
+          <>
+            <span className="wv-tl-range" role="status" aria-label="Timeline range" aria-live="polite" aria-atomic="true">
+              {quarterLabel(scale.quarters[0]!.value)} – {quarterLabel(scale.quarters.at(-1)!.value)}
+            </span>
+            {' · '}Horizon lanes across eight quarters.
+          </>
+        )}
+        actions={(
+          <div className="wk-seg" role="group" aria-label="Timeline navigation">
+            <button type="button" className="wk-seg-item" onClick={() => setOffset(offset - 4)}>Earlier</button>
+            <button type="button" className="wk-seg-item" onClick={() => setOffset(0)}>Today</button>
+            <button type="button" className="wk-seg-item" onClick={() => setOffset(offset + 4)}>Later</button>
           </div>
-          <div className="wv-tl-date-text">Dates</div>
-        </div>
-        {TIMELINE_LANES.map((lane) => {
-          const laneItems = sortByPosition(items.filter((it) => (it.horizon ?? null) === lane.id));
-          return (
+        )}
+      />
+      <div className="wv-tl-scroll" role="region" aria-label="Horizon timeline" tabIndex={0}>
+        <div ref={timeline} className={cx('wv-tl', todayVisible && 'has-today')}>
+          <div className="wv-tl-row wv-tl-header">
+            <div className="wv-tl-label wv-tl-corner"><span>Horizon</span><span className="wv-muted">open items</span></div>
+            <div className="wv-tl-track wv-tl-scale">
+              <div className="wv-tl-plane">
+                {scale.quarters.map((q, index) => (
+                  <Placed key={q.value} className={cx('wv-tl-tick', q.value.endsWith('Q1') && 'is-year')} left={q.left} width={q.width}>
+                    <span>{index === 0 || q.value.endsWith('Q1') ? q.value.replace('-', ' · ') : q.value.slice(5)}</span>
+                  </Placed>
+                ))}
+                {todayVisible && <Placed className="wv-tl-today" left={scale.today} title="Today"><span>Today</span></Placed>}
+              </div>
+            </div>
+            <div className="wv-tl-date-text">Dates</div>
+          </div>
+          {lanes.map(({ lane, items: laneItems }) => (
             <section
               key={laneKey(lane.id)}
               className={cx('wv-tl-lane', `wv-hz--${laneKey(lane.id)}`)}
@@ -105,17 +181,18 @@ export function TimelineView() {
               aria-label={`${lane.label} lane, ${laneItems.length} items`}
               onDragOver={(event: DragEvent) => { if (dragging.current) event.preventDefault(); }}
               onDrop={(event: DragEvent) => {
-                const id = dragging.current;
-                dragging.current = null;
+                const id = endDrag();
                 if (!id) return;
                 event.preventDefault();
                 void setHorizon(id, lane.id);
               }}
             >
               <div className="wv-tl-lane-head">
-                <strong>{lane.label}</strong>
-                <span className="wv-muted">{lane.hint}</span>
-                <span className="wv-count">{laneItems.length}</span>
+                <div className="wv-tl-lane-title">
+                  <strong>{lane.label}</strong>
+                  <span className="wv-muted">{lane.hint}</span>
+                  <span className="wk-count">{laneItems.length}</span>
+                </div>
               </div>
               {!laneItems.length && <div className="wv-tl-empty">Drop items here</div>}
               {laneItems.map((item) => (
@@ -125,13 +202,20 @@ export function TimelineView() {
                   offset={offset}
                   onKey={onRowKey}
                   onPick={setHorizon}
-                  onDragStart={(event) => { dragging.current = item.id; event.dataTransfer?.setData('text/plain', item.title); }}
+                  onDragStart={(event) => beginDrag(item, event)}
                 />
               ))}
             </section>
-          );
-        })}
+          ))}
+        </div>
       </div>
+      <div className="wv-tl-foot">
+        <ul className="wv-tl-key" aria-label="Key">
+          {DATE_KIND_IDS.map((kind) => <li key={kind}><span className={cx('wv-tl-key-mark', `wv-dk--${kind}`)} aria-hidden="true" />{KEY_BY_KIND[kind]}</li>)}
+          <li><span className="wv-tl-key-band" aria-hidden="true" />Period (week, month, quarter)</li>
+          <li><span className="wv-tl-key-span" aria-hidden="true" />Start to a later target or deadline</li>
+        </ul>
+        <p className="wv-hint">Drag a row to another lane to change its horizon, or press Alt+↑ or Alt+↓, or M for its menu. A bar appears only between a start date and a later target or deadline you set.</p>
       </div>
     </div>
   );
@@ -151,7 +235,7 @@ function TimelineRow({ item, offset, onKey, onPick, onDragStart }: {
     : 'Unscheduled';
   const fullDates = geo.marks.length ? geo.marks.map(({ entry }) => `${DATE_KIND_LABEL[entry.kind]} · ${formatValue(entry)}`).join(' · ') : 'Unscheduled';
   return (
-    <div className={cx('wv-tl-row', isPending(env.state, item.id) && 'is-pending', item.is_example && 'is-example')}>
+    <div className={cx('wv-tl-row', isPending(env.state, item.id) && 'is-pending', item.is_example && 'is-example')} data-hq-motion-key={item.id}>
       <div
         className="wv-tl-label"
         tabIndex={0}
@@ -181,24 +265,26 @@ function TimelineRow({ item, offset, onKey, onPick, onDragStart }: {
         />
       </div>
       <div className="wv-tl-track">
-        {!geo.marks.length && <span className="wv-tl-unscheduled">Unscheduled</span>}
-        {geo.spans.map((s) => (
-          <Placed key={`${s.from.id}-${s.to.id}`} className="wv-tl-span" left={s.left} width={s.width} title={`${formatValue(s.from, env.today)} → ${formatValue(s.to, env.today)}`} />
-        ))}
-        {geo.marks.map(({ entry, shape, left, width }) => {
-          const title = `${DATE_KIND_LABEL[entry.kind]} · ${formatValue(entry)}${entry.note ? ` — ${entry.note}` : ''}`;
-          if (shape === 'edge-before' || shape === 'edge-after') {
+        <div className="wv-tl-plane">
+          {!geo.marks.length && <span className="wv-tl-unscheduled">Unscheduled</span>}
+          {geo.spans.map((s) => (
+            <Placed key={`${s.from.id}-${s.to.id}`} className="wv-tl-span" left={s.left} width={s.width} title={`${formatValue(s.from, env.today)} → ${formatValue(s.to, env.today)}`} />
+          ))}
+          {geo.marks.map(({ entry, shape, left, width }) => {
+            const title = `${DATE_KIND_LABEL[entry.kind]} · ${formatValue(entry)}${entry.note ? ` — ${entry.note}` : ''}`;
+            if (shape === 'edge-before' || shape === 'edge-after') {
+              return (
+                <span key={entry.id} className={cx('wv-tl-edge', shape === 'edge-before' ? 'is-before' : 'is-after', `wv-dk--${entry.kind}`)} role="img" aria-label={`${title}, ${shape === 'edge-before' ? 'before' : 'after'} visible range`} title={title}>
+                  <span aria-hidden="true">{shape === 'edge-before' ? '‹' : '›'}</span><span className="wv-dk-shape" aria-hidden="true" />
+                </span>
+              );
+            }
+            if (shape === 'marker') return <Placed key={entry.id} className={cx('wv-tl-marker', `wv-dk--${entry.kind}`)} left={left} title={title} />;
             return (
-              <span key={entry.id} className={cx('wv-tl-edge', shape === 'edge-before' ? 'is-before' : 'is-after', `wv-dk--${entry.kind}`)} role="img" aria-label={`${title}, ${shape === 'edge-before' ? 'before' : 'after'} visible range`} title={title}>
-                <span aria-hidden="true">{shape === 'edge-before' ? '‹' : '›'}</span><span className="wv-dk-shape" aria-hidden="true" />
-              </span>
+              <Placed key={entry.id} className={cx('wv-tl-band', `wv-dk--${entry.kind}`, `wv-pr--${entry.precision}`)} left={left} width={width} title={title} />
             );
-          }
-          if (shape === 'marker') return <Placed key={entry.id} className={cx('wv-tl-marker', `wv-dk--${entry.kind}`)} left={left} title={title} />;
-          return (
-            <Placed key={entry.id} className={cx('wv-tl-band', `wv-dk--${entry.kind}`, `wv-pr--${entry.precision}`)} left={left} width={width} title={title} />
-          );
-        })}
+          })}
+        </div>
       </div>
       <div className="wv-tl-date-text" title={fullDates} aria-label={fullDates}>{dateText}</div>
     </div>
