@@ -36,7 +36,13 @@ export interface DurableSlot {
 }
 
 /** The slot the capture lane adopts for HQ drafts. The first claimant receives the stored drafts. */
-export interface DurableDrafts { claim(): Promise<unknown[]>; save(drafts: unknown[]): void }
+export interface DurableDrafts {
+  claim(): Promise<unknown[]>;
+  save(drafts: unknown[]): void;
+  settle(): Promise<void>;
+  status(): DurableStatus;
+  onStatus(listener: () => void): () => void;
+}
 
 interface Stored extends DurableEntries { drafts: unknown[]; dropped: number }
 
@@ -207,6 +213,12 @@ function createHub(persistence: WorkPersistence, now: () => Date): Hub {
         save(drafts) {
           own.drafts = drafts;
           void save();
+        },
+        settle: save,
+        status: () => status,
+        onStatus(listener) {
+          listeners.add(listener);
+          return () => void listeners.delete(listener);
         },
       };
     },
