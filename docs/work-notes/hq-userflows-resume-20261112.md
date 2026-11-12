@@ -186,6 +186,26 @@ detail. Token copying is injected by the production composition instead of readi
 the host inside the preview graph; the egress oracle is unchanged. All corrections
 await a new full required CI run; native qualification remains unrun.
 
+At `17f1d05c`, hosted Foundation's build and full root Vitest step passed. Wiki
+reported one stale header expectation (`index rules v1` versus the accepted v2
+contract); its source assertion now follows v2. Design's remaining type error was
+an incomplete fake object relabelled as bridged. The fixture now composes the real
+bridged workspace over the existing in-memory transport and replaces only its
+explicit synthetic picker. Required discovery remains unchanged; later steps
+blocked by these failures still need execution on the next head.
+
+Exact private origin-record reads and independent installed-source review now
+resolve both unknown requests as reservation rejected / never remotely launched.
+The existing rejected receipts prevent ordinary replay and startup recovery from
+dispatching them; there are no task/admission handles. Pending journal rows remain
+unchanged and no new native fence was created. This disposition applies to the
+exact original keys, intact records and inspected installed behavior. Current
+receiving run/root ownership predicates were verified separately. Original retries
+are stopped; the Wiki UI successor has a new task key and source-only worktree.
+The unused Mini heavy allocation was returned to the updater, which accepted it
+for one separately approved attempt. HQ verification waits for its explicit
+process/EOF/lock closure and slot return, plus qualified compiler controls.
+
 Contributing conversations and roles, with native identifiers retained privately:
 
 - Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.

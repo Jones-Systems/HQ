@@ -6,6 +6,8 @@ import type { DesignSectionProps } from '../../../ui/contract.ts';
 import { createDesignWorkspace } from '../workspace.ts';
 import { DesignWorkspaceContext } from '../workspace-context.tsx';
 import { ImportsView } from '../views/ImportsView.tsx';
+import { createBridgeWorkspaceDocuments } from '../bridge-documents.ts';
+import { createTransportDouble } from './bridge-double.ts';
 
 beforeEach(() => vi.stubGlobal('crypto', webcrypto));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -37,8 +39,15 @@ it('requires explicit rights and discards a prepared plan when the statement cha
 });
 
 it.each(['licensed', 'permission', 'public-domain'] as const)('permits an explicit %s statement in bridged presentation', async (basis) => {
-  // Keep data synthetic while exercising the same rights controls as the native picker.
-  const workspace = { ...createDesignWorkspace(null), bridged: true as const };
+  // Compose the real bridged shape over an in-memory transport, replacing only its file-picker fixture.
+  const double = createTransportDouble();
+  const workspace = createDesignWorkspace(createBridgeWorkspaceDocuments(double.transport));
+  if (!workspace.bridged) throw new Error('Expected the bridged presentation');
+  const synthetic = createDesignWorkspace(null);
+  workspace.importsFor = (context, source) => {
+    if (!source) throw new Error('This fixture requires an explicit synthetic source');
+    return synthetic.importsFor(context, source);
+  };
   await act(async () => { render(<DesignWorkspaceContext.Provider value={workspace}>
     <Suspense fallback={<p>Loading</p>}><ImportsView {...props} /></Suspense>
   </DesignWorkspaceContext.Provider>); });

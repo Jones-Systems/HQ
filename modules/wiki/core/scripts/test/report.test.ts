@@ -26,7 +26,7 @@ describe('closed report', () => {
     assert.deepEqual(JSON.parse(json), JSON.parse(JSON.stringify(report)));
     assert.ok(json.endsWith('\n'));
     const table = renderTable(report);
-    assert.match(table, /^wiki source validation \(aggregates only\), report v2, index rules v1\n/);
+    assert.match(table, /^wiki source validation \(aggregates only\), report v2, index rules v2\n/);
     assert.match(table, /\npages +9 +0\n/);
     assert.match(table, /\nstate +ready +unavailable\n/);
     assert.ok(table.endsWith('\n'));
