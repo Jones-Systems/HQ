@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch } from 'react';
+import { useEffect, useState, type Dispatch, type ReactNode } from 'react';
 import type { NodeId, Rect } from '../contract.ts';
 import type { Alignment, ZOrder } from '../arrangement.ts';
 import type { ArrangementEdit, CanvasAction } from '../controller.ts';
@@ -12,6 +12,8 @@ interface InspectorProps {
   readonly readOnly: boolean;
   /** Hidden placements, offered for re-showing when nothing is selected. */
   readonly hiddenIds: readonly string[];
+  /** The selected item's capture or summary, drawn small above its facts. Optional: root supplies it. */
+  readonly preview?: ReactNode;
   readonly dispatch: Dispatch<CanvasAction>;
 }
 
@@ -55,7 +57,7 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 /** Inspector of useful canvas properties. Source identity is read-only; only arrangement fields edit. */
-export function Inspector({ model, selection, gridSize, gridSnap, readOnly, hiddenIds, dispatch }: InspectorProps) {
+export function Inspector({ model, selection, gridSize, gridSnap, readOnly, hiddenIds, preview, dispatch }: InspectorProps) {
   const edit = (change: ArrangementEdit) => dispatch({ type: 'edit', edit: change });
   const ids = [...selection];
 
@@ -63,6 +65,7 @@ export function Inspector({ model, selection, gridSize, gridSnap, readOnly, hidd
     return <section className="hq-inspector" aria-label="Inspector">
       <h2>Canvas</h2>
       <dl><Row label="Items" value={String(model.itemCount)} /><Row label="Artboards" value={String(model.artboardCount)} /></dl>
+      <p className="hq-inspector-hint">Select an item to see its capture, source and frame.</p>
       <fieldset disabled={readOnly}>
         <legend>Grid</legend>
         <label className="hq-inspector-check"><input type="checkbox" checked={gridSnap} onChange={(event) => edit({ kind: 'grid', grid: { snap: event.target.checked } })} /> Snap to grid</label>
@@ -119,19 +122,18 @@ export function Inspector({ model, selection, gridSize, gridSnap, readOnly, hidd
     </section>;
   }
 
+  const viewport = model.details.find((detail) => detail.label === 'Viewport');
+  const more = model.details.filter((detail) => detail !== viewport);
   return <section className="hq-inspector" aria-label="Inspector">
+    {preview && <div className="hq-inspector-preview">{preview}</div>}
     <h2>{model.title}</h2>
     {model.sourceMessage && <p className="hq-inspector-warning" role="status">{model.sourceMessage}. The placement is kept.</p>}
     <dl>
-      <Row label="Kind" value={model.itemKind ?? 'Unknown'} />
       <Row label="Provider" value={model.providerLabel ?? model.ref.providerId} />
-      <Row label="Entity" value={model.ref.entityId} />
+      <Row label="Viewport" value={viewport?.value ?? (model.intrinsicSize ? `${model.intrinsicSize.width} × ${model.intrinsicSize.height}` : 'Unknown')} />
       <Row label="Pinned revision" value={model.ref.revision} />
       <Row label="Provenance" value={model.provenance ?? 'Unknown'} />
       {model.artboardName && <Row label="Artboard" value={model.artboardName} />}
-      {model.intrinsicSize && <Row label="Intrinsic size" value={`${model.intrinsicSize.width} × ${model.intrinsicSize.height}`} />}
-      {model.scale !== null && <Row label="Scale" value={`${round(model.scale * 100)}%`} />}
-      {model.details.map((detail) => <Row key={detail.label} label={detail.label} value={detail.value} />)}
     </dl>
     <FrameFields id={model.id} frame={model.frame} disabled={readOnly || model.locked} edit={edit} />
     <fieldset disabled={readOnly}>
@@ -141,5 +143,15 @@ export function Inspector({ model, selection, gridSize, gridSnap, readOnly, hidd
         onClick={() => edit({ kind: 'set-frame', id: model.id, frame: { width: model.intrinsicSize!.width, height: model.intrinsicSize!.height } })}>Reset to intrinsic size</button>}
     </fieldset>
     {arrange}
+    <details className="hq-inspector-more">
+      <summary>Source details</summary>
+      <dl>
+        <Row label="Kind" value={model.itemKind ?? 'Unknown'} />
+        <Row label="Entity" value={model.ref.entityId} />
+        {model.intrinsicSize && <Row label="Intrinsic size" value={`${model.intrinsicSize.width} × ${model.intrinsicSize.height}`} />}
+        {model.scale !== null && <Row label="Scale" value={`${round(model.scale * 100)}%`} />}
+        {more.map((detail) => <Row key={detail.label} label={detail.label} value={detail.value} />)}
+      </dl>
+    </details>
   </section>;
 }

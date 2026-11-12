@@ -1,0 +1,59 @@
+/* The Requests and Runs page. Layout adapts to the width of the page itself (the Design inspector is open by
+ * default, so the page is often 560 to 1100px), not to the window. Colour tokens: --hqd-*; motion and radius: --hq-*. */
+.hqd-request-page { container-type: inline-size; max-width: 1120px; margin: 0 auto; display: grid; gap: 20px; }
+.hqd-page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.hqd-chrome .hqd-page-heading h1 { margin: 0; font: var(--hq-type-display, 600 24px/30px system-ui); letter-spacing: -.025em; }
+.hqd-chrome .hqd-page-heading p { margin: 6px 0 0; color: var(--hqd-muted); font-size: 13px; line-height: 1.5; max-width: 62ch; }
+.hqd-request-tabs { display: grid; gap: 4px; }
+.hqd-request-tabs > .hq-tabpanel { padding-block: 12px 0; }
+
+/* A list beside the open request. Stacked (list on top, capped) while the page is narrow. */
+.hqd-request-layout { display: grid; gap: 16px; align-items: start; }
+.hqd-request-rail { display: grid; gap: 10px; align-content: start; min-width: 0; padding: 14px; border: 1px solid var(--hqd-line); border-radius: 12px; background: var(--hqd-surface); }
+.hqd-request-rail .hqr-request-list { max-height: 248px; overflow-y: auto; }
+.hqd-rail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hqd-chrome .hqd-rail-head h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.hqd-rail-loading { display: grid; gap: 8px; }
+.hqd-chrome .hqd-rail-empty { margin: 0; color: var(--hqd-muted); font-size: 12px; line-height: 1.5; }
+.hqd-request-detail { min-width: 0; }
+@container (min-width: 860px) {
+  .hqd-request-layout { grid-template-columns: 296px minmax(0, 1fr); }
+  .hqd-request-rail { position: sticky; top: 0; }
+  .hqd-request-rail .hqr-request-list { max-height: none; overflow-y: visible; }
+}
+
+/* New request: chosen from every saved version of the project. */
+.hqd-new-request { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--hqd-line); border-radius: 10px; background: var(--hqd-background); }
+.hqd-chrome .hqd-new-request h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.hqd-chrome .hqd-new-request header p { margin: 4px 0 0; color: var(--hqd-muted); font-size: 12px; line-height: 1.5; }
+.hqd-new-request-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.hqd-empty-state { display: grid; justify-items: center; gap: 8px; padding: 48px 24px; border: 1px dashed var(--hqd-line); border-radius: 12px; text-align: center; }
+.hqd-empty-state h2, .hqd-empty-state h4 { margin: 0; font-size: 16px; font-weight: 600; }
+.hqd-empty-state h4 { font-size: 14px; }
+.hqd-chrome .hqd-empty-state p { margin: 0; color: var(--hqd-muted); max-width: 440px; line-height: 1.6; }
+.hqd-empty-compact { padding: 24px 16px; }
+.hqd-chrome .hqd-safety-note { font-size: 12px; }
+
+.hqd-request-section { display: grid; gap: 16px; }
+.hqd-section-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 8px; background: var(--hq-info-soft, var(--hqd-selected)); }
+.hqd-section-notice p { flex: 1 1 240px; margin: 0; font-size: 12px; line-height: 1.6; }
+
+/* Return provenance: four chips and one caveat. */
+.hqd-return-provenance { display: grid; gap: 6px; }
+.hqd-return-chips { display: flex; flex-wrap: wrap; gap: 6px 8px; list-style: none; margin: 0; padding: 0; }
+.hqd-chrome .hqd-return-provenance p { margin: 0; color: var(--hqd-muted); font-size: 12px; line-height: 1.5; }
+
+/* Returned tab: groups on the left, the review on the right once the page is wide enough. */
+.hqd-returned { display: grid; gap: 16px; align-items: start; }
+.hqd-returned-main { display: grid; gap: 16px; min-width: 0; }
+.hqd-returned-group { display: grid; gap: 8px; }
+.hqd-chrome .hqd-returned-group h3 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--hqd-muted); }
+.hqd-chrome .hqd-returned-empty { margin: 0; padding: 10px 12px; border: 1px dashed var(--hqd-line); border-radius: 8px; color: var(--hqd-muted); font-size: 12px; }
+.hqd-returned-pane { min-width: 0; }
+@container (min-width: 860px) {
+  .hqd-returned { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); }
+}
+
+/* Runs: the connector panel sits under the packet cards. */
+.hqd-runs-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

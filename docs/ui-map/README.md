@@ -10,6 +10,7 @@ Those links require access to that private repository; its content is not copied
 | --- | --- | --- |
 | [References library and composed section](references.md) | Design → Resources → References; restored `resources/references` destination; command palette; reference navigation; combined synthetic harness; integration preview library | Source discovery plus explicitly recorded synthetic checks |
 | [Reference graph](reference-graph.md) | Nonempty graph inside References; graph-only harness; combined synthetic harness | Source discovery plus explicitly recorded synthetic checks |
+| [Design core screens](design-core.md) | Projects, Canvas, Compare, Annotations, Requests/Returned and Runs; restored destinations and palette | Recovery source inventory; all current-head journeys unverified |
 | [Design chrome and Interactive controls](design-chrome-interactive.md) | Desktop Design → Projects; existing synthetic fallback | Bounded rail, sidebar and control geometry checks |
 | [Work presentation](work.md) | Work domain, status board and planning calendar; existing evidence harness | Synthetic gutters, empty state, scroll and calendar checks |
 | [Social calendar and empty state](social-calendar.md) | Social Calendar/Library; shared evidence harness | Synthetic calendar parity and representative StateView checks |
