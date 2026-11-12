@@ -11,7 +11,7 @@ import { createReferencePort } from '../references';
 import { DEFAULT_STATE, navigationKey } from '../state';
 import userEvent from '@testing-library/user-event';
 import { resetWorkSessions, setWorkSessionPort } from '../../../../modules/work/nav';
-import { resetSocialSessions } from '../../../../modules/social/core';
+import { FIXTURE_IDS, FIXTURE_WORK_ITEM_ID, resetSocialSessions, type SocialWorkspacePort } from '../../../../modules/social/core';
 
 const props: ModulePort = { context: { id: 'preview-test', name: 'Synthetic preview' }, destination: 'home', appearance: 'light', desktop: { platform: 'browser', versions: { electron: null } }, navigate: vi.fn() };
 afterEach(() => { cleanup(); resetWorkSessions(); setWorkSessionPort(null); resetSocialSessions(); window.localStorage.clear(); vi.restoreAllMocks(); });
@@ -90,7 +90,13 @@ it.each(['default', 'empty'] as const)('mounts the shared shell with %s fixtures
   expect(splitter.getAttribute('aria-valuenow')).toBe('64');
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
   expect(screen.getByRole('region', { name: 'Settings page' })).toBeTruthy();
-  expect(screen.getAllByText('Service configuration is unavailable in this window.')).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Social & Work' }));
+  expect(screen.getAllByText('Service configuration is unavailable in this window.').length).toBeGreaterThanOrEqual(1);
+  for (const name of ['Social', 'Work']) {
+    const button = screen.getByRole('button', { name: `Check connection for ${name}` });
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.getAttribute('aria-describedby')).toBeTruthy();
+  }
   expect(window.hqServices).toBeUndefined(); expect(window.hqDesktop).toBeUndefined();
 });
 
@@ -107,4 +113,18 @@ it('keeps registered preview references unavailable without opening a fixture ta
   }
   expect(open).not.toHaveBeenCalled();
   expect((await references.resolve({ version: 1, domain: 'work', kind: 'unregistered', projectId: 'hq-local', entityId: 'synthetic', title: 'Unknown', returnDestination: { domain: 'work', destination: 'home' } })).status).toBe('unknown');
+});
+
+it('opens the Social example in the project it is shown in, so its sample links are not read as another project', async () => {
+  const social = vi.fn((projectId: string) => seed('default').social(projectId));
+  const { Social } = createServiceDomains(() => UNCONFIGURED, { social });
+  render(<Social {...props} destination={`library/${FIXTURE_IDS.steepingThread}`} />);
+  expect(await screen.findByDisplayValue('Steeping times thread')).toBeTruthy();
+  expect(social).toHaveBeenCalledWith('preview-test');
+  const port = social.mock.results[0]!.value as SocialWorkspacePort;
+  const draft = (await port.snapshot()).content.find((item) => item.id === FIXTURE_IDS.steepingThread)!;
+  expect(draft.links?.map((link) => [link.domain, link.projectId, link.entityId])).toEqual([
+    ['social', 'preview-test', FIXTURE_IDS.exampleRun], ['work', 'preview-test', FIXTURE_WORK_ITEM_ID],
+  ]);
+  expect(screen.queryByText(/Another project: links are read-only/u)).toBeNull();
 });

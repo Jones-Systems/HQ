@@ -12,6 +12,7 @@ import { NOT_CHECKED, wikiStatus, type DataSource, type SourceStatus } from './d
 export type Reachability = 'reachable' | 'unreachable';
 export interface Observation {
   readonly state: Reachability;
+  readonly status?: SourceStatus;
   /** Epoch ms of the latest call that reported this state (refreshed at most once a minute). */
   readonly at: number;
 }
@@ -78,6 +79,12 @@ export function describe(source: DataSource, { config, observed }: DescribeInput
   }
   if (config.text === NOT_CHECKED.text && observed && !isWikiObservation(observed)) {
     const seen = describeObservation(observed);
+    if (observed.status) {
+      const status = observed.status;
+      const [label = status.text, ...details] = status.text.split(' · ');
+      const detail = [...details, seen.detail].join(' · ');
+      return { ...status, text: `${label} · ${detail}`, indicator: status.indicator ?? seen.tone, label, detail };
+    }
     return { text: `${seen.label} · ${seen.detail}`, tone: observed.state === 'reachable' ? 'good' : 'bad', indicator: seen.tone, label: seen.label, detail: seen.detail };
   }
   return wording(config, config.indicator ?? 'neutral');
@@ -93,7 +100,7 @@ export interface ObservedStatusStore {
   getSnapshot(): ObservedSnapshot;
   /** Record the answer to one real call. Never throws: observing must not change a call. */
   recordResponse(domain: ServiceDomain, answer: unknown): void;
-  record(domain: ServiceDomain, outcome: Outcome): void;
+  record(domain: ServiceDomain, outcome: Outcome, status?: SourceStatus): void;
   /** Record the Wiki index states the native host reported (`undefined` when its status call failed). No toasts. */
   recordWiki(states: readonly string[] | undefined): void;
   /** Forget every observation without toasts (tests and a fresh renderer). */
@@ -106,14 +113,14 @@ export function createObservedStatusStore({ now = Date.now, toast = appToast }: 
   const listeners = new Set<() => void>();
   const emit = () => { for (const listener of [...listeners]) listener(); };
 
-  function record(domain: ServiceDomain, outcome: Outcome) {
+  function record(domain: ServiceDomain, outcome: Outcome, status?: SourceStatus) {
     if (outcome === 'unknown') return;
     const previous = snapshot[domain];
     const at = now();
     const flipped = previous !== null && previous.state !== outcome;
-    // Same state within the same displayed minute changes nothing a reader could see, so do not re-render.
-    if (previous && !flipped && minute(previous.at) === minute(at)) return;
-    snapshot = { ...snapshot, [domain]: { state: outcome, at } };
+    // Same state and wording within the displayed minute need no new rendering.
+    if (previous && !flipped && minute(previous.at) === minute(at) && JSON.stringify(previous.status) === JSON.stringify(status)) return;
+    snapshot = { ...snapshot, [domain]: { state: outcome, at, ...(status ? { status } : {}) } };
     emit();
     // First observation after load is silent; only a real change between reachable and unreachable is news.
     if (!flipped) return;

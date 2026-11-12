@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ServiceConfigTransport } from '@hq/contracts/services';
 import { validateIndexStatus } from '../../../../modules/wiki/contract/src/index';
-import { CHECKING, NOT_CHECKED, UNAVAILABLE, WIKI_NOT_CHECKED, serviceStatus, type DataSource, type SourceStatus } from '../services/data-source-status';
+import { probePlanner } from '../../../../modules/work/live/health';
+import { CHECKING, plannerHealthStatus, NOT_CHECKED, UNAVAILABLE, WIKI_NOT_CHECKED, serviceStatus, type DataSource, type SourceStatus } from '../services/data-source-status';
 import { describe, observedStatus, useObservedSnapshot, type ObservedStatusStore, type SourceWording } from '../services/observed-status';
 const initial: Record<DataSource, SourceStatus> = { social: CHECKING, work: CHECKING, wiki: WIKI_NOT_CHECKED };
 const SOURCES = ['social', 'work', 'wiki'] as const;
@@ -74,7 +75,17 @@ export function DataSourcesProvider({ children, config = window.hqServices?.conf
         if (saved.text !== NOT_CHECKED.text) { if (!timedOut) update(saved); return; }
         status = saved;
         if (timedOut) return;
-        const result = source === 'social' ? await window.hqServices?.social.call('workspace', {}) : await window.hqServices?.work.call('version', {});
+        if (source === 'work') {
+          const work = window.hqServices?.work;
+          if (!work) { if (!timedOut) { update(saved); observe(false); } return; }
+          const health = await probePlanner(work);
+          if (!timedOut) {
+            update(saved);
+            if (valid()) store.record('work', health.status === 'unavailable' && health.httpStatus === undefined ? 'unreachable' : 'reachable', plannerHealthStatus(health));
+          }
+          return;
+        }
+        const result = await window.hqServices?.social.call('workspace', {});
         if (!timedOut) { update(saved); observe(!!result?.ok && result.status >= 200 && result.status < 300); }
       }
     } catch { if (!timedOut) fail(); }

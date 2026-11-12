@@ -1,3 +1,4 @@
+import type { PlannerHealth, PlannerLimit } from '../../../../modules/work/core/port';
 import type { ServiceConfigStatus } from '@hq/contracts/services';
 import type { StatusTone } from '@hq/ui';
 export type DataSource = 'social' | 'work' | 'wiki';
@@ -37,4 +38,17 @@ export function wikiStatus(states: readonly string[] | undefined): SourceStatus 
 export function worstSource(statuses: Readonly<Record<DataSource, SourceStatus>>): SourceStatus {
   const values = Object.values(statuses);
   return values.find(status => status.tone === 'bad') ?? values.find(status => status.tone === 'neutral') ?? values[0]!;
+}
+
+const LIMIT_WORDS: Record<PlannerLimit, string> = { no_replay: 'no replay', no_hq_references: 'no HQ links', no_batch: 'no batch create' };
+/** Wording for the explicit, read-only Planner connection check. */
+export function plannerHealthStatus(health: PlannerHealth): SourceStatus {
+  if (health.status === 'ready') return { text: health.api === null ? 'Reachable' : `Reachable · Planner API ${health.api}`, tone: 'good', indicator: 'success' };
+  if (health.status === 'limited') return { text: health.limits.length ? `Reachable · limited (${health.limits.map(limit => LIMIT_WORDS[limit]).join(', ')})` : 'Reachable · limited', tone: 'neutral', indicator: 'warning' };
+  switch (health.reason) {
+    case 'refused': return { text: 'Refused · start the Planner with --allowed-host for this address', tone: 'bad', indicator: 'warning' };
+    case 'server_error': return { text: 'Planner error', tone: 'bad', indicator: 'danger' };
+    case 'incompatible': return { text: 'Not a compatible Planner', tone: 'bad', indicator: 'warning' };
+    default: return { text: 'Unreachable', tone: 'bad', indicator: 'danger' };
+  }
 }

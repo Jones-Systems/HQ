@@ -6,17 +6,17 @@ import type { ModulePort } from '@hq/contracts';
 import type { HqServices, ServiceConfigStatus, ServiceDomain } from '@hq/contracts/services';
 import { createWorkExportClient } from './work-export';
 import { WorkModule, setWorkSessionPort, examplePlanner } from '@hq/work';
-import { SocialDomain } from '../../../../modules/social/nav';
+import { SocialDomain, createExampleWorkspace } from '../../../../modules/social/nav';
 import { createLiveSocialPort } from '../../../../modules/social/live';
-import { createWorkbenchFixture } from '../../../../modules/social/workbench/fixtures/examples';
-import { FEATURE_HQ_EDITORIAL_TIMEBOX, FEATURE_HQ_REFERENCES } from '../../../../modules/social/core';
-import { bridgeTransport, createPlannerLive } from '../../../../modules/work/live';
+import { registerWorkDurability } from '../../../../modules/work/core';
+import { WORKSPACE_SCOPE } from '../references';
+import { bridgeTransport, createPlannerLive, isWorkLocalBridge, workLocalPersistence } from '../../../../modules/work/live';
 import { serviceStatus, UNAVAILABLE, type SourceStatus } from './data-source-status';
 import { describe, observeSocial, observeWork, useObservedStatus } from './observed-status';
 import './service-domain.css';
 
-type Services = Pick<HqServices, 'social' | 'work'> & { config: Pick<HqServices['config'], 'status'> };
-type Examples = { planner?: () => import('../../../../modules/work/core/port').PlannerPort; social?: () => import('../../../../modules/social/core/port').SocialWorkspacePort };
+type Services = Pick<HqServices, 'social' | 'work'> & Partial<Pick<HqServices, 'workLocal'>> & { config: Pick<HqServices['config'], 'status'> };
+type Examples = { planner?: () => import('../../../../modules/work/core/port').PlannerPort; social?: (projectId: string) => import('../../../../modules/social/core/port').SocialWorkspacePort };
 
 type Selection = 'live' | 'example' | 'unavailable';
 export const RELOAD_NOTE = 'Endpoint changes apply after HQ reloads.';
@@ -91,24 +91,26 @@ function Connecting({ domain }: { domain: DomainName }) {
   </section>;
 }
 
-/** One factory per renderer. Promises cache the choice across remounts and concurrent renders. */
-export function createServiceDomains(getServices: () => Services | undefined, examples?: Examples) {
+/** One factory per renderer. Promises cache the choice across remounts and concurrent renders.
+ * `workspaceScope` binds reference-first example selection; custom hosts pass their shown workspace id.
+ */
+export function createServiceDomains(getServices: () => Services | undefined, examples?: Examples, workspaceScope: string = WORKSPACE_SCOPE) {
   let socialChoice: ReturnType<typeof chooseSocial> | undefined;
   let workChoice: ReturnType<typeof chooseWork> | undefined;
   let workMounted: Promise<ServiceChoice> | undefined;
   let workExport: ReturnType<typeof createWorkExportClient> | undefined;
-  async function chooseSocial() {
+  async function chooseSocial(projectId: string) {
     const services = getServices();
     const choice = await readService(services, 'social');
     const { selection } = choice;
     const port = selection === 'live' ? createLiveSocialPort(observeSocial(services!.social))
-      : selection === 'example' ? (examples?.social?.() ?? createWorkbenchFixture({ features: [FEATURE_HQ_REFERENCES, FEATURE_HQ_EDITORIAL_TIMEBOX] }).port) : null;
+      : selection === 'example' ? (examples?.social?.(projectId) ?? createExampleWorkspace(projectId)) : null;
     return { choice, port };
   }
-  const getSocial = () => socialChoice ??= chooseSocial();
+  const getSocial = (projectId: string = workspaceScope) => socialChoice ??= chooseSocial(projectId);
   function Social(props: ModulePort) {
     const [choice, setChoice] = useState<Awaited<ReturnType<typeof chooseSocial>> | null>(null);
-    useEffect(() => { let mounted = true; void getSocial().then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
+    useEffect(() => { let mounted = true; void getSocial(props.context.id).then(value => { if (mounted) setChoice(value); }); return () => { mounted = false; }; }, []);
     return choice ? <Surface domain="Social" choice={choice.choice}>{choice.port && <SocialDomain {...props} port={choice.port} example={choice.choice.selection === 'example'} />}</Surface> : <Connecting domain="Social" />;
   }
   async function chooseWork() {
@@ -124,11 +126,14 @@ export function createServiceDomains(getServices: () => Services | undefined, ex
       port = planner.port;
       recovery = planner.recovery;
     } else if (selection === 'example') port = examples?.planner?.() ?? examplePlanner();
-    return { choice, port, recovery };
+    return { choice, port, recovery, workLocal: services?.workLocal };
   }
   const getWork = () => workChoice ??= chooseWork();
   async function mountWork() {
-    const { choice, port, recovery } = await getWork();
+    const { choice, port, recovery, workLocal } = await getWork();
+    if (port && choice.selection === 'live' && isWorkLocalBridge(workLocal)) {
+      registerWorkDurability(port, workLocalPersistence(workLocal));
+    }
     if (port) setWorkSessionPort(port, { example: choice.selection === 'example', ...(recovery ? { recovery } : {}) });
     return choice;
   }
