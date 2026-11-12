@@ -33,6 +33,7 @@ import { createFakeClock, createFakeReceiver, syntheticDestination, syntheticEvi
 import type { DispatchId } from '../../../modules/design/connector/src/ids.ts';
 import { CATALOG_CACHE_KEY, serializeCatalogCache } from '../../../modules/design/discovery/src/cache.ts';
 import { EMPTY_CATALOG } from '../../../modules/design/discovery/src/catalog.ts';
+import { isoTime } from '../../../modules/design/discovery/src/contract.ts';
 import { TEXT_FORMAT } from '../../../modules/design/app/storage/index.ts';
 import { TASTE_JOURNAL_KEY } from './design-host.ts';
 
@@ -422,7 +423,7 @@ describe('Discovery cache', () => {
       const discovery = await e2e.window.workspace.discoveryEnv();
       // With no selected folder, discovery clears the cache on open: that is already one cache.put.
       expect(e2e.window.transport.calls.filter((call) => call.route === 'cache.put').map((call) => call.outcome)).toEqual(['replied']);
-      const text = serializeCatalogCache(EMPTY_CATALOG, '2026-01-01T00:00:00.000Z');
+      const text = serializeCatalogCache(EMPTY_CATALOG, isoTime('2026-01-01T00:00:00.000Z'));
       await discovery.cache.writeDocument(CATALOG_CACHE_KEY, text);
       expect(await discovery.cache.readDocument(CATALOG_CACHE_KEY)).toBe(text);
       const document = await e2e.window.transport.call('cache.get', { key: CATALOG_CACHE_KEY });

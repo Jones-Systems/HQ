@@ -29,6 +29,7 @@ import { loadArrangement, saveArrangement } from '../../../modules/design/canvas
 import { parseFlow } from '../../../modules/design/flows/src/model.ts';
 import type { FlowDocument } from '../../../modules/design/flows/src/contract.ts';
 import type { DesignServiceParams, DesignServiceRoute } from '@hq/contracts/services';
+import type { BlobDigest } from '@hq/contracts/design-records';
 import { PROJECTS_KEY_PREFIX } from '../../../modules/design/projects/src/contract.ts';
 
 const ctx = (section: DesignSection, operation: string, write: boolean): DesignFailureContext => ({ section, operation, action: 'save it', write });
@@ -55,7 +56,7 @@ function observedFailure(error: unknown, context: DesignFailureContext) {
   }
   return failure;
 }
-const sha = (bytes: Uint8Array) => `sha256:${createHash('sha256').update(bytes).digest('hex')}` as const;
+const sha = (bytes: Uint8Array): BlobDigest => `sha256:${createHash('sha256').update(bytes).digest('hex')}` as BlobDigest;
 
 describe('conflict: a lost compare-and-swap is `conflict` for every writer', () => {
   it('create-only and stale numeric revisions on a raw document', async () => {
