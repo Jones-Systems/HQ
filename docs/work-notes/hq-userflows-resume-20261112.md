@@ -206,6 +206,29 @@ The unused Mini heavy allocation was returned to the updater, which accepted it
 for one separately approved attempt. HQ verification waits for its explicit
 process/EOF/lock closure and slot return, plus qualified compiler controls.
 
+The updater has now returned the Mini heavy slot after its single attempt ended
+nonpass before native birth. It reported closure of the actually started signing
+and controller processes/groups and both output streams, an independent lock
+reacquire/release and clean source. Its failed native-custody field remains in
+the immutable receipt; the separate closure establishes only those actual
+processes, not native acceptance. HQ has started no heavy work. The remaining
+verification prerequisite is the ordinary compiler controller's aggregate bound
+and fresh host admission, rather than either original delegation uncertainty.
+
+At `16e9b028`, Foundation's complete required job passes, as do Social, Planner,
+CLI with synthetic real-Planner E2E and Design inventory. Design's app section
+still reports four composition failures: workspace feed identity, fake retry
+revision, disabled Imports identity and lost-read fault injection. A bounded
+source successor owns their diagnosis and repair without weakening discovery.
+
+Wiki successor `87dbb4b4` is composed through an ordinary merge after a clean
+conflict preflight. It preserves both retained screen ancestries and the current
+setup/reference contracts. INT applies its exact optional shell-toast injection;
+the mount otherwise remains current. Home, search, topics, reader/backlinks,
+session history and keyboard source are present, with new behavior tests still
+unrun. The next required CI must qualify this assembled source; native layout,
+accessibility, persistence and reference-return evidence remain outstanding.
+
 Contributing conversations and roles, with native identifiers retained privately:
 
 - Resume HQ User Flows and Backend Buildout: receiving continuity, shared integration and delivery coordinator.
