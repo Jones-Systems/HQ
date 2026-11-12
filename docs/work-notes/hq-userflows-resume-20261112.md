@@ -24,23 +24,49 @@ The prior thread is context; this work resumes its paused source assignment. Pri
 - Baseline CI readback at foundation `8945d15`: the required Foundation, CLI/Planner, Planner and Design family checks pass. The additional Social service contract/Python job fails on both #2 and shell #200. Run `42857959988` executes 514 Social tests; `test_runs.Refusals.test_concurrent_submissions_cannot_exceed_the_limit` observes eight accepted and ten refused responses instead of eight and twelve, with connection-reset tracebacks. Source diagnosis is the next bounded action; no test has been weakened or rerun. Native and packaging jobs were skipped and prove no execution.
 - Research need: repository and handoff recovery is required before substantive planning. Existing product mockups and source are primary evidence. No new external product research is needed merely to recover this campaign.
 
-## Execution ledger
+## Recovery checkpoint and handoff
 
-Planning task `hq-recovery-fable-framing-20261112-r1` uses verified Fable 5.2/high on the account selected by the account-routing helper. It reads this coordinator tree only; the parent retains sole Git ownership. Mini readiness task `hq-recovery-mini-readiness-20261112-r1` uses Sol/high in its own app-bound worktree on `work/hq-recovery-mini-readiness-20261112`, read-only except its own Git fetch/currentness operations. Neither task builds, tests or edits source. Their exact native handles remain in the parent task ledger.
+The native goal is paused. A second owner-started continuation requested coordination transfer. This thread starts no new implementation or verification lanes while paused. Existing delegated task ownership and unknown effects remain here until explicitly serviced; a native handoff offers continuity, not task-management rights or merge authority.
 
-Independent concept review will use Astra/xhigh, and building Sol at the mode-selected effort. Children get explicit writer cones and isolated worktrees; no recursive delegation unless assigned. Build and test execution stays on the Mini, with fresh resource admission and serial descendants. The first Mini sample admitted two starts with normal pressure, zero observed swap activity and 14.7% CPU; the laptop sample admitted two starts with warning pressure and 40.7% CPU. These samples are historical evidence, not future reservations.
+The Fable initial plan, independent Astra concept review and a verified continuation in the original Fable session are complete. The reconciled plan accepts the review corrections: restore B4 tooling, B5 validation and missing native-journey source; preserve all Design ports; assign one writer per shared file; reuse the existing Darwin runner; allow one serial test process total on the Mini. The native handoff carries the complete accepted plan for encoding as a recovery amendment to the existing progressive Engineering Spec. That encoding is not yet done.
 
-Bounded task `hq-recovery-social-diagnosis-20261112-r1` uses Astra/xhigh for the one baseline Social concurrency failure. It reads this coordinator tree without writes, builds or tests. This task is independent of the framing result and returns a repair capsule for later Mini execution. The admission sample allowed two starts (warning pressure, 49.2% CPU; one core 8.33%).
+### Source checkpoints
 
-## Next actions
+| Capsule | Branch | Pushed head | Evidence and remaining work |
+| --- | --- | --- | --- |
+| Social admission | `work/hq-recovery-social-burst-20261112` | `fa2728a9d8ed90abd7b6980c905d805fed5c96a0` | Exactly listener backlog plus two affected test files; AST/diff checks only. Controlled before/after, focused tests, full Social discovery and Ubuntu advisory CI unrun. |
+| Work persistence spine | `work/hq-recovery-work-spine-20261112` | `cd1371e12182db9aaa09f7a7c809f8f07fd8f042` | Retains current foundation and #198 ancestry. Static-only checkpoint. Main-process construction/channel handler still requires coordinator integration. Offline queue and renderer wiring excluded. |
+| Planner–Wiki compatibility | `work/hq-recovery-planner-wiki-20261112` | `a4d5e0c371c03fce0bd2e2de058ba429ff063f45` | Domain fields, coverage, vector copies and hashes ported onto current validation. All 52 old cases and 27 exchanges retained; 14 Wiki cases added. Static syntax/hash/copy checks only. Generator check, behavioral tests and real roundtrip unrun. |
+| Shell/navigation | `work/hq-recovery-shell-20261112` | pending result | Existing source-only builder; owns retained shell/status/scope spine, kit, navigation/onboarding and shell mounts. |
+| Wiki validation | `work/hq-recovery-wiki-validation-20261112` | pending result | Existing synthetic-only builder. Its prompt incorrectly spells the tool cone as `modules/wiki/scripts`; actual retained tool is under `modules/wiki/core/scripts`. Receiver must clarify that narrow grant before further tool edits. Correct retained tip is `352df74`; earlier prompt names ancestor `38fe4ea`. No `core/src`, UI or contract edits are required. |
 
-Recover current lane state and unresolved decisions; obtain the Frontier Max planning contribution; perform its independent architecture review; encode the accepted bounded lanes and run them to source completion, verification and policy-covered delivery. Preserve explicit failed, missing, held and unknown evidence in this record.
+No recovery PR has been opened. All runtime tests, builds and app launches remain unrun in this campaign. Source checkpoints are not accepted implementations.
 
-## Acceptance evidence to recover
+### Remaining source work
 
-The existing F7 assessment and campaign specs require first-run orientation and reopenable onboarding; domain navigation and remembered destinations; a global command palette with the existing Design shortcut ownership respected; consistent observed service status; inline Social/Wiki failure states; readable cross-domain references and a working return route; narrow-window and keyboard journeys; reduced-motion behavior; and light/dark/system appearance. The Work and Social screen families must match their established mockups and remain functional with real local services or explicitly labelled synthetic fixtures. Design and Wiki completion includes their backend and reference contracts, not screen presence alone.
+The accepted flat capsules retain all twelve lanes: shell integration; Work main-process wiring, reviewed offline queue, health and five screen families; Social screens plus planned gated extension source; Design Taste/capabilities/export-port source, host matrix, six Sources views and main screens; Settings and Wiki views; additive Wiki contract; local checks/Darwin preview tooling; and four missing native acceptance scenarios. Generation, component execution, export enablement and live posting retain their gates. Optional review findings keep original severity and recorded disposition; they are not automatic repair assignments.
 
-Final evidence must bind to one assembled source head and its fresh Mini build. The native runner's checkpoint is only a prerequisite; selected/full modes retain their explicit missing or held journeys. Synthetic and fixture checks never prove private-data or live-provider qualification. No source build, test or app launch has run in this recovery yet.
+Design compose writers run capabilities → Sources → active-project/core views. Module builders consume the published shell checkpoint and report desktop wiring hunks to its one owner. Work queue consumes the Work-spine checkpoint and receives a correctness review before integration. Coordinator owns shared contracts, Electron main startup, workflows, root configuration and acceptance registration; exact overlaps with #209, #212 and the external storage/evidence stack require fresh reconciliation.
+
+Product defaults remain: Plan week at `board/week` within the existing navigation order; Social and Work remain workspace-scoped; no Wiki revision history. Private-source authorization and old private scratch disposition remain unresolved and do not block synthetic source implementation.
+
+### Mini verification admission
+
+The updater campaign's HQ-A3 unsigned Phase B still owns the heavy slot. Its fulfilled allocation answer gives this source-verification lane the next slot only after A3 closure and reconciliation of the unknown baseline launch. Native/signing/main holds remain. No duplicate slot request or verifier is authorized by elapsed time.
+
+Baseline launch request `hq-recovery-mini-baseline-20261112-r1` repeatedly returned “Remote delegation is durably pending reconciliation.” No task handle or child thread was returned. Reconcile the identical request in the owning parent context; never invent a handle, replay it as a new task or assume no effect. Exact input bytes and native evidence are carried in the handoff.
+
+Fresh admission is required for each new batch. The last observed Mini CPU sample was 96.19%, with normal memory pressure and no swap traffic; it admitted zero starts/tests. B4 tooling was therefore NOT launched. Historical low-load samples do not reserve capacity.
+
+Once admitted, one serial verifier uses task-local CI versions Node 24.19.0/Python 3.13.5, the qualified participating compiler controller and lock, fresh CPU/storage checks, and one host-wide test process. Queue: foundation baseline → Social repair → Planner–Wiki → wired Work spine → shell → dependency-ordered modules → assembled head. Existing alternate Node/Python versions are not identical CI evidence.
+
+### Retained failure and acceptance evidence
+
+A separate updater diagnostic at head `eff942d5aae8d4c5610772f11a123e460c8f7ced`, run `43212587934` attempt 2, job `131202757650`, reproduced four connection resets and counts 8/8 rather than 8/12 across 514 tests. This is additional failure evidence, not proof of root cause or of the repair. Social is advisory under current policy; six required fast checks there remain green.
+
+Final acceptance binds to one assembled head and fresh Mini build: real Planner reference save/open/return; offline persistence/restart and unknown outcome without duplicate intent; Social save/failure/unknown; committed synthetic Wiki indexing/recovery/backlinks/status; first-run/reopened onboarding; remembered destinations; keyboard/reduced motion; light/dark/system appearance; narrow layouts; toasts with the native Design preview; Work/Social mockup comparison; and exact-head required CI with Design inventory and explicit gaps/holds. Browser captures supplement native evidence. Checkpoint success is not full acceptance.
+
+Merge remains gated on this campaign's accepted integration-owner binding under the repository policy naming T1. Green CI alone does not release that gate. Foundation-to-main, private Wiki, live provider/posting, native enablement, signing, installation and deployment remain held.
 
 ## Source conflict preflight
 
