@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react';
-import { animateElement, prefersReducedMotion, type MotionDuration } from './motion';
+import { animateElement, prefersReducedMotion, type MotionDuration, type MotionOptions } from './motion';
 
 interface Point { readonly left: number; readonly top: number }
 
@@ -36,6 +36,7 @@ export function useListMotion<T extends HTMLElement>(order: readonly string[] | 
   const container = useRef<T | null>(null);
   const committed = useRef<string | null>(null);
   const first = useRef<Map<string, Point> | null>(null);
+  const gliding = useRef(new Set<Animation>());
   const signature = typeof order === 'string' ? order : order.join('\u0000');
   const { duration = 'slow', animateEntering = true } = options;
 
@@ -49,22 +50,34 @@ export function useListMotion<T extends HTMLElement>(order: readonly string[] | 
     first.current = null;
     committed.current = signature;
     const root = container.current;
-    if (!root || !before || prefersReducedMotion()) return;
+    if (!root || !before) return;
+    // Glides still running were measured into `before` with their leftover offset. Stop them so `after` is the true
+    // layout; otherwise a reorder during a glide would jump by that leftover.
+    for (const animation of gliding.current) animation.cancel();
+    gliding.current.clear();
+    if (prefersReducedMotion()) return;
     const after = measure(root);
+    const run = (item: HTMLElement, keyframes: Keyframe[], timing: MotionOptions) => {
+      const animation = animateElement(item, keyframes, timing);
+      if (!animation) return;
+      gliding.current.add(animation);
+      const done = () => { gliding.current.delete(animation); };
+      animation.finished.then(done, done);
+    };
     for (const item of root.querySelectorAll<HTMLElement>(`[${LIST_MOTION_KEY}]`)) {
       const key = item.getAttribute(LIST_MOTION_KEY)!;
       const from = before.get(key);
       const to = after.get(key)!;
       if (!from) {
         if (animateEntering) {
-          animateElement(item, [{ opacity: 0, transform: 'translateY(4px) scale(0.98)' }, { opacity: 1, transform: 'none' }], { duration: 'base', easing: 'enter' });
+          run(item, [{ opacity: 0, transform: 'translateY(4px) scale(0.98)' }, { opacity: 1, transform: 'none' }], { duration: 'base', easing: 'enter' });
         }
         continue;
       }
       const dx = from.left - to.left;
       const dy = from.top - to.top;
       if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
-      animateElement(item, [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration, easing: 'standard' });
+      run(item, [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration, easing: 'standard' });
     }
   }, [signature, duration, animateEntering]);
 

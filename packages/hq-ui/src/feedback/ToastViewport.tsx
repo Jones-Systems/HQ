@@ -36,6 +36,15 @@ const GLYPHS: Partial<Record<ToastTone, ReactNode>> = {
   unknown: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" strokeDasharray="3 2.6" /><path d="M10 9.8a2.2 2.2 0 1 1 3 2c-.6.3-1 .8-1 1.4v.3M12 16.5h.01" /></svg>,
 };
 
+/**
+ * Text for a live region. Identical consecutive text (a folded repeat) gets a trailing no-break space, because a
+ * region only announces when its text changes.
+ */
+function nextAnnouncement(previous: string, texts: readonly string[]): string {
+  const text = texts.join('. ');
+  return text === previous ? `${text}\u00A0` : text;
+}
+
 export interface ToastViewportProps {
   /** Landmark name. Default "Notifications". */
   readonly label?: string;
@@ -98,14 +107,27 @@ export function ToastViewport({ label = 'Notifications', hotkey = 'F8', visible 
   const [assertive, setAssertive] = useState('');
   const announced = useRef(new Map<string, number>());
   useEffect(() => {
+    const politeTexts: string[] = [];
+    const assertiveTexts: string[] = [];
     for (const record of records) {
       if (announced.current.get(record.id) === record.revision) continue;
       announced.current.set(record.id, record.revision);
       const text = [record.title, record.description].filter(Boolean).join('. ');
-      if (record.tone === 'danger' || record.tone === 'unknown') setAssertive(text); else setPolite(text);
+      (record.tone === 'danger' || record.tone === 'unknown' ? assertiveTexts : politeTexts).push(text);
     }
     for (const id of [...announced.current.keys()]) if (!live.has(id)) announced.current.delete(id);
+    // Toasts raised together share one announcement, so a burst is not reduced to its last toast.
+    if (politeTexts.length > 0) setPolite((previous) => nextAnnouncement(previous, politeTexts));
+    if (assertiveTexts.length > 0) setAssertive((previous) => nextAnnouncement(previous, assertiveTexts));
   });
+
+  /** Returns focus to where it was before F8; when that was the page itself (nothing focused), just leaves the toasts. */
+  const leaveToasts = useCallback(() => {
+    const back = returnFocus.current;
+    returnFocus.current = null;
+    if (back && back !== document.body && back.isConnected) { back.focus(); return; }
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  }, []);
 
   useEffect(() => {
     if (!hotkey) return;
@@ -115,7 +137,7 @@ export function ToastViewport({ label = 'Notifications', hotkey = 'F8', visible 
       if (!root) return;
       if (root.contains(document.activeElement)) {
         event.preventDefault();
-        returnFocus.current?.focus();
+        leaveToasts();
         return;
       }
       const target = root.querySelector<HTMLElement>('.hq-toast-slot:last-of-type button');
@@ -126,7 +148,7 @@ export function ToastViewport({ label = 'Notifications', hotkey = 'F8', visible 
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [hotkey]);
+  }, [hotkey, leaveToasts]);
 
   const dismissFromKeyboard = (record: ToastRecord) => {
     const root = region.current;
@@ -135,7 +157,7 @@ export function ToastViewport({ label = 'Notifications', hotkey = 'F8', visible 
     const neighbour = slots[index - 1] ?? slots[index + 1];
     store.dismiss(record.id, 'user');
     const next = neighbour?.querySelector<HTMLElement>('button');
-    if (next) next.focus(); else returnFocus.current?.focus();
+    if (next) next.focus(); else leaveToasts();
   };
 
   return (
@@ -175,6 +197,11 @@ interface ToastItemProps {
 
 function ToastItem({ record, leaving, onExited, onDismiss, onKeyboardDismiss, onAction }: ToastItemProps) {
   const presence = usePresence<HTMLLIElement>(!leaving, { motion: 'toast', onExited: () => onExited(record.id) });
+  // A toast that is removed while folded behind "N more" is first rendered already leaving: it has no exit animation
+  // to wait for, so drop it at once instead of leaving an inert ghost on screen.
+  const startedLeaving = useRef(leaving);
+  useEffect(() => { if (startedLeaving.current) onExited(record.id); }, [onExited, record.id]);
+  if (!presence.mounted) return null;
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape' && record.dismissible) { event.stopPropagation(); onKeyboardDismiss(); }
   };

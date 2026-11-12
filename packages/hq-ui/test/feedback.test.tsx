@@ -71,7 +71,7 @@ describe('toast store', () => {
 describe('ToastViewport', () => {
   let store: ToastStore;
   beforeEach(() => { store = createToastStore(); });
-  afterEach(() => { cleanup(); });
+  afterEach(() => { cleanup(); vi.useRealTimers(); });
   const mount = () => render(<ToastStoreProvider store={store}><button>Elsewhere</button><ToastViewport /></ToastStoreProvider>);
 
   it('renders a labelled region, announces failures assertively and successes politely', () => {
@@ -105,6 +105,52 @@ describe('ToastViewport', () => {
     dismiss.focus();
     fireEvent.keyDown(dismiss, { key: 'Escape' });
     expect(store.getSnapshot()).toHaveLength(0);
+  });
+
+  it('leaves focus on the page again when F8 was pressed with nothing focused', () => {
+    mount();
+    act(() => { createToastApi(store).error("Couldn't save"); });
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.keyDown(window, { key: 'F8' });
+    expect(screen.getByRole('group', { name: "Couldn't save" }).contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(window, { key: 'F8' });
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('announces every toast raised together, and a folded repeat again', () => {
+    mount();
+    const toast = createToastApi(store);
+    act(() => { for (const title of ['Card one synced', 'Card two synced', 'Card three synced']) toast.info(title); });
+    expect(screen.getByRole('status').textContent).toBe('Card one synced. Card two synced. Card three synced');
+    act(() => { toast.success('Saved'); });
+    const first = screen.getByRole('status').textContent;
+    act(() => { toast.success('Saved'); });
+    const second = screen.getByRole('status').textContent;
+    expect(second).not.toBe(first);
+    expect(second?.trim()).toBe('Saved');
+  });
+
+  it('drops a toast that expires or is dismissed while folded, instead of leaving an inert ghost', () => {
+    vi.useFakeTimers();
+    mount();
+    const toast = createToastApi(store);
+    act(() => {
+      toast.info('Old one', { duration: 1000 });
+      toast.info('Old two', { duration: 1000 });
+      for (const title of ['Three', 'Four', 'Five']) toast.info(title, { duration: 60_000 });
+    });
+    expect(screen.getAllByRole('group')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: '2 more notifications' })).toBeTruthy();
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(store.getSnapshot()).toHaveLength(3);
+    expect(document.querySelectorAll('.hq-toast-slot')).toHaveLength(3);
+    expect(document.querySelectorAll('.hq-toast-slot[inert]')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /more notification/ })).toBeNull();
+    act(() => { for (const title of ['Six', 'Seven']) toast.info(title, { duration: 60_000 }); });
+    act(() => { toast.dismiss(); });
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(store.getSnapshot()).toHaveLength(0);
+    expect(document.querySelectorAll('.hq-toast-slot')).toHaveLength(0);
   });
 
   it('folds older toasts behind a "more" control', () => {

@@ -44,7 +44,8 @@
 @keyframes hq-toast-in { from { opacity: 0; transform: translateY(var(--hq-motion-distance-lg)) scale(var(--hq-motion-scale-enter)); } }
 @keyframes hq-toast-out { to { opacity: 0; transform: translateX(var(--hq-motion-distance-lg)); height: 0; margin-block-start: 0; } }
 .hq-toast-slot[data-hq-presence="enter"][data-hq-motion="toast"] { animation: hq-toast-in var(--hq-duration-slow) var(--hq-ease-spring) both; }
-.hq-toast-slot[data-hq-presence="exit"][data-hq-motion="toast"] { overflow: clip; animation: hq-toast-out var(--hq-duration-base) var(--hq-ease-exit) both; }
+/* min-height: 0 lets the slot shrink while the stack closes up: a flex item's automatic minimum height would hold it open. */
+.hq-toast-slot[data-hq-presence="exit"][data-hq-motion="toast"] { min-height: 0; overflow: clip; animation: hq-toast-out var(--hq-duration-base) var(--hq-ease-exit) both; }
 
 /* ---------- Inline notice (banner and bar) ---------- */
 .hq-notice {
