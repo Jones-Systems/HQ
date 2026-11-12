@@ -85,7 +85,8 @@ export function createPlayer(flow: FlowDocument): Player {
 
   const back = (state: PlayerState, from: ScreenId, edgeId: HotspotId | null): PlayerState => {
     // A flow revision may have removed screens still in history; skip those entries.
-    const at = state.history.findLastIndex((screenId) => index.screensById.has(screenId));
+    let at = state.history.length - 1;
+    while (at >= 0 && !index.screensById.has(state.history[at]!)) at -= 1;
     return at < 0
       ? record(state, from, edgeId, { kind: 'back-unavailable' }, from, [])
       : record(state, from, edgeId, { kind: 'back', to: state.history[at]! }, state.history[at]!, state.history.slice(0, at));

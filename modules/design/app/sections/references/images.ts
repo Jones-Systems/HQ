@@ -119,3 +119,33 @@ export async function readImagePreview(asset: AssetRef, readBlob: (digest: BlobD
     return imageDataUrl(bytes, mediaType);
   } catch { return null; }
 }
+
+/**
+ * A small `data:` preview of a chosen file for the import queue (`blob:` URLs are blocked by the shell's CSP). The
+ * header is checked against the same limits as an import before anything is decoded, and the browser scales while
+ * decoding. Returns null whenever a preview cannot be made safely; the queue then shows a placeholder.
+ */
+export async function readThumbnail(file: SelectedImageFile, edge = 96): Promise<string | null> {
+  try {
+    if (typeof globalThis.createImageBitmap !== 'function' || typeof document === 'undefined') return null;
+    if (!Number.isSafeInteger(file.size) || file.size < 1 || file.size > MAX_IMAGE_BYTES) return null;
+    if (!['', 'image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return null;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (bytes.length !== file.size) return null;
+    const { mediaType, dimensions } = imageHeader(bytes);
+    if (!validDimensions(dimensions)) return null;
+    const scale = Math.min(1, edge / Math.max(dimensions.w, dimensions.h));
+    const w = Math.max(1, Math.round(dimensions.w * scale));
+    const h = Math.max(1, Math.round(dimensions.h * scale));
+    const bitmap = await globalThis.createImageBitmap(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mediaType }),
+      { resizeWidth: w, resizeHeight: h, resizeQuality: 'medium', imageOrientation: 'none' });
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const context = canvas.getContext('2d');
+      if (!context) return null;
+      context.drawImage(bitmap, 0, 0, w, h);
+      return canvas.toDataURL('image/png');
+    } finally { bitmap.close(); }
+  } catch { return null; }
+}
