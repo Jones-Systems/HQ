@@ -171,7 +171,7 @@ export interface DiscoveryEnv {
   readonly tag: typeof SYNTHETIC_TAG;
   readonly cache: MemoryCachePort;
   readonly clock: DiscoveryFakeClock;
-  /** No adapter is registered and refresh-on-open is off: the service can only show the cached catalog. */
+  /** Only the labelled example adapter is registered; opening reads the cache without refreshing. */
   readonly service: DiscoveryService;
   readonly adapterLabels: Readonly<Record<string, { readonly label: string; readonly fake: boolean }>>;
   /** The Projects read port over the same cache document. It never writes the cache. */

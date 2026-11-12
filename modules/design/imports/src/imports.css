@@ -198,3 +198,8 @@
   .hqd-imports__row { grid-template-columns: 72px minmax(0, 1fr); gap: var(--hq-space-sm); }
   .hqd-imports__actions > * { flex: 1 1 auto; }
 }
+
+.hqd-imports__rights { display: grid; gap: var(--hq-space-3, 12px); min-width: 0; margin-block: 0 24px; padding: 16px; }
+.hqd-imports__rights label { display: grid; gap: 6px; min-width: 0; }
+.hqd-imports__rights input, .hqd-imports__rights select { width: 100%; min-width: 0; box-sizing: border-box; }
+.hqd-imports__rights p { margin: 0; overflow-wrap: anywhere; }

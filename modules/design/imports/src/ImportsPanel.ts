@@ -1,10 +1,10 @@
 import {
-  createElement as h, useEffect, useMemo, useRef, useState, useSyncExternalStore,
+  createElement as h, Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore,
   type ComponentType, type ReactElement, type ReactNode, type RefObject,
 } from 'react';
 import type { ProjectId } from './contract.ts';
 import {
-  createImportsController, deriveStep, describeCounts, describeItemCount, EXPORT_CHOICES, formatExactTime, formatRelativeTime, IMPORT_STEPS,
+  createImportsController, deriveStep, describeFailure, describeCounts, describeItemCount, EXPORT_CHOICES, formatExactTime, formatRelativeTime, IMPORT_STEPS,
   type ImportsCapabilities, type ImportsController, type ImportsControllerOptions, type ImportsOutcome, type ImportsState, type ImportsStep,
   type OutcomeWhere, type PlanKind, type PlanRow,
 } from './controller.ts';
@@ -225,7 +225,9 @@ function NoticeSlot({ kit, where, state, actions }: NoticeSlotProps): ReactEleme
       tone: held.tone, title: held.title,
       actions: held.checkable === true && actions.check !== undefined ? [{ label: 'Check', onAction: actions.check, busy: checking, busyLabel: 'Checking' }] : [],
       ...(actions.dismiss === undefined ? {} : { onDismiss: actions.dismiss }),
-    }, held.detail));
+    }, state.cause !== null && state.outcome?.seq === held.seq
+      ? `${held.detail}${held.detail.includes(describeFailure(state.cause)) ? '' : ` ${describeFailure(state.cause)}`}`
+      : held.detail));
 }
 
 const PLAN_WORDS: Readonly<Record<PlanKind, string>> = { new: 'New', update: 'Update', skip: 'Skip', conflict: 'Conflict', rejected: 'Rejected' };
@@ -462,6 +464,8 @@ export interface ImportsPanelProps {
   /** The F1 primitives from `@hq/ui`. Without them the surface renders with no motion and no toasts. */
   readonly kit?: ImportsKit;
   readonly crossLink?: ImportsCrossLink;
+  /** Rights controls stay locked while a write is busy or awaits reconciliation. */
+  readonly renderRights?: (locked: boolean) => ReactNode;
 }
 
 const MINUTE_MS = 60_000;
@@ -479,7 +483,7 @@ function useClock(active: boolean): number {
 }
 
 /** Container: binds the controller to the view. Root injects deps/capabilities. */
-export function ImportsPanel({ deps, projectId, capabilities, options, kit = PLAIN_KIT, crossLink }: ImportsPanelProps): ReactElement {
+export function ImportsPanel({ deps, projectId, capabilities, options, kit = PLAIN_KIT, crossLink, renderRights }: ImportsPanelProps): ReactElement {
   const controller = useMemo(() => createImportsController(deps, projectId, capabilities, options), [deps, projectId, capabilities, options]);
   const state = useSyncExternalStore(controller.subscribe, controller.getState, controller.getState);
   const toast = kit.useToast();
@@ -498,5 +502,7 @@ export function ImportsPanel({ deps, projectId, capabilities, options, kit = PLA
     check: () => void controller.check(),
     dismiss: controller.dismissOutcome,
   }), [controller]);
-  return h(ImportsView, { state, actions, kit, now, ...(crossLink === undefined ? {} : { crossLink }) });
+  return h(Fragment, null,
+    renderRights?.(state.status === 'busy' || state.status === 'error' || state.outcome?.tone === 'unknown'),
+    h(ImportsView, { state, actions, kit, now, ...(crossLink === undefined ? {} : { crossLink }) }));
 }
