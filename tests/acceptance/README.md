@@ -269,6 +269,34 @@ journeys. It tests real Social response loss/rejection, route denial, partial
 startup/failure cleanup, peer preservation, Wiki restoration and result holds.
 All tests and native journeys remain unrun for this source checkpoint.
 
+## Supplemental Work native restart observations
+
+Selected/full mode also authors three separately named observations in the
+existing Work journey: `work-unconfirmed-native-restart` (N01),
+`work-queued-native-restart` (N02) and `work-draft-native-restart` (N03).
+N01 restarts Electron before the original explicit Check, preserving the
+request/body/baseline and zero-resend assertions. Original HQ-03 still measures
+the confirmed item only. After the existing reference round trip, N02 edits
+that item offline, restarts the app and reconnects the same Planner database;
+N03 keeps a draft explicitly, restarts and requires a deliberate Send drafts.
+Each waits for real preload-backed persistence and compares service effects.
+These are source-authored observations, not executed native results.
+
+The supplemental rows do not replace the original twelve reserved rows or
+change selected/routine success meanings. Reports expose a separate
+`nativeRestartOutcome`, requiring the shell prerequisites, HQ-02/HQ-03 and
+all three supplemental observations, with successful cleanup. Missing rows,
+first failures and duplicate IDs cannot certify this result. Routine mode
+does not run N02/N03 and cannot certify all restart observations. Full
+acceptance retains all its other gaps and holds, including HQ-07/HQ-09H.
+
+The owned Planner fixture's `start()` resumes only its stopped child, preserving
+the database and proxy origin. Startup failure is retained rather than retried;
+the runtime still owns final child cleanup. Supplemental scenarios precede
+terminal service shutdown. The [finite native observation sheet](../../docs/work-notes/hq-recovery-native-observations.md)
+records the remaining UI, persistence, layout and evidence obligations. Fresh
+build binding, native admission and all existing qualification gates still apply.
+
 ## Selected T7 scenarios
 
 After a fresh build and serial execution admission on the bound Linux or macOS host:

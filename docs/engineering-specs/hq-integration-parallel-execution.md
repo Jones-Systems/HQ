@@ -9068,4 +9068,25 @@ The separately selected Social burst repair is in scope, retaining its original 
 Durable-capture correctness review adds two P2 findings, recorded and unselected: a failed marker save or overlapping save generation can leave a conclusively pre-dispatch draft held indefinitely; held-copy and saved-scope wording can falsely assert that a possible create is absent from Planner. Preserve their resend suppression and original severity. Source review found no new P0/P1 and permits conditional composition; it does not certify fresh core/adapter restart recovery. The explicit toolbar caller adaptation remains required. Native-scenario review cleared its four selected P1 repairs and found a further P1: counted Social Library navigation defeats exact whole-button matching. That P1 is selected for a label-based selector and zero/nonzero-count regression source. The separate P2 final Planner PATCH-ledger gap remains recorded and unselected.
 
 Controller findings preserve their original labels and dispositions: **BC-R1 P1**, escaped-descendant false closure, is selected and addressed by the zero-child design, with its source candidate still unqualified; **BC-R2 P1**, receipt-write failure releasing unknown custody, is selected with a source-only repair, still unqualified; **BC-R3 P2**, transient admission consuming an attempt, remains recorded and unselected. Both P1 execution blocks require final combined-source review and actual fault qualification before release. No controller preparation or passing hosted CI waives them.
+
+The owner selected fixture-only **HQ-CFR-01–03**: preserve a positive single
+virtual deadline through GO; make held-pipe readiness agree with bytes/EOF;
+restore all seven native environment negatives and exact one-shot KILL/EPERM
+oracles. Independent re-review finds these source-corrected without weakened
+timing assertions. Executable qualification remains separate. New
+**HQ-CFR-RR-01 P2** assigns a successor digest to five preserved historical
+case-map paths and blocks production build binding; **HQ-CFR-RR-02 P3** records
+stale derivation diff edges. Both are unselected, unrepaired and unwaived.
+Their exact source/report bindings are retained privately; the affected
+model/data entry paths remain separately eligible for finite admitted checks.
+
+Accepted AC2 observations now additionally name unresolved intent across an
+Electron restart before Check, queued existing-item editing across offline
+restart/reconnect, and explicitly kept drafts across restart with no automatic
+send. They supplement the original confirmed-item restart and existing real
+Planner/disk/fresh-object tests. The parent owns registration and source/build
+binding; source authoring, model results and hosted checks cannot certify
+native execution. The finite manual matrix in
+`docs/work-notes/hq-recovery-native-observations.md` covers the remaining named
+UI families and shared-consumer/layout boundaries without a new framework.
 <!-- codex-section:end id="spec.hq-integration-parallel-execution#ctx.recovery-findings.001" -->
