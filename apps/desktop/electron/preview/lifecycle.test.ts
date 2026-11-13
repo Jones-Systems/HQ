@@ -3,14 +3,14 @@ import { runInNewContext } from 'node:vm';
 import { app } from 'electron';
 import type { BrowserWindow } from 'electron';
 const fake = vi.hoisted(() => ({ readFile: vi.fn(), create: vi.fn(), classify: vi.fn() }));
-vi.mock('electron', () => ({ app: { isPackaged: false, on: vi.fn() }, screen: { getDisplayMatching: () => ({ scaleFactor: 1 }) } }));
+vi.mock('electron', () => ({ app: { isPackaged: false, getVersion: vi.fn(() => '0.1.0-synthetic'), on: vi.fn() }, screen: { getDisplayMatching: () => ({ scaleFactor: 1 }) } }));
 vi.mock('node:fs/promises', () => ({ readFile: fake.readFile }));
 vi.mock('../contents-factory.js', () => ({ createIsolatedContents: fake.create, contentsClass: fake.classify, probeUnregisteredContents: vi.fn() }));
 import { createPreviewHost } from './host';
 import { previewParams } from './validation';
 const hosts: ReturnType<typeof createPreviewHost>[] = [];
 afterEach(async () => { await Promise.all(hosts.splice(0).map(host => host.closeAll())); vi.useRealTimers(); vi.unstubAllEnvs(); vi.clearAllMocks(); });
-function fixture(zoomFactor?: number) {
+function fixture(zoomFactor?: number, options: { persistReceipt?: (receipt: Readonly<Record<string, unknown>>) => Promise<boolean> } = {}) {
   vi.stubEnv('HQ_USER_DATA_DIR', 'synthetic-owned-profile'); vi.stubEnv('HQ_QUALIFY_PREVIEW', '1');
   let destroyed = false, url = 'about:blank', attached = false, bounds = { x: 0, y: 0, width: 0, height: 0 };
   const contents = { on: vi.fn(), isDestroyed: () => destroyed, isCrashed: vi.fn(() => false), close: vi.fn(() => { destroyed = true; }), getURL: () => url,
@@ -22,7 +22,7 @@ function fixture(zoomFactor?: number) {
   fake.readFile.mockResolvedValue('synthetic agent bundle'); fake.create.mockReturnValue({ view, session });
   const window = { webContents: { getOSProcessId: () => 123, ...(zoomFactor === undefined ? {} : { getZoomFactor: () => zoomFactor }) }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1600, height: 1000 }), contentView: { addChildView: vi.fn(), removeChildView: vi.fn() } } as unknown as BrowserWindow;
   const putBlob = vi.fn(async () => true);
-  const host = createPreviewHost({ window: () => window, putBlob }); hosts.push(host);
+  const host = createPreviewHost({ window: () => window, putBlob, ...options }); hosts.push(host);
   return { host, contents, session, view, putBlob, window };
 }
 const openParams = { versionId: 'synthetic-version', url: 'https://example.com/', viewport: { w: 390, h: 844, dpr: 3 }, label: 'Synthetic' };
@@ -354,4 +354,151 @@ it('counts certificate denials for owned preview contents after close, excluding
   for (const target of [contents, {}, null]) handler({ preventDefault: vi.fn() }, target, 'https://example.com/', [], vi.fn());
   const hook = (globalThis as unknown as { __hqPreviewQualification: { stats(): { denials: { certificates: number } } } }).__hqPreviewQualification;
   expect(hook.stats().denials.certificates).toBe(1);
+});
+
+async function receiptSession(options: Parameters<typeof fixture>[1] = {}) {
+  vi.useFakeTimers();
+  const native = fixture(undefined, options);
+  const opened = await native.host.call('open', openParams) as { ok: true; value: { sessionId: string; generation: number } };
+  const pixels = captureFixture(native.contents);
+  return { ...native, pixels, params: { sessionId: opened.value.sessionId, expectedGeneration: opened.value.generation } };
+}
+const receiptStats = () => (globalThis as unknown as { __hqPreviewQualification: { stats(): { blobWrites: number; receiptOrphans: number } } }).__hqPreviewQualification.stats();
+function navigateDuringPersistence(contents: ReturnType<typeof fixture>['contents']) {
+  const handler = contents.on.mock.calls.find(([event]) => event === 'did-start-navigation')![1] as (...args: unknown[]) => void;
+  handler({}, 'https://example.com/next', false, true);
+}
+
+it('preserves the absent-port capture result and blob-before-acknowledgment ordering without reading app version', async () => {
+  const { host, params, putBlob, pixels } = await receiptSession();
+  const order: string[] = [];
+  let entered!: () => void, finish!: (value: boolean) => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  putBlob.mockImplementation(() => { order.push('blob'); entered(); return new Promise(resolve => { finish = resolve; }); });
+  const pending = host.call('capture', params).then(result => { order.push('ack'); return result; });
+  await started;
+  expect(order).toEqual(['blob']); expect(app.getVersion).not.toHaveBeenCalled();
+  finish(true);
+  const result = await pending;
+  expect(result).toEqual({ ok: true, value: {
+    captureId: expect.any(String), sessionId: params.sessionId, versionId: openParams.versionId, generation: params.expectedGeneration,
+    route: '/', state: '', viewport: openParams.viewport, scroll: { x: 0, y: 0 }, contentSize: { w: 390, h: 844 },
+    captureDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u), capturedAt: expect.any(String),
+  } });
+  expect(order).toEqual(['blob', 'ack']); expect(putBlob).toHaveBeenCalledOnce(); expect(app.getVersion).not.toHaveBeenCalled();
+  const captureId = (result as { ok: true; value: { captureId: string } }).value.captureId;
+  expect(await host.call('image', { captureId })).toEqual({ ok: true, value: `data:image/png;base64,${pixels.data}` });
+  expect(receiptStats()).toMatchObject({ blobWrites: 1, receiptOrphans: 0 });
+});
+
+it('awaits blob then receipt before acknowledging or caching the accepted viewport capture', async () => {
+  const order: string[] = [];
+  let entered!: () => void, finish!: (value: boolean) => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const persistReceipt = vi.fn(async (_receipt: Readonly<Record<string, unknown>>) => {
+    order.push('receipt'); entered(); return await new Promise<boolean>(resolve => { finish = resolve; });
+  });
+  const { host, params, putBlob, pixels } = await receiptSession({ persistReceipt });
+  vi.setSystemTime(new Date('2026-11-13T12:00:00.000Z'));
+  putBlob.mockImplementation(async () => { order.push('blob'); vi.setSystemTime(new Date('2026-11-13T12:00:01.000Z')); return true; });
+  const pending = host.call('capture', params).then(result => { order.push('ack'); return result; });
+  await started;
+  const receipt = persistReceipt.mock.calls[0][0];
+  expect(order).toEqual(['blob', 'receipt']); expect(app.getVersion).toHaveBeenCalledOnce();
+  expect(receipt).toMatchObject({
+    producer: { appVersion: '0.1.0-synthetic', packaged: false, mode: 'qualification' },
+    host: { sessionId: params.sessionId, hostVersionId: openParams.versionId, generation: params.expectedGeneration },
+    image: { byteLength: Buffer.from(pixels.data, 'base64').length, pixelWidth: 1170, pixelHeight: 2532 },
+    imageRectCss: { x: 0, y: 0, width: 390, height: 844 },
+    time: { capturedAt: '2026-11-13T12:00:00.000Z', basis: 'host-clock-after-coherence-before-persist', acquisition: null },
+    persistedAt: '2026-11-13T12:00:01.000Z', fixture: { state: 'unknown', attestedBy: null },
+  });
+  expect(await host.call('image', { captureId: receipt.captureId })).toEqual({ ok: false, kind: 'unavailable' });
+  finish(true);
+  expect(await pending).toMatchObject({ ok: true, value: { captureId: receipt.captureId } });
+  expect(order).toEqual(['blob', 'receipt', 'ack']); expect(putBlob).toHaveBeenCalledOnce(); expect(persistReceipt).toHaveBeenCalledOnce();
+  expect(await host.call('image', { captureId: receipt.captureId })).toEqual({ ok: true, value: `data:image/png;base64,${pixels.data}` });
+  expect(receiptStats()).toMatchObject({ blobWrites: 1, receiptOrphans: 0 });
+});
+
+it('does not build or persist a receipt when the blob is refused', async () => {
+  const persistReceipt = vi.fn(async (_receipt: Readonly<Record<string, unknown>>) => true);
+  const { host, params, putBlob } = await receiptSession({ persistReceipt });
+  putBlob.mockResolvedValue(false);
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'unavailable', reason: 'storage' });
+  expect(putBlob).toHaveBeenCalledOnce(); expect(persistReceipt).not.toHaveBeenCalled(); expect(app.getVersion).not.toHaveBeenCalled();
+  expect(receiptStats()).toMatchObject({ blobWrites: 0, receiptOrphans: 0 });
+});
+
+it.each(['false', 'throw'])('reports receipt %s as storage failure with one explicit blob orphan and no saved capture', async failure => {
+  const persistReceipt = vi.fn(async (_receipt: Readonly<Record<string, unknown>>) => {
+    if (failure === 'throw') throw new Error('Synthetic receipt refusal');
+    return false;
+  });
+  const { host, params, putBlob } = await receiptSession({ persistReceipt });
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'unavailable', reason: 'storage' });
+  const receipt = persistReceipt.mock.calls[0][0];
+  expect(await host.call('image', { captureId: receipt.captureId })).toEqual({ ok: false, kind: 'unavailable' });
+  expect(await host.call('events', { sessionId: params.sessionId, after: 0 })).toEqual({ ok: true, value: { after: 0, events: [] } });
+  expect(await host.call('status', { sessionId: params.sessionId })).toMatchObject({ ok: true });
+  expect(putBlob).toHaveBeenCalledOnce(); expect(persistReceipt).toHaveBeenCalledOnce();
+  expect(receiptStats()).toMatchObject({ blobWrites: 1, receiptOrphans: 1 });
+});
+
+it.each(['navigation', 'closing'])('keeps absent-port behavior when %s happens during the existing blob write', async fence => {
+  const { host, contents, params, putBlob } = await receiptSession();
+  let entered!: () => void, finish!: (value: boolean) => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  putBlob.mockImplementation(() => { entered(); return new Promise(resolve => { finish = resolve; }); });
+  const pending = host.call('capture', params); await started;
+  if (fence === 'navigation') navigateDuringPersistence(contents);
+  else await host.call('close', { sessionId: params.sessionId });
+  finish(true);
+  expect(await pending).toMatchObject({ ok: true, value: { generation: params.expectedGeneration } });
+  expect(putBlob).toHaveBeenCalledOnce(); expect(app.getVersion).not.toHaveBeenCalled();
+});
+
+it.each(['navigation', 'closing'])('does not call the injected receipt port after %s during blob persistence', async fence => {
+  const persistReceipt = vi.fn(async (_receipt: Readonly<Record<string, unknown>>) => true);
+  const { host, contents, params, putBlob } = await receiptSession({ persistReceipt });
+  let entered!: () => void, finish!: (value: boolean) => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  putBlob.mockImplementation(() => { entered(); return new Promise(resolve => { finish = resolve; }); });
+  const pending = host.call('capture', params); await started;
+  if (fence === 'navigation') navigateDuringPersistence(contents);
+  else await host.call('close', { sessionId: params.sessionId });
+  finish(true);
+  expect(await pending).toEqual({ ok: false, kind: 'stale', reason: 'navigation' });
+  expect(putBlob).toHaveBeenCalledOnce(); expect(persistReceipt).not.toHaveBeenCalled(); expect(app.getVersion).not.toHaveBeenCalled();
+  expect(receiptStats()).toMatchObject({ blobWrites: 1, receiptOrphans: 1 });
+});
+
+it.each(['navigation', 'closing'])('writes neither blob nor receipt after %s before coherence finishes', async fence => {
+  const persistReceipt = vi.fn(async (_receipt: Readonly<Record<string, unknown>>) => true);
+  const { host, contents, params, putBlob } = await receiptSession({ persistReceipt });
+  qualification().pauseAt('post-read');
+  const pending = host.call('capture', params);
+  try {
+    await qualification().waitForPause();
+    if (fence === 'navigation') navigateDuringPersistence(contents);
+    else await host.call('close', { sessionId: params.sessionId });
+  } finally { qualification().resume(); qualification().pauseAt(null); }
+  expect(await pending).toEqual({ ok: false, kind: 'stale', reason: 'navigation' });
+  expect(putBlob).not.toHaveBeenCalled(); expect(persistReceipt).not.toHaveBeenCalled(); expect(app.getVersion).not.toHaveBeenCalled();
+  expect(receiptStats()).toMatchObject({ blobWrites: 0, receiptOrphans: 0 });
+});
+
+it.each(['navigation', 'closing'])('does not acknowledge a capture after %s while its receipt is already in flight', async fence => {
+  let entered!: () => void, finish!: (value: boolean) => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const persistReceipt = vi.fn((_receipt: Readonly<Record<string, unknown>>) => { entered(); return new Promise<boolean>(resolve => { finish = resolve; }); });
+  const { host, contents, params, putBlob } = await receiptSession({ persistReceipt });
+  const pending = host.call('capture', params); await started;
+  if (fence === 'navigation') navigateDuringPersistence(contents);
+  else await host.call('close', { sessionId: params.sessionId });
+  finish(true);
+  expect(await pending).toEqual({ ok: false, kind: 'stale', reason: 'navigation' });
+  expect(await host.call('image', { captureId: persistReceipt.mock.calls[0][0].captureId })).toEqual({ ok: false, kind: 'unavailable' });
+  expect(putBlob).toHaveBeenCalledOnce(); expect(persistReceipt).toHaveBeenCalledOnce();
+  expect(receiptStats()).toMatchObject({ blobWrites: 1, receiptOrphans: 0 });
 });
