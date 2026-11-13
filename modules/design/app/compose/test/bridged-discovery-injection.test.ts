@@ -316,7 +316,7 @@ it('admits only the exact AST forwarding exception, with meaningful negative con
   assert.deepEqual(valid.violations, []);
   assert.deepEqual([valid.forwardings, valid.declarations, valid.reads], [1, 1, 2]);
   const negative = [
-    forwardingFixture.replace('=== undefined', '== undefined'),
+    forwardingFixture.replace('options.discoverySources === undefined', 'options.discoverySources == undefined'),
     forwardingFixture.replace('createBridgedDiscovery()', 'createBridgedDiscovery?.()'),
     forwardingFixture.replace('createBridgedDiscovery(undefined,', 'createBridgedDiscovery(transport,'),
     forwardingFixture.replace('{ sources: options.discoverySources }', '{ sources: options.discoverySources, extra: true }'),
