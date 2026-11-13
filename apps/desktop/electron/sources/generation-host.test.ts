@@ -3,7 +3,6 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
 import { jsonStore } from '../jones-code/storage.js';
 import { createGenerationSources, GenerationSourceError } from './generation-sources.js';
 import type { GenerationSourceRecord, GenerationSourcesApi } from './generation-sources.js';
@@ -335,16 +334,17 @@ it('keeps production construction default-disabled and the disabled return first
   const mainCalls = [...main.matchAll(/\bcreateGenerationSourcesHost\s*\(/g)];
   expect(mainCalls).toHaveLength(1);
   expect(main.slice(mainCalls[0]!.index)).toMatch(/^createGenerationSourcesHost\(\{ userData: app\.getPath\('userData'\) \}\)/);
-  const syntax = ts.createSourceFile('generation-host.ts', source, ts.ScriptTarget.Latest, true);
-  let firstStatement: string | undefined;
-  function visit(node: ts.Node) {
-    if (ts.isMethodDeclaration(node) && node.name.getText(syntax) === 'call') firstStatement = node.body?.statements[0]?.getText(syntax);
-    ts.forEachChild(node, visit);
-  }
-  visit(syntax);
+  // TypeScript 7's root export contains version metadata, not the old compiler API.
+  // Fail closed on source-shape changes rather than starting a native parser service.
+  const callDeclarations = [...source.matchAll(/^\s*async call\([^\n]*\{\n/gm)];
+  expect(callDeclarations).toHaveLength(1);
+  const declaration = callDeclarations[0]!;
+  const firstStatement = source.slice(declaration.index! + declaration[0].length).trimStart().split('\n')[0]?.trim();
   expect(firstStatement).toBe("if (mode === 'disabled') return { ok: false, kind: 'unavailable', reason: 'disabled' };");
   expect(source).toContain("const mode = options.mode ?? 'disabled';");
-  const callers: string[] = [];
+  expect([...main.matchAll(/\bcreateGenerationSourcesHost\b/g)]).toHaveLength(2); // Import and the one proved call only; no aliases.
+  expect([...source.matchAll(/\bcreateGenerationSourcesHost\b/g)]).toHaveLength(1); // Declaration only; no internal calls or aliases.
+  const references: string[] = [];
   async function scan(directory: string): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       if (['node_modules', 'dist', 'dist-electron', '.t3'].includes(entry.name)) continue;
@@ -353,16 +353,13 @@ it('keeps production construction default-disabled and the disabled return first
       if (!/\.(?:[cm]?ts|tsx|[cm]?js|jsx)$/.test(entry.name) || /\.(?:test|spec)\./.test(entry.name)) continue;
       const text = await readFile(path, 'utf8');
       if (!text.includes('generation-host') && !text.includes('createGenerationSourcesHost')) continue;
-      const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
-      const names = new Set(['createGenerationSourcesHost']);
-      function inspect(node: ts.Node) {
-        if (ts.isImportSpecifier(node) && (node.propertyName ?? node.name).text === 'createGenerationSourcesHost') names.add(node.name.text);
-        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && names.has(node.expression.text)) callers.push(path);
-        ts.forEachChild(node, inspect);
-      }
-      inspect(file);
+      references.push(path);
+      expect(text, path).not.toMatch(/\bmode\s*:\s*['"]enabled['"]/);
     }
   }
   await scan(join(root, 'apps'));
-  expect(callers).toEqual([join(root, 'apps/desktop/electron/main.ts')]);
+  expect(references.sort()).toEqual([
+    join(root, 'apps/desktop/electron/main.ts'),
+    join(root, 'apps/desktop/electron/sources/generation-host.ts'),
+  ].sort());
 });
