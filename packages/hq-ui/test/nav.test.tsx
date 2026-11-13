@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CompactNav, DisclosureNav, ModuleNavHostProvider, useDomainNavSource, useModuleNavHost, type DomainNavSource, type NavExpansionState, type NavNode } from '../src/nav';
+import { CompactNav, DisclosureNav, ModuleNavHostProvider, useDomainNavSource, useModuleNavHost, type CompactNavProps, type DomainNavSource, type NavExpansionState, type NavNode } from '../src/nav';
 
 afterEach(cleanup);
 
@@ -114,7 +114,7 @@ describe('nested disclosure navigation', () => {
 });
 
 describe('compact injected navigation', () => {
-  function Harness({ navigate, workspace }: { navigate: ReturnType<typeof vi.fn>; workspace: ReturnType<typeof vi.fn> }) {
+  function Harness({ navigate, workspace }: { navigate: CompactNavProps['onNavigate']; workspace: CompactNavProps['onWorkspaceFocus'] }) {
     const [open, setOpen] = useState(false);
     return <><button type="button">Outside</button><CompactNav {...defaults} triggerLabel="Open Design navigation" open={open}
       onOpenChange={setOpen} onNavigate={navigate} onWorkspaceFocus={workspace} /></>;
