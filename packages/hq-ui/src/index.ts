@@ -24,3 +24,5 @@ export { REFERENCE_MAX_AGE_MS } from './references/freshness';
 
 export { TimeGrid, type TimeGridProps } from './calendar/TimeGrid';
 export { calendarGridSnap, calendarZonedParts, CALENDAR_HOUR_HEIGHT, layoutCalendarEvents, type CalendarGridEvent, type CalendarGridPosition } from './calendar/geometry';
+export * from './panel';
+export * from './nav';
