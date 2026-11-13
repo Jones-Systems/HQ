@@ -55,6 +55,41 @@ test('snapshot projects only bounded known records and finite fixture categories
     assert.equal(next.milestones['launching-runtime:bootstrap:error'].category, 'busy', 'next-launch observes the prior runtime bootstrap before candidate main exists');
     assert.equal(next.milestones['launching-runtime:bootstrap:error'].refusal.guard, 'profile-singleton');
     assert.equal(next.milestones['launching-runtime:bootstrap:error'].refusal.singleton, 'refused');
+    const unknown = { pidEqual: null, identityEqual: null };
+    const evidence = {
+      status: 'available', executableClass: 'inventory', rootClass: 'transaction-bundle',
+      self: { pidEqual: false, identityEqual: false }, helper: { ...unknown }, initiating: { ...unknown },
+      parent: { match: 'unknown', executableClass: 'unknown', rootClass: 'unknown', self: { ...unknown }, helper: { ...unknown }, initiating: { ...unknown } },
+    };
+    const malformed = [
+      null, [], { ...evidence, status: sentinel }, { ...evidence, executableClass: sentinel },
+      { ...evidence, rootClass: sentinel }, { ...evidence, self: true },
+      { ...evidence, self: { pidEqual: 'true', identityEqual: false } },
+      { ...evidence, self: { pidEqual: null, identityEqual: false } },
+      { ...evidence, helper: { pidEqual: false, identityEqual: true } },
+      { ...evidence, initiating: { pidEqual: false } },
+      { ...evidence, parent: { ...evidence.parent, match: sentinel } },
+      { ...evidence, parent: { ...evidence.parent, executableClass: 'inventory' } },
+      { ...evidence, parent: { ...evidence.parent, self: { pidEqual: true, identityEqual: true } } },
+      { ...evidence, argv: [sentinel], environment: { private: sentinel }, profile: sentinel },
+      { status: 'unavailable', reason: sentinel },
+    ];
+    for (const [index, writerEvidence] of [evidence, { status: 'unavailable', reason: 'classification-failed' }, ...malformed].entries()) {
+      const buildSequence = index + 3;
+      write(path.join(directory, 'diagnostic-binding.json'), { runRoot, stateRoot, buildSequence });
+      assert.equal(diagnostics.fixtureReporter(directory, 'bootstrap')('error', Object.assign(new Error(sentinel), {
+        code: 'busy', refusal: { guard: 'writer-process', writerEvidence },
+      })), true);
+      const projected = JSON.parse(fs.readFileSync(path.join(stateRoot, `diagnostic-bootstrap-${buildSequence}-error.json`), 'utf8'));
+      assert.equal(projected.category, 'busy');
+      if (index < 2) assert.deepEqual(projected.refusal.writerEvidence, writerEvidence);
+      else assert.deepEqual(projected.refusal, { status: 'unavailable', reason: 'invalid-refusal' });
+      const caseOutput = path.join(root, `projection-${index}`); fs.mkdirSync(caseOutput);
+      const retained = diagnostics.captureFailure({ ...args, output: caseOutput, active: { ...args.active, buildSequence } });
+      assert.deepEqual(retained.milestones['bootstrap:error'].refusal,
+        index < 2 ? projected.refusal : { status: 'unavailable', reason: 'invalid-refusal' });
+      assert.equal(fs.readFileSync(path.join(caseOutput, 'native-smoke-primary-failure.json'), 'utf8').includes(sentinel), false);
+    }
   });
 });
 
@@ -141,7 +176,24 @@ test('real fresh helper gate, singleton and writer refusals remain distinct befo
   const { fixture, identity, fakeApp } = require('../../test/fixtures.cjs');
   const { runHelper } = require('../../helper.cjs');
   const bootstrap = require('../../bootstrap.cjs');
-  for (const kind of ['gate', 'singleton', 'writer']) await t.test(kind, async t => {
+  const writers = [
+    { name: 'writer', executableClass: 'other', rootClass: 'target-bundle', parent: 'self' },
+    { name: 'inventory-first', executableClass: 'inventory', rootClass: 'transaction-bundle', parent: 'self' },
+    { name: 'framework-first', executableClass: 'framework-child', rootClass: 'target-bundle', parent: 'self' },
+    { name: 'main-first', executableClass: 'bundle-main', rootClass: 'target-bundle', parent: 'self' },
+    { name: 'self-pid-reused', executableClass: 'bundle-main', rootClass: 'target-bundle', parent: 'helper', reused: 'self' },
+    { name: 'helper-pid-reused', executableClass: 'bundle-main', rootClass: 'transaction-bundle', parent: 'self', reused: 'helper' },
+    { name: 'initiating-pid-reused', executableClass: 'bundle-main', rootClass: 'target-bundle', parent: 'self', reused: 'initiating' },
+    { name: 'absent-parent', executableClass: 'other', rootClass: 'target-bundle', parent: 'absent' },
+    { name: 'unmatched-parent', executableClass: 'other', rootClass: 'target-bundle', parent: 'unmatched' },
+    { name: 'ambiguous-parent', executableClass: 'other', rootClass: 'target-bundle', parent: 'ambiguous' },
+    { name: 'initiating-parent', executableClass: 'other', rootClass: 'target-bundle', parent: 'initiating' },
+    { name: 'external-descendant', executableClass: 'other', rootClass: 'other', parent: 'self', writerRelation: 'descendant' },
+    { name: 'state-root', executableClass: 'other', rootClass: 'state-root', parent: 'self' },
+    { name: 'misleading-inventory-basename', executableClass: 'other', rootClass: 'target-bundle', parent: 'self' },
+  ];
+  for (const scenario of [{ kind: 'gate', name: 'gate' }, { kind: 'singleton', name: 'singleton' }, ...writers.map(value => ({ kind: 'writer', ...value }))]) await t.test(scenario.name, async t => {
+    const { kind } = scenario;
     let reached, release;
     const checkpointReached = new Promise(resolve => { reached = resolve; });
     const barrier = new Promise(resolve => { release = resolve; });
@@ -156,7 +208,9 @@ test('real fresh helper gate, singleton and writer refusals remain distinct befo
     f.candidate.bundlePath = path.join(f.record.stateRoot, path.relative(oldState, f.candidate.bundlePath));
     const helper = Object.freeze(identity(path.join(f.candidate.bundlePath, 'Contents/MacOS', f.record.appName), 101));
     f.processes.clear(); f.setSelf(helper);
-    const prepared = await f.prepare();
+    const initiating = scenario.reused === 'initiating' || scenario.parent === 'initiating'
+      ? Object.freeze(identity(path.join(f.record.targetPath, 'Contents/MacOS', f.record.appName), scenario.reused === 'initiating' ? 2147000001 : 707)) : null;
+    const prepared = initiating ? await f.locked(() => f.engine.prepare(f.record, f.candidate, { kind: 'fresh', initiating })) : await f.prepare();
     await f.writeRecord();
     const helperNative = { ...f.native, identity: async () => helper };
     const pending = runHelper({ record: f.record, operationId: prepared.operationId, adapters: {
@@ -167,14 +221,42 @@ test('real fresh helper gate, singleton and writer refusals remain distinct befo
       if (kind !== 'gate') await pending;
       const before = await f.engine.read(f.record);
       assert.equal(before.sequence, 7); assert.equal(before.launchAttempted, true);
+      const journalBytes = fs.readFileSync(path.join(f.record.stateRoot, 'transaction.json'), 'utf8');
       const gateFile = path.join(f.record.stateRoot, 'gate/owner.json');
       const custody = kind === 'gate' ? fs.readFileSync(gateFile, 'utf8') : null;
       const row = f.processes.get(303);
       const appIdentity = Object.freeze(identity(row.executable, row.pid));
-      const native = { ...f.native, identity: async () => appIdentity };
+      const counts = { identity: 0, table: 0, observe: 0 };
+      const native = { ...f.native, identity: async () => { counts.identity++; return appIdentity; },
+        processTable: async () => {
+          counts.table++;
+          const table = await f.native.processTable();
+          if (scenario.parent === 'ambiguous') table.processes.push({ ...row });
+          return table;
+        },
+        observe: async expected => { counts.observe++; return f.native.observe(expected); },
+      };
       const app = fakeApp(f.record.appName);
       if (kind === 'singleton') app.requestSingleInstanceLock = () => { app.calls.push(['singleton']); return false; };
-      if (kind === 'writer') f.processes.set(404, { ...identity(path.join(f.record.targetPath, 'Contents/MacOS', sentinel), 404), ppid: 303 });
+      if (kind === 'writer') {
+        const bundle = scenario.rootClass === 'transaction-bundle' ? f.candidate.bundlePath : f.record.targetPath;
+        const executable = scenario.executableClass === 'inventory' ? path.join(bundle, 'Contents/Resources/app/tools/updater/process-inventory')
+          : scenario.executableClass === 'bundle-main' ? path.join(bundle, 'Contents/MacOS', f.record.appName)
+            : scenario.executableClass === 'framework-child' ? path.join(bundle, 'Contents/Frameworks', sentinel, 'Contents/MacOS/child')
+              : scenario.rootClass === 'other' ? path.join(f.root, sentinel)
+                : scenario.rootClass === 'state-root' ? path.join(f.record.stateRoot, sentinel)
+                  : scenario.name === 'misleading-inventory-basename' ? path.join(bundle, 'Contents/MacOS', sentinel, 'process-inventory')
+                    : path.join(bundle, 'Contents/MacOS', sentinel);
+        const pid = scenario.reused === 'self' ? appIdentity.pid : scenario.reused === 'helper' ? helper.pid : 2147000001;
+        const ppid = scenario.parent === 'absent' ? 0 : scenario.parent === 'unmatched' ? 2147000002
+          : scenario.parent === 'helper' ? helper.pid : scenario.parent === 'initiating' ? initiating.pid : appIdentity.pid;
+        f.processes.set(pid, { ...identity(executable, pid, { start: sentinel }), ppid,
+          argv: [sentinel], environment: { private: sentinel }, profile: sentinel });
+        if (scenario.parent === 'initiating') f.processes.set(initiating.pid, { ...initiating, ppid: 0 });
+        // A later, differently classified blocker must never replace the first refusal's evidence.
+        f.processes.set(505, { ...identity(path.join(f.record.targetPath, 'Contents/Resources/app/tools/updater/process-inventory'), 505), ppid: 303 });
+        if (scenario.executableClass === 'inventory') f.processes.get(505).executable = path.join(f.record.targetPath, 'Contents/Frameworks', sentinel, 'child');
+      }
       const directory = path.join(f.root, 'fixture'), output = path.join(f.root, 'output');
       fs.mkdirSync(output);
       write(path.join(directory, 'diagnostic-binding.json'), { runRoot: f.root, stateRoot: f.record.stateRoot, buildSequence: 2 });
@@ -196,9 +278,17 @@ test('real fresh helper gate, singleton and writer refusals remain distinct befo
         },
       }), error => error === original && error.code === 'busy');
       assert.equal(invoked, 1);
+      assert.equal(counts.identity, 1);
+      assert.equal(counts.table, kind === 'writer' ? 1 : 0);
+      assert.equal(counts.observe, kind === 'gate' ? 1 : 0, 'annotation performs no identity, inventory or liveness enrichment');
       assert.deepEqual(await f.engine.read(f.record), before);
+      assert.equal(fs.readFileSync(path.join(f.record.stateRoot, 'transaction.json'), 'utf8'), journalBytes);
       assert.equal(await f.engine.state.session(f.record), null);
       assert.equal(before.launch, null); assert.equal(before.profileOpened, false); assert.equal(before.health, null);
+      assert.equal(app.listenerCount('will-quit'), 0);
+      assert.equal(bootstrap.getContext(), null);
+      assert.equal(fs.existsSync(path.join(f.record.stateRoot, 'health.json')), false);
+      assert.equal(f.calls.filter(call => call[0] === 'launch').length, 1, 'helper launch precedes the refused bootstrap and main import');
       if (custody) assert.equal(fs.readFileSync(gateFile, 'utf8'), custody);
       else assert.equal(fs.existsSync(path.dirname(gateFile)), false);
       const snapshot = diagnostics.captureFailure({ output, root: f.root, production, archive,
@@ -211,10 +301,30 @@ test('real fresh helper gate, singleton and writer refusals remain distinct befo
         assert.equal(refusal.ownerRelation, 'other'); assert.equal(refusal.helperRelation, 'unknown'); assert.equal(refusal.liveness, 'live');
       }
       if (kind === 'writer') {
-        assert.equal(refusal.ownerRelation, 'other'); assert.equal(refusal.helperRelation, 'other'); assert.equal(refusal.writerRelation, 'owned-root');
+        assert.equal(refusal.ownerRelation, 'other'); assert.equal(refusal.helperRelation, 'other');
+        if (scenario.writerRelation) assert.equal(refusal.writerRelation, scenario.writerRelation);
+        else assert.equal(refusal.writerRelation, 'owned-root');
+        assert.equal(original.message, 'A live HQ app or helper blocks replacement.');
+        assert.equal(snapshot.failureCategory, 'busy');
+        assert.equal(snapshot.milestones['bootstrap:error'].category, 'busy');
+        const evidence = refusal.writerEvidence;
+        assert.equal(evidence.status, 'available');
+        assert.equal(evidence.executableClass, scenario.executableClass);
+        assert.equal(evidence.rootClass, scenario.rootClass);
+        for (const key of ['self', 'helper', 'initiating']) assert.deepEqual(evidence[key], key === 'initiating' && !initiating
+          ? { pidEqual: null, identityEqual: null } : { pidEqual: scenario.reused === key, identityEqual: false });
+        const knownParent = ['self', 'helper', 'initiating'].includes(scenario.parent);
+        assert.equal(evidence.parent.match, knownParent ? 'unique' : 'unknown');
+        assert.equal(evidence.parent.executableClass, knownParent ? 'bundle-main' : 'unknown');
+        assert.equal(evidence.parent.rootClass, !knownParent ? 'unknown' : scenario.parent === 'helper' ? 'transaction-bundle' : 'target-bundle');
+        for (const key of ['self', 'helper', 'initiating']) assert.deepEqual(evidence.parent[key], !knownParent || (key === 'initiating' && !initiating)
+          ? { pidEqual: null, identityEqual: null } : { pidEqual: scenario.parent === key, identityEqual: scenario.parent === key });
+        assert.deepEqual(original.refusal.writerEvidence, evidence, 'reporting retains only the first rejected row from the original scan');
       }
       const raw = fs.readFileSync(path.join(output, 'native-smoke-primary-failure.json'), 'utf8');
       assert.equal(raw.includes(sentinel), false); assert.equal(raw.includes(f.root), false);
+      assert.equal(raw.includes('2147000001'), false); assert.equal(raw.includes('2147000002'), false);
+      for (const key of ['pid', 'ppid', 'start', 'boot', 'executable', 'argv', 'environment', 'profile', 'events']) assert.equal(raw.includes(`"${key}":`), false);
     } finally { release(); await pending; }
     assert.equal(fs.existsSync(path.join(f.record.stateRoot, 'gate')), false);
   });

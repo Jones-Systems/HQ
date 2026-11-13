@@ -17,6 +17,38 @@ function ensureRefusal(condition, message, code, project) {
 function relation(subject, identity) { return identity ? (sameProcess(subject, identity) ? 'self' : 'other') : 'unknown'; }
 function observed(value) { return ['live', 'dead', 'stale'].includes(value) ? value : 'unknown'; }
 
+function writerEvidence(subject, table, roots, record, journal, allowed) {
+  try {
+    if (table.processes.length > 32768 || roots.length > 6 + 4 * MAX_RETAINED_OPERATIONS) throw new Error('Diagnostic bound');
+    const reference = value => { try { return validateProcess(value); } catch { return null; } };
+    // Every current production caller supplies self first, or an empty allowed list.
+    const references = { self: reference(allowed[0]), helper: reference(journal?.helper), initiating: reference(journal?.initiating) };
+    const compare = (row, identity) => ({
+      pidEqual: row && identity ? row.pid === identity.pid : null,
+      identityEqual: row && identity ? sameProcess(row, identity) : null,
+    });
+    const classify = row => {
+      if (!row) return { executableClass: 'unknown', rootClass: 'unknown' };
+      const matches = [...new Set(roots.filter(root => inside(root, row.executable)))].sort((a, b) => b.length - a.length);
+      const root = matches[0];
+      if (!root) return { executableClass: 'other', rootClass: 'other' };
+      const rootClass = root === record.targetPath ? 'target-bundle' : root === record.stateRoot ? 'state-root'
+        : journal && [journal.stagePath, journal.priorPath, journal.failedPath, journal.candidate.bundlePath].includes(root) ? 'transaction-bundle' : 'retained-bundle';
+      // Path classes describe this scan only; they never exempt a process from exclusion.
+      const executableClass = rootClass === 'state-root' ? 'other'
+        : row.executable === path.join(root, 'Contents/Resources/app/tools/updater/process-inventory') ? 'inventory'
+          : row.executable === path.join(root, 'Contents/MacOS', record.appName) ? 'bundle-main'
+            : inside(path.join(root, 'Contents/Frameworks'), row.executable) ? 'framework-child' : 'other';
+      return { executableClass, rootClass };
+    };
+    const project = row => ({ ...classify(row), ...Object.fromEntries(Object.entries(references).map(([key, identity]) => [key, compare(row, identity)])) });
+    const parents = Number.isSafeInteger(subject.ppid) && subject.ppid > 0 ? table.processes.filter(row => row.pid === subject.ppid) : [];
+    // A unique same-scan row is neither durable parentage nor a new liveness observation.
+    const parent = parents.length === 1 ? parents[0] : null;
+    return { status: 'available', ...project(subject), parent: { match: parent ? 'unique' : 'unknown', ...project(parent) } };
+  } catch { return { status: 'unavailable', reason: 'classification-failed' }; }
+}
+
 function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)) }) {
   const json = filename => readJson(filename, { fs: io });
   const optional = filename => optionalJson(filename, { fs: io });
@@ -147,6 +179,7 @@ function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep =
       guard: 'writer-process', ownerRelation: allowed.length ? 'other' : 'unknown',
       helperRelation: journal?.helper ? (sameProcess(process, journal.helper) ? 'helper' : 'other') : 'unknown',
       liveness: 'live', writerRelation: roots.some(root => inside(root, process.executable)) ? 'owned-root' : sessionLease && sameProcess(sessionLease.process, process) ? 'session' : 'descendant',
+      writerEvidence: writerEvidence(process, table, roots, record, journal, allowed),
     }));
     if (sessionLease && !allowed.some(identity => sameProcess(identity, sessionLease.process))) {
       const evidence = await native.observe(sessionLease.process);
