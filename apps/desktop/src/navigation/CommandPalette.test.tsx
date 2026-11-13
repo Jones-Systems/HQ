@@ -392,13 +392,127 @@ describe('search across HQ', () => {
   });
 
   it('Alt+← goes back after a result opens', async () => {
-    render(<TestShell initial={{ domain: 'social' }} providers={[workProvider(cards)]} />);
-    ctrlK(); type('sample');
-    await screen.findByRole('option', { name: /Order sample packs/u });
-    keys('Enter');
-    await waitFor(() => expect(location()).toBe('work:item/bb01'));
-    fireEvent.keyDown(document.body, { key: 'ArrowLeft', altKey: true });
-    expect(location()).toBe('social:home');
+    // One hosted diagnostic: observers add work and can perturb timing; a pass is not a repair.
+    type Row = Readonly<Record<string, string | number | boolean | null>>;
+    const rows: Row[] = [];
+    let bytes = 0, dropped = 0, closed = false;
+    const trace = (row: Row) => {
+      if (closed) return;
+      const size = new TextEncoder().encode(JSON.stringify(row)).byteLength + 1;
+      // Reserve envelope space; never retain nodes, callbacks or events in JSON rows.
+      if (rows.length >= 128 || bytes + size > 30 * 1024) { dropped++; return; }
+      rows.push(row); bytes += size;
+    };
+    const short = (value: string | null | undefined) => value?.slice(0, 160) ?? null;
+    const describeElement = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return 'non-element';
+      const role = target.getAttribute('role') ?? ({ BUTTON: 'button', INPUT: 'textbox', BODY: 'body', MAIN: 'main' } as Record<string, string>)[target.tagName] ?? target.tagName.toLowerCase();
+      return `${role}:${short(target.getAttribute('aria-label') ?? target.textContent) ?? ''}`;
+    };
+    const callsite = () => (new Error().stack?.split('\n').flatMap(line =>
+      line.match(/(?:apps|packages|modules)\/[\w./-]+:\d+:\d+/u) ?? []).slice(0, 4).join(' | ') ?? '').slice(0, 480);
+    const ids = new WeakMap<object, number>();
+    let nextId = 0;
+    const identity = (listener: EventListenerOrEventListenerObject | null) => {
+      if (listener === null) return 0;
+      let id = ids.get(listener);
+      if (id === undefined) { id = ++nextId; ids.set(listener, id); }
+      return id;
+    };
+    const active = new Set<string>();
+    const registration = (action: string, args: Parameters<typeof window.addEventListener>) => {
+      if (args[0] !== 'keydown') return;
+      const capture = typeof args[2] === 'boolean' ? args[2] : args[2]?.capture ?? false;
+      const id = identity(args[1]);
+      const key = `${id}:${capture}`;
+      if (action === 'remove') active.delete(key);
+      else if (active.size < 128) active.add(key);
+      trace({ phase: `listener.${action}`, id, capture, callsite: callsite() });
+    };
+    let lastEvent: KeyboardEvent | null = null;
+    let arrivals = 0, goBacks = 0, lastFrame: string | null = null;
+    const observe = (owner: string) => (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft') return;
+      lastEvent = event;
+      trace({ phase: 'event', owner, order: ++arrivals, defaultPrevented: event.defaultPrevented,
+        target: describeElement(event.target), composing: event.isComposing, alt: event.altKey,
+        ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey,
+        editable: event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])') !== null });
+    };
+    const windowCapture = observe('window.capture'), documentCapture = observe('document.capture');
+    const documentBubble = observe('document.bubble'), windowBubble = observe('window.bubble');
+    const snapshot = (phase: string) => {
+      const back = Array.from(document.querySelectorAll('button')).find(button => button.textContent?.includes('Back to'));
+      const hidden = back ? back.closest('[hidden], [aria-hidden="true"]') !== null : null;
+      const palette = document.querySelector('[role="dialog"][aria-label="Command palette"]');
+      trace({ phase, location: short(screen.queryByTestId('location')?.textContent), backPresent: !!back,
+        backVisible: !!back && !hidden, backHidden: hidden, backName: back ? describeElement(back) : null,
+        modals: Array.from(document.querySelectorAll('[aria-modal="true"]')).slice(0, 6).map(describeElement).join(' | '),
+        modalCount: document.querySelectorAll('[aria-modal="true"]').length,
+        palettePresent: !!palette, paletteModal: palette?.getAttribute('aria-modal') ?? null,
+        paletteOpen: palette?.getAttribute('aria-modal') === 'true',
+        motion: document.documentElement.getAttribute('data-hq-motion'), activeElement: describeElement(document.activeElement),
+        eventTarget: lastEvent ? describeElement(lastEvent.target) : null,
+        defaultPrevented: lastEvent?.defaultPrevented ?? null, listeners: Array.from(active).join(','), goBacks, lastFrame });
+    };
+    const originalAdd = window.addEventListener, originalRemove = window.removeEventListener;
+    let restoreAdd = () => {}, restoreRemove = () => {};
+    // Observation listeners precede fixture listeners; the post-dispatch snapshot reads final cancellation.
+    try {
+      window.addEventListener('keydown', windowCapture, true);
+      document.addEventListener('keydown', documentCapture, true);
+      document.addEventListener('keydown', documentBubble);
+      window.addEventListener('keydown', windowBubble);
+      const addSpy = vi.spyOn(window, 'addEventListener');
+      restoreAdd = () => { addSpy.mockRestore(); };
+      const removeSpy = vi.spyOn(window, 'removeEventListener');
+      restoreRemove = () => { removeSpy.mockRestore(); };
+      addSpy.mockImplementation(function (this: Window, ...args: Parameters<typeof originalAdd>) {
+        const result = Reflect.apply(originalAdd, this, args);
+        registration('add', args);
+        return result;
+      });
+      removeSpy.mockImplementation(function (this: Window, ...args: Parameters<typeof originalRemove>) {
+        const result = Reflect.apply(originalRemove, this, args);
+        registration('remove', args);
+        return result;
+      });
+      render(<TestShell initial={{ domain: 'social' }} providers={[workProvider(cards)]} trace={row => {
+        if (closed) return;
+        if (row.phase === 'goBack') { goBacks++; lastFrame = typeof row.frame === 'string' ? row.frame : null; }
+        trace(row);
+      }} />);
+      ctrlK(); type('sample');
+      await screen.findByRole('option', { name: /Order sample packs/u });
+      keys('Enter');
+      snapshot('after-enter');
+      await waitFor(() => expect(location()).toBe('work:item/bb01'));
+      snapshot('after-destination-wait');
+      snapshot('before-alt-left');
+      fireEvent.keyDown(document.body, { key: 'ArrowLeft', altKey: true });
+      snapshot('after-alt-left');
+      try {
+        expect(location()).toBe('social:home');
+      } catch (originalError) {
+        snapshot('original-assertion-failed');
+        try {
+          await act(async () => {});
+          snapshot('after-failure-empty-act');
+        } finally {
+          throw originalError;
+        }
+      }
+      snapshot('after-original-assertion');
+    } finally {
+      closed = true;
+      try { restoreAdd(); } finally { restoreRemove(); }
+      window.removeEventListener('keydown', windowCapture, true);
+      document.removeEventListener('keydown', documentCapture, true);
+      document.removeEventListener('keydown', documentBubble);
+      window.removeEventListener('keydown', windowBubble);
+      console.log('HQ_COMMAND_PALETTE_ALTLEFT_DIAGNOSTIC_V1 ' + JSON.stringify({ rows, dropped,
+        limits: '128 rows; 32KiB; observer work may perturb timing; active IDs cover only this scope; registration is not invocation; unresolved without decisive trace' }));
+    }
   });
 
   it('closes Settings when a result opens and Back returns to the domain', async () => {
