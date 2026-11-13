@@ -48,9 +48,10 @@ export interface TestShellProps {
   readonly providers?: readonly ReferenceProvider[];
   readonly initial?: Partial<ShellState>;
   readonly mac?: boolean;
+  readonly trace?: (row: Readonly<Record<string, string | boolean | null>>) => void;
 }
 
-export function TestShell({ providers = [], initial, mac = false }: TestShellProps) {
+export function TestShell({ providers = [], initial, mac = false, trace }: TestShellProps) {
   const [state, setState] = useState<ShellState>({ ...DEFAULT_STATE, ...initial });
   const stateRef = useRef(state); stateRef.current = state;
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -62,6 +63,8 @@ export function TestShell({ providers = [], initial, mac = false }: TestShellPro
     projectId: () => projectId,
     notice: value => setNotice(`${value.title}: ${value.message}`),
     open(envelope, destination, context) {
+      trace?.({ phase: 'reference.open', current: `${stateRef.current.domain}:${stateRef.current.destinations[stateRef.current.domain]}`,
+        destination: `${envelope.domain}:${destination}`, returnTo: `${context.to.domain}:${context.to.destination}` });
       setSettingsOpen(false); setNotice('');
       setReturnFrame({ context, state: navigate(stateRef.current, context.to.domain, context.to.destination) });
       setState(previous => navigate(previous, envelope.domain, destination));
@@ -72,6 +75,7 @@ export function TestShell({ providers = [], initial, mac = false }: TestShellPro
     setState(previous => navigate(previous, domain, destination));
   };
   const goBack = () => {
+    trace?.({ phase: 'goBack', frame: returnFrame ? `${returnFrame.state.domain}:${returnFrame.state.destinations[returnFrame.state.domain]}` : null });
     references.cancelOpen();
     if (returnFrame) setState(returnFrame.state);
     setReturnFrame(null);
@@ -79,6 +83,8 @@ export function TestShell({ providers = [], initial, mac = false }: TestShellPro
   const openSettings = (target: SettingsTarget) => { setSettingsTarget(target); setSettingsOpen(true); };
   useShellShortcuts({ switchDomain, openSettings: () => openSettings(null) }, { mac });
   useDocumentTitle({ domain: state.domain, settingsOpen });
+  trace?.({ phase: 'render', current: `${state.domain}:${state.destinations[state.domain]}`,
+    frame: returnFrame ? `${returnFrame.state.domain}:${returnFrame.state.destinations[returnFrame.state.domain]}` : null, settingsOpen });
 
   return <div>
     <nav aria-label="Domains">{DOMAIN_IDS.map(domain => <button key={domain} aria-current={!settingsOpen && state.domain === domain ? 'page' : undefined} onClick={() => switchDomain(domain)}>{DOMAIN_LABELS[domain]}</button>)}</nav>
