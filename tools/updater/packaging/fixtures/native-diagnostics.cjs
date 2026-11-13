@@ -13,6 +13,34 @@ const STAGES = Object.freeze({
 });
 const CATEGORIES = ['wait-timeout', 'subprocess-exit', 'assertion', 'invalid', 'unavailable', 'incompatible', 'recovery-required', 'busy', 'stale-candidate', 'other-error'];
 const GUARDS = ['gate-reconciliation-present', 'installation-gate-owner', 'gate-reconciliation-contended', 'gate-owner-changed', 'gate-owner-liveness', 'gate-acquisition-race', 'profile-singleton', 'session-claim', 'writer-inventory', 'writer-process', 'writer-session'];
+const EXECUTABLE_CLASSES = ['inventory', 'bundle-main', 'framework-child', 'other', 'unknown'];
+const ROOT_CLASSES = ['target-bundle', 'state-root', 'transaction-bundle', 'retained-bundle', 'other', 'unknown'];
+const WRITER_CLASSES = ['executableClass', 'rootClass', 'self', 'helper', 'initiating'];
+function closed(value, keys) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== keys.length || !keys.every(key => Object.hasOwn(value, key))) throw new Error('Invalid diagnostic shape');
+}
+function projectWriterClasses(value) {
+  const result = { executableClass: selected(value.executableClass, EXECUTABLE_CLASSES), rootClass: selected(value.rootClass, ROOT_CLASSES) };
+  for (const key of ['self', 'helper', 'initiating']) {
+    closed(value[key], ['pidEqual', 'identityEqual']);
+    result[key] = {};
+    for (const flag of ['pidEqual', 'identityEqual']) result[key][flag] = value[key][flag] === null ? null : boolean(value[key][flag]);
+    if ((result[key].pidEqual === null) !== (result[key].identityEqual === null)) throw new Error('Incomplete diagnostic identity');
+    if (result[key].identityEqual === true && result[key].pidEqual !== true) throw new Error('Inconsistent diagnostic identity');
+  }
+  return result;
+}
+function projectWriterEvidence(value) {
+  if (value?.status === 'unavailable') {
+    closed(value, ['status', 'reason']);
+    return { status: 'unavailable', reason: selected(value.reason, ['classification-failed']) };
+  }
+  closed(value, ['status', ...WRITER_CLASSES, 'parent']);
+  closed(value.parent, ['match', ...WRITER_CLASSES]);
+  const parent = { match: selected(value.parent.match, ['unique', 'unknown']), ...projectWriterClasses(value.parent) };
+  if (parent.match === 'unknown' && (parent.executableClass !== 'unknown' || parent.rootClass !== 'unknown' || ['self', 'helper', 'initiating'].some(key => parent[key].pidEqual !== null || parent[key].identityEqual !== null))) throw new Error('Unproved diagnostic parent');
+  return { status: selected(value.status, ['available']), ...projectWriterClasses(value), parent };
+}
 function projectRefusal(value) {
   if (value === undefined || value === null) return null;
   try {
@@ -25,6 +53,7 @@ function projectRefusal(value) {
       helperRelation: selected(value.helperRelation ?? 'unknown', ['helper', 'other', 'unknown']),
       liveness: selected(value.liveness ?? 'unknown', ['live', 'dead', 'stale', 'unknown']),
       writerRelation: selected(value.writerRelation ?? 'unknown', ['owned-root', 'session', 'descendant', 'unknown']),
+      ...(Object.hasOwn(value, 'writerEvidence') ? { writerEvidence: projectWriterEvidence(value.writerEvidence) } : {}),
     };
   } catch { return unavailable('invalid-refusal'); }
 }
