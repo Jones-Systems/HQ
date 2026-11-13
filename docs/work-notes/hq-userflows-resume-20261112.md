@@ -15,6 +15,40 @@ The prior thread is context; this work resumes its paused source assignment. Pri
 
 ## Latest disposition
 
+The November 13 continuation supersedes the historical active-writer labels
+below. Project custody is with the current recovery coordinator on
+`work/hq-completion-20261113`; both predecessor conversations were settled after
+their retained results were preserved. PR #213 remains the implementation
+checkpoint at `81b12a976f659e00194a828891b5100d1991ea94`, with seven source jobs
+green and five native/package jobs skipped. PR #215 is its native acceptance
+preparation successor in GitHub native stack #216; each changed head needs fresh CI.
+
+Selected HQ-CFR-01–03 fixture corrections are independently source-reviewed as
+corrected: the single virtual deadline survives GO, held pipes become ready
+only for bytes/EOF, and the seven environment negatives plus exact one-shot
+KILL/EPERM assertions are active. No native execution passed. The review records
+**HQ-CFR-RR-01 P2**, five historical case-map paths carrying the successor digest,
+which makes production build binding refuse; and **HQ-CFR-RR-02 P3**, stale root
+and composition diff records. Both remain unselected and unrepaired. Bounded
+model/data suites do not consume the bad historical ledger and have a separate
+finite mechanics assignment; its results are pending. BC-R1/R2 execution blocks,
+all eight native gates and full-Vitest refusal remain.
+
+Native restart source `6fa52236a7b916a6c42a0b98ee5ef3ed6b1e32d6` is composed here.
+The parent registers N01/N02/N03 separately, preserves HQ-02/HQ-03 and all reserved
+rows, and places offline title editing after the Planner–Wiki reference scenario
+so its original capture lookup remains valid. The actual existing real-Planner
+disk/fresh-core/live-adapter integration tests already cover offline edit and
+lost-request/answer recovery; these additions target native process/preload/UI
+evidence. They and the [native observation sheet](hq-recovery-native-observations.md)
+remain unrun. No new feature implementation is inferred from a coverage gap.
+
+The fleet's generation continuation remains outside this allocation: retained
+T2 explicitly requires A's G-QUAL issuance receipt before releasing G2-W2 source.
+No generation/main/contracts/preload/Settings/H3 seam was released by this
+continuation. Existing disabled association source stays preserved, with no
+new generation writer. Source allocation and live authorization remain distinct.
+
 This section supersedes historical pending labels below. At assembled source `88db57cff76b3e409f034d2c1ab344d5ee285ebe`, all seven required hosted source checks passed: Foundation, CLI with disposable real-Planner E2E, Planner contract/Python/Node, Social service, Design inventory, Design batch and Design fan-in. Foundation completed 3,491 root tests across 209 files, 831 Wiki tests and 156 portable fixture/storage/preview tests with no failures, cancellations or skips. The five skipped native/package/publication jobs establish no acceptance. Documentation changes after this checkpoint require fresh current-head CI; these counts remain bound to that source head.
 
 The original Fable planning session completed its bounded trusted-prelude continuation with native-session verification. It read none of the Mini evidence files and accepted their supplied trust/provenance/closure/full-artifact premises for source authoring only. The prior rate-limit failure remains historical evidence. Its reconciliation is encoded in the existing execution/findings sections: no further provenance research or bootstrap redesign is selected; final helper/environment/path/platform binding and all executable gates remain. Origin retained result collection is complete; project coordination and exclusive coordinator Git ownership stay here.

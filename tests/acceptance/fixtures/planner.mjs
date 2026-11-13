@@ -90,6 +90,11 @@ export async function startPlanner(runtime, repo, observe = () => {}) {
       await until(() => pending.size === 0, 'Planner proxy idle before stop');
       await runtime.stop(child);
     },
+    async start() {
+      assert.ok(child.exitCode !== null || child.signalCode !== null, 'only start our stopped Planner');
+      await until(() => pending.size === 0, 'Planner proxy idle before start');
+      await launch();
+    },
     async restart() {
       await until(() => pending.size === 0, 'Planner proxy idle before restart');
       await runtime.stop(child);

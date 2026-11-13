@@ -12,12 +12,12 @@ import { BUILD_SCHEMA, collectBuildInventory, inventoryDigest } from './build-in
 import { bindHostGallery } from './fixtures/host-gallery.mjs';
 import { setupFixtures } from './fixtures/setup.mjs';
 import { assertNoServiceMutations } from './fixtures/http.mjs';
-import { row, scenarioGaps, fullOutcome, selectedOutcome, routineOutcome, replaceRow } from './fixtures/results.mjs';
+import { row, scenarioGaps, fullOutcome, selectedOutcome, routineOutcome, nativeRestartOutcome, replaceRow } from './fixtures/results.mjs';
 import { socialScenario } from './scenarios/social.mjs';
 import { referenceScenario } from './scenarios/references.mjs';
 import { wikiScenario } from './scenarios/wiki.mjs';
 import { unavailableServiceScenario } from './scenarios/services.mjs';
-import { workScenarios } from './scenarios/work.mjs';
+import { workScenarios, workQueuedNativeRestart, workDraftNativeRestart } from './scenarios/work.mjs';
 import { localFolderScenario, galleryScenario } from './scenarios/sources.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -79,7 +79,7 @@ try {
   await access(main);
   await access(join(repo, 'apps/desktop/dist/index.html'));
   report.harness = {};
-  for (const path of ['run.mjs', 'runtime.mjs', 'build-inventory.mjs', 'fixtures/setup.mjs', 'fixtures/http.mjs', 'fixtures/remote-gallery.mjs', 'fixtures/host-gallery.mjs', 'scenarios/sources.mjs', 'scenarios/ui.mjs', 'scenarios/work.mjs', 'fixtures/results.mjs', 'fixtures/wiki.mjs', 'fixtures/social.mjs', 'fixtures/recovery-ui.mjs', 'scenarios/social.mjs', 'scenarios/references.mjs', 'scenarios/wiki.mjs', 'scenarios/services.mjs']) report.harness[path] = createHash('sha256').update(await readFile(join(repo, 'tests/acceptance', path))).digest('hex');
+  for (const path of ['run.mjs', 'runtime.mjs', 'build-inventory.mjs', 'fixtures/setup.mjs', 'fixtures/planner.mjs', 'fixtures/http.mjs', 'fixtures/remote-gallery.mjs', 'fixtures/host-gallery.mjs', 'scenarios/sources.mjs', 'scenarios/ui.mjs', 'scenarios/work.mjs', 'fixtures/results.mjs', 'fixtures/wiki.mjs', 'fixtures/social.mjs', 'fixtures/recovery-ui.mjs', 'scenarios/social.mjs', 'scenarios/references.mjs', 'scenarios/wiki.mjs', 'scenarios/services.mjs']) report.harness[path] = createHash('sha256').update(await readFile(join(repo, 'tests/acceptance', path))).digest('hex');
   buildInventory = await collectBuildInventory(repo);
   await evidenceRun.write('build-inventory.json', JSON.stringify(buildInventory, null, 2) + '\n');
   report.build = {};
@@ -201,7 +201,8 @@ try {
       },
       held: detail => finish('held', detail), stopApp, launchApp, restartApp, capture };
     // Each independent scenario retains its own first failure; no behavior retries.
-    for (const scenario of [...(galleryOnly ? [] : [workScenarios, ...(routine ? [] : [localFolderScenario]), galleryScenario]), ...(!galleryOnly && !routine ? [socialScenario, referenceScenario, wikiScenario, unavailableServiceScenario] : []), ...(hostBinding ? [ctx => galleryScenario(ctx, fixtures.hostGallery)] : [])]) {
+    // Reference lookup uses the original capture title before the offline edit changes it.
+    for (const scenario of [...(galleryOnly ? [] : [workScenarios, ...(routine ? [] : [localFolderScenario]), galleryScenario]), ...(!galleryOnly && !routine ? [socialScenario, referenceScenario, wikiScenario, workQueuedNativeRestart, workDraftNativeRestart, unavailableServiceScenario] : []), ...(hostBinding ? [ctx => galleryScenario(ctx, fixtures.hostGallery)] : [])]) {
       try { await scenario(context); }
       catch (error) {
         if (cancelled) throw error;
@@ -270,6 +271,9 @@ try {
       }
     }
     report.timings.totalMs = Math.round(performance.now() - startedAt);
+    if (!checkpoint && !galleryOnly && !routine) {
+      report.nativeRestartOutcome = report.cleanup === 'passed' ? nativeRestartOutcome(report.rows) : 'failed';
+    }
     if (cancelled) report.outcome = 'cancelled';
   };
   const primary = () => cancellationSignal ? { code: null, signal: cancellationSignal } : {

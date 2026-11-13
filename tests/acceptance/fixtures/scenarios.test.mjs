@@ -8,7 +8,7 @@ import { startPlanner } from './planner.mjs';
 import { assertNoServiceMutations } from './http.mjs';
 import { galleryBytes, sha256, startGallery, writeGalleryCorpus } from './remote-gallery.mjs';
 import { createLocalFolder, PREVIEW_PNG } from './local-folder.mjs';
-import { row, replaceRow, scenarioGaps, selectedOutcome, fullOutcome, routineOutcome, ROUTINE_SCENARIOS, SELECTED_SCENARIOS } from './results.mjs';
+import { row, replaceRow, scenarioGaps, selectedOutcome, fullOutcome, routineOutcome, nativeRestartOutcome, NATIVE_RESTART_SCENARIOS, ROUTINE_SCENARIOS, SELECTED_SCENARIOS } from './results.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 async function owned(run) {
@@ -62,6 +62,27 @@ test('four routine journeys require every result; release holds stay visible and
   assert.equal(routineOutcome([...rows, row('domain-Wiki', 'gap', [{ id: 'mounted', status: 'gap' }])]), 'platform-or-integration-gap');
 });
 
+test('native restart qualification requires every supplemental observation without releasing original holds', () => {
+  const rows = scenarioGaps(), prerequisite = [{ id: 'native', status: 'pass' }];
+  const required = ['native-prerequisites', 'renderer-isolation', 'domain-round-trip', 'shell-restart',
+    'work-service-replay', 'work-restart-without-intent', ...NATIVE_RESTART_SCENARIOS];
+  for (const id of required) {
+    assert.equal(nativeRestartOutcome(rows), 'platform-or-integration-gap');
+    replaceRow(rows, row(id, 'pass', prerequisite, ['observed']));
+  }
+  assert.equal(nativeRestartOutcome(rows), 'native-restart-passed');
+  for (const id of required) {
+    assert.equal(nativeRestartOutcome(rows.filter(r => r.id !== id)), 'platform-or-integration-gap');
+  }
+  assert.equal(rows.find(r => r.id === 'local-folder-source').status, 'held');
+  assert.equal(rows.find(r => r.id === 'remote-gallery-distinct-host').status, 'held');
+  assert.equal(fullOutcome(rows), 'platform-or-integration-gap');
+  assert.equal(nativeRestartOutcome([...rows, rows[0]]), 'failed');
+  const failed = structuredClone(rows);
+  replaceRow(failed, row('work-queued-native-restart', 'fail', prerequisite, ['first failure']));
+  assert.equal(nativeRestartOutcome(failed), 'failed');
+});
+
 test('real Planner commits once before response loss; lookup and retained DB restart preserve one item/version', () => owned(async runtime => {
   const planner = await startPlanner(runtime, repo);
   const before = await planner.state();
@@ -91,6 +112,16 @@ test('real Planner commits once before response loss; lookup and retained DB res
   assert.equal((await read.json()).items[0].id, applied.items[0].id);
   assert.deepEqual(planner.ledger.map(entry => [entry.method, entry.path]), [['POST', '/api/items'], ['POST', '/api/requests/replay'], ['GET', '/api/state']]);
   assert.equal(planner.processes.length, 2);
+  await assert.rejects(planner.start(), /only start our stopped Planner/);
+  const retainedOrigin = planner.origin, retainedDatabase = planner.database;
+  await planner.stop();
+  await planner.start();
+  assert.equal(planner.origin, retainedOrigin);
+  assert.equal(planner.database, retainedDatabase);
+  const started = await planner.state();
+  assert.deepEqual(started.items, retained.items);
+  assert.equal(started.state_version, retained.state_version);
+  assert.equal(planner.processes.length, 3);
   const deniedBoundary = planner.ledger.length;
   for (const [method, path] of [['GET', '/api/private'], ['PUT', '/api/settings'], ['POST', '/api/items/ignored/archive']]) {
     const denied = await fetch(planner.origin + path, { method, signal: AbortSignal.timeout(1000) });
