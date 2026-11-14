@@ -110,29 +110,70 @@ function propertyName(node: Node): string | null {
   if (node.type === 'Literal' && typeof node.value === 'string') return node.value;
   return null;
 }
+function unparenthesized(node: Node): Node {
+  return node.type === 'ParenthesizedExpression' ? unparenthesized(node.expression) : node;
+}
+function identifier(node: Node, name: string): boolean {
+  return node.type === 'Identifier' && node.name === name;
+}
+function receiptConsequent(node: Node): Node | null {
+  if (node.type !== 'SpreadElement') return null;
+  const conditional = unparenthesized(node.argument);
+  if (conditional.type !== 'ConditionalExpression' || !identifier(conditional.test, 'CAPTURE_RECEIPTS_ENABLED')
+    || conditional.alternate.type !== 'ObjectExpression' || conditional.alternate.properties.length !== 0
+    || conditional.consequent.type !== 'ObjectExpression' || conditional.consequent.properties.length !== 1) return null;
+  const property = conditional.consequent.properties[0];
+  if (property.type !== 'Property' || property.computed || property.method || property.shorthand || property.kind !== 'init'
+    || !identifier(property.key, 'persistReceipt') || property.value.type !== 'CallExpression'
+    || !identifier(property.value.callee, 'createCaptureReceiptPersister') || property.value.arguments.length !== 1) return null;
+  const backing = property.value.arguments[0];
+  if (backing.type !== 'CallExpression' || backing.arguments.length !== 0 || backing.callee.type !== 'MemberExpression'
+    || backing.callee.computed || !identifier(backing.callee.object, 'design') || !identifier(backing.callee.property, 'receiptBacking')) return null;
+  return conditional.consequent;
+}
 function inspectWiring(source: string, path: string) {
   const lang = /\.d\.[cm]?ts$/u.test(path) ? 'dts' : /\.[cm]?tsx?$/u.test(path) ? (path.endsWith('x') ? 'tsx' : 'ts') : 'jsx';
   const ast = parseAst(source, { lang, sourceType: 'unambiguous' }, path);
   const factories = new Set(['createPreviewHost']), violations: string[] = [];
+  const imported = new Set<string>(), permitted = new Set<Node>();
+  for (const node of ast.body) {
+    if (node.type !== 'ImportDeclaration' || node.source.value !== './capture-receipts.js') continue;
+    for (const specifier of node.specifiers) {
+      if (specifier.type === 'ImportSpecifier' && specifier.importKind !== 'type' && node.importKind !== 'type'
+        && propertyName(specifier.imported) === specifier.local.name) imported.add(specifier.local.name);
+    }
+  }
+  const mainComposition = path === join(repo, 'apps/desktop/electron/main.ts')
+    && imported.has('CAPTURE_RECEIPTS_ENABLED') && imported.has('createCaptureReceiptPersister');
   let calls = 0;
   walk(ast, node => {
     if (node.type === 'ImportSpecifier' && propertyName(node.imported) === 'createPreviewHost') factories.add(node.local.name);
     if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier' && node.init?.type === 'Identifier' && factories.has(node.init.name)) factories.add(node.id.name);
   });
   walk(ast, node => {
-    if (node.type === 'ObjectExpression' && node.properties.some(property => property.type === 'Property' && propertyName(property.key) === 'persistReceipt')) {
-      violations.push('runtime receipt option');
-    }
     if (node.type !== 'CallExpression') return;
     const callee = node.callee;
     if (!(callee.type === 'Identifier' && factories.has(callee.name))
       && !(callee.type === 'MemberExpression' && propertyName(callee.property) === 'createPreviewHost')) return;
     calls++;
     const options = node.arguments[0];
-    if (node.arguments.length !== 1 || options?.type !== 'ObjectExpression'
-      || options.properties.some(property => property.type !== 'Property' || !['window', 'putBlob'].includes(propertyName(property.key) ?? ''))) {
+    if (node.arguments.length !== 1 || options?.type !== 'ObjectExpression') {
       violations.push('preview host options are not the inert literal composition');
+      return;
     }
+    let receiptSpreads = 0;
+    for (const property of options.properties) {
+      if (property.type === 'Property' && !property.computed && ['window', 'putBlob'].includes(propertyName(property.key) ?? '')) continue;
+      const consequent = mainComposition ? receiptConsequent(property) : null;
+      if (consequent && ++receiptSpreads === 1) permitted.add(consequent);
+      else violations.push('preview host options are not the inert literal composition');
+    }
+  });
+  walk(ast, node => {
+    if (node.type === 'ObjectExpression' && !permitted.has(node)
+      && node.properties.some(property => property.type === 'Property' && propertyName(property.key) === 'persistReceipt')) violations.push('runtime receipt option');
+    if (node.type === 'AssignmentExpression' && node.left.type === 'MemberExpression'
+      && propertyName(node.left.property) === 'persistReceipt') violations.push('runtime receipt assignment');
   });
   return { calls, violations };
 }
@@ -151,7 +192,31 @@ it('distinguishes receipt wiring from the legal host type, implementation and or
   ]) expect(inspectWiring(source, 'fixture.ts').violations.length).toBeGreaterThan(0);
 });
 
-it('keeps main and every non-test source caller free of receipt persistence composition', () => {
+it('allows only the exact imported hard-off main spread, refusing alternate gates, suppliers and files', () => {
+  const main = join(repo, 'apps/desktop/electron/main.ts');
+  const imports = "import { CAPTURE_RECEIPTS_ENABLED, createCaptureReceiptPersister } from './capture-receipts.js';";
+  const spread = '...(CAPTURE_RECEIPTS_ENABLED ? { persistReceipt: createCaptureReceiptPersister(design.receiptBacking()) } : {})';
+  const source = `${imports} createPreviewHost({ window, putBlob, ${spread} });`;
+  expect(inspectWiring(source, main)).toEqual({ calls: 1, violations: [] });
+  expect(inspectWiring(source, 'fixture.ts').violations.length).toBeGreaterThan(0);
+  for (const changed of [
+    source.replace(imports, ''), source.replace('./capture-receipts.js', './other.js'),
+    source.replace('import {', 'import type {'),
+    source.replace('...(CAPTURE_RECEIPTS_ENABLED', '...(true'),
+    source.replace('...(CAPTURE_RECEIPTS_ENABLED', '...(!CAPTURE_RECEIPTS_ENABLED'),
+    source.replace('...(CAPTURE_RECEIPTS_ENABLED', '...(process.env.RECEIPTS'),
+    source.replace('createCaptureReceiptPersister(design.receiptBacking())', 'save'),
+    source.replace('design.receiptBacking()', 'other.receiptBacking()'),
+    source.replace('design.receiptBacking()', 'design.receiptBacking(options)'),
+    source.replace(': {})', ': { persistReceipt: save })'),
+    source.replace('persistReceipt:', 'other:'),
+    source.replace(spread, `${spread}, ${spread}`),
+    `${source} const other = { persistReceipt: save };`,
+    `${source} options.persistReceipt = save;`,
+  ]) expect(inspectWiring(changed, main).violations.length).toBeGreaterThan(0);
+});
+
+it('keeps every production supplier outside the hard-off main spread forbidden', () => {
   const main = join(repo, 'apps/desktop/electron/main.ts');
   expect(inspectWiring(readFileSync(main, 'utf8'), main)).toEqual({ calls: 1, violations: [] });
   const violations: string[] = [];

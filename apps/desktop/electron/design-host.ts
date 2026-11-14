@@ -235,6 +235,29 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
     }
   }
   return {
+    receiptBacking() {
+      return {
+        putDocument(key: string, value: unknown, options: { expectedRevision: null }): Promise<unknown> {
+          if (closing) return Promise.reject(Object.assign(new Error('Host closing'), { code: 'closed' }));
+          let captured: unknown;
+          try {
+            if (!wellFormedKey(key) || !/^hq\/captures\/receipts\/[a-z0-9][a-z0-9-]{0,63}$/.test(key)
+              || !record(options) || !keys(options, ['expectedRevision']) || options.expectedRevision !== null
+              || !jsonValue(value)) throw new Error('Invalid receipt write');
+            captured = structuredClone(value);
+            if (!jsonValue(captured) || Buffer.byteLength(JSON.stringify(captured)) > DESIGN_VALUE_CAP) throw new Error('Invalid receipt write');
+          } catch { return Promise.reject(Object.assign(new Error('Invalid receipt write'), { code: 'invalid-argument' })); }
+          if (closing) return Promise.reject(Object.assign(new Error('Host closing'), { code: 'closed' }));
+          const operation = gate.shared(async () => {
+            const current = await getStore();
+            return current.transactions.workspace.putDocument(key, captured as JsonValue, { expectedRevision: null });
+          });
+          active.add(operation);
+          void operation.then(() => active.delete(operation), () => active.delete(operation));
+          return operation;
+        },
+      };
+    },
     async ready(): Promise<boolean> { if (closing) return false; try { await getStore(); return true; } catch { return false; } },
     call(route: unknown, params: unknown) {
       if (closing) return Promise.resolve<DesignStorageResult<unknown>>({ ok: false, kind: 'unavailable' });
