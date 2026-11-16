@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createRequire } = require('node:module');
-const { runInNewContext } = require('node:vm');
+const { runInThisContext } = require('node:vm');
 const { fixture, fakeApp } = require('./fixtures.cjs');
 const bootstrap = require('../bootstrap.cjs');
 const { runHelper } = require('../helper.cjs');
@@ -38,9 +38,11 @@ async function packagedNative(bundle, execFile) {
   // execFile is the existing native seam: no inventory executable or other OS command runs.
   const source = path.resolve(__dirname, '../native.cjs');
   const module = { exports: {} };
-  runInNewContext(await fs.readFile(source, 'utf8'), {
-    module, require: createRequire(source), __dirname: path.dirname(inventoryPath(bundle)), process, Buffer,
-  }, { filename: source });
+  // Keep production values in the validator's realm while supplying the packaged directory.
+  const load = runInThisContext(`(function(module, require, __dirname) {
+${await fs.readFile(source, 'utf8')}
+})`, { filename: source });
+  load(module, createRequire(source), path.dirname(inventoryPath(bundle)));
   return module.exports.createNativeAdapter({ platform: 'darwin', architecture: 'arm64', execFile,
     spawn: () => assert.fail('portable inventory characterization must not spawn'),
   });
