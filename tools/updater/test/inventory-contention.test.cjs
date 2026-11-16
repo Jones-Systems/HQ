@@ -82,6 +82,8 @@ async function retainDiagnostic(f, error, name) {
   }
   assert.ok(Buffer.byteLength(raw) <= 32768);
   assert.equal((await fs.stat(filename)).mode & 0o777, 0o600);
+  // Preserve this owned capture before the next case exercises exclusive creation again.
+  await fs.rename(path.join(f.record.stateRoot, 'diagnostic-bootstrap-2-error.json'), path.join(directory, 'bootstrap-error.json'));
   return milestone.refusal;
 }
 
