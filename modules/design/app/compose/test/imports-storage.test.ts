@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 import { DesignBridgeError } from '../bridge-documents.ts';
 import { classifyDesignError, DesignOperationError } from '../errors.ts';
 import {
-  commitOperation, createImportsBridgeStorage, exportUnavailable, IMPORTS_CONTEXTS, typeImportsStorage, type ImportsCommitLink,
+  blobCanonicalBytes, commitOperation, createImportsBridgeStorage, exportUnavailable, IMPORTS_CONTEXTS, typeImportsStorage, type ImportsCommitLink,
+  type ImportsLinkContext,
 } from '../imports-storage.ts';
 import { StorageConflictError, sha256Digest, type WriteOp } from '../../../imports/src/contract.ts';
 import { planImport, type ImportPlan } from '../../../imports/src/importer.ts';
@@ -171,6 +173,43 @@ describe('imports storage over the bridge: outcomes', () => {
     assert.deepEqual(double.commits[0]!.ops.map((op) => op.op === 'put-document' ? op.key : op.op), ['design/imports/records/r', 'append-event', 'design/projects/design.projects/content/p']);
     assert.deepEqual(changed, ['p']);
     assert.deepEqual(double.documents.get('design/projects/design.projects/content/p')!.value, { linked: 2 });
+  });
+
+  it('gives the link a context: the room the importer\'s own operations left, and a digest-verified blob reader', async () => {
+    const contexts: (ImportsLinkContext | undefined)[] = [];
+    const link: ImportsCommitLink = { plan: async (_ops, _read, context) => { contexts.push(context); return { ops: [], projects: [] }; }, changed: () => {} };
+    const { double, storage } = setup(link);
+    const bytes = new Uint8Array(3000).fill(7);
+    const blobDigest = sha256Digest(`sha256:${createHash('sha256').update(bytes).digest('hex')}`);
+    const ops: WriteOp[] = [doc('imports/records/r', { n: 1 }), { op: 'put-blob', namespace: 'workspace', digest: blobDigest, mediaType: 'image/png', bytes }, event('import.applied')];
+    await storage.commit(ops);
+    const context = contexts[0]!;
+    assert.ok(context !== undefined, 'the link is always given a context');
+    const used = new TextEncoder().encode(JSON.stringify(double.commits[0]!.ops[0])).byteLength + blobCanonicalBytes(3000)
+      + new TextEncoder().encode(JSON.stringify(double.commits[0]!.ops[2])).byteLength;
+    assert.equal(context.remainingBytes, 64 * 1024 * 1024 - used);
+    assert.equal(context.remainingOps, 10_000 - 3);
+    assert.deepEqual(await context.readBlob(blobDigest), bytes, 'a stored blob is read back');
+    assert.equal(await context.readBlob(`sha256:${'b'.repeat(64)}`), null, 'an unknown digest is null');
+    assert.equal(await context.readBlob('not-a-digest'), null, 'a refused read is null, never a throw');
+    double.failWith((route) => route === 'blob.get' ? { ok: false, kind: 'unavailable' } as never : undefined);
+    assert.equal(await context.readBlob(blobDigest), null, 'a failed read is null, never a throw');
+  });
+
+  it('measures a blob as the host counts it: base64 plus 256 bytes', () => {
+    assert.deepEqual([0, 1, 3, 4, 3000, 1_049_088].map(blobCanonicalBytes), [256, 260, 260, 264, 4256, 1_398_784 + 256]);
+  });
+
+  it('refuses a link whose operations push the batch over the cap, exactly as it refuses an importer batch', async () => {
+    const big = new Uint8Array(15 * 1024 * 1024);
+    const link: ImportsCommitLink = {
+      plan: async () => ({ ops: [{ op: 'put-blob', namespace: 'workspace', digest: sha256Digest(`sha256:${'c'.repeat(64)}`), mediaType: 'image/png', bytes: big }], projects: [] }),
+      changed: () => {},
+    };
+    const { double, storage } = setup(link);
+    const blobs = ['a', 'b', 'd'].map((letter, index): WriteOp => ({ op: 'put-blob', namespace: 'workspace', digest: sha256Digest(`sha256:${letter.repeat(64)}`), mediaType: 'image/png', bytes: new Uint8Array(15 * 1024 * 1024 + index) }));
+    await assert.rejects(() => storage.commit([...blobs, event('import.applied')]), (error) => error instanceof DesignOperationError && error.kind === 'too-large');
+    assert.equal(double.count('import.commit'), 0);
   });
 
   it('refuses a batch over the canonical size cap with a typed too-large failure before any call', async () => {

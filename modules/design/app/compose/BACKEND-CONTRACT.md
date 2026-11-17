@@ -500,8 +500,25 @@ Importing a PNG makes it a project version, so Projects, Gallery, Compare and An
   file.
 - Versions are never removed. **Undo leaves the imported versions in place.** It only marks the import undone in
   the Imports history. Removing a version needs a separate Projects action.
-- Only PNG items link. An image larger than 2 MiB is imported and linked without a thumbnail, because the
-  thumbnail port caps previews at 2 MiB.
+- Only PNG items link. An image of at most 2 MiB is its own thumbnail. A larger image gets a generated one,
+  because the thumbnail port caps previews at 2 MiB (`DEFAULT_LIMITS.maxThumbnailBytes`):
+  - `png-thumbnail.ts` downsamples it in the renderer with no dependency and no native call: at most 512 px on the
+    long side, exact integer box averaging in premultiplied alpha, written as 8-bit RGBA with zlib *stored* blocks
+    so the bytes and digest are identical on every platform. It reads 8-bit grey, RGB, palette, grey+alpha and
+    RGBA, not interlaced, up to 50 million source pixels, streaming the inflate so memory does not grow with image
+    height. A 512 x 512 thumbnail is 1,049,236 bytes.
+  - The thumbnail is a `put-blob` (`image/png`) in the same `import.commit`, placed before the project content
+    document that points at it. The version's `capture.captureDigest` stays the digest of the full image; marks
+    bind to the real pixels, never to the thumbnail. The thumbnail digest is a pure function of the image bytes.
+  - The blob is read from the batch, or, when the importer skipped it because it is already stored (for example
+    taking the incoming file after a conflict), from storage by digest.
+  - It is optional and never the reason an import fails. An unsupported or damaged PNG (16-bit, indexed below 8
+    bits, interlaced, colour-key transparency, a bad checksum, a truncated or oversized stream), an unreadable
+    source, a batch that has no room, or more than 150 million source pixels already decoded in the batch links
+    the version with no thumbnail, as before. The room check reserves the content documents' growth and one
+    operation each, so the batch limits below are never reached because of a thumbnail.
+  - An identical re-pick plans nothing, so it generates nothing. Versions are immutable: a version linked earlier
+    without a thumbnail is not back-filled.
 - A project whose content is read-only (saved by a newer HQ) cannot be linked: the commit fails as `read-only`
   before anything is written.
 - After the commit is sent, whatever the outcome (it landed, it lost a race or was refused, or its reply was
