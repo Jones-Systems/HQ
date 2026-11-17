@@ -36,7 +36,9 @@ test('destinations round-trip and tolerate the shell default', () => {
   assert.deepEqual(parseDestination('home'), DEFAULT_LOCATION);
   assert.deepEqual(parseDestination('review/canvas'), { nav: 'review', section: 'canvas' });
   assert.deepEqual(parseDestination('review/Bad Id'), { nav: 'review', section: null });
-  assert.deepEqual(parseDestination('review/a/b'), DEFAULT_LOCATION);
+  // A valid section keeps its place when a third segment is not a declared view: `sub` is null, the section is not lost.
+  assert.deepEqual(parseDestination('review/a/b'), { nav: 'review', section: 'a', sub: null });
+  assert.deepEqual(parseDestination('review/Bad/b'), DEFAULT_LOCATION, 'an invalid section with more segments still falls back');
   assert.deepEqual(parseDestination('https://x'), DEFAULT_LOCATION);
   assert.equal(formatDestination(parseDestination('runs/connector')), 'runs/connector');
 });

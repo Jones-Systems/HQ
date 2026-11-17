@@ -132,3 +132,21 @@ test('unchanged writes do not dirty the session', () => {
   core.deactivate();
   assert.equal(storage.writes.length, 1);
 });
+
+test('an enveloped section slot is ordinary section state: the session schema, key and bounds are unchanged', () => {
+  const storage = createFakeStorage();
+  const core = createDesignCore(storage);
+  const slot = { v: 1, view: 'swipe', data: { pair: [1, 2] } };
+  assert.ok(core.sessions.sectionHandle('alpha', 'compare').write(slot));
+  core.deactivate();
+  const stored = JSON.parse(storage.data.get(sessionKey('alpha'))!);
+  assert.equal(stored.schema, 'hq.design.ui-session/v1');
+  assert.deepEqual(stored.sections, { compare: slot });
+  const again = createDesignCore(storage);
+  assert.deepEqual(again.sessions.sectionHandle('alpha', 'compare').read(), slot);
+  assert.equal(again.sessions.persistence('alpha').status, 'ok');
+  assert.equal(core.sessions.sectionHandle('alpha', 'compare').write({ v: 1, view: 'swipe', data: 'x'.repeat(MAX_SECTION_STATE) }), false, 'the existing size bound still applies to the whole slot');
+  assert.deepEqual(core.sessions.sectionHandle('alpha', 'compare').read(), slot);
+  const text = core.serialize('alpha')!;
+  assert.deepEqual(createDesignCore(null).restore('alpha', text), { status: 'restored' });
+});

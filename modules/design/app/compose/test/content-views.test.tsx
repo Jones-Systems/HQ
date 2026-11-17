@@ -20,6 +20,7 @@ import { alpha, beta, dataUrl, digestOf, durableFixture, png, saveVersion, type 
 
 const props: Omit<DesignSectionProps, 'context'> = {
   appearance: 'light', sectionId: 'taste', state: { read: () => undefined, write: () => true },
+  sub: null, subExplicit: false, navigateSub: () => undefined,
   navigate: () => undefined, proposeProjectSwitch: () => undefined, onCommand: () => () => undefined,
   surface: (kind) => ({ 'data-hqd-surface': kind, style: { colorScheme: 'normal', filter: 'none', mixBlendMode: 'normal',
     opacity: 1, isolation: 'isolate', forcedColorAdjust: 'none', backgroundColor: 'transparent' } }),
