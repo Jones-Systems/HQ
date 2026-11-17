@@ -7,6 +7,7 @@ import { createShellHealthGate, registerUpdateBridge, UPDATE_STATUS } from './up
 import { validateDevelopmentUrl } from './security.js';
 import { createMainWindow } from './contents-factory.js';
 import { createPreviewHost } from './preview/host.js';
+import { CAPTURE_RECEIPTS_ENABLED, createCaptureReceiptPersister } from './capture-receipts.js';
 import { createJonesHost } from './jones-code/host.js';
 import { createSourceHost } from './sources/host.js';
 import { createGenerationSourcesHost } from './sources/generation-host.js';
@@ -97,7 +98,7 @@ app.on('before-quit', (event) => {
 });
 const builtUrl = new URL('../dist/index.html', import.meta.url).href;
 let mainWindow: BrowserWindow | undefined;
-const preview = createPreviewHost({ window: () => mainWindow, putBlob: async (bytes, expectedDigest) => (await design.call('blob.put', { bytes, expectedDigest })).ok });
+const preview = createPreviewHost({ window: () => mainWindow, putBlob: async (bytes, expectedDigest) => (await design.call('blob.put', { bytes, expectedDigest })).ok, ...(CAPTURE_RECEIPTS_ENABLED ? { persistReceipt: createCaptureReceiptPersister(design.receiptBacking()) } : {}) });
 const developmentUrl = validateDevelopmentUrl(process.env.HQ_DEV_SERVER_URL, app.isPackaged);
 
 async function createWindow(): Promise<void> {

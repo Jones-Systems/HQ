@@ -10,6 +10,7 @@ import { acceptCapture, type CaptureReading } from './coherence.js';
 import { previewParams, validAgentEvent, validResolution } from './validation.js';
 import { createQualificationBarrier } from './qualification.js';
 import { fitPlacement } from './placement.js';
+import { buildCaptureReceipt } from './receipt.js';
 
 type Result = PreviewResult<unknown>;
 type Live = { view: WebContentsView; session: Session; target: URL; value: PreviewSession; visible: boolean; mode: 'off' | 'pick' | 'cite'; events: PreviewValues['events']['events'][number][]; sequence: number; draining: boolean; timer: ReturnType<typeof setInterval>; closing: boolean; epoch: number; captureSequence: number; queue: Promise<unknown>; blocked?: string; markFailure?: string; placement: number; fitted: { bounds: Rectangle; scale: number }; hold?: number };
@@ -27,6 +28,7 @@ async function bounded<T>(operation: Promise<T>, milliseconds: number): Promise<
 export function createPreviewHost(options: {
   window: () => BrowserWindow | undefined;
   putBlob: (bytes: Uint8Array, digest: string) => Promise<boolean>;
+  persistReceipt?: (receipt: Readonly<Record<string, unknown>>) => Promise<boolean>;
 }) {
   const qualificationEnabled = !app.isPackaged && Boolean(process.env.HQ_USER_DATA_DIR) && process.env.HQ_QUALIFY_PREVIEW === '1';
   const barrier = createQualificationBarrier();
@@ -42,7 +44,7 @@ export function createPreviewHost(options: {
     traces.push({ operation, phase, sessionId: live.value.sessionId, generation: live.value.generation, at: new Date().toISOString(), ...(detail ? { error: detail } : {}) });
     if (traces.length > 64) traces.shift();
   }
-  const diagnostics = { blobWrites: 0, clearedSessions: 0, deniedRequests: 0, lastPickOutcome: null as PreviewResult<CaptureRecord> | null };
+  const diagnostics = { blobWrites: 0, receiptOrphans: 0, clearedSessions: 0, deniedRequests: 0, lastPickOutcome: null as PreviewResult<CaptureRecord> | null };
   const sessions = new Map<string, Live>();
   const previewContents = new WeakSet<WebContents>();
   let lifecycleEpoch = 0, overlayHidden = false, holds = 0;
@@ -139,7 +141,7 @@ export function createPreviewHost(options: {
     const captureSequence = ++live.captureSequence;
     const deadline = Date.now() + 6000;
     const withinCapture = <T>(operation: Promise<T>) => bounded(operation, deadline - Date.now());
-    let accepted: Extract<ReturnType<typeof acceptCapture>, { ok: true }>;
+    let accepted: Extract<ReturnType<typeof acceptCapture>, { ok: true }> & { pixelWidth: number; pixelHeight: number };
     let held = false, inFlight: Promise<unknown> | undefined;
     const hold = ++holds;
     try {
@@ -164,7 +166,7 @@ export function createPreviewHost(options: {
       const result = acceptCapture(pre, fault === 'dpr' ? { ...first, width: first.width + 1 } : first, fault === 'pixels-unstable' ? { ...second, bytes: new Uint8Array([1]) } : second, fault === 'mutation' ? { ...post, mutationCounter: post.mutationCounter + 1 } : post, { generation: expectedGeneration, viewport: live.value.viewport, ...(event ? { event } : {}) });
       if (!result.ok) return { ok: false, kind: 'stale', reason: result.reason };
       if (live.closing || live.value.generation !== expectedGeneration) return { ok: false, kind: 'stale', reason: 'navigation' };
-      accepted = result;
+      accepted = { ...result, pixelWidth: first.width, pixelHeight: first.height };
     } catch (error) {
       trace(live, 'capture', 'error', error);
       if (error instanceof CaptureTimeout) {
@@ -205,8 +207,24 @@ export function createPreviewHost(options: {
       contentSize: accepted.reading.contentSize, captureDigest: accepted.digest, capturedAt: new Date().toISOString() };
     trace(live, 'capture', 'blob:start');
     if (!await options.putBlob(accepted.bytes, accepted.digest)) return { ok: false, kind: 'unavailable', reason: 'storage' };
+    const persistedAt = options.persistReceipt ? new Date().toISOString() : undefined;
     trace(live, 'capture', 'blob:end');
     diagnostics.blobWrites++;
+    if (options.persistReceipt) {
+      if (live.closing || live.value.generation !== expectedGeneration) {
+        diagnostics.receiptOrphans++;
+        return { ok: false, kind: 'stale', reason: 'navigation' };
+      }
+      let saved = false;
+      try {
+        saved = await options.persistReceipt(buildCaptureReceipt({ record, observedUrl: accepted.reading.url,
+          qualificationEnabled, appVersion: app.getVersion(), packaged: app.isPackaged,
+          byteLength: accepted.bytes.length, pixelWidth: accepted.pixelWidth, pixelHeight: accepted.pixelHeight, persistedAt: persistedAt! }));
+      } catch { /* The durable blob remains an orphan; no receipt retry or capture acknowledgment. */ }
+      if (!saved) diagnostics.receiptOrphans++;
+      if (live.closing || live.value.generation !== expectedGeneration) return { ok: false, kind: 'stale', reason: 'navigation' };
+      if (!saved) return { ok: false, kind: 'unavailable', reason: 'storage' };
+    }
     if (images.size >= 32) images.delete(images.keys().next().value!);
     images.set(captureId, { sessionId: live.value.sessionId, data: `data:image/png;base64,${Buffer.from(accepted.bytes).toString('base64')}` });
     live.value = { ...live.value, contentSize: accepted.reading.contentSize };

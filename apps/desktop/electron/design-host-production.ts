@@ -20,6 +20,7 @@ export function createProductionDesignHost(options: ProductionDesignHostOptions)
   const open = options.open ?? openEmittedDesignStore;
   const host = createDesignHost(() => open(options.profileDir(), { imports: 'enabled' }), options.save, () => options.pick.pick());
   return {
+    receiptBacking: () => host.receiptBacking(),
     ready: () => host.ready(),
     call: (route: unknown, params: unknown) => host.call(route, params),
     close(): Promise<void> {

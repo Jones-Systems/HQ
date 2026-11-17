@@ -82,6 +82,11 @@ function isRecordsImport(path: string, specifier: string): boolean {
   return within === '' || (!within.startsWith('..') && !within.startsWith('/'));
 }
 
+function permittedReceiptImport(path: string, specifier: string): boolean {
+  return path === join(repo, 'apps/desktop/electron/capture-receipts.ts')
+    && specifier === './hq-records/capture-receipt-persist-service.js';
+}
+
 function expectInertTopLevel(path: string, source: string) {
   for (const exported of parseSource(path, source).body) {
     const statement = exported.type === 'ExportNamedDeclaration' ? exported.declaration : exported;
@@ -129,17 +134,32 @@ it('recognizes static, re-export, dynamic, CommonJS and type imports without mis
     .toEqual(['./hq-records/keys.js']);
 });
 
-it('keeps identity contracts inert: no non-test production importer under apps, modules or packages', () => {
+it('admits only the exact capture receipt composition importer under apps, modules or packages', () => {
   const violations: string[] = [];
   const files = ['apps', 'modules', 'packages'].flatMap(root => sourceFiles(join(repo, root)));
   expect(files.length).toBeGreaterThan(0);
   for (const path of files) {
     if (dirname(path) === records) continue;
     for (const specifier of importSpecifiers(path, readFileSync(path, 'utf8'))) {
-      if (isRecordsImport(path, specifier)) violations.push(`${relative(repo, path)} -> ${specifier}`);
+      if (isRecordsImport(path, specifier) && !permittedReceiptImport(path, specifier)) violations.push(`${relative(repo, path)} -> ${specifier}`);
     }
   }
   expect(violations).toEqual([]);
+});
+
+it('does not extend the receipt import exception to another importer, contract or spelling', () => {
+  const path = join(repo, 'apps/desktop/electron/capture-receipts.ts');
+  const specifier = './hq-records/capture-receipt-persist-service.js';
+  expect(permittedReceiptImport(path, specifier)).toBe(true);
+  for (const other of ['main.ts', 'design-host.ts', 'preview/host.ts', 'capture-receipts.tsx']) {
+    expect(permittedReceiptImport(join(repo, 'apps/desktop/electron', other), specifier)).toBe(false);
+  }
+  for (const other of ['./hq-records/capture-evidence.js', './hq-records/keys.js', './hq-records/../hq-records/capture-receipt-persist-service.js', './hq-records/capture-receipt-persist-service', './hq-records/capture-receipt-persist-service.ts']) {
+    expect(isRecordsImport(path, other)).toBe(true);
+    expect(permittedReceiptImport(path, other)).toBe(false);
+  }
+  expectInertTopLevel(path, readFileSync(path, 'utf8'));
+  expect(() => expectInertTopLevel(path, 'export const persister = createCaptureReceiptPersistService({ backing });')).toThrow();
 });
 
 it('permits only local contract imports and node:crypto, with no host/store construction on import', () => {
@@ -150,12 +170,12 @@ it('permits only local contract imports and node:crypto, with no host/store cons
   expectInertTopLevel(join(records, 'write-fence.ts'), 'export const plan = Object.freeze([]);');
   const files = sourceFiles(records);
   expect(files.map(path => relative(records, path)).sort()).toEqual([
-    'adoption-classifier.ts', 'canonical.ts', 'capture-evidence.ts', 'keys.ts', 'projects-registry.ts', 'write-fence.ts',
+    'adoption-classifier.ts', 'canonical.ts', 'capture-evidence.ts', 'capture-receipt-persist-service.ts', 'keys.ts', 'projects-registry.ts', 'write-fence.ts',
   ]);
   for (const path of files) {
     const source = readFileSync(path, 'utf8');
     for (const specifier of importSpecifiers(path, source)) {
-      expect(specifier).toMatch(/^(?:node:crypto|\.\/(?:canonical|keys|projects-registry|adoption-classifier|write-fence)\.js)$/u);
+      expect(specifier).toMatch(/^(?:node:crypto|\.\/(?:canonical|capture-evidence|keys|projects-registry|adoption-classifier|write-fence)\.js)$/u);
     }
     expectInertTopLevel(path, source);
   }
