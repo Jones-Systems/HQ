@@ -11,7 +11,10 @@ import { SectionFrame } from './SectionFrame.tsx';
 /** F1's motion and feedback primitives. The section takes them as props so Node can still render it without CSS. */
 const KIT: DiscoveryKit = { Button, StatusIndicator, InlineNotice, Skeleton, Presence, useToast, useListMotion, useReducedMotion, animateElement };
 
-/** Opening discovery reads the existing snapshot; it never refreshes a source. */
+/**
+ * Opening discovery reads the existing snapshot; it never refreshes a source. Enrolled folders are re-read in the
+ * background (see compose/discovery-auto-refresh.ts); what the page shows is the last successful read.
+ */
 export function DiscoveryView({ navigate }: DesignSectionProps) {
   const workspace = useDesignWorkspace();
   const { service, clock, adapterLabels, tag } = use<Awaited<ReturnType<typeof workspace.discoveryEnv>>>(workspace.discoveryEnv());
@@ -23,7 +26,7 @@ export function DiscoveryView({ navigate }: DesignSectionProps) {
     }, navigate, toast);
   }, [navigate, toast]);
   return <SectionFrame lane="T15 discovery" entry="discovery/src/CatalogView.ts › DiscoveryCatalog" tags={[tag]} fill
-    notes={['Saved catalog snapshot; opening this page does not refresh sources.']}>
+    notes={['Saved catalog snapshot; opening this page does not refresh sources. Enrolled folders are re-read in the background, and the freshness shown is the last successful read.']}>
     <DiscoveryCatalog service={service} now={() => clock.now()} adapterLabels={adapterLabels} kit={KIT} onSendToTaste={onSendToTaste} />
   </SectionFrame>;
 }
