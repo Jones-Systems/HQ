@@ -184,7 +184,7 @@ function importsFullPage(source: string, path: string): boolean {
   return found;
 }
 
-it('keeps every production source free of full-page imports while the source capsule is unallocated to the host', () => {
+it('allocates full-page imports only to the internal preview host', () => {
   for (const source of ['import { planFullExtent } from "./full-page";', 'export * from "./full-page.js";',
     'const module = import("./full-page.ts");', 'const module = require("./full-page");']) {
     expect(importsFullPage(source, 'fixture.ts')).toBe(true);
@@ -193,7 +193,8 @@ it('keeps every production source free of full-page imports while the source cap
   const violations: string[] = [];
   for (const path of ['apps', 'modules', 'packages'].flatMap(root => productionSources(join(repo, root)))) {
     const source = readFileSync(path, 'utf8');
-    if (source.includes('full-page') && importsFullPage(source, path)) violations.push(relative(repo, path));
+    if (source.includes('full-page') && importsFullPage(source, path)
+      && path !== join(repo, 'apps/desktop/electron/preview/host.ts')) violations.push(relative(repo, path));
   }
   expect(violations).toEqual([]);
 });

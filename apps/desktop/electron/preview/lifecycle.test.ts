@@ -1,16 +1,21 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { runInNewContext } from 'node:vm';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { Node } from '@oxc-project/types';
+import { parseAst } from 'rolldown/parseAst';
 import { app } from 'electron';
 import type { BrowserWindow } from 'electron';
-const fake = vi.hoisted(() => ({ readFile: vi.fn(), create: vi.fn(), classify: vi.fn() }));
-vi.mock('electron', () => ({ app: { isPackaged: false, getVersion: vi.fn(() => '0.1.0-synthetic'), on: vi.fn() }, screen: { getDisplayMatching: () => ({ scaleFactor: 1 }) } }));
+const fake = vi.hoisted(() => ({ readFile: vi.fn(), create: vi.fn(), classify: vi.fn(), displayFactor: 1 }));
+vi.mock('electron', () => ({ app: { isPackaged: false, getVersion: vi.fn(() => '0.1.0-synthetic'), on: vi.fn() }, screen: { getDisplayMatching: () => ({ scaleFactor: fake.displayFactor }) } }));
 vi.mock('node:fs/promises', () => ({ readFile: fake.readFile }));
 vi.mock('../contents-factory.js', () => ({ createIsolatedContents: fake.create, contentsClass: fake.classify, probeUnregisteredContents: vi.fn() }));
 import { createPreviewHost } from './host';
 import { previewParams } from './validation';
 const hosts: ReturnType<typeof createPreviewHost>[] = [];
-afterEach(async () => { await Promise.all(hosts.splice(0).map(host => host.closeAll())); vi.useRealTimers(); vi.unstubAllEnvs(); vi.clearAllMocks(); });
-function fixture(zoomFactor?: number, options: { persistReceipt?: (receipt: Readonly<Record<string, unknown>>) => Promise<boolean> } = {}) {
+afterEach(async () => { await Promise.all(hosts.splice(0).map(host => host.closeAll())); fake.displayFactor = 1; vi.useRealTimers(); vi.unstubAllEnvs(); vi.clearAllMocks(); });
+function fixture(zoomFactor?: number, options: { persistReceipt?: (receipt: Readonly<Record<string, unknown>>) => Promise<boolean> } = {}, captureMode?: 'viewport' | 'full') {
   vi.stubEnv('HQ_USER_DATA_DIR', 'synthetic-owned-profile'); vi.stubEnv('HQ_QUALIFY_PREVIEW', '1');
   let destroyed = false, url = 'about:blank', attached = false, bounds = { x: 0, y: 0, width: 0, height: 0 };
   const contents = { on: vi.fn(), isDestroyed: () => destroyed, isCrashed: vi.fn(() => false), close: vi.fn(() => { destroyed = true; }), getURL: () => url,
@@ -22,7 +27,8 @@ function fixture(zoomFactor?: number, options: { persistReceipt?: (receipt: Read
   fake.readFile.mockResolvedValue('synthetic agent bundle'); fake.create.mockReturnValue({ view, session });
   const window = { webContents: { getOSProcessId: () => 123, ...(zoomFactor === undefined ? {} : { getZoomFactor: () => zoomFactor }) }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1600, height: 1000 }), contentView: { addChildView: vi.fn(), removeChildView: vi.fn() } } as unknown as BrowserWindow;
   const putBlob = vi.fn(async () => true);
-  const host = createPreviewHost({ window: () => window, putBlob, ...options }); hosts.push(host);
+  const hostOptions = { window: () => window, putBlob, ...options };
+  const host = captureMode === undefined ? createPreviewHost(hostOptions) : createPreviewHost(hostOptions, captureMode); hosts.push(host);
   return { host, contents, session, view, putBlob, window };
 }
 const openParams = { versionId: 'synthetic-version', url: 'https://example.com/', viewport: { w: 390, h: 844, dpr: 3 }, label: 'Synthetic' };
@@ -501,4 +507,627 @@ it.each(['navigation', 'closing'])('does not acknowledge a capture after %s whil
   expect(await host.call('image', { captureId: persistReceipt.mock.calls[0][0].captureId })).toEqual({ ok: false, kind: 'unavailable' });
   expect(putBlob).toHaveBeenCalledOnce(); expect(persistReceipt).toHaveBeenCalledOnce();
   expect(receiptStats()).toMatchObject({ blobWrites: 1, receiptOrphans: 0 });
+});
+
+// These fixtures execute the host's isolated-world expressions; they model no native rendering or attestation.
+function eventTarget() {
+  const listeners = new Map<string, Set<() => void>>();
+  return {
+    addEventListener(event: string, listener: () => void) { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event)!.add(listener); },
+    removeEventListener(event: string, listener: () => void) { listeners.get(event)?.delete(listener); },
+    dispatch(event: string) { for (const listener of listeners.get(event) ?? []) listener(); },
+    count() { return [...listeners.values()].reduce((count, values) => count + values.size, 0); },
+  };
+}
+type FakeProbe = { token: number; remove(): void; [key: string]: unknown };
+function fullPageModel(native: ReturnType<typeof fixture>, viewport: typeof openParams.viewport, extent = { w: viewport.w, h: viewport.h * 2 }) {
+  const windowEvents = eventTarget(), visualViewport = eventTarget(), commands: string[] = [];
+  const state = { viewport: { ...viewport }, scroll: { x: 0, y: 0 }, extent, mutationCounter: 0,
+    results: [] as { found: boolean; identity?: string; text?: string; rects?: unknown[] }[], events: [] as unknown[],
+    animations: [] as { playState: string }[], fonts: { status: 'loaded' }, images: [{ complete: true }], hidden: false };
+  const window = { ...windowEvents, visualViewport, __hqPreviewCaptureSequence: 0, __hqPreviewFullProbe: undefined as FakeProbe | undefined,
+    __hqPreviewAgentHostV1: { drain: () => state.events.splice(0), agent: {
+      setHighlightHidden(value: boolean) { state.hidden = value; },
+      resolveExact() { return { mutationCounter: state.mutationCounter, frame: { viewport: state.viewport, scroll: state.scroll }, results: state.results }; },
+    } } };
+  const sandbox = { window, document: { documentElement: { get scrollWidth() { return state.extent.w; }, get scrollHeight() { return state.extent.h; } },
+    getAnimations: () => state.animations, fonts: state.fonts, images: state.images } };
+  let reads = 0, shots = 0, scale = 1, widget = { width: native.view.getBounds().width, height: native.view.getBounds().height };
+  let cachedKey = '', cachedData = '';
+  const model = { state, window, visualViewport, commands, beforeRead: (_index: number) => {}, beforeShot: (_index: number) => {},
+    mapReading: (value: unknown, _index: number): unknown => value, byteLength: 28, widthDelta: 0, unstable: false,
+    get reads() { return reads; }, get shots() { return shots; }, get widget() { return widget; }, get scale() { return scale; },
+    listenerCount: () => windowEvents.count() + visualViewport.count() };
+  native.contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (world, scripts) => {
+    expect(world).toBe(1001);
+    const code = scripts[0].code, reading = code.includes('resolveExact');
+    const index = reads;
+    if (reading) { commands.push(`R${reads++}`); model.beforeRead(index); }
+    else commands.push(code.includes('p.remove()') ? 'remove' : 'reset');
+    const value: unknown = structuredClone(runInNewContext(code, sandbox));
+    return reading ? model.mapReading(value, index) : value;
+  });
+  native.contents.debugger.sendCommand.mockImplementation(async (method, raw) => {
+    const params = raw as unknown as { width: number; height: number; scale: number; clip: { width: number; height: number } };
+    if (method === 'Emulation.setVisibleSize') { commands.push('size'); widget = { width: params.width, height: params.height }; return {}; }
+    if (method === 'Emulation.setDeviceMetricsOverride') { commands.push('metrics'); scale = params.scale; return {}; }
+    if (method !== 'Page.captureScreenshot') return {};
+    commands.push(`shot${++shots}`); model.beforeShot(shots);
+    const width = params.clip.width * viewport.dpr + model.widthDelta, height = params.clip.height * viewport.dpr;
+    const identity = model.unstable ? shots : 0, key = `${width}/${height}/${model.byteLength}/${identity}`;
+    if (cachedKey !== key) {
+      const bytes = Buffer.alloc(model.byteLength); bytes.write('PNG', 1); bytes.writeUInt32BE(width, 16); bytes.writeUInt32BE(height, 20); bytes.writeUInt32BE(identity, 24);
+      cachedKey = key; cachedData = bytes.toString('base64');
+    }
+    return { data: cachedData };
+  });
+  return model;
+}
+async function fullSession(options: { viewport?: typeof openParams.viewport; displayFactor?: number; persistReceipt?: NonNullable<Parameters<typeof fixture>[1]>['persistReceipt'] } = {}) {
+  vi.useFakeTimers();
+  fake.displayFactor = options.displayFactor ?? 1;
+  const native = fixture(undefined, { persistReceipt: options.persistReceipt }, 'full');
+  const viewport = options.viewport ?? { w: 390, h: 844, dpr: 1 };
+  const opened = await native.host.call('open', { ...openParams, viewport }) as { ok: true; value: { sessionId: string; generation: number } };
+  const page = fullPageModel(native, viewport);
+  const params = { sessionId: opened.value.sessionId, expectedGeneration: opened.value.generation };
+  return { ...native, viewport, page, params };
+}
+
+it('keeps omitted mode and explicit viewport byte-identical even when the fake qualifies the host', async () => {
+  const observed: unknown[] = [];
+  for (const mode of [undefined, 'viewport'] as const) {
+    const native = fixture(undefined, {}, mode);
+    const opened = await native.host.call('open', openParams) as { ok: true; value: { sessionId: string; generation: number } };
+    captureFixture(native.contents);
+    const result = await native.host.call('capture', { sessionId: opened.value.sessionId, expectedGeneration: opened.value.generation });
+    expect(result).toMatchObject({ ok: true });
+    const shots = native.contents.debugger.sendCommand.mock.calls.filter(([method]) => method === 'Page.captureScreenshot');
+    expect(shots).toHaveLength(2);
+    expect(shots[0][1]).toEqual({ format: 'png', fromSurface: true, captureBeyondViewport: false, clip: { x: 0, y: 0, width: 390, height: 844, scale: 1 } });
+    expect(native.contents.executeJavaScriptInIsolatedWorld.mock.calls.some(([, scripts]) => scripts[0].code.includes('__hqPreviewFullProbe'))).toBe(false);
+    observed.push(shots);
+  }
+  expect(observed[0]).toEqual(observed[1]);
+});
+
+it.each([1, 2, 3].flatMap(dpr => [1, 2, 1.25].map(displayFactor => ({ dpr, displayFactor }))))('uses unchanged viewport metrics and full held geometry at $dpr DPR / $displayFactor display factor', async ({ dpr, displayFactor }) => {
+  const { host, contents, view, putBlob, page, params, viewport } = await fullSession({ viewport: { w: 390, h: 844, dpr }, displayFactor });
+  const placed = view.setBounds.mock.calls.length;
+  expect(await host.call('capture', params)).toMatchObject({ ok: true, value: { viewport, scroll: { x: 0, y: 0 }, contentSize: { w: 390, h: 1688 } } });
+  expect(page.commands).toEqual(['R0', 'size', 'metrics', 'R1', 'shot1', 'shot2', 'R2', 'size', 'metrics', 'R3', 'remove', 'reset']);
+  expect(page.reads).toBe(4); expect(page.shots).toBe(2); expect(putBlob).toHaveBeenCalledOnce();
+  expect(view.setBounds.mock.calls.length).toBe(placed);
+  expect(widgetSizes(contents).slice(-2)).toEqual([{ width: Math.round(390 * dpr / displayFactor), height: Math.round(1688 * dpr / displayFactor) }, { width: 390, height: 844 }]);
+  expect(metrics(contents).slice(-2).map(value => value.scale)).toEqual([dpr / displayFactor, 1]);
+  for (const value of metrics(contents)) expect(value).toMatchObject({ width: 390, height: 844, deviceScaleFactor: dpr, mobile: false, dontSetVisibleSize: true });
+  for (const [, value] of contents.debugger.sendCommand.mock.calls.filter(([method]) => method === 'Page.captureScreenshot')) {
+    expect(value).toEqual({ format: 'png', fromSurface: true, captureBeyondViewport: true, clip: { x: 0, y: 0, width: 390, height: 1688, scale: 1 } });
+  }
+  expect(page.window.__hqPreviewFullProbe).toBeUndefined(); expect(page.listenerCount()).toBe(0); expect(page.state.hidden).toBe(false);
+  expect(page.window.__hqPreviewCaptureSequence).toBe(1.5);
+});
+
+it.each([
+  { reason: 'scroll-origin', change: (page: ReturnType<typeof fullPageModel>) => { page.state.scroll.y = 1; } },
+  { reason: 'horizontal-extent', change: (page: ReturnType<typeof fullPageModel>) => { page.state.extent.w++; } },
+  { reason: 'extent-oversize', change: (page: ReturnType<typeof fullPageModel>) => { page.state.extent.h = 16385; } },
+  { reason: 'extent-oversize', change: (page: ReturnType<typeof fullPageModel>) => { page.state.extent.h = 1688.5; } },
+  { reason: 'extent-changed', change: (page: ReturnType<typeof fullPageModel>) => { page.state.extent.h = 843; } },
+  { reason: 'dpr', change: (page: ReturnType<typeof fullPageModel>) => { page.state.viewport.dpr = 4; } },
+])('refuses the $reason plan before any hold, screenshot or durable write', async ({ reason, change }) => {
+  const persistReceipt = vi.fn(async () => true);
+  const { host, page, params, putBlob, contents } = await fullSession({ persistReceipt });
+  change(page);
+  const sized = widgetSizes(contents).length;
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'stale', reason });
+  expect(widgetSizes(contents)).toHaveLength(sized); expect(page.shots).toBe(0); expect(page.reads).toBe(1);
+  expect(putBlob).not.toHaveBeenCalled(); expect(persistReceipt).not.toHaveBeenCalled();
+  expect(page.listenerCount()).toBe(0); expect(page.state.hidden).toBe(false);
+});
+
+it('enforces the full device-area bound independently of its edge bound', async () => {
+  const { host, page, params, putBlob } = await fullSession({ viewport: { w: 4096, h: 844, dpr: 1 } });
+  page.state.extent.h = 8193;
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'stale', reason: 'extent-oversize' });
+  expect(page.shots).toBe(0); expect(putBlob).not.toHaveBeenCalled(); expect(page.listenerCount()).toBe(0);
+});
+
+it.each(['window-resize', 'visual-resize', 'window-scroll', 'visual-scroll'] as const)('observes actual %s listeners through restoration and refuses transient events', async event => {
+  const persistReceipt = vi.fn(async () => true);
+  const { host, page, params, putBlob } = await fullSession({ persistReceipt });
+  page.beforeRead = index => {
+    if (index !== 3) return;
+    const target = event.startsWith('window') ? page.window : page.visualViewport;
+    target.dispatch(event.endsWith('resize') ? 'resize' : 'scroll');
+  };
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'stale', reason: event.endsWith('resize') ? 'layout-resized' : 'scroll' });
+  expect(page.reads).toBe(4); expect(page.shots).toBe(2); expect(page.listenerCount()).toBe(0);
+  expect(putBlob).not.toHaveBeenCalled(); expect(persistReceipt).not.toHaveBeenCalled();
+});
+
+it.each([0, 2])('reads animations, fonts and images from the actual probe at R%s before storage', async index => {
+  for (const reason of ['animating', 'fonts-pending', 'media-pending'] as const) {
+    const persistReceipt = vi.fn(async () => true);
+    const { host, page, params, putBlob } = await fullSession({ persistReceipt });
+    page.beforeRead = reading => {
+      page.state.animations.length = 0; page.state.fonts.status = 'loaded'; page.state.images[0].complete = true;
+      if (reading !== index) return;
+      if (reason === 'animating') page.state.animations.push({ playState: 'running' });
+      if (reason === 'fonts-pending') page.state.fonts.status = 'loading';
+      if (reason === 'media-pending') page.state.images[0].complete = false;
+    };
+    expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'stale', reason });
+    expect(putBlob).not.toHaveBeenCalled(); expect(persistReceipt).not.toHaveBeenCalled(); expect(page.listenerCount()).toBe(0);
+  }
+});
+
+it('uses R3 readiness only for its retained event counters', async () => {
+  const { host, page, params } = await fullSession();
+  page.beforeRead = index => { if (index === 3) { page.state.fonts.status = 'loading'; page.state.images[0].complete = false; page.state.animations.push({ playState: 'running' }); } };
+  expect(await host.call('capture', params)).toMatchObject({ ok: true });
+});
+
+it.each([1, 2, 3])('includes R%s in extent, viewport, mutation and scroll coherence', async index => {
+  for (const reason of ['extent-changed', 'dpr', 'mutation', 'scroll'] as const) {
+    const { host, page, params, putBlob } = await fullSession();
+    page.beforeRead = reading => {
+      if (reading !== index) return;
+      if (reason === 'extent-changed') page.state.extent.h++;
+      if (reason === 'dpr') page.state.viewport.h++;
+      if (reason === 'mutation') page.state.mutationCounter++;
+      if (reason === 'scroll') page.state.scroll.y++;
+    };
+    expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'stale', reason });
+    expect(putBlob).not.toHaveBeenCalled(); expect(page.listenerCount()).toBe(0);
+  }
+});
+
+it.each([1, 2, 3])('refuses changed exact mark results at R%s through the full-mode drain', async index => {
+  vi.useFakeTimers();
+  const native = fixture(undefined, {}, 'full'), viewport = { w: 390, h: 844, dpr: 1 };
+  const opened = await native.host.call('open', { ...openParams, viewport }) as { ok: true; value: { sessionId: string; generation: number } };
+  const { sessionId, generation } = opened.value;
+  await native.host.call('place', { sessionId, rect: { x: 0, y: 0, width: 390, height: 844 }, visible: true });
+  await native.host.call('mode', { sessionId, generation, mode: 'pick' });
+  const page = fullPageModel(native, viewport), rect = { x: 10, y: 10, width: 100, height: 20 };
+  page.state.results.push({ found: true, identity: 'h1', text: 'Heading', rects: [rect] });
+  page.state.events.push({ type: 'element-picked', target: { kind: 'element', path: 'body > h1', rect }, generation,
+    frame: { viewport, scroll: { x: 0, y: 0 } }, snapshot: { identity: 'h1', text: 'Heading', rects: [rect] } });
+  page.beforeRead = reading => { if (reading === index) page.state.results[0].identity = 'changed-heading'; };
+  await vi.advanceTimersByTimeAsync(100);
+  expect(await native.host.call('status', { sessionId })).toEqual({ ok: false, kind: 'stale', reason: 'mark-target-changed' });
+  expect(native.putBlob).not.toHaveBeenCalled(); expect(page.reads).toBe(4); expect(page.listenerCount()).toBe(0);
+});
+
+it.each(['missing', 'negative', 'fractional', 'infinite', 'fonts', 'images', 'extra'] as const)('fails closed on %s stability output from an executed probe', async invalid => {
+  const { host, page, params, putBlob } = await fullSession();
+  page.mapReading = (value, index) => {
+    if (index !== 2) return value;
+    const output = value as { stability?: Record<string, unknown> };
+    if (invalid === 'missing') delete output.stability;
+    else if (invalid === 'fonts') output.stability!.fontsStatus = 'unknown';
+    else if (invalid === 'images') output.stability!.imagesComplete = 1;
+    else if (invalid === 'extra') output.stability!.extra = 0;
+    else output.stability!.windowResizeEvents = invalid === 'negative' ? -1 : invalid === 'fractional' ? 0.5 : Infinity;
+    return output;
+  };
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-failed' });
+  expect(putBlob).not.toHaveBeenCalled(); expect(page.listenerCount()).toBe(0);
+});
+
+it('refuses a missing owned probe rather than substituting stable counters', async () => {
+  const { host, page, params, putBlob } = await fullSession();
+  page.beforeRead = index => { if (index === 1) page.window.__hqPreviewFullProbe!.remove(); };
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-failed' });
+  expect(page.shots).toBe(0); expect(putBlob).not.toHaveBeenCalled(); expect(page.listenerCount()).toBe(0);
+});
+
+it.each([0, 2, 3])('validates every stability field at S%s rather than trusting a claimed stable record', async index => {
+  for (const key of ['windowResizeEvents', 'visualViewportResizeEvents', 'windowScrollEvents', 'visualViewportScrollEvents', 'runningAnimations', 'fontsStatus', 'imagesComplete']) {
+    const { host, page, params, putBlob } = await fullSession();
+    page.mapReading = (value, reading) => {
+      if (reading === index) (value as { stability: Record<string, unknown> }).stability[key] = undefined;
+      return value;
+    };
+    expect(await host.call('capture', params), key).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-failed' });
+    expect(putBlob).not.toHaveBeenCalled(); expect(page.listenerCount()).toBe(0);
+  }
+});
+
+it('detects hold-time events even when viewport geometry later returns to its original values', async () => {
+  const { host, contents, page, params, putBlob } = await fullSession();
+  const ordinary = contents.debugger.sendCommand.getMockImplementation()!;
+  contents.debugger.sendCommand.mockImplementation(async (method, params) => {
+    const value = await ordinary(method, params);
+    if (method === 'Emulation.setDeviceMetricsOverride' && page.reads === 1) page.visualViewport.dispatch('resize');
+    return value;
+  });
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'stale', reason: 'layout-resized' });
+  expect(page.state.viewport).toEqual({ w: 390, h: 844, dpr: 1 }); expect(putBlob).not.toHaveBeenCalled(); expect(page.listenerCount()).toBe(0);
+});
+
+it.each(['dpr', 'pixels-unstable', 'bytes-oversize'] as const)('refuses full pixels as %s with no persistence or retry', async reason => {
+  const { host, page, params, putBlob } = await fullSession();
+  if (reason === 'dpr') page.widthDelta = 1;
+  if (reason === 'pixels-unstable') page.unstable = true;
+  if (reason === 'bytes-oversize') page.byteLength = 12 * 1024 * 1024 + 1;
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'stale', reason });
+  expect(page.shots).toBe(reason === 'bytes-oversize' ? 1 : 2); expect(putBlob).not.toHaveBeenCalled(); expect(page.listenerCount()).toBe(0);
+});
+
+it('requires exact full dimensions from the second screenshot as well as the first', async () => {
+  const { host, page, params, putBlob } = await fullSession();
+  page.beforeShot = index => { if (index === 2) page.widthDelta = 1; };
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'stale', reason: 'dpr' });
+  expect(page.shots).toBe(2); expect(putBlob).not.toHaveBeenCalled(); expect(page.listenerCount()).toBe(0);
+});
+
+it('accepts the exact PNG/base64 size limits and records truthful full geometry before acknowledgment', async () => {
+  const order: string[] = [];
+  let entered!: () => void, finish!: (saved: boolean) => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const persistReceipt = vi.fn((_receipt: Readonly<Record<string, unknown>>) => { order.push('receipt'); entered(); return new Promise<boolean>(resolve => { finish = resolve; }); });
+  const { host, page, params, putBlob, viewport } = await fullSession({ persistReceipt, viewport: { w: 390, h: 844, dpr: 3 } });
+  page.byteLength = 12 * 1024 * 1024;
+  putBlob.mockImplementation(async () => { order.push('blob'); return true; });
+  const pending = host.call('capture', params).then(result => { order.push('ack'); return result; });
+  await started;
+  const receipt = persistReceipt.mock.calls[0][0];
+  expect(order).toEqual(['blob', 'receipt']); expect(page.reads).toBe(4); expect(page.shots).toBe(2);
+  expect(receipt).toMatchObject({ viewport, pageExtentCss: { width: 390, height: 1688 }, imageRectCss: { x: 0, y: 0, width: 390, height: 1688 },
+    image: { byteLength: 12 * 1024 * 1024, pixelWidth: 1170, pixelHeight: 5064 }, fixture: { state: 'unknown', attestedBy: null }, time: { acquisition: null } });
+  expect(await host.call('image', { captureId: receipt.captureId })).toEqual({ ok: false, kind: 'unavailable' });
+  finish(true);
+  expect(await pending).toMatchObject({ ok: true, value: { captureId: receipt.captureId } });
+  expect(order).toEqual(['blob', 'receipt', 'ack']); expect(putBlob).toHaveBeenCalledOnce(); expect(persistReceipt).toHaveBeenCalledOnce();
+  expect(await host.call('image', { captureId: receipt.captureId })).toMatchObject({ ok: true });
+  expect(receiptStats()).toMatchObject({ blobWrites: 1, receiptOrphans: 0 });
+});
+
+it.each(['false', 'throw'] as const)('keeps full receipt %s outcomes as one orphan without acknowledgment or replay', async failure => {
+  const persistReceipt = vi.fn(async (_receipt: Readonly<Record<string, unknown>>) => { if (failure === 'throw') throw Error('Synthetic unknown write'); return false; });
+  const { host, params, putBlob } = await fullSession({ persistReceipt });
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'unavailable', reason: 'storage' });
+  expect(putBlob).toHaveBeenCalledOnce(); expect(persistReceipt).toHaveBeenCalledOnce();
+  expect(await host.call('image', { captureId: persistReceipt.mock.calls[0][0].captureId })).toEqual({ ok: false, kind: 'unavailable' });
+  expect(receiptStats()).toMatchObject({ blobWrites: 1, receiptOrphans: 1 });
+});
+
+it.each(['navigation', 'closing'] as const)('fences %s after every full acquisition await before another acquisition operation', async fence => {
+  // Includes each metrics send inside restoration, all four reads, and both screenshots.
+  for (const stage of ['R0', 'size1', 'metrics1', 'R1', 'shot1', 'shot2', 'R2', 'size2', 'metrics2', 'R3', 'remove', 'reset']) {
+    const persistReceipt = vi.fn(async () => true);
+    const native = await fullSession({ persistReceipt });
+    const { host, contents, params, putBlob, page } = native;
+    const invalidate = async () => { if (fence === 'navigation') navigateDuringPersistence(contents); else await host.call('close', { sessionId: params.sessionId }); };
+    let touched = false, sizes = 0, emulations = 0;
+    const world = contents.executeJavaScriptInIsolatedWorld.getMockImplementation()!;
+    contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (id, scripts) => {
+      const code = scripts[0].code;
+      const label = code.includes('resolveExact') ? `R${page.reads}` : code.includes('p.remove()') ? 'remove' : 'reset';
+      const value = await world(id, scripts);
+      if (!touched && label === stage) { touched = true; await invalidate(); }
+      return value;
+    });
+    const command = contents.debugger.sendCommand.getMockImplementation()!;
+    contents.debugger.sendCommand.mockImplementation(async (method, params) => {
+      const label = method === 'Emulation.setVisibleSize' ? `size${++sizes}` : method === 'Emulation.setDeviceMetricsOverride' ? `metrics${++emulations}` : `shot${page.shots + 1}`;
+      const value = await command(method, params);
+      if (!touched && label === stage) { touched = true; await invalidate(); }
+      return value;
+    });
+    expect(await host.call('capture', params), `${fence} at ${stage}`).toEqual({ ok: false, kind: 'stale', reason: 'navigation' });
+    expect(touched, stage).toBe(true); expect(putBlob).not.toHaveBeenCalled(); expect(persistReceipt).not.toHaveBeenCalled();
+    if (fence === 'navigation') expect(page.listenerCount()).toBe(0);
+    if (stage === 'size1') expect(page.shots).toBe(0);
+    if (stage === 'shot1') expect(page.shots).toBe(1);
+    if (stage === 'size2') expect(page.reads).toBe(3);
+  }
+});
+
+it.each(['blob', 'receipt'] as const)('keeps full persistence ordering and navigation orphan accounting at %s', async stage => {
+  let entered!: () => void, finish!: (saved: boolean) => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const persistReceipt = vi.fn(async (_receipt: Readonly<Record<string, unknown>>) => {
+    if (stage === 'receipt') { entered(); return await new Promise<boolean>(resolve => { finish = resolve; }); }
+    return true;
+  });
+  const { host, contents, params, putBlob } = await fullSession({ persistReceipt });
+  if (stage === 'blob') putBlob.mockImplementation(() => { entered(); return new Promise<boolean>(resolve => { finish = resolve; }); });
+  const pending = host.call('capture', params); await started;
+  navigateDuringPersistence(contents); finish(true);
+  expect(await pending).toEqual({ ok: false, kind: 'stale', reason: 'navigation' });
+  expect(putBlob).toHaveBeenCalledOnce(); expect(persistReceipt).toHaveBeenCalledTimes(stage === 'blob' ? 0 : 1);
+  expect(receiptStats()).toMatchObject({ blobWrites: 1, receiptOrphans: stage === 'blob' ? 1 : 0 });
+});
+
+it('restores and removes the probe after a full screenshot exception without automatic retry', async () => {
+  const { host, contents, params, page, putBlob } = await fullSession();
+  const ordinary = contents.debugger.sendCommand.getMockImplementation()!;
+  contents.debugger.sendCommand.mockImplementation((method, params) => method === 'Page.captureScreenshot' && page.shots === 1 ? Promise.reject(Error('Synthetic screenshot failure')) : ordinary(method, params));
+  expect(await host.call('capture', params)).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-failed' });
+  expect(page.shots).toBe(1); expect(page.widget).toEqual({ width: 390, height: 844 }); expect(page.scale).toBe(1);
+  expect(page.listenerCount()).toBe(0); expect(page.state.hidden).toBe(false); expect(putBlob).not.toHaveBeenCalled();
+});
+
+it('bounds full acquisition by ten seconds across individually bounded reads and screenshots', async () => {
+  const { host, contents, params, page, putBlob } = await fullSession();
+  const world = contents.executeJavaScriptInIsolatedWorld.getMockImplementation()!, command = contents.debugger.sendCommand.getMockImplementation()!;
+  contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (id, scripts) => {
+    if (scripts[0].code.includes('resolveExact')) await new Promise(resolve => setTimeout(resolve, 2400));
+    return await world(id, scripts);
+  });
+  contents.debugger.sendCommand.mockImplementation(async (method, params) => {
+    if (method === 'Page.captureScreenshot') await new Promise(resolve => setTimeout(resolve, 500));
+    return await command(method, params);
+  });
+  const start = Date.now(), settled = vi.fn();
+  void host.call('capture', params).then(result => settled({ result, elapsed: Date.now() - start }));
+  await vi.advanceTimersByTimeAsync(10000);
+  expect(settled).toHaveBeenCalledWith({ result: { ok: false, kind: 'unavailable', reason: 'capture-timeout' }, elapsed: 10000 });
+  expect(page.shots).toBe(2); expect(putBlob).not.toHaveBeenCalled(); expect(page.listenerCount()).toBe(0);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(page.listenerCount()).toBe(0); expect(putBlob).not.toHaveBeenCalled();
+});
+
+it('expires a late full R0 expression, releases the queue, and cannot reinstall its listeners', async () => {
+  const { host, contents, params, page, putBlob } = await fullSession();
+  let release!: () => void, first = true;
+  const ordinary = contents.executeJavaScriptInIsolatedWorld.getMockImplementation()!;
+  contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (id, scripts) => {
+    if (first && scripts[0].code.includes('resolveExact')) { first = false; await new Promise<void>(resolve => { release = resolve; }); }
+    return await ordinary(id, scripts);
+  });
+  const stalled = host.call('capture', params), queued = host.call('capture', params);
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(await stalled).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-timeout' });
+  expect(await queued).toMatchObject({ ok: true }); expect(putBlob).toHaveBeenCalledOnce();
+  release(); await vi.advanceTimersByTimeAsync(0);
+  expect(page.window.__hqPreviewCaptureSequence).toBe(2.5); expect(page.window.__hqPreviewFullProbe).toBeUndefined();
+  expect(page.listenerCount()).toBe(0); expect(page.state.hidden).toBe(false); expect(putBlob).toHaveBeenCalledOnce();
+});
+
+it('bounds a delayed probe removal and prevents its late callback from removing a new attempt', async () => {
+  const { host, contents, params, page, putBlob } = await fullSession();
+  let release!: () => void, first = true;
+  const ordinary = contents.executeJavaScriptInIsolatedWorld.getMockImplementation()!;
+  contents.executeJavaScriptInIsolatedWorld.mockImplementation(async (id, scripts) => {
+    if (first && scripts[0].code.includes('p.remove()')) { first = false; await new Promise<void>(resolve => { release = resolve; }); }
+    return await ordinary(id, scripts);
+  });
+  const stalled = host.call('capture', params);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(await stalled).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-timeout' });
+  expect(putBlob).not.toHaveBeenCalled();
+  qualification().pauseAt('first-capture');
+  const queued = host.call('capture', params);
+  try {
+    await qualification().waitForPause();
+    const current = page.window.__hqPreviewFullProbe;
+    expect(current?.token).toBe(2); expect(page.listenerCount()).toBe(4);
+    release(); await vi.advanceTimersByTimeAsync(0);
+    expect(page.window.__hqPreviewFullProbe).toBe(current); expect(page.listenerCount()).toBe(4); expect(page.state.hidden).toBe(true);
+    page.visualViewport.dispatch('resize'); expect(current?.visualViewportResizeEvents).toBe(1);
+  } finally { qualification().resume(); qualification().pauseAt(null); }
+  expect(await queued).toEqual({ ok: false, kind: 'stale', reason: 'layout-resized' });
+  expect(page.listenerCount()).toBe(0); expect(putBlob).not.toHaveBeenCalled();
+});
+
+it('keeps a retained old probe remover limited to its own four listeners', async () => {
+  const { host, page, params } = await fullSession();
+  let old: FakeProbe | undefined;
+  page.beforeShot = () => { old ??= page.window.__hqPreviewFullProbe; };
+  expect(await host.call('capture', params)).toMatchObject({ ok: true });
+  qualification().pauseAt('first-capture');
+  const pending = host.call('capture', params);
+  try {
+    await qualification().waitForPause();
+    const current = page.window.__hqPreviewFullProbe;
+    expect(current?.token).toBe(2); expect(old?.token).toBe(1);
+    old!.remove();
+    expect(page.window.__hqPreviewFullProbe).toBe(current); expect(page.listenerCount()).toBe(4);
+    page.window.dispatch('scroll'); expect(current?.windowScrollEvents).toBe(1);
+  } finally { qualification().resume(); qualification().pauseAt(null); }
+  expect(await pending).toEqual({ ok: false, kind: 'stale', reason: 'scroll' }); expect(page.listenerCount()).toBe(0);
+});
+
+it('restores a timed-out full shot again on late completion and ignores its pixels', async () => {
+  const { host, contents, params, page, putBlob } = await fullSession();
+  let release!: () => void, second = false;
+  const ordinary = contents.debugger.sendCommand.getMockImplementation()!;
+  contents.debugger.sendCommand.mockImplementation((method, params) => {
+    if (method === 'Page.captureScreenshot' && page.shots === 1 && !second) {
+      second = true; return new Promise(resolve => { release = () => { resolve(ordinary(method, params)); }; });
+    }
+    return ordinary(method, params);
+  });
+  const stalled = host.call('capture', params);
+  await vi.advanceTimersByTimeAsync(10000);
+  expect(await stalled).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-timeout' });
+  expect(page.widget).toEqual({ width: 390, height: 844 }); expect(page.listenerCount()).toBe(0);
+  const sized = widgetSizes(contents).length;
+  release(); await vi.advanceTimersByTimeAsync(0);
+  expect(widgetSizes(contents).slice(sized)).toEqual([{ width: 390, height: 844 }]);
+  expect(page.scale).toBe(1); expect(putBlob).not.toHaveBeenCalled();
+  expect(await host.call('capture', params)).toMatchObject({ ok: true }); expect(putBlob).toHaveBeenCalledOnce();
+});
+
+it('does not let an old full screenshot restorer take a newer hold', async () => {
+  const { host, contents, params, page, putBlob } = await fullSession();
+  let release!: () => void, second = false;
+  const ordinary = contents.debugger.sendCommand.getMockImplementation()!;
+  contents.debugger.sendCommand.mockImplementation((method, params) => {
+    if (method === 'Page.captureScreenshot' && page.shots === 1 && !second) {
+      second = true; return new Promise(resolve => { release = () => resolve(ordinary(method, params)); });
+    }
+    return ordinary(method, params);
+  });
+  const stalled = host.call('capture', params);
+  await vi.advanceTimersByTimeAsync(10000);
+  expect(await stalled).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-timeout' });
+  qualification().pauseAt('first-capture');
+  const queued = host.call('capture', params);
+  try {
+    await qualification().waitForPause();
+    const sized = widgetSizes(contents).length, current = page.window.__hqPreviewFullProbe;
+    release(); await vi.advanceTimersByTimeAsync(0);
+    expect(widgetSizes(contents)).toHaveLength(sized); expect(page.window.__hqPreviewFullProbe).toBe(current);
+    expect(page.widget).toEqual({ width: 390, height: 1688 }); expect(page.listenerCount()).toBe(4);
+  } finally { qualification().resume(); qualification().pauseAt(null); }
+  expect(await queued).toMatchObject({ ok: true }); expect(putBlob).toHaveBeenCalledOnce(); expect(page.listenerCount()).toBe(0);
+});
+
+it('bounds full finally restoration to one second and fences a late restorer between its two sends', async () => {
+  const { host, contents, params, page, putBlob } = await fullSession();
+  let release!: () => void, sizes = 0;
+  const ordinary = contents.debugger.sendCommand.getMockImplementation()!;
+  contents.debugger.sendCommand.mockImplementation((method, params) => {
+    if (method === 'Page.captureScreenshot') return Promise.reject(Error('Synthetic failure before finally'));
+    if (method === 'Emulation.setVisibleSize' && ++sizes === 2) return new Promise(resolve => { release = () => resolve(ordinary(method, params)); });
+    return ordinary(method, params);
+  });
+  const stalled = host.call('capture', params);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(await stalled).toEqual({ ok: false, kind: 'unavailable', reason: 'capture-failed' });
+  expect(page.listenerCount()).toBe(0); expect(putBlob).not.toHaveBeenCalled();
+  const emulated = metrics(contents).length;
+  release(); await vi.advanceTimersByTimeAsync(0);
+  expect(metrics(contents)).toHaveLength(emulated); expect(page.listenerCount()).toBe(0);
+});
+
+async function captureId(host: ReturnType<typeof createPreviewHost>, params: { sessionId: string; expectedGeneration: number }) {
+  const result = await host.call('capture', params) as { ok: true; value: { captureId: string } };
+  expect(result).toMatchObject({ ok: true }); return result.value.captureId;
+}
+it('evicts the actual oldest cached image at 32 entries without refreshing FIFO on reads', async () => {
+  const { host, params } = await fullSession();
+  const ids: string[] = [];
+  for (let index = 0; index < 32; index++) ids.push(await captureId(host, params));
+  expect(await host.call('image', { captureId: ids[0] })).toMatchObject({ ok: true });
+  ids.push(await captureId(host, params));
+  expect(await host.call('image', { captureId: ids[0] })).toEqual({ ok: false, kind: 'unavailable' });
+  for (const id of ids.slice(1)) expect(await host.call('image', { captureId: id })).toMatchObject({ ok: true });
+});
+
+it('counts encoded prefixes toward 64 MiB and subtracts every byte eviction and session deletion', async () => {
+  const first = await fullSession(); first.page.byteLength = 6 * 1024 * 1024;
+  const firstId = await captureId(first.host, first.params);
+  // A second fake native allocation is opened by the same host, so both sessions share its cache budget.
+  const spare = fixture();
+  const opened = await first.host.call('open', { ...openParams, viewport: first.viewport }) as { ok: true; value: { sessionId: string; generation: number } };
+  const page = fullPageModel(spare, first.viewport); page.byteLength = 6 * 1024 * 1024;
+  const params = { sessionId: opened.value.sessionId, expectedGeneration: opened.value.generation };
+  await first.host.call('close', { sessionId: first.params.sessionId });
+  expect(await first.host.call('image', { captureId: firstId })).toEqual({ ok: false, kind: 'unavailable' });
+  first.putBlob.mockClear();
+  const ids: string[] = [];
+  for (let index = 0; index < 9; index++) {
+    ids.push(await captureId(first.host, params)); first.putBlob.mockClear();
+    if (index === 6) for (const id of ids) expect(await first.host.call('image', { captureId: id })).toMatchObject({ ok: true });
+  }
+  // Each base64 body is exactly 8 MiB. Eight prefixes exceed the budget, so exactly seven remain.
+  for (const id of ids.slice(0, 2)) expect(await first.host.call('image', { captureId: id })).toEqual({ ok: false, kind: 'unavailable' });
+  for (const id of ids.slice(2)) expect(await first.host.call('image', { captureId: id })).toMatchObject({ ok: true });
+  await first.host.call('close', { sessionId: params.sessionId });
+  for (const id of ids) expect(await first.host.call('image', { captureId: id })).toEqual({ ok: false, kind: 'unavailable' });
+});
+
+const sourceRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+const hostSource = join(sourceRoot, 'apps/desktop/electron/preview/host.ts');
+const excludedSources = new Set(['node_modules', '.git', 'dist', 'dist-electron', 'dist-design-host', 'dist-wiki-host', 'coverage', '.cache']);
+function supplierSources(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    if (entry.isSymbolicLink() || excludedSources.has(entry.name)) return [];
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return supplierSources(path);
+    return entry.isFile() && /\.[cm]?[jt]sx?$/u.test(entry.name) && !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(entry.name) ? [path] : [];
+  });
+}
+function astNode(value: unknown): value is Node { return value !== null && typeof value === 'object' && 'type' in value && typeof value.type === 'string'; }
+function visitSupplier(node: Node, visitor: (node: Node) => void) {
+  visitor(node);
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) { for (const child of value) if (astNode(child)) visitSupplier(child, visitor); }
+    else if (astNode(value)) visitSupplier(value, visitor);
+  }
+}
+function astName(node: Node): string | undefined { return node.type === 'Identifier' ? node.name : node.type === 'Literal' && typeof node.value === 'string' ? node.value : undefined; }
+// Deliberately a closed syntactic seam: only named imports and direct calls are supported.
+// Binding escapes, namespace/re-export/dynamic suppliers and unsupported uses fail; this is not general dataflow analysis.
+function constructorSuppliers(source: string, path: string) {
+  const violations: string[] = [], permitted = new Set<Node>(), names = new Set(['createPreviewHost']);
+  let calls = 0;
+  const lang = /\.d\.[cm]?ts$/u.test(path) ? 'dts' : /\.[cm]?tsx?$/u.test(path) ? (path.endsWith('x') ? 'tsx' : 'ts') : 'jsx';
+  const tree = parseAst(source, { lang, sourceType: 'unambiguous' }, path);
+  const isHost = (specifier: Node) => specifier.type === 'Literal' && typeof specifier.value === 'string'
+    && specifier.value.startsWith('.') && resolve(dirname(path), specifier.value.replace(/\.[cm]?[jt]sx?$/u, '')) === hostSource.slice(0, -3);
+  visitSupplier(tree, node => {
+    if (node.type === 'ImportDeclaration') {
+      for (const specifier of node.specifiers) {
+        if (specifier.type === 'ImportSpecifier' && astName(specifier.imported) === 'createPreviewHost') {
+          names.add(specifier.local.name); permitted.add(specifier.imported); permitted.add(specifier.local);
+          if (node.importKind === 'type' || specifier.importKind === 'type') violations.push('type supplier');
+        } else if (isHost(node.source)) violations.push('unsupported host import');
+      }
+      if (isHost(node.source) && node.specifiers.length === 0) violations.push('side-effect host import');
+    }
+    if ((node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') && node.source && isHost(node.source)) violations.push('re-export supplier');
+    if (node.type === 'ImportExpression' && isHost(node.source)) violations.push('dynamic supplier');
+    if (node.type === 'CallExpression' && node.callee.type === 'Identifier' && node.callee.name === 'require' && node.arguments[0] && isHost(node.arguments[0])) violations.push('require supplier');
+  });
+  visitSupplier(tree, node => {
+    if (node.type === 'FunctionDeclaration' && node.id?.name === 'createPreviewHost' && path === hostSource) permitted.add(node.id);
+    if (node.type === 'CallExpression' && node.callee.type === 'Identifier' && names.has(node.callee.name)) {
+      permitted.add(node.callee); calls++;
+      if (node.optional || node.arguments.length !== 1 || node.arguments.some(argument => argument.type === 'SpreadElement')) violations.push('constructor mode supplied or spread');
+    }
+  });
+  visitSupplier(tree, node => {
+    if (node.type === 'Identifier' && names.has(node.name) && !permitted.has(node)) violations.push(`unsupported factory use: ${node.name}`);
+    if (node.type === 'MemberExpression' && astName(node.property) === 'createPreviewHost') violations.push('indirect member supplier');
+    if (node.type === 'ExportSpecifier' && (names.has(astName(node.local) ?? '') || names.has(astName(node.exported) ?? ''))) violations.push('exported binding');
+  });
+  return { violations, calls };
+}
+
+it('guards the constructor supplier seam with named-alias, binding-escape and indirect-supplier negative fixtures', () => {
+  const path = join(sourceRoot, 'apps/desktop/electron/supplier-fixture.ts');
+  for (const source of [
+    'import { createPreviewHost } from "./preview/host.js"; createPreviewHost(options);',
+    'import { createPreviewHost as make } from "./preview/host.js"; make(options);',
+  ]) expect(constructorSuppliers(source, path)).toEqual({ violations: [], calls: 1 });
+  expect(constructorSuppliers('const documentation = "createPreviewHost(options, full)"; // createPreviewHost(...args)', path)).toEqual({ violations: [], calls: 0 });
+  for (const source of [
+    'createPreviewHost(options, "full");',
+    'createPreviewHost(...args);',
+    'createPreviewHost();',
+    'import { createPreviewHost as make } from "./preview/host.js"; make(options, "full");',
+    'import { createPreviewHost as make } from "./preview/host.js"; const alias = make; alias(options, "full");',
+    'const alias = createPreviewHost; alias(options);',
+    'register(createPreviewHost);',
+    'const holder = { factory: createPreviewHost }; holder.factory(options, "full");',
+    'createPreviewHost.call(null, options, "full");',
+    'createPreviewHost.bind(null, options, "full");',
+    'Reflect.apply(createPreviewHost, null, [options, "full"]);',
+    'createPreviewHost = replacement;',
+    'import * as preview from "./preview/host.js"; preview.createPreviewHost(options, "full");',
+    'import factory from "./preview/host.js"; factory(options);',
+    'const { createPreviewHost: make } = require("./preview/host.js"); make(options);',
+    'const supplier = await import("./preview/host.js"); supplier["createPreviewHost"](options);',
+    'export { createPreviewHost as make } from "./preview/host.js";',
+    'export * from "./preview/host.js";',
+    'import { createPreviewHost as make } from "./preview/host.js"; export { make };',
+  ]) expect(constructorSuppliers(source, path).violations.length, source).toBeGreaterThan(0);
+});
+
+it('keeps the actual production factory supplier at one argument with no argument-list spread or escape', () => {
+  const violations: string[] = [], suppliers: string[] = [];
+  for (const path of ['apps', 'modules', 'packages'].flatMap(root => supplierSources(join(sourceRoot, root)))) {
+    const result = constructorSuppliers(readFileSync(path, 'utf8'), path);
+    violations.push(...result.violations.map(reason => `${relative(sourceRoot, path)}: ${reason}`));
+    if (result.calls) suppliers.push(relative(sourceRoot, path));
+  }
+  expect(violations).toEqual([]);
+  expect(suppliers).toEqual(['apps/desktop/electron/main.ts']);
 });
