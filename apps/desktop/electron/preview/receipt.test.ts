@@ -162,3 +162,44 @@ it('keeps main and every non-test source caller free of receipt persistence comp
   }
   expect(violations).toEqual([]);
 });
+
+function fullFacts(): CaptureReceiptFacts {
+  const input = facts();
+  return { ...input, extent: 'full',
+    record: { ...input.record, scroll: { x: 0, y: 0 }, contentSize: { w: 390, h: 2400 } },
+    pixelWidth: 1170, pixelHeight: 7200 };
+}
+
+it.each([false, true])('decodes full extent without inferring fixture absence in qualification=%s', qualificationEnabled => {
+  const input = { ...fullFacts(), qualificationEnabled }, before = structuredClone(input);
+  const receipt = decodedReceipt(input);
+  expect(receipt.imageRectCss).toEqual({ x: 0, y: 0, width: 390, height: 2400 });
+  expect(receipt.pageExtentCss).toEqual({ width: 390, height: 2400 });
+  expect(receipt.scroll).toEqual({ x: 0, y: 0 });
+  expect(receipt.image).toMatchObject({ pixelWidth: 1170, pixelHeight: 7200 });
+  expect(receipt.time.acquisition).toBeNull();
+  expect(input).toEqual(before);
+});
+
+it('preserves byte-identical default viewport output with an explicit viewport extent', () => {
+  expect(JSON.stringify(buildCaptureReceipt({ ...facts(), extent: 'viewport' }))).toBe(JSON.stringify(buildCaptureReceipt(facts())));
+});
+
+it.each([
+  { scroll: { x: 1, y: 0 } }, { scroll: { x: 0, y: 1 } },
+  { pixelWidth: 390 }, { pixelHeight: 2532 },
+])('refuses full receipt geometry that does not prove the full image: %j', change => {
+  const input = fullFacts();
+  const changed = change.scroll ? { ...input, record: { ...input.record, scroll: change.scroll } } : { ...input, ...change };
+  expect(() => buildCaptureReceipt(changed)).toThrow(RangeError);
+});
+
+it('retains partial-extent refusal independently of the unchanged fixture and producer gates', () => {
+  const receipt = decodedReceipt(fullFacts());
+  const attested = { ...receipt, fixture: { state: 'known-absent', attestedBy: 'hq.electron-preview/contract-1' } } as const;
+  for (const imageRectCss of [
+    { x: 0, y: 0, width: 390, height: 844 }, { x: 0, y: 0, width: 389, height: 2400 },
+    { x: 1, y: 0, width: 389, height: 2400 }, { x: 0, y: 1, width: 390, height: 2399 },
+  ]) expect(staticCaptureEligible({ ...attested, imageRectCss })).toEqual({ eligible: false, reason: 'partial-extent' });
+  expect(staticCaptureEligible(attested)).toEqual({ eligible: true });
+});
