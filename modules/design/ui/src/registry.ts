@@ -1,6 +1,6 @@
-import { DESIGN_NAV_IDS, type DesignNavId, type DesignSectionDescriptor, type SectionCommand } from '../contract.ts';
+import { DESIGN_NAV_IDS, type DesignNavId, type DesignSectionDescriptor, type SectionCommand, type SectionSubRoute, type SectionSubRoutes } from '../contract.ts';
 import { hasOnlyKeys, isPlainRecord, isSectionId } from './json.ts';
-import { isNavId } from './navigation.ts';
+import { isFixedSubId, isNavId, ITEM_PREFIX } from './navigation.ts';
 
 export const SECTION_SCHEMA = 'hq.design.section/v1';
 /** File every section exposes; see contract.ts. */
@@ -9,11 +9,15 @@ export const SECTION_ENTRY_FILE = 'design-module.ts';
 const HOST_DIRECTORIES: readonly string[] = ['ui'];
 const DEFAULT_ORDER = 100;
 const MAX_COMMANDS = 32;
+/** Fixed views a section may declare. Compare declares four; the bound keeps the navigation and palette finite. */
+const MAX_SUB_ROUTES = 8;
 
 export interface RegisteredSection<View = unknown> extends DesignSectionDescriptor<View> {
   readonly order: number;
   readonly commands: readonly SectionCommand[];
   readonly path: string;
+  /** A validated copy of the descriptor's routing metadata; absent when the section declares none. */
+  readonly subRoutes?: SectionSubRoutes;
 }
 
 export interface RegistryRejection {
@@ -58,6 +62,27 @@ function parseCommands(value: unknown): readonly SectionCommand[] | string {
   return commands;
 }
 
+/** Closed and bounded: unknown keys, duplicate or reserved ids, long titles and more than eight views reject the descriptor. */
+function parseSubRoutes(value: unknown): SectionSubRoutes | undefined | string {
+  if (value === undefined) return undefined;
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['fixed', 'navChildren', 'itemPrefix'])) return 'subRoutes has unexpected shape';
+  const { fixed, navChildren, itemPrefix } = value;
+  if (!Array.isArray(fixed) || fixed.length > MAX_SUB_ROUTES) return `subRoutes.fixed must be an array of at most ${MAX_SUB_ROUTES} entries`;
+  if (typeof navChildren !== 'boolean') return 'subRoutes.navChildren must be a boolean';
+  if (itemPrefix !== undefined && itemPrefix !== ITEM_PREFIX) return `subRoutes.itemPrefix must be "${ITEM_PREFIX}"`;
+  if (fixed.length === 0 && itemPrefix === undefined) return 'subRoutes must declare at least one view';
+  const seen = new Set<string>();
+  const routes: SectionSubRoute[] = [];
+  for (const item of fixed as readonly unknown[]) {
+    if (!isPlainRecord(item) || !hasOnlyKeys(item, ['id', 'title'])) return 'subRoutes view has unexpected shape';
+    if (!isFixedSubId(item.id) || seen.has(item.id)) return 'subRoutes view id must be unique, lowercase, at most 32 characters and not "item"';
+    if (!label(item.title, 80)) return 'subRoutes view title must be 1–80 printable characters';
+    seen.add(item.id);
+    routes.push({ id: item.id, title: item.title });
+  }
+  return itemPrefix === ITEM_PREFIX ? { fixed: routes, navChildren, itemPrefix: ITEM_PREFIX } : { fixed: routes, navChildren };
+}
+
 function parseDescriptor<View>(path: string, exported: unknown): RegisteredSection<View> | string {
   const directory = sectionDirectory(path);
   if (directory === null) return `entry must be named ${SECTION_ENTRY_FILE}`;
@@ -65,7 +90,7 @@ function parseDescriptor<View>(path: string, exported: unknown): RegisteredSecti
   if (typeof exported !== 'object' || exported === null || !('designModule' in exported)) return 'designModule export is missing';
   const value = (exported as { readonly designModule: unknown }).designModule;
   if (!isPlainRecord(value)) return 'designModule export is not a plain object';
-  if (!hasOnlyKeys(value, ['schema', 'id', 'title', 'nav', 'order', 'commands', 'view'])) return 'descriptor has unexpected fields';
+  if (!hasOnlyKeys(value, ['schema', 'id', 'title', 'nav', 'order', 'commands', 'subRoutes', 'view'])) return 'descriptor has unexpected fields';
   if (value.schema !== SECTION_SCHEMA) return `schema must be ${SECTION_SCHEMA}`;
   if (!isSectionId(value.id)) return 'id must be a lowercase identifier';
   if (value.id !== directory) return `id "${value.id}" must equal its directory "${directory}"`;
@@ -76,8 +101,11 @@ function parseDescriptor<View>(path: string, exported: unknown): RegisteredSecti
   if (typeof value.view !== 'function') return 'view must be a lazy loader function';
   const commands = parseCommands(value.commands);
   if (typeof commands === 'string') return commands;
+  const subRoutes = parseSubRoutes(value.subRoutes);
+  if (typeof subRoutes === 'string') return subRoutes;
   return {
     schema: SECTION_SCHEMA, id: value.id, title: value.title, nav: value.nav, order, commands,
+    ...(subRoutes === undefined ? {} : { subRoutes }),
     view: value.view as () => Promise<View>, path,
   };
 }

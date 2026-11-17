@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DESIGN_NAV_IDS, type DesignLocation } from '../../contract.ts';
-import { regionStop, resolveShortcut, rovingNext, tabStops, type ChromeView, type KeyInput } from '../../src/focus.ts';
+import { HOSTED_REGIONS, navTarget, ownsPalette, regionStop, resolveShortcut, rovingNext, SHORTCUT_HINTS, shortcutHints, tabStops, type ChromeView, type KeyInput } from '../../src/focus.ts';
 import { formatDestination } from '../../src/navigation.ts';
 import { buildCommands, filterCommands, paletteReduce, CLOSED_PALETTE } from '../../src/palette.ts';
 import { chromeView, SYNTHETIC_SECTIONS } from './fixtures.ts';
@@ -175,4 +175,109 @@ test('responsive squeeze omits unavailable edges but manually collapsed panels r
   const squeezed = tabStops({ ...collapsed, squeezed: ['sidebar', 'inspector'] });
   assert.ok(!squeezed.some((stop) => stop.id.startsWith('splitter:')));
   assert.equal(regionStop(squeezed, 'nav:runs', false)?.id, 'workspace');
+});
+
+const hostedView = (overrides: Partial<ChromeView> = {}): ChromeView => chromeView({ hosted: true, location: { nav: 'review', section: 'canvas' }, ...overrides });
+
+test('hosted, the shell owns navigation: no area buttons, section list, sidebar splitter or sidebar toggle are stops', () => {
+  const stops = tabStops(hostedView());
+  assert.deepEqual(stops.map((stop) => stop.id), ['palette', 'toggle:inspector', 'workspace', 'splitter:inspector', 'inspector']);
+  assert.equal(new Set(stops.map((stop) => stop.id)).size, stops.length);
+  assert.ok(!stops.some((stop) => stop.id.startsWith('nav:') || stop.id.startsWith('section:') || stop.id === 'splitter:sidebar' || stop.id === 'toggle:sidebar'));
+  const collapsed = tabStops(hostedView({ visible: { sidebar: false, inspector: false } }));
+  assert.deepEqual(collapsed.map((stop) => stop.id), ['palette', 'toggle:inspector', 'workspace', 'splitter:inspector']);
+  assert.deepEqual(tabStops(hostedView({ squeezed: ['inspector'] })).map((stop) => stop.id), ['palette', 'toggle:inspector', 'workspace', 'inspector'], 'squeezed omits only the grip');
+});
+
+test('hosted false or absent leaves the standalone stops exactly as before', () => {
+  const standalone = tabStops(chromeView({ location: { nav: 'review', section: 'canvas' } }));
+  assert.deepEqual(tabStops(chromeView({ location: { nav: 'review', section: 'canvas' }, hosted: false })), standalone);
+  assert.deepEqual(standalone.map((stop) => stop.id).slice(0, 8), ['nav:projects', 'nav:resources', 'nav:review', 'nav:requests', 'nav:runs', 'palette', 'toggle:sidebar', 'toggle:inspector']);
+});
+
+test('hosted, every control that remains is reachable with Tab and Enter, and the palette still reaches every target', () => {
+  const view = hostedView();
+  const stops = tabStops(view);
+  const palette = stops.find((stop) => stop.id === 'palette');
+  assert.deepEqual(palette?.action, { type: 'open-palette' });
+  assert.deepEqual(stops.find((stop) => stop.id === 'toggle:inspector')?.action, { type: 'toggle-panel', panel: 'inspector' });
+  const locations = reachable({ view, focus: 'palette', palette: null }, ['Mod+K', 'ArrowDown', 'Enter']);
+  for (const target of allTargets) assert.ok(locations.has(target), `unreachable: ${target}`);
+});
+
+test('hosted F6 cycles the workspace and the inspector only', () => {
+  const stops = tabStops(hostedView());
+  const forward = (from: string | null) => regionStop(stops, from, false, HOSTED_REGIONS)?.id;
+  const backward = (from: string | null) => regionStop(stops, from, true, HOSTED_REGIONS)?.id;
+  assert.equal(forward('workspace'), 'splitter:inspector', 'the first stop of the inspector region');
+  assert.equal(forward('inspector'), 'workspace');
+  assert.equal(backward('workspace'), 'splitter:inspector');
+  assert.equal(backward('inspector'), 'workspace');
+  assert.equal(forward('palette'), 'workspace', 'from the page head, F6 enters the cycle at its start');
+  assert.equal(forward(null), 'workspace');
+  const single = tabStops(hostedView({ visible: { sidebar: true, inspector: false }, squeezed: ['inspector'] }));
+  assert.deepEqual(single.map((stop) => stop.id), ['palette', 'toggle:inspector', 'workspace']);
+  assert.equal(regionStop(single, 'workspace', false, HOSTED_REGIONS)?.id, 'workspace', 'one populated region cycles to itself');
+  assert.equal(regionStop([], 'workspace', false, HOSTED_REGIONS), null);
+  // The default cycle is unchanged for standalone callers.
+  assert.equal(regionStop(tabStops(chromeView()), 'nav:runs', false)?.id, 'section:projects');
+});
+
+test('Mod+\\ is forwarded to the shell when hosted and never toggles Design\'s own sidebar', () => {
+  const sidebar = input({ key: '\\', ctrlKey: true });
+  assert.deepEqual(resolveShortcut(sidebar, false, true), { type: 'host-nav-toggle' });
+  assert.deepEqual(resolveShortcut(input({ key: '\\', metaKey: true }), true, true), { type: 'host-nav-toggle' });
+  assert.deepEqual(resolveShortcut(sidebar, false, false), { type: 'toggle-panel', panel: 'sidebar' }, 'standalone is unchanged');
+  assert.deepEqual(resolveShortcut(sidebar, false), { type: 'toggle-panel', panel: 'sidebar' }, 'the default is standalone');
+  assert.deepEqual(resolveShortcut(input({ key: '|', ctrlKey: true, shiftKey: true }), false, true), { type: 'toggle-panel', panel: 'inspector' }, 'the inspector stays Design\'s');
+  assert.equal(resolveShortcut(input({ key: '\\', ctrlKey: true, editable: true }), false, true), null, 'typing never toggles anything');
+  assert.equal(resolveShortcut(input({ key: '\\', ctrlKey: true, altKey: true }), false, true), null);
+});
+
+test('other shortcuts are the same hosted and standalone', () => {
+  for (const hosted of [false, true]) {
+    assert.deepEqual(resolveShortcut(input({ key: 'k', ctrlKey: true }), false, hosted), { type: 'palette' });
+    assert.deepEqual(resolveShortcut(input({ key: 'F6' }), false, hosted), { type: 'region', backwards: false });
+    assert.deepEqual(resolveShortcut(input({ key: 'Escape' }), false, hosted), { type: 'dismiss' });
+    assert.deepEqual(resolveShortcut(input({ key: '2', code: 'Digit2', altKey: true }), false, hosted), { type: 'nav', nav: 'resources' });
+  }
+});
+
+test('hosted, Design opens its own palette only for a Mod+K that starts inside its chrome', () => {
+  assert.equal(ownsPalette(false, false), true, 'standalone always owns it');
+  assert.equal(ownsPalette(false, true), true);
+  assert.equal(ownsPalette(true, true), true);
+  assert.equal(ownsPalette(true, false), false, 'body focus, the shell navigation and other domains reach the shell palette');
+});
+
+test('the inspector hint for Mod+\\ names what it does in each mode', () => {
+  assert.equal(shortcutHints(false), SHORTCUT_HINTS);
+  const hosted = shortcutHints(true);
+  assert.equal(hosted.length, SHORTCUT_HINTS.length);
+  assert.equal(hosted.find((hint) => hint.keys === 'Mod+\\')?.action, 'Expand or compact navigation');
+  assert.deepEqual(hosted.filter((hint) => hint.keys !== 'Mod+\\'), SHORTCUT_HINTS.filter((hint) => hint.keys !== 'Mod+\\'));
+});
+
+test('navTarget needs only the sections and the remembered section', () => {
+  assert.deepEqual(navTarget({ sectionsByNav: chromeView().sectionsByNav, lastSection: { review: 'compare' } }, 'review'), { nav: 'review', section: 'compare' });
+  assert.deepEqual(navTarget({ sectionsByNav: chromeView().sectionsByNav, lastSection: {} }, 'runs'), { nav: 'runs', section: 'connector' });
+});
+
+const viewSections = SYNTHETIC_SECTIONS.map((section) => ({
+  ...section, commands: [],
+  ...(section.id === 'compare' ? { subRoutes: { fixed: [{ id: 'strip', title: 'Strip' }, { id: 'swipe', title: 'Swipe stage' }], navChildren: true } } : {}),
+}));
+
+test('the palette lists each declared view and still reaches every section; hosted drops only the sidebar toggle', () => {
+  const standalone = buildCommands({ ...chromeView(), sections: viewSections, currentProjectId: 'p1' });
+  const hosted = buildCommands({ ...chromeView({ hosted: true }), sections: viewSections, currentProjectId: 'p1' });
+  assert.ok(standalone.some((command) => command.id === 'toggle:sidebar'));
+  assert.ok(!hosted.some((command) => command.id === 'toggle:sidebar'));
+  assert.ok(hosted.some((command) => command.id === 'toggle:inspector'));
+  assert.deepEqual(hosted.filter((command) => command.id !== 'toggle:sidebar' && command.id !== 'toggle:inspector').map((command) => command.id),
+    standalone.filter((command) => command.id !== 'toggle:sidebar' && command.id !== 'toggle:inspector').map((command) => command.id), 'every other command is the same');
+  assert.deepEqual(standalone.filter((command) => command.id.startsWith('sub:')).map((command) => command.id), ['sub:compare:strip', 'sub:compare:swipe']);
+  assert.deepEqual(filterCommands(standalone, 'swipe')[0]?.action, { type: 'navigate', location: { nav: 'review', section: 'compare', sub: 'swipe' } });
+  assert.equal(filterCommands(standalone, 'stage')[0]?.id, 'sub:compare:swipe', 'a view is found by its title');
+  for (const section of SYNTHETIC_SECTIONS) assert.ok(standalone.some((command) => command.id === `section:${section.id}`), section.id);
 });

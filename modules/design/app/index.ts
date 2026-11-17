@@ -42,6 +42,8 @@ export function createDesignComposition(ports: DesignRuntimePorts = {}) {
     designDomain: composed,
     designPresentation: composed.presentation,
     designReferenceReads: referenceReads,
+    /** This composition's navigation as data for a shell to register. Pure: it mounts and loads nothing. */
+    designNavSource: domain.navSource,
     designDeactivate() { flush(); void workspace.interactive.deactivate(); },
   };
 }
@@ -50,6 +52,7 @@ const production = createDesignComposition();
 export const designDomain = production.designDomain;
 export const designPresentation = production.designPresentation;
 export const designReferenceReads = production.designReferenceReads;
+export const designNavSource = production.designNavSource;
 export const designDeactivate = production.designDeactivate;
 export type { DesignRuntimePorts, InteractiveCatalogPort, InteractiveCatalogItem } from './compose/runtime-ports.ts';
 

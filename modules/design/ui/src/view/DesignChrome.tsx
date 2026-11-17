@@ -2,12 +2,14 @@ import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, 
 import type { ModulePort } from '@hq/contracts';
 import { DESIGN_NAV_IDS, type DesignLocation, type ShellContextPort } from '../../contract.ts';
 import type { DesignCore } from '../domain-core.ts';
-import { navTarget, regionStop, resolveShortcut, rovingNext, SHORTCUT_HINTS, tabStops, type ChromeView } from '../focus.ts';
-import { formatDestination, NAV_LABELS, parseDestination, sameLocation } from '../navigation.ts';
+import { HOSTED_REGIONS, navTarget, ownsPalette, regionStop, resolveShortcut, rovingNext, shortcutHints, tabStops, type ChromeView } from '../focus.ts';
+import { crumbFor, resolveDesignRoute, subRoutesLookup } from '../nav-source.ts';
+import { formatDestination, isValidSub, NAV_LABELS, parseDestination, sameLocation } from '../navigation.ts';
 import { buildCommands, CLOSED_PALETTE, paletteReduce, type PaletteAction, type ProjectCandidate } from '../palette.ts';
-import { fitSidebar, maxSize, naturalSidebar, PANEL_BOUNDS, resolveLayout, setPanelSize, sidebarPadding, splitterKey, togglePanel, type PanelId } from '../panels.ts';
+import { fitSidebar, maxSize, naturalSidebar, PANEL_BOUNDS, resolveLayout, setPanelSize, sidebarPadding, splitterKey, togglePanel, type PanelId, type PanelLayout } from '../panels.ts';
 import { cancelSwitch, confirmSwitch, INITIAL_GUARD, proposeSwitch, type GuardState } from '../project-guard.ts';
 import type { DesignRegistry } from '../registry.ts';
+import { sectionPayloadsFor } from '../section-payload.ts';
 import { chromeTheme } from '../theme.ts';
 import { CommandPalette } from './CommandPalette.tsx';
 import { ProjectSwitchPrompt } from './ProjectSwitchPrompt.tsx';
@@ -22,6 +24,12 @@ export interface DesignChromeProps {
   readonly projects?: readonly ProjectCandidate[];
   readonly mac: boolean;
   readonly useKitTheme?: boolean;
+  /**
+   * A shell hosts Design and owns navigation (the module-nav context is on). The area buttons and the
+   * sidebar are not rendered; the bar becomes a page head with the crumb, Commands and the inspector
+   * toggle. Default off: standalone and harness use keep Design's own navigation.
+   */
+  readonly hosted?: boolean;
 }
 
 const FLUSH_DELAY_MS = 750;
@@ -45,7 +53,7 @@ function guardReduce(state: GuardState, event: GuardEvent): GuardState {
   return event.next;
 }
 
-export function DesignChrome({ port, shell, core, registry, projects, mac, useKitTheme = false }: DesignChromeProps) {
+export function DesignChrome({ port, shell, core, registry, projects, mac, useKitTheme = false, hosted = false }: DesignChromeProps) {
   const snapshot = useSyncExternalStore(shell.subscribe, shell.getSnapshot, shell.getSnapshot);
   const projectId = snapshot.context.id;
   useSyncExternalStore(core.sessions.subscribe, core.sessions.version, core.sessions.version);
@@ -81,17 +89,23 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
   // Width the current sidebar labels need; null until measured (and in layout-less test DOMs).
   const [natural, setNatural] = useState<number | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
-  const panels = fitSidebar(session.panels, natural);
+  // Hosted, the sidebar is the shell's: it takes no room here, and only inspector changes are ever merged into the stored layout.
+  const fit = (layout: PanelLayout): PanelLayout => fitSidebar(layout, hosted ? null : natural);
+  const fitted = fit(session.panels);
+  const panels: PanelLayout = hosted ? { ...fitted, sidebar: { ...fitted.sidebar, collapsed: true } } : fitted;
   const resting = resolveLayout(panels, width);
   const resolved = dragSize?.projectId === projectId && !resting.squeezed.includes(dragSize.panel)
     ? { ...resting, [dragSize.panel]: dragSize.size, main: resting.main + resting[dragSize.panel] - dragSize.size }
     : resting;
   const visible = { sidebar: resolved.sidebar > 0, inspector: resolved.inspector > 0 };
   const sectionsByNav = registry.byNav;
-  const requested = parseDestination(port.destination);
-  const location: DesignLocation = requested.section !== null && registry.get(requested.section)?.nav === requested.nav
-    ? requested : navTarget({ location: requested, sectionsByNav, visible, lastSection: session.lastSection }, requested.nav);
-  const view: ChromeView = { location, sectionsByNav, visible, squeezed: resolved.squeezed, lastSection: session.lastSection };
+  const payloads = sectionPayloadsFor(core.sessions);
+  const requested = parseDestination(port.destination, subRoutesLookup(registry));
+  // Explicit valid view, else the one remembered for this project and section, else the default. Read-only:
+  // a bare, restored, Back or reference destination is shown with that view but never rewritten to carry it.
+  const route = resolveDesignRoute({ requested, registry, lastSection: session.lastSection, remembered: (sectionId) => payloads.view(projectId, sectionId) });
+  const location: DesignLocation = route.location;
+  const view: ChromeView = { location, sectionsByNav, visible, squeezed: resolved.squeezed, lastSection: session.lastSection, hosted };
   const stops = tabStops(view);
   const activeSection = location.section === null ? undefined : registry.get(location.section);
 
@@ -107,8 +121,16 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
   };
 
   const go = (target: DesignLocation) => {
+    const targetSection = target.section === null ? undefined : registry.get(target.section);
+    const sub = targetSection !== undefined && targetSection.nav === target.nav && isValidSub(target.sub, targetSection.subRoutes) ? target.sub : null;
     if (target.section !== null) core.sessions.setLastSection(projectId, target.nav, target.section);
-    if (!sameLocation(target, requested)) port.navigate(formatDestination(target));
+    // Choosing a view is a user choice, so it is remembered. Bare, restored, Back and reference destinations never pass here.
+    if (sub !== null && targetSection !== undefined) payloads.setView(projectId, targetSection.id, sub);
+    const next: DesignLocation = sub === null ? { nav: target.nav, section: target.section } : { nav: target.nav, section: target.section, sub };
+    if (!sameLocation(next, requested)) port.navigate(formatDestination(next));
+  };
+  const navigateSub = (sub: string | null) => {
+    if (activeSection !== undefined) go({ nav: location.nav, section: activeSection.id, sub });
   };
   const setPanels = (next: typeof session.panels) => {
     for (const panel of ['sidebar', 'inspector'] as const) {
@@ -119,8 +141,9 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
     }
     core.sessions.setPanels(projectId, next);
   };
+  const commit = (next: PanelLayout) => setPanels(hosted ? { ...session.panels, inspector: next.inspector } : next);
   // A panel hidden only because the window is narrow cannot be shown; its toggle explains why.
-  const toggle = (panel: PanelId) => { if (!resolved.squeezed.includes(panel)) setPanels(togglePanel(session.panels, panel)); };
+  const toggle = (panel: PanelId) => { if (!(hosted && panel === 'sidebar') && !resolved.squeezed.includes(panel)) setPanels(togglePanel(session.panels, panel)); };
   const labelKey = `${location.nav}\u0000${registry.byNav[location.nav].map((section) => section.title).join('\u0000')}`;
   useLayoutEffect(() => {
     const aside = sidebarRef.current;
@@ -195,7 +218,10 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
   };
   const commands = palette.open ? buildCommands({
     ...view, currentProjectId: projectId, ...(projects ? { projects } : {}),
-    sections: registry.sections.map((section) => ({ id: section.id, title: section.title, nav: section.nav, commands: section.commands })),
+    sections: registry.sections.map((section) => ({
+      id: section.id, title: section.title, nav: section.nav, commands: section.commands,
+      ...(section.subRoutes === undefined ? {} : { subRoutes: section.subRoutes }),
+    })),
   }) : [];
 
   const confirmProject = (token: number) => {
@@ -205,18 +231,21 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
     afterCommit(() => focusStop('workspace'));
   };
 
-  const onKeyDown = (event: KeyboardEvent) => {
+  const onKeyDown = (event: KeyboardEvent, insideChrome: boolean) => {
     if (event.defaultPrevented || palette.open || guard.pending !== null) return; // modal surfaces handle their own keys
     const shortcut = resolveShortcut({
       key: event.key, code: event.code, metaKey: event.metaKey, ctrlKey: event.ctrlKey,
       altKey: event.altKey, shiftKey: event.shiftKey, editable: isEditable(event.target),
-    }, mac);
+    }, mac, hosted);
     if (shortcut === null || shortcut.type === 'dismiss') return; // nothing open to dismiss
+    // Hosted, the shell owns Mod+\ and any Mod+K that did not start inside Design: leave those events untouched.
+    if (shortcut.type === 'host-nav-toggle') return;
+    if (shortcut.type === 'palette' && !ownsPalette(hosted, insideChrome)) return;
     event.preventDefault();
     switch (shortcut.type) {
       case 'palette': openPalette(); break;
-      case 'region': focusStop(regionStop(stops, focusedStop(), shortcut.backwards)?.id ?? null); break;
-      case 'nav': go(navTarget(view, shortcut.nav)); afterCommit(() => focusStop(`nav:${shortcut.nav}`)); break;
+      case 'region': focusStop(regionStop(stops, focusedStop(), shortcut.backwards, hosted ? HOSTED_REGIONS : undefined)?.id ?? null); break;
+      case 'nav': go(navTarget(view, shortcut.nav)); afterCommit(() => focusStop(hosted ? 'workspace' : `nav:${shortcut.nav}`)); break;
       case 'toggle-panel': toggle(shortcut.panel); break;
     }
   };
@@ -230,7 +259,8 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
       const root = rootRef.current;
       const target = event.target;
       if (!root) return;
-      if ((target instanceof Node && root.contains(target)) || target === document.body || target === document.documentElement) keyHandler.current(event);
+      const inside = target instanceof Node && root.contains(target);
+      if (inside || target === document.body || target === document.documentElement) keyHandler.current(event, inside);
     };
     document.addEventListener('keydown', listener);
     return () => document.removeEventListener('keydown', listener);
@@ -259,7 +289,7 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
       title={`Drag to resize ${panel}; click a closed edge or press Enter to restore`}
       onKeyDown={(event) => {
         const next = splitterKey(panels, panel, event.key, event.shiftKey, width);
-        if (next) { event.preventDefault(); setPanels(fitSidebar(next, natural)); }
+        if (next) { event.preventDefault(); commit(fit(next)); }
       }}
       onDoubleClick={() => toggle(panel)}
       onPointerDown={(event) => {
@@ -287,8 +317,8 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
           cleanup();
           setDragSize(null);
           if (endEvent.type !== 'pointerup') return;
-          if (startLayout[panel].collapsed && Math.abs(distance) < 4) setPanels(togglePanel(startLayout, panel));
-          else setPanels(setPanelSize(startLayout, panel, floor(startSize + distance * direction), width));
+          if (startLayout[panel].collapsed && Math.abs(distance) < 4) commit(togglePanel(startLayout, panel));
+          else commit(setPanelSize(startLayout, panel, floor(startSize + distance * direction), width));
         };
         stopDrag.current = cleanup;
         target.addEventListener('pointermove', move);
@@ -299,36 +329,48 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
   };
 
   const style = { ...theme.vars, colorScheme: snapshot.appearance } as CSSProperties;
-  return <div className="hqd-chrome" data-hqd-chrome="" data-appearance={snapshot.appearance} style={style} ref={rootRef}>
-    <header className="hqd-bar">
-      <nav className="hqd-subnav" aria-label="Design" onKeyDown={(event) => roving(event, navStops.map((stop) => stop.id), 'horizontal')}>
-        {navStops.map((stop, index) => {
-          const nav = DESIGN_NAV_IDS[index]!;
-          return <button key={stop.id} type="button" {...stopProps(stop.id)} className="hqd-nav-item"
-            aria-current={location.nav === nav ? 'page' : undefined} aria-keyshortcuts={`Alt+${index + 1}`}
-            onClick={() => { if (stop.action.type === 'navigate') go(stop.action.location); }}>{stop.label}</button>;
-        })}
-      </nav>
-      <div className="hqd-bar-tools">
-        <button type="button" {...stopProps('palette')} className="hqd-palette-button"
-          aria-haspopup="dialog" aria-keyshortcuts={mac ? 'Meta+K' : 'Control+K'} onClick={openPalette}>
-          <span>Commands</span><kbd>{mac ? '⌘K' : 'Ctrl K'}</kbd>
-        </button>
-        {(['sidebar', 'inspector'] as const).map((panel) => <button key={panel} type="button"
-          {...stopProps(`toggle:${panel}`)} className="hqd-icon-button"
-          aria-pressed={visible[panel]} aria-controls={`hqd-${panel}`} aria-label={panel === 'sidebar' ? 'Sidebar' : 'Inspector'}
-          aria-disabled={resolved.squeezed.includes(panel) || undefined}
-          title={resolved.squeezed.includes(panel) ? `The window is too narrow for the ${panel}` : `${visible[panel] ? 'Hide' : 'Show'} ${panel}`}
-          onClick={() => toggle(panel)}>
-          <svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4">
-            <rect x="2.5" y="3.5" width="15" height="13" rx="2" />
-            {panel === 'sidebar' ? <path d="M7.5 3.5v13" /> : <path d="M12.5 3.5v13" />}
-          </svg>
-        </button>)}
-      </div>
-    </header>
+  // Commands and the panel toggles. Hosted, the sidebar toggle is gone with the sidebar.
+  const toolPanels: readonly PanelId[] = hosted ? ['inspector'] : ['sidebar', 'inspector'];
+  const tools = <div className="hqd-bar-tools">
+    <button type="button" {...stopProps('palette')} className="hqd-palette-button"
+      aria-haspopup="dialog" aria-keyshortcuts={mac ? 'Meta+K' : 'Control+K'} onClick={openPalette}>
+      <span>Commands</span><kbd>{mac ? '⌘K' : 'Ctrl K'}</kbd>
+    </button>
+    {toolPanels.map((panel) => <button key={panel} type="button"
+      {...stopProps(`toggle:${panel}`)} className="hqd-icon-button"
+      aria-pressed={visible[panel]} aria-controls={`hqd-${panel}`} aria-label={panel === 'sidebar' ? 'Sidebar' : 'Inspector'}
+      aria-disabled={resolved.squeezed.includes(panel) || undefined}
+      title={resolved.squeezed.includes(panel) ? `The window is too narrow for the ${panel}` : `${visible[panel] ? 'Hide' : 'Show'} ${panel}`}
+      onClick={() => toggle(panel)}>
+      <svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4">
+        <rect x="2.5" y="3.5" width="15" height="13" rx="2" />
+        {panel === 'sidebar' ? <path d="M7.5 3.5v13" /> : <path d="M12.5 3.5v13" />}
+      </svg>
+    </button>)}
+  </div>;
+  const crumb = hosted ? crumbFor(route, registry) : [];
+  return <div className="hqd-chrome" data-hqd-chrome="" data-hqd-hosted={hosted ? '' : undefined} data-appearance={snapshot.appearance} style={style} ref={rootRef}>
+    {hosted
+      ? <header className="hqd-bar hqd-pagehead">
+        <nav className="hqd-crumb" aria-label="Breadcrumb">
+          <ol>{crumb.map((segment, index) => <li key={`${index}:${segment}`} title={segment}
+            aria-current={index === crumb.length - 1 ? 'page' : undefined}>{segment}</li>)}</ol>
+        </nav>
+        {tools}
+      </header>
+      : <header className="hqd-bar">
+        <nav className="hqd-subnav" aria-label="Design" onKeyDown={(event) => roving(event, navStops.map((stop) => stop.id), 'horizontal')}>
+          {navStops.map((stop, index) => {
+            const nav = DESIGN_NAV_IDS[index]!;
+            return <button key={stop.id} type="button" {...stopProps(stop.id)} className="hqd-nav-item"
+              aria-current={location.nav === nav ? 'page' : undefined} aria-keyshortcuts={`Alt+${index + 1}`}
+              onClick={() => { if (stop.action.type === 'navigate') go(stop.action.location); }}>{stop.label}</button>;
+          })}
+        </nav>
+        {tools}
+      </header>}
     <div className="hqd-body" ref={bodyRef}>
-      {visible.sidebar &&
+      {visible.sidebar && !hosted &&
         <aside ref={sidebarRef} id="hqd-sidebar" className="hqd-sidebar" style={{ width: resolved.sidebar, paddingInline: sidebarPadding(resolved.sidebar) }} aria-label={`${NAV_LABELS[location.nav]} sections`}>
           <h2 className="hqd-heading" title={NAV_LABELS[location.nav]}>{NAV_LABELS[location.nav]}</h2>
           {sectionStops.length === 0
@@ -340,12 +382,14 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
                 onClick={() => { if (stop.action.type === 'navigate') go(stop.action.location); }}>{stop.label}</button>)}
             </nav>}
         </aside>}
-      {!resolved.squeezed.includes('sidebar') && splitter('sidebar')}
+      {!hosted && !resolved.squeezed.includes('sidebar') && splitter('sidebar')}
       <section {...stopProps('workspace')} className="hqd-workspace" tabIndex={0}
         aria-label={activeSection ? activeSection.title : `${NAV_LABELS[location.nav]} workspace`} style={{ minWidth: 0 }}>
         {activeSection
           ? <SectionOutlet key={`${projectId}:${activeSection.id}`} section={activeSection} context={snapshot.context}
-            appearance={snapshot.appearance} state={core.sessions.sectionHandle(projectId, activeSection.id)}
+            appearance={snapshot.appearance}
+            state={activeSection.subRoutes === undefined ? core.sessions.sectionHandle(projectId, activeSection.id) : payloads.dataHandle(projectId, activeSection.id)}
+            sub={route.sub} subExplicit={route.subExplicit} navigateSub={navigateSub}
             navigate={go} propose={propose} onCommand={onCommand} />
           : <div className="hqd-placeholder">
             <h2>{NAV_LABELS[location.nav]}</h2>
@@ -370,7 +414,7 @@ export function DesignChrome({ port, shell, core, registry, projects, mac, useKi
             <ul>{registry.rejected.map((item) => <li key={item.path}>{item.reason}</li>)}</ul>
           </div>}
           <h3 className="hqd-subheading">Keyboard</h3>
-          <dl className="hqd-shortcuts">{SHORTCUT_HINTS.map((hint) => <div key={hint.keys}>
+          <dl className="hqd-shortcuts">{shortcutHints(hosted).map((hint) => <div key={hint.keys}>
             <dt><kbd>{mac ? hint.keys.replaceAll('Mod', '⌘') : hint.keys.replaceAll('Mod', 'Ctrl')}</kbd></dt><dd>{hint.action}</dd>
           </div>)}</dl>
         </aside>}

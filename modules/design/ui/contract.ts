@@ -54,10 +54,39 @@ export interface UiStatePort {
   setItem(key: string, value: string): void;
 }
 
-/** Where Design is showing something. Serialised into ModulePort.destination. */
+/**
+ * Where Design is showing something. Serialised into ModulePort.destination.
+ *
+ * `sub` is the section-owned view inside `section`: a fixed id the section's
+ * descriptor declares (`SectionSubRoutes.fixed`), or `item/<encodeURIComponent(id)>`
+ * for sections that declare `itemPrefix`. Absent and null are the same: no explicit
+ * view, so the remembered preference and then the default apply. Callers that only
+ * know `{ nav, section }` stay valid.
+ */
 export interface DesignLocation {
   readonly nav: DesignNavId;
   readonly section: string | null;
+  readonly sub?: string | null;
+}
+
+/** One fixed view of a section, such as Compare's `swipe`. The id is route grammar; the title is display text. */
+export interface SectionSubRoute {
+  /** Lowercase letters, digits and hyphens, starting with a letter, at most 32 characters; never `item`. */
+  readonly id: string;
+  readonly title: string;
+}
+
+/**
+ * Cheap routing metadata a descriptor may declare so the chrome can parse, format and
+ * navigate its views without loading any section code. It is not a claim that the
+ * section renders alternate views: a section consumes `sub` only when it says so.
+ */
+export interface SectionSubRoutes {
+  readonly fixed: readonly SectionSubRoute[];
+  /** Whether the fixed views appear as children of the section in navigation (Compare) or stay inside it (Flows). */
+  readonly navChildren: boolean;
+  /** Set for sections whose views include one route per library entry: `item/<encodeURIComponent(id)>`. */
+  readonly itemPrefix?: 'item';
 }
 
 /** Opaque per-section chrome state (draft text, viewport, selection…) kept across domain switches. */
@@ -88,6 +117,8 @@ export interface DesignSectionDescriptor<View = unknown> {
   readonly nav: DesignNavId;
   readonly order?: number;
   readonly commands?: readonly SectionCommand[];
+  /** Optional routing metadata for the section's views; see `SectionSubRoutes`. Data only, never view code. */
+  readonly subRoutes?: SectionSubRoutes;
   readonly view: () => Promise<View>;
 }
 
@@ -96,7 +127,20 @@ export interface DesignSectionProps {
   readonly context: ProjectContext;
   readonly appearance: ResolvedAppearance;
   readonly sectionId: string;
+  /**
+   * Chrome state for this section. A section that declares `subRoutes` receives a handle
+   * that reaches only its own data; the remembered view is kept beside it and never exposed here.
+   */
   readonly state: SectionStateHandle;
+  /**
+   * The effective view: an explicit valid route view, else the view remembered for this project and
+   * section, else the descriptor default (null for sections that declare none, and for item sections).
+   */
+  readonly sub: string | null;
+  /** True only when `sub` came from the route itself; a remembered or default view is not explicit. */
+  readonly subExplicit: boolean;
+  /** Choose a view of this section. Null shows the section's remembered or default view. Never remounts the section. */
+  readonly navigateSub: (sub: string | null) => void;
   readonly navigate: (location: DesignLocation) => void;
   /** Opens a confirmation prompt; never switches project context by itself. */
   readonly proposeProjectSwitch: (projectId: string, label: string) => void;

@@ -1,7 +1,9 @@
 import { useMemo, type ComponentType } from 'react';
 import type { ModulePort } from '@hq/contracts';
+import { useModuleNavHost, type DomainNavSource } from '@hq/ui';
 import type { DesignDomain, ShellContextPort, ShellContextSnapshot, UiStatePort } from '../contract.ts';
 import { createDesignCore, type DesignCore } from './domain-core.ts';
+import { createDesignNavSource } from './nav-source.ts';
 import type { ProjectCandidate } from './palette.ts';
 import type { DesignRegistry } from './registry.ts';
 import { FALLBACK_TOKENS } from './theme.ts';
@@ -38,15 +40,21 @@ function useModulePortShell(port: ModulePort): ShellContextPort {
 
 /**
  * Build the descriptor handed to the HQ shell. The core (sessions, keep-alive)
- * is created once here and outlives every mount of `Component`.
+ * is created once here and outlives every mount of `Component`. `navSource` is
+ * this composition's navigation as data (descriptor-derived, session-backed); it
+ * mounts nothing and is registered nowhere until a shell chooses to. `Component`
+ * reads the module-nav host context, which is off unless a shell turns it on: off,
+ * Design keeps its own navigation; on, it omits the duplicated navigation and sidebar.
  */
-export function createDesignDomain(options: DesignDomainOptions): DesignDomain<ComponentType<ModulePort>> & { readonly core: DesignCore } {
+export function createDesignDomain(options: DesignDomainOptions): DesignDomain<ComponentType<ModulePort>> & { readonly core: DesignCore; readonly navSource: DomainNavSource } {
   const core = createDesignCore(options.storage);
+  const navSource = createDesignNavSource({ registry: options.registry, sessions: core.sessions });
   const mac = options.mac ?? detectMac();
   function DesignDomainView(port: ModulePort) {
     const adapted = useModulePortShell(port);
+    const hosted = useModuleNavHost();
     return <DesignChrome port={port} shell={options.shell ?? adapted} core={core} registry={options.registry}
-      mac={mac} useKitTheme={options.shell === undefined} {...(options.projects ? { projects: options.projects } : {})} />;
+      mac={mac} hosted={hosted} useKitTheme={options.shell === undefined} {...(options.projects ? { projects: options.projects } : {})} />;
   }
   return {
     id: 'design', label: 'Design', order: 0, keepAlive: true, presentation: 'fill',
@@ -55,5 +63,6 @@ export function createDesignDomain(options: DesignDomainOptions): DesignDomain<C
     restore: core.restore,
     deactivate: core.deactivate,
     core,
+    navSource,
   };
 }

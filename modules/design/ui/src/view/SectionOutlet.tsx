@@ -40,23 +40,28 @@ export interface SectionOutletProps {
   readonly section: RegisteredSection<SectionView>;
   readonly context: ProjectContext;
   readonly appearance: ResolvedAppearance;
+  /** Already the section's own handle: data only for a section with sub-routes (the chrome derives it). */
   readonly state: SectionStateHandle;
+  /** The effective view and whether the route named it; passed straight to the section. Changing them never remounts it. */
+  readonly sub: string | null;
+  readonly subExplicit: boolean;
+  readonly navigateSub: (sub: string | null) => void;
   readonly navigate: (location: DesignLocation) => void;
   readonly propose: (projectId: string, label: string, origin: 'section') => void;
   readonly onCommand: (sectionId: string, listener: (commandId: string) => void) => () => void;
 }
 
-export function SectionOutlet({ section, context, appearance, state, navigate, propose, onCommand }: SectionOutletProps) {
+export function SectionOutlet({ section, context, appearance, state, sub, subExplicit, navigateSub, navigate, propose, onCommand }: SectionOutletProps) {
   const [attempt, setAttempt] = useState(0);
   const View = useMemo(() => lazyView(section), [section, attempt]);
   // A lazy section that failed to load stays failed, so another attempt also loads its code again.
   const retry = () => { lazyViews.delete(section); setAttempt((current) => current + 1); };
   const props: DesignSectionProps = useMemo(() => ({
-    context, appearance, sectionId: section.id, state, navigate,
+    context, appearance, sectionId: section.id, state, sub, subExplicit, navigateSub, navigate,
     proposeProjectSwitch: (projectId: string, label: string) => propose(projectId, label, 'section'),
     surface: surfaceProps,
     onCommand: (listener: (commandId: string) => void) => onCommand(section.id, listener),
-  }), [context, appearance, section.id, state, navigate, propose, onCommand]);
+  }), [context, appearance, section.id, state, sub, subExplicit, navigateSub, navigate, propose, onCommand]);
   return <ErrorBoundary resetKeys={[section.id, context.id, attempt]} fallback={() => <SectionFailed title={section.title} retry={retry} />}>
     <Suspense fallback={<SectionLoading title={section.title} />}>
       <View {...props} />
