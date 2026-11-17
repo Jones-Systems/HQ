@@ -1,5 +1,5 @@
 import type { PreviewViewport } from '@hq/contracts/preview';
-import { pixelDigest, type CapturePixels, type CaptureReading, type Coherence } from './coherence';
+import { pixelDigest, type CapturePixels, type CaptureReading, type Coherence } from './coherence.js';
 
 export const FULL_PAGE_CAPTURE_ENABLED = false as const;
 export const MAX_DEVICE_EDGE = 16384;
