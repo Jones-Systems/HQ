@@ -150,12 +150,12 @@ it('permits only local contract imports and node:crypto, with no host/store cons
   expectInertTopLevel(join(records, 'write-fence.ts'), 'export const plan = Object.freeze([]);');
   const files = sourceFiles(records);
   expect(files.map(path => relative(records, path)).sort()).toEqual([
-    'adoption-classifier.ts', 'canonical.ts', 'capture-evidence.ts', 'keys.ts', 'projects-registry.ts', 'write-fence.ts',
+    'adoption-classifier.ts', 'canonical.ts', 'capture-evidence.ts', 'capture-receipt-read-service.ts', 'keys.ts', 'projects-registry.ts', 'write-fence.ts',
   ]);
   for (const path of files) {
     const source = readFileSync(path, 'utf8');
     for (const specifier of importSpecifiers(path, source)) {
-      expect(specifier).toMatch(/^(?:node:crypto|\.\/(?:canonical|keys|projects-registry|adoption-classifier|write-fence)\.js)$/u);
+      expect(specifier).toMatch(/^(?:node:crypto|\.\/(?:canonical|keys|projects-registry|adoption-classifier|write-fence|capture-evidence)\.js)$/u);
     }
     expectInertTopLevel(path, source);
   }
