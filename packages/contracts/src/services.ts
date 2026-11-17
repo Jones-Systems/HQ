@@ -117,7 +117,7 @@ export interface ServiceConfigTransport {
   set(input: ServiceConfigInput): Promise<ServiceConfigStatus>;
   status(domain: ServiceDomain): Promise<ServiceConfigStatus>;
 }
-export const GENERATION_SOURCE_ROUTES = ['snapshot', 'serving'] as const;
+export const GENERATION_SOURCE_ROUTES = ['snapshot', 'serving', 'registerPublisher', 'importPublisher', 'setOwnerState', 'refresh'] as const;
 export type GenerationSourceRoute = (typeof GENERATION_SOURCE_ROUTES)[number];
 export interface GenerationSourceSnapshot {
   readonly sourceId: string;
@@ -139,6 +139,14 @@ export type GenerationSourceServing =
   | { readonly status: 'empty' }
   | { readonly status: 'held'; readonly reason: string; readonly lastGood: GenerationSourceIdentity | null }
   | { readonly status: 'pending' | 'current'; readonly generation: GenerationSourceIdentity; readonly served: GenerationSourceBinding; readonly accepted: GenerationSourceBinding };
+export interface GenerationSourceRevision { readonly recordRevision: string }
+export type GenerationSourceImport =
+  | { readonly kind: 'held'; readonly reason: string }
+  | ({ readonly kind: 'advanced' | 'unchanged' } & GenerationSourceRevision);
+export type GenerationSourceRefresh =
+  | Extract<GenerationSourceServing, { readonly status: 'unavailable' | 'held' }>
+  | { readonly status: 'activated'; readonly generation: GenerationSourceIdentity; readonly previous: GenerationSourceIdentity | null }
+  | { readonly status: 'current'; readonly generation: GenerationSourceIdentity };
 export type GenerationSourcesResult<T> = { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly kind: 'invalid' }
   | { readonly ok: false; readonly kind: 'unavailable'; readonly reason?: 'disabled' | 'record_invalid' | 'record_conflict' | 'record_unavailable' | 'record_uncertain'
@@ -147,10 +155,18 @@ export type GenerationSourcesResult<T> = { readonly ok: true; readonly value: T 
 export interface GenerationSourcesParams {
   readonly snapshot: Record<string, never>;
   readonly serving: { readonly sourceId: string };
+  readonly registerPublisher: { readonly publisherId: string; readonly expectedRevision: string };
+  readonly importPublisher: { readonly publisherId: string; readonly expectedRevision: string };
+  readonly setOwnerState: { readonly sourceId: string; readonly ownerState: 'active' | 'removed'; readonly expectedRevision: string };
+  readonly refresh: { readonly sourceId: string };
 }
 export interface GenerationSourcesValues {
   readonly snapshot: readonly GenerationSourceSnapshot[];
   readonly serving: GenerationSourceServing;
+  readonly registerPublisher: GenerationSourceRevision;
+  readonly importPublisher: GenerationSourceImport;
+  readonly setOwnerState: GenerationSourceRevision;
+  readonly refresh: GenerationSourceRefresh;
 }
 export interface GenerationSourcesTransport {
   call<R extends GenerationSourceRoute>(route: R, params: GenerationSourcesParams[R]): Promise<GenerationSourcesResult<GenerationSourcesValues[R]>>;
