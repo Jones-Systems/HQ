@@ -7,6 +7,7 @@ import { record } from '../services.js';
 import { PREVIEW_HOST_ENABLED, PREVIEW_PICK_QUALIFIED } from './status.js';
 import { requestAllowed, previewTarget } from './policy.js';
 import { acceptCapture, type CaptureReading } from './coherence.js';
+import { FULL_PAGE_CAPTURE_ENABLED, FULL_DEADLINE_MS, planFullExtent, acceptFullExtent, type StabilityReading } from './full-page.js';
 import { previewParams, validAgentEvent, validResolution } from './validation.js';
 import { createQualificationBarrier } from './qualification.js';
 import { fitPlacement } from './placement.js';
@@ -25,11 +26,12 @@ async function bounded<T>(operation: Promise<T>, milliseconds: number): Promise<
     })]);
   } finally { clearTimeout(timer); }
 }
+type CaptureMode = 'viewport' | 'full';
 export function createPreviewHost(options: {
   window: () => BrowserWindow | undefined;
   putBlob: (bytes: Uint8Array, digest: string) => Promise<boolean>;
   persistReceipt?: (receipt: Readonly<Record<string, unknown>>) => Promise<boolean>;
-}) {
+}, captureMode: CaptureMode = FULL_PAGE_CAPTURE_ENABLED ? 'full' : 'viewport') {
   const qualificationEnabled = !app.isPackaged && Boolean(process.env.HQ_USER_DATA_DIR) && process.env.HQ_QUALIFY_PREVIEW === '1';
   const barrier = createQualificationBarrier();
   const enabled = PREVIEW_HOST_ENABLED || qualificationEnabled;
@@ -49,6 +51,13 @@ export function createPreviewHost(options: {
   const previewContents = new WeakSet<WebContents>();
   let lifecycleEpoch = 0, overlayHidden = false, holds = 0;
   const images = new Map<string, { sessionId: string; data: string }>();
+  // Logical UTF-8 encoded payload, including the data URL prefix; this is not a JS heap measurement.
+  let imageBytes = 0;
+  const maxImageBytes = 64 * 1024 * 1024;
+  function deleteImage(key: string) {
+    const image = images.get(key);
+    if (image) { imageBytes -= Buffer.byteLength(image.data, 'utf8'); images.delete(key); }
+  }
   let bundle: Promise<{ source: string; digest: string }> | undefined;
   const pinnedBundle = () => bundle ??= readFile(new URL('../preview-agent/agent.js', import.meta.url), 'utf8').then(source => ({ source, digest: createHash('sha256').update(source).digest('hex') }));
   async function world<T>(live: Live, expression: string): Promise<T> {
@@ -69,7 +78,7 @@ export function createPreviewHost(options: {
   async function closeSession(id: string) {
     const live = sessions.get(id); if (!live) return;
     live.closing = true; clearInterval(live.timer); sessions.delete(id);
-    for (const [key, value] of images) if (value.sessionId === id) images.delete(key);
+    for (const [key, value] of images) if (value.sessionId === id) deleteImage(key);
     const window = options.window();
     try { if (!live.view.webContents.isDestroyed()) live.view.webContents.close({ waitForBeforeUnload: false }); }
     finally { if (window && !window.isDestroyed()) window.contentView.removeChildView(live.view); await live.session.clearData(); diagnostics.clearedSessions++; }
@@ -80,14 +89,41 @@ export function createPreviewHost(options: {
     for (const id of sessions.keys()) void close(id);
     await Promise.all([closeNetworkControl(), ...closingTasks]);
   }
-  async function read(live: Live, requests: readonly unknown[], captureSequence: number): Promise<CaptureReading> {
+  async function read(live: Live, requests: readonly unknown[], captureSequence: number, probe?: 'install' | 'read'): Promise<CaptureReading & { stability?: StabilityReading }> {
     const generation = live.value.generation, url = live.view.webContents.getURL();
-    const value = await world<unknown>(live, `(() => {if ((window.__hqPreviewCaptureSequence ?? 0) > ${captureSequence}) throw Error("Expired capture"); window.__hqPreviewCaptureSequence=${captureSequence};const a=window.__hqPreviewAgentHostV1.agent;a.setHighlightHidden(true);const r=a.resolveExact(${JSON.stringify(requests)});return {...r,contentSize:{w:document.documentElement.scrollWidth,h:document.documentElement.scrollHeight}};})()`);
+    const probeCode = !probe ? '' : `${probe === 'install' ? `
+      window.__hqPreviewFullProbe?.remove();
+      const owned={token:${captureSequence},windowResizeEvents:0,visualViewportResizeEvents:0,windowScrollEvents:0,visualViewportScrollEvents:0};
+      const listeners=[];
+      for(const [target,event,key] of [[window,'resize','windowResizeEvents'],[window,'scroll','windowScrollEvents'],[window.visualViewport,'resize','visualViewportResizeEvents'],[window.visualViewport,'scroll','visualViewportScrollEvents']]) {
+        if(!target) continue;
+        const listener=()=>{if(window.__hqPreviewFullProbe===owned && window.__hqPreviewCaptureSequence===owned.token) owned[key]++;};
+        target.addEventListener(event,listener); listeners.push([target,event,listener]);
+      }
+      owned.remove=()=>{for(const [target,event,listener] of listeners) target.removeEventListener(event,listener);if(window.__hqPreviewFullProbe===owned) delete window.__hqPreviewFullProbe;};
+      window.__hqPreviewFullProbe=owned;
+    ` : ''}
+      const p=window.__hqPreviewFullProbe;
+      if(!p || p.token!==${captureSequence}) throw Error('Missing stability probe');
+    `;
+    const stabilityCode = !probe ? '' : `
+      const stability={windowResizeEvents:p.windowResizeEvents,visualViewportResizeEvents:p.visualViewportResizeEvents,
+        windowScrollEvents:p.windowScrollEvents,visualViewportScrollEvents:p.visualViewportScrollEvents,
+        runningAnimations:document.getAnimations().filter(animation=>animation.playState==='running').length,
+        fontsStatus:document.fonts.status,imagesComplete:Array.from(document.images).every(image=>image.complete===true)};
+    `;
+    const value = await world<unknown>(live, `(() => {if ((window.__hqPreviewCaptureSequence ?? 0) > ${captureSequence}) throw Error("Expired capture"); window.__hqPreviewCaptureSequence=${captureSequence};${probeCode}const a=window.__hqPreviewAgentHostV1.agent;a.setHighlightHidden(true);const r=a.resolveExact(${JSON.stringify(requests)});${stabilityCode}return {...r,contentSize:{w:document.documentElement.scrollWidth,h:document.documentElement.scrollHeight}${probe ? ',stability' : ''}};})()`);
     if (!record(value) || !Number.isSafeInteger(value.mutationCounter) || !record(value.frame) || !record(value.frame.viewport) || !record(value.frame.scroll) || !Array.isArray(value.results) || value.results.length !== requests.length || !record(value.contentSize)) throw Error('Invalid agent reading');
     const numbers = [...Object.values(value.frame.viewport), ...Object.values(value.frame.scroll), ...Object.values(value.contentSize)];
     if (!numbers.every(n => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) < 10000000)) throw Error('Invalid frame');
+    if (probe) {
+      const s = value.stability;
+      const counters = ['windowResizeEvents', 'visualViewportResizeEvents', 'windowScrollEvents', 'visualViewportScrollEvents', 'runningAnimations'] as const;
+      if (!record(s) || Object.keys(s).length !== 7 || counters.some(key => !Number.isSafeInteger(s[key]) || (s[key] as number) < 0)
+        || (s.fontsStatus !== 'loaded' && s.fontsStatus !== 'loading') || typeof s.imagesComplete !== 'boolean') throw Error('Invalid stability reading');
+    }
     if (live.value.generation !== generation || live.view.webContents.getURL() !== url) throw Error('Navigation changed');
-    return { ...(value as unknown as CaptureReading), generation, url };
+    return { ...(value as unknown as CaptureReading & { stability?: StabilityReading }), generation, url };
   }
   async function emulate(live: Live, scale = 1) {
     if (live.closing || live.view.webContents.isDestroyed()) throw Error('Preview closed');
@@ -98,10 +134,11 @@ export function createPreviewHost(options: {
     // widget to it, so after a link navigation the view painted w×h outside its placed bounds.
     await debuggerPort.sendCommand('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: dpr, mobile: false, scale, dontSetVisibleSize: true });
   }
-  async function pixels(live: Live, scroll: { x: number; y: number }) {
+  async function pixels(live: Live, scroll: { x: number; y: number }, fullShot?: Extract<ReturnType<typeof planFullExtent>, { ok: true }>['shot']) {
     const contents = live.view.webContents;
     if (!contents.debugger.isAttached()) contents.debugger.attach('1.3');
-    const result = await contents.debugger.sendCommand('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false, clip: { x: scroll.x, y: scroll.y, width: live.value.viewport.w, height: live.value.viewport.h, scale: 1 } });
+    const result = await contents.debugger.sendCommand('Page.captureScreenshot', fullShot ?? { format: 'png', fromSurface: true, captureBeyondViewport: false, clip: { x: scroll.x, y: scroll.y, width: live.value.viewport.w, height: live.value.viewport.h, scale: 1 } });
+    if (fullShot && record(result) && typeof result.data === 'string' && result.data.length > 16 * 1024 * 1024) throw new RangeError('bytes-oversize');
     if (!record(result) || typeof result.data !== 'string' || result.data.length > 16 * 1024 * 1024) throw Error('Invalid capture');
     const bytes = Buffer.from(result.data, 'base64');
     if (bytes.length < 24 || bytes.subarray(1, 4).toString() !== 'PNG') throw Error('Invalid PNG');
@@ -128,9 +165,12 @@ export function createPreviewHost(options: {
     const size = { width: Math.round(w * scale), height: Math.round(h * scale) };
     return size.width === width && size.height === height && live.fitted.scale === scale ? undefined : { size, scale };
   }
-  async function restoreFitted(live: Live) {
+  async function restoreFitted(live: Live, afterAwait?: () => void, owns: () => boolean = () => true) {
     if (live.closing || live.view.webContents.isDestroyed()) return;
-    await widgetSize(live, live.fitted.bounds); await emulate(live, live.fitted.scale);
+    if (!owns()) return;
+    await widgetSize(live, live.fitted.bounds); afterAwait?.();
+    if (!owns()) return;
+    await emulate(live, live.fitted.scale); afterAwait?.();
   }
   async function capture(live: Live, expectedGeneration: number, event?: AgentEvent): Promise<PreviewResult<CaptureRecord>> {
     if (event && !pickQualified) return { ok: false, kind: 'stale', reason: 'unqualified' };
@@ -139,12 +179,44 @@ export function createPreviewHost(options: {
     if (request) { delete (request as { rect?: unknown }).rect; delete (request as { rects?: unknown }).rects; }
     // Native promises cannot be cancelled; monotonic world tokens fence late highlight writes.
     const captureSequence = ++live.captureSequence;
-    const deadline = Date.now() + 6000;
+    const deadline = Date.now() + (captureMode === 'full' ? FULL_DEADLINE_MS : 6000);
     const withinCapture = <T>(operation: Promise<T>) => bounded(operation, deadline - Date.now());
     let accepted: Extract<ReturnType<typeof acceptCapture>, { ok: true }> & { pixelWidth: number; pixelHeight: number };
     let held = false, inFlight: Promise<unknown> | undefined;
     const hold = ++holds;
+    const assertCurrent = () => { if (live.closing || live.value.generation !== expectedGeneration) throw Error('Navigation changed'); };
+    const assertFullCurrent = () => { assertCurrent(); if (Date.now() >= deadline) throw new CaptureTimeout('Capture deadline expired'); };
+    const fullAwait = async <T>(operation: () => Promise<T>): Promise<T> => {
+      assertFullCurrent();
+      try { const result = await withinCapture(operation()); assertFullCurrent(); return result; }
+      catch (error) { assertCurrent(); throw error; }
+    };
     try {
+      if (captureMode === 'full') {
+        const pre = await fullAwait(() => read(live, request ? [request] : [], captureSequence, 'install'));
+        const window = options.window();
+        const factor = window && !window.isDestroyed() ? screen.getDisplayMatching(window.getBounds()).scaleFactor : 1;
+        const plan = planFullExtent(pre, live.value.viewport, factor);
+        if (!plan.ok) return { ok: false, kind: 'stale', reason: plan.reason };
+        if (qualificationEnabled) await fullAwait(() => barrier.checkpoint('pre-read', live.value.sessionId));
+        held = true; live.hold = hold;
+        await fullAwait(() => inFlight = widgetSize(live, plan.held.size));
+        await fullAwait(() => inFlight = emulate(live, plan.held.scale));
+        const heldPre = await fullAwait(() => read(live, request ? [request] : [], captureSequence, 'read'));
+        const first = await fullAwait(() => inFlight = pixels(live, pre.frame.scroll, plan.shot));
+        if (qualificationEnabled) await fullAwait(() => barrier.checkpoint('first-capture', live.value.sessionId));
+        const second = await fullAwait(() => inFlight = pixels(live, pre.frame.scroll, plan.shot));
+        const heldPost = await fullAwait(() => read(live, request ? [request] : [], captureSequence, 'read'));
+        await fullAwait(() => inFlight = restoreFitted(live, assertFullCurrent, () => live.hold === hold));
+        held = false;
+        const post = await fullAwait(() => read(live, request ? [request] : [], captureSequence, 'read'));
+        if (qualificationEnabled) await fullAwait(() => barrier.checkpoint('post-read', live.value.sessionId));
+        const result = acceptFullExtent([pre, heldPre, heldPost, post], [pre.stability!, heldPost.stability!, post.stability!], first, second,
+          { generation: expectedGeneration, viewport: live.value.viewport, extent: plan.extent });
+        if (!result.ok) return { ok: false, kind: 'stale', reason: result.reason };
+        assertCurrent();
+        accepted = { ...result, pixelWidth: first.width, pixelHeight: first.height };
+      } else {
       trace(live, 'capture', 'pre-read:start');
       const pre = await withinCapture(read(live, request ? [request] : [], captureSequence));
       trace(live, 'capture', 'pre-read:end');
@@ -167,14 +239,19 @@ export function createPreviewHost(options: {
       if (!result.ok) return { ok: false, kind: 'stale', reason: result.reason };
       if (live.closing || live.value.generation !== expectedGeneration) return { ok: false, kind: 'stale', reason: 'navigation' };
       accepted = { ...result, pixelWidth: first.width, pixelHeight: first.height };
+      }
     } catch (error) {
       trace(live, 'capture', 'error', error);
+      if (captureMode === 'full' && (live.closing || live.value.generation !== expectedGeneration)) return { ok: false, kind: 'stale', reason: 'navigation' };
+      if (captureMode === 'full' && error instanceof RangeError && error.message === 'bytes-oversize') return { ok: false, kind: 'stale', reason: 'bytes-oversize' };
       if (error instanceof CaptureTimeout) {
         // Chromium still completes a timed-out screenshot and then restores the widget size and metrics it
         // started with, the shot's. Restore the frame again once it settles, unless a later capture holds it.
         if (held && inFlight) void inFlight.catch(() => {}).then(async () => {
           if (live.hold !== undefined && live.hold !== hold) return;
-          await restoreFitted(live); trace(live, 'capture', 'shot-geometry:late-restored');
+          if (captureMode === 'full') await bounded(restoreFitted(live, undefined, () => live.hold === undefined || live.hold === hold), 1000);
+          else await restoreFitted(live);
+          trace(live, 'capture', 'shot-geometry:late-restored');
         }).catch(error => trace(live, 'capture', 'shot-geometry:error', error));
         return { ok: false, kind: 'unavailable', reason: 'capture-timeout' };
       }
@@ -183,21 +260,38 @@ export function createPreviewHost(options: {
         : { ok: false, kind: 'unavailable', reason: 'capture-failed' };
     } finally {
       trace(live, 'capture', 'finalize:start');
+      let probeCleanupError: unknown;
       if (held && !live.closing && !live.view.webContents.isDestroyed()) {
         // A failed or timed-out shot must not leave the widget at the shot size; the attempt has already failed.
-        try { await bounded(restoreFitted(live), 1000); } catch (error) { trace(live, 'capture', 'shot-geometry:error', error); }
+        try {
+          await bounded(captureMode === 'full' ? restoreFitted(live, undefined, () => live.hold === hold) : restoreFitted(live), 1000);
+          if (captureMode === 'full') assertCurrent();
+        } catch (error) { trace(live, 'capture', 'shot-geometry:error', error); }
       }
       if (live.hold === hold) live.hold = undefined;
+      if (captureMode === 'full' && !live.closing && !live.view.webContents.isDestroyed()) {
+        try {
+          // Removing only this token's listeners cannot delete the next attempt's probe.
+          await bounded(world(live, `(() => {if ((window.__hqPreviewCaptureSequence ?? 0) <= ${captureSequence}) {window.__hqPreviewCaptureSequence=${captureSequence + 0.5};window.__hqPreviewAgentHostV1?.agent.setHighlightHidden(false);}const p=window.__hqPreviewFullProbe;if(p?.token===${captureSequence}) p.remove();})()`), 1000);
+          assertCurrent();
+        } catch (error) {
+          probeCleanupError = error;
+        }
+      }
       if (!live.closing && !live.view.webContents.isDestroyed()) {
         try {
           // The half-step expires this attempt without overtaking the next integer token.
           await bounded(world(live, `if ((window.__hqPreviewCaptureSequence ?? 0) <= ${captureSequence}) { window.__hqPreviewCaptureSequence=${captureSequence + 0.5}; window.__hqPreviewAgentHostV1?.agent.setHighlightHidden(false); }`), 1000);
+          if (captureMode === 'full') assertCurrent();
         } catch (error) {
           trace(live, 'capture', 'finalize:error', error);
+          if (captureMode === 'full' && (live.closing || live.value.generation !== expectedGeneration)) return { ok: false, kind: 'stale', reason: 'navigation' };
           if (error instanceof CaptureTimeout) return { ok: false, kind: 'unavailable', reason: 'capture-timeout' };
           return { ok: false, kind: 'unavailable', reason: 'capture-failed' };
         }
       }
+      if (captureMode === 'full' && (live.closing || live.value.generation !== expectedGeneration)) return { ok: false, kind: 'stale', reason: 'navigation' };
+      if (probeCleanupError) return { ok: false, kind: 'unavailable', reason: probeCleanupError instanceof CaptureTimeout ? 'capture-timeout' : 'capture-failed' };
       trace(live, 'capture', 'finalize:end');
     }
     if (live.closing || live.value.generation !== expectedGeneration) return { ok: false, kind: 'stale', reason: 'navigation' };
@@ -210,6 +304,7 @@ export function createPreviewHost(options: {
     const persistedAt = options.persistReceipt ? new Date().toISOString() : undefined;
     trace(live, 'capture', 'blob:end');
     diagnostics.blobWrites++;
+    if (captureMode === 'full' && !options.persistReceipt && (live.closing || live.value.generation !== expectedGeneration)) return { ok: false, kind: 'stale', reason: 'navigation' };
     if (options.persistReceipt) {
       if (live.closing || live.value.generation !== expectedGeneration) {
         diagnostics.receiptOrphans++;
@@ -219,14 +314,16 @@ export function createPreviewHost(options: {
       try {
         saved = await options.persistReceipt(buildCaptureReceipt({ record, observedUrl: accepted.reading.url,
           qualificationEnabled, appVersion: app.getVersion(), packaged: app.isPackaged,
-          byteLength: accepted.bytes.length, pixelWidth: accepted.pixelWidth, pixelHeight: accepted.pixelHeight, persistedAt: persistedAt! }));
+          byteLength: accepted.bytes.length, pixelWidth: accepted.pixelWidth, pixelHeight: accepted.pixelHeight, persistedAt: persistedAt!,
+          ...(captureMode === 'full' ? { extent: 'full' } : {}) }));
       } catch { /* The durable blob remains an orphan; no receipt retry or capture acknowledgment. */ }
       if (!saved) diagnostics.receiptOrphans++;
       if (live.closing || live.value.generation !== expectedGeneration) return { ok: false, kind: 'stale', reason: 'navigation' };
       if (!saved) return { ok: false, kind: 'unavailable', reason: 'storage' };
     }
-    if (images.size >= 32) images.delete(images.keys().next().value!);
-    images.set(captureId, { sessionId: live.value.sessionId, data: `data:image/png;base64,${Buffer.from(accepted.bytes).toString('base64')}` });
+    const data = `data:image/png;base64,${Buffer.from(accepted.bytes).toString('base64')}`;
+    images.set(captureId, { sessionId: live.value.sessionId, data }); imageBytes += Buffer.byteLength(data, 'utf8');
+    while (images.size > 32 || imageBytes > maxImageBytes) deleteImage(images.keys().next().value!);
     live.value = { ...live.value, contentSize: accepted.reading.contentSize };
     return { ok: true, value: record };
   }
