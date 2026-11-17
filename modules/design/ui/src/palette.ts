@@ -28,7 +28,12 @@ export interface PaletteSource extends ChromeView {
   readonly projects?: readonly ProjectCandidate[];
 }
 
-/** Every navigation target, view toggle, section command and project proposal. */
+/**
+ * Every navigation target, view toggle, section command and project proposal. A section's fixed
+ * views each get an "Open Compare · Swipe stage" entry (an explicit view; choosing it is a user choice
+ * the chrome may remember). When a shell hosts Design (`source.hosted`) the sidebar is not rendered, so
+ * its toggle is omitted; the inspector toggle and every other entry stay.
+ */
 export function buildCommands(source: PaletteSource): readonly PaletteCommand[] {
   const commands: PaletteCommand[] = DESIGN_NAV_IDS.map((nav) => ({
     id: `nav:${nav}`, title: `Go to ${NAV_LABELS[nav]}`, group: 'Go to', keywords: [nav],
@@ -39,8 +44,15 @@ export function buildCommands(source: PaletteSource): readonly PaletteCommand[] 
       id: `section:${section.id}`, title: `Open ${section.title}`, group: 'Sections',
       keywords: [section.id, NAV_LABELS[section.nav]], action: { type: 'navigate', location: { nav: section.nav, section: section.id } },
     });
+    for (const route of section.subRoutes?.fixed ?? []) {
+      commands.push({
+        id: `sub:${section.id}:${route.id}`, title: `Open ${section.title} · ${route.title}`, group: 'Sections',
+        keywords: [section.id, route.id, route.title, NAV_LABELS[section.nav]],
+        action: { type: 'navigate', location: { nav: section.nav, section: section.id, sub: route.id } },
+      });
+    }
   }
-  for (const panel of ['sidebar', 'inspector'] as const) {
+  for (const panel of source.hosted === true ? ['inspector'] as const : ['sidebar', 'inspector'] as const) {
     commands.push({
       id: `toggle:${panel}`, title: `${source.visible[panel] ? 'Hide' : 'Show'} ${panel}`, group: 'View',
       keywords: ['panel', 'toggle'], action: { type: 'toggle-panel', panel },

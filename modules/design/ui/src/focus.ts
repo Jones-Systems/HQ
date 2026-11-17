@@ -1,15 +1,22 @@
-import { DESIGN_NAV_IDS, type DesignLocation, type DesignNavId } from '../contract.ts';
+import { DESIGN_NAV_IDS, type DesignLocation, type DesignNavId, type SectionSubRoutes } from '../contract.ts';
 import { NAV_LABELS } from './navigation.ts';
 import type { PanelId } from './panels.ts';
 
 /** Landmark regions in F6 order. */
 export const REGIONS = ['bar', 'sidebar', 'main', 'inspector'] as const;
 export type Region = (typeof REGIONS)[number];
+/**
+ * F6 order when a shell hosts Design and owns navigation: the page head is not a landmark, so F6
+ * cycles the workspace and the inspector only.
+ */
+export const HOSTED_REGIONS: readonly Region[] = ['main', 'inspector'];
 
 export interface SectionSummary {
   readonly id: string;
   readonly title: string;
   readonly nav: DesignNavId;
+  /** Routing metadata copied from the descriptor; absent for sections without alternate views. */
+  readonly subRoutes?: SectionSubRoutes;
 }
 
 export type StopAction =
@@ -36,9 +43,14 @@ export interface ChromeView {
   readonly squeezed?: readonly PanelId[];
   /** Most recent section per nav area, restored when returning to that area. */
   readonly lastSection: Readonly<Partial<Record<DesignNavId, string>>>;
+  /**
+   * A shell hosts Design and owns navigation (the module-nav context is on). The area buttons, the
+   * sidebar, its splitter and its toggle are not rendered, so they are not stops. Absent means false.
+   */
+  readonly hosted?: boolean;
 }
 
-export function navTarget(view: ChromeView, nav: DesignNavId): DesignLocation {
+export function navTarget(view: Pick<ChromeView, 'sectionsByNav' | 'lastSection'>, nav: DesignNavId): DesignLocation {
   const remembered = view.lastSection[nav];
   const sections = view.sectionsByNav[nav];
   const section = remembered !== undefined && sections.some((item) => item.id === remembered) ? remembered : sections[0]?.id ?? null;
@@ -50,19 +62,20 @@ export function navTarget(view: ChromeView, nav: DesignNavId): DesignLocation {
  * order, so the keyboard model and the DOM cannot drift apart.
  */
 export function tabStops(view: ChromeView): readonly TabStop[] {
-  const stops: TabStop[] = DESIGN_NAV_IDS.map((nav) => ({
+  const hosted = view.hosted === true;
+  const stops: TabStop[] = hosted ? [] : DESIGN_NAV_IDS.map((nav) => ({
     id: `nav:${nav}`, region: 'bar', label: NAV_LABELS[nav], action: { type: 'navigate', location: navTarget(view, nav) },
   }));
   stops.push({ id: 'palette', region: 'bar', label: 'Command palette', action: { type: 'open-palette' } });
-  for (const panel of ['sidebar', 'inspector'] as const) {
+  for (const panel of hosted ? ['inspector'] as const : ['sidebar', 'inspector'] as const) {
     stops.push({ id: `toggle:${panel}`, region: 'bar', label: `${view.visible[panel] ? 'Hide' : 'Show'} ${panel}`, action: { type: 'toggle-panel', panel } });
   }
-  if (view.visible.sidebar) {
+  if (view.visible.sidebar && !hosted) {
     for (const section of view.sectionsByNav[view.location.nav]) {
       stops.push({ id: `section:${section.id}`, region: 'sidebar', label: section.title, action: { type: 'navigate', location: { nav: section.nav, section: section.id } } });
     }
   }
-  if (!view.squeezed?.includes('sidebar')) {
+  if (!hosted && !view.squeezed?.includes('sidebar')) {
     stops.push({ id: 'splitter:sidebar', region: 'sidebar', label: 'Resize sidebar', action: { type: 'resize', panel: 'sidebar' } });
   }
   stops.push({ id: 'workspace', region: 'main', label: 'Workspace', action: { type: 'none' } });
@@ -75,9 +88,12 @@ export function tabStops(view: ChromeView): readonly TabStop[] {
   return stops;
 }
 
-/** F6 / Shift+F6: first stop of the next populated region, wrapping. */
-export function regionStop(stops: readonly TabStop[], currentId: string | null, backwards: boolean): TabStop | null {
-  const populated = REGIONS.filter((region) => stops.some((stop) => stop.region === region));
+/**
+ * F6 / Shift+F6: first stop of the next populated region, wrapping. `regions` is the cycle; a stop in a
+ * region outside it (the hosted page head) starts the cycle from its edge.
+ */
+export function regionStop(stops: readonly TabStop[], currentId: string | null, backwards: boolean, regions: readonly Region[] = REGIONS): TabStop | null {
+  const populated = regions.filter((region) => stops.some((stop) => stop.region === region));
   if (populated.length === 0) return null;
   const current = stops.find((stop) => stop.id === currentId)?.region;
   const index = current === undefined ? -1 : populated.indexOf(current);
@@ -116,7 +132,12 @@ export type Shortcut =
   | { readonly type: 'dismiss' }
   | { readonly type: 'region'; readonly backwards: boolean }
   | { readonly type: 'nav'; readonly nav: DesignNavId }
-  | { readonly type: 'toggle-panel'; readonly panel: PanelId };
+  | { readonly type: 'toggle-panel'; readonly panel: PanelId }
+  /**
+   * Mod+\ while a shell hosts Design: the shell's navigation toggle. Design leaves the key alone
+   * (no preventDefault, nothing toggled) so the shell's own handler receives it.
+   */
+  | { readonly type: 'host-nav-toggle' };
 
 export const SHORTCUT_HINTS: readonly { readonly keys: string; readonly action: string }[] = [
   { keys: 'Mod+K', action: 'Command palette' },
@@ -127,19 +148,37 @@ export const SHORTCUT_HINTS: readonly { readonly keys: string; readonly action: 
   { keys: 'Escape', action: 'Close palette or prompt' },
 ];
 
+/** The hints shown in the inspector. Hosted, the sidebar toggle belongs to the shell's navigation. */
+export function shortcutHints(hosted: boolean): readonly { readonly keys: string; readonly action: string }[] {
+  if (!hosted) return SHORTCUT_HINTS;
+  return SHORTCUT_HINTS.map((hint) => (hint.keys === 'Mod+\\' ? { keys: hint.keys, action: 'Expand or compact navigation' } : hint));
+}
+
+/**
+ * Whether Design opens its own palette for a Mod+K. Standalone it always does. Hosted, only when the
+ * event target is inside the Design chrome: body focus, the shell's navigation and other domains open the
+ * shell's palette, so the result never depends on listener order.
+ */
+export function ownsPalette(hosted: boolean, targetInsideChrome: boolean): boolean {
+  return !hosted || targetInsideChrome;
+}
+
 /**
  * Chrome-level shortcuts. While typing, only the palette, region and dismiss
  * keys apply so text entry never triggers navigation. `Mod` is ⌘ on macOS and
- * Ctrl elsewhere.
+ * Ctrl elsewhere. `hosted` is true while a shell owns navigation: Mod+\ is then forwarded.
  */
-export function resolveShortcut(input: KeyInput, mac: boolean): Shortcut | null {
+export function resolveShortcut(input: KeyInput, mac: boolean, hosted = false): Shortcut | null {
   const mod = mac ? input.metaKey && !input.ctrlKey : input.ctrlKey && !input.metaKey;
   const key = input.key.length === 1 ? input.key.toLowerCase() : input.key;
   if (mod && !input.altKey && !input.shiftKey && key === 'k') return { type: 'palette' };
   if (key === 'Escape' && !mod && !input.altKey) return { type: 'dismiss' };
   if (key === 'F6' && !mod && !input.altKey) return { type: 'region', backwards: input.shiftKey };
   if (input.editable) return null;
-  if (mod && !input.altKey && (key === '\\' || key === '|')) return { type: 'toggle-panel', panel: input.shiftKey ? 'inspector' : 'sidebar' };
+  if (mod && !input.altKey && (key === '\\' || key === '|')) {
+    if (input.shiftKey) return { type: 'toggle-panel', panel: 'inspector' };
+    return hosted ? { type: 'host-nav-toggle' } : { type: 'toggle-panel', panel: 'sidebar' };
+  }
   const digit = /^Digit([1-5])$/u.exec(input.code);
   if (input.altKey && !mod && !input.shiftKey && digit) {
     const nav = DESIGN_NAV_IDS[Number(digit[1]) - 1];

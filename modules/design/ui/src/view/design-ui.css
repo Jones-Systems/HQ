@@ -29,6 +29,15 @@
 .hqd-chrome .hqd-icon-button[aria-pressed="true"] { color: var(--hq-text-selected, var(--hqd-text)); background: var(--hqd-selected); }
 .hqd-chrome .hqd-icon-button[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 
+/* Hosted by a shell (module-nav context on): the shell owns navigation, so the bar is a page head. */
+.hqd-chrome .hqd-pagehead { gap: 16px; }
+.hqd-chrome .hqd-crumb { flex: 1; min-width: 0; }
+.hqd-chrome .hqd-crumb ol { display: flex; align-items: center; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.hqd-chrome .hqd-crumb li { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--hqd-muted); }
+.hqd-chrome .hqd-crumb li:not(:last-child) { flex-shrink: 4; }
+.hqd-chrome .hqd-crumb li + li::before { content: "/"; padding: 0 8px; color: var(--hqd-muted); }
+.hqd-chrome .hqd-crumb li:last-child { color: var(--hqd-text); font-weight: 600; }
+
 /* Panels */
 .hqd-chrome .hqd-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 .hqd-chrome .hqd-sidebar, .hqd-chrome .hqd-inspector { flex: none; overflow: auto; padding: 16px 12px; background: var(--hqd-surface); }
