@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import zlib from 'node:zlib';
 import type { DesignServiceTransport, DesignServiceRoute, DesignServiceParams, DesignServiceValues, DesignStorageResult, ImportPickResult } from '@hq/contracts/services';
 import { authoringDigest } from '../canonical.ts';
 import { createTransportDouble } from './bridge-double.ts';
@@ -81,4 +82,124 @@ export function syntheticImportPng(width: number, height: number, seed = 0): Uin
   bytes.set([8, 6, 0, 0, 0], 24);
   bytes[40] = seed;
   return bytes;
+}
+
+// ------------------------------------------------------------------------------ real PNG builder (test-only)
+
+export type BuiltPngColorType = 0 | 2 | 3 | 4 | 6;
+export const PNG_CHANNELS: Readonly<Record<BuiltPngColorType, number>> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
+
+export interface BuiltPngOptions {
+  readonly width: number;
+  readonly height: number;
+  /** Default 6 (RGBA). */
+  readonly colorType?: BuiltPngColorType;
+  /** IHDR bit depth. Default 8. Anything else only changes the header: the image data is still written as 8-bit. */
+  readonly depth?: number;
+  /** IHDR interlace method. Default 0. Anything else only changes the header. */
+  readonly interlace?: number;
+  /** Unfiltered samples, `width * height * channels` bytes. Default: seeded noise. */
+  readonly samples?: Uint8Array;
+  readonly seed?: number;
+  /** Filter type applied to every scanline. Default 0. */
+  readonly filter?: 0 | 1 | 2 | 3 | 4;
+  /** Palette as RGB triples (colour type 3). */
+  readonly palette?: Uint8Array;
+  /** A tRNS chunk, written after PLTE. */
+  readonly trns?: Uint8Array;
+  /** Split the zlib stream across this many IDAT chunks. Default 1. */
+  readonly idatChunks?: number;
+  readonly level?: number;
+  /** Changes the raw (filtered, uncompressed) scanline bytes before they are compressed. */
+  readonly rawTransform?: (raw: Uint8Array) => Uint8Array;
+  /** Changes the compressed zlib stream before it is split into IDAT chunks. */
+  readonly zlibTransform?: (stream: Uint8Array) => Uint8Array;
+  /** Extra chunks written right before the first IDAT. */
+  readonly extraChunks?: readonly { readonly type: string; readonly data: Uint8Array }[];
+  readonly omitIend?: boolean;
+}
+
+/** Deterministic noise (xorshift32): incompressible, identical on every run. */
+export function noiseSamples(length: number, seed = 1): Uint8Array {
+  const out = new Uint8Array(length);
+  let state = (seed * 2654435761 + 1) >>> 0 || 1;
+  for (let i = 0; i < length; i += 1) {
+    state ^= state << 13; state >>>= 0;
+    state ^= state >>> 17;
+    state ^= state << 5; state >>>= 0;
+    out[i] = state & 0xff;
+  }
+  return out;
+}
+
+const paethPredictor = (a: number, b: number, c: number): number => {
+  const p = a + b - c;
+  const [pa, pb, pc] = [Math.abs(p - a), Math.abs(p - b), Math.abs(p - c)];
+  return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+};
+
+/** Scanlines of `samples` with filter type `type` on every row (the reverse of what a decoder does). */
+export function filterScanlines(samples: Uint8Array, width: number, height: number, channels: number, type: number): Uint8Array {
+  const stride = width * channels;
+  const out = new Uint8Array(height * (1 + stride));
+  for (let y = 0; y < height; y += 1) {
+    out[y * (1 + stride)] = type;
+    for (let i = 0; i < stride; i += 1) {
+      const x = samples[y * stride + i]!;
+      const left = i >= channels ? samples[y * stride + i - channels]! : 0;
+      const up = y > 0 ? samples[(y - 1) * stride + i]! : 0;
+      const upLeft = y > 0 && i >= channels ? samples[(y - 1) * stride + i - channels]! : 0;
+      const predicted = type === 0 ? 0 : type === 1 ? left : type === 2 ? up : type === 3 ? (left + up) >> 1 : paethPredictor(left, up, upLeft);
+      out[y * (1 + stride) + 1 + i] = (x - predicted) & 0xff;
+    }
+  }
+  return out;
+}
+
+/** One PNG chunk (length, type, data, CRC-32). */
+export function pngChunkBytes(type: string, data: Uint8Array): Uint8Array {
+  const out = new Uint8Array(12 + data.length);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, data.length);
+  out.set(Buffer.from(type, 'latin1'), 4);
+  out.set(data, 8);
+  view.setUint32(8 + data.length, zlib.crc32(out.subarray(4, 8 + data.length)));
+  return out;
+}
+
+/** A real, decodable PNG built with `node:zlib` (the encoder is independent of the code under test). */
+export function buildPng(options: BuiltPngOptions): Uint8Array {
+  const { width, height } = options;
+  const colorType = options.colorType ?? 6;
+  const channels = PNG_CHANNELS[colorType];
+  const samples = options.samples ?? noiseSamples(width * height * channels, options.seed ?? 1);
+  if (samples.length !== width * height * channels) throw new Error('samples do not match the image size');
+  const ihdr = new Uint8Array(13);
+  const view = new DataView(ihdr.buffer);
+  view.setUint32(0, width);
+  view.setUint32(4, height);
+  ihdr.set([options.depth ?? 8, colorType, 0, 0, options.interlace ?? 0], 8);
+  let raw = filterScanlines(samples, width, height, channels, options.filter ?? 0);
+  if (options.rawTransform !== undefined) raw = options.rawTransform(raw);
+  let stream: Uint8Array = zlib.deflateSync(raw, { level: options.level ?? 1 });
+  if (options.zlibTransform !== undefined) stream = options.zlibTransform(stream);
+  const chunks: Uint8Array[] = [Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), pngChunkBytes('IHDR', ihdr)];
+  if (options.palette !== undefined) chunks.push(pngChunkBytes('PLTE', options.palette));
+  if (options.trns !== undefined) chunks.push(pngChunkBytes('tRNS', options.trns));
+  for (const extra of options.extraChunks ?? []) chunks.push(pngChunkBytes(extra.type, extra.data));
+  const parts = Math.max(1, Math.min(options.idatChunks ?? 1, stream.length));
+  const size = Math.ceil(stream.length / parts);
+  for (let start = 0; start < stream.length; start += size) chunks.push(pngChunkBytes('IDAT', stream.subarray(start, start + size)));
+  if (options.omitIend !== true) chunks.push(pngChunkBytes('IEND', new Uint8Array(0)));
+  const out = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.length, 0));
+  let at = 0;
+  for (const chunk of chunks) { out.set(chunk, at); at += chunk.length; }
+  return out;
+}
+
+/** A real RGBA noise PNG larger than the 2 MiB Projects thumbnail cap (about 2.16 MB). Synthetic only. */
+export function largeImportPng(seed = 1, width = 900, height = 600): Uint8Array {
+  const png = buildPng({ width, height, seed });
+  if (png.byteLength <= 2 * 1024 * 1024) throw new Error('the large test PNG must exceed the 2 MiB thumbnail cap');
+  return png;
 }

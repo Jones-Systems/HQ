@@ -31,6 +31,8 @@ const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const DECIMAL_REVISION = /^[1-9][0-9]*$/u;
 /** The host refuses an import batch above this many canonical bytes (`IMPORT_LIMITS.totalBytes`). */
 const IMPORT_TOTAL_BYTES = 64 * 1024 * 1024;
+/** The host refuses an import batch with more operations than this. */
+const IMPORT_MAX_OPS = 10_000;
 const BLOB_BYTES = 16 * 1024 * 1024;
 const FETCH_CHUNK = 16;
 
@@ -47,14 +49,25 @@ export const IMPORTS_CONTEXTS: Readonly<Record<ImportsOperation | 'pick', Design
   export: { section: 'imports', operation: 'imports.export', action: 'create the backup', write: false },
 });
 
+/** What the importer's own operations leave free under the host limits, and a way to read a stored blob. */
+export interface ImportsLinkContext {
+  /** Reads a workspace blob that is not in this batch (digest-verified by the port). `null` on any failure. */
+  readonly readBlob: (digest: string) => Promise<Uint8Array | null>;
+  /** Canonical bytes still free under the host limit after the importer's own operations. */
+  readonly remainingBytes: number;
+  /** Operations still free under the host limit after the importer's own operations. */
+  readonly remainingOps: number;
+}
+
 /** Operations that change project content alongside the imports records they commit. */
 export interface ImportsCommitLink {
   /**
    * Extra operations for the SAME atomic batch (keys are already host keys, such as `design/projects/...`), plus the
    * projects whose content they change. `read` reads an imports document (`imports/...` key) from storage.
-   * Planning performs no write.
+   * Planning performs no write. `context` says how much of the host limits the importer's own operations left, so
+   * a link can add optional blobs without ever being the reason a batch is refused.
    */
-  plan(ops: readonly WriteOp[], read: (key: string) => Promise<StoredDocument | null>):
+  plan(ops: readonly WriteOp[], read: (key: string) => Promise<StoredDocument | null>, context?: ImportsLinkContext):
     Promise<{ readonly ops: readonly WriteOp[]; readonly projects: readonly string[] }>;
   /** The batch was sent and project content may have changed: it landed, was refused or has an unknown outcome. Readers should re-read. */
   changed(project: string): void;
@@ -123,11 +136,16 @@ function toWireOp(op: WriteOp, keys: 'imports' | 'host'): WireOp {
   throw new DesignBridgeError('invalid');
 }
 
+/** Canonical size the host counts for one blob of `byteLength` bytes: base64 plus 256 bytes of envelope. */
+export function blobCanonicalBytes(byteLength: number): number {
+  return Math.ceil(byteLength / 3) * 4 + 256;
+}
+
 /** Canonical size the host will count: documents and events as JSON, blobs as base64. */
 function canonicalBytes(ops: readonly WireOp[]): number {
   const encoder = new TextEncoder();
   let total = 0;
-  for (const op of ops) total += op.op === 'put-blob' ? Math.ceil(op.bytes.byteLength / 3) * 4 + 256 : encoder.encode(JSON.stringify(op)).byteLength;
+  for (const op of ops) total += op.op === 'put-blob' ? blobCanonicalBytes(op.bytes.byteLength) : encoder.encode(JSON.stringify(op)).byteLength;
   return total;
 }
 
@@ -200,9 +218,13 @@ export function createImportsBridgeStorage(options: ImportsBridgeOptions): Stora
     async commit(ops) {
       if (!Array.isArray(ops) || ops.length === 0) throw new DesignBridgeError('invalid');
       const wire = ops.map((op) => toWireOp(op, 'imports'));
-      const linked = link === undefined ? { ops: [], projects: [] } : await link.plan(ops, (key) => getDocument(WORKSPACE, key));
+      const linked = link === undefined ? { ops: [], projects: [] } : await link.plan(ops, (key) => getDocument(WORKSPACE, key), {
+        readBlob: async (digest) => { try { return await port.getBlob(WORKSPACE, digest as Sha256Digest); } catch { return null; } },
+        remainingBytes: IMPORT_TOTAL_BYTES - canonicalBytes(wire),
+        remainingOps: IMPORT_MAX_OPS - wire.length,
+      });
       wire.push(...linked.ops.map((op) => toWireOp(op, 'host')));
-      if (wire.length > 10_000 || canonicalBytes(wire) > IMPORT_TOTAL_BYTES) {
+      if (wire.length > IMPORT_MAX_OPS || canonicalBytes(wire) > IMPORT_TOTAL_BYTES) {
         throw new DesignOperationError(designFailure('too-large', IMPORTS_CONTEXTS[commitOperation(ops)], { reason: 'import-total' }));
       }
       const changed = () => { for (const project of linked.projects) link?.changed(project); };

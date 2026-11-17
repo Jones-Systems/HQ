@@ -1,19 +1,22 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
+import type { DesignServiceParams } from '@hq/contracts/services';
 import { createBridgeWorkspaceDocuments } from '../bridge-documents.ts';
 import { createBridgedWorkspace } from '../bridged-workspace.ts';
 import { createProjectContentEvents } from '../content-events.ts';
 import { classifyDesignError, designFeedback, DesignOperationError } from '../errors.ts';
-import { IMPORTS_CONTEXTS } from '../imports-storage.ts';
+import { createImportsContentLink } from '../imports-content-link.ts';
+import { blobCanonicalBytes, IMPORTS_CONTEXTS, type ImportsLinkContext } from '../imports-storage.ts';
 import { createWorkspaceThumbnailPort } from '../thumbnail-port.ts';
 import { createProjectsStorage } from '../../storage/index.ts';
 import { createImportsController, type ImportsController } from '../../../imports/src/controller.ts';
 import { applyImport, editImportedRecord, listRecords, planImport, type ImportPlan } from '../../../imports/src/importer.ts';
-import { projectId as importsProject } from '../../../imports/src/contract.ts';
+import { projectId as importsProject, SCHEMAS, type WriteOp } from '../../../imports/src/contract.ts';
 import { CONTENT_SCHEMA, summarize } from '../../../projects/src/content.ts';
 import { projectId as contentProject } from '../../../projects/src/ids.ts';
 import { ProjectContentRepository, contentKey } from '../../../projects/src/repository.ts';
-import { createImportsDouble, syntheticImportPng } from './imports-bridge-double.ts';
+import { buildPng, createImportsDouble, largeImportPng, syntheticImportPng } from './imports-bridge-double.ts';
 
 const project = { id: 'proj-imports-env', name: 'Imports env' };
 const CONTENT_DOCUMENT = `design/projects/${contentKey(contentProject(project.id))}`;
@@ -379,5 +382,273 @@ describe('typed Imports failures reach the view', () => {
     assert.equal(f.controller.getState().outcome?.title, 'The import had landed');
     assert.equal(f.controller.getState().outcome?.reconciles, true);
     assert.equal(f.commitCount(), writes, 'history refresh and Check never repeat the unknown write');
+  });
+});
+
+describe('large accepted PNGs get a deterministic thumbnail in the same atomic import', () => {
+  const MIB2 = 2 * 1024 * 1024;
+  const sha = (bytes: Uint8Array) => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  type Op = DesignServiceParams['import.commit']['ops'][number];
+  const blobsOf = (ops: readonly Op[]) => ops.filter((op): op is Extract<Op, { op: 'put-blob' }> => op.op === 'put-blob');
+  const dimensions = (bytes: Uint8Array) => { const view = new DataView(bytes.buffer, bytes.byteOffset); return [view.getUint32(16), view.getUint32(20)]; };
+  const large = (name: string, seed = 1, width = 900, height = 600): Picked => ({ name, mediaType: 'image/png', bytes: largeImportPng(seed, width, height) });
+  const thumbnailOf = (ops: readonly Op[], source: Uint8Array) => blobsOf(ops).filter((op) => op.digest !== sha(source));
+
+  it('carries a thumbnail blob in the same import.commit, and the linked version points at it', async () => {
+    const f = setup();
+    const file = large('poster.png');
+    assert.ok(file.bytes.byteLength > MIB2, 'the fixture is over the Projects thumbnail cap');
+    f.pick(file);
+    await f.controller.choose();
+    await f.controller.apply();
+    assert.equal(f.controller.getState().status, 'applied', f.controller.getState().message ?? '');
+    assert.equal(f.commitCount(), 1, 'one atomic batch');
+    assert.equal(f.double.count('doc.put'), 0);
+    const ops = f.double.commits[0]!.ops;
+    assert.equal(blobsOf(ops).length, 2, 'the accepted image and one thumbnail');
+    const [thumb] = thumbnailOf(ops, file.bytes);
+    assert.ok(thumb, 'a thumbnail blob');
+    assert.equal(thumb.mediaType, 'image/png');
+    assert.equal(thumb.digest, sha(thumb.bytes));
+    assert.ok(thumb.bytes.byteLength <= MIB2);
+    const contentIndex = ops.findIndex((op) => op.op === 'put-document' && op.key === CONTENT_DOCUMENT);
+    assert.ok(contentIndex > ops.indexOf(thumb), 'the thumbnail blob comes before the content document that points at it');
+    assert.deepEqual(dimensions(thumb.bytes), [512, 341]);
+
+    const version = (await f.content()).versions[0]!;
+    assert.deepEqual(version.thumbnail, { digest: thumb.digest, mediaType: 'image/png', bytes: thumb.bytes.byteLength, w: 512, h: 341 });
+    assert.ok(Math.max(version.thumbnail!.w!, version.thumbnail!.h!) <= 512);
+    // Marks bind to the real pixels, never to the thumbnail.
+    assert.equal(version.capture.captureDigest, sha(file.bytes));
+    assert.notEqual(version.capture.captureDigest, version.thumbnail!.digest);
+    assert.deepEqual(version.capture.viewport, { w: 900, h: 600, dpr: 1 });
+    const resolved = await createWorkspaceThumbnailPort(f.documents).readThumbnail(version.thumbnail!, new AbortController().signal);
+    assert.deepEqual([resolved.mediaType, [...resolved.bytes]], ['image/png', [...thumb.bytes]]);
+    assert.deepEqual(f.notified, [1]);
+  });
+
+  it('keeps rights, provenance and deterministic IDs on the imports records; the thumbnail is a pure function of the image', async () => {
+    const [a, b] = [setup(), setup()];
+    const file = large('poster.png', 3);
+    const digests: string[] = [];
+    for (const f of [a, b]) {
+      f.pick(file);
+      await f.controller.choose();
+      await f.controller.apply();
+      digests.push((await f.content()).versions[0]!.thumbnail!.digest);
+    }
+    assert.equal(digests[0], digests[1], 'two independent imports of the same bytes make the same thumbnail');
+    assert.deepEqual((await a.content()).versions[0]!.id, (await b.content()).versions[0]!.id);
+    const record = (await listRecords(a.env.deps, importsProject(project.id)))[0]!;
+    assert.match(record.versionId, /^ver_[0-9a-f]{32}$/u);
+    const stored = a.double.documents.get(`design/imports/versions/${record.versionId}`)!.value as { content: { digest: string; bytes: number }; rights: { basis: string }; provenance: { itemKey: string } };
+    assert.equal(stored.content.digest, sha(file.bytes), 'the imports version still describes the full image');
+    assert.equal(stored.content.bytes, file.bytes.byteLength);
+    assert.equal(stored.rights.basis, 'owned');
+    assert.equal(stored.provenance.itemKey, 'poster.png');
+  });
+
+  it('re-picking the identical file makes no commit and no thumbnail', async () => {
+    const f = setup();
+    f.pick(large('poster.png'));
+    await f.controller.choose();
+    await f.controller.apply();
+    const before = JSON.stringify([...f.double.documents.entries()]);
+    const blobs = f.double.blobs.size;
+    f.pick(large('poster.png'));
+    await f.controller.choose();
+    assert.equal(f.controller.getState().summary?.canApply, false);
+    assert.match(f.controller.getState().summary?.headline ?? '', /^Already imported/u);
+    await f.controller.apply();
+    assert.equal(f.commitCount(), 1);
+    assert.equal(JSON.stringify([...f.double.documents.entries()]), before);
+    assert.equal(f.double.blobs.size, blobs);
+    assert.deepEqual(f.notified, [1]);
+  });
+
+  it('a large PNG that cannot be decoded is imported and linked with no thumbnail, and the import succeeds', async () => {
+    const f = setup();
+    const interlaced = { name: 'interlaced.png', mediaType: 'image/png' as const, bytes: buildPng({ width: 900, height: 600, interlace: 1, seed: 4 }) };
+    const padded = new Uint8Array(MIB2 + 4096);
+    padded.set(syntheticImportPng(640, 480, 9));
+    f.pick(interlaced, { name: 'header-only.png', mediaType: 'image/png', bytes: padded });
+    await f.controller.choose();
+    await f.controller.apply();
+    assert.equal(f.controller.getState().status, 'applied', f.controller.getState().message ?? '');
+    const ops = f.double.commits[0]!.ops;
+    assert.equal(blobsOf(ops).length, 2, 'only the two accepted images: no thumbnail blob');
+    const content = await f.content();
+    assert.equal(content.versions.length, 2, 'both are linked');
+    assert.deepEqual(content.versions.map((version) => version.thumbnail), [undefined, undefined]);
+    assert.ok(content.versions.every((version) => version.capture.captureDigest !== undefined));
+  });
+
+  it('the same image under two names is two versions with one thumbnail blob operation', async () => {
+    const f = setup();
+    const png = largeImportPng(5);
+    f.pick({ name: 'one.png', mediaType: 'image/png', bytes: png }, { name: 'two.png', mediaType: 'image/png', bytes: new Uint8Array(png) });
+    await f.controller.choose();
+    await f.controller.apply();
+    assert.equal(f.controller.getState().status, 'applied', f.controller.getState().message ?? '');
+    const ops = f.double.commits[0]!.ops;
+    assert.equal(blobsOf(ops).length, 2, 'one image blob and one thumbnail blob');
+    const content = await f.content();
+    assert.equal(content.versions.length, 2);
+    assert.equal(content.versions[0]!.thumbnail!.digest, content.versions[1]!.thumbnail!.digest);
+    assert.equal(blobsOf(ops).filter((op) => op.digest === content.versions[0]!.thumbnail!.digest).length, 1);
+    assert.equal(content.views.length, 2);
+  });
+
+  it('a PNG at or under 2 MiB behaves exactly as before: it is its own thumbnail, with no extra blob', async () => {
+    const f = setup();
+    const png = buildPng({ width: 400, height: 300, seed: 6 });
+    assert.ok(png.byteLength > 400_000 && png.byteLength <= MIB2);
+    f.pick({ name: 'small.png', mediaType: 'image/png', bytes: png }, pngFile('header.png', 2, 320, 200));
+    await f.controller.choose();
+    await f.controller.apply();
+    const ops = f.double.commits[0]!.ops;
+    assert.equal(blobsOf(ops).length, 2, 'the two accepted images only');
+    for (const version of (await f.content()).versions) {
+      assert.equal(version.thumbnail!.digest, version.capture.captureDigest);
+    }
+    assert.equal((await f.content()).versions.find((version) => version.label === 'Imported small.png')!.thumbnail!.bytes, png.byteLength);
+  });
+
+  it('taking the incoming version after a conflict generates the thumbnail from the stored blob', async () => {
+    const f = setup();
+    f.pick(pngFile('a.png', 1));
+    await f.controller.choose();
+    await f.controller.apply();
+    for (const record of await listRecords(f.env.deps, importsProject(project.id))) await editImportedRecord(f.env.deps, record.recordId, { title: 'Mine' });
+    const incoming = large('a.png', 7);
+    f.pick(incoming);
+    await f.controller.choose();
+    await f.controller.apply();
+    await f.controller.refresh();
+    assert.equal(f.controller.getState().conflicts.length, 1);
+    assert.equal(blobsOf(f.double.commits.at(-1)!.ops).length, 1, 'the conflict batch stores the evidence image and links nothing');
+    assert.equal((await f.content()).versions.length, 1);
+    const blobReads = f.double.count('blob.get');
+    await f.controller.resolve(f.controller.getState().conflicts[0]!.recordId, 'take-incoming');
+    const resolveOps = f.double.commits.at(-1)!.ops;
+    assert.equal(blobsOf(resolveOps).length, 1, 'no image blob in this batch (it is already stored), only the new thumbnail');
+    assert.ok(f.double.count('blob.get') > blobReads, 'the source image was read back from storage');
+    const taken = (await f.content()).versions.at(-1)!;
+    assert.equal(taken.thumbnail!.digest, blobsOf(resolveOps)[0]!.digest);
+    assert.equal(taken.capture.captureDigest, sha(incoming.bytes));
+    assert.deepEqual(dimensions(blobsOf(resolveOps)[0]!.bytes), [512, 341]);
+  });
+
+  it('a batch whose own operations nearly fill the 64 MiB limit still succeeds, without a thumbnail', { timeout: 120_000 }, async () => {
+    const f = setup();
+    const files = [1, 2, 3].map((seed): Picked => ({ name: `huge-${seed}.png`, mediaType: 'image/png', bytes: largeImportPng(seed, 2030, 2030) }));
+    for (const file of files) assert.ok(file.bytes.byteLength > 16_400_000 && file.bytes.byteLength < 16 * 1024 * 1024);
+    f.pick(...files);
+    await f.controller.choose();
+    await f.controller.apply();
+    assert.equal(f.controller.getState().status, 'applied', f.controller.getState().message ?? '');
+    const ops = f.double.commits[0]!.ops;
+    assert.equal(blobsOf(ops).length, 3, 'only the accepted images');
+    const canonical = ops.reduce((sum, op) => sum + (op.op === 'put-blob' ? blobCanonicalBytes(op.bytes.byteLength) : new TextEncoder().encode(JSON.stringify(op)).byteLength), 0);
+    assert.ok(canonical <= 64 * 1024 * 1024 && canonical > 64 * 1024 * 1024 - 1_400_000, `the batch is within the limit and has no room for a thumbnail (${canonical})`);
+    const content = await f.content();
+    assert.equal(content.versions.length, 3, 'every image is linked');
+    assert.deepEqual(content.versions.map((version) => version.thumbnail), [undefined, undefined, undefined]);
+  });
+});
+
+describe('the content link plans thumbnails inside the host limits', () => {
+  /** Synthetic link input: records and versions as an import batch would carry them, each pointing at a stored large PNG. */
+  async function linkInputs(entries: readonly { n: number; width: number; height: number; digest: string }[]) {
+    const f = setup();
+    const ops: WriteOp[] = [];
+    for (const { n, width, height, digest } of entries) {
+      const hex = n.toString(16).padStart(32, '0');
+      const [viewId, versionId] = [`view_${hex}`, `ver_${hex}`];
+      const version = { schema: SCHEMAS.version, versionId, viewId, projectId: project.id,
+        content: { kind: 'image', digest, mediaType: 'image/png', bytes: 3_000_000, w: width, h: height }, rights: { basis: 'owned', holder: 'Owner' }, provenance: { originalName: `n${n}.png` } };
+      const record = { schema: SCHEMAS.record, recordId: `rec_${hex}`, projectId: project.id, viewId, versionId, title: `n${n}`, tombstone: null };
+      ops.push({ op: 'put-document', namespace: 'workspace', key: `imports/versions/${versionId}`, value: version as never, expectedRevision: null },
+        { op: 'put-document', namespace: 'workspace', key: `imports/records/rec_${hex}`, value: record as never, expectedRevision: null });
+    }
+    const link = createImportsContentLink({ repository: f.repository, clock: { now: () => '2026-11-17T00:00:00.000Z' }, documentKey: () => CONTENT_DOCUMENT, notify: () => {} });
+    const read = async () => null;
+    return { link, ops, read };
+  }
+
+  const source = largeImportPng(2);
+  const context = (overrides: Partial<ImportsLinkContext> = {}, reads: string[] = []): ImportsLinkContext => ({
+    readBlob: async (digest) => { reads.push(digest); return new Uint8Array(source); }, remainingBytes: 64 * 1024 * 1024, remainingOps: 10_000, ...overrides,
+  });
+  const digest = (n: number) => `sha256:${n.toString(16).padStart(64, '0')}`;
+  const thumbsIn = (ops: readonly WriteOp[]) => ops.filter((op) => op.op === 'put-blob');
+  const contentVersions = (ops: readonly WriteOp[]) => ((ops.find((op) => op.op === 'put-document')! as unknown as { value: { versions: { thumbnail?: unknown }[] } }).value.versions);
+
+  it('adds one thumbnail blob before the content document when the batch has room', async () => {
+    const { link, ops, read } = await linkInputs([{ n: 1, width: 900, height: 600, digest: digest(1) }]);
+    const planned = await link.plan(ops, read, context());
+    assert.deepEqual(planned.ops.map((op) => op.op), ['put-blob', 'put-document']);
+    assert.deepEqual(planned.projects, [project.id]);
+    assert.ok(contentVersions(planned.ops)[0]!.thumbnail);
+  });
+
+  it('without a context there is no source to read: the version links with no thumbnail', async () => {
+    const { link, ops, read } = await linkInputs([{ n: 1, width: 900, height: 600, digest: digest(1) }]);
+    const planned = await link.plan(ops, read);
+    assert.deepEqual(planned.ops.map((op) => op.op), ['put-document']);
+    assert.equal(contentVersions(planned.ops)[0]!.thumbnail, undefined);
+  });
+
+  it('skips the thumbnail, and never reads the image, when the free bytes cannot hold it', async () => {
+    const { link, ops, read } = await linkInputs([{ n: 1, width: 900, height: 600, digest: digest(1) }]);
+    const reads: string[] = [];
+    const planned = await link.plan(ops, read, context({ remainingBytes: 500_000 }, reads));
+    assert.deepEqual(planned.ops.map((op) => op.op), ['put-document'], 'the content document is still written');
+    assert.deepEqual(reads, [], 'a thumbnail that cannot fit is not even decoded');
+  });
+
+  it('uses the free bytes exactly: it fits at the boundary and is skipped one byte short', async () => {
+    const { link, ops, read } = await linkInputs([{ n: 1, width: 900, height: 600, digest: digest(1) }]);
+    const roomy = await link.plan(ops, read, context());
+    const thumb = thumbsIn(roomy.ops)[0] as Extract<WriteOp, { op: 'put-blob' }>;
+    const cost = blobCanonicalBytes(thumb.bytes.byteLength);
+    const content = JSON.stringify((roomy.ops.find((op) => op.op === 'put-document') as { value: unknown }).value).length;
+    // Find the smallest free-byte count that still fits by probing around the cost plus the reserved content growth.
+    let smallest = Infinity;
+    for (let free = cost; free <= cost + content + 20_000; free += 1) {
+      const planned = await link.plan(ops, read, context({ remainingBytes: free }));
+      if (thumbsIn(planned.ops).length === 1) { smallest = free; break; }
+    }
+    assert.ok(Number.isFinite(smallest) && smallest > cost, 'the content document growth is reserved on top of the thumbnail');
+    assert.equal(thumbsIn((await link.plan(ops, read, context({ remainingBytes: smallest - 1 }))).ops).length, 0);
+    assert.equal(thumbsIn((await link.plan(ops, read, context({ remainingBytes: smallest }))).ops).length, 1);
+  });
+
+  it('keeps one operation free for the content document: a thumbnail needs two free operations', async () => {
+    const { link, ops, read } = await linkInputs([{ n: 1, width: 900, height: 600, digest: digest(1) }]);
+    assert.equal(thumbsIn((await link.plan(ops, read, context({ remainingOps: 1 }))).ops).length, 0);
+    assert.equal(thumbsIn((await link.plan(ops, read, context({ remainingOps: 2 }))).ops).length, 1);
+  });
+
+  it('decodes at most 150 million source pixels per batch; later versions get no thumbnail', async () => {
+    const { link, ops, read } = await linkInputs([
+      { n: 1, width: 10_000, height: 10_000, digest: digest(1) }, { n: 2, width: 10_000, height: 10_000, digest: digest(2) },
+      { n: 3, width: 900, height: 600, digest: digest(3) },
+    ]);
+    const reads: string[] = [];
+    const planned = await link.plan(ops, read, context({}, reads));
+    assert.deepEqual(reads, [digest(1)], 'only the first image was decoded');
+    assert.deepEqual(contentVersions(planned.ops).map((version) => version.thumbnail !== undefined), [true, false, false],
+      'once the pixel ceiling is hit, no later version is decoded');
+  });
+
+  it('a source that cannot be read, or a reader that throws, links with no thumbnail', async () => {
+    const { link, ops, read } = await linkInputs([{ n: 1, width: 900, height: 600, digest: digest(1) }]);
+    const missing = await link.plan(ops, read, context({ readBlob: async () => null }));
+    assert.deepEqual(missing.ops.map((op) => op.op), ['put-document']);
+    const throwing = await link.plan(ops, read, context({ readBlob: async () => { throw new Error('storage failed'); } }));
+    assert.deepEqual(throwing.ops.map((op) => op.op), ['put-document']);
+    const garbage = await link.plan(ops, read, context({ readBlob: async () => new Uint8Array(3_000_000) }));
+    assert.deepEqual(garbage.ops.map((op) => op.op), ['put-document']);
   });
 });
