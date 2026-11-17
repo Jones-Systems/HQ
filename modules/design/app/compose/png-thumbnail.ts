@@ -5,8 +5,14 @@
  * than that is therefore downsampled here, in the renderer, with no dependency, no canvas and no native call:
  *
  *  - Decode: the PNG subset real captures use (8-bit grey, RGB, palette, grey+alpha and RGBA; no interlace), streamed
- *    through the platform `DecompressionStream`. Peak memory is two scanlines plus the bin accumulators, whatever the
- *    source height. Every chunk CRC is verified, and inflated output is bounded to exactly what the header promises.
+ *    through the platform `DecompressionStream`. Every chunk CRC is verified. The compressed data is handed to the
+ *    inflater in 16 KiB slices, only when it asks for more, and decoding stops (and cancels the stream) as soon as the
+ *    inflated output exceeds what the header promises. Deflate expands at most about 1032 times, so one slice can put
+ *    at most about 17 MB of output in the inflater's queue before that check sees it: a decompression bomb costs one
+ *    such burst, never its full expansion. Beyond that queue, the decoder holds two scanlines and the bin accumulators
+ *    (at most 2048 x 2048 bins), whatever the source height.
+ *  - Responsiveness: CRC checks and decoding yield to the event loop after about every 1 MiB of work, so a large image
+ *    never blocks the renderer for long. Yielding changes no byte of the result.
  *  - Resample: exact integer box averaging in premultiplied alpha, so a transparent pixel never tints its neighbours.
  *  - Encode: 8-bit RGBA with filter 0 and zlib *stored* blocks written by hand. No compressor is involved, so the bytes
  *    (and their digest) are identical on every platform and engine version. A 512 x 512 result is 1,049,236 bytes.
@@ -30,6 +36,8 @@ export interface PngThumbnailLimits {
 export interface PngThumbnailOptions extends Partial<PngThumbnailLimits> {
   /** Zlib inflate of the concatenated IDAT data, streamed. Injected in tests. */
   readonly inflate?: (parts: readonly Uint8Array[]) => AsyncIterable<Uint8Array>;
+  /** Resolves once the event loop has had a turn to run other tasks. Called between slices of work. Injected in tests. */
+  readonly yieldControl?: () => Promise<void>;
 }
 
 export interface PngThumbnail {
@@ -49,6 +57,39 @@ const MAX_SOURCE_SIDE = 32_768;
 const MAX_TARGET_SIDE = 2048;
 const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
 const STORED_BLOCK = 65_535;
+/** Compressed bytes handed to the inflater per request. */
+export const INFLATE_SLICE_BYTES = 16 * 1024;
+/** Bytes of CRC checking or decoding between two yields to the event loop (a few milliseconds of work). */
+const YIELD_EVERY_BYTES = 1 << 20;
+
+// ------------------------------------------------------------------------------ pacing
+
+/** A macrotask turn: `scheduler.yield` where present, else a message, else a timer. Renderer-safe web globals only. */
+function yieldToEventLoop(): Promise<void> {
+  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+  if (typeof scheduler?.yield === 'function') return scheduler.yield();
+  if (typeof MessageChannel === 'function') {
+    return new Promise((resolve) => {
+      const channel = new MessageChannel();
+      channel.port1.onmessage = () => { channel.port1.close(); resolve(); };
+      channel.port2.postMessage(null);
+    });
+  }
+  return new Promise((resolve) => { setTimeout(resolve, 0); });
+}
+
+/** Counts work in bytes and yields to the event loop after every `YIELD_EVERY_BYTES` of it. */
+type Pace = (bytes: number) => Promise<void> | undefined;
+
+function pacer(yieldControl: () => Promise<void>): Pace {
+  let pending = 0;
+  return (bytes) => {
+    pending += bytes;
+    if (pending < YIELD_EVERY_BYTES) return undefined;
+    pending = 0;
+    return yieldControl();
+  };
+}
 
 // ------------------------------------------------------------------------------ checksums
 
@@ -62,9 +103,25 @@ const CRC_TABLE = (() => {
   return table;
 })();
 
+function crc32Update(crc: number, bytes: Uint8Array): number {
+  for (let i = 0; i < bytes.length; i += 1) crc = CRC_TABLE[(crc ^ bytes[i]!) & 0xff]! ^ (crc >>> 8);
+  return crc;
+}
+
 function crc32(parts: readonly Uint8Array[]): number {
   let crc = 0xffffffff;
-  for (const part of parts) for (let i = 0; i < part.length; i += 1) crc = CRC_TABLE[(crc ^ part[i]!) & 0xff]! ^ (crc >>> 8);
+  for (const part of parts) crc = crc32Update(crc, part);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+/** The CRC-32 of a chunk's type and data, yielding between slices of a large chunk. */
+async function chunkCrc(type: Uint8Array, data: Uint8Array, pace: Pace): Promise<number> {
+  let crc = crc32Update(0xffffffff, type);
+  for (let start = 0; start < data.length; start += YIELD_EVERY_BYTES) {
+    const end = Math.min(start + YIELD_EVERY_BYTES, data.length);
+    crc = crc32Update(crc, data.subarray(start, end));
+    await pace(end - start);
+  }
   return (crc ^ 0xffffffff) >>> 0;
 }
 
@@ -101,7 +158,7 @@ const CHANNELS: Readonly<Record<number, number>> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 
 const chunkType = (bytes: Uint8Array, at: number): string => String.fromCharCode(bytes[at]!, bytes[at + 1]!, bytes[at + 2]!, bytes[at + 3]!);
 
 /** Parses the supported subset. Returns `null` for anything else, including damage. */
-function parsePng(source: Uint8Array, maxSourcePixels: number): Parsed | null {
+async function parsePng(source: Uint8Array, maxSourcePixels: number, pace: Pace): Promise<Parsed | null> {
   if (source.length < 8 + 25 + 12) return null;
   for (let i = 0; i < 8; i += 1) if (source[i] !== SIGNATURE[i]) return null;
   const view = new DataView(source.buffer, source.byteOffset, source.byteLength);
@@ -120,7 +177,7 @@ function parsePng(source: Uint8Array, maxSourcePixels: number): Parsed | null {
     if (length > 0x7fffffff || end > source.length) return null;
     const type = chunkType(source, at + 4);
     const data = source.subarray(at + 8, at + 8 + length);
-    if (crc32([source.subarray(at + 4, at + 8), data]) !== view.getUint32(at + 8 + length)) return null;
+    if (await chunkCrc(source.subarray(at + 4, at + 8), data, pace) !== view.getUint32(at + 8 + length)) return null;
     if (first && type !== 'IHDR') return null;
     first = false;
     if (type === 'IHDR') {
@@ -174,13 +231,26 @@ function parsePng(source: Uint8Array, maxSourcePixels: number): Parsed | null {
 
 // ------------------------------------------------------------------------------ inflate
 
+/**
+ * Inflates the IDAT parts with the platform `DecompressionStream`. The input is a pull source with no buffer of its
+ * own: it hands over one `INFLATE_SLICE_BYTES` slice (a view, never a copy) only when the inflater asks for more, which
+ * it does only once its output has been read. An engine that inflates a whole input chunk at once (Chromium does)
+ * therefore queues at most one slice's expansion before the reader can stop it.
+ */
 async function* inflateWithPlatform(parts: readonly Uint8Array[]): AsyncGenerator<Uint8Array, void, undefined> {
+  let part = 0;
+  let offset = 0;
   const input = new ReadableStream<Uint8Array<ArrayBuffer>>({
-    start(controller) {
-      for (const part of parts) controller.enqueue(part as Uint8Array<ArrayBuffer>);
-      controller.close();
+    pull(controller) {
+      while (part < parts.length && offset >= parts[part]!.length) { part += 1; offset = 0; }
+      if (part >= parts.length) { controller.close(); return; }
+      const current = parts[part]!;
+      const end = Math.min(offset + INFLATE_SLICE_BYTES, current.length);
+      controller.enqueue(current.subarray(offset, end) as Uint8Array<ArrayBuffer>);
+      offset = end;
     },
-  });
+    cancel() { part = parts.length; },
+  }, { highWaterMark: 0 });
   const reader = input.pipeThrough(new DecompressionStream('deflate')).getReader();
   try {
     for (;;) {
@@ -189,7 +259,8 @@ async function* inflateWithPlatform(parts: readonly Uint8Array[]): AsyncGenerato
       yield value;
     }
   } finally {
-    // An early stop (more output than promised) must release the stream; a failure to cancel changes nothing.
+    // An early stop (more output than promised) cancels the inflater and, through the pipe, the input: nothing more is
+    // fed. A failure to cancel changes nothing.
     try { await reader.cancel(); } catch { /* already closed or errored */ }
   }
 }
@@ -271,7 +342,7 @@ function accumulate(row: Uint8Array, parsed: Parsed, columns: Uint32Array, bins:
   }
 }
 
-async function downsample(parsed: Parsed, tw: number, th: number, inflate: NonNullable<PngThumbnailOptions['inflate']>): Promise<Uint8Array | null> {
+async function downsample(parsed: Parsed, tw: number, th: number, inflate: NonNullable<PngThumbnailOptions['inflate']>, pace: Pace): Promise<Uint8Array | null> {
   const { width, height, channels } = parsed;
   const rowLength = 1 + width * channels;
   const expected = height * rowLength;
@@ -303,7 +374,11 @@ async function downsample(parsed: Parsed, tw: number, th: number, inflate: NonNu
       row.set(chunk.subarray(at, at + take), filled);
       filled += take;
       at += take;
-      if (filled === rowLength && !finishRow()) return null;
+      if (filled === rowLength) {
+        if (!finishRow()) return null;
+        // A queued read resolves without a macrotask turn, so decoding yields on its own schedule.
+        await pace(rowLength);
+      }
     }
   }
   if (received !== expected || y !== height) return null;
@@ -324,6 +399,7 @@ async function downsample(parsed: Parsed, tw: number, th: number, inflate: NonNu
       out[at + 1] = floorDiv(2 * bins.g[bin]! + sumA, 2 * sumA);
       out[at + 2] = floorDiv(2 * bins.b[bin]! + sumA, 2 * sumA);
     }
+    await pace(tw * 4);
   }
   return out;
 }
@@ -402,12 +478,13 @@ export async function pngThumbnail(source: Uint8Array, options: PngThumbnailOpti
     const maxBytes = options.maxBytes ?? PNG_THUMBNAIL_DEFAULTS.maxBytes;
     if (!(source instanceof Uint8Array) || !validLimit(maxSide, 1, MAX_TARGET_SIDE) || !validLimit(maxSourcePixels, 1, Number.MAX_SAFE_INTEGER)
       || !validLimit(maxBytes, 1, Number.MAX_SAFE_INTEGER)) return null;
-    const parsed = parsePng(source, maxSourcePixels);
+    const pace = pacer(options.yieldControl ?? yieldToEventLoop);
+    const parsed = await parsePng(source, maxSourcePixels, pace);
     if (parsed === null) return null;
     const { tw, th } = targetSize(parsed.width, parsed.height, maxSide);
     // The stored encoding has a known size: refuse before decoding when it cannot fit.
     if (encodedSize(tw, th) > maxBytes) return null;
-    const raw = await downsample(parsed, tw, th, options.inflate ?? inflateWithPlatform);
+    const raw = await downsample(parsed, tw, th, options.inflate ?? inflateWithPlatform, pace);
     if (raw === null) return null;
     const bytes = encodeRgba(raw, tw, th);
     return bytes.length <= maxBytes ? { bytes, w: tw, h: th } : null;

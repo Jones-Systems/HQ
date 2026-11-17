@@ -506,7 +506,11 @@ Importing a PNG makes it a project version, so Projects, Gallery, Compare and An
     long side, exact integer box averaging in premultiplied alpha, written as 8-bit RGBA with zlib *stored* blocks
     so the bytes and digest are identical on every platform. It reads 8-bit grey, RGB, palette, grey+alpha and
     RGBA, not interlaced, up to 50 million source pixels, streaming the inflate so memory does not grow with image
-    height. A 512 x 512 thumbnail is 1,049,236 bytes.
+    height. Compressed data reaches the inflater in 16 KiB slices, only on demand, and decoding stops and cancels
+    the stream once output exceeds what the header promises, so a decompression bomb costs at most one slice's
+    expansion (about 17 MB), never its full size. Checksums and decoding yield to the event loop about every 1 MiB
+    of work, so the renderer stays responsive; yielding changes no output byte. A 512 x 512 thumbnail is
+    1,049,236 bytes.
   - The thumbnail is a `put-blob` (`image/png`) in the same `import.commit`, placed before the project content
     document that points at it. The version's `capture.captureDigest` stays the digest of the full image; marks
     bind to the real pixels, never to the thumbnail. The thumbnail digest is a pure function of the image bytes.

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 import zlib from 'node:zlib';
-import { PNG_THUMBNAIL_DEFAULTS, pngThumbnail, type PngThumbnail } from '../png-thumbnail.ts';
+import { INFLATE_SLICE_BYTES, PNG_THUMBNAIL_DEFAULTS, pngThumbnail, type PngThumbnail } from '../png-thumbnail.ts';
 import { buildPng, noiseSamples, PNG_CHANNELS, pngChunkBytes, type BuiltPngColorType } from './imports-bridge-double.ts';
 
 const sha = (bytes: Uint8Array) => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -337,5 +337,145 @@ describe('pngThumbnail: ceilings and refusals all return null, never throw', () 
     expectThumbnail(result);
     assert.equal(seen.length, 3);
     assert.ok(seen.every((part) => part.buffer === source.buffer), 'subarrays of the source, not copies');
+  });
+});
+
+/**
+ * A zlib stream that never ends: one literal zero, then `matches` copies of (length 258, distance 1) in a fixed-Huffman
+ * block. Each match is 13 bits for 258 zero bytes, an expansion of about 159 times (dynamic codes reach deflate's ceiling
+ * of about 1032). Built bit by bit, so a bomb of hundreds of megabytes costs under 2 MB and no compressor time.
+ */
+function zeroBomb(matches: number): Uint8Array {
+  const out = new Uint8Array(2 + Math.ceil((3 + 8 + matches * 13) / 8));
+  out[0] = 0x78; out[1] = 0x01;
+  let bit = 16;
+  const put = (value: number, length: number) => { // Huffman codes are packed most significant bit first.
+    for (let i = length - 1; i >= 0; i -= 1, bit += 1) if (((value >> i) & 1) !== 0) out[bit >> 3]! |= 1 << (bit & 7);
+  };
+  put(0b0, 1); // BFINAL = 0
+  put(0b1, 1); put(0b0, 1); // BTYPE = 01 (fixed), a value, so least significant bit first
+  put(0b00110000, 8); // literal 0
+  for (let i = 0; i < matches; i += 1) { put(0b11000101, 8); put(0b00000, 5); } // length code 285 (258), distance code 0 (1)
+  return out;
+}
+
+/**
+ * Swaps the global `DecompressionStream` for the real one behind a transparent wrapper that records every input write
+ * it is fed. Inflation stays the platform's own; `pngThumbnail` gets no injected inflater.
+ */
+async function withObservedPlatformInflate<T>(run: (writes: number[]) => Promise<T>): Promise<T> {
+  const Real = globalThis.DecompressionStream;
+  const writes: number[] = [];
+  class Observed {
+    readonly readable: ReadableStream<Uint8Array<ArrayBuffer>>;
+    readonly writable: WritableStream<Uint8Array<ArrayBuffer>>;
+    constructor(format: CompressionFormat) {
+      const real = new Real(format);
+      const writer = real.writable.getWriter();
+      this.readable = real.readable;
+      this.writable = new WritableStream({
+        write(chunk) { writes.push(chunk.length); return writer.write(chunk); },
+        close() { return writer.close(); },
+        abort(reason) { return writer.abort(reason); },
+      });
+    }
+  }
+  globalThis.DecompressionStream = Observed as unknown as typeof DecompressionStream;
+  try { return await run(writes); } finally { globalThis.DecompressionStream = Real; }
+}
+
+const macrotasks = async (count: number) => { for (let i = 0; i < count; i += 1) await new Promise((resolve) => setTimeout(resolve, 0)); };
+const sum = (values: readonly number[]) => values.reduce((total, value) => total + value, 0);
+
+describe('pngThumbnail: the platform inflater is fed in bounded slices', () => {
+  it('the zero bomb used below really inflates to zeros', () => {
+    const prefix = zeroBomb(1000);
+    const inflated = zlib.inflateSync(prefix, { finishFlush: zlib.constants.Z_SYNC_FLUSH });
+    assert.ok(inflated.length >= 1 + 999 * 258, `inflated ${inflated.length} bytes`);
+    assert.ok(inflated.every((value) => value === 0));
+  });
+
+  it('stops a single-IDAT zero bomb (about 258 MB inflated) after a few slices, with no injected inflater', async () => {
+    const bomb = zeroBomb(1_000_000); // about 1.6 MB compressed, about 258 MB of zeros
+    assert.ok(bomb.length > 1_600_000);
+    const source = buildPng({ width: 20, height: 20, colorType: 2, zlibTransform: () => bomb });
+    await withObservedPlatformInflate(async (writes) => {
+      const started = Date.now();
+      assert.equal(await pngThumbnail(source), null, 'more output than the header promises');
+      const elapsed = Date.now() - started;
+      const fed = sum(writes);
+      assert.ok(writes.every((length) => length <= INFLATE_SLICE_BYTES), `every write is at most one slice: ${writes.join(', ')}`);
+      assert.ok(fed <= 8 * INFLATE_SLICE_BYTES, `only a few slices of the ${bomb.length}-byte IDAT were fed (${fed} bytes)`);
+      await macrotasks(5);
+      assert.equal(sum(writes), fed, 'the input is cancelled: nothing more is fed afterwards');
+      assert.ok(elapsed < 5000, `stopped promptly (${elapsed} ms)`);
+    });
+  });
+
+  it('a normal single-IDAT image decodes through the platform in slices, identical to node:zlib', async () => {
+    const source = buildPng({ width: 300, height: 220, colorType: 6, samples: noiseSamples(300 * 220 * 4, 21) });
+    const idatLength = new DataView(source.buffer).getUint32(8 + 25);
+    assert.ok(idatLength > 8 * INFLATE_SLICE_BYTES, 'large enough to need many slices');
+    const viaZlib = expectThumbnail(await pngThumbnail(source, { maxSide: 64, inflate: (parts) => (async function* () { yield zlib.inflateSync(Buffer.concat(parts)); })() }));
+    await withObservedPlatformInflate(async (writes) => {
+      const viaPlatform = expectThumbnail(await pngThumbnail(source, { maxSide: 64 }));
+      assert.deepEqual([...viaPlatform.bytes], [...viaZlib.bytes]);
+      assert.equal(sum(writes), idatLength, 'every compressed byte was fed exactly once');
+      assert.ok(writes.length >= Math.ceil(idatLength / INFLATE_SLICE_BYTES), `in slices (${writes.length} writes)`);
+      assert.ok(writes.every((length) => length <= INFLATE_SLICE_BYTES));
+    });
+    assert.deepEqual([...decodeThumbnail(viaZlib.bytes).rgba], [...expectedRgba(noiseSamples(300 * 220 * 4, 21), 300, 220, 6, 64, 46)]);
+  });
+
+  it('slices span IDAT boundaries in order', async () => {
+    const options = { width: 300, height: 220, colorType: 6 as const, samples: noiseSamples(300 * 220 * 4, 22) };
+    const one = expectThumbnail(await pngThumbnail(buildPng({ ...options, idatChunks: 1 }), { maxSide: 50 }));
+    // 7 parts of about 38 KB each: none a multiple of the slice size.
+    const split = buildPng({ ...options, idatChunks: 7 });
+    await withObservedPlatformInflate(async (writes) => {
+      const many = expectThumbnail(await pngThumbnail(split, { maxSide: 50 }));
+      assert.deepEqual([...many.bytes], [...one.bytes]);
+      assert.ok(writes.every((length) => length <= INFLATE_SLICE_BYTES));
+    });
+  });
+});
+
+describe('pngThumbnail: yields to the event loop', () => {
+  it('yields while checking and decoding a large image, and the bytes do not change', async () => {
+    const source = buildPng({ width: 2048, height: 1024, colorType: 6, samples: noiseSamples(2048 * 1024 * 4, 31) });
+    let yields = 0;
+    const counted = expectThumbnail(await pngThumbnail(source, { yieldControl: async () => { yields += 1; await macrotasks(1); } }));
+    // About 8.4 MB checked and about 8.4 MB decoded, at one yield per MiB of work.
+    assert.ok(yields >= 14, `yielded ${yields} times`);
+    const plain = expectThumbnail(await pngThumbnail(source));
+    assert.deepEqual([...counted.bytes], [...plain.bytes]);
+  });
+
+  it('other tasks run while a large image decodes (the default yield is a macrotask)', async () => {
+    const source = buildPng({ width: 2048, height: 1024, colorType: 6, samples: noiseSamples(2048 * 1024 * 4, 32) });
+    // An injected inflater whose reads all resolve as microtasks, as queued platform reads do.
+    const inflate = (parts: readonly Uint8Array[]) => (async function* () {
+      const raw = zlib.inflateSync(Buffer.concat(parts));
+      for (let at = 0; at < raw.length; at += 65_536) yield raw.subarray(at, at + 65_536);
+    })();
+    let ticks = 0;
+    const timer = setInterval(() => { ticks += 1; }, 0);
+    try {
+      expectThumbnail(await pngThumbnail(source, { inflate }));
+    } finally {
+      clearInterval(timer);
+    }
+    assert.ok(ticks >= 2, `a timer ran ${ticks} times during decoding`);
+  });
+
+  it('the golden vector is unchanged with a yield after every step', async () => {
+    const source = buildPng({ width: 2, height: 2, colorType: 2, samples: GOLDEN_SOURCE });
+    const thumbnail = expectThumbnail(await pngThumbnail(source, { maxSide: 1, yieldControl: () => macrotasks(1) }));
+    assert.equal(sha(thumbnail.bytes), GOLDEN_DIGEST);
+  });
+
+  it('a yield that rejects yields null, never a throw', async () => {
+    const source = buildPng({ width: 2048, height: 1024, colorType: 0, samples: noiseSamples(2048 * 1024, 33) });
+    assert.equal(await pngThumbnail(source, { yieldControl: () => Promise.reject(new Error('stopped')) }), null);
   });
 });
