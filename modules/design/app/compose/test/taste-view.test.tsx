@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { webcrypto } from 'node:crypto';
-import { Suspense } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Suspense, useState, type ReactNode } from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { ToastStoreProvider, createToastStore, type ToastStore } from '@hq/ui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectContext } from '@hq/contracts';
 import type { JsonValue } from '@hq/contracts/services';
@@ -11,6 +12,7 @@ import { projectId, versionId, viewId } from '../../../projects/src/ids.ts';
 import { contentKey } from '../../../projects/src/repository.ts';
 import { qualifySubjectId } from '../../../taste/src/contract.ts';
 import { TASTE_DOCUMENT_KEY } from '../../../taste/src/project-service.ts';
+import { TasteQueueContext, type TasteQueueItem } from '../../../taste/src/ui/queue-context.ts';
 import { createBridgeWorkspaceDocuments } from '../bridge-documents.ts';
 import { createDesignWorkspace, type DesignWorkspace } from '../workspace.ts';
 import { DesignWorkspaceContext } from '../workspace-context.tsx';
@@ -330,5 +332,174 @@ describe('Taste production composition', () => {
     expect(screen.getByText('in-memory fake journal (not durable)')).toBeTruthy();
     expect(screen.getByLabelText('Project · Synthetic taste project')).toBeTruthy();
     expect(screen.queryByLabelText('Version to rate')).toBeNull();
+  });
+});
+
+/**
+ * Queued Sources subjects, rated through the real project-bound adapter over the bridge transport double. The queue is
+ * volatile memory owned by the composition; here a stateful owner stands in for it, as the composed view does.
+ */
+describe('Taste queued subjects in production composition', () => {
+  const PRICING: TasteQueueItem = { id: 'pricing', kind: 'reference', label: 'Larkspur pricing', detail: 'larkspur.example', from: 'references' };
+  const BUTTON: TasteQueueItem = { id: 'button', kind: 'component', label: 'Button · Synthetic system', from: 'components' };
+
+  function queued(workspace: DesignWorkspace, initial: readonly TasteQueueItem[], toasts: ToastStore = createToastStore(), context: ProjectContext = A) {
+    const rated: TasteQueueItem[] = [];
+    function Owner({ children }: { readonly children: ReactNode }) {
+      const [items, setItems] = useState(initial);
+      const drop = (item: TasteQueueItem) => setItems((list) => list.filter((entry) => entry.id !== item.id || entry.kind !== item.kind));
+      return <TasteQueueContext value={{ items, onRated: (item) => { rated.push(item); drop(item); }, onSkipped: drop,
+        originLabel: (from) => ({ references: 'References', components: 'Components' }[from] ?? '') }}>{children}</TasteQueueContext>;
+    }
+    return { rated, toasts, ui: <ToastStoreProvider store={toasts}><Owner>{view(workspace, context)}</Owner></ToastStoreProvider> };
+  }
+
+  const puts = (double: ReturnType<typeof createTransportDouble>) => double.calls.filter(({ route }) => route === 'doc.put');
+  const records = (double: ReturnType<typeof createTransportDouble>) => ((double.documents.get(TASTE_DOCUMENT_KEY)?.value as { jsonl: string } | undefined)?.jsonl ?? '')
+    .split('\n').filter(Boolean).map((line) => JSON.parse(line) as { clientEventId: string; payload: { scope: unknown; subject: { id: string; kind: string } } });
+  const putRecord = (call: { params: unknown }) => JSON.parse(((call.params as { value: { jsonl: string } }).value.jsonl).trim().split('\n').at(-1)!) as { clientEventId: string; payload: unknown };
+  const deck = () => screen.getByRole('group', { name: /^Waiting to rate/u });
+  const like = () => fireEvent.click(within(deck()).getByRole('button', { name: 'Like, rating 4' }));
+  const front = () => deck().querySelector('[data-position="front"]')?.textContent ?? '';
+
+  it('rates a queued reference in a project with no saved versions, and removes the card once the save is confirmed', async () => {
+    const { double, workspace, seed } = harness();
+    await seed(A, []);
+    const { rated, ui } = queued(workspace, [PRICING]);
+    await renderReady(ui);
+    await screen.findByText('No saved versions for this project yet.');
+    await screen.findByRole('group', { name: /^Waiting to rate/u });
+    expect(front()).toContain('Larkspur pricing');
+    expect(screen.queryByLabelText('Version to rate')).toBeNull();
+    expect(puts(double)).toHaveLength(0);
+    await screen.findByText('General taste');
+    like();
+    await screen.findByText('1 entry · verified');
+    expect(rated).toEqual([PRICING]);
+    expect(puts(double)).toHaveLength(1);
+    const [record] = records(double);
+    expect(record!.payload.scope).toEqual({ kind: 'project', projectId: A.id });
+    expect(record!.payload.subject).toMatchObject({ id: 'reference:pricing', kind: 'reference' });
+    expect(screen.getByText(/Everything waiting is rated/u)).toBeTruthy();
+  });
+
+  it('reconciles an unknown general-scope save through the bound client without a load failure, and retries the same entry', async () => {
+    const { double, workspace, seed } = harness();
+    await seed(A, []);
+    const { rated, toasts, ui } = queued(workspace, [PRICING, BUTTON]);
+    await renderReady(ui);
+    fireEvent.click(await screen.findByLabelText('General taste'));
+    double.failWith((route) => route === 'doc.put' ? { ok: false, kind: 'unknown' } : undefined);
+    like();
+    await waitFor(() => expect(toasts.getSnapshot()[0]?.tone).toBe('unknown'));
+    expect(rated).toEqual([]);
+    expect(front()).toContain('Larkspur pricing');
+    double.failWith(() => undefined);
+    fireEvent.click(within(deck()).getByRole('button', { name: 'Check' }));
+    await waitFor(() => expect(toasts.getSnapshot()[0]?.title).toBe('Not in the journal yet'));
+    expect(toasts.getSnapshot().some((toast) => toast.title === "Couldn't read the journal")).toBe(false);
+    expect(screen.queryByText('taste.load')).toBeNull();
+    expect(puts(double)).toHaveLength(1);
+    expect(records(double)).toHaveLength(0);
+    fireEvent.click(within(deck()).getByRole('button', { name: 'Retry same entry' }));
+    await waitFor(() => expect(rated).toEqual([PRICING]));
+    expect(puts(double)).toHaveLength(2);
+    const [first, second] = puts(double).map(putRecord);
+    expect(second!.clientEventId).toBe(first!.clientEventId);
+    expect(second!.payload).toEqual(first!.payload);
+    expect(records(double)).toHaveLength(1);
+    expect(records(double)[0]!.payload.scope).toEqual({ kind: 'general' });
+    expect(front()).toContain('Button · Synthetic system');
+  });
+
+  it('counts a save that landed before its acknowledgement was lost as saved, with one write in total', async () => {
+    const { double, documents, seed } = harness();
+    await seed(A, []);
+    let lost = false;
+    const workspace = createDesignWorkspace({ ...documents, async putDocument(key, value, options) {
+      const saved = await documents.putDocument(key, value, options);
+      if (!lost) { lost = true; throw new Error('synthetic lost acknowledgement'); }
+      return saved;
+    } });
+    const { rated, toasts, ui } = queued(workspace, [PRICING]);
+    await renderReady(ui);
+    fireEvent.click(await screen.findByLabelText('General taste'));
+    like();
+    await waitFor(() => expect(toasts.getSnapshot()[0]?.tone).toBe('unknown'));
+    expect(rated).toEqual([]);
+    fireEvent.click(within(deck()).getByRole('button', { name: 'Check' }));
+    await waitFor(() => expect(rated).toEqual([PRICING]));
+    expect(puts(double)).toHaveLength(1);
+    expect(records(double)).toHaveLength(1);
+    expect(toasts.getSnapshot().map((toast) => toast.tone)).toEqual(['success']);
+  });
+
+  it('removes a card only for a confirmed save, not for a conflict or an unconfirmed one', async () => {
+    const { double, workspace, seed } = harness();
+    await seed(A, []);
+    const { rated, ui } = queued(workspace, [PRICING]);
+    await renderReady(ui);
+    await screen.findByText('General taste');
+    double.failWith((route) => route === 'doc.put' ? { ok: false, kind: 'conflict' } : undefined);
+    like();
+    await screen.findByText('Rating not confirmed');
+    expect(rated).toEqual([]);
+    expect(front()).toContain('Larkspur pricing');
+    expect(records(double)).toHaveLength(0);
+    double.failWith((route) => route === 'doc.put' ? { ok: false, kind: 'unknown' } : undefined);
+    fireEvent.click(within(deck()).getByRole('button', { name: 'Retry same entry' }));
+    await waitFor(() => expect(puts(double)).toHaveLength(2));
+    expect(rated).toEqual([]);
+    expect(front()).toContain('Larkspur pricing');
+    double.failWith(() => undefined);
+    fireEvent.click(within(deck()).getByRole('button', { name: 'Retry same entry' }));
+    await waitFor(() => expect(rated).toEqual([PRICING]));
+    expect(puts(double)).toHaveLength(3);
+    expect(records(double)).toHaveLength(1);
+    expect(new Set(puts(double).map((call) => putRecord(call).clientEventId)).size).toBe(1);
+  });
+
+  it('shows the queued deck beside the version picker, and one deck only once a version is chosen', async () => {
+    const { double, workspace, seed } = harness();
+    await seed(A);
+    const { ui } = queued(workspace, [PRICING]);
+    await renderReady(ui);
+    await screen.findByText('Choose a saved version to rate.');
+    expect(screen.getByLabelText('Version to rate')).toBeTruthy();
+    await screen.findByRole('group', { name: /^Waiting to rate/u });
+    expect(screen.queryByRole('heading', { name: 'Saved landing v1' })).toBeNull();
+    expect(screen.getAllByRole('group', { name: /^Waiting to rate/u })).toHaveLength(1);
+    await choose();
+    expect(screen.getByRole('heading', { name: 'Saved landing v1' })).toBeTruthy();
+    expect(screen.getAllByRole('group', { name: /^Waiting to rate/u })).toHaveLength(1);
+    expect(screen.queryByRole('heading', { name: 'Queued items' })).toBeNull();
+    expect(puts(double)).toHaveLength(0);
+  });
+
+  it.each(['without a queue', 'with an empty queue'] as const)('mounts no panel and reads no journal for an empty project %s', async (kind) => {
+    const { double, workspace, seed } = harness();
+    await seed(A, []);
+    await renderReady(kind === 'with an empty queue' ? queued(workspace, []).ui : view(workspace));
+    await screen.findByText('No saved versions for this project yet.');
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(screen.queryByRole('group', { name: /^Waiting to rate/u })).toBeNull();
+    expect(screen.queryByText('Project profile')).toBeNull();
+    expect(journalReads(double)).toBe(0);
+    expect(puts(double)).toHaveLength(0);
+  });
+
+  it('keeps the deck mounted after the last queued card is rated', async () => {
+    const { double, workspace, seed } = harness();
+    await seed(A, []);
+    const { rated, ui } = queued(workspace, [PRICING]);
+    await renderReady(ui);
+    await screen.findByText('General taste');
+    like();
+    await waitFor(() => expect(rated).toEqual([PRICING]));
+    expect(await screen.findByText(/Everything waiting is rated/u)).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Just rated' }).textContent).toContain('Larkspur pricing');
+    await screen.findByText('1 entry · verified');
+    expect(screen.getByText(/Everything waiting is rated/u)).toBeTruthy();
+    expect(puts(double)).toHaveLength(1);
   });
 });

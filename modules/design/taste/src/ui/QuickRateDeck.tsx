@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { Button, InlineNotice, Presence, StatusIndicator, useListMotion, useToast } from '@hq/ui';
 import {
-  RATING_VALUES, type RatingValue, type TasteClientPort, type TasteCommand, type TasteScope, type TasteSnapshot,
+  RATING_VALUES, type ProjectId, type RatingValue, type TasteClientPort, type TasteCommand, type TasteScope, type TasteSnapshot,
 } from '../contract.ts';
 import { DeckCard, type DeckCardHandle } from './DeckCard.tsx';
 import {
@@ -17,6 +17,11 @@ export interface QuickRateDeckProps {
   readonly client: TasteClientPort;
   readonly scope: TasteScope;
   readonly snapshot: TasteSnapshot;
+  /**
+   * The project the panel's client reads through. `scope` only says where a rating applies: a general-scope rating
+   * made from a project-bound panel is still recorded as general, but the journal is read through this project.
+   */
+  readonly projectId: ProjectId | null;
   readonly newId: NewId;
   /** The journal is read-only, or another save is in flight. */
   readonly disabled: boolean;
@@ -48,7 +53,7 @@ export function QuickRateDeck(props: QuickRateDeckProps) {
   return queue ? <Deck {...props} queue={queue} /> : null;
 }
 
-function Deck({ client, scope, snapshot, newId, disabled, onSaved, queue }: QuickRateDeckProps & { readonly queue: TasteQueueValue }) {
+function Deck({ client, scope, snapshot, projectId, newId, disabled, onSaved, queue }: QuickRateDeckProps & { readonly queue: TasteQueueValue }) {
   const toast = useToast();
   const titleId = useId();
   const exactId = useId();
@@ -78,8 +83,8 @@ function Deck({ client, scope, snapshot, newId, disabled, onSaved, queue }: Quic
 
   // Async work below reads the newest props through this, not the render it was created in. The functions use
   // only refs and state setters otherwise, so a handler or toast action from an earlier render stays correct.
-  const latest = useRef({ client, scope, snapshot, newId, disabled, onSaved, queue, top, toast });
-  useEffect(() => { latest.current = { client, scope, snapshot, newId, disabled, onSaved, queue, top, toast }; });
+  const latest = useRef({ client, scope, snapshot, projectId, newId, disabled, onSaved, queue, top, toast });
+  useEffect(() => { latest.current = { client, scope, snapshot, projectId, newId, disabled, onSaved, queue, top, toast }; });
 
   // The inline "Saved" is a recent-result note: it fades from the header after a few seconds.
   useEffect(() => {
@@ -175,7 +180,7 @@ function Deck({ client, scope, snapshot, newId, disabled, onSaved, queue }: Quic
     busy.current = true;
     setChecking(true);
     try {
-      const fresh = await ctx.client.snapshot(ctx.scope.kind === 'project' ? ctx.scope.projectId : null);
+      const fresh = await ctx.client.snapshot(ctx.projectId);
       if (snapshotHasCommand(fresh, pending.command)) {
         await settle(pending.item, pending.value, pending.command, { kind: 'saved' });
       } else {

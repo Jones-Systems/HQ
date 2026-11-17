@@ -140,6 +140,15 @@ panel in the HQ shell remains root's integration step (owner disposition C1).
 - Renderer: mount `TastePanel` with a `TasteClientPort` adapter, the
   current `ProjectId` (or null) and a `TasteSubject` bound to an exact version
   (`projectVersionSubject(projectId, versionId, label)`, never a bare version ID).
+- `TastePanel` takes `subject: null` for a **queue-only** panel: just the header ("Queued items"), journal badge, scope
+  choice and the **Waiting to rate** deck, with no per-subject rating controls. The composed view mounts it for items
+  queued from Sources or References when no version is chosen, so a queued item can be rated before any version is
+  saved. `QuickRateDeck` takes the panel's `projectId` and reads the journal through it, both to reconcile an unknown
+  save (Check) and everywhere else. The scope only says where a rating applies: a general-scope rating made through a
+  project-bound client is recorded as general but read through that bound project, because the bound client refuses a
+  read for any other project, including `null`. A card leaves the queue only when the journal confirms its save; a
+  refused, failed or unconfirmed save keeps it, and Retry resends the same command with the same `clientEventId`. The
+  queue itself stays volatile memory owned by the composition; nothing here persists it.
 - A thrown `submit` is shown as unknown and offers a retry of the identical
   command; the journal's idempotency makes that safe. The project-bound client
   throws typed errors (`errors.ts`) only where it can prove nothing was written
