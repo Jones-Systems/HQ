@@ -16,6 +16,8 @@ This directory adds only the cross-section handoff to Taste:
 | `useHandoffQueue()` | The current queue, for Taste's **Waiting to rate** deck and for "queued" markers on cards. |
 | `TASTE_LOCATION` | Taste's mount location, read from its descriptor. |
 
+A queued item can be rated before any version is saved: Taste shows its **Waiting to rate** deck beside, or in place of, the version picker. The queue stays in memory and is lost when the composition ends.
+
 Sections stay independent: a section never imports this directory. Its composed view in `../views/` passes
 callbacks such as `onSendToTaste`, or a section-owned context value, down to the section.
 

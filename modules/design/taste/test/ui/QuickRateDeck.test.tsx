@@ -4,7 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { useState, type ReactNode } from 'react';
 import { ToastStoreProvider, createToastStore, type ToastStore } from '@hq/ui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { assessmentId, clientEventId, projectId, subjectId, type AppendResult, type TasteClientPort, type TasteCommand } from '../../src/contract.ts';
+import {
+  assessmentId, clientEventId, projectId, subjectId, type AppendResult, type TasteClientPort, type TasteCommand, type TasteSubject,
+} from '../../src/contract.ts';
 import { createFakeTasteFileSystem } from '../../src/fake-file-system.ts';
 import { TasteJournal } from '../../src/journal.ts';
 import { TasteService } from '../../src/service.ts';
@@ -12,6 +14,7 @@ import { QuickRateDeck } from '../../src/ui/QuickRateDeck.tsx';
 import { TasteQueueContext, type TasteQueueItem, type TasteQueueValue } from '../../src/ui/queue-context.ts';
 import { TastePanel } from '../../src/ui/TastePanel.tsx';
 import { webCryptoSha256 } from '../../src/web-digest.ts';
+import { Documents, bind } from '../document-port.ts';
 
 /**
  * Rendered checks in happy-dom: what the deck does for the keys, the outcomes and the empty queue. Real motion,
@@ -45,7 +48,7 @@ interface Harness {
  * Mirrors the composed view: the items live in the owner's state, and rated or skipped items leave it. With `keep`
  * the owner is slow to react and the item stays, as it does for the moment between the call and the next commit.
  */
-function mount(client: TasteClientPort, initial: readonly TasteQueueItem[], withQueue = true, keep = false): Harness {
+function mount(client: TasteClientPort, initial: readonly TasteQueueItem[], withQueue = true, keep = false, subject: TasteSubject | null = SUBJECT): Harness {
   const rated: TasteQueueItem[] = [];
   const skipped: TasteQueueItem[] = [];
   const toasts = createToastStore();
@@ -60,7 +63,7 @@ function mount(client: TasteClientPort, initial: readonly TasteQueueItem[], with
     };
     return <TasteQueueContext value={value}>{children}</TasteQueueContext>;
   }
-  const panel = <TastePanel client={client} subject={SUBJECT} projectId={PROJECT} projectName="Synthetic A" newId={(() => { let n = 0; return () => `id-${(n += 1)}`; })()} />;
+  const panel = <TastePanel client={client} subject={subject} projectId={PROJECT} projectName="Synthetic A" newId={(() => { let n = 0; return () => `id-${(n += 1)}`; })()} />;
   const view = render(<ToastStoreProvider store={toasts}>{withQueue ? <Owner>{panel}</Owner> : panel}</ToastStoreProvider>);
   return { rated, skipped, toasts, view };
 }
@@ -74,7 +77,7 @@ describe('QuickRateDeck without a queue', () => {
   it('renders nothing at all when Taste is mounted on its own', async () => {
     const taste = await service();
     const html = renderToStaticMarkup(<QuickRateDeck client={taste} scope={{ kind: 'general' }} snapshot={await taste.snapshot(null)}
-      newId={() => 'id'} disabled={false} onSaved={() => undefined} />);
+      projectId={null} newId={() => 'id'} disabled={false} onSaved={() => undefined} />);
     expect(html).toBe('');
     mount(taste, [PRICING], false);
     await screen.findByText('Project profile');
@@ -365,5 +368,118 @@ describe('QuickRateDeck outcomes', () => {
     fireKey('ArrowRight');
     await waitFor(() => expect(rated).toEqual([PRICING]));
     expect(submit).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The production client admits only its bound project, so a read through `snapshot(null)` throws. These cases use the
+ * real bound adapter over a synthetic document port, not the plain service, which accepts `null`.
+ */
+describe('QuickRateDeck through the project-bound client', () => {
+  /** The bound client with its reads recorded, so a test can prove which project every read named. */
+  function bound(documents: Documents) {
+    const client = bind(documents, PROJECT);
+    const snapshot = vi.fn<TasteClientPort['snapshot']>((id) => client.snapshot(id));
+    const wrapped: TasteClientPort = { label: client.label, snapshot, submit: (command) => client.submit(command), exportProfile: (options) => client.exportProfile(options) };
+    return { wrapped, snapshot };
+  }
+  const journalRecords = (documents: Documents) => ((documents.value as { jsonl: string } | null)?.jsonl ?? '').split('\n').filter(Boolean);
+
+  /** A write that reaches the document and then loses its acknowledgement, once. */
+  class LostAcknowledgement extends Documents {
+    #lost = false;
+    override async putDocument(...args: Parameters<Documents['putDocument']>) {
+      const saved = await super.putDocument(...args);
+      if (!this.#lost) { this.#lost = true; throw new Error('synthetic lost acknowledgement'); }
+      return saved;
+    }
+  }
+
+  const reads = async (snapshot: ReturnType<typeof bound>['snapshot']) => snapshot.mock.calls.map(([id]) => id);
+
+  it('reconciles an unknown general-scope save by reading through the bound project, then retries the same entry', async () => {
+    const documents = new Documents();
+    const { wrapped, snapshot } = bound(documents);
+    documents.putError = new Error('synthetic timeout');
+    const { rated, toasts } = mount(wrapped, [PRICING, BUTTON]);
+    await screen.findByText('Project profile');
+    fireEvent.click(screen.getByLabelText('General taste'));
+    fireKey('ArrowRight');
+    await waitFor(() => expect(toasts.getSnapshot()[0]?.tone).toBe('unknown'));
+    expect(rated).toEqual([]);
+    expect(deck().querySelector('[data-position="front"]')?.getAttribute('data-state')).toBe('unknown');
+    expect(documents.writes).toBe(1);
+    // The write did not land. Check reads the journal through the bound project and reports that, writing nothing.
+    documents.putError = null;
+    fireEvent.click(within(deck()).getByRole('button', { name: 'Check' }));
+    await waitFor(() => expect(toasts.getSnapshot()[0]?.title).toBe('Not in the journal yet'));
+    expect(toasts.getSnapshot().some((toast) => toast.title === "Couldn't read the journal")).toBe(false);
+    expect(documents.writes).toBe(1);
+    expect(rated).toEqual([]);
+    expect(snapshot).toHaveBeenCalled();
+    expect((await reads(snapshot)).every((id) => id === PROJECT)).toBe(true);
+    // Retry sends the identical command; once the journal confirms it, the card leaves and the record is not duplicated.
+    fireEvent.click(within(deck()).getByRole('button', { name: 'Retry same entry' }));
+    await waitFor(() => expect(rated).toEqual([PRICING]));
+    expect(documents.writes).toBe(2);
+    expect(journalRecords(documents)).toHaveLength(1);
+    const record = JSON.parse(journalRecords(documents)[0]!);
+    expect(record.payload.scope).toEqual({ kind: 'general' });
+    expect(record.payload.subject).toMatchObject({ id: 'reference:pricing', kind: 'reference' });
+    expect(deck().querySelector('[data-position="front"]')?.textContent).toContain('Button · Synthetic system');
+    expect((await reads(snapshot)).every((id) => id === PROJECT)).toBe(true);
+  });
+
+  it('counts a general-scope save that landed before its acknowledgement was lost as saved when checked', async () => {
+    const documents = new LostAcknowledgement();
+    const { wrapped, snapshot } = bound(documents);
+    const { rated, toasts } = mount(wrapped, [PRICING]);
+    await screen.findByText('Project profile');
+    fireEvent.click(screen.getByLabelText('General taste'));
+    fireKey('ArrowUp');
+    await waitFor(() => expect(toasts.getSnapshot()[0]?.tone).toBe('unknown'));
+    expect(rated).toEqual([]);
+    fireEvent.click(within(deck()).getByRole('button', { name: 'Check' }));
+    await waitFor(() => expect(rated).toEqual([PRICING]));
+    expect(documents.writes).toBe(1);
+    expect(journalRecords(documents)).toHaveLength(1);
+    expect(toasts.getSnapshot().map((toast) => toast.tone)).toEqual(['success']);
+    expect((await reads(snapshot)).every((id) => id === PROJECT)).toBe(true);
+  });
+
+  it('reads the bound project in the project scope too', async () => {
+    const documents = new Documents();
+    const { wrapped, snapshot } = bound(documents);
+    documents.putError = new Error('synthetic timeout');
+    const { rated, toasts } = mount(wrapped, [PRICING]);
+    await screen.findByText('Project profile');
+    fireKey('ArrowRight');
+    await waitFor(() => expect(toasts.getSnapshot()[0]?.tone).toBe('unknown'));
+    documents.putError = null;
+    fireEvent.click(within(deck()).getByRole('button', { name: 'Check' }));
+    await waitFor(() => expect(toasts.getSnapshot()[0]?.title).toBe('Not in the journal yet'));
+    fireEvent.click(within(deck()).getByRole('button', { name: 'Retry same entry' }));
+    await waitFor(() => expect(rated).toEqual([PRICING]));
+    expect(documents.writes).toBe(2);
+    expect(journalRecords(documents)).toHaveLength(1);
+    expect(JSON.parse(journalRecords(documents)[0]!).payload.scope).toEqual({ kind: 'project', projectId: PROJECT });
+    expect((await reads(snapshot)).every((id) => id === PROJECT)).toBe(true);
+  });
+
+  it('rates a queued item from a queue-only panel that has no subject', async () => {
+    const documents = new Documents();
+    const { wrapped } = bound(documents);
+    const { rated, view } = mount(wrapped, [PRICING], true, false, null);
+    await screen.findByRole('heading', { name: 'Queued items' });
+    expect(deck()).toBeTruthy();
+    expect(screen.getByRole('radiogroup', { name: 'Rating scope' })).toBeTruthy();
+    expect(view.container.querySelector('.taste-body')).toBeNull();
+    expect(view.container.querySelector('.taste-status')).toBeNull();
+    fireKey('ArrowRight');
+    await waitFor(() => expect(rated).toEqual([PRICING]));
+    expect(documents.writes).toBe(1);
+    expect(journalRecords(documents)).toHaveLength(1);
+    await waitFor(() => expect(screen.getByText('1 entry · verified')).toBeTruthy());
+    expect(screen.getByText(/Everything waiting is rated/u)).toBeTruthy();
   });
 });
