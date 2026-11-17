@@ -9,6 +9,13 @@
  *
  * An unknown outcome (a refresh that threw or answered `unavailable`) is never resent: the cycle ends, the source
  * backs off, and the next cycle begins by reading `status`, which is how the outcome is reconciled.
+ *
+ * Back-off also ends when `status` shows the source healthy (`ready` or `partial`) with a `lastSuccessAt` at or after
+ * the start of its last failed attempt: a manual refresh from Settings, or an unknown refresh that actually landed,
+ * then counts as recovery instead of leaving the source skipped and escalating its next failure.
+ *
+ * Each start() begins a new run. A cycle from an earlier run makes no further request once stopped, and never stands
+ * in for the current run's cycle, so a restarted scheduler keeps its own timing.
  */
 import type { SourceResult, SourceStatus, SourceTransport } from '@hq/contracts/catalog';
 
@@ -37,7 +44,7 @@ export interface SourceAutoRefreshOptions {
 export interface SourceAutoRefresh {
   start(): void;
   stop(): void;
-  /** Runs one cycle now. While a cycle is already running it returns that cycle and starts no second one. */
+  /** Runs one cycle now. While a cycle of the current run is already running it returns that cycle and starts no second one. */
   cycle(): Promise<void>;
   readonly running: boolean;
 }
@@ -56,7 +63,8 @@ const systemClock: SourceAutoRefreshClock = {
 /** Cycles to skip after the nth consecutive failure: 1, 2, 4, then 8 (the cap). */
 const skipAfter = (failures: number) => Math.min(SOURCE_AUTO_REFRESH.maxBackoffCycles, 2 ** (failures - 1));
 
-interface Tracking { failures: number; skip: number }
+/** `attemptedAt` is the clock time when the most recent failed attempt began. */
+interface Tracking { failures: number; skip: number; attemptedAt: number }
 
 export function createSourceAutoRefresh(options: SourceAutoRefreshOptions): SourceAutoRefresh {
   const clock = options.clock ?? systemClock;
@@ -70,7 +78,8 @@ export function createSourceAutoRefresh(options: SourceAutoRefreshOptions): Sour
 
   let started = false;
   let timer: unknown = null;
-  let inFlight: Promise<void> | null = null;
+  // The current run's cycle; a cycle from an older epoch is never reused.
+  let inFlight: { epoch: number; run: Promise<void> } | null = null;
   // Changes on stop(); a cycle that began under an older epoch makes no further request.
   let epoch = 0;
   let statusFailures = 0;
@@ -79,19 +88,28 @@ export function createSourceAutoRefresh(options: SourceAutoRefreshOptions): Sour
   const schedule = (delay: number) => {
     clearTimer();
     if (!started) return;
+    const mine = epoch;
     timer = clock.setTimeout(() => {
       timer = null;
-      void runCycle().finally(() => { if (started && timer === null) schedule(nextDelay()); });
+      void runCycle().finally(() => { if (started && mine === epoch && timer === null) schedule(nextDelay()); });
     }, delay);
   };
   /** After a failed `status` the loop backs off too: one interval plus 1, 2, 4, then 8 skipped cycles. */
   const nextDelay = () => statusFailures === 0 ? intervalMs : intervalMs * (1 + skipAfter(statusFailures));
 
-  const failed = (id: string) => {
-    const entry = tracking.get(id) ?? { failures: 0, skip: 0 };
+  const failed = (id: string, attemptedAt: number) => {
+    const entry = tracking.get(id) ?? { failures: 0, skip: 0, attemptedAt };
     entry.failures += 1;
     entry.skip = skipAfter(entry.failures);
+    entry.attemptedAt = attemptedAt;
     tracking.set(id, entry);
+  };
+
+  /** A healthy row whose last success is no older than the failed attempt shows the source recovered elsewhere. */
+  const recoveredSince = (row: SourceStatus, entry: Tracking) => {
+    if ((row.state !== 'ready' && row.state !== 'partial') || row.lastSuccessAt === null) return false;
+    const at = Date.parse(row.lastSuccessAt);
+    return Number.isFinite(at) && at >= entry.attemptedAt;
   };
 
   const isDue = (row: SourceStatus, now: number) => {
@@ -109,18 +127,19 @@ export function createSourceAutoRefresh(options: SourceAutoRefreshOptions): Sour
       if (!status.ok || !Array.isArray(status.value)) throw new Error('status unavailable');
       rows = status.value;
     } catch {
-      statusFailures += 1;
+      if (mine === epoch) statusFailures += 1;
       return;
     }
-    statusFailures = 0;
     if (mine !== epoch) return;
+    statusFailures = 0;
     const present = new Set(rows.map((row) => row.sourceId));
     for (const id of [...tracking.keys()]) if (!present.has(id)) tracking.delete(id);
     const now = clock.now();
     const due: SourceStatus[] = [];
     for (const row of [...rows].sort((a, b) => a.sourceId < b.sourceId ? -1 : a.sourceId > b.sourceId ? 1 : 0)) {
       if (!kinds.has(row.kind)) continue;
-      const entry = tracking.get(row.sourceId);
+      let entry = tracking.get(row.sourceId);
+      if (entry && recoveredSince(row, entry)) { tracking.delete(row.sourceId); entry = undefined; }
       if (entry && entry.skip > 0) { entry.skip -= 1; continue; }
       if (isDue(row, now)) due.push(row);
     }
@@ -129,24 +148,25 @@ export function createSourceAutoRefresh(options: SourceAutoRefreshOptions): Sour
       for (const row of due) {
         if (mine !== epoch) return;
         attempted = true;
+        const attemptedAt = clock.now();
         let result: SourceResult<readonly SourceStatus[]>;
         try {
           result = await sources.call('refresh', { sourceId: row.sourceId });
         } catch {
           // Unknown effect: back the source off, end the cycle and never resend. The next cycle reads `status`.
-          failed(row.sourceId);
+          failed(row.sourceId, attemptedAt);
           return;
         }
         if (!result.ok) {
           if (result.kind === 'stale') { tracking.delete(row.sourceId); continue; }   // the source no longer exists
-          failed(row.sourceId);
+          failed(row.sourceId, attemptedAt);
           if (result.kind === 'unavailable') return;                                   // outcome unknown
           continue;                                                                    // 'invalid': refused, nothing happened
         }
         const after = result.value.find((item) => item.sourceId === row.sourceId);
         if (!after) { tracking.delete(row.sourceId); continue; }                       // removed meanwhile
         if (after.state === 'ready' || after.state === 'partial') tracking.delete(row.sourceId);
-        else failed(row.sourceId);                                                     // the registry kept the last snapshot
+        else failed(row.sourceId, attemptedAt);                                        // the registry kept the last snapshot
       }
     } finally {
       if (attempted && mine === epoch) options.onChanged?.();
@@ -154,11 +174,14 @@ export function createSourceAutoRefresh(options: SourceAutoRefreshOptions): Sour
   }
 
   function runCycle(): Promise<void> {
-    if (inFlight) return inFlight;
+    if (inFlight && inFlight.epoch === epoch) return inFlight.run;
     const mine = epoch;
-    const run = cycleOnce(mine).catch(() => { /* a cycle never rejects into the timer */ }).finally(() => { if (inFlight === run) inFlight = null; });
-    inFlight = run;
-    return run;
+    const current = {
+      epoch: mine,
+      run: cycleOnce(mine).catch(() => { /* a cycle never rejects into the timer */ }).finally(() => { if (inFlight === current) inFlight = null; }),
+    };
+    inFlight = current;
+    return current.run;
   }
 
   return {

@@ -17,7 +17,10 @@ const jonesConnection = createJonesConnection(window.hqServices?.jonesCode);
 void jonesConnection.refresh();
 window.addEventListener('hq-sources-changed', () => { void jonesConnection.refresh(); });
 // Re-reads due enrolled sources through the registry's own refresh route; a no-op without the native bridge.
-createSourceAutoRefresh({ sources: window.hqServices?.sources, onChanged: () => window.dispatchEvent(new Event('hq-sources-changed')) }).start();
+const sourceAutoRefresh = createSourceAutoRefresh({ sources: window.hqServices?.sources, onChanged: () => window.dispatchEvent(new Event('hq-sources-changed')) });
+sourceAutoRefresh.start();
+// Development only: a hot-reloaded copy of this module arms its own scheduler, so stop this one first.
+import.meta.hot?.dispose(() => sourceAutoRefresh.stop());
 export const { designDomain, designReferenceReads } = createDesignComposition({
   preview: desktopPreview, runsConnection: jonesConnection.connection, onSelectProject: selectDesktopProject,
   sources: { async list() { const result = await window.hqServices?.sources?.call('list', {}); if (!result?.ok) throw Error('Project sources unavailable'); return result.value; } },

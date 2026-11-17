@@ -260,6 +260,71 @@ describe('source auto refresh', () => {
     expect(double.refreshes).toEqual(['a']);
   });
 
+  it('a restart during a cycle starts a fresh cycle on schedule, and the stopped cycle makes no further request', async () => {
+    const { clock, double, refresh } = setup([row('a'), row('b')]);
+    const gate: { release: () => void } = { release: () => {} };
+    const held = new Promise<void>((resolve) => { gate.release = resolve; });
+    let first = true;
+    double.on('a', async () => {
+      if (first) { first = false; await held; }
+      double.setRows(double.rows.map((item) => item.sourceId === 'a' ? { ...item, lastSuccessAt: iso(clock.time) } : item));
+      return { ok: true, value: double.rows };
+    });
+    refresh.start();
+    clock.advance(SOURCE_AUTO_REFRESH.initialDelayMs);
+    await settle();
+    expect(double.routes).toEqual(['status', 'refresh']);
+    refresh.stop();
+    refresh.start();
+    clock.advance(SOURCE_AUTO_REFRESH.initialDelayMs);
+    await settle();
+    // The restarted run read status itself instead of reusing the stopped run's cycle.
+    expect(double.routes).toEqual(['status', 'refresh', 'status', 'refresh', 'refresh']);
+    expect(double.refreshes).toEqual(['a', 'a', 'b']);
+    expect(clock.nextDelay).toBe(SOURCE_AUTO_REFRESH.intervalMs);
+    gate.release();
+    await settle();
+    // The stopped cycle does not go on to 'b', and its completion arms no second timer.
+    expect(double.refreshes).toEqual(['a', 'a', 'b']);
+    expect(clock.pending).toBe(1);
+    expect(clock.nextDelay).toBe(SOURCE_AUTO_REFRESH.intervalMs);
+  });
+
+  it('ends a back-off when status shows a manual success after the failed attempt, but not an older one', async () => {
+    const { clock, double, refresh } = setup([stale('a'), row('b', { lastSuccessAt: iso(START - 60 * MINUTE) })]);
+    double.on('a', { ok: true, value: [stale('a')] });   // the registry kept the last snapshot: backed off
+    double.on('b', { ok: false, kind: 'invalid' });       // refused while ready: backed off
+    await refresh.cycle();
+    expect(double.refreshes).toEqual(['a', 'b']);
+    // A minute later Settings refreshes 'a' successfully; 'b' keeps its success from before the refused attempt.
+    clock.advance(MINUTE);
+    double.setRows(double.rows.map((item) => item.sourceId === 'a' ? row('a', { lastSuccessAt: iso(clock.time) }) : item));
+    clock.advance(SOURCE_AUTO_REFRESH.intervalMs);
+    await refresh.cycle();
+    // 'a' is no longer backed off and is due again; 'b' still sits out its skipped cycle.
+    expect(double.refreshes).toEqual(['a', 'b', 'a']);
+  });
+
+  it('treats an unknown refresh that landed as a success, so the next failure does not escalate', async () => {
+    const { clock, double, refresh } = setup([stale('a')]);
+    double.on('a',
+      async (): Promise<SourceResult<readonly SourceStatus[]>> => {
+        // The refresh lands, but its answer is lost.
+        double.setRows([row('a', { lastSuccessAt: iso(clock.time) })]);
+        throw new Error('bridge gone');
+      },
+      { ok: true, value: [stale('a')] });
+    await refresh.cycle();
+    await refresh.cycle();                                // status shows the landed success: the back-off ends
+    expect(double.refreshes).toEqual(['a']);              // fresh, so not due yet
+    clock.advance(SOURCE_AUTO_REFRESH.intervalMs);
+    await refresh.cycle();                                // fails: the first failure again, one skipped cycle
+    await refresh.cycle();
+    expect(double.refreshes).toEqual(['a', 'a']);
+    await refresh.cycle();
+    expect(double.refreshes).toEqual(['a', 'a', 'a']);
+  });
+
   it('reports a change once per cycle that attempted a refresh, and not otherwise', async () => {
     const onChanged = vi.fn();
     const { double, refresh } = setup([row('a'), row('b')], { onChanged });
