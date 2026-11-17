@@ -4,12 +4,32 @@ import { LocalDirectoryAdapter, LOCAL_HOST_ID } from '../../discovery/src/adapte
 import { DiscoveryService } from '../../discovery/src/discovery.ts';
 import { CATALOG_CACHE_KEY, serializeCatalogCache } from '../../discovery/src/cache.ts';
 import { EMPTY_CATALOG } from '../../discovery/src/catalog.ts';
-import { isoFromMs, type CacheStoragePort, type ClockPort } from '../../discovery/src/contract.ts';
+import { hostId, isoFromMs, type CacheStoragePort, type ClockPort, type HostId, type SourceAdapter } from '../../discovery/src/contract.ts';
 import { TEXT_FORMAT } from '../storage/index.ts';
-import { CACHED_TAG } from './labels.ts';
+import { CACHED_TAG, SYNTHETIC_TAG } from './labels.ts';
 import { createCachedCatalogReadPort, type CachedCatalogReadPort } from './catalog-read-port.ts';
 
-export async function createBridgedDiscovery(transport: DesignServiceTransport | undefined = globalThis.window?.hqServices?.design) {
+export type InjectedDiscoverySource = {
+  adapterKey: string;
+  hostId: HostId;
+  label: string;
+  adapter: SourceAdapter;
+};
+
+export async function createBridgedDiscovery(transport: DesignServiceTransport | undefined = globalThis.window?.hqServices?.design,
+  options: { sources?: readonly InjectedDiscoverySource[] } = {}) {
+  const sources = options.sources?.map((source) => ({ ...source })) ?? [];
+  if (sources.length > 8) throw new Error('At most eight synthetic discovery sources may be injected.');
+  const adapterKeys = new Set(['local']);
+  const hostIds = new Set<HostId>([LOCAL_HOST_ID]);
+  for (const source of sources) {
+    if (source.adapter.qualification !== 'fake') throw new Error('Injected discovery sources must use fake adapters.');
+    if (adapterKeys.has(source.adapterKey)) throw new Error('Injected discovery adapter keys must be unique and not local.');
+    hostId(source.hostId);
+    if (hostIds.has(source.hostId)) throw new Error('Injected discovery host IDs must be unique and not local.');
+    adapterKeys.add(source.adapterKey);
+    hostIds.add(source.hostId);
+  }
   if (!transport) throw new Error('Project folders require the desktop catalog connection.');
   async function call<R extends DesignServiceRoute>(route: R, params: DesignServiceParams[R]): Promise<DesignServiceValues[R]> {
     const result = await transport!.call(route, params);
@@ -51,11 +71,18 @@ export async function createBridgedDiscovery(transport: DesignServiceTransport |
   let roots: readonly CatalogRoot[] = await call('catalog.roots', {});
   const clear = () => cache.writeDocument(CATALOG_CACHE_KEY, serializeCatalogCache(EMPTY_CATALOG, isoFromMs(clock.now())));
   if (roots.length === 0) await clear();
-  const buildService = () => new DiscoveryService({ cache, clock, adapters: { local: adapter }, refreshOnOpen: false,
-    enrollments: [{ hostId: LOCAL_HOST_ID, label: 'This device', adapterKey: 'local', enrolledAt: isoFromMs(clock.now()) }] });
+  const adapters: Record<string, SourceAdapter> = { local: adapter, ...Object.fromEntries(sources.map((source) => [source.adapterKey, source.adapter])) };
+  const hostLabels = { [LOCAL_HOST_ID]: 'This device', ...Object.fromEntries(sources.map((source) => [source.hostId, source.label])) };
+  const adapterLabels: Record<string, { label: string; fake: boolean }> = { local: { label: 'Local directory', fake: false },
+    ...Object.fromEntries(sources.map((source) => [source.adapterKey, { label: source.label, fake: true }])) };
+  const buildService = () => new DiscoveryService({ cache, clock, adapters, refreshOnOpen: false,
+    enrollments: [{ hostId: LOCAL_HOST_ID, label: 'This device', adapterKey: 'local', enrolledAt: isoFromMs(clock.now()) },
+      ...sources.map((source) => ({ hostId: source.hostId, label: source.label, adapterKey: source.adapterKey, enrolledAt: isoFromMs(clock.now()) }))] });
   let service = buildService();
   await service.open();
-  const readPort = createCachedCatalogReadPort({ cache, hostLabels: { [LOCAL_HOST_ID]: 'This device' }, provenance: 'Selected local projects folder' });
+  const readPort = createCachedCatalogReadPort({ cache, hostLabels, ...(sources.length === 0
+    ? { provenance: 'Selected local projects folder' }
+    : { dataTag: SYNTHETIC_TAG, provenance: `Synthetic injected sources: ${sources.map((source) => source.label).join(', ')}; selected local projects folder` }) });
   catalogReader = readPort;
   await readPort.load();
   let busy = false;
@@ -73,8 +100,8 @@ export async function createBridgedDiscovery(transport: DesignServiceTransport |
     if (report.results.some((result) => result.outcome !== 'applied')) throw new Error('Project refresh did not complete. Cached projects remain available.');
   }
   return {
-    tag: CACHED_TAG, cache, clock, get service() { return service; }, readPort,
-    adapterLabels: { local: { label: 'Local directory', fake: false } },
+    tag: sources.length === 0 ? CACHED_TAG : SYNTHETIC_TAG, cache, clock, get service() { return service; }, readPort,
+    adapterLabels,
     roots: () => roots,
     refresh: () => exclusive(refresh),
     chooseRoot: () => exclusive(async () => {

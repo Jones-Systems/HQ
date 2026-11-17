@@ -30,7 +30,7 @@ import { createProviderRegistry } from '../../canvas/src/providers.ts';
 import { createCanvasProviderAdapter } from './canvas-adapter.ts';
 import { createProjectVersionsProvider } from './project-versions.ts';
 import { canvasProjectIdFor, shellProjectIdFor, type ImportsEnv } from './fake-workspace.ts';
-import { createBridgedDiscovery } from './bridged-discovery.ts';
+import { createBridgedDiscovery, type InjectedDiscoverySource } from './bridged-discovery.ts';
 import { createWorkspaceThumbnailPort } from './thumbnail-port.ts';
 import { createProjectCompareCatalog } from './compare-catalog.ts';
 import type { EvidenceTag } from './labels.ts';
@@ -66,6 +66,7 @@ function unusableContent(loaded: Exclude<LoadedContent, { status: 'ok' }>, conte
 export interface BridgedWorkspaceOptions {
   /** Shared change feed; writers outside this workspace (captures, Imports) notify it. */
   readonly contentEvents?: ProjectContentEvents;
+  readonly discoverySources?: readonly InjectedDiscoverySource[];
 }
 
 export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<Pick<WorkspaceRecords, 'getBlob'>>, options: BridgedWorkspaceOptions = {}) {
@@ -77,7 +78,7 @@ export function createBridgedWorkspace(documents: WorkspaceDocuments & Partial<P
   let discoveryFailed = false;
   const discoveryEnv = () => {
     if (discovery === undefined) {
-      const attempt = createBridgedDiscovery();
+      const attempt = options.discoverySources === undefined ? createBridgedDiscovery() : createBridgedDiscovery(undefined, { sources: options.discoverySources });
       discovery = attempt;
       discoveryFailed = false;
       attempt.then(undefined, () => { if (discovery === attempt) discoveryFailed = true; });
