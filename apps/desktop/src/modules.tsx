@@ -12,9 +12,12 @@ const wiki = createWikiDomain({ getPort: () => window.hqServices?.wiki ?? null, 
 
 import { createDesignComposition } from '../../../modules/design/app/index.ts';
 import { desktopPreview, createJonesConnection, selectDesktopProject } from './interactive-runtime';
+import { createSourceAutoRefresh } from './source-auto-refresh';
 const jonesConnection = createJonesConnection(window.hqServices?.jonesCode);
 void jonesConnection.refresh();
 window.addEventListener('hq-sources-changed', () => { void jonesConnection.refresh(); });
+// Re-reads due enrolled sources through the registry's own refresh route; a no-op without the native bridge.
+createSourceAutoRefresh({ sources: window.hqServices?.sources, onChanged: () => window.dispatchEvent(new Event('hq-sources-changed')) }).start();
 export const { designDomain, designReferenceReads } = createDesignComposition({
   preview: desktopPreview, runsConnection: jonesConnection.connection, onSelectProject: selectDesktopProject,
   sources: { async list() { const result = await window.hqServices?.sources?.call('list', {}); if (!result?.ok) throw Error('Project sources unavailable'); return result.value; } },
