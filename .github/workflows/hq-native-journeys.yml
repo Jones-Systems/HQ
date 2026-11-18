@@ -39,12 +39,26 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24.19.0'
+      - name: Provide bubblewrap on a disposable hosted runner
+        if: github.repository == 'Jones-Systems/HQ' && runner.environment == 'github-hosted' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v bwrap; then exit 0; fi
+          sudo -n apt-get update
+          sudo -n apt-get install -y --no-install-recommends bubblewrap
+          command -v bwrap
       - name: Require existing Linux capabilities
         shell: bash
         run: |
           set -euo pipefail
           for tool in Xvfb bwrap python3 git fc-match; do command -v "$tool"; done
           test -f "$(fc-match --format '%{file}' sans)"
+      - name: Prove unprivileged user and PID namespaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 10s bwrap --die-with-parent --unshare-user --unshare-pid --ro-bind / / --proc /proc --dev /dev /usr/bin/true
       - name: Admit workspace storage before install and build
         shell: bash
         run: |
