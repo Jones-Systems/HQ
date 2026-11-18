@@ -4,9 +4,12 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { fixtureReporter } = require('./native-diagnostics.cjs');
+const report = fixtureReporter(__dirname, 'main');
 const context = require('../tools/updater/bootstrap.cjs').getContext();
 
 async function main() {
+  report('entered');
   assert.equal(context?.record.synthetic, true);
   assert.equal(app.commandLine.hasSwitch('use-mock-keychain'), true);
   assert.equal(context.record.bundleId, 'org.jones-systems.hq.updater-test');
@@ -19,6 +22,7 @@ async function main() {
   try { control = JSON.parse(await fs.readFile(controlFile, 'utf8')); await fs.unlink(controlFile); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (control.mode === 'fail-health') {
+    report('failed-health');
     await fs.writeFile(path.join(context.record.userData, 'post-open-synthetic-write.txt'), 'preserve after failed health');
     app.exit(23);
     return;
@@ -26,15 +30,20 @@ async function main() {
   app.disableHardwareAcceleration();
   await app.whenReady();
   assert.equal(await context.markMainReady(), false);
+  report('main-ready');
   const window = new BrowserWindow({ show: false, webPreferences: { preload: path.join(__dirname, 'native-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
   let acknowledge;
   const mounted = new Promise(resolve => { acknowledge = resolve; });
   ipcMain.handle('hq-synthetic-shell-mounted', async event => {
-    assert.equal(event.sender, window.webContents);
-    assert.equal(event.senderFrame, window.webContents.mainFrame);
-    const healthy = await context.markRendererReady();
-    assert.equal(healthy, true);
-    acknowledge();
+    try {
+      assert.equal(event.sender, window.webContents);
+      assert.equal(event.senderFrame, window.webContents.mainFrame);
+      report('renderer-ready');
+      const healthy = await context.markRendererReady();
+      assert.equal(healthy, true);
+      report('healthy');
+      acknowledge();
+    } catch (error) { report('renderer-error', error); throw error; }
   });
   await window.loadFile(path.join(__dirname, 'native-shell.html'));
   await mounted;
@@ -48,9 +57,9 @@ async function main() {
   app.exit(0);
 }
 
-const watchdog = setTimeout(() => app.exit(24), 25000);
+const watchdog = setTimeout(() => { report('watchdog'); app.exit(24); }, 25000);
 watchdog.unref();
-main().catch(async error => {
-  if (context?.record.synthetic) await fs.writeFile(path.join(context.record.stateRoot, 'smoke-failure.json'), JSON.stringify({ name: error.name, message: error.message })).catch(() => {});
+main().catch(error => {
+  report('error', error);
   app.exit(2);
 });

@@ -156,7 +156,11 @@ test('another live lease or a failed singleton cannot import main', async t => {
   f.processes.delete(existing.pid);
   const app = fakeApp(f.record.appName);
   app.requestSingleInstanceLock = () => false;
-  await assert.rejects(run(options(f, app, async () => assert.fail('main imported'))), { code: 'busy' });
+  await assert.rejects(run(options(f, app, async () => assert.fail('main imported'))), error => error.code === 'busy' && error.refusal.guard === 'profile-singleton' && error.refusal.launchBinding === 'absent');
+  const original = Object.freeze(Object.assign(new Error('private diagnostic sentinel'), { code: 'busy' }));
+  app.requestSingleInstanceLock = () => { throw original; };
+  await assert.rejects(run(options(f, app, async () => assert.fail('main imported'))), error => error === original);
+  await assert.rejects(fs.stat(path.join(f.record.stateRoot, 'gate')), { code: 'ENOENT' });
 });
 
 test('profile-opened is durable before main and joint readiness commits the installed record', async t => {
