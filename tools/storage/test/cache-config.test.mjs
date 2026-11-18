@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { stripTypeScriptTypes } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Script } from 'node:vm';
 import { it } from 'node:test';
@@ -10,25 +11,41 @@ const configs = [
   ['apps/desktop/vite.config.ts', 'vite-desktop'],
   ['apps/desktop/vite.preview-agent.config.ts', 'vite-preview-agent'],
   ['vitest.config.ts', 'vitest-root'],
+  ['modules/design/annotations/vitest.config.ts', 'design-annotations'],
+  ['modules/design/app/sections/vitest.config.ts', 'design-app-sections'],
+  ['modules/design/canvas/vitest.config.ts', 'design-canvas'],
+  ['modules/design/compare/vitest.config.ts', 'design-compare'],
+  ['modules/design/components/vitest.config.ts', 'design-components'],
+  ['modules/design/references/vitest.config.ts', 'design-references'],
+  ['modules/design/requests/vitest.config.ts', 'design-requests'],
+  ['modules/design/taste/vitest.config.ts', 'design-taste'],
+  ['modules/design/ui/vitest.config.ts', 'design-ui'],
+  ['modules/design/preview/vite.config.ts', 'design-preview'],
 ];
 
 // Evaluate the actual config expressions without installing or starting Vite. Its
 // defineConfig wrapper is an identity here; hosted CI checks the real tool API.
+// Erase types once per source file, including the preview's unexecuted hooks.
+const sources = new Map();
 function readConfig(path, checkout, cwd) {
-  const source = readFileSync(new URL(path, repository), 'utf8')
-    .replace(/^import \{ (?:fileURLToPath|defineConfig) \} from '(?:node:url|vite|vitest\/config)';\r?\n/gm, '')
-    .replaceAll('import.meta.url', 'configUrl')
-    .replace('export default ', 'globalThis.config = ');
+  if (!sources.has(path)) sources.set(path,
+    stripTypeScriptTypes(readFileSync(new URL(path, repository), 'utf8'))
+      .replace(/^import .* from '[^']+';\r?\n/gm, '')
+      .replaceAll('import.meta.url', 'configUrl')
+      .replaceAll('import.meta.dirname', 'configDir')
+      .replace('export default ', 'globalThis.config = '));
   const context = {
     URL, fileURLToPath, defineConfig: value => value,
     configUrl: new URL(path, checkout).href,
-    process: { cwd: () => cwd },
+    configDir: dirname(fileURLToPath(new URL(path, checkout))),
+    process: { cwd: () => cwd, env: {} },
+    appendFileSync: () => { throw new Error('Config evaluation must not write logs'); },
   };
-  new Script(source, { filename: path }).runInNewContext(context, { timeout: 1000 });
+  new Script(sources.get(path), { filename: path }).runInNewContext(context, { timeout: 1000 });
   return context.config;
 }
 
-it('keeps the three scoped cache namespaces distinct and inside this worktree', () => {
+it('keeps all allocated cache namespaces distinct and inside this worktree', () => {
   const destinations = configs.map(([path, namespace]) => {
     const config = readConfig(path, repository, fileURLToPath(repository));
     assert.equal(config.cacheDir, join(fileURLToPath(repository), '.t3', 'cache', namespace));
@@ -52,5 +69,8 @@ it('follows the config checkout rather than the invocation cwd, including spaces
   assert.equal(destinations.size, configs.length * 2);
 });
 
-// Module-local modules/design/*/vitest.config.ts (including the app config)
-// and the design-sections.yml matrix are outside this slice and keep defaults.
+// UNCOVERED: modules/design/app/vitest.config.ts (the separate PR168 candidate).
+// These eight Vite configs also retain their default cache placement:
+// modules/design/{canvas/harness,compare/demo,components/harness,projects/harness,
+// references/harness,requests/harness,taste/preview,ui/harness}/vite.config.ts.
+// No workflow/matrix is changed; no cache migration, deletion or quota is tested.
