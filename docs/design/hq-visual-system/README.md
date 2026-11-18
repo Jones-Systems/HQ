@@ -93,3 +93,5 @@ python3 -I tools/compare_regions.py     # writes evidence/manifest.json; exits n
 `tools/render.sh artwork` regenerates the fictional artwork PNGs from `mockups/assets/src/`. Run it only when the artwork changes, because the PNG bytes are the reference the checks compare against. To browse the mockups, serve this directory over loopback (for example `python3 -m http.server --bind 127.0.0.1`) and open `mockups/design.html?theme=system`.
 
 All names, brands and content (Larkspur Tea Co., Atlas Weekend Market) are fictional.
+
+For running the real app headlessly with example data and capturing screenshots of this system, see [Dev preview](../../dev-preview.md).

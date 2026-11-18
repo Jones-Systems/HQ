@@ -39,4 +39,4 @@ jobs:
       - name: Test Wiki with the Node test runner
         run: npm test --workspace @hq/wiki
       - name: Test portable acceptance fixtures and storage lifecycle
-        run: node --test --test-concurrency=1 'tests/acceptance/**/*.test.mjs' 'tools/storage/test/**/*.test.mjs'
+        run: node --test --test-concurrency=1 'tests/acceptance/**/*.test.mjs' 'tools/storage/test/**/*.test.mjs' 'tools/dev-preview/test/**/*.test.mjs'
