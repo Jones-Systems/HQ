@@ -167,7 +167,7 @@ it('Work card: Wiki links read Changed and Missing, Link to… adds a page, open
 
   fireEvent.click(open);
   await waitFor(() => expect(pageTitle()).toBe('Retry Policy'), slow);
-  expect(screen.getByRole('button', { name: /^Wiki$/ }).getAttribute('aria-current')).toBe('page');
+  expect(within(screen.getByRole('navigation', { name: 'Domains' })).getByRole('button', { name: 'Wiki' }).getAttribute('aria-current')).toBe('page');
   fireEvent.click(screen.getByRole('button', { name: 'Back to Synthetic reference card' }));
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Capture to Inbox' })).toHaveProperty('value', 'Keep this capture'));
   expect(screen.getByRole('textbox', { name: 'Card title' })).toHaveProperty('value', 'Synthetic reference card');

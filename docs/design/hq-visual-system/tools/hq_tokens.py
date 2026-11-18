@@ -77,6 +77,9 @@ def load() -> dict:
         m = REF.match(ref)
         if not m or m.group(1) not in data["color"]:
             raise TokenError(f"component.{name} references unknown colour role {ref}")
+    for name in data["motion-reduced"]["values"]:
+        if name not in data["motion"]:
+            raise TokenError(f"motion-reduced.{name} overrides no motion token")
     return data
 
 
@@ -169,8 +172,14 @@ def css(data: dict) -> str:
     out += ["[data-theme=\"dark\"] {", *shadows("dark"), "}"]
     out += [
         "",
+        "/* Reduced motion: the OS preference, or the shell's explicit <html data-hq-motion=\"reduce\"> override. */",
         "@media (prefers-reduced-motion: reduce) {",
-        f"  :root {{ --{p}-duration-fast: 0ms; --{p}-duration-base: 0ms; --{p}-duration-slow: 0ms; }}",
+        "  :root {",
+        *(f"    --{p}-{name}: {v};" for name, v in data["motion-reduced"]["values"].items()),
+        "  }",
+        "}",
+        ":root[data-hq-motion=\"reduce\"] {",
+        *(f"  --{p}-{name}: {v};" for name, v in data["motion-reduced"]["values"].items()),
         "}",
         "",
         "/* Preserved content (spec RS-2 marker data-hq-content=\"captured\" | \"producer\" | \"export\"): captured screenshots,",

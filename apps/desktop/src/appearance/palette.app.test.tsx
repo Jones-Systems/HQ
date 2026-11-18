@@ -15,6 +15,12 @@ function openAppearance() {
   fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
   return screen.getByRole('region', { name: 'Settings page' });
 }
+/** The colour editor lives behind "Customize colors" and stays closed until it is asked for. */
+function openColors(settings: HTMLElement) {
+  const toggle = within(settings).getByRole('button', { name: /Customize colors/ });
+  if (toggle.getAttribute('aria-expanded') !== 'true') fireEvent.click(toggle);
+  return settings;
+}
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear(); });
 
 it('offers four presets, applies Warm Graphite by default in dark mode and switches the actual chrome immediately', () => {
@@ -51,9 +57,9 @@ it('keeps a stored light appearance, leaves light tokens generated, and still ed
   fireEvent.click(within(settings).getByRole('radio', { name: /Slate/ }));
   expect(token('--hq-canvas')).toBe('');
   expect(window.localStorage.getItem('hq.appearance.v1')).toBe('light');
-  fireEvent.click(within(within(settings).getByRole('group', { name: 'Color theme' })).getByRole('button', { name: 'Dark' }));
+  fireEvent.click(within(within(settings).getByRole('radiogroup', { name: 'Color theme' })).getByRole('radio', { name: 'Dark' }));
   expect(token('--hq-canvas')).toBe(PALETTE_PRESETS.slate.colors.canvas);
-  fireEvent.click(within(within(settings).getByRole('group', { name: 'Color theme' })).getByRole('button', { name: 'Light' }));
+  fireEvent.click(within(within(settings).getByRole('radiogroup', { name: 'Color theme' })).getByRole('radio', { name: 'Light' }));
   expect(token('--hq-canvas')).toBe('');
   expect(token('--hq-artwork-matte')).toBe('');
 });
@@ -61,7 +67,7 @@ it('keeps a stored light appearance, leaves light tokens generated, and still ed
 it('edits a colour by picker and hex, keeps the last good value for partial or invalid hex, and resets', () => {
   systemDark(true); window.localStorage.clear();
   render(<App />);
-  const settings = openAppearance();
+  const settings = openColors(openAppearance());
   const hex = within(settings).getByRole('textbox', { name: 'Primary button hex value' }) as HTMLInputElement;
   fireEvent.change(hex, { target: { value: '#12' } });
   expect(token('--hq-accent')).toBe(PALETTE_PRESETS.graphite.colors.accent);
@@ -87,7 +93,7 @@ it('edits a colour by picker and hex, keeps the last good value for partial or i
 it('shows low contrast beside a valid custom colour without rewriting it', () => {
   systemDark(true); window.localStorage.clear();
   render(<App />);
-  const settings = openAppearance();
+  const settings = openColors(openAppearance());
   const hex = within(settings).getByRole('textbox', { name: 'Text hex value' });
   fireEvent.change(hex, { target: { value: '#4A4540' } });
   expect(token('--hq-text')).toBe('#4A4540');
@@ -97,7 +103,7 @@ it('shows low contrast beside a valid custom colour without rewriting it', () =>
 it('restores per-preset edits after restart and keeps other presets untouched', () => {
   systemDark(true); window.localStorage.clear();
   const first = render(<App />);
-  let settings = openAppearance();
+  let settings = openColors(openAppearance());
   fireEvent.change(within(settings).getByRole('textbox', { name: 'Navigation hex value' }), { target: { value: '#101010' } });
   fireEvent.click(within(settings).getByRole('radio', { name: /Slate/ }));
   fireEvent.change(within(settings).getByRole('textbox', { name: 'Navigation hex value' }), { target: { value: '#202020' } });

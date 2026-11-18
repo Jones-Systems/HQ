@@ -51,9 +51,15 @@ export const HQ_SIZE_TOKENS = [
   '--hq-size-window-min-width', '--hq-size-window-min-height',
 ] as const;
 
-/** Durations collapse to 0ms under `prefers-reduced-motion: reduce`. */
+/**
+ * Durations collapse to 0ms, distances to 0px and scales to 1 under `prefers-reduced-motion: reduce` or
+ * `<html data-hq-motion="reduce">`. See `motion/` for the primitives that consume them.
+ */
 export const HQ_MOTION_TOKENS = [
-  '--hq-duration-fast', '--hq-duration-base', '--hq-duration-slow', '--hq-ease-standard', '--hq-ease-exit',
+  '--hq-duration-instant', '--hq-duration-fast', '--hq-duration-base', '--hq-duration-slow', '--hq-duration-slower',
+  '--hq-ease-standard', '--hq-ease-exit', '--hq-ease-enter', '--hq-ease-spring',
+  '--hq-motion-distance-sm', '--hq-motion-distance-md', '--hq-motion-distance-lg',
+  '--hq-motion-scale-press', '--hq-motion-scale-enter', '--hq-motion-stagger',
 ] as const;
 
 export const HQ_LAYER_TOKENS = [

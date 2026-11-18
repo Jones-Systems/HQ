@@ -28,6 +28,8 @@ export interface NavState {
 
 export type NavAction =
   | { readonly type: 'go'; readonly entry: HistoryEntry }
+  /** Swap the current entry (search as you type) without adding one or dropping the forward branch. */
+  | { readonly type: 'replace'; readonly entry: HistoryEntry }
   | { readonly type: 'back' }
   | { readonly type: 'forward' }
   | { readonly type: 'jump'; readonly index: number }
@@ -76,6 +78,11 @@ export function navReducer(state: NavState, action: NavAction): NavState {
   switch (action.type) {
     case 'go':
       return sameEntry(currentEntry(state), action.entry) ? state : push(state, action.entry, withRequest(state, action.entry));
+    case 'replace': {
+      if (sameEntry(currentEntry(state), action.entry)) return state;
+      const entries = [...state.entries.slice(0, state.index), action.entry, ...state.entries.slice(state.index + 1)];
+      return { ...state, entries, pending: withRequest(state, action.entry) };
+    }
     case 'back':
       return moveTo(state, state.index - 1);
     case 'forward':

@@ -2,7 +2,8 @@
 // Review, Archive and the read-only By date board. The Work domain mounts
 // `PlanningViews` with the shared Work store; the Board, card detail and
 // capture belong to their own lanes and connect through the optional links.
-import './work-views.css';
+import '../theme';
+import './views-base.css';
 
 export { PlanningViews, failureText, type PlanningViewsProps } from './PlanningViews';
 export type { ViewLinks } from './env';

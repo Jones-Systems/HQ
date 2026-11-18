@@ -1,0 +1,130 @@
+/*
+ * Work planning views: shared base. Work roles (--work-st-*, --work-dk-*, --work-why-*) live in
+ * ../theme/work-theme.css, each paired with a word and a shape, so nothing relies on colour alone.
+ * The scheme follows <html data-theme>, as the kit documents; nested [data-theme] subtrees are not
+ * supported in Vite builds (kit finding F1). No inline styles: positions arrive as --wv-* properties
+ * set through CSSOM. Each view owns its own stylesheet beside its component.
+ */
+.wv {
+  display: grid;
+  gap: var(--hq-space-md);
+  color: var(--hq-text);
+  font: var(--hq-type-body);
+  min-width: 0;
+}
+.wv *, .wv *::before, .wv *::after { box-sizing: border-box; }
+.wv :focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
+.wv h2, .wv h3, .wv h4, .wv p { margin: 0; }
+
+.wv-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.wv-muted { color: var(--hq-text-muted); }
+.wv-hint, .wv-section-hint, .wv-col-rule { color: var(--hq-text-muted); font: var(--hq-type-small); }
+.wv-eyebrow { font: var(--hq-type-small); font-weight: var(--hq-font-weight-semibold); letter-spacing: normal; text-transform: none; color: var(--hq-text-subtle); }
+.wv-count { font: var(--hq-type-meta); color: var(--hq-text-subtle); margin-left: var(--hq-space-xs); }
+
+.wv-topline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--hq-space-sm); }
+.wv-project-note { font: var(--hq-type-meta); color: var(--hq-text-muted); }
+.wv-body { min-width: 0; }
+
+.wv-banners { display: grid; gap: var(--hq-space-xs); }
+.wv-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm);
+  padding: var(--hq-space-sm) var(--hq-space-md); border-radius: var(--hq-radius-md);
+  border: 1px solid var(--hq-border); background: var(--hq-surface-raised);
+}
+.wv-banner--info { border-color: var(--hq-info); background: var(--hq-info-soft); }
+.wv-banner--warning { border-color: var(--hq-warning); background: var(--hq-warning-soft); }
+.wv-banner--danger { border-color: var(--hq-danger); background: var(--hq-danger-soft); }
+.wv-banner--unknown { border-style: dashed; border-color: var(--hq-text-muted); }
+
+/* Links and controls */
+.wv-link {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; text-align: start; cursor: pointer;
+  border-radius: var(--hq-radius-xs);
+}
+.wv-link:hover { text-decoration: underline; }
+.wv-more, .wv-attn-line {
+  font: var(--hq-type-label); color: var(--hq-accent-text); background: none; border: 0; padding: var(--hq-space-2xs) 0; cursor: pointer;
+}
+.wv-seg { display: inline-flex; flex-wrap: wrap; gap: var(--hq-space-2xs); }
+.wv-seg-btn {
+  display: inline-flex; align-items: center; gap: var(--hq-space-2xs);
+  font: var(--hq-type-label); color: var(--hq-text-muted); background: var(--hq-surface-sunken);
+  border: 0; border-radius: var(--hq-radius-pill); padding: var(--hq-space-2xs) var(--hq-space-sm); min-height: var(--hq-size-hit-min); cursor: pointer;
+}
+.wv-seg-btn:hover { background: var(--hq-surface-hover); color: var(--hq-text); }
+.wv-seg-btn[aria-pressed="true"] { color: var(--hq-accent-text); background: var(--hq-accent-soft); font-weight: var(--hq-font-weight-semibold); }
+.wv-seg--mini .wv-seg-btn { padding: 0 var(--hq-space-xs); }
+.wv-check, .wv-inline-setting { display: inline-flex; align-items: center; gap: var(--hq-space-xs); font: var(--hq-type-label); color: var(--hq-text-muted); }
+.wv-input-xs, .wv-select {
+  font: var(--hq-type-small); color: var(--hq-text); background: var(--hq-surface-raised);
+  border: 1px solid var(--hq-border-control); border-radius: var(--hq-radius-sm); min-height: var(--hq-size-hit-min); padding: 0 var(--hq-space-xs);
+}
+.wv-input-xs { width: 4.5em; }
+
+/* Status: word plus the theme status dot (.wk-dot). */
+.wv-status { display: inline-flex; align-items: center; gap: var(--hq-space-2xs); font: var(--hq-type-label); white-space: nowrap; }
+.wv-select.wv-st--inbox, .wv-select.wv-st--considering, .wv-select.wv-st--next, .wv-select.wv-st--active,
+.wv-select.wv-st--on_hold, .wv-select.wv-st--done, .wv-select.wv-st--dropped { border-inline-start-width: 3px; }
+.wv-select.wv-st--inbox { border-inline-start-color: var(--work-st-inbox); }
+.wv-select.wv-st--considering { border-inline-start-color: var(--work-st-considering); }
+.wv-select.wv-st--next { border-inline-start-color: var(--work-st-next); }
+.wv-select.wv-st--active { border-inline-start-color: var(--work-st-active); }
+.wv-select.wv-st--on_hold { border-inline-start-color: var(--work-st-on_hold); }
+.wv-select.wv-st--done { border-inline-start-color: var(--work-st-done); }
+.wv-select.wv-st--dropped { border-inline-start-color: var(--work-st-dropped); }
+
+/* Date kinds: word plus shape. Kind roles are text colours (4.5:1 on HQ surfaces). */
+.wv-dk--target { --dk: var(--work-dk-target); }
+.wv-dk--deadline { --dk: var(--work-dk-deadline); }
+.wv-dk--start { --dk: var(--work-dk-start); }
+.wv-dk--event { --dk: var(--work-dk-event); }
+.wv-dk-shape { display: inline-block; width: 8px; height: 8px; flex: none; border: 1.5px solid var(--dk, currentColor); border-radius: 50%; }
+.wv-dk--target .wv-dk-shape { background: radial-gradient(circle, var(--dk) 0 1.2px, transparent 1.3px); }
+.wv-dk--deadline .wv-dk-shape { border-radius: 1px; transform: rotate(45deg); background: var(--dk); }
+.wv-dk--start .wv-dk-shape { border-radius: 1px; border-width: 0 0 0 3px; }
+.wv-dk--event .wv-dk-shape { border-radius: 2px; background: var(--dk); }
+/* Date chips render as the theme .wk-chip family; .wv-date stays as the views' hook. */
+
+/* Chips are the theme .wk-chip family. These hooks keep pressed Why toggles in their hue and list text marks quiet. */
+.wv-pill--need { --wv-pill-ink: var(--work-why-need); --wv-pill-fill: var(--work-why-need-bg); }
+.wv-pill--want { --wv-pill-ink: var(--work-why-want); --wv-pill-fill: var(--work-why-want-bg); }
+.wv-pill--exploring { --wv-pill-ink: var(--work-why-exploring); --wv-pill-fill: var(--work-why-exploring-bg); }
+.wv-seg-btn[aria-pressed="true"][class*="wv-pill--"] { color: var(--wv-pill-ink); background: var(--wv-pill-fill); }
+.wv-prio--high { color: var(--hq-danger); }
+.wv-prio--low { color: var(--hq-text-subtle); }
+.wv-example {
+  display: inline-flex; align-items: center; min-height: 20px; padding: 0 6px; white-space: nowrap;
+  border-radius: var(--wk-radius-chip); box-shadow: inset 0 0 0 1px var(--hq-border-strong); color: var(--hq-text-muted); font: var(--wk-type-chip);
+}
+.wv-kind { display: inline-flex; flex: none; color: var(--hq-text-muted); }
+
+/* Rows, sections, panels */
+.wv-row { display: flex; align-items: center; gap: var(--hq-space-sm); min-height: 28px; padding: var(--hq-space-2xs) 0; }
+.wv-row-title { font-weight: var(--hq-font-weight-medium); }
+.wv-row-sub { color: var(--hq-text-muted); font: var(--hq-type-small); }
+.wv-row-trailing { margin-left: auto; display: inline-flex; align-items: center; gap: var(--hq-space-xs); }
+.wv-pending { font: var(--hq-type-meta); color: var(--hq-text-subtle); }
+.wv .hq-btn svg.wv-more-icon { stroke-width: 3.2; }
+.wv-row.is-pending, .wv-card.is-pending, .wv-tl-row.is-pending { box-shadow: inset 2px 0 0 var(--hq-border-control); }
+.wv-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--hq-space-sm); }
+.wv-section-title { display: inline-flex; align-items: baseline; font: var(--hq-type-heading); letter-spacing: var(--hq-type-heading-tracking); }
+.wv-quiet { padding: var(--hq-space-sm) 0; }
+.wv-quiet-title { font-weight: var(--hq-font-weight-medium); }
+.wv-quiet-hint { color: var(--hq-text-muted); font: var(--hq-type-small); }
+.wv-panel, .wv-review-section, .wv-tray, .wv-outside, .wv-period-band {
+  display: grid; align-content: start; gap: var(--hq-space-xs);
+  background: var(--hq-surface); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); padding: var(--hq-space-md);
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .wv *, .wv *::before, .wv *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
+
+@media (forced-colors: active) {
+  .wv-dk-shape, .wv-tl-marker, .wv-tl-span, .wv-tl-band { forced-color-adjust: none; border-color: CanvasText; }
+  .wv-dk--deadline .wv-dk-shape, .wv-dk--event .wv-dk-shape, .wv-tl-marker { background: CanvasText; }
+  .wv-seg-btn[aria-pressed="true"] { outline: 2px solid Highlight; }
+  .wv-kind-toggle[aria-pressed="false"] .wv-dk-shape { opacity: 1; }
+}

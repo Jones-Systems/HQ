@@ -136,3 +136,10 @@ export function moveMenuEntries(columns: BoardColumns, id: string): MoveMenuEntr
 export function describeMove(request: MoveRequest, from: Status): string {
   return request.status === from ? 'Reorder' : `Move to ${STATUS_LABEL[request.status]}`;
 }
+
+/** The drop badge's words: what letting go here would do ("Move to Active", "Reorder in Next"), or that nothing changes. */
+export function describeDrop(request: MoveRequest | null, from: Status, over: Status | null): string {
+  if (!over) return 'Drop on a column';
+  if (!request) return `Stays in ${STATUS_LABEL[over]}`;
+  return request.status === from ? `Reorder in ${STATUS_LABEL[from]}` : `Move to ${STATUS_LABEL[request.status]}`;
+}

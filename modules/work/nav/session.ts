@@ -7,6 +7,7 @@ import {
 } from '../core';
 import { createDetailState, type DetailState } from '../detail';
 import { bridgeTransport, createPlannerLive, isWorkBridge, type PlannerLive } from '../live';
+import { durableDrafts } from '../core/durability';
 import { viewItems } from '../views/fixtures';
 
 // The Work session (RW-5, RV-6, iface.domain-module.001). T0 remounts the module on every domain switch, so
@@ -17,8 +18,8 @@ import { viewItems } from '../views/fixtures';
 // The Planner is chosen once per renderer: the live Planner when the desktop bridge (`window.hqServices.work`) is
 // present, otherwise the labelled fictional example. A live Planner that is unconfigured or unreachable never falls
 // back to the example; the domain says it is not connected. Live Planner records persist in the Planner service.
-// Everything else here, including unsaved text and unconfirmed writes, is in memory for this session only and labelled
-// so; persistence across a restart waits for a shell storage member (G-3).
+// Registered durability keeps HQ drafts and core recovery state on this device. Unsaved UI text and page state
+// remain session-only; neither restoring a session nor restoring a draft sends it.
 
 export interface ScrollPosition { readonly top: number; readonly left: number; readonly columns: number }
 
@@ -116,7 +117,7 @@ export function workSession(contextId: string): WorkSession {
     const port = chosen?.port ?? examplePlanner();
     sessions.set(contextId, session = {
       store: createWorkStore(port, chosen?.recovery ? { recovery: chosen.recovery } : {}), feedback: createFeedback(),
-      drafts: createDraftStore(), detail: createDetailState(), ui: createUiState(), example: chosen?.example ?? true,
+      drafts: createDraftStore({ durableDrafts: durableDrafts(port) }), detail: createDetailState(), ui: createUiState(), example: chosen?.example ?? true,
     });
   }
   return session;

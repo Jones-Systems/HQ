@@ -17,17 +17,19 @@
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
-      "Content-Length": "2346"
+      "Content-Length": "2465"
     },
     "body": {
       "brands": [
         {
           "id": "00000000000000000000000000000001",
-          "name": "Larkspur Tea Co."
+          "name": "Larkspur Tea Co.",
+          "project_id": null
         },
         {
           "id": "default",
-          "name": "My workspace"
+          "name": "My workspace",
+          "project_id": null
         }
       ],
       "content": [
@@ -53,7 +55,8 @@
           "is_example": 1,
           "created_at": "2026-01-15T12:00:07+00:00",
           "finished_at": "2026-01-15T12:00:08+00:00",
-          "error": "Synthetic contract failure"
+          "error": "Synthetic contract failure",
+          "source_ids": []
         },
         {
           "id": "00000000000000000000000000000003",
@@ -62,7 +65,8 @@
           "is_example": 0,
           "created_at": "2026-01-15T12:00:05+00:00",
           "finished_at": "2026-01-15T12:00:06+00:00",
-          "error": null
+          "error": null,
+          "source_ids": []
         }
       ],
       "tools": [
@@ -125,9 +129,12 @@
       ],
       "features": [
         "hq-editorial-timebox-v1",
-        "hq-references-v1"
+        "hq-references-v1",
+        "hq-brand-project-v1",
+        "hq-sources-v1"
       ],
-      "csrf": "synthetic-workspace-token"
+      "csrf": "synthetic-workspace-token",
+      "sources": []
     }
   }
 }

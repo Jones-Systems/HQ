@@ -27,8 +27,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument('--port', type=int, default=8766, help='Port (default 8766). 0 picks a free port.')
     parser.add_argument('--allowed-host', action='append', default=[], metavar='HOST[:PORT]',
                         help='Extra Host header value to accept, for a private HTTPS front. May repeat.')
-    parser.add_argument('--publishing', choices=['off'], default='off',
-                        help='Account connection and publishing. Only "off" exists.')
+    parser.add_argument('--publishing', choices=['off', 'simulator'], default='off',
+                        help='Account connection and publishing. Default off; simulator is local only.')
     return parser.parse_args(argv)
 
 
@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
         return refuse(str(exc))
     try:
         try:
-            service = SocialService(data)
+            service = SocialService(data, publishing=args.publishing)
         except StoreError as exc:
             return refuse(str(exc))
         try:

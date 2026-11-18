@@ -47,7 +47,8 @@ export async function startPlanner(runtime, repo, observe = () => {}) {
       const entry = { count: ledger.length + 1, method: req.method, path: req.url,
         body: JSON.stringify(body), bodyUtf8: bytes.toString('utf8'), requestId: req.headers['x-request-id'] ?? body?.request_id ?? null };
       ledger.push(entry);
-      if (!(req.method === 'GET' && ['/api/state', '/api/version'].includes(req.url)) &&
+      if (!(req.method === 'GET' && (['/api/state', '/api/version'].includes(req.url) || /^\/api\/items\/[A-Za-z0-9_-]{6,40}(?:\/history)?$/.test(req.url))) &&
+          !(req.method === 'PATCH' && /^\/api\/items\/[A-Za-z0-9_-]{6,40}$/.test(req.url)) &&
           !(req.method === 'POST' && ['/api/items', '/api/requests/replay'].includes(req.url))) { entry.status = 404; res.writeHead(404); res.end(); return; }
       const target = new URL(req.url, upstream);
       const headers = { ...req.headers, host: target.host, 'content-length': String(bytes.length) };
@@ -84,6 +85,10 @@ export async function startPlanner(runtime, repo, observe = () => {}) {
     async state() {
       const response = await fetch(new URL('api/state', upstream), { signal: AbortSignal.timeout(5000) });
       assert.equal(response.status, 200); return response.json();
+    },
+    async stop() {
+      await until(() => pending.size === 0, 'Planner proxy idle before stop');
+      await runtime.stop(child);
     },
     async restart() {
       await until(() => pending.size === 0, 'Planner proxy idle before restart');

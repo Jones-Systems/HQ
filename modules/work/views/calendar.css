@@ -1,0 +1,189 @@
+/* Calendar (month, week, day, agenda). Chips, hues and chrome come from the Work theme (.wk-*, --work-dk-*); motion
+   timing comes from the shared --hq-duration-* / --hq-ease-* tokens, so reduced motion makes every transition instant. */
+.wv-cal { display: grid; gap: var(--hq-space-md); min-width: 0; }
+
+/* Date kinds: the soft fill that goes with --dk (text hue, set by .wv-dk--* in views-base.css). */
+.wv-cal .wv-dk--target, .wv-time-grid [data-dk="target"] { --dk: var(--work-dk-target); --dk-bg: var(--work-dk-target-bg); }
+.wv-cal .wv-dk--deadline, .wv-time-grid [data-dk="deadline"] { --dk: var(--work-dk-deadline); --dk-bg: var(--work-dk-deadline-bg); }
+.wv-cal .wv-dk--start, .wv-time-grid [data-dk="start"] { --dk: var(--work-dk-start); --dk-bg: var(--work-dk-start-bg); }
+.wv-cal .wv-dk--event, .wv-time-grid [data-dk="event"] { --dk: var(--work-dk-event); --dk-bg: var(--work-dk-event-bg); }
+
+/* ---------------------------------------------------------------- header */
+.wv-cal-title { border-radius: var(--hq-radius-xs); }
+.wv-cal-year { color: var(--hq-text-subtle); font-weight: var(--hq-font-weight-medium); }
+.wv-cal-range .wk-seg-item { padding: 0 var(--hq-space-sm); }
+.wv-cal-step { min-width: 28px; justify-content: center; padding: 0 var(--hq-space-2xs); }
+.wv-cal-filters { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--hq-space-xs) var(--hq-space-md); }
+.wv-cal-kinds { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
+/* A date-kind toggle is a theme chip: pressed is the filled .wk-chip--<kind>, off is an outline with a muted icon. */
+.wv-kind-toggle { min-height: 26px; padding: 0 var(--hq-space-sm) 0 var(--hq-space-xs); border: 0; cursor: pointer; transition: background-color var(--hq-duration-fast) var(--hq-ease-standard), color var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard); }
+.wv-kind-toggle:not([aria-pressed="true"]) { background: transparent; color: var(--hq-text-muted); box-shadow: inset 0 0 0 1px var(--hq-border-strong); }
+.wv-kind-toggle:not([aria-pressed="true"]):hover { background: var(--hq-surface-hover); color: var(--hq-text); }
+.wv-kind-toggle:not([aria-pressed="true"]) > svg { opacity: .65; }
+.wv-kind-toggle[aria-pressed="true"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 30%, transparent); }
+
+/* ---------------------------------------------------------------- layout */
+.wv-cal-layout { display: grid; gap: 0; grid-template-columns: minmax(0, 1fr) 10px var(--wv-cal-sidebar-width, 280px); align-items: start; }
+.wv-cal-main, .wv-cal-side { display: grid; gap: var(--hq-space-md); min-width: 0; }
+/* The content slides sideways when the range changes; clip that travel so it never adds a scrollbar. */
+.wv-cal-main { grid-column: 1; grid-template-columns: minmax(0, 1fr); overflow-x: clip; overflow-clip-margin: 4px; }
+.wv-cal-side { grid-column: 3; grid-template-columns: minmax(0, 1fr); }
+.wv-cal-side[hidden] { display: none; }
+.wv-cal-divider { grid-column: 2; display: flex; position: relative; align-self: stretch; }
+.wv-cal-divider .hq-splitter { flex: 1; }
+.wv-cal-restore { position: absolute; top: 10px; right: 0; z-index: 2; width: 20px; height: 32px; border: 1px solid var(--hq-border); border-radius: var(--hq-radius-sm); background: var(--hq-surface); color: var(--hq-accent-text); cursor: pointer; }
+.wv-cal-closed-tray { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--hq-space-xs); position: sticky; top: 0; z-index: 5; padding: var(--hq-space-2xs) var(--hq-space-xs); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-sm); background: var(--hq-surface); color: var(--hq-text-muted); font: var(--hq-type-small); }
+
+/* The period band: coarse dates that never sit on a single day, as a slim strip above the grid. */
+.wv-cal-main > .wv-period-band { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-2xs) var(--hq-space-sm); padding: 0; border: 0; border-radius: 0; background: transparent; overflow-wrap: anywhere; }
+.wv-band-label { font: var(--wk-type-meta); color: var(--hq-text-muted); }
+.wv-band-list, .wv-week-band { display: flex; flex-wrap: wrap; gap: var(--hq-space-2xs); min-width: 0; }
+
+/* ---------------------------------------------------------------- month */
+.wv-month { border: 1px solid var(--hq-border); border-radius: var(--wk-radius-col); overflow: hidden; background: var(--hq-surface); box-shadow: var(--wk-shadow-card); }
+.wv-month-head, .wv-month-cells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.wv-month-head { background: var(--hq-surface-sunken); }
+.wv-month-head > div { font: var(--wk-type-eyebrow); letter-spacing: 0.06em; text-transform: uppercase; color: var(--hq-text-subtle); padding: var(--hq-space-xs) var(--hq-space-sm); }
+.wv-week-band { padding: var(--hq-space-2xs) var(--hq-space-sm); border-top: 1px dashed var(--hq-border-strong); background: var(--hq-surface-sunken); }
+.wv-day {
+  min-height: 104px; min-width: 0; padding: var(--hq-space-2xs) var(--hq-space-xs) var(--hq-space-xs); border-top: 1px solid var(--hq-border); border-inline-start: 1px solid var(--hq-border);
+  display: grid; align-content: start; gap: var(--hq-space-3xs);
+  transition: background-color var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.wv-day:first-child { border-inline-start: 0; }
+.wv-day.is-outside { background: var(--hq-surface-sunken); }
+.wv-day.is-outside .wv-day-num { color: var(--hq-text-subtle); font-weight: var(--hq-font-weight-regular); }
+.wv-day.is-past:not(.is-today) .wv-day-num { color: var(--hq-text-muted); }
+.wv-day-head { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: var(--hq-size-hit-min); border-radius: var(--hq-radius-sm); cursor: pointer; }
+.wv-day-num {
+  display: inline-flex; align-items: center; justify-content: center; font: var(--wk-type-num); font-size: 12.5px; font-weight: var(--hq-font-weight-semibold); color: var(--hq-text);
+  background: transparent; border: 0; border-radius: var(--hq-radius-pill); min-width: var(--hq-size-hit-min); min-height: var(--hq-size-hit-min); padding: 0; cursor: pointer;
+}
+.wv-day-num:hover { background: var(--hq-surface-hover); }
+/* Today is emphasised on its number: a filled accent disc. The word is in the cell's name and aria-current. */
+.wv-day.is-today .wv-day-num { color: var(--hq-on-accent); background: var(--hq-accent); }
+.wv-day-add {
+  font: var(--hq-type-label); color: var(--hq-text-muted); background: none; border: 0; min-width: var(--hq-size-hit-min); min-height: var(--hq-size-hit-min); cursor: pointer; border-radius: var(--hq-radius-sm);
+  opacity: 0; transition: opacity var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.wv-day:hover .wv-day-add, .wv-day:focus-within .wv-day-add, .wv-day-add:focus-visible { opacity: 1; }
+.wv-day-add:hover { background: var(--hq-surface-hover); color: var(--hq-text); }
+@media (hover: none) { .wv-day-add { opacity: 1; } }
+.wv-day-chips { display: grid; gap: var(--hq-space-3xs); min-width: 0; }
+.wv-day-more {
+  font: var(--wk-type-meta); font-weight: var(--hq-font-weight-semibold); color: var(--hq-accent-text); background: none; border: 0; text-align: start;
+  padding: 0 var(--hq-space-2xs); cursor: pointer; min-height: var(--hq-size-hit-min); border-radius: var(--hq-radius-xs);
+}
+.wv-day-more:hover { text-decoration: underline; }
+
+/* ---------------------------------------------------------------- chips */
+.wv-cal-chip { display: block; min-width: 0; }
+.wv-cal-chip .hq-menu { display: block; }
+.wv-cal-chip .hq-btn {
+  width: 100%; height: auto; min-height: 24px; justify-content: flex-start; gap: var(--hq-space-2xs); padding: 0 var(--hq-space-xs) 0 var(--hq-space-xs);
+  border-radius: var(--wk-radius-chip); font: var(--wk-type-chip); font-weight: var(--hq-font-weight-medium); color: var(--hq-text);
+  background: var(--dk-bg); box-shadow: inset 3px 0 0 var(--dk);
+}
+.wv-cal-chip .hq-btn:hover { background: color-mix(in srgb, var(--dk) 16%, var(--dk-bg)); }
+.wv-cal-chip .hq-btn > .work-icon { color: var(--dk); flex: none; }
+.wv-cal-chip.wv-ds--overdue .hq-btn { background: var(--hq-danger-soft); box-shadow: inset 3px 0 0 var(--hq-danger); }
+.wv-cal-chip.wv-ds--overdue .hq-btn > .work-icon { color: var(--hq-danger); }
+/* Coarse dates (week, month, quarter, year) keep a dashed edge and their period named, so precision stays visible. */
+.wv-cal-chip.is-coarse .hq-btn { width: auto; max-width: 100%; background: transparent; box-shadow: none; outline: 1px dashed var(--dk); outline-offset: -1px; }
+.wv-cal-chip.is-coarse .hq-btn:hover { background: var(--dk-bg); }
+.wv-cal-chip.is-closed .wv-chip-title { text-decoration: line-through; color: var(--hq-text-muted); }
+.wv-cal-chip.is-pending .hq-btn { opacity: .72; }
+.wv-cal-chip[draggable="true"] .hq-btn { cursor: grab; }
+.wv-chip-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.wv-chip-time { font: var(--wk-type-num); color: var(--dk); flex: none; }
+.wv-chip-period { font: var(--wk-type-meta); color: var(--hq-text-muted); flex: none; }
+.wv-chip-flag { margin-left: auto; flex: none; font: var(--wk-type-meta); font-weight: var(--hq-font-weight-semibold); color: var(--hq-danger); }
+/* Month cells are narrow: the word is kept for assistive tech and the title attribute, the cell shows "!". */
+.wv-day .wv-chip-flag { font-size: 0; }
+.wv-day .wv-chip-flag::before { content: "!"; font: var(--wk-type-chip); }
+@media (forced-colors: active) {
+  .wv-cal-chip .hq-btn { forced-color-adjust: none; background: ButtonFace; color: ButtonText; box-shadow: none; outline: 1px solid ButtonText; outline-offset: -1px; }
+  .wv-cal-chip.is-coarse .hq-btn { outline-style: dashed; }
+  .wv-cal-chip .hq-btn > .work-icon { color: ButtonText; }
+  .wv-kind-toggle[aria-pressed="true"] { outline: 2px solid Highlight; }
+}
+
+/* ---------------------------------------------------------------- timed week and day */
+.wv-time-grid { min-width: 0; }
+.wv-time-grid .hq-calendar-time-grid { border-radius: var(--wk-radius-col); box-shadow: var(--wk-shadow-card); }
+.wv-time-grid .hq-calendar-time-help { font: var(--wk-type-meta); color: var(--hq-text-subtle); }
+.wv-time-grid .hq-calendar-time-head > span { font: var(--wk-type-eyebrow); letter-spacing: 0.06em; text-transform: uppercase; color: var(--hq-text-subtle); }
+/* Events take their date kind's hue and word (the shared grid has one accent). */
+.wv-time-grid [data-dk] .hq-calendar-time-event-body {
+  color: var(--hq-text); background: var(--dk-bg); border-color: color-mix(in srgb, var(--dk) 40%, transparent); border-left-color: var(--dk);
+}
+.wv-time-grid [data-dk] .hq-calendar-time-resize::after { background: var(--dk); }
+.wv-time-grid [data-ds="overdue"] .hq-calendar-time-event-body { background: var(--hq-danger-soft); border-color: color-mix(in srgb, var(--hq-danger) 40%, transparent); border-left-color: var(--hq-danger); }
+.wv-time-grid [data-dk] .hq-calendar-time-event-body span { color: var(--hq-text-muted); }
+
+/* ---------------------------------------------------------------- drop targets */
+/* While a date or an unscheduled item is being dragged, every day that can take it is outlined; the one under the
+   pointer is filled. Marked through data attributes set by the view, so no re-render happens mid-drag. */
+.wv-cal[data-wk-dragging] :is(.wv-day, .wv-agenda-day[data-drop], .hq-calendar-time-day, .hq-calendar-all-day) { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hq-accent) 38%, transparent); }
+.wv-cal :is(.wv-day, .wv-agenda-day, .hq-calendar-time-day, .hq-calendar-all-day)[data-over] { background-color: var(--hq-accent-soft); box-shadow: inset 0 0 0 2px var(--hq-accent); }
+.wv-cal .wv-tray[data-over], .wv-cal .wv-cal-closed-tray[data-over] { box-shadow: inset 0 0 0 2px var(--hq-danger); }
+.wv-cal[data-wk-dragging="date"] .wv-tray-drop { border-style: dashed; border-color: var(--hq-danger); color: var(--hq-danger); }
+@media (forced-colors: active) {
+  .wv-cal :is(.wv-day, .wv-agenda-day, .hq-calendar-time-day, .hq-calendar-all-day)[data-over] { outline: 2px solid Highlight; outline-offset: -2px; }
+}
+
+/* ---------------------------------------------------------------- tray and outside list */
+.wv-tray-list { display: grid; gap: var(--hq-space-md); }
+.wv-tray-group { display: grid; gap: var(--hq-space-3xs); min-width: 0; }
+.wv-tray-group--inbox { padding-top: var(--hq-space-sm); border-top: 1px dashed var(--hq-border-strong); }
+.wv-tray-group-head { display: flex; align-items: center; justify-content: space-between; gap: var(--hq-space-xs); min-height: var(--hq-size-hit-min); }
+.wv-tray-group-title { margin: 0; font: var(--wk-type-eyebrow); letter-spacing: 0.06em; text-transform: uppercase; color: var(--hq-text-subtle); }
+.wv-tray-group-head > .wv-count, .wv-tray-toggle > .wv-count { margin-left: 0; }
+.wv-tray-group-head .wv-more { padding: 0; font: var(--wk-type-meta); font-weight: var(--hq-font-weight-semibold); }
+.wv-tray-toggle { display: inline-flex; align-items: center; gap: var(--hq-space-xs); min-height: var(--hq-size-hit-min); padding: 0; border: 0; background: none; color: inherit; cursor: pointer; border-radius: var(--hq-radius-xs); }
+.wv-tray-toggle:hover .wv-tray-group-title { color: var(--hq-text); }
+.wv-tray-caret { color: var(--hq-text-subtle); transition: transform var(--hq-duration-fast) var(--hq-ease-standard); }
+.wv-tray-toggle[aria-expanded="true"] .wv-tray-caret { transform: rotate(90deg); }
+.wv-tray-group-list { display: grid; gap: var(--hq-space-3xs); }
+.wv-tray-group-list[hidden] { display: none; }
+.wv-tray-item {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: var(--hq-space-xs); row-gap: 2px;
+  padding: var(--hq-space-2xs) var(--hq-space-xs); border-radius: var(--wk-radius-control); cursor: grab;
+  transition: background-color var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.wv-tray-item:hover { background: var(--hq-surface-hover); }
+.wv-tray-item .wv-kind { grid-column: 1; }
+.wv-tray-title { grid-column: 2; min-width: 0; overflow-wrap: anywhere; font: var(--wk-type-body); font-weight: var(--hq-font-weight-medium); }
+.wv-tray-item > .wk-chip { grid-column: 2; justify-self: start; }
+.wv-tray-item > .wv-tray-schedule { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+.wv-tray-item.is-pending { opacity: .72; }
+.wv-tray-drop { font: var(--hq-type-small); color: var(--hq-text-subtle); border: 1px solid var(--hq-border-strong); border-radius: var(--hq-radius-sm); padding: var(--hq-space-xs); text-align: center; }
+.wv-outside-label { font: var(--wk-type-eyebrow); letter-spacing: 0.06em; text-transform: uppercase; color: var(--hq-text-subtle); padding-top: var(--hq-space-xs); }
+.wv-outside { min-width: 0; }
+.wv-outside-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs); }
+.wv-outside-row .wv-link { min-width: 0; overflow-wrap: anywhere; }
+.wv-outside-row .hq-btn { margin-left: auto; }
+.wv-picker { display: grid; gap: var(--hq-space-md); }
+.wv-picker-kinds { display: flex; flex-wrap: wrap; gap: var(--hq-space-xs); }
+
+/* ---------------------------------------------------------------- agenda */
+.wv-agenda { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-sm); }
+.wv-agenda-day {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-2xs); padding: var(--hq-space-sm); border: 1px solid var(--hq-border); border-radius: var(--wk-radius-card);
+  background: var(--hq-surface); overflow-wrap: anywhere; transition: background-color var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.wv-agenda-day.is-today { border-color: var(--hq-accent); box-shadow: inset 3px 0 0 var(--hq-accent); }
+.wv-agenda-day.is-past:not(.is-today) { background: var(--hq-surface-sunken); }
+.wv-agenda-label { font: var(--wk-type-section); }
+.wv-agenda-entry { display: flex; align-items: center; gap: var(--hq-space-sm); }
+.wv-agenda-entry .wv-cal-chip { flex: 1; }
+.wv-agenda .wv-cal-chip .hq-btn { flex-wrap: wrap; white-space: normal; padding-block: var(--hq-space-3xs); }
+.wv-agenda .wv-chip-title { white-space: normal; overflow-wrap: anywhere; }
+.wv-agenda .wv-chip-time, .wv-agenda .wv-chip-period { flex-shrink: 1; }
+.wv-kind-choice { display: flex; flex-wrap: wrap; gap: var(--hq-space-xs); }
+
+@media (max-width: 760px) {
+  .wv-cal-layout { grid-template-columns: minmax(0, 1fr) 10px min(var(--wv-cal-sidebar-width, 280px), 40vw); }
+  .wv-day { min-height: 84px; padding-inline: var(--hq-space-2xs); }
+  .wv-month-head > div { padding-inline: var(--hq-space-xs); }
+}

@@ -1,5 +1,6 @@
 /* Wiki domain container. Shipped as a file next to wiki-view.css: the shell's CSP is style-src 'self', so no inline
-   style or <style> element is used anywhere. The Wiki view supplies its own padding and consumes the shared theme under .wiki-view. */
+   style or <style> element is used anywhere. The Wiki view lays out its own frame (sidebar, top bar and the one
+   scrolling content column), so the container fills the workspace and never scrolls itself. */
 
 .wiki-domain {
   box-sizing: border-box;
@@ -8,5 +9,5 @@
   min-width: 0;
   color: var(--hq-text);
   background: var(--hq-surface);
-  overflow: auto;
+  overflow: hidden;
 }

@@ -63,10 +63,15 @@ test('panel gates the private draft backup on explicit confirmation', async () =
   assert.match(exported, /cache: cache excluded/u);
 });
 
-test('panel shows a failure as one sentence in an alert, description included', async () => {
+test('panel shows a typed failure in one alert, description included', async () => {
   const { deps } = setup();
   const failure = Object.assign(new Error('Could not choose files'), { description: 'One of the files is not a PNG image. Nothing was imported.' });
   const controller = createImportsController(deps, PROJECT, { pickSource: async () => { throw failure; } });
   await controller.choose();
-  assert.match(render(controller.getState()), /<p class="hqd-imports__message" role="alert">Could not choose files\. One of the files is not a PNG image\. Nothing was imported\.<\/p>/u);
+  const html = render(controller.getState());
+  assert.equal((html.match(/role="alert"/gu) ?? []).length, 1);
+  const alert = /<div role="alert" data-tone="danger">([\s\S]*?)<\/div>/u.exec(html)?.[1];
+  assert.ok(alert);
+  assert.match(alert, /<strong>Couldn&#x27;t read the files<\/strong>/u);
+  assert.match(alert, /Could not choose files\. One of the files is not a PNG image\. Nothing was imported\./u);
 });

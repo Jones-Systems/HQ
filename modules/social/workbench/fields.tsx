@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { Button, IconButton } from '@hq/ui';
+import { Button, FieldError, IconButton } from '@hq/ui';
 import { describeOrigin, describeShape, readImportFile, type ImportFormat, type ImportedValue } from './imports';
 
 /** DOM ID of a form field, so a problem summary can move focus to it. */
@@ -13,16 +13,18 @@ interface FieldFrameProps {
   readonly hint?: ReactNode;
   readonly error?: string | undefined;
   readonly optional?: boolean;
+  /** Announce the error as it appears: for one raised by the user's last action, such as choosing a file. */
+  readonly announce?: boolean;
   readonly children: ReactNode;
 }
 
-function FieldFrame({ id, label, hint, error, optional, children }: FieldFrameProps) {
+function FieldFrame({ id, label, hint, error, optional, announce, children }: FieldFrameProps) {
   return (
     <div className={error ? 'sw-field sw-field--invalid' : 'sw-field'}>
       <label className="sw-label" htmlFor={id}>{label}{optional && <span className="sw-optional"> optional</span>}</label>
       {children}
       {hint && <p className="sw-hint" id={`${id}-hint`}>{hint}</p>}
-      {error && <p className="sw-error" id={`${id}-error`}>{error}</p>}
+      <FieldError id={`${id}-error`} announce={announce === true}>{error}</FieldError>
     </div>
   );
 }
@@ -153,21 +155,24 @@ export function ImportSlot({ id, label, hint, format = 'json', values, onAdd, on
     const files = [...(input.files ?? [])];
     setReadError(null);
     setReading(true);
+    let failed = false;
     try {
       for (const file of files) {
         const result = await readImportFile(file, format);
         if (result.ok) onAdd(result.imported);
-        else setReadError(result.message);
+        else { failed = true; setReadError(result.message); }
       }
     } finally {
       setReading(false);
       input.value = '';
+      // Focus stays on the file field that has the problem, so its error is the next thing read.
+      if (failed) input.focus();
     }
   };
   const shownError = readError ?? error;
   return (
     <FieldFrame
-      id={id} label={label} error={shownError ?? undefined} optional={optional}
+      id={id} label={label} error={shownError ?? undefined} optional={optional} announce={readError !== null}
       hint={<>{hint}{hint ? ' ' : ''}{format === 'json-or-jsonl' ? 'JSON or JSON Lines' : 'JSON'}, at most 2 MB.</>}
     >
       <input

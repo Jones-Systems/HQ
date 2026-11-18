@@ -1,8 +1,8 @@
 // Work navigation metadata (T4 information architecture). The Board itself
 // belongs to the board lane; these views are the rest of the Work views.
 
-/** The planning views this package renders. `by-date` is the read-only By date board (RV-5). */
-export const PLANNING_VIEW_IDS = ['glance', 'list', 'calendar', 'timeline', 'review', 'archive', 'by-date'] as const;
+/** The planning views this package renders. `by-date` is the read-only By date board (RV-5); `week` is Plan week. */
+export const PLANNING_VIEW_IDS = ['glance', 'list', 'calendar', 'timeline', 'review', 'archive', 'by-date', 'week'] as const;
 export type PlanningViewId = (typeof PLANNING_VIEW_IDS)[number];
 
 /** Work views in Planner order; the number keys match the Planner. */
@@ -20,6 +20,7 @@ export const WORK_VIEWS = [
 export const WORK_BOARDS = [
   { id: 'status', label: 'Status board' },
   { id: 'by-date', label: 'By date', aliases: ['lists'] },
+  { id: 'week', label: 'Plan week' },
 ] as const;
 
 /** RV-7 working default: Work's home is the Board. */

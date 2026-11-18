@@ -6,7 +6,7 @@ export type { Clock, GitObjectSource, IndexStore, Pin, SkippedEntries, SourceFai
 export type { FieldMappings, SourceProfile, TopicMode } from './profile.ts';
 export { DEFAULT_FIELD_MAPPINGS, INDEX_RULES_VERSION, TOPIC_MODES, profileIndexKey, validateSourceProfile } from './profile.ts';
 
-export type { IndexSnapshot, SnapshotExpectation, SnapshotPage, SnapshotStats } from './snapshot.ts';
+export type { IndexSnapshot, LinkOrigin, SnapshotExpectation, SnapshotPage, SnapshotStats } from './snapshot.ts';
 export { INDEX_SCHEMA_ID, MAX_EXCERPT_UNITS, parseSnapshot } from './snapshot.ts';
 
 export type { MemoryIndexStore } from './memory-store.ts';
@@ -21,13 +21,13 @@ export { createNodeGitObjectSource, parseLsTree } from './node-git-source.ts';
 export type { FrontmatterResult } from './frontmatter.ts';
 export { parseFrontmatter } from './frontmatter.ts';
 
-export type { DraftBlock, DraftDocument, DraftInline, LinkRef, RawLink } from './draft.ts';
+export type { BodyLink, DraftBlock, DraftDocument, DraftInline, LinkRef, RawLink } from './draft.ts';
 export { collectLinks, documentText, resolveDocument } from './draft.ts';
 export type { MarkdownParse } from './markdown.ts';
 export { parseMarkdown, scanLinks } from './markdown.ts';
 
-export type { PageAnalysis } from './analyze.ts';
-export { analyzePage, buildPage } from './analyze.ts';
+export type { PageAnalysis, PageLink } from './analyze.ts';
+export { BODY_ORIGIN, analyzePage, buildPage } from './analyze.ts';
 
 export type { PageDirectory } from './resolver.ts';
 export { resolveLink, resolveName } from './resolver.ts';

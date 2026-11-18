@@ -18,6 +18,8 @@ it('closed route key sets and reserved Wiki channel; unknown route/params never 
   expect(Object.keys(WORK_METHODS)).toEqual([...WORK_SERVICE_ROUTES]);
   expect(Object.keys(SOCIAL_PATHS)).toEqual([...SOCIAL_SERVICE_ROUTES]);
   expect(CHANNELS.wiki).toBe('hq:svc:wiki');
+  expect(CHANNELS.workLocal).toBe('hq:svc:work-local');
+  expect(new Set(Object.values(CHANNELS)).size).toBe(Object.keys(CHANNELS).length);
   const transport = vi.fn<Transport>(); const svc = createServices(config, transport);
   for (const [route, params] of [['delete', {}], ['state', { url: 'https://example.test' }], ['item', { id: '../bad' }], ['create', { ...original.params, header: 'x' }], ['create', { requestId: 'bad', fields: {} }], ['create', { ...original.params, fields: { bad: undefined } }]]) expect(await svc.work(route, params)).toEqual(unavailable);
   for (const [route, params] of [['other', {}], ['workspace', { token: 'secret' }], ['saveContent', { title: 'x', links: [] }], ['submitRun', { tool: 'tool', input: {}, is_example: true, requestId: 'invented' }]]) expect(await svc.social(route, params)).toEqual(unavailable);

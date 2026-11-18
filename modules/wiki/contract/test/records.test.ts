@@ -119,6 +119,69 @@ test('backlinks: bounded, de-duplicated and consistent', () => {
   assert.equal(reason(validateBacklinkResult({ target: { namespace: 'bl', path: '/abs' }, entries: [], total: 0, truncated: false })), 'absolute-path');
 });
 
+test('backlinks: via and excerpt are optional, closed and validated (additive revision)', () => {
+  const target = bl('t.md');
+  const result = (entries: unknown[]) => ({ target, entries, total: entries.length, truncated: false });
+  const entry = (extra: Record<string, unknown> = {}) => ({ source: bl('s.md'), title: 'S', ...extra });
+  const via = (value: unknown) => validateBacklinkResult(result([entry({ via: value })]));
+  const excerpt = (value: unknown) => validateBacklinkResult(result([entry({ excerpt: value })]));
+
+  // Old shapes stay valid, alone or mixed with new ones; each member is independently optional.
+  assert.equal(validateBacklinkResult(result([entry()])).ok, true);
+  assert.equal(validateBacklinkResult(result([entry(), { source: bl('u.md'), title: 'U', via: ['body'], excerpt: 'See the target.' }])).ok, true);
+  assert.equal(via(['body']).ok, true);
+  assert.equal(excerpt('See the target.').ok, true);
+  assert.equal(validateBacklinkResult(result([entry({ via: ['Zeta', 'body', 'related'], excerpt: 'x' })])).ok, true);
+
+  // via: 1..8 distinct, ascending, plain identifiers (the page field-name rule, at most 64 characters).
+  const eight = Array.from({ length: 8 }, (_, i) => `f${i}`);
+  assert.equal(via(eight).ok, true);
+  assert.equal(reason(via([...eight, 'f8'])), 'too-large');
+  assert.equal(reason(via([])), 'empty');
+  assert.equal(reason(via('body')), 'wrong-type');
+  assert.equal(reason(via(null)), 'wrong-type');
+  assert.equal(reason(via(undefined)), 'wrong-type');
+  assert.equal(reason(via([1])), 'wrong-type');
+  assert.equal(reason(via(['has space'])), 'invalid-format');
+  assert.equal(reason(via(['__proto__'])), 'invalid-format');
+  assert.equal(reason(via([''])), 'invalid-format');
+  assert.equal(via(['a'.repeat(64)]).ok, true);
+  assert.equal(reason(via(['a'.repeat(65)])), 'invalid-format');
+  assert.equal(reason(via(['body', 'body'])), 'duplicate');
+  assert.equal(reason(via(['related', 'body'])), 'inconsistent');
+  assert.equal(via(['Zeta', 'alpha']).ok, true, 'code-unit order: uppercase sorts before lowercase');
+  assert.equal(reason(via(['alpha', 'Zeta'])), 'inconsistent');
+
+  // excerpt: non-empty single-line inert text of at most 160 UTF-16 units.
+  assert.equal(excerpt('a'.repeat(160)).ok, true);
+  assert.equal(reason(excerpt('a'.repeat(161))), 'too-long');
+  assert.equal(excerpt(`${'a'.repeat(158)}😀`).ok, true);
+  assert.equal(reason(excerpt(`${'a'.repeat(159)}😀`)), 'too-long', 'the cap counts code units, so a pair that crosses it is over');
+  assert.equal(reason(excerpt('')), 'empty');
+  assert.equal(reason(excerpt('a\nb')), 'control-character');
+  assert.equal(reason(excerpt('a\tb')), 'control-character');
+  assert.equal(reason(excerpt('a\u0000b')), 'nul');
+  assert.equal(reason(excerpt('a\ud800b')), 'lone-surrogate');
+  assert.equal(reason(excerpt(3)), 'wrong-type');
+  assert.equal(reason(excerpt(null)), 'wrong-type');
+  assert.equal(reason(excerpt(undefined)), 'wrong-type');
+  assert.equal(excerpt('<b>[not](a-link)</b>').ok, true, 'markup is plain text, never interpreted');
+
+  // The entry stays closed: nothing but source, title, via and excerpt.
+  assert.equal(reason(validateBacklinkResult(result([entry({ rank: 1 })]))), 'unknown-property');
+  assert.equal(reason(validateBacklinkResult(result([entry({ path: '/etc' })]))), 'unknown-property');
+  assert.equal(reason(validateBacklinkResult({ ...result([entry()]), via: ['body'] })), 'unknown-property', 'via belongs to entries, not to the result');
+
+  // Existing invariants still hold with the new members present.
+  const decorated = (n: number) => Array.from({ length: n }, (_, i) => ({ source: bl(`s${i}.md`), title: `S${i}`, via: ['body'], excerpt: `Line ${i}` }));
+  assert.equal(validateBacklinkResult({ target, entries: decorated(50), total: 50, truncated: false }).ok, true);
+  assert.equal(validateBacklinkResult({ target, entries: decorated(50), total: 60, truncated: true }).ok, true);
+  assert.equal(reason(validateBacklinkResult({ target, entries: decorated(51), total: 51, truncated: false })), 'too-large');
+  assert.equal(reason(validateBacklinkResult({ target, entries: decorated(50), total: 60, truncated: false })), 'inconsistent');
+  const twice = decorated(1)[0];
+  assert.equal(reason(validateBacklinkResult({ target, entries: [twice, twice], total: 2, truncated: false })), 'duplicate');
+});
+
 test('topics: namespaced, hierarchical and bounded', () => {
   const topic = (id: string, parentId: string | null, pages: unknown[] = [], pageCount = pages.length) => ({ id, label: id.toUpperCase(), parentId, pageCount, pages });
   const list = { namespace: 'bl', topics: [topic('root', null, [bl('a.md')], 3), topic('child', 'root')] };
@@ -135,6 +198,40 @@ test('topics: namespaced, hierarchical and bounded', () => {
   assert.equal(reason(validateTopicList({ namespace: 'bl', topics: [topic('t', null, [...fifty, bl('p50.md')])] })), 'out-of-range');
   const many = Array.from({ length: 501 }, (_, i) => topic(`t${i}`, null));
   assert.equal(reason(validateTopicList({ namespace: 'bl', topics: many })), 'too-large');
+});
+
+test('topics: pageTitles is optional and must match pages one to one (additive revision)', () => {
+  const topic = (extra: Record<string, unknown> = {}, pages: unknown[] = [bl('a.md'), bl('b.md')]) => ({ id: 't', label: 'T', parentId: null, pageCount: pages.length, pages, ...extra });
+  const list = (t: unknown) => ({ namespace: 'bl', topics: [t] });
+  const titles = (value: unknown, pages?: unknown[]) => validateTopicList(list(topic({ pageTitles: value }, pages)));
+
+  // Old shapes stay valid; so does the same list with titles.
+  assert.equal(validateTopicList(list(topic())).ok, true);
+  assert.equal(titles(['Alpha', 'Beta']).ok, true);
+  assert.equal(titles(['Same', 'Same']).ok, true, 'titles may repeat');
+  assert.equal(titles([], []).ok, true, 'a topic without previewed pages has no titles');
+  const fifty = Array.from({ length: 50 }, (_, i) => bl(`p${i}.md`));
+  assert.equal(titles(fifty.map((_, i) => `P${i}`), fifty).ok, true);
+
+  assert.equal(reason(titles(['Alpha'])), 'inconsistent', 'fewer titles than pages');
+  assert.equal(reason(titles(['A', 'B', 'C'])), 'inconsistent', 'more titles than pages');
+  assert.equal(reason(titles([])), 'inconsistent', 'empty titles do not match two pages');
+  assert.equal(reason(titles('Alpha')), 'wrong-type');
+  assert.equal(reason(titles(null)), 'wrong-type');
+  assert.equal(reason(titles(undefined)), 'wrong-type');
+  assert.equal(reason(titles(['Alpha', 1])), 'wrong-type');
+  assert.equal(reason(titles(['Alpha', ''])), 'empty');
+  assert.equal(reason(titles(['Alpha', 'B\nC'])), 'control-character');
+  assert.equal(reason(titles(['Alpha', 'B\u0000'])), 'nul');
+  assert.equal(reason(titles(['Alpha', '\ud800'])), 'lone-surrogate');
+  assert.equal(titles(['Alpha', 'x'.repeat(256)]).ok, true);
+  assert.equal(reason(titles(['Alpha', 'x'.repeat(257)])), 'too-long');
+  assert.equal(reason(validateTopicList(list(topic({ titles: ['Alpha', 'Beta'] })))), 'unknown-property');
+
+  // Existing invariants still hold with titles present.
+  assert.equal(reason(validateTopicList(list(topic({ pageTitles: ['A', 'B'], pageCount: 1 })))), 'inconsistent');
+  assert.equal(reason(validateTopicList(list(topic({ pageTitles: ['A', 'B'], pages: [bl('a.md'), dev('b.md')] })))), 'inconsistent');
+  assert.equal(reason(validateTopicList(list(topic({ pageTitles: ['A', 'B'], pages: [bl('a.md'), bl('a.md')] })))), 'duplicate');
 });
 
 test('index status: one entry per namespace, descriptor present unless unavailable', () => {

@@ -1,27 +1,34 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ModulePort } from '@hq/contracts';
-import { Button, IconButton, Splitter, StateView, Toast, ToastRegion, TOAST_AUTO_DISMISS_MS, type ReferencePort, type ReturnContext } from '@hq/ui';
-import { StatusBoard, SyncBanners, undoFromToast, useFeedback, WorkToasts, type Feedback } from '../board';
+import { navigateWithTransition, Splitter, StateView, type ReferencePort, type ReturnContext } from '@hq/ui';
+import { StatusBoard, SyncBanners, WorkToasts } from '../board';
 import { DraftsPanel, QuickCapture, useCaptureShortcut } from '../capture';
 import {
-  activeFilterCount, areasOf, DEFAULT_SETTINGS, EMPTY_FILTERS, HORIZONS, KINDS, useWorkState,
-  type DateInput, type Filters, type Settings, type Status, type WorkState, type WorkStore,
+  DEFAULT_SETTINGS, isLive, reviewBucketsFor, useWorkState,
+  type DateInput, type Settings, type Status,
 } from '../core';
 import { CardDetail } from '../detail';
 import { WorkExport, type WorkExportPort } from '../export';
 import { PLANNING_VIEW_IDS, PlanningViews, PROJECT_NOTE, type PlanningViewId, type WorkDestination } from '../views';
 import {
-  itemDestination, NAV_ITEMS, PAGE_LABELS, pageDestination, parseWorkDestination, viewLinkDestination,
-  type NavItem, type WorkPage, type WorkRoute,
+  itemDestination, PAGE_LABELS, pageDestination, parseWorkDestination, viewLinkDestination,
+  type WorkPage, type WorkRoute,
 } from './routes';
 import { useWorkUi, workSession, type WorkUi } from './session';
 import { useCssVars, useRemembered } from '../views/env';
+import { TopBarStatus } from '../board/SyncStatus';
+import { BarStatus, ExampleMarker, FilterBar } from './TopBar';
+import { WorkNav } from './WorkNav';
+import { DetailSheet, SHEET_BREAKPOINT } from './DetailSheet';
+import { useWidth } from './useWidth';
+import { useNumberKeys } from './keys';
 import { ToolbarCapture } from './ToolbarCapture';
 import { workUndoHandler } from './undo';
+import '../theme';
+import '../board/feedback.css';
 import './nav.css';
 
-/** The honest label on the example Planner: fictional, in memory, for this session only. */
-export const EXAMPLE_NOTE = 'Fictional example planning, kept in memory for this session only. No Planner is connected, nothing is saved beyond this session, and nothing starts.';
+export { EXAMPLE_NOTE } from './TopBar';
 
 /**
  * PlanningViews subscribes to the same store and would poll it a second time; the domain's own subscription polls,
@@ -60,8 +67,16 @@ export function WorkDomain({ context, destination, navigate, now, pollMs, refere
   const [restoreWidth, setRestoreWidth] = useRemembered('work.nav.restore', 184);
   const [detailWidth, setDetailWidth] = useRemembered('work.detail.width', 360);
   const [detailRestore, setDetailRestore] = useRemembered('work.detail.restore', 360);
-  const [toolbarCollapsed, setToolbarCollapsed] = useRemembered('work.toolbar.collapsed', false);
-  const toolbarId = useId();
+  const areaRef = useRef<HTMLDivElement>(null);
+  const areaWidth = useWidth(areaRef);
+  const sheet = areaWidth > 0 && areaWidth < SHEET_BREAKPOINT;
+  const go = useCallback((to: string) => navigateWithTransition(() => navigate(to)), [navigate]);
+  useNumberKeys(rootRef, go);
+  const live = state.items.filter(isLive);
+  const buckets = reviewBucketsFor(live, state.confirmed?.settings ?? DEFAULT_SETTINGS, now?.() ?? new Date());
+  const inboxCount = live.filter((item) => item.status === 'inbox').length;
+  const reviewCount = Object.values(buckets).reduce((sum, items) => sum + items.length, 0);
+  const counts = { board: { count: inboxCount, words: `${inboxCount} in Inbox` }, review: { count: reviewCount, words: `${reviewCount} review prompts` } };
   useCssVars(rootRef, { '--wd-nav-width': `${navWidth}px`, '--wd-detail-width': `${detailWidth}px` });
   const resizeDetail = (size: number) => {
     const next = size < 112 ? 0 : Math.max(240, Math.min(640, size));
@@ -95,8 +110,7 @@ export function WorkDomain({ context, destination, navigate, now, pollMs, refere
     editDate: (id: string) => navigate(itemDestination(id)),
     capture: ({ date }: { date?: DateInput }) => {
       ui.setCapture({ date: date ?? null });
-      if (toolbarCollapsed) { setToolbarCollapsed(false); requestAnimationFrame(() => captureRef.current?.focus()); }
-      else captureRef.current?.focus();
+      captureRef.current?.focus();
     },
     navigate: (to: WorkDestination) => navigate(viewLinkDestination(to)),
   };
@@ -122,23 +136,30 @@ export function WorkDomain({ context, destination, navigate, now, pollMs, refere
       </>
     );
   } else if (isPlanningView(page.page)) {
-    body = <PlanningViews store={store} view={page.page} filters={view.filters} {...(now ? { now } : {})} pollMs={VIEWS_POLL_MS} {...links} />;
+    body = <PlanningViews store={store} view={page.page} feedback={feedback} filters={view.filters} {...(now ? { now } : {})} pollMs={VIEWS_POLL_MS} {...links} />;
   } else if (page.page === 'settings') {
     body = <><SettingsPage settings={state.confirmed?.settings ?? null} loading={state.confirmed === null} /><WorkExport key={context.id} port={workExport} /></>;
   } else {
     body = (
       <StateView
         state="unavailable" title="Proposed — not available"
-        description="Weekly plan boards (editable lists) are deferred (D-3). Nothing was changed. The By date board shows dated planning today."
-        action={{ label: 'Open By date', onAction: () => navigate('board/by-date') }}
+        description="Weekly plan boards (editable lists) are deferred (D-3). Nothing was changed. Use Plan week to arrange existing planning dates."
+        action={{ label: 'Open Plan week', onAction: () => go('board/week') }}
       />
     );
   }
 
+  const cardDetail = itemId ? <CardDetail
+    projectId={context.id} {...(references ? { references } : {})}
+    store={store} state={state} feedback={feedback} itemId={itemId} detail={detail} {...(now ? { now } : {})}
+    onClose={() => navigate(view.lastPage)}
+  /> : null;
+
   return (
+    <TopBarStatus>
     <div className="wd-domain work-ui" ref={rootRef} onKeyDown={workUndoHandler(store, feedback)}>
       <aside className="wd-side" aria-label="Work workspace" hidden={navWidth === 0}>
-        <WorkNav current={page?.page ?? null} onOpen={(item) => navigate(item.destination)} />
+        <WorkNav current={page?.page ?? null} counts={counts} onOpen={(item) => go(item.destination)} />
       </aside>
       <div className="wd-nav-divider">
         <Splitter label="Work navigation width" value={navWidth} min={0} max={280} onResize={resizeNav} onToggle={() => resizeNav(navWidth === 0 ? restoreWidth : 0)} />
@@ -147,39 +168,24 @@ export function WorkDomain({ context, destination, navigate, now, pollMs, refere
       <div className="wd-main">
         {returnContext && <p className="hq-meta">From {returnContext.label} · {returnContext.to.domain} · {returnContext.to.destination}</p>}
         <h1 className="hq-sr-only">Work · {page ? PAGE_LABELS[page.page] : 'Unknown page'}</h1>
-        {session.example && (
-          <p className="wd-example" role="note"><span className="wd-tag">Example data</span> {EXAMPLE_NOTE}</p>
-        )}
-        {toolbarCollapsed && <div className="wd-toolbar-toggle">
-          <Button size="sm" variant="ghost" aria-expanded={false} aria-controls={toolbarId} onClick={() => setToolbarCollapsed(false)}>
-            Show capture &amp; filters · {activeFilterCount(view.filters)} filters
-          </Button>
-        </div>}
-        <div className="wd-toolbar" id={toolbarId} hidden={toolbarCollapsed}>
+        <div className="wd-topbar">
           <ToolbarCapture ref={captureRef} session={session} state={state} {...(now ? { now } : {})} onMore={openCapture} />
           {page && page.page !== 'settings' && page.page !== 'plan' && <FilterBar ui={ui} filters={view.filters} state={state} />}
-          <IconButton
-            className="wd-toolbar-hide" size="sm" label="Hide capture & filters" aria-expanded={true} aria-controls={toolbarId}
-            onClick={() => setToolbarCollapsed(true)}
-            icon={<svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6" /></svg>}
-          />
+          <div className="wd-topbar-end"><BarStatus store={store} state={state} />{session.example && <ExampleMarker />}</div>
         </div>
         <DraftsPanel drafts={drafts} store={store} feedback={feedback} />
-        <div className={`wd-workarea${itemId ? ' wd-workarea--detail' : ''}`}>
-          <ScrollArea ui={ui} pageKey={pageKey} ready={state.confirmed !== null}>{body}</ScrollArea>
-          {itemId && <>
+        <div ref={areaRef} className={`wd-workarea${itemId && !sheet ? ' wd-workarea--detail' : ''}`}>
+          <div className="wd-page" inert={Boolean(itemId && sheet)}><ScrollArea ui={ui} pageKey={pageKey} ready={state.confirmed !== null}>{body}</ScrollArea></div>
+          {itemId && !sheet && <>
             <div className="wd-detail-divider">
               <Splitter label="Work detail width" value={detailWidth} min={0} max={640} side="end" onResize={resizeDetail} onToggle={() => resizeDetail(detailWidth === 0 ? detailRestore : 0)} />
               {detailWidth === 0 && <button type="button" className="wd-detail-restore" aria-label="Show item details" title="Show item details" onClick={() => resizeDetail(detailRestore)}>‹</button>}
             </div>
             <div className="wd-detail-host" hidden={detailWidth === 0}>
-            <CardDetail
-              projectId={context.id} {...(references ? { references } : {})}
-              store={store} state={state} feedback={feedback} itemId={itemId} detail={detail} {...(now ? { now } : {})}
-              onClose={() => navigate(view.lastPage)}
-            />
+            {cardDetail}
             </div>
           </>}
+          {itemId && sheet && <DetailSheet label="Card details" onClose={() => navigate(view.lastPage)}>{cardDetail}</DetailSheet>}
         </div>
       </div>
 
@@ -187,84 +193,14 @@ export function WorkDomain({ context, destination, navigate, now, pollMs, refere
         open={dialog !== null} initialStatus={dialog ?? 'inbox'} onClose={() => setDialog(null)}
         store={store} state={state} feedback={feedback} drafts={drafts} {...(now ? { now } : {})}
       />
-      {page && isPlanningView(page.page)
-        ? <FeedbackToasts store={store} state={state} feedback={feedback} />
-        : <WorkToasts store={store} state={state} feedback={feedback} />}
+      <WorkToasts store={store} state={state} feedback={feedback} />
     </div>
+    </TopBarStatus>
   );
 }
 
-function WorkNav({ current, onOpen }: { current: WorkPage | null; onOpen(item: NavItem): void }) {
-  const id = useId();
-  const group = (name: NavItem['group'], label: string) => (
-    <>
-      <p className="wd-group" id={`${id}-${name}`}>{label}</p>
-      <ul aria-labelledby={`${id}-${name}`}>
-        {NAV_ITEMS.filter((item) => item.group === name).map((item) => (
-          <li key={item.page}>
-            <button type="button" className="wd-nav-item" aria-current={item.page === current ? 'page' : undefined} onClick={() => onOpen(item)}>
-              {item.label}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </>
-  );
-  return (
-    <nav className="wd-nav" aria-label="Work">
-      {group('boards', 'Boards')}
-      {group('views', 'Views')}
-      {group('settings', 'Planner')}
-    </nav>
-  );
-}
+/** Restores each page's owned scroll offsets after its content is available. */
 
-/** Board-level filters. Area filters by the Planner's label; it is never a project and never switches one. */
-function FilterBar({ ui, filters, state }: { ui: WorkUi; filters: Filters; state: WorkState }) {
-  const id = useId();
-  const set = (patch: Partial<Filters>) => ui.update({ filters: { ...filters, ...patch } });
-  const areas = areasOf(state.items);
-  const count = activeFilterCount(filters);
-  return (
-    <div className="wd-filters" role="group" aria-label="Filter planning">
-      <label className="wd-filter wd-filter--search" htmlFor={`${id}-q`}>
-        <span className="hq-sr-only">Search</span>
-        <input id={`${id}-q`} className="work-input" type="search" placeholder="Search planning" value={filters.q} onChange={(event) => set({ q: event.target.value })} />
-      </label>
-      <label className="wd-filter" htmlFor={`${id}-kind`}>
-        <span className="work-field-label">Kind</span>
-        <select id={`${id}-kind`} className="work-input" value={filters.kind} onChange={(event) => set({ kind: event.target.value })}>
-          <option value="">Any</option>
-          {KINDS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-        </select>
-      </label>
-      <label className="wd-filter" htmlFor={`${id}-horizon`}>
-        <span className="work-field-label">Horizon</span>
-        <select id={`${id}-horizon`} className="work-input" value={filters.horizon} onChange={(event) => set({ horizon: event.target.value })}>
-          <option value="">Any</option>
-          {HORIZONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-          <option value="__none">Not set</option>
-        </select>
-      </label>
-      <div className="wd-filter">
-        <label className="work-field-label" htmlFor={`${id}-area`}>Area label</label>
-        <select id={`${id}-area`} className="work-input" value={filters.area} onChange={(event) => set({ area: event.target.value })} aria-describedby={`${id}-area-hint`}>
-          <option value="">Any</option>
-          {areas.map((area) => <option key={area} value={area}>{area}</option>)}
-          <option value="__none">No label</option>
-        </select>
-        <span className="hq-sr-only" id={`${id}-area-hint`}>A Planner label, not a project.</span>
-      </div>
-      {count > 0 && <Button size="sm" variant="ghost" onClick={() => ui.update({ filters: EMPTY_FILTERS })}>Clear filters ({count})</Button>}
-    </div>
-  );
-}
-
-/**
- * The page's own scroller. Its position is recorded per page in the session and put back once the page has content
- * after a remount, together with the board's horizontal column scroll. The height comes through CSSOM because the app
- * CSP forbids inline style attributes.
- */
 function ScrollArea({ ui, pageKey, ready, children }: { ui: WorkUi; pageKey: string; ready: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const restored = useRef<string | null>(null);
@@ -273,7 +209,7 @@ function ScrollArea({ ui, pageKey, ready, children }: { ui: WorkUi; pageKey: str
     const el = ref.current;
     if (!el) return;
     // Set on the work area, so the card detail beside the page shares the same height.
-    const area = el.parentElement ?? el;
+    const area = el.closest<HTMLElement>('.wd-workarea') ?? el;
     const fit = () => {
       area.style.setProperty('--wd-scroll-max', `${area.clientHeight}px`);
     };
@@ -325,27 +261,6 @@ function SettingsPage({ settings, loading }: { settings: Settings | null; loadin
       </dl>
       <p className="hq-meta">Read from the Planner settings. The By date board, Calendar and Glance group weeks by this week start. HQ does not change these settings yet.</p>
     </section>
-  );
-}
-
-/** Toasts for board, detail and capture actions on a planning view page, whose own banners already show notices. */
-function FeedbackToasts({ store, state, feedback }: { store: WorkStore; state: WorkState; feedback: Feedback }) {
-  const toasts = useFeedback(feedback);
-  const live = new Set(state.undo.map((entry) => entry.id));
-  return (
-    <ToastRegion label="Work card notifications">
-      {toasts.map((toast) => (
-        <Toast
-          key={toast.id}
-          className={`work-toast work-toast--${toast.tone}`}
-          message={toast.message}
-          meta={toast.meta}
-          autoDismissMs={toast.tone === 'info' ? TOAST_AUTO_DISMISS_MS : undefined}
-          action={toast.undoId && live.has(toast.undoId) ? { label: 'Undo', keyshortcuts: 'Control+Z Meta+Z', onAction: () => void undoFromToast(store, feedback, toast) } : undefined}
-          onDismiss={() => feedback.dismiss(toast.id)}
-        />
-      ))}
-    </ToastRegion>
   );
 }
 

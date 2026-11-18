@@ -76,8 +76,8 @@
     "drag":    { "light": "0 14px 28px rgba(25, 26, 22, 0.20)", "dark": "0 16px 32px rgba(0, 0, 0, 0.60)", "use": "Item being dragged" }
   },
   "font": {
-    "family-sans": { "value": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "use": "Interface text. Bundle OFL woff2 under font-src 'self'; system fallback is acceptable." },
-    "family-mono": { "value": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace", "use": "Code and identifiers" },
+    "family-sans": { "value": "\"IBM Plex Sans\", -apple-system, BlinkMacSystemFont, \"Segoe UI Variable Text\", \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Liberation Sans\", \"Noto Sans\", system-ui, sans-serif", "use": "Interface text. Concrete faces come before the generics because some Linux fontconfig setups resolve system-ui and sans-serif to a monospace face. Bundle OFL woff2 under font-src 'self'; system fallback is acceptable." },
+    "family-mono": { "value": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, \"Liberation Mono\", monospace", "use": "Code and identifiers" },
     "weight-regular": { "value": "400" },
     "weight-medium":  { "value": "500" },
     "weight-semibold":{ "value": "600" }
@@ -130,11 +130,37 @@
     "wide-min":    { "value": "1280px", "use": "From 1280px the secondary nav uses its full width" }
   },
   "motion": {
+    "duration-instant": "60ms",
     "duration-fast": "90ms",
     "duration-base": "160ms",
     "duration-slow": "240ms",
+    "duration-slower": "360ms",
     "ease-standard": "cubic-bezier(0.2, 0, 0, 1)",
-    "ease-exit": "cubic-bezier(0.4, 0, 1, 1)"
+    "ease-exit": "cubic-bezier(0.4, 0, 1, 1)",
+    "ease-enter": "cubic-bezier(0.05, 0.7, 0.1, 1)",
+    "ease-spring": "linear(0, 0.059 4%, 0.193 8%, 0.357 12%, 0.519 16%, 0.664 20%, 0.808 25%, 0.910 30%, 0.975 35%, 1.011 40%, 1.030 47%, 1.028 55%, 1.016 65%, 1.003 80%, 1)",
+    "motion-distance-sm": "4px",
+    "motion-distance-md": "8px",
+    "motion-distance-lg": "16px",
+    "motion-scale-press": "0.97",
+    "motion-scale-enter": "0.96",
+    "motion-stagger": "28ms"
+  },
+  "motion-reduced": {
+    "use": "Applied under prefers-reduced-motion: reduce and when the shell sets <html data-hq-motion=\"reduce\">. Every movement collapses to its end state; nothing slides, scales or staggers.",
+    "values": {
+      "duration-instant": "0ms",
+      "duration-fast": "0ms",
+      "duration-base": "0ms",
+      "duration-slow": "0ms",
+      "duration-slower": "0ms",
+      "motion-distance-sm": "0px",
+      "motion-distance-md": "0px",
+      "motion-distance-lg": "0px",
+      "motion-scale-press": "1",
+      "motion-scale-enter": "1",
+      "motion-stagger": "0ms"
+    }
   },
   "z": {
     "sticky": "10", "drawer": "30", "popover": "40", "dialog": "50", "toast": "60", "tooltip": "70"

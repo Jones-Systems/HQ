@@ -60,6 +60,11 @@ export interface CanvasState {
   readonly guides: readonly SnapGuide[];
   /** Loaded from a record that cannot be edited safely (future schema, invalid, mismatch). */
   readonly readOnly: boolean;
+  /**
+   * Counts camera moves the view eases: zoom buttons and presets, fit, keyboard zoom and focus reveal. Wheel, pinch,
+   * pan and drag never change it, so they stay direct. View state only; it is not part of the record or of history.
+   */
+  readonly cameraEase: number;
 }
 
 export type CanvasAction =
@@ -70,9 +75,9 @@ export type CanvasAction =
   | { readonly type: 'viewport'; readonly size: Size }
   | { readonly type: 'camera'; readonly camera: Camera }
   | { readonly type: 'pan'; readonly dx: number; readonly dy: number }
-  | { readonly type: 'zoom-at'; readonly anchor: Point; readonly factor: number }
-  | { readonly type: 'zoom-to'; readonly zoom: number; readonly anchor?: Point }
-  | { readonly type: 'fit'; readonly target: 'all' | 'selection' }
+  | { readonly type: 'zoom-at'; readonly anchor: Point; readonly factor: number; readonly ease?: boolean }
+  | { readonly type: 'zoom-to'; readonly zoom: number; readonly anchor?: Point; readonly ease?: boolean }
+  | { readonly type: 'fit'; readonly target: 'all' | 'selection'; readonly ease?: boolean }
   | { readonly type: 'wheel'; readonly input: WheelInput; readonly anchor: Point }
   | { readonly type: 'key'; readonly input: KeyInput; readonly platform: Platform }
   | { readonly type: 'pointer-down'; readonly point: Point; readonly target: NodeId | null; readonly toggle: boolean; readonly pan: boolean }
@@ -91,7 +96,7 @@ export function createCanvasState(arrangement: CanvasArrangement, options: { rea
   return {
     history: createHistory(arrangement), preview: null, camera: options.camera ?? DEFAULT_CAMERA,
     viewport: options.viewport ?? DEFAULT_VIEWPORT, selection: [], focusId: null, gesture: null, guides: [],
-    readOnly: options.readOnly ?? false,
+    readOnly: options.readOnly ?? false, cameraEase: 0,
   };
 }
 
@@ -121,21 +126,22 @@ function center(state: CanvasState): Point {
   return { x: state.viewport.width / 2, y: state.viewport.height / 2 };
 }
 
-function setCamera(state: CanvasState, camera: Camera): CanvasState {
-  return camera.x === state.camera.x && camera.y === state.camera.y && camera.zoom === state.camera.zoom ? state : { ...state, camera };
+function setCamera(state: CanvasState, camera: Camera, ease = false): CanvasState {
+  if (camera.x === state.camera.x && camera.y === state.camera.y && camera.zoom === state.camera.zoom) return state;
+  return { ...state, camera, cameraEase: ease ? state.cameraEase + 1 : state.cameraEase };
 }
 
-function fit(state: CanvasState, target: 'all' | 'selection'): CanvasState {
+function fit(state: CanvasState, target: 'all' | 'selection', ease: boolean): CanvasState {
   const arrangement = visibleArrangement(state);
   const bounds = target === 'selection' && state.selection.length > 0 ? selectionBounds(arrangement, state.selection) : allBounds(arrangement);
-  return bounds ? setCamera(state, fitRect(bounds, state.viewport)) : state;
+  return bounds ? setCamera(state, fitRect(bounds, state.viewport), ease) : state;
 }
 
 function focus(state: CanvasState, id: NodeId | null): CanvasState {
   if (id === null) return state.focusId === null ? state : { ...state, focusId: null };
   const found = findNode(visibleArrangement(state), id);
   if (!found) return state;
-  return { ...setCamera(state, ensureVisible(state.camera, state.viewport, found.node.frame)), focusId: id };
+  return { ...setCamera(state, ensureVisible(state.camera, state.viewport, found.node.frame), true), focusId: id };
 }
 
 function select(state: CanvasState, ids: readonly NodeId[], mode: 'replace' | 'toggle' | 'add'): CanvasState {
@@ -167,9 +173,9 @@ function key(state: CanvasState, input: KeyInput, platform: Platform): CanvasSta
   switch (command.kind) {
     case 'pan': return setCamera(state, panBy(state.camera, command.dx, command.dy));
     case 'nudge': return edit(state, { kind: 'move', ids: state.selection, dx: command.dx, dy: command.dy });
-    case 'zoom-step': return setCamera(state, zoomAt(state.camera, center(state), command.direction === 1 ? ZOOM_STEP : 1 / ZOOM_STEP));
-    case 'zoom-reset': return setCamera(state, zoomTo(state.camera, center(state), 1));
-    case 'fit': return fit(state, command.target);
+    case 'zoom-step': return setCamera(state, zoomAt(state.camera, center(state), command.direction === 1 ? ZOOM_STEP : 1 / ZOOM_STEP), true);
+    case 'zoom-reset': return setCamera(state, zoomTo(state.camera, center(state), 1), true);
+    case 'fit': return fit(state, command.target, true);
     case 'focus-step': {
       const next = nextFocus(state, command.direction);
       return next === null ? state : focus(state, next);
@@ -264,9 +270,9 @@ export function reduceCanvas(state: CanvasState, action: CanvasAction): CanvasSt
     }
     case 'camera': return setCamera(state, { ...action.camera, zoom: clampZoom(action.camera.zoom) });
     case 'pan': return setCamera(state, panBy(state.camera, action.dx, action.dy));
-    case 'zoom-at': return setCamera(state, zoomAt(state.camera, action.anchor, action.factor));
-    case 'zoom-to': return setCamera(state, zoomTo(state.camera, action.anchor ?? center(state), action.zoom));
-    case 'fit': return fit(state, action.target);
+    case 'zoom-at': return setCamera(state, zoomAt(state.camera, action.anchor, action.factor), action.ease === true);
+    case 'zoom-to': return setCamera(state, zoomTo(state.camera, action.anchor ?? center(state), action.zoom), action.ease === true);
+    case 'fit': return fit(state, action.target, action.ease === true);
     case 'wheel': {
       const intent = normalizeWheel(action.input, state.viewport.height);
       return intent.kind === 'zoom'

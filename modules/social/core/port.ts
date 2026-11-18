@@ -91,6 +91,7 @@ export interface RunRecord {
   finished_at: string | null;
   error: string | null;
   output?: unknown;
+  source_ids?: string[];
 }
 
 export interface WorkspaceSnapshot {
@@ -101,6 +102,8 @@ export interface WorkspaceSnapshot {
   tools: Tool[];
   features: string[];
   observedAt: string;
+  sources?: import('./extensions').SourceRecord[];
+  publishing?: import('./extensions').PublishingSnapshot;
 }
 
 export type DraftFields = Omit<Draft, 'id' | 'version' | 'updated_at'>;
@@ -145,7 +148,7 @@ export interface SocialWorkspacePort {
   /** read class */
   run(id: string): Promise<RunRecord>;
   /** EXECUTION class. Adapters never retry it; a lost response rejects `unknown`. */
-  submitRun(tool: ToolId, input: Record<string, unknown>, isExample: boolean): Promise<RunRecord>;
+  submitRun(tool: ToolId, input: Record<string, unknown>, isExample: boolean, options?: { sourceIds: readonly string[] }): Promise<RunRecord>;
 }
 
 export type CallClass = 'content' | 'read' | 'execution';

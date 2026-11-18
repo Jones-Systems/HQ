@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { WikiService } from '../../contract/src/index.ts';
 import { createSyntheticService } from '../fixtures/synthetic.ts';
+import { filterChip } from './chrome.ts';
 import { all, byText, click, one, textOf } from './render.ts';
 import { deferred, launch, override, release, type Deferred } from './support.ts';
 
@@ -11,7 +12,8 @@ type SearchResponse = Awaited<ReturnType<WikiService['search']>>;
 type PageResponse = Awaited<ReturnType<WikiService['getPage']>>;
 type TopicsResponse = Awaited<ReturnType<WikiService['listTopics']>>;
 
-const nav = (container: HTMLElement, label: string): HTMLElement => byText(container, '.wiki-nav button', label);
+const back = (container: HTMLElement): HTMLElement => one(container, 'button[aria-label="Back"]');
+const shown = (container: HTMLElement): string | null => container.querySelector('main > [aria-label]')?.getAttribute('aria-label') ?? null;
 
 function controlled<T>(): { next(): Deferred<T>; all: Deferred<T>[] } {
   const all: Deferred<T>[] = [];
@@ -37,7 +39,7 @@ test('an older search response arriving after a newer one is discarded', async (
   assert.ok(titles.includes('Cash flow'));
   await release(searches.all[0]!, await base.search({ query: 'archive' }));
   assert.deepEqual(all(app.container, '.wiki-hit-title').map((node) => node.textContent), titles, 'the stale archive results never replace the newer ones');
-  assert.equal(textOf(one(app.container, '.wiki-search .wiki-section-title')), 'Search: “cash”');
+  assert.equal(textOf(one(app.container, '.wiki-search .wiki-section-title')), 'Results for “cash”');
   await app.unmount();
 });
 
@@ -58,9 +60,22 @@ test('an older response arriving before the newer one is also never shown', asyn
 test('toggling the repository filter supersedes the request in flight', async () => {
   const base = createSyntheticService();
   const searches = controlled<SearchResponse>();
-  const app = await launch({ destination: 'search?q=pricing', service: override(base, { search: () => searches.next().promise }) });
-  await click(one(app.container, 'input[name="repository"][value="appdev"]'));
+  const requests: Parameters<WikiService['search']>[0][] = [];
+  const app = await launch({
+    destination: 'search?q=pricing',
+    service: override(base, {
+      search: (request) => {
+        requests.push(request);
+        return searches.next().promise;
+      },
+    }),
+  });
+  assert.equal(filterChip(app.container, 'appdev').getAttribute('aria-pressed'), 'true');
+  await click(filterChip(app.container, 'appdev'));
+  assert.equal(filterChip(app.container, 'appdev').getAttribute('aria-pressed'), 'false');
+  assert.equal(filterChip(app.container, 'bl').getAttribute('aria-pressed'), 'true');
   assert.equal(searches.all.length, 2);
+  assert.deepEqual(requests, [{ query: 'pricing' }, { query: 'pricing', namespaces: ['bl'] }]);
   await release(searches.all[1]!, await base.search({ query: 'pricing', namespaces: ['bl'] }));
   await release(searches.all[0]!, await base.search({ query: 'pricing' }));
   assert.equal(all(app.container, '.wiki-hit').length, 3, 'only the bl-filtered response is shown');
@@ -77,7 +92,7 @@ test('reader: a slow page response cannot replace the page navigated to since', 
   assert.equal(textOf(one(app.container, '.wiki-page-title')), 'Cash flow');
   await release(pages.all[0]!, await base.getPage({ key: { namespace: 'bl', path: 'lessons/pricing.md' } }));
   assert.equal(textOf(one(app.container, '.wiki-page-title')), 'Cash flow');
-  assert.equal(textOf(one(app.container, '.wiki-crumbs code')), 'lessons/cash-flow.md');
+  assert.equal(textOf(one(app.container, '[data-field="path"] dd')), 'lessons/cash-flow.md');
   await app.unmount();
 });
 
@@ -85,33 +100,44 @@ test('going back while a request is in flight shows the earlier view, not the la
   const base = createSyntheticService();
   const topics = controlled<TopicsResponse>();
   const app = await launch({ service: override(base, { listTopics: () => topics.next().promise }) });
-  await click(nav(app.container, 'Topics · BusinessLessons'));
+  assert.equal(shown(app.container), 'Home');
+  await app.external('topics/bl');
   assert.equal(all(app.container, '[data-state="loading"]').length, 1);
-  await click(nav(app.container, '← Back'));
-  assert.equal(all(app.container, '.wiki-card').length, 2);
+  await click(back(app.container));
+  assert.equal(shown(app.container), 'Home');
   await release(topics.all[0]!, await base.listTopics({ namespace: 'bl' }));
   assert.equal(all(app.container, '.wiki-topic').length, 0, 'the late topic list is not mounted into home');
-  assert.equal(all(app.container, '.wiki-card').length, 2);
+  assert.equal(shown(app.container), 'Home');
   await app.unmount();
 });
 
-test('revisiting a destination loads it fresh and shows the latest answer', async () => {
+test('revisiting a destination shows the cached answer at once, and the latest answer once the cache is a minute old', async (t) => {
   const base = createSyntheticService();
-  let calls = 0;
+  let loads = 0;
   const app = await launch({
     destination: 'topics/bl',
     service: override(base, {
       listTopics: async (request) => {
-        calls++;
         const answer = await base.listTopics(request);
-        return answer.ok && calls > 1 ? { ok: true, value: { ...answer.value, topics: answer.value.topics.slice(0, 1) } } : answer;
+        if (request.namespace === 'bl') loads++;
+        // The first answer for BusinessLessons has several topics; every later one has a single topic.
+        return answer.ok && request.namespace === 'bl' && loads > 1 ? { ok: true, value: { ...answer.value, topics: answer.value.topics.slice(0, 1) } } : answer;
       },
     }),
   });
   assert.ok(all(app.container, '.wiki-topic-root > .wiki-topic').length > 1);
-  await click(nav(app.container, 'Topics · App Development'));
-  await click(nav(app.container, 'Topics · BusinessLessons'));
-  assert.equal(all(app.container, '.wiki-topic-root > .wiki-topic').length, 1, 'the second visit shows the second answer');
+
+  await app.external('topics/appdev');
+  await app.external('topics/bl');
+  assert.equal(loads, 1, 'a revisit inside a minute does not ask again');
+  assert.ok(all(app.container, '.wiki-topic-root > .wiki-topic').length > 1, 'the cached list shows at once');
+
+  const real = Date.now();
+  t.mock.method(Date, 'now', () => real + 61_000);
+  await app.external('topics/appdev');
+  await app.external('topics/bl');
+  assert.equal(loads, 2, 'an older entry is requested again');
+  assert.equal(all(app.container, '.wiki-topic-root > .wiki-topic').length, 1, 'the second answer replaces the first');
   await app.unmount();
 });
 

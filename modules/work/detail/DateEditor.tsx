@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { Button } from '@hq/ui';
+import { Button, FieldError } from '@hq/ui';
 import {
   DATE_KIND_LABEL, DATE_KINDS, dateState, formatValue, LIMITS, periodBounds, PRECISION_LABEL, PRECISIONS, relativeDays,
   stripDerived, valueContaining,
@@ -99,22 +99,30 @@ export function DateEditor({ dates, today, settings, onSave, disabled }: DateEdi
     <div className="work-dates">
       {dates.length === 0 && !editing && <p className="work-empty-line">No dates. Nothing is dated unless you add one.</p>}
       <ul className="work-date-list">
-        {dates.map((entry, index) => (
-          <li key={entry.id} className={`work-date${COARSE_PRECISIONS.has(entry.precision) ? ' work-date--coarse' : ''}`}>
-            <span className={`work-date-kind work-chip--dk-${entry.kind}`}><DateKindIcon kind={entry.kind} />{DATE_KIND_LABEL[entry.kind]}</span>
-            <span className="work-date-value">
-              <span>{formatValue(entry, today)}</span>
-              <span className="hq-meta">{PRECISION_LABEL[entry.precision]} · {relativeText(entry, today)}{entry.note && ` · ${entry.note}`}</span>
-            </span>
-            <span className="work-date-actions">
-              <Button size="sm" variant="ghost" disabled={disabled || busy} onClick={() => { setError(null); setEditing({ index, draft: toDraft(entry, today, settings) }); }}>Edit</Button>
-              <Button size="sm" variant="ghost" disabled={disabled || busy} onClick={() => void commit(existing().filter((_, i) => i !== index))}>Remove</Button>
-            </span>
-          </li>
-        ))}
+        {dates.map((entry, index) => {
+          const coarse = COARSE_PRECISIONS.has(entry.precision);
+          const state = dateState(entry, today, true);
+          // The state is a word as well as a hue: an overdue deadline reads "Overdue · Deadline".
+          const word = state === 'overdue' ? 'Overdue · ' : state === 'passed' && entry.kind === 'target' ? 'Target passed · ' : '';
+          return (
+            <li key={entry.id} className={`work-date${coarse ? ' work-date--coarse' : ''}`}>
+              <span className={`wk-chip wk-chip--${entry.kind}${coarse ? ' wk-chip--coarse' : ''}${state === 'overdue' || state === 'passed' ? ` wk-chip--${state}` : ''} work-date-kind`}>
+                <DateKindIcon kind={entry.kind} />{word}{DATE_KIND_LABEL[entry.kind]}
+              </span>
+              <span className="work-date-value">
+                <span>{formatValue(entry, today)}</span>
+                <span className="hq-meta">{PRECISION_LABEL[entry.precision]} · {relativeText(entry, today)}{entry.note && ` · ${entry.note}`}</span>
+              </span>
+              <span className="work-date-actions">
+                <Button size="sm" variant="ghost" disabled={disabled || busy} onClick={() => { setError(null); setEditing({ index, draft: toDraft(entry, today, settings) }); }}>Edit</Button>
+                <Button size="sm" variant="ghost" disabled={disabled || busy} onClick={() => void commit(existing().filter((_, i) => i !== index))}>Remove</Button>
+              </span>
+            </li>
+          );
+        })}
       </ul>
       {editing && draft ? (
-        <fieldset className="work-date-form" aria-describedby={error ? `${id}-error` : undefined}>
+        <fieldset className="work-date-form" {...(error ? { 'aria-describedby': `${id}-error` } : {})}>
           <legend>{editing.index === null ? 'Add a date' : 'Edit date'}</legend>
           <label className="work-field">
             <span className="work-field-label">Kind</span>
@@ -163,7 +171,7 @@ export function DateEditor({ dates, today, settings, onSave, disabled }: DateEdi
             <span className="work-field-label">Note (optional)</span>
             <input className="work-input" value={draft.note} maxLength={LIMITS.dateNote} onChange={(event) => setDraft({ note: event.target.value })} />
           </label>
-          {error && <p className="work-field-error work-field--wide" id={`${id}-error`} role="alert">{error}</p>}
+          <FieldError id={`${id}-error`} announce className="work-field--wide">{error}</FieldError>
           <span className="work-date-form-actions">
             <Button size="sm" variant="ghost" onClick={() => { setEditing(null); setError(null); }}>Cancel</Button>
             <Button size="sm" variant="primary" busy={busy} busyLabel="Saving" onClick={saveDraft}>Save date</Button>

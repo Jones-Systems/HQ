@@ -6,6 +6,8 @@
  * them. Everything here is erasable TypeScript and free of Node/DOM imports.
  */
 
+import { TasteInvalidInputError } from './errors.ts';
+
 export type Brand<T, K extends string> = T & { readonly __kind: K };
 
 export type ProjectId = Brand<string, 'ProjectId'>;
@@ -27,15 +29,49 @@ export function isIdentifier(value: unknown): value is string {
     && value.trim() === value && !/[\u0000-\u001f\u007f]/u.test(value);
 }
 
-function brand<K extends string>(kind: K) {
+function brand<K extends string>(kind: K, valid: (value: unknown) => value is string = isIdentifier) {
   return (value: string): Brand<string, K> => {
-    if (!isIdentifier(value)) throw new TypeError(`Invalid ${kind}`);
+    if (!valid(value)) throw new TasteInvalidInputError(`Invalid ${kind}`);
     return value as Brand<string, K>;
   };
 }
 
+const QUALIFIED_PREFIX = 'pv1:';
+const QUALIFIED_HEAD = /^pv1:([1-9][0-9]{0,2}):/u;
+/** `pv1:` + project length digits + `:` + both bounded parts. */
+export const MAX_QUALIFIED_SUBJECT_ID_LENGTH = QUALIFIED_PREFIX.length + 4 + 2 * MAX_ID_LENGTH;
+
+/**
+ * Version IDs are only unique inside their project: deterministic capture IDs and imported IDs repeat across
+ * projects. A version subject is therefore stored as `pv1:<project length>:<project><version>`. The length prefix
+ * makes the pair unambiguous without escaping, so two different (project, version) pairs never share an ID.
+ * Throws `TasteInvalidInputError` unless both parts are valid identifiers.
+ */
+export function qualifySubjectId(project: string, localId: string): SubjectId {
+  if (!isIdentifier(project) || !isIdentifier(localId)) throw new TasteInvalidInputError('Invalid SubjectId');
+  return `${QUALIFIED_PREFIX}${project.length}:${project}${localId}` as SubjectId;
+}
+
+/** The project and version a qualified ID names, or null for any other string (including legacy plain IDs). */
+export function parseQualifiedSubjectId(value: unknown): { readonly projectId: ProjectId; readonly localId: string } | null {
+  if (typeof value !== 'string' || value.length > MAX_QUALIFIED_SUBJECT_ID_LENGTH) return null;
+  const head = QUALIFIED_HEAD.exec(value);
+  if (!head) return null;
+  const length = Number(head[1]);
+  const rest = value.slice(head[0].length);
+  const project = rest.slice(0, length);
+  const localId = rest.slice(length);
+  if (project.length !== length || !isIdentifier(project) || !isIdentifier(localId)) return null;
+  return { projectId: project as ProjectId, localId };
+}
+
+/** A subject ID is a plain identifier (older journals, references, components) or a project-qualified one. */
+export function isSubjectIdentifier(value: unknown): value is string {
+  return isIdentifier(value) || parseQualifiedSubjectId(value) !== null;
+}
+
 export const projectId = brand('ProjectId');
-export const subjectId = brand('SubjectId');
+export const subjectId = brand('SubjectId', isSubjectIdentifier);
 export const assessmentId = brand('AssessmentId');
 export const noteId = brand('NoteId');
 export const counterevidenceId = brand('CounterevidenceId');
@@ -62,13 +98,21 @@ export type RatingValue = (typeof RATING_VALUES)[number];
 export const SUBJECT_KINDS = ['version', 'reference', 'component', 'flow', 'other'] as const;
 export type SubjectKind = (typeof SUBJECT_KINDS)[number];
 
-/** What is being judged. The label is display-only; identity is `id`. */
+/**
+ * What is being judged. The label is display-only; identity is `id`. A Design version is judged under its
+ * project-qualified ID (`qualifySubjectId`, `projectVersionSubject`); older journals hold plain version IDs.
+ */
 export interface TasteSubject {
   readonly id: SubjectId;
   readonly kind: SubjectKind;
   readonly label: string;
   /** Exact source revision when the subject is a Design version; never "latest". */
   readonly versionId?: string;
+}
+
+/** The subject for one saved Design version of `project`. `versionId` stays the plain project-local ID. */
+export function projectVersionSubject(project: ProjectId, versionId: string, label: string): TasteSubject {
+  return { id: qualifySubjectId(project, versionId), kind: 'version', label, versionId };
 }
 
 /** An owner's rating. A re-rating names the assessment it supersedes. */

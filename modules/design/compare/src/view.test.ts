@@ -46,25 +46,25 @@ describe('CompareWorkspace markup (react-dom/server)', () => {
     expect(panelMarkup(after, 'c')).toBe(panelMarkup(before, 'c'));
   });
 
-  it('labels static captures and live previews differently and shows exact VersionIds', async () => {
+  it('draws static captures and fake live previews differently and keeps provenance behind Details', async () => {
     const html = renderToStaticMarkup(createElement(CompareWorkspace, { controller: await renderedWorkspace() }));
     const a = panelMarkup(html, 'a');
     const b = panelMarkup(html, 'b');
     expect(a).toContain('data-source-kind="static-capture"');
-    expect(a).toContain('<strong>Static capture</strong>');
-    expect(a).toContain('data-evidence="browser-capture"');
-    expect(a).toContain('Browser capture; not native evidence.');
     expect(a).toMatch(/<img class="cmp-capture" src="data:image\/svg\+xml/);
     expect(b).toContain('data-source-kind="live-preview"');
-    expect(b).toContain('<strong>Live preview</strong>');
-    expect(b).toContain('data-evidence="live-preview-fake"');
-    expect(b).toContain('Fake preview · labelled fake');
     expect(b).not.toContain('<img');
+    // A fake live preview is labelled in the one-line header; the source badge and caveats wait behind Details.
+    expect(b).toContain('<span class="cmp-chip cmp-chip-fake">Fake preview</span>');
+    expect(a).not.toContain('cmp-chip-fake');
     expect(html).toContain('Labelled fake previews');
-    expect(a).toContain('<code class="cmp-version-id" title="Pinned VersionId">home-v1</code>');
-    expect(b).toContain('<code class="cmp-version-id" title="Pinned VersionId">home-v2</code>');
+    expect(a).not.toContain('cmp-details-body');
+    expect(a).toContain('aria-expanded="false"');
+    // The Version menu offers the project's versions by label; exact ids live in Details.
+    expect(b).toMatch(/<option value="home-v2" selected="">Home v2<\/option>/);
+    expect(b).toContain('<option value="home-v3">Home v3</option>');
+    expect(b).toContain('<option value="pricing-v1">Pricing v1</option>');
     expect(html).not.toMatch(/<option[^>]*>[^<]*latest/i);
-    expect(b).toMatch(/<option value="home-v2" selected="">Home v2 — home-v2<\/option>/);
     expect(html).not.toContain('<iframe');
   });
 
@@ -74,11 +74,10 @@ describe('CompareWorkspace markup (react-dom/server)', () => {
     expect([...html.matchAll(/data-role="(\w+)"/g)].map((m) => m[1])).toEqual(['baseline', 'candidate', 'reference']);
     expect([...html.matchAll(/role="separator"[^>]*aria-label="Resize panel (\d)"[^>]*aria-valuenow="(\d+)"/g)].map((m) => [m[1], m[2]]))
       .toEqual([['1', '380'], ['2', '420'], ['3', '300']]);
-    expect(html).toContain('aria-pressed="false"');
+    expect(html).toMatch(/aria-pressed="false"[^>]*>Synced scroll <span class="cmp-toggle-state">Off<\/span>/);
     controller.setSyncScroll(true, panelId('a'));
     html = renderToStaticMarkup(createElement(CompareWorkspace, { controller }));
-    expect(html).toContain('aria-pressed="true"');
-    expect(html).toContain('>Synced scroll: On</button>');
+    expect(html).toMatch(/aria-pressed="true"[^>]*>Synced scroll <span class="cmp-toggle-state">On<\/span>/);
   });
 
   it('hands overlay slots the exact source frame of each panel', async () => {

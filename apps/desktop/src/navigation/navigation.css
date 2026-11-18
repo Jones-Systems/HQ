@@ -1,0 +1,88 @@
+/* Command palette and Back pill. Tokens only; every duration and distance comes from the @hq/ui motion tokens, which
+   collapse to zero under prefers-reduced-motion and <html data-hq-motion="reduce">. */
+
+/* ---------- Command palette ---------- */
+.hq-palette-layer {
+  position: fixed; inset: 0; z-index: var(--hq-z-dialog);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: clamp(24px, 12vh, 112px) var(--hq-space-lg) var(--hq-space-lg);
+  background: var(--hq-scrim);
+}
+.hq-palette {
+  box-sizing: border-box; width: min(640px, 100%); max-height: min(72vh, 540px);
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--hq-border-strong); border-radius: var(--hq-radius-lg);
+  background: var(--hq-surface-overlay); color: var(--hq-text); box-shadow: var(--hq-shadow-overlay);
+  font: var(--hq-type-body);
+}
+.hq-palette-input {
+  box-sizing: border-box; flex: none; width: 100%; padding: 14px 16px 13px;
+  border: 0; border-bottom: 1px solid var(--hq-border); border-radius: 0; outline: 0;
+  background: transparent; color: inherit; font: var(--hq-type-title); letter-spacing: var(--hq-type-title-tracking);
+}
+.hq-palette-input::placeholder { color: var(--hq-text-subtle); }
+.hq-palette-input:focus-visible { border-bottom-color: var(--hq-focus); box-shadow: 0 1px 0 var(--hq-focus); }
+.hq-palette-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 6px 8px; }
+.hq-palette-group-label {
+  padding: 10px 10px 4px; color: var(--hq-text-subtle);
+  font: var(--hq-type-eyebrow); letter-spacing: var(--hq-type-eyebrow-tracking); text-transform: uppercase;
+}
+.hq-palette-option {
+  display: flex; align-items: center; gap: var(--hq-space-sm); box-sizing: border-box; min-height: 36px; padding: 0 10px;
+  border-radius: var(--hq-radius-control); cursor: default;
+}
+.hq-palette-option[aria-selected="true"] { background: var(--hq-surface-selected); color: var(--hq-text-selected); }
+@media (forced-colors: active) { .hq-palette-option[aria-selected="true"] { outline: 2px solid Highlight; outline-offset: -2px; } }
+.hq-palette-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hq-palette-detail {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--hq-text-muted); font: var(--hq-type-small);
+}
+.hq-palette-option[aria-selected="true"] .hq-palette-detail { color: inherit; opacity: 0.8; }
+.hq-palette-keys { display: inline-flex; flex: none; gap: 3px; margin-inline-start: auto; }
+.hq-palette-detail + .hq-palette-keys { margin-inline-start: var(--hq-space-sm); }
+.hq-palette-title:only-child { flex: 1 1 auto; }
+.hq-palette kbd, .hq-return-pill kbd {
+  display: inline-block; min-width: 16px; padding: 1px 5px; box-sizing: border-box; text-align: center;
+  border: 1px solid var(--hq-border-strong); border-radius: var(--hq-radius-xs); background: var(--hq-surface-sunken);
+  color: var(--hq-text-muted); font: var(--hq-type-meta);
+}
+/* The status row has a fixed height, so "Searching…" and the key hints never move the list. */
+.hq-palette-status {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--hq-space-md); flex: none; box-sizing: border-box; min-height: 32px; padding: 6px 14px;
+  border-top: 1px solid var(--hq-border); color: var(--hq-text-subtle); font: var(--hq-type-small);
+}
+.hq-palette-hints { display: inline-flex; align-items: center; gap: 4px; }
+.hq-palette-hints kbd + kbd { margin-inline-start: -1px; }
+.hq-palette-hint-chord { display: inline-flex; gap: 3px; }
+.hq-palette-searching::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; margin-inline-end: 8px; border-radius: 50%; background: var(--hq-accent);
+  animation: hq-palette-pulse 1.1s ease-in-out infinite;
+}
+@keyframes hq-palette-pulse { 50% { opacity: 0.25; } }
+.hq-palette .hq-notice { flex: none; border-radius: 0; border-inline: 0; }
+@media (prefers-reduced-motion: reduce) { .hq-palette-searching::before { animation: none; } }
+:root[data-hq-motion="reduce"] .hq-palette-searching::before { animation: none; }
+
+/* ---------- Back pill ---------- */
+/* A zero-height anchor: the pill overlays the top of the workspace and never pushes the page down. */
+.hq-return-anchor { position: relative; flex: none; height: 0; z-index: var(--hq-z-sticky); }
+.hq-return-anchor[hidden] { display: none; }
+.hq-return-row { position: absolute; inset-inline: 0; top: var(--hq-space-sm); display: flex; justify-content: center; pointer-events: none; padding-inline: var(--hq-space-lg); }
+.hq-return-pill {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: var(--hq-space-xs); max-width: min(420px, 100%); box-sizing: border-box; height: 28px; padding: 0 6px 0 10px;
+  border: 1px solid var(--hq-border-strong); border-radius: var(--hq-radius-pill);
+  background: var(--hq-surface-overlay); color: var(--hq-text); box-shadow: var(--hq-shadow-overlay);
+  font: var(--hq-type-label); cursor: pointer;
+  transition: background-color var(--hq-duration-fast) var(--hq-ease-standard), transform var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.hq-return-pill:hover { background: var(--hq-control-hover); }
+.hq-return-pill:active { transform: scale(var(--hq-motion-scale-press)); transition-duration: var(--hq-duration-instant); }
+.hq-return-pill:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
+.hq-return-arrow { flex: none; width: 14px; height: 14px; }
+.hq-return-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hq-return-keys { display: inline-flex; flex: none; gap: 2px; margin-inline-start: 2px; }
+@media (max-width: 640px) { .hq-return-keys { display: none; } }
+
+/* Palette hands focus to the workspace after a command. It is a focus target, not a control: no ring over the whole page. */
+main[tabindex="-1"]:focus, [role="main"][tabindex="-1"]:focus { outline: none; }

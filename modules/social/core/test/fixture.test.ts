@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FEATURE_HQ_BRAND_PROJECT, FEATURE_HQ_REFERENCES, RUN_STATUSES, portErrorOf } from '../port';
 import { createFixtureWorkspace, serviceTimestamp, type FixtureOptions } from '../fixture';
-import { FIXTURE_IDS, FIXTURE_PROJECT_ID } from '../fixtures/workspace';
+import { FIXTURE_IDS, FIXTURE_OTHER_PROJECT_ID, FIXTURE_PROJECT_ID, FIXTURE_WORK_ITEM_ID } from '../fixtures/workspace';
 import { recordCalls } from '../recorder';
 import { submitRunOnce } from '../runs';
 import { describeSocialPortConformance, type SocialPortHarness } from './port-conformance';
@@ -28,6 +28,22 @@ describeSocialPortConformance("fixture without features (today's service)", () =
 
 describe('fixture workspace', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it('points its brand and sample links into the project it is shown in', async () => {
+    const features = [FEATURE_HQ_REFERENCES, FEATURE_HQ_BRAND_PROJECT];
+    const snapshot = await createFixtureWorkspace({ clock: tickingClock(), features, projectId: 'hq-local' }).port.snapshot();
+    const brand = (id: string) => snapshot.brands.find((item) => item.id === id);
+    expect(brand(FIXTURE_IDS.larkspur)?.project_id).toBe('hq-local');
+    // The second brand stays in another project, for the project-mismatch case.
+    expect(brand(FIXTURE_IDS.harbor)?.project_id).toBe(FIXTURE_OTHER_PROJECT_ID);
+    const links = snapshot.content.find((draft) => draft.id === FIXTURE_IDS.steepingThread)?.links ?? [];
+    expect(links.map((link) => [link.domain, link.projectId, link.entityId])).toEqual([
+      ['social', 'hq-local', FIXTURE_IDS.exampleRun], ['work', 'hq-local', FIXTURE_WORK_ITEM_ID],
+    ]);
+    // Without a project the seed keeps its own fixture project.
+    const plain = await createFixtureWorkspace({ clock: tickingClock(), features }).port.snapshot();
+    expect(plain.content.find((draft) => draft.id === FIXTURE_IDS.steepingThread)?.links?.every((link) => link.projectId === FIXTURE_PROJECT_ID)).toBe(true);
+  });
 
   it('is fictional, deterministic and covers every run status', async () => {
     const { port } = createFixtureWorkspace({ clock: tickingClock() });

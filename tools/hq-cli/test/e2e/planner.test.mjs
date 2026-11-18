@@ -84,6 +84,27 @@ test('in-tree Planner: five-item owner example, discovery, separate dates, repla
     const listed = await cli(['planner', 'items', 'list']);
     assert.deepEqual(listed.data.items.find(i => i.id === linked.data.item.id).references, read.data.item.references);
     assert.equal(listed.data.items.some(i => i.title === 'Never sent'), false);
+    const wikiTarget = { ...target, domain: 'wiki', projectId: 'remote-wiki-project', workspaceId: 'remote-wiki-workspace', kind: 'page', entityId: 'docs/guide.md', title: 'Synthetic wiki page', sourceRevision: 'wiki-c1:' + 'a'.repeat(64), returnDestination: { domain: 'work', destination: `item/${linked.data.item.id}` } };
+    const wikiFields = await save('wiki-reference.json', { title: 'Wiki linked', references: [{ kind: 'hq', label: 'Wiki link', target: wikiTarget }] });
+    const wikiLinked = await cli(['planner', 'items', 'create', '--fields-file', wikiFields]);
+    assert.deepEqual(wikiLinked.data.item.references[0].target, wikiTarget);
+    const wikiRead = await cli(['planner', 'items', 'get', wikiLinked.data.item.id]);
+    assert.deepEqual(wikiRead.data.item.references, wikiLinked.data.item.references);
+    const wikiPatch = await save('wiki-patch.json', { references: [{ ...wikiRead.data.item.references[0], target: { ...wikiTarget, sourceRevision: 'wiki-c1:' + 'b'.repeat(64) } }] });
+    const wikiUpdated = await cli(['planner', 'items', 'update', wikiRead.data.item.id, '--revision', String(wikiRead.data.item.revision), '--fields-file', wikiPatch]);
+    assert.equal(wikiUpdated.data.item.revision, wikiRead.data.item.revision + 1);
+    assert.deepEqual(wikiUpdated.data.item.references[0].target, { ...wikiTarget, sourceRevision: 'wiki-c1:' + 'b'.repeat(64) });
+    const stale = await cli(['planner', 'items', 'update', wikiRead.data.item.id, '--revision', String(wikiRead.data.item.revision), '--fields-file', wikiPatch], true, false);
+    assert.equal(stale.ok, false); assert.equal(stale.effect, 'none'); assert.equal(stale.error.code, 'revision_conflict');
+    const wikiListed = (await cli(['planner', 'items', 'list'])).data.items.find(i => i.id === wikiRead.data.item.id);
+    assert.deepEqual(wikiListed.references, wikiUpdated.data.item.references);
+    const beforeInvalid = (await cli(['planner', 'status'])).data.state_version;
+    for (const badTarget of [{ ...wikiTarget, version: 2 }, { ...wikiTarget, extra: true }, { ...wikiTarget, returnDestination: { domain: 'wiki', destination: 'https:example' } }]) {
+      const invalid = await fetch(`${origin}/api/items`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' }, body: JSON.stringify({ fields: { title: 'Invalid Wiki', references: [{ kind: 'hq', target: badTarget }] } }) });
+      assert.equal(invalid.status, 400);
+      assert.equal((await invalid.json()).errors[0].message, 'Reference 1 has an invalid HQ target.');
+    }
+    assert.equal((await cli(['planner', 'status'])).data.state_version, beforeInvalid);
   });
   await assert.rejects(access(ownedRoot), { code: 'ENOENT' });
   assert.throws(() => process.kill(servicePid, 0), { code: 'ESRCH' });

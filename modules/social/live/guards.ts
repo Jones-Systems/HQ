@@ -1,3 +1,5 @@
+import { FEATURE_HQ_SOURCES, FEATURE_HQ_PUBLISHING, validProjectId, type SourceRecord, type PublishingSnapshot } from '../core/extensions';
+import { guardSource, guardPublishing } from './extension-guards';
 import { parseReference, type ReferenceEnvelope } from '@hq/contracts';
 import {
   RUN_STATUSES, TOOL_CATEGORIES, isChannel, isJsonObject, isToolId, checkSlot, FEATURE_HQ_EDITORIAL_TIMEBOX,
@@ -58,6 +60,10 @@ export function guardRun(value: unknown): RunRecord | null {
     || !str(created_at) || !nullableStr(finished_at) || !nullableStr(error)) return null;
   const run: RunRecord = { id, tool, status: status as RunStatus, is_example, created_at, finished_at, error };
   if ('output' in value) run.output = value.output;
+  if ('source_ids' in value) {
+    if (!Array.isArray(value.source_ids) || value.source_ids.length > 20 || !value.source_ids.every(str)) return null;
+    run.source_ids = [...value.source_ids];
+  }
   return run;
 }
 
@@ -81,6 +87,8 @@ export interface GuardedWorkspace {
   readonly runs: RunRecord[];
   readonly tools: Tool[];
   readonly features: string[];
+  readonly sources?: SourceRecord[];
+  readonly publishing?: PublishingSnapshot;
 }
 
 export function guardWorkspace(value: unknown): GuardedWorkspace | null {
@@ -93,7 +101,12 @@ export function guardWorkspace(value: unknown): GuardedWorkspace | null {
   if (!features) return null;
   const content = guardList(value.content, (item) => guardDraft(item, features));
   if (!brands || !content || !runs || !tools) return null;
-  return { brands, content, runs, tools, features };
+  if (features.includes('hq-brand-project-v1') && brands.some(b => b.project_id === undefined || !validProjectId(b.project_id))) return null;
+  if (features.includes(FEATURE_HQ_SOURCES) && runs.some(r => !r.source_ids)) return null;
+  const sources = features.includes(FEATURE_HQ_SOURCES) ? guardList(value.sources, guardSource) : undefined;
+  const publishing = features.includes(FEATURE_HQ_PUBLISHING) ? guardPublishing(value.publishing) : undefined;
+  if (sources === null || (sources && sources.length > 500) || publishing === null) return null;
+  return { brands, content, runs, tools, features, ...(sources ? { sources } : {}), ...(publishing ? { publishing } : {}) };
 }
 
 /** A sample is a JSON object of tool input; anything else fails closed. */

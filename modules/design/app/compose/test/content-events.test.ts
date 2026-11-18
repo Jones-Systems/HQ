@@ -123,3 +123,28 @@ it('gives each workspace one feed, in both the in-memory and the bridged composi
   assert.notEqual(memory.contentEvents, bridged.contentEvents);
   assert.notEqual(createDesignWorkspace(null).contentEvents, memory.contentEvents);
 });
+
+it('isolates synthetic stores with their feeds while project edits reach readers in the same workspace', async () => {
+  const first = createDesignWorkspace(null);
+  const second = createDesignWorkspace(null);
+  const project = { id: 'workspace-feed-isolation', name: 'Synthetic project' };
+  const [a, b] = await Promise.all([first.contentFor(project), second.contentFor(project)]);
+  assert.notEqual(a.repository, b.repository);
+  assert.notEqual(a.storage, b.storage);
+  const controller = await first.projectsFor(project);
+  controller.openProject(a.content.projectId);
+  const revision = first.contentEvents.revision(project.id);
+  const otherRevision = second.contentEvents.revision(project.id);
+  const seen: number[] = [];
+  const stop = first.contentEvents.subscribe(project.id, () => seen.push(first.contentEvents.revision(project.id)));
+  try {
+    assert.deepEqual(await controller.addView('Workspace-local view', 'page'), { ok: true });
+    assert.deepEqual(seen, [revision + 1]);
+    assert.equal(second.contentEvents.revision(project.id), otherRevision);
+    assert.ok((await first.readContent(project)).views.some((view) => view.title === 'Workspace-local view'));
+    assert.ok(!(await second.readContent(project)).views.some((view) => view.title === 'Workspace-local view'));
+  } finally {
+    stop();
+    controller.dispose();
+  }
+});

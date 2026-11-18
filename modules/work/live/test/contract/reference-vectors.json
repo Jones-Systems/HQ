@@ -127,6 +127,47 @@
       ]
     },
     {
+      "id": "domain-wiki",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "optional-provenance",
       "input": [
         {
@@ -1704,6 +1745,407 @@
               "destination": "artifact/example"
             }
           }
+        }
+      ]
+    },
+    {
+      "id": "wiki-return-work",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "remote-project",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "work",
+              "destination": "artifact/example"
+            },
+            "sourceRevision": "remote-revision-7",
+            "workspaceId": "remote-workspace"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "remote-project",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "work",
+              "destination": "artifact/example"
+            },
+            "sourceRevision": "remote-revision-7",
+            "workspaceId": "remote-workspace"
+          }
+        }
+      ]
+    },
+    {
+      "id": "work-return-wiki",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "work",
+            "projectId": "remote-project",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            },
+            "sourceRevision": "remote-revision-7",
+            "workspaceId": "remote-workspace"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "work",
+            "projectId": "remote-project",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            },
+            "sourceRevision": "remote-revision-7",
+            "workspaceId": "remote-workspace"
+          }
+        }
+      ]
+    },
+    {
+      "id": "wiki-bool-version",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": true,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "wiki-wrong-version",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 2,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "wiki-unknown-domain",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "unknown",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "wiki-extra-key",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            },
+            "extra": "x"
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "wiki-null-optional",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            },
+            "sourceRevision": null
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "wiki-control",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "a\u007fb",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "wiki-utf16-overflow",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "wiki-title-overflow",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "wiki-scheme",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "https:example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "wiki-destination-extra",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "wiki",
+              "destination": "artifact/example",
+              "extra": true
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "wiki-destination-domain",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "wiki",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "unknown",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
         }
       ]
     }

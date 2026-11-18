@@ -86,9 +86,20 @@ describe('rail and appearance controls', () => {
   });
   it.each(['null', '{broken', '{}', '{"width":10,"expanded":160}', '{"width":64,"expanded":64}', '{"width":"160","expanded":160}'])('ignores malformed rail preferences: %s', value => {
     const storage = memoryStorage(); storage.setItem(RAIL_KEY, value);
-    expect(readRail(storage)).toEqual({ width: 160, expanded: 160 });
+    expect(readRail(storage)).toEqual({ width: 64, expanded: 200 });
+  });
+  it('starts on the compact icon rail, reading the old unchosen 160 px default as unset but keeping chosen widths', () => {
+    const storage = memoryStorage();
+    expect(readRail(storage)).toEqual({ width: 64, expanded: 200 });
+    expect(toggleRail(readRail(storage))).toEqual({ width: 200, expanded: 200 });
+    storage.setItem(RAIL_KEY, '{"width":160,"expanded":160}');
+    expect(readRail(storage)).toEqual({ width: 64, expanded: 200 });
+    storage.setItem(RAIL_KEY, '{"width":64,"expanded":160}');
+    expect(readRail(storage)).toEqual({ width: 64, expanded: 160 });
+    storage.setItem(RAIL_KEY, '{"width":176,"expanded":176}');
+    expect(readRail(storage)).toEqual({ width: 176, expanded: 176 });
   });
   it('keeps rail controls usable with inaccessible storage', () => {
-    expect(readRail({ getItem: () => { throw new Error('blocked'); }, setItem: () => {} })).toEqual({ width: 160, expanded: 160 });
+    expect(readRail({ getItem: () => { throw new Error('blocked'); }, setItem: () => {} })).toEqual({ width: 64, expanded: 200 });
   });
 });

@@ -2,7 +2,7 @@
 // namespace-wide and produce the serialisable snapshot. Read-only: nothing here writes to a source.
 
 import { MAX_OUT_LINKS, MAX_PAGE_BLOB_BYTES, validatePagePath } from '../../contract/src/index.ts';
-import { analyzePage, resolveTargets, type PageAnalysis } from './analyze.ts';
+import { analyzePage, resolveLinks, type PageAnalysis } from './analyze.ts';
 import type { GitObjectSource, Pin } from './ports.ts';
 import { profileIndexKey, type SourceProfile } from './profile.ts';
 import { buildAliasMap, type PageDirectory } from './resolver.ts';
@@ -145,7 +145,7 @@ export async function buildSnapshot(args: BuildArguments): Promise<BuildOutcome>
   let nullOmissions = 0;
   let outLinkCaps = 0;
   const snapshotPages: SnapshotPage[] = pages.map(({ candidate, analysis }) => {
-    const links = resolveTargets(analysis, directory, candidate.path);
+    const { targets: links, origins: linkOrigins } = resolveLinks(analysis, directory, candidate.path);
     if (links.length > MAX_OUT_LINKS) outLinkCaps++;
     nullOmissions += analysis.nullOmissions;
     if (analysis.rawReason === 'frontmatter-unsupported') rawFrontmatter++;
@@ -160,6 +160,7 @@ export async function buildSnapshot(args: BuildArguments): Promise<BuildOutcome>
       names: analysis.names,
       topics: analysis.topics,
       links,
+      linkOrigins,
       excerpt: cleanLabel(analysis.bodyText, MAX_EXCERPT_UNITS),
       raw: analysis.rawReason,
       terms: counted.terms,

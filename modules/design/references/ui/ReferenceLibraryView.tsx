@@ -1,8 +1,10 @@
-import { SecondaryPanel } from '../../ui/src/secondary-panels.tsx';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Button, IconButton, StatusChip } from '@hq/ui';
+import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { InlineNotice, useToast } from '@hq/ui';
 import type { BlobDigest, CollectionId, ReferenceId } from '../src/contract.ts';
-import type { LibraryViewModel, ReferenceCard } from './view-model.ts';
+import { ReferenceCollections } from './ReferenceCollections.tsx';
+import { ReferenceGrid, type RevealedReference } from './ReferenceGrid.tsx';
+import { ReferenceLightbox } from './ReferenceLightbox.tsx';
+import type { LibraryViewModel, ReferenceTasteSubject } from './view-model.ts';
 import './references.css';
 
 export interface ReferenceLibraryActions {
@@ -19,52 +21,92 @@ export interface ReferenceLibraryViewProps extends ReferenceLibraryActions {
   readonly view: LibraryViewModel;
   /** Injected verified preview lookup. Returning null shows a placeholder. */
   readonly previewUrl: (digest: BlobDigest) => string | null;
+  /** True while a preview is still being read, so its card shows a skeleton rather than "unavailable". */
+  readonly previewPending?: (digest: BlobDigest) => boolean;
   readonly importControls?: ReactNode;
   readonly onShowProjects?: () => void;
+  /** "Rate taste" on a card and in the lightbox. Omit and the action is not offered. */
+  readonly onSendToTaste?: (subject: ReferenceTasteSubject) => void;
+  /** Where bulk import (bundles, recordings, HTML) lives. Omit and the pointer to it is not shown. */
+  readonly onOpenImports?: () => void;
+  /** Files dropped on the library. The owner of the import queue decides what to do with them. */
+  readonly onDropFiles?: (files: readonly File[]) => void;
+  /** A reference the owner just saved: the grid scrolls to it and washes it once. */
+  readonly revealed?: RevealedReference | null;
 }
+
+const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
 
 /** Presentational reference library. Every action is explicit and local; none dispatches work. */
 export function ReferenceLibraryView(props: ReferenceLibraryViewProps) {
   const { view } = props;
+  const toast = useToast();
   const searchId = useId();
-  const detailHeading = useRef<HTMLHeadingElement>(null);
   const cardButtons = useRef(new Map<ReferenceId, HTMLButtonElement>());
-  const previousSelection = useRef<ReferenceId | undefined>(undefined);
-  const selectedId = view.detail?.id;
-  const detailCard = view.cards.find((card) => card.id === selectedId);
+  const openId = useRef<ReferenceId | null>(null);
+  const dragDepth = useRef(0);
+  const [dragging, setDragging] = useState(false);
+  const selectedId = view.detail?.id ?? null;
+
+  // Closing the lightbox returns focus to the card that was open, not to whichever card opened it first.
   useEffect(() => {
-    if (selectedId) {
-      detailHeading.current?.focus({ preventScroll: true });
-      const detail = detailHeading.current?.closest('.hq-refs-detail');
-      if (detail) detail.scrollTop = 0;
-      if (!previousSelection.current) detailHeading.current?.scrollIntoView({ block: 'nearest' });
-    }
-    previousSelection.current = selectedId;
+    if (selectedId === null && openId.current !== null) cardButtons.current.get(openId.current)?.focus();
+    openId.current = selectedId;
   }, [selectedId]);
-  const closeDetail = () => {
-    props.onSelectReference(null);
-    if (selectedId) cardButtons.current.get(selectedId)?.focus();
-  };
-  return <section className="hq-refs" aria-labelledby={`${searchId}-title`}>
-    <header className="hq-refs-header">
-      <div className="hq-refs-heading">
-        <span className="eyebrow">Design</span>
-        <h2 id={`${searchId}-title`}>References</h2>
-        <p className="hq-refs-count">{view.totalLive} {view.totalLive === 1 ? 'reference' : 'references'}</p>
-      </div>
-      {view.totalLive > 0 && <div className="hq-refs-search">
-        <label className="hq-sr-only" htmlFor={searchId}>Search references</label>
-        <input id={searchId} type="search" value={view.query} placeholder="Search references"
-          onChange={(event) => props.onQueryChange(event.currentTarget.value)} />
-      </div>}
-      {props.importControls}
-    </header>
-    {view.banner === null ? null : <div className="hq-refs-banner" role="status">
-      <span>{view.banner}</span>
-      <button type="button" onClick={props.onReload}>Reload</button>
-    </div>}
-    <div className="hq-refs-body">
-      {view.totalLive > 0 && <SecondaryPanel name="reference-collections" label="Reference collections" initial={200} side="start"><CollectionsNav {...props} /></SecondaryPanel>}
+
+  const canDrop = props.onDropFiles !== undefined;
+  const dropHandlers = canDrop ? {
+    onDragEnter: (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth.current += 1;
+      setDragging(true);
+    },
+    onDragOver: (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = view.canEdit ? 'copy' : 'none';
+    },
+    onDragLeave: (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setDragging(false);
+    },
+    onDrop: (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      // Always cancel: an unhandled file drop would navigate the window to the file.
+      event.preventDefault();
+      dragDepth.current = 0;
+      setDragging(false);
+      const files = Array.from(event.dataTransfer.files);
+      if (files.length === 0) return;
+      if (!view.canEdit) {
+        toast.warning('Importing is paused', { description: view.banner ?? 'The library cannot be changed right now.' });
+        return;
+      }
+      props.onDropFiles?.(files);
+    },
+  } : {};
+
+  return <>
+    <section className="hq-refs" aria-labelledby={`${searchId}-title`} {...dropHandlers}>
+      <header className="hq-refs-header">
+        <div className="hq-refs-heading">
+          <span className="eyebrow">Design</span>
+          <h2 id={`${searchId}-title`}>References</h2>
+          <p className="hq-refs-count">{view.totalLive} {view.totalLive === 1 ? 'reference' : 'references'}</p>
+        </div>
+        {view.totalLive > 0 && <div className="hq-refs-search">
+          <label className="hq-sr-only" htmlFor={searchId}>Search references</label>
+          <input id={searchId} type="search" value={view.query} placeholder="Search references"
+            onChange={(event) => props.onQueryChange(event.currentTarget.value)} />
+        </div>}
+        {props.importControls}
+      </header>
+      {view.banner === null ? null : <InlineNotice tone="warning" variant="bar" title={view.banner}
+        actions={[{ label: 'Reload', onAction: props.onReload }]} />}
+      {view.totalLive > 0 && <ReferenceCollections view={view} onSelectCollection={props.onSelectCollection}
+        onCreateCollection={props.onCreateCollection} onDeleteCollection={props.onDeleteCollection} />}
       <div className="hq-refs-results">
         {view.totalLive > 0 && <div className="hq-refs-summary">
           <span>{view.collections.find((collection) => collection.selected)?.name ?? 'All references'}</span>
@@ -74,98 +116,29 @@ export function ReferenceLibraryView(props: ReferenceLibraryViewProps) {
           <div className="hq-refs-welcome-mark" aria-hidden="true">▧</div>
           <h3>Bring in designs to compare</h3>
           <p>Import screenshots from a website or app to build your reference library. Selected images and their source details stay on this device.</p>
+          {canDrop && <p>Drag screenshots here, or use Import screenshots.</p>}
           <p>Project folders are separate: add them in Projects to browse source files and available previews.</p>
-          {props.onShowProjects && <button type="button" onClick={props.onShowProjects}>Show my project folders</button>}
+          <div className="hq-refs-welcome-links">
+            {props.onShowProjects && <button type="button" onClick={props.onShowProjects}>Show my project folders</button>}
+            {props.onOpenImports && <p className="hq-refs-cross">Importing a bundle, recordings or HTML? <button type="button" className="hq-refs-link" onClick={props.onOpenImports}>Use Imports</button></p>}
+          </div>
         </div> : view.emptyMessage === null
-          ? <ul className="hq-refs-grid" aria-label="Reference results">
-            {view.cards.map((card) => <li key={card.id}><Card card={card} {...props} openRef={(element) => {
-              if (element) cardButtons.current.set(card.id, element);
-              else cardButtons.current.delete(card.id);
-            }} /></li>)}
-          </ul>
+          ? <ReferenceGrid view={view} previewUrl={props.previewUrl} previewPending={props.previewPending} revealed={props.revealed}
+            onOpen={props.onSelectReference} onUseInProject={props.onUseInProject} onSendToTaste={props.onSendToTaste}
+            registerOpen={(id, element) => {
+              if (element) cardButtons.current.set(id, element);
+              else cardButtons.current.delete(id);
+            }} />
           : <p className="hq-refs-empty">{view.emptyMessage}</p>}
       </div>
-      {view.detail === null ? null : <SecondaryPanel name="reference-detail" label="Reference details" initial={280}><aside className="hq-refs-detail" aria-label="Reference details">
-        <div className="hq-refs-detail-head">
-          <h3 ref={detailHeading} tabIndex={-1}>{view.detail.title}</h3>
-          <IconButton size="sm" label="Close reference details" icon="×" onClick={closeDetail} />
+      {dragging && <div className="hq-refs-drop hq-enter-fade" aria-hidden="true">
+        <div className="hq-refs-drop-label">
+          <strong>{view.canEdit ? 'Drop screenshots to import' : 'Importing is paused'}</strong>
+          <span>{view.canEdit ? 'PNG, JPEG or WebP' : 'The library cannot be changed right now'}</span>
         </div>
-        {(() => { const thumbnail = view.cards.find((card) => card.id === view.detail?.id)?.thumbnail;
-          const src = thumbnail ? props.previewUrl(thumbnail.digest) : null;
-          return src ? <img className="hq-refs-detail-image" data-presentation={thumbnail?.presentation} src={src} alt={view.detail.title} /> : null; })()}
-        {detailCard && <><EvidenceChips card={detailCard} />{detailCard.caveat && <p className="hq-refs-caveat">{detailCard.caveat}</p>}</>}
-        {view.detail.notes === '' ? null : <p>{view.detail.notes}</p>}
-        <h4>Provenance</h4>
-        <dl>{view.detail.provenance.map((row) => [<dt key={`${row.term}-t`}>{row.term}</dt>, <dd key={`${row.term}-d`}>{row.value}</dd>])}</dl>
-        <h4>Used in</h4>
-        {view.detail.usedIn.length === 0 ? <p className="hq-refs-muted">Not linked to a project.</p>
-          : <ul className="hq-refs-uses">{view.detail.usedIn.map((item) => <li key={item}>{item}</li>)}</ul>}
-      </aside></SecondaryPanel>}
-    </div>
-  </section>;
-}
-
-function CollectionsNav(props: ReferenceLibraryViewProps) {
-  const { view } = props;
-  const [draft, setDraft] = useState('');
-  const inputId = useId();
-  return <nav className="hq-refs-collections" aria-label="Reference collections">
-    <div className="hq-refs-collections-heading">Collections</div>
-    <ul>
-      <li><Button variant="ghost" size="sm" aria-pressed={view.allSelected} onClick={() => props.onSelectCollection(null)}>All references</Button></li>
-      {view.collections.map((collection) => <li key={collection.id} className="hq-refs-collection">
-        <Button variant="ghost" size="sm" aria-pressed={collection.selected} onClick={() => props.onSelectCollection(collection.id)}>
-          <span className="hq-refs-collection-name">{collection.name}</span> <span className="hq-refs-muted">{collection.count}</span>
-        </Button>
-        {view.canEdit ? <IconButton size="sm" icon="×" label={`Delete collection ${collection.name} (references are kept)`}
-          title="Delete collection — references and files are kept" onClick={() => props.onDeleteCollection(collection.id)} /> : null}
-      </li>)}
-    </ul>
-    {view.canEdit ? <form className="hq-refs-new" onSubmit={(event) => {
-      event.preventDefault();
-      const name = draft.trim();
-      if (name !== '') { props.onCreateCollection(name); setDraft(''); }
-    }}>
-      <label htmlFor={inputId}>New collection</label>
-      <input id={inputId} value={draft} maxLength={200} onChange={(event) => setDraft(event.currentTarget.value)} />
-      <Button size="sm" type="submit" disabled={draft.trim() === ''}>Add</Button>
-    </form> : null}
-  </nav>;
-}
-
-function Card({ card, view, previewUrl, onSelectReference, onUseInProject, openRef }: { card: ReferenceCard; openRef: (element: HTMLButtonElement | null) => void } & ReferenceLibraryViewProps) {
-  const src = card.thumbnail === null ? null : previewUrl(card.thumbnail.digest);
-  const project = view.currentProject;
-  return <article className="hq-refs-card" aria-current={card.selected ? 'true' : undefined}>
-    <button ref={openRef} type="button" className="hq-refs-open" onClick={() => onSelectReference(card.id)} aria-label={`Show details for ${card.title}`}>
-      <div className="hq-refs-thumb" data-presentation={src === null ? undefined : card.thumbnail?.presentation}>
-        {src === null ? <span className="hq-refs-muted">{card.thumbnail === null ? 'No image' : 'Preview unavailable'}</span>
-          : card.thumbnail?.presentation === 'phone'
-            ? <span className="hq-refs-device"><img src={src} alt="" loading="lazy" decoding="async" width={card.thumbnail.w ?? undefined} height={card.thumbnail.h ?? undefined} /></span>
-            : <img src={src} alt="" loading="lazy" decoding="async" width={card.thumbnail?.w ?? undefined} height={card.thumbnail?.h ?? undefined} />}
-      </div>
-      <div className="hq-refs-card-heading"><h3>{card.title}</h3>
-      <p className="hq-refs-source" title={card.sourceLabel}>{card.sourceLabel}</p></div>
-    </button>
-    <div className="hq-refs-card-body">
-    <EvidenceChips card={card} />
-    {card.caveat === null ? null : <p className="hq-refs-caveat">{card.caveat}</p>}
-    {card.tags.length === 0 ? null : <ul className="hq-refs-tags" aria-label="Tags">{card.tags.map((tag) => <li key={tag}>{tag}</li>)}</ul>}
-    </div>
-    <div className="hq-refs-card-footer">
-      {project !== null && card.usedInCurrentProject
-        ? <StatusChip tone="success" label={`Used in ${project.name}`} />
-        : <Button size="sm" variant="secondary" disabled={project === null || !view.canEdit}
-          onClick={() => onUseInProject(card.id)}>
-          {project === null ? 'Open a project to use' : `Use in ${project.name}`}
-        </Button>}
-    </div>
-  </article>;
-}
-
-function EvidenceChips({ card }: { card: ReferenceCard }) {
-  return <p className="hq-refs-badges">
-    <StatusChip tone={card.isNativeExecution ? 'success' : 'neutral'} label={card.evidenceLabel} />
-    <StatusChip tone={card.rights.publishable ? 'success' : card.rights.status === 'restricted' ? 'warning' : 'unknown'} label={card.rights.label} />
-  </p>;
+      </div>}
+    </section>
+    <ReferenceLightbox view={view} previewUrl={props.previewUrl} onClose={() => props.onSelectReference(null)}
+      onSelect={props.onSelectReference} onUseInProject={props.onUseInProject} onSendToTaste={props.onSendToTaste} />
+  </>;
 }

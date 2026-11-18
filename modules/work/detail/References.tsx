@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Button, StatusChip } from '@hq/ui';
+import { useId, useState } from 'react';
+import { Button, FieldError, fieldErrorProps, StatusChip } from '@hq/ui';
 import { LIMITS, REFERENCE_KINDS, REFERENCE_LABEL, type ItemReference, type ReferenceInput, type UrlReference } from '../core';
 
 // Ordinary Planner links remain independent of the optional HQ reference mount.
@@ -22,6 +22,9 @@ function inputsOf(references: readonly ItemReference[]): ReferenceInput[] {
     : { id: ref.id, kind: ref.kind, label: ref.label, url: ref.url }));
 }
 
+/** `social` → `Social`: the domain and kind as words, not identifiers. */
+const words = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
 export interface ReferencesProps {
   references: readonly ItemReference[];
   onSave(next: ReferenceInput[]): Promise<string | null>;
@@ -30,6 +33,7 @@ export interface ReferencesProps {
 }
 
 export function References({ references, onSave, disabled, hideHq }: ReferencesProps) {
+  const id = useId();
   const [adding, setAdding] = useState<{ kind: UrlKind; label: string; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,10 +57,12 @@ export function References({ references, onSave, disabled, hideHq }: ReferencesP
           <li key={ref.id} className={`work-link${ref.kind === 'hq' ? ' work-link--hq' : ''}`}>
             {ref.kind === 'hq' ? (
               <>
-                <span className="work-link-kind">HQ · {ref.target.domain} · {ref.target.kind}</span>
+                <span className="work-link-kind">{words(ref.target.domain)} · {words(ref.target.kind)}</span>
                 <span className="work-link-body">
-                  <span>{ref.target.title}</span>
-                  <span className="hq-meta">Snapshot title{ref.target.sourceRevision ? ` · source revision ${ref.target.sourceRevision}` : ''}. Read-only here; following it never starts anything.</span>
+                  <span className="work-link-title">{ref.target.title}</span>
+                  <span className="hq-meta" {...(ref.target.sourceRevision ? { title: `Source revision ${ref.target.sourceRevision}` } : {})}>
+                    Title as saved. Read-only here; following it never starts anything.
+                  </span>
                 </span>
                 <StatusChip tone="unknown" label="Not resolved" />
               </>
@@ -88,7 +94,7 @@ export function References({ references, onSave, disabled, hideHq }: ReferencesP
           </label>
           <label className="work-field work-field--wide">
             <span className="work-field-label">Web address (http or https)</span>
-            <input className="work-input" type="url" value={adding.url} maxLength={LIMITS.referenceUrl} spellCheck={false} onChange={(event) => setAdding({ ...adding, url: event.target.value })} />
+            <input className="work-input" type="url" value={adding.url} maxLength={LIMITS.referenceUrl} spellCheck={false} {...fieldErrorProps(`${id}-error`, error)} onChange={(event) => setAdding({ ...adding, url: event.target.value })} />
           </label>
           <span className="work-date-form-actions">
             <Button size="sm" variant="ghost" onClick={() => { setAdding(null); setError(null); }}>Cancel</Button>
@@ -98,7 +104,7 @@ export function References({ references, onSave, disabled, hideHq }: ReferencesP
       ) : (
         <Button size="sm" variant="ghost" disabled={disabled || references.length >= LIMITS.references} onClick={() => setAdding({ kind: 'url', label: '', url: '' })}>+ Add link</Button>
       )}
-      {error && <p className="work-field-error" role="alert">{error}</p>}
+      <FieldError id={`${id}-error`} announce>{error}</FieldError>
     </div>
   );
 }

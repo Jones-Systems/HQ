@@ -192,3 +192,79 @@ export function planPreviewWindow(total: number, firstVisible: number, visibleCo
   for (let index = end; index < Math.min(total, end + Math.max(0, prefetch)); index += 1) ahead.push(index);
   return { visible, prefetch: ahead };
 }
+
+// ---- grid windowing ----------------------------------------------------------------------------
+
+/** Card geometry for the responsive grid. Heights are fixed so a row's offset is a pure multiplication. */
+export interface GridOptions {
+  /** Narrowest a card may be before the grid drops a column (the `auto-fill` minimum). */
+  readonly minCardWidth: number;
+  readonly gap: number;
+  /** Fixed height of the text area under the 16:10 preview. */
+  readonly metaHeight: number;
+  /** Preview width divided by height. */
+  readonly aspect: number;
+}
+
+export const DEFAULT_GRID: GridOptions = Object.freeze({ minCardWidth: 220, gap: 14, metaHeight: 92, aspect: 16 / 10 });
+
+export interface GridMetrics {
+  readonly columns: number;
+  readonly cardWidth: number;
+  readonly previewHeight: number;
+  readonly cardHeight: number;
+  /** Distance between the tops of consecutive rows (card height plus the row gap). */
+  readonly rowHeight: number;
+}
+
+/**
+ * `auto-fill` for a measured container: as many columns as fit at the minimum card width, sharing the
+ * remaining space equally. An unmeasured container (width 0, as in a static render) gets one column.
+ */
+export function gridMetrics(containerWidth: number, options: Partial<GridOptions> = {}): GridMetrics {
+  const { minCardWidth, gap, metaHeight, aspect } = { ...DEFAULT_GRID, ...options };
+  const width = Number.isFinite(containerWidth) && containerWidth > 0 ? containerWidth : 0;
+  const columns = Math.max(1, Math.floor((width + gap) / (minCardWidth + gap)));
+  const cardWidth = width > 0 ? Math.max(1, (width - gap * (columns - 1)) / columns) : minCardWidth;
+  const previewHeight = Math.round(cardWidth / aspect);
+  const cardHeight = previewHeight + metaHeight;
+  return { columns, cardWidth, previewHeight, cardHeight, rowHeight: cardHeight + gap };
+}
+
+export interface GridWindowInput {
+  readonly total: number;
+  readonly columns: number;
+  readonly rowHeight: number;
+  readonly scrollTop: number;
+  readonly viewportHeight: number;
+  /** Rows beyond the visible rows whose previews are requested early. */
+  readonly prefetchRows: number;
+}
+
+export interface GridWindow {
+  readonly columns: number;
+  readonly totalRows: number;
+  /** Height of the whole scroll extent, so the scrollbar is right without mounting every card. */
+  readonly totalHeight: number;
+  readonly firstRow: number;
+  /** Top offset of the first mounted row. */
+  readonly offsetTop: number;
+  /** Card indices on screen (including one partial row), then the early-request indices after them. */
+  readonly visible: number[];
+  readonly prefetch: number[];
+}
+
+/**
+ * Virtualises a grid by rows: converts the scroll position into whole rows, then into card indices
+ * (rows × columns) for `planPreviewWindow`, so only mounted, visible cards ask for previews.
+ */
+export function planGridWindow(input: GridWindowInput): GridWindow {
+  const columns = Math.max(1, Math.floor(input.columns));
+  const rowHeight = Math.max(1, input.rowHeight);
+  const total = Math.max(0, input.total);
+  const totalRows = Math.ceil(total / columns);
+  const firstRow = Math.max(0, Math.min(Math.floor(Math.max(0, input.scrollTop) / rowHeight), Math.max(0, totalRows - 1)));
+  const visibleRows = Math.ceil(Math.max(0, input.viewportHeight) / rowHeight) + 1;
+  const plan = planPreviewWindow(total, firstRow * columns, visibleRows * columns, Math.max(0, input.prefetchRows) * columns);
+  return { columns, totalRows, totalHeight: totalRows * rowHeight, firstRow, offsetTop: firstRow * rowHeight, visible: plan.visible, prefetch: plan.prefetch };
+}

@@ -2,13 +2,17 @@ import {
   createFixtureWorkspace,
   type FixtureOptions, type FixtureWorkspace, type RunRecord, type SocialWorkspacePort, type ToolId,
 } from '../../core';
+import { WORKBENCH_OUTPUTS } from '../../core/fixtures/outputs';
 
 /**
  * Fictional workbench examples and run outputs. Every value is invented. Top-level keys follow each tool's
  * native input contract; nested documents (niche, manifests, packets, panels, bundles, creator batches) are
  * illustrative placeholders, not the native tools' schemas, because the fixture never runs a native tool.
- * Outputs use the worker's `{ ok, result }` envelope with the result fields the delivered recipes read.
+ * Outputs (`WORKBENCH_OUTPUTS`) use the worker's `{ ok, result }` envelope with the result fields the delivered
+ * recipes read.
  */
+
+export { WORKBENCH_OUTPUTS };
 
 export const WORKBENCH_EXAMPLES: { readonly [T in ToolId]: Record<string, unknown> } = {
   'x-studio': {
@@ -52,45 +56,23 @@ export const WORKBENCH_EXAMPLES: { readonly [T in ToolId]: Record<string, unknow
   },
 };
 
-export const WORKBENCH_OUTPUTS: { readonly [T in ToolId]: Record<string, unknown> } = {
-  'x-studio': { ok: true, result: { content: { blocks: [{ text: 'Free cupping hour this Saturday at Larkspur Tea Co.' }, { text: 'Bring a mug and one question about steeping. We will taste three times side by side.' }] } } },
-  'social-publisher': {
-    ok: true,
-    result: {
-      qualification: 'Offline text preparation only. Account access and media are unverified; no consent or posting occurs.',
-      channels: [
-        { platform: 'x', findings: [{ rule_id: 'x.caption', status: 'pass' }] },
-        { platform: 'linkedin', findings: [{ rule_id: 'linkedin.owner_scope', status: 'fail' }] },
-        { platform: 'instagram', findings: [{ rule_id: 'instagram.format', status: 'fail' }, { rule_id: 'instagram.owner_scope', status: 'fail' }] },
-        { platform: 'tiktok', findings: [{ rule_id: 'tiktok.format', status: 'fail' }] },
-        { platform: 'facebook', findings: [{ rule_id: 'facebook.caption', status: 'pass' }] },
-      ],
-    },
-  },
-  'x-intelligence': {
-    ok: true,
-    result: {
-      counts: { items: 2, evidence: 2 },
-      evidence: [
-        { title: 'A corner shop tries cold-brew oolong', text: 'Matched "oolong" and "steeping" in supplied item fixture-item-1.' },
-        { title: 'Steeping questions at a market stall', text: 'Matched "steeping" in supplied item fixture-item-2.' },
-      ],
-    },
-  },
-  'tiktok-intelligence': { ok: true, result: { niche: 'Fictional tea rituals', as_of: '2026-10-01T12:00:00Z', posts: [{ post_id: 'fixture-post-1' }, { post_id: 'fixture-post-2' }], qualifications: ['Supplied snapshots only.'] } },
-  'seo-studio': { ok: true, result: { ok: false, packets: [{ slug: 'steeping-guide', findings: ['Needs a second source.'] }] } },
-  'search-visibility': { ok: true, result: { queries: 1, citations: [{ url: 'https://example.invalid/steeping', count: 1 }], coverage: 1 } },
-  'reddit-opportunities': { ok: true, result: { import: { posts: 1 }, analysis: { opportunities: [{ id: 'fixture-post-1', score: 0.7 }] }, profile: 'example-product (illustrative built-in profile; rankings apply to that profile)' } },
-  'creator-relationships': {
-    ok: true,
-    result: {
-      creators: [
-        { handle: 'fixture-creator-a', status: 'strong_fit', niche_matches: ['tea'], age_days: 3.5, missing_evidence: {} },
-        { handle: 'fixture-creator-b', status: 'needs_evidence', niche_matches: [], age_days: 41.25, missing_evidence: { audience_location: 'not supplied' } },
-      ],
-    },
-  },
-};
+/** How long each simulated worker step takes: queued → running, then running → succeeded. */
+export const EXAMPLE_RUN_STEP_MS = 1100;
+
+export interface ExampleRunSimulation {
+  /** Milliseconds per step. Default `EXAMPLE_RUN_STEP_MS`, about a second, so each state is visible. */
+  readonly stepMs?: number;
+}
+
+export interface WorkbenchFixtureOptions extends FixtureOptions {
+  /**
+   * Opt in (default off): a run submitted as an example walks queued → running → succeeded on real timers and
+   * finishes with the tool's fictional output. Runs on the user's own input, and the seeded runs, are left as
+   * they are, and a run another control has already moved on (restart, `advanceRuns`) is never stepped again.
+   * Nothing auto-advances unless this is set, so tests that drive runs through `controls` stay deterministic.
+   */
+  readonly simulateExampleRuns?: boolean | ExampleRunSimulation;
+}
 
 export interface WorkbenchFixture extends FixtureWorkspace {
   /**
@@ -98,27 +80,74 @@ export interface WorkbenchFixture extends FixtureWorkspace {
    * fictional output. It stands in for the service's worker; it is never reachable from the UI.
    */
   settle(runId?: string, outcome?: (tool: ToolId) => { ok: boolean; error?: string; output?: Record<string, unknown> }): RunRecord | null;
+  /** Stops the example-run simulation and clears its timers. Safe to call again; runs stay as they were. */
+  dispose(): void;
+}
+
+const disposers = new WeakMap<SocialWorkspacePort, () => void>();
+
+/** Disposes the fixture that owns `port`, if it is one. Call it when a module-level port is replaced. */
+export function disposeWorkbenchFixture(port: SocialWorkspacePort | null | undefined): void {
+  if (port) disposers.get(port)?.();
 }
 
 /** The core fixture with workbench examples: `example()` is still a recorded read with the fixture's faults. */
-export function createWorkbenchFixture(options: FixtureOptions = {}): WorkbenchFixture {
-  const fixture = createFixtureWorkspace(options);
+export function createWorkbenchFixture(options: WorkbenchFixtureOptions = {}): WorkbenchFixture {
+  const { simulateExampleRuns, ...fixtureOptions } = options;
+  const stepMs = typeof simulateExampleRuns === 'object' ? simulateExampleRuns.stepMs ?? EXAMPLE_RUN_STEP_MS : EXAMPLE_RUN_STEP_MS;
+  const fixture = createFixtureWorkspace(fixtureOptions);
   const base = fixture.port;
-  const port: SocialWorkspacePort = {
+
+  // The example-run worker: real timers, stepping one run at a time through the fixture's own `advanceRuns`.
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  let disposed = false;
+  const later = (action: () => void, ms: number) => {
+    const timer = setTimeout(() => {
+      timers.delete(timer);
+      if (!disposed) action();
+    }, ms);
+    timers.add(timer);
+  };
+  const simulate = (runId: string, tool: ToolId) => later(() => {
+    // Start the run; null means something else already moved it on, so the simulation stands down.
+    if (!fixture.controls.advanceRuns(undefined, runId)) return;
+    later(() => { fixture.controls.advanceRuns({ ok: true, output: structuredClone(WORKBENCH_OUTPUTS[tool]) }, runId); }, stepMs);
+  }, stepMs);
+
+  const port: FixtureWorkspace['port'] = {
+    ...base,
     snapshot: () => base.snapshot(),
     saveDraft: (draft) => base.saveDraft(draft),
     addBrand: (name) => base.addBrand(name),
     run: (id) => base.run(id),
-    submitRun: (tool, input, isExample) => base.submitRun(tool, input, isExample),
+    async submitRun(tool, input, isExample, options) {
+      if (!simulateExampleRuns || disposed) return base.submitRun(tool, input, isExample, options);
+      const known = new Set(fixture.controls.inspect().runs.map((run) => run.id));
+      try {
+        return await base.submitRun(tool, input, isExample, options);
+      } finally {
+        // Also covers a lost response that still created the run: the service worker would run it either way.
+        for (const run of fixture.controls.inspect().runs) {
+          if (!known.has(run.id) && run.is_example === 1 && run.status === 'queued') simulate(run.id, run.tool);
+        }
+      }
+    },
     async example(tool) {
       await base.example(tool);
       return structuredClone(WORKBENCH_EXAMPLES[tool]);
     },
   };
+  const dispose = () => {
+    disposed = true;
+    for (const timer of timers) clearTimeout(timer);
+    timers.clear();
+  };
+  disposers.set(port, dispose);
   const defaultOutcome = (tool: ToolId) => ({ ok: true, output: WORKBENCH_OUTPUTS[tool] });
   return {
     port,
     controls: fixture.controls,
+    dispose,
     settle(runId, outcome = defaultOutcome) {
       for (let step = 0; step < 100; step += 1) {
         const runs = fixture.controls.inspect().runs;

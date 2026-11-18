@@ -15,6 +15,7 @@ const shape = id => schemas().find(c => c.id === id);
 
 test('reference envelopes retain optional fields and match parseReference text/destination semantics', () => {
   for (const value of [target, { ...target, domain: 'design', returnDestination: { domain: 'social', destination: '/entry' } }]) assert.equal(conforms(referenceEnvelope, value), true);
+  for (const domain of ['planner', 'Wiki', 'wikis', '']) for (const bad of [{ ...target, domain }, { ...target, returnDestination: { domain, destination: 'page/demo' } }]) assert.equal(conforms(referenceEnvelope, bad), false, domain);
   for (const patch of [{ version: '1' }, { domain: 'planner' }, { projectId: ' x' }, { title: 'x\n' }, { kind: '' }, { workspaceId: null }, { title: 'x\u007f' }]) assert.equal(conforms(referenceEnvelope, { ...target, ...patch }), false, JSON.stringify(patch));
   for (const destination of ['HTTPS:example', '//host', '\\\\host', '/\\host', '\\/host', ' x', 'x ', '', 'x\u0000']) assert.equal(conforms(referenceEnvelope, { ...target, returnDestination: { domain: 'work', destination } }), false, destination);
 });
@@ -39,6 +40,30 @@ test('discovered create/update/batch file schemas and read output preserve the c
     assert.equal(output.exitCode, 0); assert.equal(conforms(shape(output.result.command).output, output.result), true);
     assert.deepEqual((output.result.data.item ?? output.result.data.items[0]).references, [reference]);
   }
+});
+
+test('a Wiki reference is written and read back with its complete target, including a Wiki return destination', async t => {
+  const dir = await scratch(t);
+  const wiki = { id: 'refer004', kind: 'hq', label: 'Wiki page', target: { ...target, domain: 'wiki', kind: 'page', entityId: 'page-demo', title: 'Synthetic wiki page', returnDestination: { domain: 'wiki', destination: 'page/page-demo' } } };
+  const backToWiki = { id: 'refer005', kind: 'hq', label: 'Design artifact', target: { ...target, domain: 'design', kind: 'artifact', entityId: 'artifact-demo', returnDestination: { domain: 'wiki', destination: 'page/page-demo' } } };
+  const references = [wiki, backToWiki];
+  const file = await dir.write('wiki.json', { title: 'Linked', references });
+  const h = server(call => json({ item: item(call.parsed.fields), state_version: 9 }), modern);
+  const created = await run(['planner', 'items', 'create', '--fields-file', file], h.deps);
+  assert.equal(created.exitCode, 0); assert.deepEqual(created.result.data.item.references, references);
+  assert.deepEqual(h.writes()[0].parsed.fields.references, references);
+  assert.equal(conforms(shape(created.result.command).output, created.result), true);
+  const value = item({ references });
+  for (const args of [['planner', 'items', 'get', 'item0001'], ['planner', 'items', 'list']]) {
+    const read = harness({ '/api/items/item0001': { item: value }, '/api/state': state({ items: [value] }) });
+    const output = await run(args, read.deps);
+    assert.equal(output.exitCode, 0); assert.equal(conforms(shape(output.result.command).output, output.result), true);
+    assert.deepEqual((output.result.data.item ?? output.result.data.items[0]).references, references);
+  }
+  const unknown = await dir.write('unknown.json', { title: 'Linked', references: [{ ...wiki, target: { ...wiki.target, domain: 'planner' } }] });
+  const refused = server(() => { throw Error('Unknown domain must not be sent'); }, modern);
+  assert.equal((await run(['planner', 'items', 'create', '--fields-file', unknown], refused.deps)).exitCode, 2);
+  assert.equal(refused.calls.length, 0);
 });
 
 test('HQ reference writes require advertised feature before create/update/atomic/sequential mutations', async t => {
@@ -105,7 +130,7 @@ test('completed sequential HQ items stay skipped when resume service lacks refer
 
 test('canonical backend vectors preserve exact ReferenceEnvelope accept/reject semantics', () => {
   const bytes = readFileSync(new URL('../../../services/planner/contract/reference-vectors.json', import.meta.url));
-  assert.equal(createHash('sha256').update(bytes).digest('hex'), '94f030e550d4c7d6bb823836dcfed75a7d86b1c1442dd3efc748dee2389ba5a1');
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), 'ebc01c0a4f9f503342279911390a9e69c0f03e352360fdcff269047b0428d0bc');
   const vectors = JSON.parse(bytes);
   assert.equal(vectors.schema, 'hq.planner.reference-vectors/v1');
   for (const vector of vectors.cases) {

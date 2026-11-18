@@ -26,7 +26,11 @@ describe('CanvasView markup', () => {
     const focused = reduceCanvas(reduceCanvas(createCanvasState(sampleArrangement()), { type: 'select', ids: [B, C] }), { type: 'focus', id: C });
     const { state, registry } = setup(reduceCanvas(focused, { type: 'camera', camera: { x: 100, y: 50, zoom: 2 } }));
     const html = renderToStaticMarkup(<CanvasView state={state} dispatch={noop} registry={registry} platform="other" />);
-    expect(html).toContain('transform:translate(-200px, -100px) scale(2)');
+    // The camera is three numbers on the root, so it can ease; the world transform is derived from them in CSS.
+    expect(html).toContain('--hq-canvas-x:100');
+    expect(html).toContain('--hq-canvas-y:50');
+    expect(html).toContain('--hq-canvas-zoom:2');
+    expect(html).not.toContain('scale(2)');
     expect(html).toContain('aria-label="Home v1"');
     expect(html).toMatch(/data-node-id="item-c"[^>]*aria-pressed="true"[^>]*tabindex="0"/u);
     expect(html).toMatch(/data-node-id="item-a"[^>]*aria-pressed="false"[^>]*tabindex="-1"/u);
@@ -51,6 +55,63 @@ describe('CanvasView markup', () => {
     const html = renderToStaticMarkup(<CanvasView state={state} dispatch={noop} registry={registry} platform="other"
       renderers={{ 'synthetic-views': (descriptor) => <figure data-testid="custom">{descriptor.title}</figure> }} />);
     expect(html.match(/data-testid="custom"/gu)?.length).toBe(3);
+  });
+});
+
+describe('item frames', () => {
+  const html = (state: CanvasState, registry: ReturnType<typeof setup>['registry'], extra: Partial<Parameters<typeof CanvasView>[0]> = {}) =>
+    renderToStaticMarkup(<CanvasView state={state} dispatch={noop} registry={registry} platform="other" {...extra} />);
+
+  it('captions each item with its title and provenance, beside its content rather than over it', () => {
+    const { state, registry } = setup();
+    const markup = html(state, registry);
+    const card = markup.match(/<div class="hq-canvas-card"[^>]*data-kind="view-version"[^>]*>.*?<\/div><\/div><\/div>/u)![0];
+    expect(card).toMatch(/<div class="hq-canvas-card-body">.*<\/div><div class="hq-canvas-caption">/u);
+    expect(card).toContain('<strong title="Home v1">Home v1</strong>');
+    expect(card).toContain('320×200 · Static capture');
+    expect(markup.match(/class="hq-canvas-caption"/gu)?.length).toBe(3);
+  });
+
+  it('labels an item with no renderer by its kind instead of leaving the frame blank', () => {
+    const { state, registry } = setup();
+    expect(html(state, registry)).toContain('<div class="hq-canvas-placeholder"><span>View version</span></div>');
+  });
+
+  it('lets a renderer replace the caption line, and keeps its body inside the frame', () => {
+    const { state, registry } = setup();
+    const markup = html(state, registry, {
+      renderers: { 'synthetic-views': (descriptor) => ({ body: <i data-testid="body">{descriptor.title}</i>, meta: 'Checkout flow · 4 steps' }) },
+    });
+    expect(markup.match(/<div class="hq-canvas-card-body"><i data-testid="body">/gu)?.length).toBe(3);
+    expect(markup).toContain('<span title="Checkout flow · 4 steps">Checkout flow · 4 steps</span>');
+    expect(markup).not.toContain('Static capture');
+  });
+
+  it('drops the caption of a frame too small on screen to hold it, and marks one with no room for any text', () => {
+    const at = (zoom: number) => setup(reduceCanvas(createCanvasState(sampleArrangement()), { type: 'camera', camera: { x: 0, y: 0, zoom } }));
+    const small = at(0.4);
+    const smallMarkup = html(small.state, small.registry);
+    expect(smallMarkup).not.toContain('hq-canvas-caption');
+    expect(smallMarkup.match(/data-compact="true"/gu)?.length).toBe(2);
+    expect(smallMarkup.match(/data-compact="tiny"/gu)?.length).toBe(1);
+    const far = at(0.25);
+    expect(html(far.state, far.registry).match(/data-compact="tiny"/gu)?.length).toBe(3);
+    expect(html(createCanvasState(sampleArrangement()), small.registry)).not.toContain('data-compact');
+  });
+
+  it('keeps the title of a missing item on its caption', () => {
+    const { registry } = setup();
+    const arrangement = addPlacement(sampleArrangement(), {
+      id: canvasItemId('orphan'), ref: { providerId: providerId('gone'), entityId: 'x', revision: 'r9' }, frame: { x: 0, y: 900, width: 320, height: 200 },
+    });
+    expect(html(createCanvasState(arrangement), registry)).toMatch(/hq-canvas-card is-missing.*<strong title="x @ r9">x @ r9<\/strong>/u);
+  });
+
+  it('says whether the grid is showing and whether items snap to it', () => {
+    const { state, registry } = setup();
+    expect(html(state, registry)).toContain('data-grid="on"');
+    const far = reduceCanvas(state, { type: 'camera', camera: { x: 0, y: 0, zoom: 0.02 } });
+    expect(html(far, registry)).toContain('data-grid="off"');
   });
 });
 

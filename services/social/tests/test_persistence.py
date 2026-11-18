@@ -54,7 +54,7 @@ class Persistence(ServiceTestCase):
     def test_the_default_brand_is_never_duplicated_by_restarts(self):
         for _ in range(3):
             self.restart()
-        self.assertEqual(self.get('/api/workspace').json['brands'], [{'id': 'default', 'name': 'My workspace'}])
+        self.assertEqual(self.get('/api/workspace').json['brands'], [{'id': 'default', 'name': 'My workspace', 'project_id': None}])
 
     def test_repeated_restarts_do_not_change_stored_data(self):
         self.harness.save(title='Stable', planned_date='2026-10-22', planning_slot=SLOT, links=[link('x')])

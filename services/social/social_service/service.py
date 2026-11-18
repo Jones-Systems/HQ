@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from . import timebox, tools, validation
+from .extensions import Extensions, BRAND_PROJECT, SOURCES, PUBLISHING
 from .errors import NotFoundError
 from .runner import RUN_TIMEOUT, FINISHED, RunManager
 from .store import Store
@@ -26,13 +27,16 @@ class SocialService:
     def __init__(self, data_dir: Path, *, token: str | None = None, clock: Callable[[], datetime] | None = None,
                  new_id: Callable[[], str] | None = None, timezones: bool | None = None,
                  worker_command: Sequence[str] | None = None, run_timeout: float = RUN_TIMEOUT,
-                 start_runs: bool = True):
+                 start_runs: bool = True, publishing: str = 'off'):
         self.data_dir = Path(data_dir)
         self.token = token if token is not None else secrets.token_urlsafe(32)
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._new_id = new_id or (lambda: uuid.uuid4().hex)
         self.timezones = timebox.timezone_data_available() if timezones is None else timezones
+        if publishing not in ('off', 'simulator'):
+            raise ValueError('Only off or simulator publishing is supported')
         self.store = Store(self.data_dir / DATABASE_NAME)
+        self.extensions = Extensions(self, publishing)
         try:
             self.store.interrupt_active(self.now())
             (self.data_dir / RUNS_DIRECTORY).mkdir(mode=0o700, exist_ok=True)
@@ -53,7 +57,7 @@ class SocialService:
 
     @property
     def features(self) -> list[str]:
-        return ([FEATURE_TIMEBOX] if self.timezones else []) + [FEATURE_REFERENCES]
+        return ([FEATURE_TIMEBOX] if self.timezones else []) + [FEATURE_REFERENCES, BRAND_PROJECT, SOURCES] + ([PUBLISHING] if self.extensions.publishing == 'simulator' else [])
 
     # ------------------------------------------------------------------ routes
 
@@ -65,6 +69,7 @@ class SocialService:
             'tools': tools.catalog(),
             'features': self.features,
             'csrf': self.token,
+            **self.extensions.snapshot(),
         }
 
     def save_content(self, data: dict[str, Any]) -> tuple[int, dict[str, Any]]:
@@ -80,7 +85,15 @@ class SocialService:
         return 200, tools.sample(validation.check_tool(tool))
 
     def submit_run(self, data: dict[str, Any]) -> tuple[int, dict[str, Any]]:
-        return 201, self.runs.submit(validation.check_run(data))
+        source_ids = data.get('source_ids', [])
+        from .errors import ValidationError
+        with self.store._lock:
+            known = {r['id'] for r in self.extensions.rows('source') if not r['archived']}
+            if (not isinstance(source_ids, list) or len(source_ids) > 20 or
+                    any(not isinstance(i, str) or i not in known for i in source_ids)):
+                raise ValidationError('Unknown source')
+            record = self.runs.submit(validation.check_run({k: v for k, v in data.items() if k != 'source_ids'}), source_ids)
+            return 201, dict(record, source_ids=source_ids)
 
     def get_run(self, run_id: str) -> tuple[int, dict[str, Any]]:
         record = self.store.get_run(validation.check_run_id(run_id))

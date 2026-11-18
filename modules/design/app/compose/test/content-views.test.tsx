@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { webcrypto } from 'node:crypto';
 import { Suspense } from 'react';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectContext } from '@hq/contracts';
 import type { DesignSectionProps } from '../../../ui/contract.ts';
@@ -208,9 +208,17 @@ describe('Requests and Runs pick from the current versions', () => {
     const Requests = mountRequests(() => <p>request body</p>);
     await ready(() => mount(workspace, <Requests {...props} sectionId="requests" context={alpha} />));
     const picker = await screen.findByLabelText('Source version');
-    expect(screen.getAllByRole('option', { name: /Version v1/u })).toHaveLength(1);
+    const first = within(picker).getByRole('radio', { name: 'Version v1 /main · 320×640' }) as HTMLInputElement;
+    expect(first.value).toBe('v1');
+    expect(first.getAttribute('aria-disabled')).toBeNull();
+    expect(first.checked).toBe(true);
     await act(async () => { await save(alpha, { id: 'v2', sourceRevision: 'rev-2' }); });
-    await screen.findByRole('option', { name: /Version v2/u });
+    const saved = await within(picker).findByRole('radio', { name: 'Version v2 /main · 320×640' }) as HTMLInputElement;
+    expect(saved.value).toBe('v2');
+    expect(saved.getAttribute('aria-disabled')).toBeNull();
+    fireEvent.click(saved);
+    expect(saved.checked).toBe(true);
+    expect(first.checked).toBe(false);
     expect(screen.getByLabelText('Source version')).toBe(picker);
   });
 });

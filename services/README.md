@@ -17,8 +17,14 @@ no npm build step. The agent client lives separately in
 service discovery nor a Planner date schedules execution.
 
 HQ references persist in Planner and render as snapshots in its legacy UI.
-The Work live adapter and desktop connection remain follow-on work. No combined service process,
-unified database or shared endpoint-configuration platform is introduced.
+HQ's Work module reaches the Planner through the Work live adapter
+(`modules/work/live`) and the desktop's closed main-process bridge
+(`apps/desktop/electron/services.ts`). The Planner address is set in HQ's
+settings and stays in the main process; the renderer never sees it. The
+[backend assessment](../docs/engineering-specs/backend-assessment-planner-20261103.md)
+records what is verified against a real disposable Planner. No combined
+service process, unified database or shared endpoint-configuration platform is
+introduced.
 
 Run the Planner checks serially from `services/planner`, after checking host
 capacity:

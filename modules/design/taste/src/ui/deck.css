@@ -1,0 +1,90 @@
+/* "Waiting to rate": the Quick Rate deck. Chrome only. The image inside a card sits in a preserved-content well and
+   is never faded, filtered or recoloured; the card around it moves. Durations and easings are the HQ motion tokens,
+   so reduced motion zeroes them. Layout answers to the panel's container (`taste`), set up in taste.css. */
+
+.taste-deck-hint { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px dashed var(--hq-border-strong); border-radius: var(--hq-radius-md); font-size: 12px; color: var(--muted); }
+.taste-deck-hint svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.taste-deck-hint strong { color: var(--text); font-weight: 600; }
+
+.taste-deck { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: var(--hq-radius-lg); background: var(--hq-surface-sunken); min-width: 0; /* A thrown card leaves through the sides of the panel, and may be lifted above it while it is dragged up. */ overflow-x: clip; }
+.taste-deck-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
+.taste-deck-head h3 { margin: 0; }
+.taste-deck-count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.taste-deck-saved { margin-left: auto; min-width: 0; }
+.taste-deck-done { font-size: 12px; color: var(--muted); }
+.taste-deck-done strong { color: var(--text); font-weight: 600; }
+
+/* The focusable surface: keys apply while it holds focus. */
+.taste-deck-surface { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; border-radius: var(--hq-radius-md); }
+.taste-deck-surface:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: 4px; }
+@container taste (min-width: 760px) {
+  .taste-deck-surface { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); align-items: start; gap: 24px; }
+  .taste-deck-stage { margin-inline: 0; }
+}
+
+/* The stack: every card shares one cell; the next card sits behind the first, lower and a little smaller. */
+.taste-deck-stage { display: grid; width: 100%; max-width: 420px; margin-inline: auto; padding-bottom: 14px; }
+.taste-deck-card { grid-area: 1 / 1; position: relative; z-index: 2; display: grid; align-content: start; min-width: 0; overflow: hidden; border: 1px solid var(--hq-card-edge); border-radius: var(--hq-radius-lg); background: var(--hq-card-bg); box-shadow: var(--hq-shadow-raised); cursor: grab; user-select: none; touch-action: none; transition: transform var(--hq-duration-slow) var(--hq-ease-enter), box-shadow var(--hq-duration-fast) var(--hq-ease-standard), border-color var(--hq-duration-fast) var(--hq-ease-standard); }
+.taste-deck-card[data-position="peek"] { z-index: 1; transform: translateY(14px) scale(0.955); box-shadow: none; cursor: default; pointer-events: none; animation: hq-fade-in var(--hq-duration-base) var(--hq-ease-standard) both; }
+.taste-deck-card[data-dragging] { transition: none; cursor: grabbing; box-shadow: var(--hq-shadow-drag); }
+.taste-deck-card[data-leaving] { transition: none; pointer-events: none; }
+.taste-deck-card[data-state="saving"] { cursor: progress; }
+.taste-deck-card[data-state="unknown"] { border-style: dashed; border-color: var(--hq-warning); cursor: default; }
+
+.taste-deck-image { display: block; height: 136px; padding: 8px; border-bottom: 1px solid var(--line); }
+.taste-deck-image > img { width: 100%; height: 100%; object-fit: contain; -webkit-user-drag: none; }
+.taste-deck-glyph { display: grid; place-items: center; height: 96px; background: var(--hq-surface-sunken); border-bottom: 1px solid var(--line); color: var(--hq-text-subtle); }
+.taste-deck-glyph svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.taste-deck-info { display: grid; gap: 3px; padding: 11px 14px 13px; min-width: 0; }
+.taste-deck-label { font: var(--hq-type-heading); font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.taste-deck-detail { font-family: var(--hq-font-family-mono); font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.taste-deck-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 3px; font-size: 11px; color: var(--muted); }
+
+/* The stamp ramps with the drag (--taste-strength, set by the card) and is full strength once a choice is saving. */
+.taste-deck-stamp { position: absolute; top: 14px; z-index: 3; padding: 4px 10px; border: 2px solid currentColor; border-radius: var(--hq-radius-md); background: var(--hq-surface-raised); font: 700 13px/1 var(--hq-font-family-sans); letter-spacing: 0.3px; white-space: nowrap; pointer-events: none; opacity: var(--taste-strength, 0); }
+.taste-deck-stamp[data-side="right"] { left: 14px; transform: rotate(-8deg); color: var(--hq-success); }
+.taste-deck-stamp[data-side="left"] { right: 14px; transform: rotate(8deg); color: var(--hq-danger); }
+.taste-deck-stamp[data-side="up"] { left: 50%; transform: translateX(-50%); color: var(--hq-accent); }
+.taste-deck-stamp[data-side="down"] { left: 50%; transform: translateX(-50%); color: var(--hq-text-muted); }
+
+.taste-deck-side { display: grid; gap: 10px; min-width: 0; align-content: start; }
+.taste-deck-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(70px, auto); gap: 8px; }
+.taste-deck-action.hq-btn { flex-direction: column; gap: 1px; height: auto; min-height: 46px; padding: 6px 8px; border-radius: var(--hq-radius-md); }
+.taste-deck-action-label { font: var(--hq-type-label); font-size: 13px; font-weight: 600; }
+.taste-deck-action-key { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--hq-text-subtle); font-variant-numeric: tabular-nums; }
+.taste-deck-action[data-tone="4"].hq-btn--secondary:hover:not([aria-disabled="true"]) { background: var(--hq-success-soft); }
+.taste-deck-action[data-tone="5"].hq-btn--secondary:hover:not([aria-disabled="true"]) { background: var(--hq-accent-soft); }
+.taste-deck-action[data-tone="2"].hq-btn--secondary:hover:not([aria-disabled="true"]) { background: var(--hq-danger-soft); }
+.taste-deck-skip.hq-btn { box-shadow: inset 0 0 0 1px var(--line); }
+@container taste (max-width: 500px) {
+  .taste-deck-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .taste-deck-skip { grid-column: 1 / -1; min-height: 36px; }
+  .taste-deck-skip.hq-btn { flex-direction: row; gap: 8px; }
+}
+
+.taste-deck-exact-toggle { display: inline-flex; align-items: center; gap: 4px; width: fit-content; min-height: 26px; padding: 2px 6px 2px 2px; border: 0; background: transparent; font-size: 12px; color: var(--muted); border-radius: var(--hq-radius-sm); }
+.taste-deck-exact-toggle:hover { color: var(--text); background: transparent; }
+.taste-deck-exact-toggle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform var(--hq-duration-base) var(--hq-ease-standard); }
+.taste-deck-exact-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.taste-deck-exact-toggle:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: 1px; }
+.taste-deck-exact-pad { padding: 4px 0 2px; }
+.taste-deck-exact-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.taste-deck-exact-button.hq-btn { flex-direction: column; gap: 0; height: auto; min-height: 44px; padding: 4px 4px; }
+.taste-deck-exact-button b { font-size: 14px; font-variant-numeric: tabular-nums; }
+.taste-deck-exact-button span { font-size: 10px; line-height: 1.2; color: var(--hq-text-subtle); white-space: normal; text-align: center; }
+
+.taste-deck-notice { margin: 0; }
+.taste-deck-keys { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; font-size: 11px; color: var(--muted); }
+.taste-deck-keys li { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.taste-deck kbd { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border: 1px solid var(--hq-border-control); border-radius: var(--hq-radius-xs); background: var(--hq-surface-raised); color: var(--text); font: 500 10.5px/1 var(--hq-font-family-sans); }
+.taste-deck-keys-note { font-size: 11px; color: var(--muted); }
+
+.taste-deck-recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.taste-deck-recent-title { font-size: 11px; color: var(--muted); }
+.taste-deck-recent ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.taste-deck-chip { display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--hq-radius-pill); background: var(--hq-surface-raised); font-size: 11px; min-width: 0; }
+.taste-deck-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 18ch; }
+.taste-deck-chip b { font-weight: 600; color: var(--muted); white-space: nowrap; }
+.taste-deck-chip[data-value="4"] b { color: var(--hq-success); }
+.taste-deck-chip[data-value="5"] b { color: var(--hq-accent); }
+.taste-deck-chip[data-value="1"] b, .taste-deck-chip[data-value="2"] b { color: var(--hq-danger); }

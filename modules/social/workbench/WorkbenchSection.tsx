@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import type { ProjectContext } from '@hq/contracts';
 import { Button, StateView, StatusChip } from '@hq/ui';
-import { isRunId, isToolId, workspaceSnapshot, type SocialWorkspacePort, type ToolId } from '../core';
+import { isRunId, isToolId, portErrorNotice, workspaceSnapshot, type SocialWorkspacePort, type ToolId } from '../core';
+import { useSocialFrame } from '../ui';
 import { DELIVERED_LIMITS } from './catalog';
 import { Catalog } from './WorkbenchCatalog';
 import { WorkbenchEnvironmentProvider, useWorkbench } from './env';
@@ -36,6 +37,12 @@ export function isWorkbenchDestination(destination: string): boolean {
   return parseWorkbenchDestination(destination) !== null;
 }
 
+/**
+ * How often the example workspace's runs are read while active. Its simulated worker steps about once a second, so
+ * the default two-second read would skip a step. A live service is read at the normal cadence.
+ */
+export const EXAMPLE_POLL_INTERVAL_MS = 500;
+
 export interface WorkbenchSectionProps {
   readonly port: SocialWorkspacePort;
   readonly context: ProjectContext;
@@ -45,17 +52,22 @@ export interface WorkbenchSectionProps {
   readonly clock?: () => Date;
   readonly visibility?: Visibility;
   readonly pollIntervalMs?: number;
+  /** The fictional example workspace. Defaults to what the Social frame says, and to false outside it. */
+  readonly example?: boolean;
 }
 
 /**
  * The eight tool workbenches, run history and receipts (task.social-workbench.001). Rendering, navigating,
  * loading examples, editing and importing make zero execution calls; only the explicit Run action submits.
  */
-export function WorkbenchSection({ port, context, destination, navigate, clock, visibility, pollIntervalMs }: WorkbenchSectionProps) {
+export function WorkbenchSection({ port, context, destination, navigate, clock, visibility, pollIntervalMs, example }: WorkbenchSectionProps) {
+  const frame = useSocialFrame();
+  const isExample = example ?? frame?.example ?? false;
+  const interval = pollIntervalMs ?? (isExample ? EXAMPLE_POLL_INTERVAL_MS : undefined);
   const environment = useMemo(() => ({
-    port, context, navigate, clock: clock ?? (() => new Date()),
-    ...(visibility ? { visibility } : {}), ...(pollIntervalMs ? { pollIntervalMs } : {}),
-  }), [port, context, navigate, clock, visibility, pollIntervalMs]);
+    port, context, navigate, clock: clock ?? (() => new Date()), example: isExample,
+    ...(visibility ? { visibility } : {}), ...(interval ? { pollIntervalMs: interval } : {}),
+  }), [port, context, navigate, clock, visibility, interval, isExample]);
   return (
     <WorkbenchEnvironmentProvider value={environment}>
       <SectionBody destination={destination} />
@@ -72,10 +84,13 @@ function SectionBody({ destination }: { readonly destination: string }) {
     if (session.getState().workspace.status === 'idle') void session.load(port);
   }, [port, session]);
 
+  // Inside the Social domain the page header's sync pill carries freshness and the limits; mounted on its own, the
+  // section shows them itself.
+  const framed = useSocialFrame() !== null;
   return (
     <div className="sw-section">
-      <p className="sw-limits" role="note"><b>Delivered limits</b> {DELIVERED_LIMITS}</p>
-      <ServiceStatus />
+      {!framed && <p className="sw-limits" role="note"><b>Delivered limits</b> {DELIVERED_LIMITS}</p>}
+      {!framed && <ServiceStatus />}
       {page === null ? (
         <StateView
           state="unavailable" title="This Social page doesn't exist"
@@ -95,10 +110,11 @@ function ServiceStatus() {
   const load = state.workspace;
   const last = workspaceSnapshot(load);
   if (load.status === 'error') {
+    const notice = portErrorNotice(load.error, 'load');
     return (
       <div className="sw-service sw-service--down" role="status">
-        <StatusChip tone="unavailable" label="Social service unreachable" detail={last ? `last synced ${formatTime(last.observedAt)}` : 'never synced'} />
-        <span>Runs pause until it answers. Checking again never resends a run.</span>
+        <StatusChip tone={load.error.kind === 'unavailable' ? 'unavailable' : 'warning'} label={notice.title} detail={last ? `last synced ${formatTime(last.observedAt)}` : 'never synced'} />
+        <span>{notice.message} Checking again never resends a run.</span>
         <Button size="sm" onClick={() => void session.load(port)}>Check again</Button>
       </div>
     );

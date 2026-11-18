@@ -47,7 +47,7 @@ describe('rendered projects section (server render)', () => {
     assert.equal((html.match(/data-key="workspace:/gu) ?? []).length, 3);
     assert.equal((html.match(/data-key="source:/gu) ?? []).length, 2, 'same-titled source entry stays separate');
     assert.match(html, /aria-label="Project gallery"/u);
-    assert.match(html, /Switch project/u);
+    assert.match(html, /New project/u);
   });
 
   test('collapsed gallery group renders its header with aria-expanded=false and no tiles', async () => {
@@ -63,7 +63,7 @@ describe('rendered projects section (server render)', () => {
       controller.select(viewId('fake-view-3-1'), versionId('fake-version-3-1-2'));
       controller.toggleView(viewId('fake-view-3-2'));
     });
-    assert.match(html, /← Back to Gallery/u);
+    assert.match(html, /All projects/u);
     assert.match(html, /data-view="fake-view-3-1"/u);
     assert.match(html, /data-view="fake-view-3-2"/u);
     assert.match(html, /data-view="fake-view-3-3"/u);

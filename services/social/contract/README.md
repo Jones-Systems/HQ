@@ -30,3 +30,8 @@ To update the fixtures deliberately after reviewing a contract change, run `pyth
 inspect the diff and commit the exchanges with the refreshed `SHA256SUMS`. `tests/test_contract.py` regenerates
 the exchanges, compares them byte for byte, checks the manifest, and verifies that the disposable service and
 its scratch directory are cleaned up after success, failure and interrupt.
+
+`extension-exchanges.json` is a separate authored expectation artifact, exercised by
+`tests/test_extensions.py`. It is explicitly not an HTTP capture. The recovery's six additive baseline
+exchange updates and manifest were edited statically; real generator equality is unrun until serial
+verification. Do not treat the refreshed hashes as behavioral qualification.

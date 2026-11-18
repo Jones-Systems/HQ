@@ -18,6 +18,11 @@ function markup(html: string): HTMLDivElement {
   return root;
 }
 
+/** The label of the step marked current in the request stepper. */
+function currentStep(root: ParentNode): string | undefined {
+  return root.querySelector('.hqr-steps [aria-current="step"] .hqr-step-label')?.textContent ?? undefined;
+}
+
 function ProbeCompare({ baselineVersionId, candidateVersionId }: CompareSlotProps) {
   return <div data-probe-baseline={baselineVersionId} data-probe-candidate={candidateVersionId} />;
 }
@@ -31,11 +36,14 @@ describe('RequestsView rendered markup', () => {
     expect(html).toContain('Private draft');
     expect(html).toContain('data-privacy="local-unsent"');
     expect(html).toContain('Not sent · stays on this device');
-    expect(html).toMatch(/<li aria-current="step">Draft<\/li>/u);
     const root = markup(html);
+    expect(getByRole(root, 'list', { name: 'Request progress' })).toBeTruthy();
+    expect(currentStep(root)).toBe('Draft');
     const freeze = getByRole(root, 'button', { name: 'Freeze request' }) as HTMLButtonElement;
     expect(freeze.type).toBe('button');
-    expect(freeze.disabled).toBe(true);
+    // Unavailable, not dead: it stays focusable and says why through aria-describedby.
+    expect(freeze.getAttribute('aria-disabled')).toBe('true');
+    expect(freeze.disabled).toBe(false);
     const description = freeze.getAttribute('aria-describedby');
     expect(description).toBeTruthy();
     expect([...root.querySelectorAll('[id]')].find((element) => element.id === description)?.textContent).toContain('Add at least one source version.');
@@ -53,7 +61,7 @@ describe('RequestsView rendered markup', () => {
     const html = renderToStaticMarkup(<RequestsView session={session} CompareSlot={CompareSlotFake} newId={newId} />);
     expect(html).toMatch(/<input type="checkbox"\/>Hero crop <span class="hqr-muted">64 B<\/span><span class="hqr-badge hqr-badge-quiet">Not included<\/span>/u);
     expect(html).toMatch(/<input type="checkbox" checked=""\/>Footer crop <span class="hqr-muted">64 B<\/span><\/label>/u);
-    expect(html).toMatch(/<li aria-current="step">Freeze<\/li>/u);
+    expect(currentStep(markup(html))).toBe('Freeze');
   });
 
   test('after freeze, packet history shows the current packet and an explicit send that rendering never calls', async () => {
@@ -75,7 +83,7 @@ describe('RequestsView rendered markup', () => {
     const returned = candidate(linkOf(packet));
     const html = renderToStaticMarkup(<RequestsView session={session} CompareSlot={ProbeCompare} candidate={returned} newId={newId} />);
     expect(html).toContain('data-probe-baseline="v-a1" data-probe-candidate="v-a2"');
-    expect(html).toMatch(/<li aria-current="step">Review<\/li>/u);
+    expect(currentStep(markup(html))).toBe('Review');
     expect(html).toContain('Sending is unavailable here: no qualified destination is connected.');
     expect(html).not.toContain('Send packet');
     for (const level of ['agent-reported', 'observed', 'owner-judged']) expect(html).toContain(`data-level="${level}"`);

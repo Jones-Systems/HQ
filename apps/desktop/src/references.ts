@@ -1,5 +1,14 @@
-import { isDestination, isDomainId, parseReference, type ReferenceEnvelope } from '@hq/contracts';
+import { isDestination, isDomainId, parseReference, type DomainId, type ReferenceEnvelope } from '@hq/contracts';
 import { REFERENCE_STATUSES, type ReferencePort, type ReferenceProvider, type ReferenceResolution, type ReturnContext } from '@hq/contracts/references';
+
+/**
+ * Social and Work are workspace-scoped: their references always carry this project id (HQR-1's `WORKSPACE_SCOPE`),
+ * whatever Design project the shell has selected. The port treats that scope as always current for those domains,
+ * so their links do not turn read-only after a Design project switch. Design stays scoped to the selected project.
+ */
+export const WORKSPACE_SCOPE = 'hq-local';
+export const WORKSPACE_DOMAINS: readonly DomainId[] = Object.freeze(['social', 'work']);
+const workspaceScoped = (domain: string) => (WORKSPACE_DOMAINS as readonly string[]).includes(domain);
 
 export const RESOLUTION_MAX_AGE = 5 * 60_000;
 export interface ReferenceNotice { readonly title: string; readonly message: string }
@@ -12,6 +21,8 @@ const key = (envelope: ReferenceEnvelope) => JSON.stringify([envelope.domain, en
 export function createReferencePort(providers: readonly ReferenceProvider[], navigation: ReferenceNavigation, now = Date.now): ReferencePort & { cancelOpen(): void } {
   const cache = new Map<string, { projectId: string; revision: string | undefined; resolution: ReferenceResolution }>();
   let opening = 0;
+  /** Whether `projectId` is current for a reference in `domain`: the selected project, or the workspace scope. */
+  const current = (domain: string, projectId: string) => projectId === navigation.projectId() || (projectId === WORKSPACE_SCOPE && workspaceScoped(domain));
   const providerFor = (envelope: ReferenceEnvelope) => providers.find(p => p.domain === envelope.domain && p.kinds.includes(envelope.kind));
   const unknown = (): ReferenceResolution => ({ status: 'unknown', observedAt: new Date(now()).toISOString() });
   function validResolution(value: ReferenceResolution): boolean {
@@ -45,10 +56,12 @@ export function createReferencePort(providers: readonly ReferenceProvider[], nav
       for (const provider of providers) {
         if (scope.domains && !scope.domains.includes(provider.domain)) continue;
         try {
-          const results = await provider.find(query, { projectId: scope.projectId, limit: scope.limit, ...(scope.kinds ? { kinds: scope.kinds } : {}) });
+          // Workspace-scoped providers answer for the workspace scope, whichever project the caller is in.
+          const projectId = workspaceScoped(provider.domain) ? WORKSPACE_SCOPE : scope.projectId;
+          const results = await provider.find(query, { projectId, limit: scope.limit, ...(scope.kinds ? { kinds: scope.kinds } : {}) });
           for (const result of results) {
             const envelope = parseReference(result);
-            if (!envelope || envelope.projectId !== scope.projectId || envelope.domain !== provider.domain || !provider.kinds.includes(envelope.kind) || (scope.kinds && !scope.kinds.includes(envelope.kind))) continue;
+            if (!envelope || envelope.projectId !== projectId || envelope.domain !== provider.domain || !provider.kinds.includes(envelope.kind) || (scope.kinds && !scope.kinds.includes(envelope.kind))) continue;
             found.set(key(envelope), envelope);
             if (found.size >= scope.limit) return [...found.values()];
           }
@@ -63,13 +76,13 @@ export function createReferencePort(providers: readonly ReferenceProvider[], nav
         navigation.notice({ title: 'Reference', message: 'Invalid reference. Read-only.' }); return;
       }
       const context = { label: returnTo.label, to: { ...returnTo.to } };
-      if (envelope.projectId !== navigation.projectId()) {
+      if (!current(envelope.domain, envelope.projectId)) {
         navigation.notice({ title: envelope.title, message: `Reference belongs to project ${envelope.projectId}. Read-only; the current project is unchanged.` }); return;
       }
       if (!providerFor(envelope)) { navigation.notice({ title: envelope.title, message: 'Unknown reference kind. Snapshot is read-only.' }); return; }
       void resolve(envelope).then(resolution => {
         if (ticket !== opening) return;
-        if (envelope.projectId !== navigation.projectId() || (resolution.targetProjectId !== undefined && resolution.targetProjectId !== navigation.projectId())) {
+        if (!current(envelope.domain, envelope.projectId) || (resolution.targetProjectId !== undefined && !current(envelope.domain, resolution.targetProjectId))) {
           navigation.notice({ title: envelope.title, message: 'Target belongs to another project. Read-only; the current project is unchanged.' }); return;
         }
         if (!['available', 'changed', 'archived', 'moved'].includes(resolution.status) || !resolution.destination || !fresh(resolution)) {

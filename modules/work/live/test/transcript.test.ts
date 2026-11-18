@@ -20,7 +20,7 @@ describe('reads', () => {
     expect(await port.version()).toBe(0);
     expect(await port.snapshot()).toEqual({
       items: [], settings: { default_tz: 'America/New_York', week_start: 'sun', stale_days: 21 }, stateVersion: 0,
-      observedAt: '2026-01-15T12:00:00Z', features: ['items.batch_create', 'requests.replay', 'hq-references-v1'],
+      observedAt: '2026-01-15T12:00:00Z', features: ['items.batch_create', 'requests.replay', 'hq-references-v1'], api: 2,
     });
     const state = await port.snapshot();
     expect(state.stateVersion).toBe(9);

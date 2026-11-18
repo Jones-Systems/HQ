@@ -7,6 +7,10 @@ export { TasteService, parseExportOptions, parseTasteCommand, type TasteServiceO
 export { createNodeTasteFileSystem, nodeSha256 } from './node-file-system.ts';
 export { canonicalize } from './jcs.ts';
 export {
-  createProjectTasteContribution, TasteProjectBindingError, TasteUnavailableError, TASTE_DOCUMENT_KEY,
+  createProjectTasteContribution, TASTE_DOCUMENT_KEY,
   type ProjectTasteContribution, type ProjectTasteOptions, type TasteDocumentPort, type TasteJournalDocument,
 } from './project-service.ts';
+export {
+  TasteConflictError, TasteInvalidInputError, TasteJournalFaultError, TasteJournalFullError, TasteProjectBindingError, TasteReadOnlyError,
+  TasteUnavailableError,
+} from './errors.ts';

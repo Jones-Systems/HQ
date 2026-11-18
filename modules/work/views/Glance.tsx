@@ -1,4 +1,4 @@
-import { StateView } from '@hq/ui';
+import { useListMotion, StateView } from '@hq/ui';
 import {
   addDays, dateState, DEFAULT_SETTINGS, formatDay, isLive, isOpen, matchesFilters, relativeDays, reviewBucketsFor,
   sortByPosition, STATUSES, type Item, type Settings,
@@ -6,6 +6,9 @@ import {
 import { useEnv } from './env';
 import { currentPeriodEntries, UPCOMING_DAYS, upcomingEntries } from './moves';
 import { ago, DateChip, ItemRow, MotivationPill, Quiet, SectionHead, StatusMark, cx } from './parts';
+import { DoneButton } from '../theme';
+import { isPending } from './env';
+import './glance.css';
 
 // Glance (RV-4): what matters now, what's coming, and what needs sorting,
 // without opening anything. Every link here only navigates.
@@ -33,6 +36,7 @@ function longDay(iso: string): string {
 
 export function GlanceView() {
   const env = useEnv();
+  const rows = useListMotion<HTMLDivElement>(env.state.items.map((item) => `${item.id}:${item.status}:${item.horizon ?? ''}`));
   const { today, settings, state } = env;
   const all = state.items.filter(isLive);
   if (!all.length) {
@@ -72,7 +76,7 @@ export function GlanceView() {
   }
 
   return (
-    <div className="wv-glance">
+    <div className="wv-glance" ref={rows}>
       <section className="wv-glance-hero">
         <p className="wv-eyebrow">{longDay(today)}</p>
         <h2 className="wv-glance-heading">{greeting(env.now(), settings)}</h2>
@@ -98,12 +102,15 @@ export function GlanceView() {
                 {now.slice(0, 8).map((item) => {
                   const step = item.next_steps.find((s) => !s.done);
                   return (
+                    <div className="wv-glance-now-row" key={item.id} data-hq-motion-key={item.id}>
+                    <DoneButton label={`Mark “${item.title}” done`} disabled={isPending(state, item.id)}
+                      onDone={() => void env.run(env.store.move(item.id, 'done', { place: 'top' }), `Moved “${item.title}” to Done`)} />
                     <ItemRow
-                      key={item.id}
                       item={item}
                       sub={step ? `Next: ${step.text}` : undefined}
                       trailing={<>{item.status === 'active' && <StatusMark status="active" />}<MotivationPill motivation={item.motivation} /></>}
                     />
+                    </div>
                   );
                 })}
                 {now.length > 8 && go && more(`${now.length - 8} more on the board`, () => go({ view: 'board' }))}

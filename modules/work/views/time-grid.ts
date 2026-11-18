@@ -13,6 +13,27 @@ export function calendarDays(day: string, mode: 'week' | 'day', weekStart: WeekS
   return Array.from({ length: mode === 'week' ? 7 : 1 }, (_, i) => addDays(start, i));
 }
 
+const TITLE_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const TITLE_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const part = (iso: string) => ({ y: Number(iso.slice(0, 4)), m: Number(iso.slice(5, 7)), d: Number(iso.slice(8, 10)) });
+
+/**
+ * The calendar page title for the shown period (X-8): "November 2026", "Nov 1 – 7, 2026" (or "Oct 28 – Nov 3, 2026",
+ * and across a year "Dec 28, 2026 – Jan 3, 2027"), and "Wednesday, Oct 21, 2026".
+ */
+export function periodTitle(mode: 'month' | 'week' | 'day', year: number, month: number, days: readonly string[]): string {
+  if (mode === 'month') return `${TITLE_MONTHS[month - 1]} ${year}`;
+  const first = part(days[0]!);
+  const short = (p: ReturnType<typeof part>) => `${TITLE_MONTHS[p.m - 1]!.slice(0, 3)} ${p.d}`;
+  if (mode === 'day') {
+    const weekday = TITLE_WEEKDAYS[new Date(Date.UTC(first.y, first.m - 1, first.d)).getUTCDay()]!;
+    return `${weekday}, ${short(first)}, ${first.y}`;
+  }
+  const last = part(days[days.length - 1]!);
+  if (first.y !== last.y) return `${short(first)}, ${first.y} – ${short(last)}, ${last.y}`;
+  return `${short(first)} – ${first.m === last.m ? last.d : short(last)}, ${last.y}`;
+}
+
 export function layoutTimedEntries(entries: readonly GridEntry[], day?: string, zone?: string): GridPosition[] {
   const events = entries.filter(({ entry }) => entry.precision === 'day' && entry.time).map((x) => {
     const interval = zone ? displayedInterval(x.entry, zone) : null;

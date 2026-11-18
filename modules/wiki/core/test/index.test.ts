@@ -348,6 +348,12 @@ describe('snapshots', () => {
       'unsafe link target': (s) =>
         JSON.stringify({ ...s, pages: s['pages'].map((p: any, i: number) => (i === 0 ? { ...p, links: [{ kind: 'external', url: 'javascript:alert(1)' }] } : p)) }),
       'bad term': (s) => JSON.stringify({ ...s, pages: s['pages'].map((p: any, i: number) => (i === 0 ? { ...p, terms: [['x', -1, 0]] } : p)) }),
+      'link origins removed': (s) => JSON.stringify({ ...s, pages: s['pages'].map((p: any, i: number) => (i === 0 ? { ...p, linkOrigins: undefined } : p)) }),
+      'link origins out of step with links': (s) => JSON.stringify({ ...s, pages: s['pages'].map((p: any, i: number) => (i === 0 ? { ...p, linkOrigins: [] } : p)) }),
+      'via out of order': (s) =>
+        JSON.stringify({ ...s, pages: s['pages'].map((p: any, i: number) => (i === 0 ? { ...p, linkOrigins: p.linkOrigins.map((o: any) => ({ ...o, via: ['related', 'body'] })) } : p)) }),
+      'excerpt with a control character': (s) =>
+        JSON.stringify({ ...s, pages: s['pages'].map((p: any, i: number) => (i === 0 ? { ...p, linkOrigins: p.linkOrigins.map((o: any) => ({ ...o, excerpt: 'bad\u0001' })) } : p)) }),
     };
     for (const [name, mutate] of Object.entries(mutations)) {
       const store = createMemoryIndexStore();

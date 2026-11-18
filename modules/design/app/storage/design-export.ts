@@ -11,7 +11,7 @@ import { collectBlobReferences, projectDesignDocument, projectImportEvent } from
 export interface DesignOmission { readonly category: string; readonly count: number; readonly unit: 'documents' | 'streams' | 'blobs' | 'events' | 'records'; readonly reason: string }
 export interface DesignExportReport { readonly documents: number; readonly blobs: number; readonly events: number; readonly omitted: readonly DesignOmission[] }
 export interface DesignExportPort {
-  readonly status: typeof EXPORT_STATUS;
+  readonly status: typeof EXPORT_STATUS | { readonly state: 'enabled' };
   preview(exportedAt: string): Promise<EngineResult<DesignExportReport>>;
   build(exportedAt: string): Promise<EngineResult<{ readonly bytes: Uint8Array; readonly report: DesignExportReport }>>;
 }
@@ -124,5 +124,5 @@ export function createDesignExport(runtime: TransactionRuntime, enabled = false)
       return { ok: true, value: { bytes: canonicalBytes(bundle as unknown as JsonValue), report } };
     });
   }
-  return Object.freeze({ status: EXPORT_STATUS, build, async preview(at: string) { const result = await build(at); return result.ok ? { ok: true, value: result.value.report } : result; } } satisfies DesignExportPort);
+  return Object.freeze({ status: enabled ? Object.freeze({ state: 'enabled' as const }) : EXPORT_STATUS, build, async preview(at: string) { const result = await build(at); return result.ok ? { ok: true, value: result.value.report } : result; } } satisfies DesignExportPort);
 }

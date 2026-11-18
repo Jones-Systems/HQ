@@ -18,8 +18,8 @@ const ctx = { today: '2026-01-15', filters: {}, view: () => 'board', go() {}, op
   rerender() {}, keepFocus() {}, openCapture() {}, openMoveMenu() {}, loadExamples() {},
   draftsPanel: () => document.createElement('div') };
 
-function setup() {
-  state.items = [structuredClone(item)];
+function setup(entry = item) {
+  state.items = [structuredClone(entry)];
   state.byId = new Map(state.items.map((value) => [value.id, value]));
   state.phase = 'ready';
   state.connection = 'online';
@@ -27,7 +27,7 @@ function setup() {
   document.body.append(panel);
   mountDetail(panel, ctx);
   closeDetailPanel();
-  renderDetail(item.id, ctx);
+  renderDetail(entry.id, ctx);
   return panel;
 }
 
@@ -58,5 +58,27 @@ test('removing another reference resaves the exact HQ target; removing HQ remove
   panel = setup();
   await panel.querySelectorAll('.ref')[0].querySelector('button').listeners.click[0]({ preventDefault() {}, stopPropagation() {} });
   assert.deepEqual(sent[1], [other]);
+  panel.remove();
+});
+
+test('a Wiki reference renders as literal text like the other domains and is echoed unchanged on resave', async (t) => {
+  const wikiTarget = { ...target, domain: 'wiki', kind: 'page', entityId: 'page-example', title: 'Wiki page',
+    returnDestination: { domain: 'wiki', destination: 'page/example' } };
+  const wiki = { id: 'wikiref1', kind: 'hq', label: 'Wiki page', target: wikiTarget };
+  const withWiki = { ...item, references: [wiki, other] };
+  const sent = [];
+  const original = globalThis.fetch;
+  t.after(() => { globalThis.fetch = original; });
+  globalThis.fetch = async (path, init) => {
+    const body = JSON.parse(init.body);
+    sent.push(body.patch.references);
+    return { ok: true, json: async () => ({ item: { ...state.byId.get(item.id), ...body.patch, revision: body.revision + 1 }, state_version: sent.length }) };
+  };
+  const panel = setup(withWiki);
+  const row = panel.querySelectorAll('.ref')[0];
+  assert.ok(row.textContent.includes('Linked in HQ: Wiki page'));
+  assert.equal(row.querySelectorAll('a').length, 0);
+  await panel.querySelectorAll('.ref')[1].querySelector('button').listeners.click[0]({ preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual(sent[0], [wiki]);
   panel.remove();
 });

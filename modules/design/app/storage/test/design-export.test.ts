@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it } from 'node:test';
+import { createDesignExport } from '../design-export.ts';
+import type { TransactionRuntime } from '../transactions.ts';
 import { encodeName } from '../../../../../packages/design-store/src/layout.ts';
 import { parseBundle, restoreBundle } from '../../../imports/src/bundle.ts';
 import type { StoragePort as RequestsStoragePort } from '../../../requests/src/contract.ts';
@@ -81,4 +83,12 @@ it('pending keys, torn/corrupt streams and missing blobs are counted without exp
     assert.doesNotMatch(new TextDecoder().decode(result.bytes), /SECRET-PENDING|SECRET-EVENT/);
     await e.close();
   } finally { removeDir(dir); }
+});
+
+it('advertises the explicit export flag without enabling default constructions', async () => {
+  const runtime = null as unknown as TransactionRuntime;
+  const off = createDesignExport(runtime);
+  assert.equal(off.status.state, 'disabled');
+  assert.deepEqual(await off.preview(AT), { ok: false, kind: 'unavailable', reason: 'disabled' });
+  assert.deepEqual(createDesignExport(runtime, true).status, { state: 'enabled' });
 });

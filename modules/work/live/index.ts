@@ -5,10 +5,12 @@ export {
   createLivePlanner, createPlannerLive, createPlannerLivePort, SETTLED_LIMIT, UNRESOLVED_LIMIT,
   type LedgerView, type PlannerLive,
 } from './adapter';
+export { isWorkLocalBridge, WorkLocalError, workLocalPersistence, type WorkLocalFailure, type WorkLocalPersistence } from './durable';
 export {
   bridgeTransport, ENTITY_ID_PATTERN, isServiceResponse, isWorkBridge, REQUEST_ID_PATTERN, WORK_READ_ROUTES, WORK_ROUTES,
   WORK_SERVICE_ROUTES, WORK_WRITE_ROUTES,
-  type PlannerTransport, type ServiceResponse, type WorkBridge, type WorkMutationCall, type WorkMutationRoute, type WorkParams,
+  type PlannerTransport, type ServiceResponse, type WorkBridge, type WorkLocalJson, type WorkLocalParams, type WorkLocalResult,
+  type WorkLocalRoute, type WorkLocalTransport, type WorkLocalValues, type WorkMutationCall, type WorkMutationRoute, type WorkParams,
   type WorkReadRoute, type WorkRoute, type WorkServiceParams, type WorkServiceRoute, type WorkServiceTransport,
   type WorkWriteRoute,
 } from './transport';

@@ -19,7 +19,7 @@ def vectors():
         cases.append({"id": name, "input": deepcopy(refs), "errors": [{"field": "references", "message": message}]})
 
     accept("minimal-hq", [deepcopy(REFERENCE)])
-    for domain in ("social", "work"):
+    for domain in ("social", "work", "wiki"):
         ref = deepcopy(REFERENCE)
         ref["target"]["domain"] = domain
         ref["target"]["returnDestination"]["domain"] = domain
@@ -102,6 +102,23 @@ def vectors():
     reject("duplicate-entry-id", [deepcopy(REFERENCE), ref], "Reference 2 is malformed.")
     ref["id"] = "ref002"
     accept("distinct-targets", [deepcopy(REFERENCE), ref])
+    for target_domain, return_domain in (("wiki", "work"), ("work", "wiki")):
+        ref = deepcopy(REFERENCE)
+        ref["target"].update(domain=target_domain, projectId="remote-project", sourceRevision="remote-revision-7",
+                             workspaceId="remote-workspace")
+        ref["target"]["returnDestination"]["domain"] = return_domain
+        accept(f"{target_domain}-return-{return_domain}", [ref])
+    for case in list(cases):
+        if case["id"] in ("bool-version", "wrong-version", "unknown-domain", "extra-key", "null-optional",
+                          "control", "utf16-overflow", "title-overflow", "scheme", "destination-extra", "destination-domain"):
+            wiki = deepcopy(case)
+            wiki["id"] = "wiki-" + case["id"]
+            target = wiki["input"][0]["target"]
+            if target["domain"] == "design":
+                target["domain"] = "wiki"
+            if target["returnDestination"]["domain"] == "design":
+                target["returnDestination"]["domain"] = "wiki"
+            cases.append(wiki)
     return {"schema": "hq.planner.reference-vectors/v1", "feature": "hq-references-v1",
             "generated_entry_id": "generated001", "cases": cases}
 

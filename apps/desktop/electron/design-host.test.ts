@@ -1,3 +1,5 @@
+import { DESIGN_HELD_FEATURES as RENDERER_HELD_FEATURES } from '../../../modules/design/app/compose/capabilities.ts';
+import { DESIGN_HELD_FEATURES } from './design-host';
 import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -170,4 +172,78 @@ it('blob writes enforce digest and 16 MiB cap before touching storage', async ()
   expect(await host.call('blob.put', { bytes, expectedDigest })).toEqual({ ok: true, value: { digest: expectedDigest, bytes: bytes.length } });
   for (const params of [{ bytes: new Uint8Array(bytes.length + 1), expectedDigest }, { bytes: new Uint8Array([1]), expectedDigest }, { bytes, expectedDigest, path: 'forbidden' }]) expect(await host.call('blob.put', params)).toEqual({ ok: false, kind: 'invalid' });
   expect(store.transactions.workspace.putBlob).toHaveBeenCalledTimes(1); await host.close();
+});
+const heldFeatures = [
+  { feature: 'generation-sources', status: 'held', reason: 'external-access-held' },
+  { feature: 'component-runner', status: 'held', reason: 'native-qualification-pending' },
+  { feature: 'jones-code-live-send', status: 'held', reason: 'live-effects-held' },
+];
+function withStatus(accepted: boolean, exportState: string) {
+  const store = fake();
+  return { ...store, transactions: { ...store.transactions, status: { accepted, state: accepted ? 'enabled' : 'disabled' } }, exportBundle: { ...store.exportBundle, status: { state: exportState } } };
+}
+it('design.capabilities is a registered route and reports only the opened store status and what was injected', async () => {
+  expect(DESIGN_SERVICE_ROUTES).toContain('design.capabilities');
+  const pick = vi.fn(), save = vi.fn();
+  for (const [accepted, exportState, withPick, withSave, expected] of [
+    [false, 'disabled', false, false, { imports: 'disabled', pick: 'disabled', export: 'disabled' }],
+    [true, 'disabled', true, true, { imports: 'enabled', pick: 'enabled', export: 'disabled' }],
+    [true, 'enabled', true, true, { imports: 'enabled', pick: 'enabled', export: 'enabled' }],
+    [true, 'enabled', false, true, { imports: 'enabled', pick: 'disabled', export: 'enabled' }],
+    // Export needs the save dialog as well as the store, so a host without one does not offer it.
+    [true, 'enabled', true, false, { imports: 'enabled', pick: 'enabled', export: 'disabled' }],
+    [false, 'enabled', false, true, { imports: 'disabled', pick: 'disabled', export: 'enabled' }],
+  ] as const) {
+    const store = withStatus(accepted, exportState), host = createDesignHost(async () => store, withSave ? save : undefined, withPick ? pick : undefined);
+    expect(await host.call('design.capabilities', {})).toEqual({ ok: true, value: { ...expected, held: heldFeatures } });
+    await host.close();
+  }
+  // It touches no storage, picker, bundle builder or save dialog.
+  const store = withStatus(true, 'enabled'), host = createDesignHost(async () => store, save, pick);
+  await host.call('design.capabilities', {});
+  for (const method of [store.workspace.getDocument, store.workspace.putDocument, store.workspace.listDocuments, store.transactions.commit, store.transactions.repair,
+    store.transactions.diagnostics, store.exportBundle.preview, store.exportBundle.build, store.cache.getDocument, store.cache.putDocument, pick, save]) expect(method).not.toHaveBeenCalled();
+  await host.close();
+});
+it('design.capabilities opens the store lazily like the other routes, and answers unavailable when the open fails or the host is closed', async () => {
+  const open = vi.fn(async () => withStatus(true, 'disabled')), host = createDesignHost(open);
+  expect(await host.call('design.capabilities', { extra: true })).toEqual({ ok: false, kind: 'invalid' });
+  expect(open).not.toHaveBeenCalled();
+  expect(await host.call('design.capabilities', {})).toMatchObject({ ok: true, value: { imports: 'enabled' } });
+  expect(await host.call('design.capabilities', {})).toMatchObject({ ok: true });
+  expect(open).toHaveBeenCalledTimes(1);
+  await host.close();
+  expect(await host.call('design.capabilities', {})).toEqual({ ok: false, kind: 'unavailable' });
+  const failed = createDesignHost(async () => { throw Error(); });
+  expect(await failed.call('design.capabilities', {})).toEqual({ ok: false, kind: 'unavailable' });
+  await failed.close();
+});
+it('design.capabilities returns a fresh held list on every call', async () => {
+  const host = createDesignHost(async () => withStatus(false, 'disabled'));
+  const first = await host.call('design.capabilities', {}) as { value: { held: { reason: string }[] } };
+  first.value.held[0]!.reason = 'tampered';
+  expect(await host.call('design.capabilities', {})).toMatchObject({ value: { held: heldFeatures } });
+  await host.close();
+});
+
+it('keeps the host and renderer held-feature vocabulary identical', () => {
+  expect(RENDERER_HELD_FEATURES).toEqual(DESIGN_HELD_FEATURES);
+});
+it('separates pre-save export failures from unknown save effects and cancellation', async () => {
+  const store = fake(); store.exportBundle.status.state = 'enabled';
+  const save = vi.fn().mockResolvedValue({ saved: false }), host = createDesignHost(async () => store, save);
+  const params = { exportedAt: '2026-01-01T00:00:00Z' };
+  for (const [error, kind] of [[Object.assign(new Error(), { name: 'ExportProjectionError' }), 'invalid'], [new Error(), 'unavailable']] as const) {
+    store.exportBundle.preview.mockRejectedValueOnce(error); store.exportBundle.build.mockRejectedValueOnce(error);
+    expect(await host.call('export.preview', params)).toEqual({ ok: false, kind });
+    expect(await host.call('export.save', params)).toEqual({ ok: false, kind });
+  }
+  expect(save).not.toHaveBeenCalled();
+  store.exportBundle.build.mockResolvedValue({ ok: true, value: { bytes: new Uint8Array([1]) } });
+  expect(await host.call('export.save', params)).toEqual({ ok: true, value: { saved: false } });
+  save.mockResolvedValueOnce({ saved: true });
+  expect(await host.call('export.save', params)).toEqual({ ok: true, value: { saved: true } });
+  save.mockRejectedValueOnce(new Error('lost'));
+  expect(await host.call('export.save', params)).toEqual({ ok: false, kind: 'unknown' });
+  expect(save).toHaveBeenCalledTimes(3); await host.close();
 });

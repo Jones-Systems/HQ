@@ -46,7 +46,8 @@ test('all section runtime imports remain renderer-safe; no descriptors or produc
       assert.equal(forbidden(specifier), false, `${path}: ${specifier}`);
       if (specifier.startsWith('.')) visit(resolveSource(path, specifier));
       else if (Object.hasOwn(workspace, specifier)) visit(workspace[specifier]!);
-      else assert.ok(['react', 'react/jsx-runtime'].includes(specifier), `unqualified package: ${specifier}`);
+      // `react-dom` reaches sections only through the UI kit's `flushSync` (page transitions); renderer-only.
+      else assert.ok(['react', 'react/jsx-runtime', 'react-dom'].includes(specifier), `unqualified package: ${specifier}`);
     }
   };
   for (const section of ['requests', 'runs', 'references']) {

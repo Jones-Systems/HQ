@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { createElement } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ModulePort, ReferenceEnvelope } from '@hq/contracts';
 import type { ReferenceProvider } from '@hq/contracts/references';
 import { createReferencePort, RESOLUTION_MAX_AGE } from './references';
 import { App } from './App';
+import { selectDesktopProject } from './interactive-runtime';
 const envelope: ReferenceEnvelope = { version: 1, domain: 'work', projectId: 'hq-local', kind: 'item', entityId: 'one', title: 'Card', returnDestination: { domain: 'design', destination: 'home' } };
 vi.mock('./reference-providers', () => ({ REFERENCE_PROVIDERS: [{ domain: 'work', kinds: ['item'], find: async () => [], resolve: async () => ({ status: 'available', observedAt: new Date().toISOString(), destination: 'item/one' }) }] }));
 vi.mock('./modules', () => {
@@ -14,7 +15,7 @@ vi.mock('./modules', () => {
       createElement('button', { onClick: () => props.references?.open(envelope, { label: 'Design draft', to: { domain: 'design', destination: props.destination } }) }, 'Open card'),
       createElement('button', { onClick: () => props.references?.open({ ...envelope, projectId: 'elsewhere' }, { label: 'Design draft', to: { domain: 'design', destination: props.destination } }) }, 'Open other project'));
   }
-  function Target(props: ModulePort) { return createElement('p', {}, `Target ${props.destination}; return ${props.returnContext?.label ?? 'none'}`); }
+  function Target(props: ModulePort) { return createElement('p', {}, `Target ${props.destination}; return ${props.returnContext?.label ?? 'none'}; project ${props.context.id}`); }
   return { DOMAIN_LABELS: { design: 'Design', social: 'Social', work: 'Work', wiki: 'Wiki' }, MODULES: { design: Source, social: Target, work: Target, wiki: Target }, MODULE_PRESENTATION: {} };
 });
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
@@ -61,7 +62,7 @@ function mount() {
 it('App reference open/Back restores the source domain and navigation state while preserving module remount semantics', async () => {
   mount(); fireEvent.click(screen.getByRole('button', { name: 'Select source draft' }));
   fireEvent.click(screen.getByRole('button', { name: 'Open card' }));
-  await screen.findByText('Target item/one; return Design draft');
+  await screen.findByText(/^Target item\/one; return Design draft;/);
   fireEvent.click(screen.getByRole('button', { name: 'Back to Design draft' }));
   expect(screen.getByText('Source draft/one')).toBeTruthy();
   expect(screen.getByRole('button', { name: /^Design$/ }).getAttribute('aria-current')).toBe('page');
@@ -69,5 +70,41 @@ it('App reference open/Back restores the source domain and navigation state whil
 it('App project mismatch displays a read-only notice without navigation', async () => {
   mount(); fireEvent.click(screen.getByRole('button', { name: 'Open other project' }));
   await waitFor(() => expect(screen.getByLabelText('Read-only reference').textContent).toContain('elsewhere'));
-  expect(screen.queryByText('Target item/one; return Design draft')).toBeNull();
+  expect(screen.queryByText(/^Target item\/one; return Design draft;/)).toBeNull();
+});
+/** OD-3: Social and Work stay workspace-scoped (`hq-local`); a Design project switch must not make them read-only. */
+function scoped<D extends 'work' | 'design'>(domain: D, kind: string, projectOf: (scope: string) => string | null) {
+  return {
+    domain, kinds: [kind],
+    find: vi.fn(async (_query: string, scope: { projectId: string }) => {
+      const projectId = projectOf(scope.projectId);
+      return projectId ? [{ ...envelope, domain, kind, projectId, entityId: `${domain}-one` }] : [];
+    }),
+    resolve: vi.fn(async (target: ReferenceEnvelope) => ({ status: 'available' as const, observedAt: new Date(1000).toISOString(), targetProjectId: target.projectId, destination: `${kind}/one` })),
+  } satisfies ReferenceProvider;
+}
+it('workspace-scoped Work references stay current after a Design project switch; other projects stay read-only', async () => {
+  let project = 'hq-local';
+  // Like the real providers: Work answers only for the workspace scope, Design for the project it is asked about.
+  const work = scoped('work', 'item', scope => scope === 'hq-local' ? 'hq-local' : null);
+  const design = scoped('design', 'section', scope => scope);
+  const open = vi.fn(), notice = vi.fn();
+  const port = createReferencePort([design, work], { projectId: () => project, open, notice }, () => 1000);
+  project = 'design-b';
+  const found = await port.find('Card', { projectId: 'design-b', limit: 10 });
+  expect(found.map(item => [item.domain, item.projectId])).toEqual([['design', 'design-b'], ['work', 'hq-local']]);
+  const back = { label: 'Source', to: envelope.returnDestination };
+  port.open(envelope, back);
+  await waitFor(() => expect(open).toHaveBeenCalledOnce());
+  expect(open.mock.calls[0]![1]).toBe('item/one'); expect(notice).not.toHaveBeenCalled();
+  port.open({ ...envelope, domain: 'design', kind: 'section', projectId: 'design-a' }, back);
+  port.open({ ...envelope, projectId: 'other' }, back);
+  expect(notice).toHaveBeenCalledTimes(2); expect(open).toHaveBeenCalledOnce();
+});
+it('App keeps Work references openable after a Design project switch and gives Work the workspace scope', async () => {
+  mount();
+  act(() => selectDesktopProject({ id: 'design-b', label: 'Design B', navigation: 'preserve-design' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Open card' }));
+  expect(await screen.findByText('Target item/one; return Design draft; project hq-local')).toBeTruthy();
+  expect(screen.queryByLabelText('Read-only reference')).toBeNull();
 });

@@ -1,6 +1,6 @@
 .updates-settings { display: grid; gap: 24px; min-width: 0; }
 .updates-settings h4 { margin: 0; font: var(--hq-type-label); font-weight: 600; }
-.updates-details { display: grid; gap: 10px; margin: 0; padding: 16px 18px; font: var(--hq-type-body); }
+.updates-details { display: grid; gap: 10px; margin: 0; padding: 14px 18px 16px; font: var(--hq-type-body); }
 .updates-details > div { display: grid; grid-template-columns: 94px minmax(0, 1fr); align-items: baseline; gap: 14px; min-width: 0; }
 .updates-details dt { color: var(--hq-text-muted); }
 .updates-details dd { min-width: 0; margin: 0; color: var(--hq-text); overflow-wrap: anywhere; }
@@ -12,9 +12,6 @@
 .updates-cancel { justify-items: start; }
 .updates-settings .updates-install-note { font-size: 12px; }
 .updates-transfer progress { display: block; width: 100%; height: 8px; accent-color: var(--hq-accent); }
-.updates-notice { padding: 16px 18px; border: 1px solid var(--hq-warning); border-radius: var(--hq-radius-lg); background: var(--hq-surface-raised); overflow-wrap: anywhere; }
-.updates-notice--inline { border: 0; border-radius: 0; }
-.updates-notice p, .updates-recovery p { color: var(--hq-text); }
 .updates-settings .updates-recovery-state { color: var(--hq-text-muted); font-size: 12px; overflow-wrap: anywhere; }
 .updates-settings input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--hq-accent); }
 .updates-settings input[type="checkbox"]:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 3px; }

@@ -2,7 +2,7 @@
 // Pure of side effects and of `node:*`, so it loads under the Node test runner; the stylesheet import lives in index.ts.
 
 import { createElement as h, type ComponentType, type ReactElement } from 'react';
-import { WikiSetupGate, createWikiView } from '../../ui/src/index.ts';
+import { WikiSetupGate, createWikiView, type WikiToastPort } from '../../ui/src/index.ts';
 import { createWikiClient } from './client.ts';
 import type { WikiHostPort, WikiModulePort } from './port.ts';
 
@@ -20,6 +20,8 @@ export interface WikiDomainOptions {
    * bridge that appears after load is used. The module never names, discovers or reaches for a global itself.
    */
   readonly getPort: () => WikiHostPort | null;
+  /** Optional shell toast port; failures remain visible inline without it. */
+  readonly toast?: WikiToastPort | null;
   /**
    * Asks the shell to open Settings at Data sources › Local Wiki, offered on the not-set-up card and the silent-host
    * notice. Optional: without it those screens name the place and offer no button.
@@ -35,7 +37,7 @@ export interface WikiDomainOptions {
  */
 export function createWikiDomain(options: WikiDomainOptions): WikiDomain {
   const service = createWikiClient(options.getPort);
-  const View = createWikiView(service);
+  const View = createWikiView(service, { toast: options.toast ?? null, openSettings: options.openSettings ?? null });
   const openSettings = options.openSettings ?? null;
 
   function WikiModule(props: WikiModulePort): ReactElement {

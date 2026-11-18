@@ -66,6 +66,26 @@ describe('classifyWikiSetup', () => {
 });
 
 describe('the mounted Wiki before set-up', () => {
+  test('pending setup does not mount content or request topics before the status is answered', async () => {
+    let answer: (value: unknown) => void = () => {};
+    const pending = new Promise((resolve) => { answer = resolve; });
+    const b = bridge({ listSources: EMPTY_SOURCES, indexStatus: () => pending });
+    const { Component } = createWikiDomain({ getPort: () => b.port });
+    const m = await mount(Component, modulePort());
+    try {
+      await settle();
+      assert.match(textOf(one(m.container, '[role="status"]')), /Checking Wiki setup/);
+      assert.deepEqual([...new Set(b.calls)].sort(), ['indexStatus', 'listSources']);
+      answer(EMPTY_STATUS());
+      await settle();
+      assert.ok(one(m.container, '[data-wiki-setup="not-configured"]'));
+      assert.deepEqual([...new Set(b.calls)].sort(), ['indexStatus', 'listSources']);
+    } finally {
+      answer(EMPTY_STATUS());
+      await m.unmount();
+    }
+  });
+
   test('not configured: one set-up card whose Open Settings asks the shell, and no error panel', async () => {
     const b = bridge({ listSources: EMPTY_SOURCES, indexStatus: EMPTY_STATUS });
     const opened: string[] = [];

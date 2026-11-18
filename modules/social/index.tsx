@@ -17,7 +17,7 @@ export interface SocialModuleProps extends ModulePort {
  * The workspace source is chosen once per window; only the fictional example workspace is labelled as such.
  */
 export function SocialModule(props: SocialModuleProps) {
-  const { port, source } = socialWorkspace();
+  const { port, source } = socialWorkspace(props.context.id);
   return <SocialDomain {...props} port={port} example={source === 'fixture'} />;
 }
 

@@ -1,0 +1,14 @@
+## Working rules (all B1 builders)
+
+- Repository: Jones-Systems/HQ (public). You run in your own isolated worktree on the branch named above and you are its only Git owner. Verify repository, worktree path, branch and HEAD before your first write. Read `AGENTS.md` at the repository root first and follow it.
+- Never reset, clean, rebase, amend published commits, force-push, or use `git stash` (the stash stack is shared). Use WIP commits. Merge forward (`git merge --no-ff`) when you need another branch's commits.
+- Push only your own branch, with a normal push. Do not open, close, merge, retarget, comment on or edit any pull request; the lead does that after review. Do not touch other worktrees or other lanes' branches.
+- No deployment, installation, sudo, credentials, or restarting any service or Jones Code. A disposable local Planner started by a test is fine.
+- Keep databases and test data outside the repository: create scratch with `mktemp -d /tmp/hq-b1-<topic>-XXXXXX` (never under `$HOME`: an empty `~/.git` exists there and trips guards) and remove exactly what you created on success, failure and cancellation, after stopping any child process.
+- A hook rejects git commands that use shell variables and truncating redirects (`>`) into home paths: write git commands with literal paths.
+- Install dependencies once at the worktree root: `ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --ignore-scripts --no-audit --no-fund`.
+- Before every test or build command, sample capacity with `python3 ~/.local/state/universal-agents/guidance/codex-v3/55493cab7ac6ee5b85412ae3fc867c31/tree/skills/inspect-linux-system-telemetry/scripts/collect_work_capacity.py --format admission` and start only if CPU is below 85%. Run one test process at a time. While iterating, run only affected files, e.g. `node_modules/.bin/vitest run --maxWorkers=4 <paths>`; `npm run typecheck` is fast. Planner checks run serially from `services/planner`: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -t tests` and `node --test --test-concurrency=1 'tests/*.test.mjs'`. CLI checks run from `tools/hq-cli`: `HQ_CLI_E2E=1 npm test`.
+- Diagnose a failing test before touching it. Never weaken, skip or delete a test to get green. When you change behaviour on purpose, update the exact assertions and say why in the commit message.
+- Match the surrounding code: its comment density (short doc comments that state contracts), naming and idiom. TypeScript is strict; keep `npm run typecheck` clean.
+- Make coherent commits with clear messages. Push your branch when done (and at useful checkpoints).
+- Final report, concise: what changed (files), commits with SHAs, every check you ran with exact counts (pass/fail/skip) and the CPU sample before it, anything unverified, defects you found but did not fix, and open questions. Last line exactly: `Branch <name>, head <full SHA>, checks <summary>`.

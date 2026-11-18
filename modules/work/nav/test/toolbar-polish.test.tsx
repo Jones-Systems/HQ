@@ -27,25 +27,19 @@ async function mount(destination = 'board') {
 }
 
 describe('Work toolbar grouping', () => {
-  it('keeps labelled filters and an icon collapse control together after capture', async () => {
+  it('keeps labelled filters visible and preserves unsent capture text', async () => {
     const { container, session } = await mount();
-    const toolbar = container.querySelector('.wd-toolbar')!;
+    const toolbar = container.querySelector('.wd-topbar')!;
     const filters = screen.getByRole('group', { name: 'Filter planning' });
     const search = within(filters).getByRole('searchbox', { name: 'Search' });
     expect(search.getAttribute('placeholder')).toBe('Search planning');
     for (const name of ['Kind', 'Horizon', 'Area label']) expect(within(filters).getByRole('combobox', { name })).toBeTruthy();
-    const hide = screen.getByRole('button', { name: 'Hide capture & filters' });
-    expect(hide.classList.contains('hq-btn--icon')).toBe(true);
-    expect(toolbar.lastElementChild).toBe(hide);
     expect(toolbar.contains(screen.getByRole('form', { name: 'Quick capture' }))).toBe(true);
     fireEvent.change(search, { target: { value: 'library' } });
     const capture = screen.getByRole('textbox', { name: 'Capture to Inbox' });
     fireEvent.change(capture, { target: { value: 'Keep this unsent title' } });
-    fireEvent.click(hide);
-    expect(screen.queryByRole('searchbox', { name: 'Search' })).toBeNull();
-    const show = screen.getByRole('button', { name: 'Show capture & filters · 1 filters' });
-    expect(show.getAttribute('aria-expanded')).toBe('false');
-    fireEvent.click(show);
+    expect(screen.getByRole('group', { name: 'Filter planning' })).toBe(filters);
+    expect(screen.queryByRole('button', { name: 'Hide capture & filters' })).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Capture to Inbox' })).toBe(capture);
     expect(capture).toHaveProperty('value', 'Keep this unsent title');
     expect(search).toHaveProperty('value', 'library');
@@ -62,9 +56,13 @@ describe.each(['board', 'list'])('Work feedback on %s', (destination) => {
     });
     expect(screen.getByRole('button', { name: 'Undo' }).getAttribute('aria-keyshortcuts')).toBe('Control+Z Meta+Z');
     await act(async () => { await vi.advanceTimersByTimeAsync(7999); });
-    expect(screen.getByText('Updated bicycle horizon')).toBeTruthy();
+    expect(within(container.querySelector('.hq-toast-list')!).getByText('Updated bicycle horizon')).toBeTruthy();
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-    expect(screen.queryByText('Updated bicycle horizon')).toBeNull();
+    const leaving = within(container.querySelector('.hq-toast-list')!).getByText('Updated bicycle horizon').closest('li')!;
+    expect(leaving.getAttribute('data-hq-presence')).toBe('exit');
+    expect(leaving.hasAttribute('inert')).toBe(true);
+    fireEvent.animationEnd(leaving);
+    expect(within(container.querySelector('.hq-toast-list')!).queryByText('Updated bicycle horizon')).toBeNull();
     expect(session.store.getState().undo).toHaveLength(1);
     await act(async () => { fireEvent.keyDown(container.querySelector('.wd-domain')!, { key: 'z', [modifier]: true }); });
     const restored = session.store.getState().items.find((item) => item.id === 'ex-bike')!;
@@ -76,14 +74,18 @@ describe.each(['board', 'list'])('Work feedback on %s', (destination) => {
   });
 
   it('keeps warning and danger feedback visible past eight seconds', async () => {
-    const { session } = await mount(destination);
+    const { session, container } = await mount(destination);
     vi.useFakeTimers();
     act(() => {
       session.feedback.push({ message: 'Unknown save result', tone: 'warning' });
       session.feedback.push({ message: 'Saving is paused', tone: 'danger' });
+      session.feedback.push({ message: 'Awaiting confirmation', tone: 'unknown' });
     });
     await act(async () => { await vi.advanceTimersByTimeAsync(16_000); });
-    expect(screen.getByText('Unknown save result')).toBeTruthy();
-    expect(screen.getByText('Saving is paused')).toBeTruthy();
+    expect(within(container.querySelector('.hq-toast-list')!).getByText('Unknown save result')).toBeTruthy();
+    expect(within(container.querySelector('.hq-toast-list')!).getByText('Saving is paused')).toBeTruthy();
+    const unknown = screen.getByRole('group', { name: 'Awaiting confirmation' });
+    expect(within(unknown).getByRole('button', { name: 'Check' })).toBeTruthy();
+    expect(within(unknown).queryByRole('button', { name: /Retry|Apply/u })).toBeNull();
   });
 });

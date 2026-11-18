@@ -45,7 +45,7 @@ describe('renderer source', () => {
   }
 
   test('imports are limited to react, the contract, the UI and this module', () => {
-    const allowed = [/^react$/, /^\.\.\/\.\.\/contract\/src\/index\.ts$/, /^\.\.\/\.\.\/ui\/src\/index\.ts$/, /^\.\/[a-z-]+\.ts$/, /^\.\.\/\.\.\/ui\/src\/wiki-view\.css$/, /^\.\/wiki-domain\.css$/];
+    const allowed = [/^react$/, /^\.\.\/\.\.\/contract\/src\/index\.ts$/, /^\.\.\/\.\.\/ui\/src\/index\.ts$/, /^\.\/[a-z-]+\.ts$/, /^\.\.\/\.\.\/ui\/src\/wiki-[a-z-]+\.css$/, /^\.\/wiki-domain\.css$/];
     for (const path of sources) {
       const code = stripComments(read(path));
       for (const match of code.matchAll(/(?:^|\n)\s*(?:import|export)\b[^'"`]*?\bfrom\s*['"]([^'"]+)['"]|(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g)) {
@@ -64,8 +64,11 @@ describe('stylesheets', () => {
   const entry = stripComments(read(join(SRC, 'index.ts')));
   const imported = [...entry.matchAll(/^\s*import\s*['"]([^'"]+\.css)['"]/gm)].map((m) => m[1] as string);
 
-  test('the entry imports exactly the two stylesheet files, and both exist', () => {
-    assert.deepEqual(imported, ['../../ui/src/wiki-view.css', './wiki-domain.css']);
+  test('the entry imports exactly the Wiki stylesheet files, base first, and each exists', () => {
+    const ui = readdirSync(join(WIKI, 'ui', 'src')).filter((name) => name.endsWith('.css')).sort();
+    assert.ok(ui.includes('wiki-view.css'));
+    const expected = ['../../ui/src/wiki-view.css', ...ui.filter((name) => name !== 'wiki-view.css').map((name) => `../../ui/src/${name}`), './wiki-domain.css'];
+    assert.deepEqual(imported, expected);
     for (const file of imported) assert.ok(existsSync(resolve(SRC, file)), file);
   });
 
@@ -78,11 +81,29 @@ describe('stylesheets', () => {
     });
 
     test(`${file}: every rule is scoped under .wiki-view or .wiki-domain`, () => {
-      // Drop at-rule wrappers (@media) but keep their contents; then read each `selector { … }` head.
-      const flat = css().replace(/@media[^{]*\{/g, '').replace(/\}\s*\}/g, '}');
-      const heads = [...flat.matchAll(/([^{}]+)\{[^{}]*\}/g)].map((m) => (m[1] as string).trim());
-      assert.ok(heads.length > 0);
-      for (const head of heads) {
+      // Walk the rule heads with their enclosing at-rule. Conditional wrappers (@media, @supports, @container,
+      // @starting-style) keep their contents checked; keyframe blocks must be wiki- named and hold only offsets.
+      const heads: { head: string; parent: string | null }[] = [];
+      const stack: string[] = [];
+      let buffer = '';
+      for (const ch of css()) {
+        if (ch === '{') { heads.push({ head: buffer.trim(), parent: stack.at(-1) ?? null }); stack.push(buffer.trim()); buffer = ''; }
+        else if (ch === '}') { stack.pop(); buffer = ''; }
+        else if (ch === ';') buffer = '';
+        else buffer += ch;
+      }
+      assert.equal(stack.length, 0, 'balanced braces');
+      const rules = heads.filter(({ head }) => !head.startsWith('@'));
+      assert.ok(rules.length > 0);
+      for (const { head, parent } of heads) {
+        if (parent?.startsWith('@keyframes')) {
+          assert.match(head, /^(?:from|to|\d+(?:\.\d+)?%)(?:\s*,\s*(?:from|to|\d+(?:\.\d+)?%))*$/, `keyframe offset ${head}`);
+          continue;
+        }
+        if (head.startsWith('@')) {
+          assert.match(head, /^@(?:media|supports|container|starting-style)\b|^@keyframes wiki-[a-z0-9-]+$/, `at-rule ${head}`);
+          continue;
+        }
         for (const selector of head.split(',').map((s) => s.trim())) {
           assert.match(selector, /^\.wiki-(?:view|domain)\b/, `unscoped selector: ${selector}`);
         }

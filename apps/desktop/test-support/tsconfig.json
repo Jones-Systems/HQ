@@ -1,0 +1,15 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": [
+    "design-e2e/**/*.ts",
+    "../electron/design-host.e2e.failures.test.ts",
+    "../electron/design-host.e2e.sections.test.ts",
+    "vitest.config.ts"
+  ]
+}

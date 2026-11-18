@@ -93,7 +93,7 @@ it('choose, plan and apply imports PNGs as project versions with thumbnails; his
   await s.controller.choose();
   expect(f.dialog).toHaveBeenCalledTimes(1);
   expect(f.dialog.mock.calls[0]![0]).toBe(f.window);
-  expect(f.dialog.mock.calls[0]![1]).toMatchObject({ title: 'Choose design files you made', buttonLabel: 'Import as my work' });
+  expect(f.dialog.mock.calls[0]![1]).toMatchObject({ title: 'Choose design files', buttonLabel: 'Import selected files' });
   expect(s.controller.getState().status).toBe('planned');
   expect(s.controller.getState().summary?.rows.map(row => [row.key, row.action])).toEqual([['home.png', 'New'], ['settings.png', 'New']]);
   expect(s.routes).not.toContain('import.commit');

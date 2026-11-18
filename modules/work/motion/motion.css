@@ -1,0 +1,10 @@
+/* Work-only motion pieces. Timing, easing and the reduced-motion rules come from the shared @hq/ui tokens
+   (--hq-duration-*, --hq-ease-*, --hq-motion-*); see docs/design/hq-visual-system/motion-and-feedback.md. */
+
+/* The capture-to-Inbox flight token. Fixed to the viewport, above everything, never interactive. */
+.wk-fly-token {
+  position: fixed; left: 0; top: 0; z-index: 2147483000; max-width: 240px; padding: 4px 10px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none;
+  border-radius: var(--hq-radius-pill); background: var(--hq-accent); color: var(--hq-on-accent);
+  font: var(--hq-type-label); font-weight: var(--hq-font-weight-semibold); box-shadow: var(--hq-shadow-overlay);
+}

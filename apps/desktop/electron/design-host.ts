@@ -9,6 +9,9 @@ import { jsonValue, keys, record } from './services.js';
 
 type NodeResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly kind: 'unavailable'; readonly reason: string };
 const publicResult = (result: NodeResult): DesignStorageResult<unknown> => result.ok ? result : result.reason === 'disabled' ? disabled() : { ok: false, kind: 'unavailable' };
+function exportBuildFailure(error: unknown): DesignStorageResult<never> {
+  return { ok: false, kind: error instanceof Error && error.name === 'ExportProjectionError' ? 'invalid' : 'unavailable' };
+}
 interface WorkspaceRecords {
   getDocument(key: string): Promise<StoredDocument | null>;
   putDocument(key: string, value: JsonValue, options?: { readonly expectedRevision?: number | null }): Promise<StoredDocument>;
@@ -45,6 +48,12 @@ export const DOCUMENT_ROOTS = ['design/projects/', 'design/components/', 'design
 export const TASTE_JOURNAL_KEY = 'design/taste/journal.v1';
 export const DESIGN_BLOB_CAP = 16 * 1024 * 1024;
 const disabled = () => ({ ok: false as const, kind: 'unavailable' as const, reason: 'disabled' as const });
+/** Features this build holds back. Fixed: they are owner-held or await qualification, so nothing switches them on at runtime. */
+export const DESIGN_HELD_FEATURES = Object.freeze([
+  Object.freeze({ feature: 'generation-sources', status: 'held', reason: 'external-access-held' }),
+  Object.freeze({ feature: 'component-runner', status: 'held', reason: 'native-qualification-pending' }),
+  Object.freeze({ feature: 'jones-code-live-send', status: 'held', reason: 'live-effects-held' }),
+] as const);
 const digest = (v: unknown): v is BlobDigest => typeof v === 'string' && /^sha256:[0-9a-f]{64}$/.test(v);
 const eventType = (stream: unknown) => typeof stream === 'string' && allowedDocumentKey(stream) && stream.startsWith('design/requests/') ? 'requests.event-bytes' : stream === 'design/imports' ? 'imports.event' : null;
 export const DESIGN_VALUE_CAP = 2_000_000;
@@ -140,7 +149,7 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
         if (!keys(params, ['ops']) || !validImportOps(params.ops)) return { ok: false, kind: 'invalid' };
       } else if (route === 'import.repair') {
         if (!keys(params, ['txnId']) || typeof params.txnId !== 'string' || !/^[a-f0-9]{64}$/.test(params.txnId)) return { ok: false, kind: 'invalid' };
-      } else if (route === 'import.status' || route === 'storage.diagnostics' || route === 'import.pick') {
+      } else if (route === 'import.status' || route === 'storage.diagnostics' || route === 'import.pick' || route === 'design.capabilities') {
         if (!keys(params, [])) return { ok: false, kind: 'invalid' };
       } else if (route === 'export.preview' || route === 'export.save') {
         if (!keys(params, ['exportedAt']) || typeof params.exportedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(params.exportedAt) || !Number.isFinite(Date.parse(params.exportedAt))) return { ok: false, kind: 'invalid' };
@@ -162,6 +171,14 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
     const p = params as Record<string, unknown>;
     try {
       switch (route) {
+        // Read-only and storage-free: it reports the opened store's advertised status and what was injected, nothing else.
+        // Export needs the save dialog as well as the store, so it is enabled only when both are present.
+        case 'design.capabilities': return { ok: true, value: {
+          imports: current.transactions.status.accepted ? 'enabled' : 'disabled',
+          pick: pick ? 'enabled' : 'disabled',
+          export: current.exportBundle.status.state !== 'disabled' && save ? 'enabled' : 'disabled',
+          held: DESIGN_HELD_FEATURES.map(item => ({ ...item })),
+        } };
         case 'import.commit': return current.transactions.status.accepted ? publicResult(await current.transactions.commit(p.ops as readonly ImportWriteOp[])) : disabled();
         case 'import.status': return current.transactions.status.accepted ? { ok: true, value: current.transactions.status } : disabled();
         case 'import.repair': {
@@ -171,14 +188,21 @@ export function createDesignHost(open: () => Promise<DesignStore>, save?: SaveBy
           return { ok: true, value: { txnId: p.txnId, repaired: true } };
         }
         case 'storage.diagnostics': return current.transactions.status.accepted ? publicResult(await current.transactions.diagnostics()) : disabled();
-        case 'export.preview': return current.exportBundle.status.state === 'disabled' ? disabled() : publicResult(await current.exportBundle.preview(p.exportedAt as string));
+        case 'export.preview': {
+          if (current.exportBundle.status.state === 'disabled') return disabled();
+          try { return publicResult(await current.exportBundle.preview(p.exportedAt as string)); }
+          catch (error) { return exportBuildFailure(error); }
+        }
         case 'export.save': {
           if (current.exportBundle.status.state === 'disabled') return disabled();
           if (!save) return { ok: false, kind: 'unavailable' };
-          const result = await current.exportBundle.build(p.exportedAt as string);
+          let result: NodeResult;
+          try { result = await current.exportBundle.build(p.exportedAt as string); }
+          catch (error) { return exportBuildFailure(error); }
           if (!result.ok) return publicResult(result);
           if (!record(result.value) || !(result.value.bytes instanceof Uint8Array)) return { ok: false, kind: 'unavailable' };
-          return { ok: true, value: await save(result.value.bytes, { defaultPath: 'design-export.json', filters: [{ name: 'Design bundle', extensions: ['json'] }] }) };
+          try { return { ok: true, value: await save(result.value.bytes, { defaultPath: 'design-export.json', filters: [{ name: 'Design bundle', extensions: ['json'] }] }) }; }
+          catch { return { ok: false, kind: 'unknown' }; }
         }
         case 'cache.put': return { ok: true, value: await current.cache.putDocument(p.key as string, p.value as JsonValue) };
         case 'blob.put': return { ok: true, value: await current.transactions.workspace.putBlob(p.bytes as Uint8Array, { expectedDigest: p.expectedDigest as BlobDigest }) };

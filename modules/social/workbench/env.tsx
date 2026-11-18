@@ -10,6 +10,11 @@ export interface WorkbenchEnvironment {
   readonly clock: () => Date;
   readonly visibility?: Visibility;
   readonly pollIntervalMs?: number;
+  /**
+   * The fictional example workspace, where no Social service is set up. Receipts then say that a run on the user's own
+   * input waits here, and offer to set the service up. It changes labels only.
+   */
+  readonly example: boolean;
 }
 
 const Environment = createContext<WorkbenchEnvironment | null>(null);

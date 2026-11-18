@@ -1,0 +1,19 @@
+/* The planning-view host: the one project note, notices in context and the loading skeleton. Token-only, no inline styles. */
+.wv { gap: var(--hq-space-sm); }
+.wv-topline { gap: var(--hq-space-xs) var(--hq-space-md); }
+.wv-project-note { font: var(--wk-type-meta, var(--hq-type-meta)); color: var(--hq-text-subtle); }
+.wv-notices { display: grid; gap: var(--hq-space-xs); min-width: 0; }
+.wv-notices:empty { display: none; }
+
+/* Skeleton shaped like the page: header, then rows, columns or panels. */
+.wv-skeleton { display: grid; gap: var(--hq-space-md); min-width: 0; }
+.wv-skeleton-label { margin: 0; }
+.wv-skeleton-head { display: grid; gap: var(--hq-space-xs); justify-items: start; }
+.wv-skeleton-rows { display: grid; gap: var(--hq-space-xs); }
+.wv-skeleton-blocks { display: grid; gap: var(--hq-space-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.wv-skeleton[data-shape="grid"] .wv-skeleton-blocks { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+.wv-skeleton-block {
+  display: grid; align-content: start; gap: var(--hq-space-sm); padding: var(--hq-space-md);
+  border-radius: var(--wk-radius-col, var(--hq-radius-lg)); background: var(--hq-surface-sunken);
+}
+.wv-skeleton .hq-skeleton--block { width: 100%; }

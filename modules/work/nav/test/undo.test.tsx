@@ -73,7 +73,7 @@ describe('Work-level Ctrl/⌘+Z', () => {
     await settle();
 
     expect(recorded.writes().slice(before).map((call) => call.method)).toStrictEqual(['move']);
-    expect(await screen.findByText(/^Undone:/u)).toBeTruthy();
+    expect(await screen.findByRole('group', { name: /^Undone:/u })).toBeTruthy();
   });
 
   it('consumes exactly one entry on the Board, whose cards leave Ctrl/⌘+Z to the domain', async () => {

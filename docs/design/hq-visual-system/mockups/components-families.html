@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HQ mockup — Components layout families</title>
+  <link rel="stylesheet" href="../tokens/hq-tokens.css">
+  <style>
+    /* Mockup-only styles. Four candidate layouts for Design › Resources › Components, each drawn at the
+       572px content column of the default 1280×820 window. Component previews are held (runner not
+       qualified), so every stage shows the held blueprint rather than a render. Fictional content. */
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; background: var(--hq-canvas); color: var(--hq-text); font: var(--hq-type-body); }
+    h1 { font: var(--hq-type-title); margin: 0 0 4px; }
+    .lede { color: var(--hq-text-muted); margin: 0 0 20px; max-width: 80ch; }
+    .grid { display: grid; grid-template-columns: repeat(2, 572px); gap: 28px; }
+    .family { display: grid; gap: 8px; align-content: start; }
+    .family > header { display: flex; align-items: baseline; gap: 10px; }
+    .family > header strong { font: var(--hq-type-heading); }
+    .family > header span { color: var(--hq-text-muted); font-size: 12px; }
+    .col { width: 572px; height: 640px; overflow: hidden; background: var(--hq-surface); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-lg); padding: 16px 18px; display: grid; align-content: start; gap: 12px; position: relative; }
+    .mono { font-family: var(--hq-font-family-mono); font-size: 11px; color: var(--hq-text-muted); }
+    .eyebrow { font: 500 10.5px/14px var(--hq-font-family-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--hq-text-muted); }
+    .title { font: var(--hq-type-title); margin: 0; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .between { justify-content: space-between; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--hq-border-control); background: var(--hq-surface-raised); font-size: 12px; white-space: nowrap; }
+    .chip[aria-pressed="true"] { background: var(--hq-selected-bg); color: var(--hq-selected-fg); border-color: var(--hq-accent-edge); font-weight: 600; }
+    .seg { display: inline-flex; border: 1px solid var(--hq-border-control); border-radius: var(--hq-radius-control); overflow: hidden; }
+    .seg span { padding: 3px 10px; font-size: 12px; border-right: 1px solid var(--hq-border); }
+    .seg span:last-child { border-right: 0; }
+    .seg span[aria-pressed="true"] { background: var(--hq-selected-bg); color: var(--hq-selected-fg); font-weight: 600; }
+    .btn { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: var(--hq-radius-control); border: 1px solid var(--hq-border-control); background: var(--hq-button-secondary-bg); font-size: 12px; }
+    .btn.primary { background: var(--hq-button-primary-bg); color: var(--hq-button-primary-fg); border-color: transparent; }
+    .held { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--hq-text-muted); }
+    .held i { width: 8px; height: 8px; border: 1.5px dashed currentColor; border-radius: 50%; display: inline-block; }
+    /* Held blueprint: the declared frame, never a render. */
+    .stage { border-radius: var(--hq-radius-md); background-color: var(--hq-surface-sunken);
+      background-image: linear-gradient(var(--hq-border) 1px, transparent 1px), linear-gradient(90deg, var(--hq-border) 1px, transparent 1px);
+      background-size: 16px 16px; display: grid; place-items: center; position: relative; }
+    .bp { border: 1.5px dashed var(--hq-accent-edge); border-radius: 6px; background: color-mix(in srgb, var(--hq-surface) 82%, transparent); display: grid; place-items: center; gap: 2px; text-align: center; padding: 6px; }
+    .bp b { font: 600 13px/18px var(--hq-font-family-sans); }
+    .bp .mono { font-size: 10.5px; }
+    .dims { position: absolute; font: 10px/1 var(--hq-font-family-mono); color: var(--hq-text-subtle); }
+    .swatches { display: flex; gap: 4px; }
+    .swatches i { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.15); display: block; }
+    .s1 { background: #3b5bdb; } .s2 { background: #c92a2a; } .s3 { background: #495057; } .s4 { background: #ffffff; }
+    .panel { border: 1px solid var(--hq-border); border-radius: var(--hq-radius-md); background: var(--hq-surface-raised); }
+    .props { display: grid; grid-template-columns: 96px 1fr 44px; gap: 6px 10px; align-items: center; padding: 10px 12px; font-size: 12px; }
+    .props .k { font-weight: 600; } .props .k small { font: 10.5px var(--hq-font-family-mono); color: var(--hq-text-muted); font-weight: 400; margin-left: 4px; }
+    .field { height: 26px; border: 1px solid var(--hq-input-edge); border-radius: var(--hq-radius-control); background: var(--hq-input-bg); padding: 0 8px; display: flex; align-items: center; font-size: 12px; }
+    .reset { color: var(--hq-accent-text); font-size: 11.5px; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--hq-accent); display: inline-block; margin-left: 4px; }
+    .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--hq-border); }
+    .tabs span { padding: 6px 10px; font-size: 12.5px; color: var(--hq-text-muted); }
+    .tabs span[aria-selected="true"] { color: var(--hq-text); font-weight: 600; box-shadow: inset 0 -2px 0 var(--hq-accent); }
+    .tree { display: grid; gap: 2px; font-size: 12.5px; }
+    .tree div { padding: 4px 8px; border-radius: var(--hq-radius-sm); }
+    .tree .on { background: var(--hq-selected-bg); color: var(--hq-selected-fg); font-weight: 600; }
+    .tree .sub { padding-left: 22px; color: var(--hq-text-muted); }
+    .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .card { border: 1px solid var(--hq-card-edge); border-radius: var(--hq-radius-lg); background: var(--hq-card-bg); overflow: hidden; }
+    .card .stage { height: 120px; border-radius: 0; }
+    .card .meta { padding: 10px 12px; display: grid; gap: 4px; }
+    .card.on { border-color: var(--hq-card-edge-selected); box-shadow: 0 0 0 1px var(--hq-card-edge-selected); }
+    .matrix { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .tile { border: 1px solid var(--hq-card-edge); border-radius: var(--hq-radius-md); background: var(--hq-card-bg); overflow: hidden; }
+    .tile .stage { height: 86px; border-radius: 0; }
+    .tile .meta { padding: 8px 10px; display: grid; gap: 3px; font-size: 12px; }
+    .tile.on { border-color: var(--hq-card-edge-selected); box-shadow: 0 0 0 1px var(--hq-card-edge-selected); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--hq-border); }
+    thead th { font: 500 10.5px/14px var(--hq-font-family-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--hq-text-muted); border-top: 0; }
+    tr.on td { background: var(--hq-selected-bg); color: var(--hq-selected-fg); }
+    .strip { display: flex; gap: 6px; overflow: hidden; }
+    .strip .tile { min-width: 118px; }
+    .strip .tile .stage { height: 56px; }
+    .scrim { position: absolute; inset: 0 0 0 auto; width: 300px; background: var(--hq-surface-overlay); border-left: 1px solid var(--hq-border); box-shadow: var(--hq-shadow-overlay); padding: 14px; display: grid; align-content: start; gap: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Components: four layout families</h1>
+  <p class="lede">Design › Resources › Components at the 572px content column of the default window. Component execution is held until native qualification (<span class="mono">ac.component-static-enablement.001</span>), so every stage shows the declared frame, the resolved props and the tokens the component uses. None of these is a render. The families differ in how a person browses the library and tests variants and props.</p>
+  <div class="grid">
+
+    <section class="family" aria-label="Family A">
+      <header><strong>A · Workbench</strong><span>Storybook canvas + controls</span></header>
+      <div class="col">
+        <div class="tabs"><span aria-selected="true">Canvas</span><span>Tokens</span><span>Motion</span></div>
+        <div style="display:grid;grid-template-columns:140px 1fr;gap:12px">
+          <div class="tree">
+            <div class="eyebrow" style="padding:4px 8px">Library · 2</div>
+            <div class="on">Synthetic Button</div>
+            <div class="sub">Primary</div><div class="sub">Neutral small</div><div class="sub">Danger pill</div><div class="sub">Disabled</div>
+            <div>Synthetic Card</div>
+          </div>
+          <div style="display:grid;gap:8px">
+            <div class="row between"><span class="seg"><span aria-pressed="true">Grid</span><span>Light</span><span>Dark</span></span><span class="seg"><span aria-pressed="true">Fit</span><span>320</span><span>480</span></span></div>
+            <div class="stage" style="height:190px"><div class="bp" style="width:200px;height:100px"><b>Synthetic Button</b><span class="mono">Primary · “Continue”</span><span class="held"><i></i>Preview held</span></div><span class="dims" style="bottom:8px;right:10px">240 × 120</span></div>
+          </div>
+        </div>
+        <div class="panel"><div class="row between" style="padding:8px 12px;border-bottom:1px solid var(--hq-border)"><strong style="font-size:12.5px">Controls</strong><span class="mono">r1 · sha256 9f3c…</span></div>
+          <div class="props"><span class="k">label<small>string</small></span><span class="field">Continue</span><span></span><span class="k">tone<small>enum</small></span><span class="field">primary</span><span></span><span class="k">size<small>enum</small></span><span class="field">md</span><span></span><span class="k">radius<small>number</small><span class="dot"></span></span><span class="field">12</span><span class="reset">Reset</span><span class="k">disabled<small>bool</small></span><span class="field" style="width:40px">off</span><span></span></div></div>
+      </div>
+    </section>
+
+    <section class="family" aria-label="Family B">
+      <header><strong>B · Specimen gallery</strong><span>Figma assets / Mobbin grid</span></header>
+      <div class="col">
+        <div class="row between"><div><div class="eyebrow">Synthetic Sample System</div><p class="title">Components</p></div><span class="field" style="width:180px;color:var(--hq-text-muted)">Search components</span></div>
+        <div class="row"><span class="chip" aria-pressed="true">All · 2</span><span class="chip">Color</span><span class="chip">Typography</span><span class="chip">Spacing</span></div>
+        <div class="cards">
+          <div class="card on"><div class="stage"><div class="bp" style="width:132px;height:66px"><b>Button</b><span class="held"><i></i>Held</span></div></div><div class="meta"><strong>Synthetic Button</strong><span class="mono">4 variants · 5 props · r1</span><div class="swatches"><i class="s1"></i><i class="s2"></i><i class="s3"></i></div></div></div>
+          <div class="card"><div class="stage"><div class="bp" style="width:150px;height:90px"><b>Card</b><span class="held"><i></i>Held</span></div></div><div class="meta"><strong>Synthetic Card</strong><span class="mono">2 variants · 4 props · r1</span><div class="swatches"><i class="s1"></i><i class="s3"></i><i class="s4"></i></div></div></div>
+        </div>
+        <div class="scrim"><div class="row between"><strong>Synthetic Button</strong><span class="btn">Close</span></div><div class="row"><span class="chip" aria-pressed="true">Primary</span><span class="chip">Neutral small</span><span class="chip">Danger pill</span><span class="chip">Disabled</span></div><div class="stage" style="height:120px"><div class="bp" style="width:150px;height:70px"><b>Primary</b><span class="held"><i></i>Preview held</span></div></div><div class="props" style="padding:0;grid-template-columns:70px 1fr"><span class="k">label</span><span class="field">Continue</span><span class="k">tone</span><span class="field">primary</span><span class="k">size</span><span class="field">md</span></div></div>
+      </div>
+    </section>
+
+    <section class="family" aria-label="Family C">
+      <header><strong>C · Variant matrix</strong><span>Figma component set / Storybook docs</span></header>
+      <div class="col">
+        <div class="row between"><div class="row"><span class="seg"><span aria-pressed="true">Button</span><span>Card</span></span><span class="mono">r1 · 4 variants</span></div><span class="btn">Edit props</span></div>
+        <div class="matrix">
+          <div class="tile on"><div class="stage"><div class="bp" style="width:110px;height:46px"><b>Primary</b></div></div><div class="meta"><strong>Primary</strong><span class="mono">tone: primary</span></div></div>
+          <div class="tile"><div class="stage"><div class="bp" style="width:84px;height:38px"><b>Neutral sm</b></div></div><div class="meta"><strong>Neutral small</strong><span class="mono">tone: neutral · size: sm · label: Cancel</span></div></div>
+          <div class="tile"><div class="stage"><div class="bp" style="width:110px;height:46px;border-radius:24px"><b>Danger</b></div></div><div class="meta"><strong>Danger pill</strong><span class="mono">tone: danger · radius: 24 · label: Delete</span></div></div>
+          <div class="tile"><div class="stage"><div class="bp" style="width:110px;height:46px;opacity:.55"><b>Disabled</b></div></div><div class="meta"><strong>Disabled</strong><span class="mono">disabled: true</span></div></div>
+        </div>
+        <div class="held"><i></i>Previews held until the component runner is qualified. Variants and props stay editable.</div>
+      </div>
+    </section>
+
+    <section class="family" aria-label="Family D">
+      <header><strong>D · Spec sheet</strong><span>Linear-dense list and detail</span></header>
+      <div class="col">
+        <table><thead><tr><th>Component</th><th>Variants</th><th>Props</th><th>Tokens</th><th>Rev</th></tr></thead>
+          <tbody><tr class="on"><td>Synthetic Button</td><td>4</td><td>5</td><td>6</td><td>r1</td></tr><tr><td>Synthetic Card</td><td>2</td><td>4</td><td>5</td><td>r1</td></tr></tbody></table>
+        <div class="panel" style="padding:10px 12px;display:grid;gap:8px">
+          <div class="row between"><strong>Synthetic Button</strong><span class="held"><i></i>Preview held</span></div>
+          <table><thead><tr><th>Prop</th><th>Type</th><th>Default</th><th>Constraint</th></tr></thead>
+            <tbody><tr><td>label</td><td>string</td><td>Continue</td><td>≤ 60 chars</td></tr><tr><td>tone</td><td>enum</td><td>primary</td><td>primary · neutral · danger</td></tr><tr><td>size</td><td>enum</td><td>md</td><td>sm · md · lg</td></tr><tr><td>disabled</td><td>boolean</td><td>false</td><td></td></tr><tr><td>radius</td><td>number</td><td>6</td><td>0–24, step 1</td></tr></tbody></table>
+          <table><thead><tr><th>Variant</th><th>Overrides</th></tr></thead><tbody><tr><td>Primary</td><td class="mono">tone: primary</td></tr><tr><td>Neutral small</td><td class="mono">tone, size, label</td></tr><tr><td>Danger pill</td><td class="mono">tone, radius, label</td></tr></tbody></table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>

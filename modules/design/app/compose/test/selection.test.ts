@@ -48,13 +48,27 @@ function setup() {
   return { double, workspace };
 }
 
-it('null injection preserves all existing fake functions and labels', async () => {
+it('null injection preserves the fake APIs and labels with workspace-local state and no host calls', async () => {
+  const hostCalls: string[] = [];
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { hqServices: { design: {
+    async call(route: string) { hostCalls.push(route); return { ok: false, kind: 'unavailable' }; },
+  } } } });
   const workspace = createDesignWorkspace(null);
+  const other = createDesignWorkspace(null);
   assert.equal(workspace.bridged, false);
+  assert.equal(other.bridged, false);
   assert.equal(workspace.storageTag, FAKE_TAG);
   for (const key of ['projectsFor', 'componentsFor', 'flowsFor', 'compareFor', 'annotationsEnv', 'canvasFor', 'discoveryEnv', 'tasteEnv', 'importsFor'] as const) {
-    assert.equal(workspace[key], fake[key]);
+    assert.equal(typeof workspace[key], 'function', key);
+    assert.notEqual(workspace[key], fake[key], `${key} does not reuse the legacy global workspace`);
+    assert.notEqual(workspace[key], other[key], `${key} belongs to this workspace`);
   }
+  const pending = workspace.contentFor(project);
+  assert.equal(workspace.contentFor(project), pending, 'same-workspace reads retain their memoized content');
+  const content = await pending;
+  assert.equal(content.tag, FAKE_TAG);
+  assert.notEqual(content.storage, (await other.contentFor(project)).storage);
+  assert.deepEqual(hostCalls, [], 'explicit synthetic selection does not read the available native transport');
 });
 
 it('durable sections use F1 roots; navigation and reads never put documents', async () => {

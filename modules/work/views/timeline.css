@@ -1,0 +1,106 @@
+/* Timeline: horizon lanes across eight quarters. Hues are the theme's date-kind hues; every mark also has its own
+   shape and a label for assistive tech, so none relies on colour. Motion timing uses the shared tokens. */
+.wv-tl-wrap { display: grid; gap: var(--hq-space-md); min-width: 0; }
+.wv-tl-wrap .wv-dk--target { --dk-bg: var(--work-dk-target-bg); }
+.wv-tl-wrap .wv-dk--deadline { --dk-bg: var(--work-dk-deadline-bg); }
+.wv-tl-wrap .wv-dk--start { --dk-bg: var(--work-dk-start-bg); }
+.wv-tl-wrap .wv-dk--event { --dk-bg: var(--work-dk-event-bg); }
+.wv-tl-range { color: var(--hq-text); font-weight: var(--hq-font-weight-semibold); font-variant-numeric: tabular-nums; }
+
+/* The frame scrolls sideways when the window is narrow; the lane titles and row labels stay in view (sticky). */
+.wv-tl-scroll {
+  overflow-x: auto; min-width: 0; overscroll-behavior-x: contain; border: 1px solid var(--hq-border); border-radius: var(--wk-radius-col);
+  background: var(--hq-surface); box-shadow: var(--wk-shadow-card);
+}
+.wv-tl { --wv-tl-label: 248px; --wv-tl-dates: 176px; min-width: 920px; }
+.wv-tl-row {
+  display: grid; grid-template-columns: var(--wv-tl-label) minmax(480px, 1fr) var(--wv-tl-dates); align-items: stretch; min-height: 38px;
+  border-bottom: 1px solid var(--hq-border); background: var(--hq-surface);
+}
+.wv-tl-row:not(.wv-tl-header):hover { background: color-mix(in srgb, var(--hq-text) 4%, var(--hq-surface)); }
+.wv-tl-header { background: var(--hq-surface-raised); border-bottom-color: var(--hq-border-strong); }
+.wv-tl-label {
+  position: sticky; left: 0; z-index: 3; display: flex; align-items: center; gap: var(--hq-space-xs); min-width: 0; min-height: 38px; padding: 0 var(--hq-space-sm);
+  background: inherit; border-inline-end: 1px solid var(--hq-border); cursor: grab;
+}
+.wv-tl-label:focus-visible { outline-offset: -2px; }
+.wv-tl-corner { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; cursor: default; font: var(--wk-type-section); }
+.wv-tl-corner .wv-muted { font: var(--wk-type-meta); }
+.wv-tl-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font: var(--wk-type-card); font-weight: var(--hq-font-weight-medium); }
+.wv-tl-menu { margin-left: auto; flex: none; }
+
+/* A track is a clipped window onto the plane, which carries the quarter lines, the today line and the marks. The plane
+   is what slides when the range moves, so the borders and labels around it stay put. */
+.wv-tl-track { position: relative; min-height: 38px; overflow: hidden; border-inline-end: 1px solid var(--hq-border); }
+.wv-tl-plane { position: absolute; inset: 0; background: var(--wv-grid); background-color: transparent; }
+.wv-tl.has-today .wv-tl-row:not(.wv-tl-header) .wv-tl-plane::before {
+  content: ""; position: absolute; inset-block: 0; left: var(--wv-today); width: 2px; margin-left: -1px; background: var(--hq-accent); opacity: .6; pointer-events: none;
+}
+.wv-tl-scale { min-height: 48px; }
+.wv-tl-tick, .wv-tl-span, .wv-tl-band, .wv-tl-marker, .wv-tl-today { position: absolute; left: var(--wv-left, 0%); }
+.wv-tl-tick {
+  top: 0; bottom: 0; width: var(--wv-width, 0%); display: flex; align-items: flex-start; border-inline-start: 1px solid var(--hq-border);
+  font: var(--wk-type-meta); color: var(--hq-text-subtle); padding: var(--hq-space-xs) var(--hq-space-sm) 0; white-space: nowrap;
+}
+.wv-tl-tick.is-year { border-inline-start-color: var(--hq-border-strong); color: var(--hq-text-muted); }
+.wv-tl-today { top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--hq-accent); }
+.wv-tl-today > span {
+  position: absolute; left: 6px; bottom: 4px; padding: 0 6px; border-radius: var(--hq-radius-pill); background: var(--hq-accent); color: var(--hq-on-accent);
+  font: var(--wk-type-chip); line-height: 16px;
+}
+.wv-tl-date-text {
+  align-self: center; padding: 0 var(--hq-space-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: var(--wk-type-meta); color: var(--hq-text-muted);
+}
+.wv-tl-header .wv-tl-date-text { font: var(--wk-type-eyebrow); letter-spacing: 0.06em; text-transform: uppercase; color: var(--hq-text-subtle); }
+
+/* Lanes. The title block sticks to the left edge, so it stays readable while the quarters scroll. */
+.wv-tl-lane { border-bottom: 1px solid var(--hq-border-strong); }
+.wv-tl-lane:last-child { border-bottom: 0; }
+.wv-tl-lane-head { background: var(--hq-surface-sunken); border-bottom: 1px solid var(--hq-border); transition: background-color var(--hq-duration-fast) var(--hq-ease-standard); }
+.wv-tl-lane-title { position: sticky; left: 0; display: inline-flex; align-items: baseline; gap: var(--hq-space-sm); padding: var(--hq-space-xs) var(--hq-space-sm); }
+.wv-tl-lane-title strong { font: var(--wk-type-section); }
+.wv-tl-lane-title .wv-muted { font: var(--wk-type-meta); }
+.wv-tl-empty { position: sticky; left: 0; width: max-content; padding: var(--hq-space-sm) var(--hq-space-md); color: var(--hq-text-subtle); font: var(--hq-type-small); }
+/* A lane that can take the dragged row is tinted; the one under the pointer is outlined. Set as data attributes by the view. */
+.wv-tl-wrap[data-wk-dragging] .wv-tl-lane .wv-tl-lane-head { background: color-mix(in srgb, var(--hq-accent) 7%, var(--hq-surface-sunken)); }
+.wv-tl-lane[data-over] { outline: 2px solid var(--hq-accent); outline-offset: -2px; }
+.wv-tl-lane[data-over] .wv-tl-lane-head { background: var(--hq-accent-soft); }
+
+/* Marks: circle target, diamond deadline, square event, bar start. Words are in each mark's label. */
+.wv-tl-marker, .wv-tl-key-mark { width: 11px; height: 11px; flex: none; border-radius: 50%; background: var(--dk); box-shadow: 0 0 0 1.5px var(--hq-surface); }
+.wv-tl-marker { top: calc(50% - 5.5px); margin-left: -5.5px; }
+.wv-tl-key-mark { display: inline-block; }
+.wv-tl-marker.wv-dk--deadline, .wv-tl-key-mark.wv-dk--deadline { border-radius: 2px; transform: rotate(45deg); }
+.wv-tl-marker.wv-dk--event, .wv-tl-key-mark.wv-dk--event { border-radius: 2px; }
+.wv-tl-marker.wv-dk--start, .wv-tl-key-mark.wv-dk--start { border-radius: 1px; width: 4px; height: 16px; }
+.wv-tl-marker.wv-dk--start { margin-left: -2px; top: calc(50% - 8px); }
+/* A bar joins a start to a later target or deadline the owner set; a band is a coarse period, dashed so its precision shows. */
+.wv-tl-span, .wv-tl-key-span { height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--work-dk-start) 55%, transparent); }
+.wv-tl-span { top: calc(50% - 4px); width: var(--wv-width, 0%); }
+.wv-tl-band, .wv-tl-key-band { height: 20px; border: 1.5px dashed var(--dk, var(--hq-text-muted)); border-radius: var(--wk-radius-chip); background: color-mix(in srgb, var(--dk, var(--hq-text-muted)) 12%, transparent); }
+.wv-tl-band { top: calc(50% - 10px); width: var(--wv-width, 0%); overflow: hidden; }
+.wv-tl-edge { position: absolute; top: calc(50% - 8px); display: inline-flex; align-items: center; gap: 1px; width: 16px; height: 16px; font: var(--hq-type-meta); color: var(--dk); background: var(--hq-surface); }
+.wv-tl-edge.is-after { flex-direction: row-reverse; }
+.wv-tl-edge.is-before { left: var(--hq-space-2xs); }
+.wv-tl-edge.is-after { right: var(--hq-space-2xs); }
+.wv-tl-unscheduled { position: absolute; top: 50%; left: var(--hq-space-sm); transform: translateY(-50%); font: var(--wk-type-meta); color: var(--hq-text-subtle); }
+
+/* ---------------------------------------------------------------- footer: key and keyboard help */
+.wv-tl-foot { display: grid; gap: var(--hq-space-xs); }
+.wv-tl-key { display: flex; flex-wrap: wrap; gap: var(--hq-space-2xs) var(--hq-space-md); margin: 0; padding: 0; list-style: none; font: var(--wk-type-meta); color: var(--hq-text-muted); }
+.wv-tl-key li { display: inline-flex; align-items: center; gap: var(--hq-space-xs); }
+.wv-tl-key-band { display: inline-block; width: 22px; height: 12px; }
+.wv-tl-key-span { display: inline-block; width: 22px; }
+
+@media (forced-colors: active) {
+  .wv-tl-key-mark, .wv-tl-key-band, .wv-tl-key-span { forced-color-adjust: none; border-color: CanvasText; }
+  .wv-tl-key-mark.wv-dk--deadline, .wv-tl-key-mark.wv-dk--event, .wv-tl-key-mark { background: CanvasText; }
+  .wv-tl-lane[data-over] { outline-color: Highlight; }
+  .wv-tl-today, .wv-tl-plane::before { forced-color-adjust: none; background: Highlight; }
+}
+
+/* The window is narrower than the table: keep every column, let the frame scroll, and tighten the label columns. */
+@media (max-width: 960px) {
+  .wv-tl { --wv-tl-label: 188px; --wv-tl-dates: 140px; min-width: 820px; }
+}

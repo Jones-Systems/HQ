@@ -1,0 +1,122 @@
+/* List: a dense, sortable table. The title column is the flexible one; the others have fixed widths that fit their
+   longest value, so nothing clips at 1440. The table is its own container, so columns drop out by the width it is given
+   (a window, or a window with the card panel open), lowest priority first, and the title never shrinks below a readable
+   width. Durations and easings are the shared motion tokens, so reduced motion makes every change instant. */
+.wl { container: wl / inline-size; display: grid; gap: var(--hq-space-lg); min-width: 0; }
+.wl-wrap {
+  min-width: 0; border: 1px solid var(--hq-border); border-radius: var(--wk-radius-col);
+  background: var(--hq-surface); overflow: clip;
+}
+.wl-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font: var(--wk-type-body); }
+.wl-table th, .wl-table td { height: 40px; padding: 0 var(--hq-space-md); border-bottom: 1px solid var(--hq-border); text-align: start; vertical-align: middle; white-space: nowrap; }
+.wl-table tbody tr:last-child td { border-bottom: 0; }
+
+/* Column widths. Fixed layout: the first row sets them, and the title takes what is left. */
+.wl-table .wl-c-done { width: 44px; padding-inline: var(--hq-space-md) 0; }
+.wl-table .wv-col-status { width: 148px; }
+.wl-table .wv-col-motivation { width: 116px; }
+.wl-table .wv-col-horizon { width: 116px; }
+.wl-table .wv-col-priority { width: 108px; }
+.wl-table .wv-col-area { width: 120px; }
+.wl-table .wv-col-date { width: 168px; }
+.wl-table .wv-col-steps { width: 72px; }
+.wl-table .wv-col-updated { width: 104px; }
+
+/* Sticky header: it stays under the page header's scroller while the rows scroll. */
+.wl-table thead th {
+  position: sticky; top: 0; z-index: 2; height: 38px; background: var(--hq-surface-sunken);
+  font: var(--wk-type-eyebrow); letter-spacing: 0.06em; text-transform: uppercase; color: var(--hq-text-subtle);
+}
+.wl-table thead th[aria-sort="ascending"], .wl-table thead th[aria-sort="descending"] { color: var(--hq-text); }
+.wl-sort {
+  display: inline-flex; align-items: center; gap: var(--hq-space-2xs); max-width: 100%; min-height: 24px; margin: 0 calc(-1 * var(--hq-space-xs)); padding: 0 var(--hq-space-xs);
+  border: 0; border-radius: var(--wk-radius-chip); background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
+}
+.wl-sort:hover { background: var(--hq-surface-hover); color: var(--hq-text); }
+.wl-sort-arrow {
+  width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  opacity: 0; transition: opacity var(--hq-duration-fast) var(--hq-ease-standard), transform var(--hq-duration-base) var(--hq-ease-standard);
+}
+.wl-sort:hover .wl-sort-arrow { opacity: 0.45; }
+.wl-sort[data-dir] .wl-sort-arrow { opacity: 1; }
+.wl-sort[data-dir="desc"] .wl-sort-arrow { transform: rotate(180deg); }
+
+/* Rows */
+.wl-row { background: transparent; transition: background-color var(--hq-duration-fast) var(--hq-ease-standard); }
+.wl-row:hover, .wl-row:focus-within { background: var(--hq-surface-hover); }
+.wl-row.is-openable { cursor: default; }
+.wl-row.is-pending td:first-child { box-shadow: inset 2px 0 0 var(--hq-accent); }
+.wl-row.is-closed .wl-title-text { color: var(--hq-text-muted); }
+.wl-row.is-closed .wv-kind { opacity: 0.6; }
+
+.wl-title { display: flex; align-items: center; gap: var(--hq-space-sm); min-width: 0; }
+.wl-title-text {
+  min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: var(--hq-font-weight-medium); color: var(--hq-text);
+}
+.wl-title .wv-example, .wl-title .wv-pending { flex: none; }
+.wl-title-text.wv-link:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.wl-row .wv-col-area .wk-area { display: block; }
+.wl-steps { font: var(--wk-type-num); color: var(--hq-text-muted); }
+.wl-row .wv-col-updated { font: var(--wk-type-meta); }
+
+/* The Done control: quiet until the row is hovered or has focus, always reachable by keyboard, and always shown when
+   there is no hover (touch). It is never rendered on Done or Dropped rows. */
+.wl-c-done .wk-done { opacity: 0; transition: opacity var(--hq-duration-fast) var(--hq-ease-standard), color var(--hq-duration-fast) var(--hq-ease-standard); }
+.wl-row:hover .wk-done, .wl-row:focus-within .wk-done, .wl-c-done .wk-done:focus-visible, .wl-c-done .wk-done[data-checked="true"] { opacity: 1; }
+@media (hover: none) { .wl-c-done .wk-done { opacity: 1; } }
+
+/* Inline pickers: a native select drawn as a chip, with the word, an optional shape and a chevron. */
+.wl-pick {
+  position: relative; display: inline-flex; align-items: center; max-width: 100%; height: 26px; border-radius: var(--wk-radius-chip);
+  background: var(--hq-surface-raised); color: var(--hq-text); box-shadow: inset 0 0 0 1px var(--hq-border);
+  font: var(--wk-type-chip);
+  transition: background-color var(--hq-duration-fast) var(--hq-ease-standard), box-shadow var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.wl-pick:hover { background: var(--hq-surface-hover); box-shadow: inset 0 0 0 1px var(--hq-border-strong); }
+.wl-pick:has(.wl-pick-select:focus-visible) { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: 1px; }
+.wl-pick.is-empty { color: var(--hq-text-muted); background: transparent; }
+.wl-pick > .wk-dot { position: absolute; inset-inline-start: 9px; pointer-events: none; }
+.wl-pick-select {
+  appearance: none; min-width: 0; max-width: 100%; height: 26px; margin: 0; padding: 0 22px 0 9px; border: 0; border-radius: inherit;
+  background: transparent; color: inherit; font: inherit; text-overflow: ellipsis; cursor: pointer; color-scheme: inherit;
+}
+.wl-pick.has-lead .wl-pick-select { padding-inline-start: 24px; }
+.wl-pick-select:focus-visible { outline: none; }
+.wl-pick-select option { color: var(--hq-text); background: var(--hq-surface-raised); }
+.wl-pick-chevron {
+  position: absolute; inset-inline-end: 6px; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
+  stroke-linejoin: round; opacity: 0.65; pointer-events: none;
+}
+.wl-pick--need { color: var(--work-why-need); background: var(--work-why-need-bg); box-shadow: none; }
+.wl-pick--want { color: var(--work-why-want); background: var(--work-why-want-bg); box-shadow: none; }
+.wl-pick--exploring { color: var(--work-why-exploring); background: var(--work-why-exploring-bg); box-shadow: none; }
+.wl-pick--need:hover, .wl-pick--want:hover, .wl-pick--exploring:hover { box-shadow: inset 0 0 0 1px currentColor; }
+.wl-pick--high { color: var(--hq-danger); background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hq-danger) 55%, transparent); }
+@media (forced-colors: active) { .wl-pick { outline: 1px solid ButtonText; outline-offset: -1px; } }
+
+/* Narrow: drop the lowest-priority columns first. The row never wraps and the title never clips; what is hidden is
+   still in the card. */
+.wl-narrow-note { display: none; }
+@container wl (max-width: 1060px) {
+  .wl-table .wv-col-updated, .wl-table .wv-col-steps { display: none; }
+  .wl-narrow-note { display: block; }
+}
+@container wl (max-width: 880px) {
+  .wl-table .wv-col-area, .wl-table .wv-col-priority { display: none; }
+}
+@container wl (max-width: 700px) {
+  .wl-table .wv-col-motivation { display: none; }
+  .wl-table .wv-col-date { width: 148px; }
+}
+@container wl (max-width: 560px) {
+  .wl-table .wv-col-horizon { display: none; }
+  .wl-table .wv-col-status { width: 140px; }
+}
+@container wl (max-width: 440px) {
+  .wl-table .wv-col-date { display: none; }
+}
+@container wl (max-width: 700px) {
+  .wl-table th, .wl-table td { padding-inline: var(--hq-space-sm); }
+  .wl-table .wl-c-done { width: 38px; padding-inline: var(--hq-space-sm) 0; }
+}

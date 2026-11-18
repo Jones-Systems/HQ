@@ -31,9 +31,14 @@ def exchanges():
 class ContractDrift(unittest.TestCase):
     def test_real_http_exchanges_have_no_drift(self):
         generator = module('generate')
-        expected = {path.name: path.read_text() for path in (ROOT / 'contract/exchanges').glob('*.json')}
+        expected = {path.name: path.read_bytes() for path in (ROOT / 'contract/exchanges').glob('*.json')}
         self.assertTrue(expected, 'Golden exchanges must exist')
-        self.assertEqual(generator.rendered(generator.capture()), expected)
+        actual = generator.rendered(generator.capture())
+        self.assertEqual(set(actual), set(expected), 'Captured and golden file sets must match')
+        self.maxDiff = None
+        for name in sorted(expected):
+            with self.subTest(exchange=name):
+                self.assertEqual(actual[name].encode('utf-8'), expected[name])
 
     def test_manifest_pins_every_exchange(self):
         folder = ROOT / 'contract'

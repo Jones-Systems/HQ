@@ -43,6 +43,24 @@ function answering(response: ServiceResponse | (() => Promise<ServiceResponse>))
   return { transport, calls };
 }
 
+/**
+ * A transport answering each route from a queue (the last answer repeats), for statuses the fixture Planner never
+ * produces. An unscripted route throws, which the adapter reads as a lost answer; tests assert the exact call list.
+ */
+function scripted(answers: Partial<Record<WorkRoute, ServiceResponse[]>>) {
+  const queues = new Map(Object.entries(answers).map(([route, list]) => [route, [...list!]]));
+  const calls: { route: WorkRoute; params: unknown }[] = [];
+  const transport: PlannerTransport = {
+    async call(route, params) {
+      calls.push({ route, params: structuredClone(params) });
+      const queue = queues.get(route);
+      if (!queue?.length) throw new Error(`unscripted call ${route}`);
+      return queue.length > 1 ? queue.shift()! : queue[0]!;
+    },
+  };
+  return { transport, calls, routes: () => calls.map((c) => c.route) };
+}
+
 const CURRENT = {
   id: 'item00000001', revision: 3, title: 'Current', kind: 'idea', status: 'inbox', motivation: null, horizon: null, priority: null,
   area: null, notes: '', next_steps: [], references: [], dates: [], position: 1024, is_example: false,
@@ -51,10 +69,11 @@ const CURRENT = {
 const http = (status: number, body: unknown): ServiceResponse => ({ ok: true, status, body, replayed: false });
 
 describe('the live port surface', () => {
-  it('exposes exactly the Planner API keys, and a recovery with only check, apply and release', () => {
+  it('exposes exactly the Planner API keys, and a recovery of check, apply, release and the intent pair', () => {
     const planner = createPlannerLive(answering(http(500, null)).transport);
     expect(Object.keys(planner.port).sort()).toEqual([...PLANNER_PORT_KEYS].sort());
-    expect(Object.keys(planner.recovery).sort()).toEqual([...PLANNER_RECOVERY_KEYS].sort());
+    // `exportIntent` and `adoptIntent` are the optional members that let a durable queue keep an unresolved intent.
+    expect(Object.keys(planner.recovery).sort()).toEqual([...PLANNER_RECOVERY_KEYS, 'exportIntent', 'adoptIntent'].sort());
     expect(Object.keys(createPlannerLivePort(answering(http(500, null)).transport)).sort()).toEqual([...PLANNER_PORT_KEYS].sort());
     expect(createLivePlanner).toBe(createPlannerLive);
   });
@@ -66,8 +85,8 @@ describe('error mapping (every HTTP answer is ok: true; branch on status)', () =
     ['400 without field errors', http(400, { error: 'bad_request_id', message: 'Bad request id.' }), { kind: 'invalid', errors: [{ field: 'body', message: 'Bad request id.' }] }, 'free'],
     ['413 too large', http(413, { error: 'too_large', message: 'Too large.' }), { kind: 'invalid', errors: [{ field: 'body', message: 'Too large.' }] }, 'free'],
     ['415 media type', http(415, null), { kind: 'invalid', errors: [{ field: 'body', message: 'The Planner refused the request (415).' }] }, 'free'],
-    ['403 forbidden', http(403, { error: 'forbidden' }), { kind: 'unavailable' }, 'free'],
-    ['421 bad host', http(421, { error: 'bad_host' }), { kind: 'unavailable' }, 'free'],
+    ['403 forbidden', http(403, { error: 'forbidden' }), { kind: 'unavailable', reason: 'refused' }, 'free'],
+    ['421 bad host', http(421, { error: 'bad_host' }), { kind: 'unavailable', reason: 'refused' }, 'free'],
     ['404', http(404, { error: 'not_found' }), { kind: 'not_found' }, 'free'],
     ['409 revision with current', http(409, { error: 'revision_conflict', current: CURRENT }), { kind: 'revision_conflict', current: CURRENT }, 'free'],
     ['409 revision with a malformed current', http(409, { error: 'revision_conflict', current: { id: 'x' } }), { kind: 'unknown', requestId: 'req-error-0001' }, 'unresolved'],
@@ -81,7 +100,7 @@ describe('error mapping (every HTTP answer is ok: true; branch on status)', () =
     ['302 redirect', http(302, null), { kind: 'unknown', requestId: 'req-error-0001' }, 'unresolved'],
     ['200 malformed body', http(200, { item: { id: 'x' }, state_version: 5 }), { kind: 'unknown', requestId: 'req-error-0001' }, 'unresolved'],
     ['transport unknown', { ok: false, kind: 'unknown' }, { kind: 'unknown', requestId: 'req-error-0001' }, 'unresolved'],
-    ['transport unavailable', { ok: false, kind: 'unavailable' }, { kind: 'unavailable' }, 'free'],
+    ['transport unavailable', { ok: false, kind: 'unavailable' }, { kind: 'unavailable', reason: 'unreachable' }, 'free'],
     ['a malformed envelope', { ok: true } as unknown as ServiceResponse, { kind: 'unknown', requestId: 'req-error-0001' }, 'unresolved'],
   ];
 
@@ -95,17 +114,60 @@ describe('error mapping (every HTTP answer is ok: true; branch on status)', () =
   it('a thrown transport is unknown for a write and unavailable for a read', async () => {
     const planner = createPlannerLive({ call: async (route) => { if (route === 'version') return http(200, { state_version: 1 }); throw new Error('bridge gone'); } });
     expect(await failure(planner.port.markReviewed('item00000001', 3, 'req-thrown-01'))).toEqual({ kind: 'unknown', requestId: 'req-thrown-01' });
-    expect(await failure(planner.port.snapshot())).toEqual({ kind: 'unavailable' });
+    expect(await failure(planner.port.snapshot())).toEqual({ kind: 'unavailable', reason: 'unreachable' });
   });
 
   it.each([
-    ['transport loss', { ok: false, kind: 'unknown' } as ServiceResponse, { kind: 'unavailable' }],
-    ['500', http(500, null), { kind: 'unavailable' }],
+    ['transport loss', { ok: false, kind: 'unknown' } as ServiceResponse, { kind: 'unavailable', reason: 'unreachable' }],
+    ['transport unavailable', { ok: false, kind: 'unavailable' } as ServiceResponse, { kind: 'unavailable', reason: 'unreachable' }],
+    ['403', http(403, null), { kind: 'unavailable', reason: 'refused' }],
+    ['421', http(421, { error: 'bad_host' }), { kind: 'unavailable', reason: 'refused' }],
+    ['500', http(500, null), { kind: 'unavailable', reason: 'server_error' }],
+    ['503', http(503, { error: 'busy' }), { kind: 'unavailable', reason: 'server_error' }],
     ['404', http(404, { error: 'not_found' }), { kind: 'not_found' }],
-    ['a malformed body', http(200, { history: [{ at: 1 }] }), { kind: 'unavailable' }],
-  ])('a read answered %s', async (_, response, expected) => {
+    ['a redirect', http(302, null), { kind: 'unavailable', reason: 'incompatible' }],
+    ['a malformed body', http(200, { history: [{ at: 1 }] }), { kind: 'unavailable', reason: 'incompatible' }],
+  ])('a history read answered %s', async (_, response, expected) => {
     const planner = createPlannerLive(answering(response).transport);
     expect(await failure(planner.port.history('item00000001'))).toEqual(expected);
+  });
+
+  const STATE_BODY = { items: [CURRENT], settings: { default_tz: 'America/New_York', week_start: 'sun', stale_days: 21 }, state_version: 2, server_time: '2026-01-15T12:00:00Z' };
+  const BODIES = { state: STATE_BODY, version: { state_version: 2, features: [REPLAY_FEATURE] } };
+  const read = (route: 'state' | 'version', planner: ReturnType<typeof createPlannerLive>) => route === 'state' ? planner.port.snapshot() : planner.port.version();
+  it.each(['state', 'version'] as const)('a %s read is classified by why the Planner cannot be used', async (route) => {
+    const cases: [ServiceResponse, unknown][] = [
+      [{ ok: false, kind: 'unavailable' }, { kind: 'unavailable', reason: 'unreachable' }],
+      [{ ok: false, kind: 'unknown' }, { kind: 'unavailable', reason: 'unreachable' }],
+      [http(403, { error: 'forbidden' }), { kind: 'unavailable', reason: 'refused' }],
+      [http(421, { error: 'bad_host' }), { kind: 'unavailable', reason: 'refused' }],
+      [http(500, null), { kind: 'unavailable', reason: 'server_error' }],
+      [http(502, 'bad gateway'), { kind: 'unavailable', reason: 'server_error' }],
+      [http(599, null), { kind: 'unavailable', reason: 'server_error' }],
+      // Something answered that is not a Planner this HQ can use. A 404 is not "item not found" for the board or version.
+      [http(404, '<html>not here</html>'), { kind: 'unavailable', reason: 'incompatible' }],
+      [http(400, { error: 'invalid' }), { kind: 'unavailable', reason: 'incompatible' }],
+      [http(401, null), { kind: 'unavailable', reason: 'incompatible' }],
+      [http(302, null), { kind: 'unavailable', reason: 'incompatible' }],
+      [http(200, '<html>a web page</html>'), { kind: 'unavailable', reason: 'incompatible' }],
+      [http(200, null), { kind: 'unavailable', reason: 'incompatible' }],
+      [http(200, { ...BODIES[route], state_version: 'two' }), { kind: 'unavailable', reason: 'incompatible' }],
+      [http(200, { ...BODIES[route], api: 0 }), { kind: 'unavailable', reason: 'incompatible' }],
+    ];
+    for (const [response, expected] of cases) {
+      const planner = createPlannerLive({ call: async () => response });
+      expect(await failure(read(route, planner))).toEqual(expected);
+    }
+  });
+
+  it('every unavailable carries a reason: a refused or failing preflight read sends no write', async () => {
+    for (const [response, reason] of [[http(421, null), 'refused'], [http(503, null), 'server_error'], [http(404, null), 'incompatible'], [{ ok: false, kind: 'unavailable' }, 'unreachable']] as const) {
+      const calls: WorkRoute[] = [];
+      const planner = createPlannerLive({ async call(route) { calls.push(route); return response as ServiceResponse; } });
+      expect(await failure(planner.port.markReviewed('item00000001', 1, 'req-no-base-1'))).toEqual({ kind: 'unavailable', reason });
+      expect(calls).toEqual(['version']);
+      expect(planner.ledger.unresolved()).toEqual([]);
+    }
   });
 
   it('fails a snapshot closed on any malformed member, and defaults missing features to []', async () => {
@@ -113,7 +175,7 @@ describe('error mapping (every HTTP answer is ok: true; branch on status)', () =
     const ok = createPlannerLive({ call: async () => http(200, state) });
     expect(await ok.port.snapshot()).toMatchObject({ stateVersion: 2, observedAt: '2026-01-15T12:00:00Z', features: [] });
     for (const broken of [{ ...state, state_version: '2' }, { ...state, items: [{ ...CURRENT, status: 'later' }] }, { ...state, server_time: undefined }, { ...state, items: [{ ...CURRENT, dates: [{ id: 'd1', kind: 'target' }] }] }]) {
-      expect(await failure(createPlannerLive({ call: async () => http(200, broken) }).port.snapshot())).toEqual({ kind: 'unavailable' });
+      expect(await failure(createPlannerLive({ call: async () => http(200, broken) }).port.snapshot())).toEqual({ kind: 'unavailable', reason: 'incompatible' });
     }
   });
 });
@@ -244,12 +306,12 @@ describe('unknown writes: no automatic retry, recovery only through the replay r
     const requestId = rid();
     await failure(port.markReviewed(a.id, a.revision, requestId));
     wire.next('replay', 'drop');
-    expect(await failure(recovery.check(requestId))).toEqual({ kind: 'unavailable' });
+    expect(await failure(recovery.check(requestId))).toEqual({ kind: 'unavailable', reason: 'unreachable' });
     expect(await recovery.check(requestId)).toEqual({ outcome: 'not_applied' });
     wire.next('replay', 'lose-response');
     expect(await failure(recovery.apply(requestId))).toEqual({ kind: 'unknown', requestId });
     wire.next('replay', { instead: http(503, null) });
-    expect(await failure(recovery.check(requestId))).toEqual({ kind: 'unavailable' });
+    expect(await failure(recovery.check(requestId))).toEqual({ kind: 'unavailable', reason: 'server_error' });
   });
 
   it('maps the service refusing a resend as no effect, and frees the ID', async () => {
@@ -336,7 +398,7 @@ describe('explicit Apply needs this adapter\'s own not_applied Check', () => {
     await failure(port.create({ title: 'Clear the gutter' }, requestId));
     expect(await recovery.check(requestId)).toEqual({ outcome: 'not_applied' });
     wire.next('replay', 'drop');
-    expect(await failure(recovery.check(requestId))).toEqual({ kind: 'unavailable' });
+    expect(await failure(recovery.check(requestId))).toEqual({ kind: 'unavailable', reason: 'unreachable' });
     expect(await failure(recovery.apply(requestId))).toEqual({ kind: 'unknown', requestId });
     expect(await recovery.check(requestId)).toEqual({ outcome: 'not_applied' });
     let item = fixture.control.stored().find((i) => i.id === a.id)!;
@@ -345,6 +407,137 @@ describe('explicit Apply needs this adapter\'s own not_applied Check', () => {
     expect(await failure(recovery.apply(requestId))).toEqual({ kind: 'unknown', requestId });
     expect(modes(wire)).toEqual(['lookup', 'lookup', 'lookup', 'lookup']);
     expect(fixture.control.stored().filter((i) => i.title === 'Clear the gutter')).toHaveLength(0);
+  });
+});
+
+describe('replay failures are classified; a baseline newer than the store is store_changed (G7)', () => {
+  const LOST: ServiceResponse = { ok: false, kind: 'unknown' };
+  const versionAt = (stateVersion: number) => http(200, { state_version: stateVersion, api: 2, features: [REPLAY_FEATURE] });
+  const NOT_APPLIED = http(200, { outcome: 'not_applied' });
+  const BAD_BASELINE = http(400, { error: 'invalid', message: 'sent_after_version must name a nonnegative observed version.' });
+  const ID = 'req-replay-0001';
+
+  /** A reviewed mark whose answer was lost, with a baseline of 4, then the scripted replay and version answers. */
+  async function lostWrite(replays: ServiceResponse[], versions: ServiceResponse[] = []) {
+    const wire = scripted({ version: [versionAt(4), ...versions], reviewed: [LOST], replay: replays });
+    const planner = createPlannerLive(wire.transport);
+    expect(await failure(planner.port.markReviewed('item00000001', 3, ID))).toEqual({ kind: 'unknown', requestId: ID });
+    return { wire, planner };
+  }
+
+  it.each([
+    ['transport unavailable', { ok: false, kind: 'unavailable' } as ServiceResponse, { kind: 'unavailable', reason: 'unreachable' }],
+    ['transport loss', LOST, { kind: 'unavailable', reason: 'unreachable' }],
+    ['403', http(403, { error: 'forbidden' }), { kind: 'unavailable', reason: 'refused' }],
+    ['421', http(421, { error: 'bad_host' }), { kind: 'unavailable', reason: 'refused' }],
+    ['500', http(500, null), { kind: 'unavailable', reason: 'server_error' }],
+    ['503', http(503, null), { kind: 'unavailable', reason: 'server_error' }],
+    ['a malformed 200', http(200, { outcome: 'maybe' }), { kind: 'unavailable', reason: 'incompatible' }],
+    // Any other refusal says nothing about the Planner's availability; the write's outcome simply stays unknown.
+    ['404', http(404, null), { kind: 'unknown', requestId: ID }],
+    ['302', http(302, null), { kind: 'unknown', requestId: ID }],
+    ['413', http(413, { error: 'too_large' }), { kind: 'unknown', requestId: ID }],
+    ['422 unrecognised', http(422, { error: 'invalid_import' }), { kind: 'unknown', requestId: ID }],
+    ['409 unrecognised', http(409, { error: 'something_new' }), { kind: 'unknown', requestId: ID }],
+    ['an applied_now answer to a lookup', http(200, { outcome: 'applied_now', status: 200, response: {} }), { kind: 'unknown', requestId: ID }],
+  ])('a lookup answered %s', async (_, response, expected) => {
+    const { wire, planner } = await lostWrite([response]);
+    expect(await failure(planner.recovery.check(ID))).toEqual(expected);
+    // One lookup and nothing else, and the intent is still held for another Check.
+    expect(wire.routes()).toEqual(['version', 'reviewed', 'replay']);
+    expect(planner.ledger.unresolved()).toEqual([ID]);
+  });
+
+  it.each([
+    ['transport unavailable (nothing sent)', { ok: false, kind: 'unavailable' } as ServiceResponse, { kind: 'unavailable', reason: 'unreachable' }],
+    ['transport loss', LOST, { kind: 'unknown', requestId: ID }],
+    ['403', http(403, { error: 'forbidden' }), { kind: 'unavailable', reason: 'refused' }],
+    ['421', http(421, { error: 'bad_host' }), { kind: 'unavailable', reason: 'refused' }],
+    ['500: it may have landed', http(500, null), { kind: 'unknown', requestId: ID }],
+    ['a malformed 200', http(200, { outcome: 'maybe' }), { kind: 'unknown', requestId: ID }],
+  ])('a resend answered %s keeps its write classification', async (_, response, expected) => {
+    const { wire, planner } = await lostWrite([NOT_APPLIED, response]);
+    expect(await planner.recovery.check(ID)).toEqual({ outcome: 'not_applied' });
+    expect(await failure(planner.recovery.apply(ID))).toEqual(expected);
+    expect(wire.routes()).toEqual(['version', 'reviewed', 'replay', 'replay']);
+    expect(planner.ledger.unresolved()).toEqual([ID]);
+  });
+
+  it('a lookup answered 400 for a baseline newer than the store is store_changed after exactly one version read', async () => {
+    const { wire, planner } = await lostWrite([BAD_BASELINE], [versionAt(2)]);
+    expect(await failure(planner.recovery.check(ID))).toEqual({ kind: 'replay_indeterminate', requestId: ID, reason: 'store_changed' });
+    expect(wire.routes()).toEqual(['version', 'reviewed', 'replay', 'version']);
+    expect(wire.calls[2]!.params).toMatchObject({ mode: 'lookup', requestId: ID, sentAfterVersion: 4 });
+    expect(wire.calls[3]!.params).toEqual({});
+    // The intent is held, not forgotten, so a later Check answers the same way.
+    expect(planner.ledger.unresolved()).toEqual([ID]);
+  });
+
+  it('an apply answered 400 for a newer baseline is store_changed, sends nothing else, and authorizes no further apply', async () => {
+    const { wire, planner } = await lostWrite([NOT_APPLIED, BAD_BASELINE], [versionAt(2)]);
+    expect(await planner.recovery.check(ID)).toEqual({ outcome: 'not_applied' });
+    expect(await failure(planner.recovery.apply(ID))).toEqual({ kind: 'replay_indeterminate', requestId: ID, reason: 'store_changed' });
+    expect(wire.routes()).toEqual(['version', 'reviewed', 'replay', 'replay', 'version']);
+    expect(wire.calls[3]!.params).toMatchObject({ mode: 'resend', sentAfterVersion: 4 });
+    expect(planner.ledger.unresolved()).toEqual([ID]);
+    // An apply needs a fresh not_applied Check: this one sends nothing.
+    expect(await failure(planner.recovery.apply(ID))).toEqual({ kind: 'unknown', requestId: ID });
+    expect(wire.routes()).toHaveLength(5);
+  });
+
+  it('a 400 that is not a newer baseline keeps its ordinary mapping', async () => {
+    // The store is at or past the baseline (4), or the version cannot be read: not store_changed.
+    for (const version of [versionAt(4), versionAt(9), { ok: false, kind: 'unavailable' } as ServiceResponse, http(500, null), http(200, { state_version: 'x' })]) {
+      const { wire, planner } = await lostWrite([http(400, { error: 'invalid', message: 'Bad envelope.' })], [version]);
+      expect(await failure(planner.recovery.check(ID))).toEqual({ kind: 'unknown', requestId: ID });
+      expect(wire.routes()).toEqual(['version', 'reviewed', 'replay', 'version']);
+      expect(planner.ledger.unresolved()).toEqual([ID]);
+    }
+    // A refused resend rolled back: the original never landed, so the ID is free again.
+    const { wire, planner } = await lostWrite([NOT_APPLIED, http(400, { error: 'invalid', message: 'Bad envelope.' })], [versionAt(9)]);
+    expect(await planner.recovery.check(ID)).toEqual({ outcome: 'not_applied' });
+    expect(await failure(planner.recovery.apply(ID))).toEqual({ kind: 'invalid', errors: [{ field: 'body', message: 'Bad envelope.' }] });
+    expect(wire.routes()).toEqual(['version', 'reviewed', 'replay', 'replay', 'version']);
+    expect(planner.ledger.unresolved()).toEqual([]);
+  });
+
+  it('another status is never probed for a newer baseline', async () => {
+    const { wire, planner } = await lostWrite([http(404, null)], [versionAt(2)]);
+    await failure(planner.recovery.check(ID));
+    expect(wire.routes()).toEqual(['version', 'reviewed', 'replay']);
+  });
+});
+
+describe('PlannerLive.health', () => {
+  const all = [REPLAY_FEATURE, HQ_REFERENCES_FEATURE, 'items.batch_create'];
+
+  it('is not a port member and probes through the adapter transport, reading only the version', async () => {
+    const wire = scripted({ version: [http(200, { state_version: 4, api: 2, features: all, request_retention: { max: 2000, evicted_through_version: 1 } })] });
+    const planner = createPlannerLive(wire.transport);
+    expect(Object.keys(planner).sort()).toEqual(['health', 'ledger', 'port', 'recovery']);
+    expect(Object.keys(planner.port).sort()).toEqual([...PLANNER_PORT_KEYS].sort());
+    expect(await planner.health()).toMatchObject({
+      status: 'ready', api: 2, stateVersion: 4, features: all, limits: [], retention: { max: 2000, evictedThroughVersion: 1 },
+    });
+    expect(wire.calls).toEqual([{ route: 'version', params: {} }]);
+    expect(planner.ledger.unresolved()).toEqual([]);
+  });
+
+  it('reports why the Planner cannot be used, and never writes or replays while doing so', async () => {
+    for (const [response, reason] of [[http(421, null), 'refused'], [http(502, null), 'server_error'], [http(404, null), 'incompatible'], [{ ok: false, kind: 'unavailable' }, 'unreachable']] as const) {
+      const wire = scripted({ version: [response as ServiceResponse] });
+      expect(await createPlannerLive(wire.transport).health()).toMatchObject({ status: 'unavailable', reason });
+      expect(wire.routes()).toEqual(['version']);
+    }
+  });
+
+  it('works over the fixture Planner without touching its state', async () => {
+    const { planner, wire, fixture } = await live({ features: [HQ_REFERENCES_FEATURE] });
+    const before = { calls: wire.calls.length, version: fixture.control.stateVersion() };
+    // The fixture advertises replay and HQ references but not batch create: still ready, with the missing capability named.
+    expect(await planner.health()).toMatchObject({ status: 'ready', api: 2, limits: ['no_batch'] });
+    expect(wire.calls.slice(before.calls)).toEqual([{ route: 'version', params: {} }]);
+    expect(fixture.control.stateVersion()).toBe(before.version);
   });
 });
 
@@ -398,7 +591,7 @@ describe('the recorded intent and baseline', () => {
   it('reads the version first when nothing was observed, and sends nothing when it cannot', async () => {
     const calls: WorkRoute[] = [];
     const planner = createPlannerLive({ async call(route) { calls.push(route); return { ok: false, kind: 'unavailable' }; } });
-    expect(await failure(planner.port.markReviewed('item00000001', 1, 'req-no-base-1'))).toEqual({ kind: 'unavailable' });
+    expect(await failure(planner.port.markReviewed('item00000001', 1, 'req-no-base-1'))).toEqual({ kind: 'unavailable', reason: 'unreachable' });
     expect(calls).toEqual(['version']);
   });
 
@@ -451,7 +644,7 @@ describe('moves: renumbered neighbours and read-back', () => {
 
 describe('no network capability in the renderer', () => {
   it('live production code has no fetch, XHR, socket, Node or CLI access', () => {
-    for (const file of ['adapter.ts', 'transport.ts', 'wire.ts', 'index.ts']) {
+    for (const file of ['adapter.ts', 'health.ts', 'transport.ts', 'wire.ts', 'index.ts', 'intent.ts', 'durable.ts']) {
       const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
       expect([file, /\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|require\(|from 'node:|hq-cli|child_process/u.test(source)]).toEqual([file, false]);
     }

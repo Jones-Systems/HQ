@@ -5,9 +5,13 @@
 // `tokens/t0-bridge.css` is deliberately not loaded here: it redefines T0 shell names and is the shell owner's.
 import './tokens/hq-tokens.css';
 import './components/hq-ui.css';
+import './motion/motion.css';
+import './feedback/feedback.css';
 import './references/references.css';
 
 export * from './components';
+export * from './motion';
+export * from './feedback';
 export * from './contrast';
 export * from './palettes';
 export * from './tokens';

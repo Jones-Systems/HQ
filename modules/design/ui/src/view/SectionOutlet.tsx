@@ -1,5 +1,6 @@
-import { Component, lazy, Suspense, useMemo, type ComponentType, type LazyExoticComponent, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, useState, type ComponentType, type LazyExoticComponent } from 'react';
 import type { ProjectContext, ResolvedAppearance } from '@hq/contracts';
+import { ErrorBoundary, InlineNotice, Skeleton } from '@hq/ui';
 import type { DesignLocation, DesignSectionProps, SectionStateHandle } from '../../contract.ts';
 import type { RegisteredSection } from '../registry.ts';
 import { surfaceProps } from '../theme.ts';
@@ -17,14 +18,22 @@ function lazyView(section: RegisteredSection<SectionView>): LazyExoticComponent<
   return view;
 }
 
-class SectionBoundary extends Component<{ readonly title: string; readonly children: ReactNode }, { readonly failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError(): { failed: boolean } { return { failed: true }; }
-  render() {
-    return this.state.failed
-      ? <div className="hqd-placeholder" role="alert"><h2>{this.props.title} could not be shown</h2><p>The rest of Design keeps working. Reopen the section to try again.</p></div>
-      : this.props.children;
-  }
+/** Shaped like a section (heading row, then content blocks) and shown only when loading takes a moment. */
+function SectionLoading({ title }: { readonly title: string }) {
+  return <div className="hqd-section-loading hq-enter-fade" aria-busy="true">
+    <p className="hq-sr-only" role="status">Loading {title}…</p>
+    <div className="hqd-section-loading-head"><Skeleton width="180px" /><Skeleton width="72px" /></div>
+    <div className="hqd-section-loading-body"><Skeleton shape="block" height="160px" /><Skeleton shape="block" height="160px" /><Skeleton shape="block" height="160px" /></div>
+  </div>;
+}
+
+/** A failure stays inside the section, says what was kept and offers another try; navigation keeps working. */
+function SectionFailed({ title, retry }: { readonly title: string; readonly retry: () => void }) {
+  return <div className="hqd-section-failed">
+    <InlineNotice tone="danger" live="assertive" title={`${title} could not be shown`} actions={[{ label: 'Try again', onAction: retry }]}>
+      The rest of Design keeps working, and nothing you saved was changed.
+    </InlineNotice>
+  </div>;
 }
 
 export interface SectionOutletProps {
@@ -38,16 +47,19 @@ export interface SectionOutletProps {
 }
 
 export function SectionOutlet({ section, context, appearance, state, navigate, propose, onCommand }: SectionOutletProps) {
-  const View = lazyView(section);
+  const [attempt, setAttempt] = useState(0);
+  const View = useMemo(() => lazyView(section), [section, attempt]);
+  // A lazy section that failed to load stays failed, so another attempt also loads its code again.
+  const retry = () => { lazyViews.delete(section); setAttempt((current) => current + 1); };
   const props: DesignSectionProps = useMemo(() => ({
     context, appearance, sectionId: section.id, state, navigate,
     proposeProjectSwitch: (projectId: string, label: string) => propose(projectId, label, 'section'),
     surface: surfaceProps,
     onCommand: (listener: (commandId: string) => void) => onCommand(section.id, listener),
   }), [context, appearance, section.id, state, navigate, propose, onCommand]);
-  return <SectionBoundary title={section.title}>
-    <Suspense fallback={<div className="hqd-placeholder" aria-busy="true"><p>Loading {section.title}…</p></div>}>
+  return <ErrorBoundary resetKeys={[section.id, context.id, attempt]} fallback={() => <SectionFailed title={section.title} retry={retry} />}>
+    <Suspense fallback={<SectionLoading title={section.title} />}>
       <View {...props} />
     </Suspense>
-  </SectionBoundary>;
+  </ErrorBoundary>;
 }

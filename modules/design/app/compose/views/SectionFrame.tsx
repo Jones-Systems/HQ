@@ -13,15 +13,18 @@ export interface SectionFrameProps {
   readonly notes?: readonly string[];
   /** Give the section a bounded box (canvas-like views size to their container). */
   readonly fill?: boolean;
+  /** Names the project the section works on, for example `ProjectScope`. */
+  readonly scope?: ReactNode;
   readonly children: ReactNode;
 }
 
 /** Non-real data always has a visible badge; details retain capability and durability limits. */
-export function SectionFrame({ lane, tags, notes = [], fill = false, children }: SectionFrameProps) {
+export function SectionFrame({ lane, tags, notes = [], fill = false, scope, children }: SectionFrameProps) {
   const nonReal = tags.filter((tag) => tag.status !== 'workspace');
   const details = [...new Set([...tags.map((tag) => tag.text), ...notes])];
-  return <div className="hqd-compose-frame" data-compose-lane={lane}>
-    {(nonReal.length > 0 || details.length > 0) && <div className="hqd-compose-provenance" role="note">
+  return <div className="hqd-compose-frame hq-enter-fade" data-compose-lane={lane}>
+    {(scope !== undefined || nonReal.length > 0 || details.length > 0) && <div className="hqd-compose-provenance" role="note">
+      {scope}
       {nonReal.map((tag) => <StatusChip key={`${tag.status}:${tag.text}`} tone={tag.status === 'cached' ? 'warning' : 'info'}
         label={tag.status === 'fake' ? 'Example' : tag.status === 'cached' ? 'Cached' : 'Synthetic'} />)}
       <details className="hqd-about-data">

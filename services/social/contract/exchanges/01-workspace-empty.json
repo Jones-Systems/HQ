@@ -17,13 +17,14 @@
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
-      "Content-Length": "1586"
+      "Content-Length": "1655"
     },
     "body": {
       "brands": [
         {
           "id": "default",
-          "name": "My workspace"
+          "name": "My workspace",
+          "project_id": null
         }
       ],
       "content": [],
@@ -88,9 +89,12 @@
       ],
       "features": [
         "hq-editorial-timebox-v1",
-        "hq-references-v1"
+        "hq-references-v1",
+        "hq-brand-project-v1",
+        "hq-sources-v1"
       ],
-      "csrf": "synthetic-workspace-token"
+      "csrf": "synthetic-workspace-token",
+      "sources": []
     }
   }
 }

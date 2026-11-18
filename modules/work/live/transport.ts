@@ -55,6 +55,28 @@ export interface WorkServiceTransport {
   call<R extends WorkServiceRoute>(route: R, params: WorkServiceParams[R]): Promise<ServiceResponse>;
 }
 
+// The device-document slice of the bridge (`hqServices.workLocal`), mirrored the same way from the shared
+// `services.ts` (`WorkLocalRoute`, `WorkLocalParams`, `WorkLocalValues`, `WorkLocalResult`, `WorkLocalTransport`,
+// `JsonValue`) so Work production code stays inside ac.work-domain.001; `test/canonical-shape.test.ts` binds it.
+
+/** Plain JSON, as main stores it. */
+export type WorkLocalJson = null | boolean | number | string | readonly WorkLocalJson[] | { readonly [key: string]: WorkLocalJson };
+export type WorkLocalRoute = 'load' | 'save';
+export interface WorkLocalParams {
+  readonly load: Record<string, never>;
+  /** `binding` comes from `load`. `expectedRevision` must equal the stored revision (0 when nothing is stored). */
+  readonly save: { readonly binding: string; readonly expectedRevision: number; readonly value: WorkLocalJson };
+}
+export interface WorkLocalValues {
+  readonly load: { readonly binding: string; readonly revision: number; readonly value: WorkLocalJson | null };
+  readonly save: { readonly revision: number };
+}
+export type WorkLocalResult<T> = { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly kind: 'conflict' | 'invalid' | 'too_large' | 'unavailable' };
+export interface WorkLocalTransport {
+  call<R extends WorkLocalRoute>(route: R, params: WorkLocalParams[R]): Promise<WorkLocalResult<WorkLocalValues[R]>>;
+}
+
 /** Local names kept for Work's existing callers. */
 export type WorkRoute = WorkServiceRoute;
 export type WorkWriteRoute = WorkMutationRoute;

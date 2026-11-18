@@ -29,7 +29,9 @@ test('selection retains loaded img nodes and pending reads instead of blanking t
     expect([...container.querySelectorAll('.hq-refs-card img')]).toEqual(images);
     expect(previewImage).toHaveBeenCalledTimes(reads);
   }
-  expect(scroll).toHaveBeenCalledTimes(1);
+  // Details open in a lightbox dialog over the page (they used to open in an inline panel that scrolled into view),
+  // so selecting a reference must not scroll the page behind it.
+  expect(scroll).not.toHaveBeenCalled();
   scroll.mockRestore();
 });
 

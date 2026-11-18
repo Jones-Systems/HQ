@@ -1,33 +1,13 @@
-import type { ReactNode } from 'react';
 import {
   cardDate, DATE_KIND_LABEL, formatShort, HORIZON_LABEL, MOTIVATION_LABEL, PRIORITY_LABEL,
-  type DateKind, type Item, type ItemKind, type PlanningDate,
+  type Item, type PlanningDate,
 } from '../core';
+import { ArrowUpIcon, DateKindIcon } from '../theme/icons';
 
-// Small presentational pieces shared by the board card and the detail panel.
-// Every chip carries a visible word, so no meaning depends on colour (T4 check 7).
+export { DateKindIcon, KindIcon } from '../theme/icons';
 
-const KIND_PATHS: Record<ItemKind, ReactNode> = {
-  project: <path d="M3.5 7.5v10h17v-8h-8l-2-2z" />,
-  idea: <><path d="M9 17h6M10 20h4" /><path d="M12 4a5 5 0 0 0-3 9c.6.5 1 1.2 1 2h4c0-.8.4-1.5 1-2a5 5 0 0 0-3-9z" /></>,
-  goal: <path d="M6 20V4m0 1h11l-2 4 2 4H6" />,
-  chore: <path d="m14 4 6 6-9 9H5v-6zM12 6l6 6" />,
-};
-
-export function KindIcon({ kind }: { kind: ItemKind }) {
-  return <svg className="work-icon" viewBox="0 0 24 24" aria-hidden="true">{KIND_PATHS[kind]}</svg>;
-}
-
-const DATE_KIND_PATHS: Record<DateKind, ReactNode> = {
-  target: <><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2.5" /></>,
-  deadline: <path d="M6 20V4m0 1h11l-2 4 2 4H6" />,
-  start: <path d="M5 12h12m-4-5 5 5-5 5" />,
-  event: <><rect x="4" y="5.5" width="16" height="14" rx="2" /><path d="M4 10h16M8 3.5v4M16 3.5v4" /></>,
-};
-
-export function DateKindIcon({ kind }: { kind: DateKind }) {
-  return <svg className="work-icon work-icon--sm" viewBox="0 0 24 24" aria-hidden="true">{DATE_KIND_PATHS[kind]}</svg>;
-}
+// Small presentational pieces shared by the board card and the detail panel. Marks and chip styles come from the
+// Work theme (one chip family for every surface). Every chip carries a visible word, so no meaning depends on colour.
 
 export const COARSE_PRECISIONS: ReadonlySet<PlanningDate['precision']> = new Set(['week', 'month', 'quarter', 'year']);
 
@@ -58,11 +38,9 @@ export function dateChip(item: Item, today: string): DateChipModel | null {
 }
 
 export function DateChip({ chip }: { chip: DateChipModel }) {
+  const state = chip.state === 'overdue' || chip.state === 'passed' ? ` wk-chip--${chip.state}` : '';
   return (
-    <span
-      className={`work-chip work-chip--date work-chip--dk-${chip.entry.kind} work-chip--${chip.state}${chip.coarse ? ' work-chip--coarse' : ''}`}
-      title={chip.label}
-    >
+    <span className={`wk-chip wk-chip--${chip.entry.kind}${state}${chip.coarse ? ' wk-chip--coarse' : ''}`} title={chip.label}>
       <DateKindIcon kind={chip.entry.kind} />
       <span className="hq-sr-only">{DATE_KIND_LABEL[chip.entry.kind]}: </span>
       {chip.text}
@@ -75,10 +53,10 @@ export function ItemChips({ item, today }: { item: Item; today: string }) {
   const chip = dateChip(item, today);
   return (
     <span className="work-chips">
-      {item.motivation && <span className={`work-chip work-chip--why-${item.motivation}`}><span className="hq-sr-only">Why: </span>{MOTIVATION_LABEL[item.motivation]}</span>}
-      {item.horizon && <span className="work-chip work-chip--horizon"><span className="hq-sr-only">Horizon: </span>{HORIZON_LABEL[item.horizon]}</span>}
+      {item.motivation && <span className={`wk-chip wk-chip--${item.motivation}`}><span className="hq-sr-only">Why: </span>{MOTIVATION_LABEL[item.motivation]}</span>}
+      {item.horizon && <span className="wk-chip"><span className="hq-sr-only">Horizon: </span>{HORIZON_LABEL[item.horizon]}</span>}
       {chip && <DateChip chip={chip} />}
-      {item.priority === 'high' && <span className="work-chip work-chip--priority-high"><span aria-hidden="true">↑ </span>{PRIORITY_LABEL.high}<span className="hq-sr-only"> priority</span></span>}
+      {item.priority === 'high' && <span className="wk-chip wk-chip--high"><ArrowUpIcon />{PRIORITY_LABEL.high}<span className="hq-sr-only"> priority</span></span>}
     </span>
   );
 }

@@ -314,14 +314,14 @@ describe('collapsible Work panels', () => {
     expect((notes as HTMLTextAreaElement).value).toBe('Keep this draft visible after restore');
   });
 
-  it('hides capture and filters behind one restore control and preserves an active filter', async () => {
-    render(<WorkDomain {...port('home')} now={fixedNow} />);
+  it('keeps capture and active filters visible across a page change', async () => {
+    const props = port('board');
+    const view = render(<WorkDomain {...props} now={fixedNow} />);
     await screen.findByRole('heading', { level: 2, name: 'Status board' });
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Search' }), { target: { value: 'library' } });
-    fireEvent.click(screen.getByRole('button', { name: /Hide capture & filters/ }));
-    expect(screen.queryByRole('searchbox', { name: 'Search' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Show capture & filters · 1 filters/ }));
-    expect((screen.getByRole('searchbox', { name: 'Search' }) as HTMLInputElement).value).toBe('library');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Kind' }), { target: { value: 'chore' } });
+    view.rerender(<WorkDomain {...props} destination="list" now={fixedNow} />);
+    expect(screen.getByRole('combobox', { name: 'Kind' })).toHaveProperty('value', 'chore');
+    expect(screen.getByRole('textbox', { name: 'Capture to Inbox' })).toBeTruthy();
     expect(recorded.writes()).toHaveLength(0);
   });
 });

@@ -120,29 +120,56 @@ function features(raw: Json): string[] {
   return list(raw.features, (f) => need(isText(f), f as string));
 }
 
-export interface Observed { stateVersion: number; features: string[] }
+/** The advertised API version, a positive integer; `null` when the body names none. Anything else present is malformed. */
+function apiVersion(raw: Json): number | null {
+  if (raw.api === undefined) return null;
+  return need(Number.isInteger(raw.api) && (raw.api as number) >= 1, raw.api as number);
+}
 
-/** `GET /api/state` → Snapshot: `state_version` → `stateVersion`, `server_time` → `observedAt`, missing `features` → `[]`. */
+/** `request_retention`; `null` when the body names none. */
+function retention(raw: Json): Retention | null {
+  if (raw.request_retention === undefined) return null;
+  need(isRecord(raw.request_retention), raw.request_retention);
+  const r = raw.request_retention as Json;
+  return { max: need(isCount(r.max), r.max as number), evictedThroughVersion: need(isCount(r.evicted_through_version), r.evicted_through_version as number) };
+}
+
+export interface Retention { max: number; evictedThroughVersion: number }
+export interface Observed { stateVersion: number; features: string[] }
+/** `GET /api/version`: the observation plus the advertised API version and replay-record retention. */
+export interface Version extends Observed { api: number | null; retention: Retention | null }
+
+/**
+ * `GET /api/state` → Snapshot: `state_version` → `stateVersion`, `server_time` → `observedAt`, missing `features` → `[]`.
+ * `api` is set only when the body carries one.
+ */
 export function decodeSnapshot(body: unknown): Snapshot | null {
   return decode(() => {
     need(isRecord(body), body);
     const b = body as Json;
+    const api = apiVersion(b);
     return {
       items: list(b.items, item),
       settings: settings(b.settings),
       stateVersion: need(isCount(b.state_version), b.state_version as number),
       observedAt: need(isText(b.server_time) && b.server_time.length > 0, b.server_time as string),
       features: features(b),
+      ...(api !== null ? { api } : {}),
     };
   });
 }
 
 /** `GET /api/version`. */
-export function decodeVersion(body: unknown): Observed | null {
+export function decodeVersion(body: unknown): Version | null {
   return decode(() => {
     need(isRecord(body), body);
     const b = body as Json;
-    return { stateVersion: need(isCount(b.state_version), b.state_version as number), features: features(b) };
+    return {
+      stateVersion: need(isCount(b.state_version), b.state_version as number),
+      features: features(b),
+      api: apiVersion(b),
+      retention: retention(b),
+    };
   });
 }
 

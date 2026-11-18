@@ -13,7 +13,7 @@ import {
   type WikiService,
 } from '../../contract/src/index.ts';
 import { createSyntheticService } from '../fixtures/synthetic.ts';
-import { createWikiView, type WikiViewProps } from '../src/index.ts';
+import { createWikiView, type WikiHostAffordances, type WikiViewProps } from '../src/index.ts';
 import { dom } from './dom.ts';
 import { mount, settle, type Mounted } from './render.ts';
 
@@ -141,11 +141,20 @@ export interface Launched {
   unmount(): Promise<void>;
 }
 
-export async function launch(options: { destination?: string; service?: WikiService; appearance?: 'light' | 'dark'; persistLimit?: number } = {}): Promise<Launched> {
+export async function launch(options: {
+  destination?: string;
+  service?: WikiService;
+  appearance?: 'light' | 'dark';
+  persistLimit?: number;
+  /** Host affordances (toast, openSettings) for a fresh view. */
+  affordances?: WikiHostAffordances;
+  /** Reuse a view (and so its session) across launches, like the shell remounting the domain. */
+  View?: ComponentType<WikiViewProps>;
+} = {}): Promise<Launched> {
   const requested: string[] = [];
   const control = { set: (_destination: string): void => {}, current: options.destination ?? 'home' };
   let props: ShellProps = {
-    View: createWikiView(options.service ?? createSyntheticService()),
+    View: options.View ?? createWikiView(options.service ?? createSyntheticService(), options.affordances),
     initial: options.destination ?? 'home',
     appearance: options.appearance ?? 'light',
     log: requested,

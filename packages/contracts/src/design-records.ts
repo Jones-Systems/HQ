@@ -10,7 +10,22 @@ export type ImportWriteOp =
   | { readonly op: 'put-document'; readonly namespace: string; readonly key: string; readonly value: JsonValue; readonly expectedRevision: string | null }
   | { readonly op: 'put-blob'; readonly namespace: string; readonly digest: string & { readonly __kind: 'Sha256Digest' }; readonly mediaType: string; readonly bytes: Uint8Array }
   | { readonly op: 'append-event'; readonly namespace: string; readonly stream: string; readonly payload: JsonValue; readonly expectedSeq: number };
+export type DesignFeatureState = 'enabled' | 'disabled';
+/** A feature this build does not enable, with a stable reason id. The list is fixed by the build; it never changes at runtime. */
+export interface DesignHeldFeature {
+  readonly feature: 'generation-sources' | 'component-runner' | 'jones-code-live-send';
+  readonly status: 'held';
+  readonly reason: 'external-access-held' | 'native-qualification-pending' | 'live-effects-held';
+}
+/** What `design.capabilities` reports: only what the host already holds, never a probe of storage or a native dialog. */
+export interface DesignCapabilities {
+  readonly imports: DesignFeatureState;
+  readonly pick: DesignFeatureState;
+  readonly export: DesignFeatureState;
+  readonly held: readonly DesignHeldFeature[];
+}
 export interface DesignRecordParams {
+  readonly 'design.capabilities': Record<string, never>;
   readonly 'blob.put': { readonly bytes: Uint8Array; readonly expectedDigest: BlobDigest };
   readonly 'blob.get': { readonly digest: BlobDigest };
   readonly 'blob.has': { readonly digest: BlobDigest };
@@ -25,6 +40,7 @@ export interface DesignRecordParams {
   readonly 'cache.put': { readonly key: 'design.discovery.catalog'; readonly value: JsonValue };
 }
 export interface DesignRecordValues {
+  readonly 'design.capabilities': DesignCapabilities;
   readonly 'blob.put': BlobRef;
   readonly 'blob.get': Uint8Array | null;
   readonly 'blob.has': boolean;

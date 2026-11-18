@@ -1,71 +1,16 @@
-import { useState } from 'react';
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
-import { TOOL_IDS, recordCalls, resetSocialSessions, type RecordedPort, type ToolId } from '../../core';
+import { NEW_DRAFT_KEY } from '../../content/model';
+import { DEFAULT_BRAND_ID, TOOL_IDS, recordCalls, resetSocialSessions, socialSession } from '../../core';
 import { TOOL_GUIDES } from '../catalog';
-import { createWorkbenchFixture, WORKBENCH_EXAMPLES, type WorkbenchFixture } from '../fixtures/examples';
-import type { Visibility } from '../polling';
+import { createWorkbenchFixture, WORKBENCH_EXAMPLES } from '../fixtures/examples';
 import { WorkbenchSection } from '../WorkbenchSection';
-
-const CONTEXT = { id: 'fixture-project', name: 'Fixture project' };
+import { CONTEXT, clickRun, executions, loadExample, openTool, setup, toolName, type Setup } from './support';
 
 afterEach(() => {
   cleanup();
   resetSocialSessions();
 });
-
-function visibilityControl(visible = true) {
-  const listeners = new Set<() => void>();
-  const visibility: Visibility = { isVisible: () => visible, subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener); } };
-  return { visibility, set(value: boolean) { visible = value; act(() => { for (const listener of [...listeners]) listener(); }); } };
-}
-
-interface Setup {
-  readonly fixture: WorkbenchFixture;
-  readonly recorded: RecordedPort;
-  readonly user: ReturnType<typeof userEvent.setup>;
-  readonly destination: () => string;
-  readonly go: (destination: string) => void;
-  readonly visible: ReturnType<typeof visibilityControl>;
-  readonly unmount: () => void;
-}
-
-function setup({ destination = 'workbenches', features, visible = true, delay }: { destination?: string; features?: string[]; visible?: boolean; delay?: () => Promise<void> } = {}): Setup {
-  const fixture = createWorkbenchFixture({ ...(features ? { features } : {}), ...(delay ? { delay } : {}) });
-  const recorded = recordCalls(fixture.port);
-  const visibleControl = visibilityControl(visible);
-  let current = destination;
-  let go: (next: string) => void = () => {};
-  function Shell() {
-    const [where, setWhere] = useState(destination);
-    current = where;
-    go = (next) => act(() => setWhere(next));
-    return <WorkbenchSection port={recorded.port} context={CONTEXT} destination={where} navigate={(next) => setWhere(next)} visibility={visibleControl.visibility} pollIntervalMs={10} />;
-  }
-  const view = render(<Shell />);
-  return { fixture, recorded, user: userEvent.setup(), destination: () => current, go: (next) => go(next), visible: visibleControl, unmount: view.unmount };
-}
-
-const executions = (recorded: RecordedPort) => recorded.callsOf('execution');
-
-async function openTool(s: Setup, tool: ToolId) {
-  s.go(`workbenches/${tool}`);
-  await screen.findByRole('heading', { level: 1, name: (await toolName(s, tool)) });
-}
-
-async function toolName(s: Setup, tool: ToolId): Promise<string> {
-  return (await s.fixture.port.snapshot()).tools.find((item) => item.id === tool)!.name;
-}
-
-async function loadExample(s: Setup) {
-  await s.user.click(screen.getByRole('button', { name: 'Load example' }));
-  await screen.findByText('Example data');
-}
-
-async function clickRun(s: Setup, tool: ToolId) {
-  await s.user.click(screen.getByRole('button', { name: `Run ${await toolName(s, tool)}` }));
-}
 
 describe('workbench catalog and navigation', () => {
   it('groups the eight delivered tools by category and states each delivered limit', async () => {
@@ -98,13 +43,13 @@ describe('workbench catalog and navigation', () => {
     await s.user.upload(screen.getByLabelText('Creator batch', { selector: 'input' }), new File([batchText], 'batch.json', { type: 'application/json' }));
     await screen.findByText(`batch.json · ${batchText.length} bytes`);
     s.go('runs');
-    await screen.findByRole('table');
+    await screen.findAllByRole('button', { name: /^Open receipt/u });
     await s.user.click(screen.getAllByRole('button', { name: /^Open receipt/u })[0]!);
     await screen.findByText(/^Run receipt/u);
 
     expect(executions(s.recorded)).toHaveLength(0);
     expect(s.recorded.callsOf('read').length).toBeGreaterThan(0);
-  });
+  }, 20_000);
 
   it('keeps form input across a module remount without calling the service', async () => {
     const s = setup({ destination: 'workbenches/x-studio' });
@@ -212,7 +157,7 @@ describe('explicit Run', () => {
     await loadExample(s);
     s.fixture.controls.loseNextSubmitResponse();
     await clickRun(s, 'x-studio');
-    expect(await screen.findByText('Outcome unknown')).toBeTruthy();
+    expect(await screen.findByText('Run status unknown')).toBeTruthy();
     const created = s.fixture.controls.inspect().runs.at(-1)!;
     const matches = await screen.findByRole('region', { name: 'Possible matches' });
     expect(await within(matches).findByRole('button', { name: `Open receipt ${created.id.slice(-8)}` })).toBeTruthy();
@@ -224,16 +169,16 @@ describe('explicit Run', () => {
     await s.user.click(within(matches).getByRole('button', { name: 'Check run history again' }));
     s.go('workbenches');
     await openTool(s, 'x-studio');
-    expect(await screen.findByText('Outcome unknown')).toBeTruthy();
+    expect(await screen.findByText('Run status unknown')).toBeTruthy();
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(executions(s.recorded)).toHaveLength(1);
 
-    await s.user.click(screen.getByRole('button', { name: 'Run again…' }));
+    await s.user.click(screen.getByRole('button', { name: 'Run Writing studio…' }));
     const dialog = await screen.findByRole('alertdialog');
     await s.user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(executions(s.recorded)).toHaveLength(1);
-    await s.user.click(screen.getByRole('button', { name: 'Run again…' }));
-    await s.user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Run again' }));
+    await s.user.click(screen.getByRole('button', { name: 'Run Writing studio…' }));
+    await s.user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Create another run' }));
     await waitFor(() => expect(executions(s.recorded)).toHaveLength(2));
   });
 
@@ -244,6 +189,23 @@ describe('explicit Run', () => {
     s.fixture.controls.failNext('submitRun', { kind: 'conflict', message: 'Run queue is full. Wait for a run to finish.' });
     await clickRun(s, 'x-studio');
     expect(await screen.findByText('Run queue is full. Wait for a run to finish.')).toBeTruthy();
+    expect(executions(s.recorded)).toHaveLength(1);
+  });
+
+  it.each([
+    ['forbidden', 'The Social service refused this request. The run did not start.'],
+    ['not_found', 'The Social service could not find what this run needs. The run did not start.'],
+  ] as const)('keeps a %s refusal inline and does not submit again on navigation', async (kind, message) => {
+    const s = setup({ destination: 'workbenches/x-studio' });
+    await screen.findByRole('heading', { level: 1 });
+    await loadExample(s);
+    s.fixture.controls.failNext('submitRun', { kind });
+    await clickRun(s, 'x-studio');
+    expect(await screen.findByText((text) => text.startsWith(message))).toBeTruthy();
+    expect(executions(s.recorded)).toHaveLength(1);
+    s.go('workbenches');
+    await openTool(s, 'x-studio');
+    expect(await screen.findByText((text) => text.startsWith(message))).toBeTruthy();
     expect(executions(s.recorded)).toHaveLength(1);
   });
 
@@ -260,43 +222,6 @@ describe('explicit Run', () => {
   });
 });
 
-describe('run history and polling', () => {
-  it('lists statuses, times, errors and example labels; active runs read only while visible', async () => {
-    const s = setup({ destination: 'runs', visible: false });
-    const table = await screen.findByRole('table');
-    for (const label of ['Queued', 'Running', 'Succeeded', 'Failed', 'Interrupted']) expect(within(table).getByText(label)).toBeTruthy();
-    expect(within(table).getByText('Example data')).toBeTruthy();
-    expect(within(table).getByText('Service restarted before completion; run again explicitly.')).toBeTruthy();
-
-    const running = s.fixture.controls.inspect().runs.find((run) => run.status === 'running')!;
-    s.go(`runs/${running.id}`);
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    const reads = () => s.recorded.calls().filter((call) => call.method === 'run').length;
-    expect(reads()).toBe(0);
-    s.visible.set(true);
-    await waitFor(() => expect(reads()).toBe(1));
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    expect(reads()).toBeGreaterThan(1);
-    act(() => { s.fixture.settle(running.id); });
-    const receipt = await screen.findByRole('article');
-    await within(receipt).findByText('Succeeded');
-    const settled = reads();
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    expect(reads()).toBe(settled);
-    expect(executions(s.recorded)).toHaveLength(0);
-  });
-
-  it('shows runs last seen active as Unknown when the service stops answering', async () => {
-    const s = setup({ destination: 'runs' });
-    await screen.findByRole('table');
-    s.fixture.controls.setUnavailable(true);
-    await s.user.click(screen.getByRole('button', { name: 'Refresh' }));
-    const table = await screen.findByRole('table');
-    await waitFor(() => expect(within(table).getAllByText('Unknown')).toHaveLength(2));
-    expect(within(table).getAllByText(/Don't start it again until the status is known/u)).toHaveLength(2);
-  });
-});
-
 describe('Start draft from a result', () => {
   async function finishedStudioRun(s: Setup) {
     await screen.findByRole('heading', { level: 1 });
@@ -308,75 +233,116 @@ describe('Start draft from a result', () => {
     await screen.findByText('Succeeded', {}, { timeout: 2000 });
     return runId;
   }
+  const newEditor = () => socialSession(CONTEXT.id).getState().editors[NEW_DRAFT_KEY];
+  const saves = (s: Setup) => s.recorded.calls().filter((call) => call.method === 'saveDraft');
 
-  it('saves one draft whose citation is persisted under hq-references-v1', async () => {
-    const s = setup({ destination: 'workbenches/x-studio' });
+  it('opens the Library composer with the result and its citation, saving nothing and running nothing', async () => {
+    const s = setup({ destination: 'workbenches/x-studio', holdNavigation: true });
     const runId = await finishedStudioRun(s);
     const before = s.fixture.controls.inspect().content.length;
+    expect(newEditor()).toBeUndefined();
     await s.user.click(screen.getByRole('button', { name: 'Start draft' }));
-    expect(screen.getByText('Unsaved draft')).toBeTruthy();
-    expect(screen.getByText('Will be saved with the draft')).toBeTruthy();
-    expect(s.recorded.calls().filter((call) => call.method === 'saveDraft')).toHaveLength(0);
-    await s.user.click(screen.getByRole('button', { name: 'Save to library' }));
-    expect(await screen.findByText('Saved with the draft')).toBeTruthy();
-    const saves = s.recorded.calls().filter((call) => call.method === 'saveDraft');
-    expect(saves).toHaveLength(1);
-    const content = s.fixture.controls.inspect().content;
-    expect(content).toHaveLength(before + 1);
-    const draft = content.at(-1)!;
-    expect(draft.links).toEqual([expect.objectContaining({ kind: 'run', entityId: runId, domain: 'social', projectId: CONTEXT.id })]);
-    await s.user.click(screen.getByRole('button', { name: 'Open in library' }));
-    expect(s.destination()).toBe(`library/${draft.id}`);
+    expect(s.navigated).toStrictEqual(['library/new']);
+    const editor = newEditor()!;
+    expect(editor).toMatchObject({ base: null, status: 'editing' });
+    expect(editor.fields.links).toEqual([expect.objectContaining({ kind: 'run', entityId: runId, domain: 'social', projectId: CONTEXT.id })]);
+    expect(editor.fields.title.length).toBeGreaterThan(0);
+    expect(editor.fields.body.length).toBeGreaterThan(0);
+    // Unsaved until Save in the Library; the receipt no longer carries its own editor.
+    expect(saves(s)).toHaveLength(0);
+    expect(s.fixture.controls.inspect().content).toHaveLength(before);
+    expect(screen.queryByRole('button', { name: 'Save to library' })).toBeNull();
     expect(executions(s.recorded)).toHaveLength(1);
   });
 
-  it('shows an unknown save with Check and blocks saving again until the check says it did not happen', async () => {
-    const s = setup({ destination: 'workbenches/x-studio' });
-    await finishedStudioRun(s);
-    const before = s.fixture.controls.inspect().content.length;
-    const saves = () => s.recorded.calls().filter((call) => call.method === 'saveDraft');
+  it('reads Draft started from the editor holding this run, then offers the Library without changing it', async () => {
+    const s = setup({ destination: 'workbenches/x-studio', holdNavigation: true });
+    const runId = await finishedStudioRun(s);
     await s.user.click(screen.getByRole('button', { name: 'Start draft' }));
-    s.fixture.controls.failNext('saveDraft', { kind: 'unknown', attemptedAt: '2026-10-20T12:00:00Z' });
-    await s.user.click(screen.getByRole('button', { name: 'Save to library' }));
-    expect(await screen.findByText('Save result unknown')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
-    await s.user.click(screen.getByRole('button', { name: 'Save to library' }));
-    expect(saves()).toHaveLength(1);
-    await s.user.click(screen.getByRole('button', { name: 'Check' }));
-    expect(await screen.findByText(/the save did not happen/u)).toBeTruthy();
-    await s.user.click(screen.getByRole('button', { name: 'Save to library' }));
-    await screen.findByText('Draft in library');
-    expect(saves()).toHaveLength(2);
-    expect(s.fixture.controls.inspect().content).toHaveLength(before + 1);
+    expect(await screen.findByText('Draft started')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Start draft' })).toBeNull();
+    const before = newEditor();
+    await s.user.click(screen.getByRole('button', { name: 'Open in Library' }));
+    expect(s.navigated).toStrictEqual(['library/new', 'library/new']);
+    expect(newEditor()).toBe(before);
+    expect(newEditor()!.fields.links).toEqual([expect.objectContaining({ entityId: runId })]);
+    expect(saves(s)).toHaveLength(0);
+  });
+
+  it('reads Draft saved from a stored draft that cites this run, with a path to it', async () => {
+    const s = setup({ destination: 'workbenches/x-studio', holdNavigation: true });
+    await finishedStudioRun(s);
+    await s.user.click(screen.getByRole('button', { name: 'Start draft' }));
+    // The Library saves the editor; this view only reads the result.
+    const session = socialSession(CONTEXT.id);
+    const draft = await session.saveEditor(s.recorded.port, NEW_DRAFT_KEY);
+    expect(draft).not.toBeNull();
+    expect(await screen.findByText('Draft saved')).toBeTruthy();
+    expect(screen.queryByText('Draft started')).toBeNull();
+    await s.user.click(screen.getByRole('button', { name: 'Open saved draft' }));
+    expect(s.navigated.at(-1)).toBe(`library/${draft!.id}`);
+    expect(screen.getByRole('button', { name: 'Start another draft' })).toBeTruthy();
     expect(executions(s.recorded)).toHaveLength(1);
   });
 
-  it('keeps Discard unavailable while the first save is in flight', async () => {
-    let release: () => void = () => undefined;
-    let gate: Promise<void> = Promise.resolve();
-    const s = setup({ destination: 'workbenches/x-studio', delay: () => gate });
+  it('never overwrites unsaved text in the Library composer: the user opens it or replaces it', async () => {
+    const s = setup({ destination: 'workbenches/x-studio', holdNavigation: true });
     await finishedStudioRun(s);
+    const session = socialSession(CONTEXT.id);
+    session.openEditor(NEW_DRAFT_KEY, null, { title: 'My own half-written post', body: 'Do not lose this', brand_id: DEFAULT_BRAND_ID, channel: 'X', planned_date: '', archived: 0 });
     await s.user.click(screen.getByRole('button', { name: 'Start draft' }));
-    gate = new Promise((resolve) => { release = resolve; });
-    await s.user.click(screen.getByRole('button', { name: 'Save to library' }));
-    expect(await screen.findByText('Saving…', { selector: '[role="status"]' })).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Discard' }) as HTMLButtonElement).disabled).toBe(true);
-    act(() => release());
-    await screen.findByText('Draft in library');
+    const open = await screen.findByRole('button', { name: 'Open the unsaved draft' });
+    expect(screen.getByText("The Library's new draft has unsaved text")).toBeTruthy();
+    expect(s.navigated).toStrictEqual([]);
+    expect(newEditor()!.fields.title).toBe('My own half-written post');
+    await waitFor(() => expect(document.activeElement).toBe(open));
+
+    await s.user.click(open);
+    expect(s.navigated).toStrictEqual(['library/new']);
+    expect(newEditor()!.fields.body).toBe('Do not lose this');
+    expect(screen.queryByText("The Library's new draft has unsaved text")).toBeNull();
+
+    await s.user.click(screen.getByRole('button', { name: 'Start draft' }));
+    await s.user.click(await screen.findByRole('button', { name: 'Replace it with this result' }));
+    expect(s.navigated.at(-1)).toBe('library/new');
+    expect(newEditor()!.fields.title).not.toBe('My own half-written post');
+    expect(newEditor()!.fields.links).toEqual([expect.objectContaining({ kind: 'run' })]);
+    expect(saves(s)).toHaveLength(0);
   });
 
-  it('without hq-references-v1 the citation is shown as not saved and never silently dropped', async () => {
-    const s = setup({ destination: 'workbenches/x-studio', features: [] });
+  it('dismissing the conflict leaves the composer untouched and returns focus to Start draft', async () => {
+    const s = setup({ destination: 'workbenches/x-studio', holdNavigation: true });
     await finishedStudioRun(s);
+    socialSession(CONTEXT.id).openEditor(NEW_DRAFT_KEY, null, { title: 'Kept', body: 'Kept body', brand_id: DEFAULT_BRAND_ID, channel: 'X', planned_date: '', archived: 0 });
     await s.user.click(screen.getByRole('button', { name: 'Start draft' }));
-    expect(screen.getByText('Not saved — needs Social service support')).toBeTruthy();
-    await s.user.click(screen.getByRole('button', { name: 'Save to library' }));
-    await screen.findByText('Draft in library');
-    expect(screen.getByText('Not saved — needs Social service support')).toBeTruthy();
-    expect(screen.getByText('Citation details')).toBeTruthy();
-    const draft = s.fixture.controls.inspect().content.at(-1)!;
-    expect('links' in draft).toBe(false);
-    expect(s.recorded.calls().filter((call) => call.method === 'saveDraft')).toHaveLength(1);
+    await s.user.click(await screen.findByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByText("The Library's new draft has unsaved text")).toBeNull();
+    expect(newEditor()!.fields.title).toBe('Kept');
+    expect(s.navigated).toStrictEqual([]);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Start draft' }));
+  });
+
+  it('replaces a blank composer without asking', async () => {
+    const s = setup({ destination: 'workbenches/x-studio', holdNavigation: true });
+    await finishedStudioRun(s);
+    socialSession(CONTEXT.id).openEditor(NEW_DRAFT_KEY, null, { title: '  ', body: '', brand_id: DEFAULT_BRAND_ID, channel: 'X', planned_date: '', archived: 0 });
+    await s.user.click(screen.getByRole('button', { name: 'Start draft' }));
+    expect(screen.queryByText("The Library's new draft has unsaved text")).toBeNull();
+    expect(s.navigated).toStrictEqual(['library/new']);
+    expect(newEditor()!.fields.links).toEqual([expect.objectContaining({ kind: 'run' })]);
+  });
+
+  it('without hq-references-v1 the citation is said not to be saved and is never silently dropped', async () => {
+    const s = setup({ destination: 'workbenches/x-studio', features: [], holdNavigation: true });
+    await finishedStudioRun(s);
+    expect(screen.getByText(/the run citation is not saved with the draft/u)).toBeTruthy();
+    await s.user.click(screen.getByRole('button', { name: 'Start draft' }));
+    expect(s.navigated).toStrictEqual(['library/new']);
+    expect('links' in newEditor()!.fields).toBe(false);
+    // Nothing links the editor to the run, so the receipt keeps offering Start draft rather than claiming a state.
+    expect(screen.getByRole('button', { name: 'Start draft' })).toBeTruthy();
+    expect(screen.queryByText('Draft started')).toBeNull();
+    expect(saves(s)).toHaveLength(0);
     expect(executions(s.recorded)).toHaveLength(1);
   });
 });

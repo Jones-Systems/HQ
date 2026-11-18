@@ -22,7 +22,10 @@ export interface SummaryEntry {
 export interface ResultSummary {
   readonly kind: 'result' | 'failed' | 'unrecognized';
   readonly heading: string;
+  /** Shown as summary tiles above the entries; a whole-number value counts up. */
   readonly facts: readonly SummaryFact[];
+  /** Column heading for the entries table's first column, for example "Channel profile". */
+  readonly entryLabel?: string;
   readonly entries: readonly SummaryEntry[];
   /** How many entries exist beyond those listed. */
   readonly more: number;
@@ -80,7 +83,7 @@ const SUMMARIZERS: { readonly [T in ToolId]: Summarizer } = {
     const body = blocks.join('\n\n');
     return {
       heading: blocks.length ? 'Your first draft' : 'No draft text returned',
-      facts: [{ label: 'Blocks', value: String(blocks.length) }],
+      facts: [{ label: 'Blocks', value: String(blocks.length) }, ...(body ? [{ label: 'Words', value: String(body.split(/\s+/u).filter(Boolean).length) }] : [])],
       entries: [], more: 0,
       notices: ['Unreviewed local draft. Claims and first-person statements need your review.'],
       ...(body ? { draftText: body } : {}),
@@ -99,7 +102,12 @@ const SUMMARIZERS: { readonly [T in ToolId]: Summarizer } = {
     const gaps = entries.filter((entry) => entry.status?.tone === 'warning').length;
     return {
       heading: `${plural(channels.length, 'channel profile')} checked`,
-      facts: [{ label: 'Channels with gaps', value: String(gaps) }],
+      facts: [
+        { label: 'Profiles checked', value: String(channels.length) },
+        { label: 'Text checks passed', value: String(channels.length - gaps) },
+        { label: 'Channels with gaps', value: String(gaps) },
+      ],
+      entryLabel: 'Channel profile',
       ...capped(entries),
       notices: [text(result.qualification) ?? 'Offline text preparation only. No posting occurs.'],
       draftText: entries.map((entry) => `${entry.title}: ${entry.status?.label}. ${entry.detail}`).join('\n'),
@@ -110,7 +118,7 @@ const SUMMARIZERS: { readonly [T in ToolId]: Summarizer } = {
     const entries = evidence.map((record): SummaryEntry => ({ title: text(record.title) ?? 'Supplied observation', detail: text(record.text) ?? 'Open the native findings for this record.' }));
     const counts = isJsonObject(result.counts) ? Object.entries(result.counts).map(([key, value]) => ({ label: words(key), value: String(value) })) : [];
     return {
-      heading: plural(evidence.length, 'evidence record'), facts: counts, ...capped(entries), notices: [],
+      heading: plural(evidence.length, 'evidence record'), facts: counts, entryLabel: 'Evidence record', ...capped(entries), notices: [],
       draftText: entries.map((entry) => `- ${entry.title}: ${entry.detail}`).join('\n'),
     };
   },
@@ -128,7 +136,12 @@ const SUMMARIZERS: { readonly [T in ToolId]: Summarizer } = {
       };
     });
     return {
-      heading: plural(creators.length, 'creator assessment'), facts: [], ...capped(entries),
+      heading: plural(creators.length, 'creator assessment'),
+      facts: creators.length ? [
+        { label: 'Creators assessed', value: String(creators.length) },
+        { label: 'With missing evidence', value: String(entries.filter((entry) => entry.status?.tone === 'warning').length) },
+      ] : [],
+      entryLabel: 'Creator', ...capped(entries),
       notices: ['Rankings explain fit from supplied evidence only. No messages, outreach or account actions.'],
       draftText: entries.map((entry) => `- ${entry.title} (${entry.status?.label}): ${entry.detail}. ${entry.meta}`).join('\n'),
     };

@@ -29,6 +29,13 @@ export interface IndexedPage extends SnapshotPage {
   readonly id: string;
 }
 
+/** One page that links to a target, with the provenance recorded for that pair. */
+export interface BacklinkSource {
+  readonly page: IndexedPage;
+  readonly via: readonly string[];
+  readonly excerpt: string | null;
+}
+
 interface Posting {
   readonly doc: number;
   /** Weighted term frequency: body + TITLE_WEIGHT * title. */
@@ -45,8 +52,8 @@ export interface NamespaceIndex {
   /** Weighted token length per document. */
   readonly docLengths: readonly number[];
   readonly totalLength: number;
-  /** Target path -> source pages (sorted by title, then key). */
-  readonly backlinks: ReadonlyMap<string, readonly IndexedPage[]>;
+  /** Target path -> source pages with how they link (sorted by title, then key). */
+  readonly backlinks: ReadonlyMap<string, readonly BacklinkSource[]>;
   readonly topics: TopicList;
 }
 
@@ -119,6 +126,12 @@ function directoryTopicDrafts(pages: readonly IndexedPage[]): TopicDraft[] {
   return [...drafts.values()];
 }
 
+/** The page keys and display titles of a topic's first MAX_RESULTS members, in one order. */
+function previewOf(namespace: WikiNamespace, members: readonly IndexedPage[]): Pick<Topic, 'pages' | 'pageTitles'> {
+  const shown = [...members].sort(compareTitleThenKey).slice(0, MAX_RESULTS);
+  return { pages: shown.map((p) => pageKey(namespace, p.path)), pageTitles: shown.map((p) => p.title) };
+}
+
 function buildTopics(namespace: WikiNamespace, pages: readonly IndexedPage[], mode: TopicMode): TopicList {
   if (mode === 'none') return { namespace, topics: [] };
   const all = mode === 'field' ? fieldTopicDrafts(pages) : directoryTopicDrafts(pages);
@@ -132,7 +145,7 @@ function buildTopics(namespace: WikiNamespace, pages: readonly IndexedPage[], mo
     label: draft.label,
     parentId: draft.parentKey === null ? null : (ids.get(draft.parentKey) ?? null),
     pageCount: draft.members.length,
-    pages: [...draft.members].sort(compareTitleThenKey).slice(0, MAX_RESULTS).map((p) => pageKey(namespace, p.path)),
+    ...previewOf(namespace, draft.members),
   }));
   topics.sort((a, b) => compareUnits(a.label, b.label) || compareUnits(a.id, b.id));
   return { namespace, topics };
@@ -166,18 +179,18 @@ export function createNamespaceIndex(snapshot: IndexSnapshot, topicMode: TopicMo
     }
   }
 
-  const backlinkSets = new Map<string, Set<IndexedPage>>();
+  const backlinkSets = new Map<string, BacklinkSource[]>();
   for (const page of pages) {
-    for (const target of page.links) {
-      if (target.kind !== 'page' || target.key.namespace !== namespace || target.key.path === page.path) continue;
-      if (!byPath.has(target.key.path)) continue;
-      const set = backlinkSets.get(target.key.path);
-      if (set === undefined) backlinkSets.set(target.key.path, new Set([page]));
-      else set.add(page);
+    for (const origin of page.linkOrigins) {
+      if (origin.path === page.path || !byPath.has(origin.path)) continue;
+      const source: BacklinkSource = { page, via: origin.via, excerpt: origin.excerpt };
+      const list = backlinkSets.get(origin.path);
+      if (list === undefined) backlinkSets.set(origin.path, [source]);
+      else list.push(source);
     }
   }
-  const backlinks = new Map<string, readonly IndexedPage[]>();
-  for (const [path, set] of backlinkSets) backlinks.set(path, [...set].sort(compareTitleThenKey));
+  const backlinks = new Map<string, readonly BacklinkSource[]>();
+  for (const [path, list] of backlinkSets) backlinks.set(path, list.sort((a, b) => compareTitleThenKey(a.page, b.page)));
 
   return { namespace, snapshot, pages, byPath, directory, postings, docLengths, totalLength, backlinks, topics: buildTopics(namespace, pages, topicMode) };
 }

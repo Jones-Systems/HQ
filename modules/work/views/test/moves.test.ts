@@ -135,7 +135,7 @@ describe('selections', () => {
 });
 
 describe('module-local Work roles', () => {
-  const css = readFileSync(new URL('../work-views.css', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../../theme/work-theme.css', import.meta.url), 'utf8');
   const tokens = JSON.parse(readFileSync(new URL('../../../../packages/hq-ui/src/tokens/hq-tokens.json', import.meta.url), 'utf8')) as {
     color: Record<string, { light: string; dark: string }>;
   };

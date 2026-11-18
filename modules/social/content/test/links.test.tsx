@@ -26,7 +26,14 @@ function setup(features?: string[], draftId = source) {
   return { ...fixture, recorded, references, navigate, props, session: socialSession(projectId) };
 }
 
+/** Pasting a serialized reference is a developer tool, so it lives behind Advanced, closed until opened. */
+function openAdvanced() {
+  const toggle = screen.getByRole('button', { name: 'Advanced' });
+  if (toggle.getAttribute('aria-expanded') !== 'true') fireEvent.click(toggle);
+}
+
 function paste() {
+  openAdvanced();
   fireEvent.change(screen.getByLabelText('Serialized HQ reference'), { target: { value: JSON.stringify(envelope) } });
   fireEvent.click(screen.getByRole('button', { name: 'Add reference' }));
 }
@@ -40,7 +47,7 @@ describe('Social draft references', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Link to…' }));
     await screen.findByRole('option', { name: /Notes on a slower posting rhythm/ });
     fireEvent.click(screen.getByRole('option', { name: /Notes on a slower posting rhythm/ }));
-    await screen.findByRole('button', { name: 'Undo link' });
+    await screen.findByRole('button', { name: 'Undo' });
     expect(s.controls.inspect().content.find((draft) => draft.id === source)).toMatchObject({ version: 4, links: [expect.objectContaining({ entityId: envelope.entityId })] });
     await waitFor(() => expect((screen.getByRole('button', { name: `Open ${envelope.title}` }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: `Open ${envelope.title}` }));
@@ -66,7 +73,7 @@ describe('Social draft references', () => {
     s.session.openEditor(source, stored, { ...stored, links: [envelope] });
     const view = render(<SocialContent {...s.props} />);
     await screen.findByText(UNSAVED_LINKS);
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('cannot save links yet'));
     expect(s.recorded.calls().filter((call) => call.method === 'saveDraft')).toEqual([]);
     expect(s.session.getState().editors[source]?.fields.links).toEqual([envelope]);
@@ -74,7 +81,7 @@ describe('Social draft references', () => {
     view.unmount();
     render(<SocialContent {...s.props} />);
     expect(await screen.findByText(UNSAVED_LINKS)).toBeTruthy();
-    expect(screen.getByText(envelope.title, { selector: '.hq-reference-title' })).toBeTruthy();
+    expect(screen.getByText(envelope.title, { selector: '.soc-link-title' })).toBeTruthy();
     expect(s.recorded.callsOf('execution')).toEqual([]);
   });
 
@@ -98,9 +105,9 @@ describe('Social draft references', () => {
     const section = await screen.findByRole('region', { name: 'Draft links' });
     fireEvent.drop(section, { dataTransfer: { getData: () => JSON.stringify(envelope) } });
     fireEvent.drop(section, { dataTransfer: { getData: () => JSON.stringify(envelope) } });
-    await screen.findByRole('button', { name: 'Undo link' });
+    await screen.findByRole('button', { name: 'Undo' });
     expect(s.recorded.calls().filter((call) => call.method === 'saveDraft')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Undo link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     await waitFor(() => expect(s.controls.inspect().content.find((draft) => draft.id === source)?.links).toEqual([]));
     s.controls.editElsewhere(source, { title: 'Someone else' });
     paste();
@@ -115,15 +122,15 @@ describe('Social draft references', () => {
     render(<SocialContent {...s.props} />);
     await screen.findByRole('region', { name: 'Draft links' });
     paste();
-    await screen.findByRole('button', { name: 'Undo link' });
+    await screen.findByRole('button', { name: 'Undo' });
     s.controls.editElsewhere(envelope.entityId, { title: 'New target title' });
     s.recorded.clear();
     fireEvent.click(screen.getByRole('button', { name: 'Check references' }));
     await screen.findByText(/Latest title: New target title/);
     expect(s.controls.inspect().content.find((draft) => draft.id === source)?.links?.[0]?.title).toBe(envelope.title);
     expect(s.recorded.calls().filter((call) => call.method === 'saveDraft')).toEqual([]);
-    await waitFor(() => expect((screen.getByRole('button', { name: `Update snapshot ${envelope.title}` }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: `Update snapshot ${envelope.title}` }));
+    await waitFor(() => expect((screen.getByRole('button', { name: `Update title ${envelope.title}` }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: `Update title ${envelope.title}` }));
     await screen.findByRole('button', { name: 'Undo' });
     expect(s.controls.inspect().content.find((draft) => draft.id === source)?.links?.[0]).toMatchObject({ title: 'New target title', sourceRevision: '2' });
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
@@ -135,7 +142,7 @@ describe('Social draft references', () => {
     const s = setup(['hq-references-v1', FEATURE_HQ_BRAND_PROJECT], FIXTURE_IDS.openDay);
     render(<SocialContent {...s.props} />);
     await screen.findByText('Another project: this draft is read-only. The project has not changed.');
-    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save draft' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Link to…' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.drop(screen.getByRole('region', { name: 'Draft links' }), { dataTransfer: { getData: () => JSON.stringify(envelope) } });
     expect(s.recorded.calls().filter((call) => call.method === 'saveDraft')).toEqual([]);
@@ -204,11 +211,31 @@ describe('Social draft references', () => {
     expect((open as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() => expect(s.recorded.calls().every((call) => call.outcome !== 'pending')).toBe(true));
     s.recorded.clear();
-    fireEvent.dragStart(screen.getByText(envelope.title, { selector: '.hq-reference-title' }));
-    fireEvent.dragEnd(screen.getByText(envelope.title, { selector: '.hq-reference-title' }));
+    fireEvent.dragStart(screen.getByText(envelope.title, { selector: '.soc-link-title' }));
+    fireEvent.dragEnd(screen.getByText(envelope.title, { selector: '.soc-link-title' }));
     fireEvent.click(open);
     expect(s.recorded.calls()).toEqual([]);
     expect(s.references.open).not.toHaveBeenCalled();
     expect(s.navigate).not.toHaveBeenCalled();
+  });
+
+  it('shows each link as a title, where it lives and a status in words, with developer text behind a closed Advanced', async () => {
+    const s = setup(undefined, FIXTURE_IDS.steepingThread);
+    render(<SocialContent {...s.props} />);
+    const run = await screen.findByText('Signal inbox · Neighborhood tea', { selector: '.soc-link-title' });
+    const row = run.closest('li')!;
+    expect(row.querySelector('.soc-link-meta')?.textContent).toBe('Run in Social');
+    await waitFor(() => expect(row.querySelector('.hq-status-label')?.textContent ?? '').toMatch(/Up to date|Changed since linked|Not checked yet|Can’t be found|Archived/u));
+    const list = row.closest('ul')!;
+    expect(list.textContent).not.toMatch(/Serialized|JSON|Snapshot|Not resolved|fixture-item-1/u);
+
+    const toggle = screen.getByRole('button', { name: 'Advanced' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    const field = screen.getByLabelText('Serialized HQ reference');
+    expect(field.closest('[hidden]')).not.toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(field.closest('[hidden]')).toBeNull();
+    expect(s.recorded.callsOf('execution')).toEqual([]);
   });
 });

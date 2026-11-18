@@ -205,7 +205,7 @@ older open copy is refused rather than overwriting it.
 
 Items accept `{id, kind: "hq", label, target: ReferenceEnvelope}` alongside
 legacy URL references. HQ references forbid `url`. The envelope uses version 1,
-a Design/Social/Work domain, project and entity identity, title snapshot, and
+a Design/Social/Work/Wiki domain, project and entity identity, title snapshot, and
 module-local return destination. Optional `sourceRevision` and `workspaceId`
 survive reads and writes. Unknown fields, unsafe destination forms, invalid
 text, duplicate IDs and duplicate Work target identities are rejected.

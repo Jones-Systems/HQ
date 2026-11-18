@@ -37,7 +37,7 @@ it('production workspace is held with no srcdoc', async () => {
   const library = new ComponentLibrary(createMemoryStorage(), webCryptoDigest);
   await library.saveSource(SYNTHETIC_BUTTON);
   const view = render(<ComponentsWorkspace library={library} clock={createFakeClock()} appearance="light" />);
-  await waitFor(() => expect(view.getByText(/HELD/)).toBeTruthy());
+  await waitFor(() => expect(view.getByText('Preview held')).toBeTruthy());
   expect(view.container.querySelector('iframe')).toBeNull();
 });
 

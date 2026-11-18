@@ -21,6 +21,7 @@ import {
   validateSearchResult,
   validateSourceDescriptor,
   validateTopicList,
+  type BacklinkEntry,
   type BacklinkResult,
   type IndexStatus,
   type NamespaceIndexStatus,
@@ -239,7 +240,12 @@ export function createWikiHost(options: WikiHostOptions): WikiHost {
         if (index === null) return noIndex();
         if (!index.byPath.has(key.path)) return failWith(serviceError('not-found', 'not-found', 'page not found'));
         const sources = index.backlinks.get(key.path) ?? [];
-        const entries = sources.slice(0, limit).map((page) => ({ source: pageKey(key.namespace, page.path), title: page.title }));
+        const entries = sources.slice(0, limit).map(({ page, via, excerpt }): BacklinkEntry => ({
+          source: pageKey(key.namespace, page.path),
+          title: page.title,
+          ...(via.length === 0 ? {} : { via: [...via] }),
+          ...(excerpt === null ? {} : { excerpt }),
+        }));
         const result: BacklinkResult = { target: pageKey(key.namespace, key.path), entries, total: sources.length, truncated: sources.length > entries.length };
         return checked(validateBacklinkResult(result));
       });

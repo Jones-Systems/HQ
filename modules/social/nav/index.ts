@@ -8,4 +8,4 @@ export { SWITCH_PROJECT_REASON, chooseBrand, domainView, projectLink, selectedBr
 export { CAPABILITIES, Overview, type OverviewProps } from './Overview';
 export { SOURCES_PROPOSED, Sources } from './Sources';
 export { ACCOUNT_CHANNELS, Channels, PUBLISHING_NEEDS } from './Channels';
-export { EXAMPLE_WORKSPACE_NOTE, setSocialWorkspacePort, socialWorkspacePort } from './workspace';
+export { EXAMPLE_WORKSPACE_NOTE, createExampleWorkspace, setSocialWorkspacePort, socialWorkspacePort } from './workspace';

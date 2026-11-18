@@ -1,0 +1,194 @@
+/* HQ shell (docs/design/hq-visual-system/mockups): a title bar and an icon rail on the canvas around one rounded
+   sheet that holds the workspace. Movement uses the shared duration and easing tokens, which drop to zero under
+   reduced motion. The rail width is set on .shell as --shell-rail-w (CSSOM; CSP allows no style attributes). */
+
+.shell {
+  --shell-rail-w: 64px;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--shell-rail-w) minmax(0, 1fr);
+  grid-template-rows: var(--hq-size-titlebar-height) minmax(0, 1fr);
+  height: 100dvh; min-height: 0; overflow: hidden;
+  background: var(--hq-canvas); color: var(--hq-text);
+}
+.shell .shell-icon { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Skip link: the first stop for keyboard users, out of sight until focused. */
+.shell-skip {
+  position: absolute; z-index: var(--hq-z-tooltip); top: var(--hq-space-xs); left: var(--hq-space-sm);
+  padding: var(--hq-space-xs) var(--hq-space-md); border-radius: var(--hq-radius-sm);
+  background: var(--hq-surface-overlay); color: var(--hq-text); font: var(--hq-type-label); text-decoration: none;
+  translate: 0 calc(-100% - var(--hq-space-lg));
+  transition: translate var(--hq-duration-base) var(--hq-ease-enter);
+}
+.shell-skip:focus { translate: none; box-shadow: var(--hq-shadow-overlay); outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: 2px; }
+
+/* ---------- Title bar ---------- */
+.shell-topbar {
+  grid-column: 1 / -1; grid-row: 1;
+  display: flex; align-items: center; gap: var(--hq-space-sm);
+  min-width: 0; padding-right: var(--hq-space-md);
+  user-select: none;
+}
+.shell-brand { flex: none; align-self: stretch; display: flex; align-items: center; justify-content: center; width: var(--shell-rail-w); }
+.shell:not(.is-rail-compact) .shell-brand { justify-content: flex-start; padding-left: var(--hq-space-xl); }
+.shell-mark { display: inline-flex; align-items: center; gap: var(--hq-space-xs); font: 600 12px/1 var(--hq-font-family-mono); letter-spacing: 0.04em; color: var(--hq-text); }
+.shell-mark::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--hq-accent); box-shadow: inset 0 0 0 1px var(--hq-accent-edge); }
+.shell-spacer { flex: 1 1 0; min-width: var(--hq-space-sm); }
+
+.shell-project { display: flex; align-items: center; gap: var(--hq-space-2xs); flex: 0 1 auto; min-width: 0; }
+.shell-project-menu { min-width: 0; max-width: 100%; }
+.shell-project-menu > .hq-btn { max-width: 100%; gap: var(--hq-space-sm); color: var(--hq-text); }
+.shell-project-menu > .hq-btn strong { min-width: 0; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--hq-type-label); font-weight: 600; }
+.shell-project-menu .hq-menu-list { min-width: 240px; }
+.shell-eyebrow { font: var(--hq-type-eyebrow); letter-spacing: var(--hq-type-eyebrow-tracking); text-transform: uppercase; color: var(--hq-text-subtle); }
+.shell .shell-chevron { width: 12px; height: 12px; color: var(--hq-text-subtle); transition: rotate var(--hq-duration-base) var(--hq-ease-standard); }
+.shell [aria-expanded="true"] > .shell-chevron { rotate: 180deg; }
+.shell-scope-note { flex: 0 10 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--hq-type-meta); color: var(--hq-text-subtle); }
+
+/* Back after following a reference: a pill that pops in where the user landed. */
+.shell-back {
+  display: inline-flex; align-items: center; gap: var(--hq-space-3xs); flex: 0 1 auto; min-width: 0; max-width: 280px;
+  height: var(--hq-size-control-sm); min-height: 0; padding: 0 var(--hq-space-sm) 0 var(--hq-space-2xs);
+  border: 0; border-radius: var(--hq-radius-pill); background: var(--hq-accent-soft); color: var(--hq-accent-text);
+  font: var(--hq-type-label); cursor: pointer;
+  transition: background var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.shell-back:hover { background: color-mix(in srgb, var(--hq-accent-soft), var(--hq-accent) 14%); }
+.shell-back-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.shell-crumbs { display: flex; align-items: center; gap: var(--hq-space-2xs); flex: 0 1 auto; min-width: 0; overflow: hidden; padding-left: var(--hq-space-xs); font: var(--hq-type-label); color: var(--hq-text-muted); white-space: nowrap; }
+.shell-crumbs > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.shell-crumbs [aria-current] { color: var(--hq-text); }
+.shell .shell-crumb-separator { width: 12px; height: 12px; color: var(--hq-text-subtle); }
+.shell-storage { flex: none; }
+
+/* Data sources: a chip with the worst status shape, and a popover with every source. */
+.shell-sources { position: relative; flex: none; }
+.shell-chip {
+  display: inline-flex; align-items: center; gap: var(--hq-space-xs);
+  height: var(--hq-size-control-sm); min-height: 0; padding: 0 var(--hq-space-xs) 0 var(--hq-space-sm);
+  border: 0; border-radius: var(--hq-radius-pill); background: transparent; color: var(--hq-text-muted);
+  box-shadow: inset 0 0 0 1px var(--hq-border); font: var(--hq-type-label); cursor: pointer;
+  transition: background var(--hq-duration-fast) var(--hq-ease-standard), color var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.shell-chip:hover, .shell-chip[aria-expanded="true"] { background: var(--hq-surface-hover); color: var(--hq-text); }
+.shell-popover {
+  position: absolute; z-index: var(--hq-z-popover); top: calc(100% + var(--hq-space-xs)); left: 0;
+  width: 300px; max-width: calc(100vw - 2 * var(--hq-space-md)); padding: var(--hq-space-xs);
+  border-radius: var(--hq-radius-md); background: var(--hq-surface-overlay); color: var(--hq-text);
+  box-shadow: var(--hq-shadow-overlay); transform-origin: top left;
+}
+.shell-popover--end { left: auto; right: 0; transform-origin: top right; }
+.shell-popover-foot { margin-top: var(--hq-space-2xs); padding: var(--hq-space-xs) var(--hq-space-sm) var(--hq-space-2xs); border-top: 1px solid var(--hq-border); }
+.shell-link-button { min-height: 0; padding: 0; border: 0; background: none; color: var(--hq-accent-text); font: var(--hq-type-label); cursor: pointer; }
+.shell-link-button:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+/* Appearance: every choice visible in wide windows; one stepping button in compact ones. */
+.shell-segmented { display: inline-flex; flex: none; gap: 2px; padding: 2px; border-radius: var(--hq-radius-md); background: var(--hq-surface-sunken); box-shadow: inset 0 0 0 1px var(--hq-border); }
+.shell-segmented button {
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 22px; min-height: 0; padding: 0;
+  border: 0; border-radius: var(--hq-radius-sm); background: transparent; color: var(--hq-text-muted); cursor: pointer;
+  transition: background var(--hq-duration-fast) var(--hq-ease-standard), color var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.shell-segmented button:hover { background: var(--hq-surface-hover); color: var(--hq-text); }
+.shell-segmented button[aria-checked="true"] { background: var(--hq-surface-raised); color: var(--hq-text); box-shadow: 0 0 0 1px var(--hq-border-strong), var(--hq-shadow-raised); }
+.shell-segmented button[aria-checked="true"] .shell-icon { animation: hq-scale-in var(--hq-duration-slow) var(--hq-ease-spring) both; }
+.shell .shell-segmented .shell-icon { width: 14px; height: 14px; }
+.shell-icon-button {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; min-height: 0; padding: 0;
+  border: 0; border-radius: var(--hq-radius-sm); background: transparent; color: var(--hq-text-muted); cursor: pointer;
+}
+.shell-icon-button:hover { background: var(--hq-surface-hover); color: var(--hq-text); }
+.shell-appearance-cycle { display: none; }
+
+/* ---------- Rail ---------- */
+.shell-rail {
+  grid-column: 1; grid-row: 2; position: relative;
+  display: flex; flex-direction: column; gap: var(--hq-space-2xs);
+  min-width: 0; min-height: 0; padding: var(--hq-space-2xs) var(--hq-space-xs) var(--hq-space-md);
+  overflow: hidden auto;
+}
+.shell-rail > nav { display: grid; gap: var(--hq-space-2xs); }
+.shell-rail-item {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  width: 100%; height: var(--hq-size-rail-item-height); min-height: 0; padding: 0 2px;
+  border: 0; border-radius: var(--hq-radius-md); background: transparent; color: var(--hq-rail-item-fg);
+  font: var(--hq-type-rail); letter-spacing: var(--hq-type-rail-tracking); cursor: pointer;
+  transition: background var(--hq-duration-fast) var(--hq-ease-standard), color var(--hq-duration-fast) var(--hq-ease-standard);
+}
+.shell .shell-rail-item .shell-icon { width: var(--hq-size-icon-lg); height: var(--hq-size-icon-lg); transition: transform var(--hq-duration-fast) var(--hq-ease-standard); }
+.shell-rail-item:hover:not([aria-current]) { background: var(--hq-rail-item-bg-hover); color: var(--hq-rail-item-fg-hover); }
+.shell-rail-item:active:not([aria-current]) .shell-icon { transform: scale(var(--hq-motion-scale-press)); transition-duration: var(--hq-duration-instant); }
+.shell-rail-item[aria-current="page"] { color: var(--hq-selected-fg); font-weight: 600; }
+.shell-rail-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shell-rail-settings { margin-top: auto; flex: none; }
+.shell-rail.is-compact .shell-rail-settings { height: 40px; }
+.shell-rail.is-compact .shell-rail-settings .shell-rail-label { display: none; }
+/* One selection pill slides between items (Rail measures the selected item). Shared filled selection: never a side stripe. */
+.shell-rail-pill {
+  position: absolute; z-index: 0; top: 0; left: 0;
+  width: var(--shell-pill-w, 0px); height: var(--shell-pill-h, 0px);
+  translate: var(--shell-pill-x, 0px) var(--shell-pill-y, 0px);
+  border-radius: var(--hq-radius-md); background: var(--hq-selected-bg);
+  pointer-events: none;
+}
+.shell-rail[data-pill-ready] .shell-rail-pill { transition: translate var(--hq-duration-slow) var(--hq-ease-spring), height var(--hq-duration-base) var(--hq-ease-standard); }
+/* Dragged wider than the compact threshold, items read as rows. */
+.shell-rail:not(.is-compact) { padding-inline: var(--hq-space-sm); }
+.shell-rail:not(.is-compact) .shell-rail-item { flex-direction: row; justify-content: flex-start; gap: var(--hq-space-sm); height: 34px; padding: 0 var(--hq-space-sm); font: var(--hq-type-label); letter-spacing: normal; }
+.shell-rail:not(.is-compact) .shell-rail-item[aria-current="page"] { font-weight: 600; }
+.shell .shell-rail:not(.is-compact) .shell-rail-item .shell-icon { width: 18px; height: 18px; }
+
+/* The splitter sits on the sheet's left edge instead of taking a column. */
+.shell > .hq-splitter { grid-column: 2; grid-row: 2; justify-self: start; z-index: 3; width: 8px; height: 100%; margin-left: -4px; }
+.shell > .hq-splitter::after { left: 3px; }
+
+/* ---------- Sheet ---------- */
+.workspace {
+  grid-column: 2; grid-row: 2; position: relative;
+  display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden;
+  background: var(--hq-surface);
+  border-top: 1px solid var(--hq-border); border-left: 1px solid var(--hq-border);
+  border-top-left-radius: var(--hq-radius-sheet);
+}
+.workspace:focus { outline: none; }
+.workspace > main { flex: 1; min-height: 0; padding: 0; overflow: auto; }
+/* Page transitions: main carries @hq/ui's .hq-page; Settings, which replaces it, takes the same name. Their own
+   corner radius keeps the snapshots inside the sheet's rounded corner while they animate. */
+.workspace > .settings-page { view-transition-name: hq-page; }
+.workspace > main, .workspace > .settings-page { border-top-left-radius: calc(var(--hq-radius-sheet) - 1px); }
+/* The rail keeps its live image during a page transition, so only its pill moves. */
+.shell-rail { view-transition-name: hq-rail; }
+::view-transition-old(hq-rail) { display: none; }
+::view-transition-group(hq-rail), ::view-transition-new(hq-rail) { animation: none; }
+/* Mounted domain views keep drafts and navigation while Settings uses the sheet. */
+.workspace > main[hidden], .workspace > [hidden] { display: none !important; }
+.shell-reference-notice { flex: none; }
+
+/* ---------- Compact windows ---------- */
+@media (max-width: 959px) {
+  .shell-segmented { display: none; }
+  .shell-appearance-cycle { display: inline-flex; }
+  .shell-crumb-section:not([aria-current]), .shell .shell-crumb-separator { display: none; }
+  .shell-project-menu > .hq-btn strong { max-width: 150px; }
+  .shell-back { max-width: 180px; }
+}
+@media (max-height: 460px) {
+  .shell-rail-item { height: 40px; }
+  .shell-rail-label { display: none; }
+}
+@media (forced-colors: active) {
+  .shell-rail-pill { display: none; }
+  .shell-rail-item[aria-current="page"], .shell-segmented button[aria-checked="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+  .workspace { border: 1px solid CanvasText; }
+}
+
+.shell-search { display: inline-flex; align-items: center; gap: var(--hq-space-sm); flex: none;
+  border: 1px solid var(--hq-border); border-radius: var(--hq-radius-sm); padding: var(--hq-space-xs) var(--hq-space-sm);
+  background: var(--hq-control); color: var(--hq-text); font: var(--hq-type-label); cursor: pointer; }
+.shell-search:hover { background: var(--hq-control-hover); }
+.shell-search:focus-visible { outline: var(--hq-size-focus-width) solid var(--hq-focus); outline-offset: var(--hq-size-focus-offset); }
+.shell-search kbd { color: var(--hq-text-muted); font: inherit; }
+@media (max-width: 999px) { .shell-search kbd { display: none; } }

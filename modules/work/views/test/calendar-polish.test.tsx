@@ -7,23 +7,22 @@ import { setup } from './harness';
 
 afterEach(cleanup);
 
+const viewNav = () => within(screen.getByRole('navigation', { name: 'Calendar view' }));
 async function selectView(user: ReturnType<typeof userEvent.setup>, name: 'Month' | 'Week' | 'Day' | 'Agenda') {
-  if (name === 'Agenda') { await user.click(screen.getByRole('button', { name: 'Agenda' })); return; }
-  if (screen.queryByRole('button', { name: 'Agenda', pressed: true })) await user.click(screen.getByRole('button', { name: 'Agenda' }));
-  for (let i = 0; i < 3 && !screen.getByRole('button', { name: /^Calendar view:/ }).textContent?.includes(name); i++) {
-    await user.click(screen.getByRole('button', { name: /^Calendar view:/ }));
-  }
+  await user.click(viewNav().getByRole('button', { name }));
 }
+/** The layout the segmented nav marks as current. */
+const currentView = () => viewNav().getAllByRole('button').find((b) => b.getAttribute('aria-current') === 'page')?.textContent;
 
 describe('Calendar view navigation', () => {
   it('drills the full month header into the clicked week, then its day, without writes', async () => {
     const { container, rec } = await setup({ view: 'calendar' });
     const head = container.querySelector('[data-day="2026-10-30"] .wv-day-head')!;
     fireEvent.doubleClick(head);
-    expect(screen.getByRole('button', { name: /^Calendar view: Week\./ })).toBeTruthy();
+    expect(currentView()).toBe('Week');
     expect(container.querySelector('[data-time-day="2026-10-30"]')).toBeTruthy();
     fireEvent.doubleClick(screen.getByRole('button', { name: 'Open day 2026-10-30' }));
-    expect(screen.getByRole('button', { name: /^Calendar view: Day\./ })).toBeTruthy();
+    expect(currentView()).toBe('Day');
     expect(container.querySelectorAll('[data-time-day]')).toHaveLength(1);
     expect(container.querySelector('[data-time-day="2026-10-30"]')).toBeTruthy();
     expect(rec.writes()).toEqual([]);
@@ -33,11 +32,11 @@ describe('Calendar view navigation', () => {
     const { container, rec } = await setup({ view: 'calendar' });
     const number = within(container.querySelector('[data-day="2026-10-22"] .wv-day-head') as HTMLElement).getByRole('button', { name: /^Open week/ });
     fireEvent.click(number, { detail: 1 });
-    expect(screen.getByRole('button', { name: /^Calendar view: Month\./ })).toBeTruthy();
+    expect(currentView()).toBe('Month');
     number.focus();
     if (key === 'assistive click') fireEvent.click(number, { detail: 0 });
     else fireEvent.keyDown(number, { key });
-    expect(screen.getByRole('button', { name: /^Calendar view: Week\./ })).toBeTruthy();
+    expect(currentView()).toBe('Week');
     expect(document.activeElement).toBe(container.querySelector('.wv-cal-title'));
     const user = userEvent.setup();
     screen.getByRole('button', { name: 'Open day 2026-10-22' }).focus();
@@ -56,36 +55,34 @@ describe('Calendar view navigation', () => {
     await user.dblClick(within(head).getByRole('button', { name: /^New item on/ }));
     expect(capture).toHaveBeenCalled();
     expect(capture.mock.calls.every(([value]) => value.date.value === '2026-10-22')).toBe(true);
-    expect(screen.getByRole('button', { name: /^Calendar view: Month\./ })).toBeTruthy();
+    expect(currentView()).toBe('Month');
     await user.dblClick(within(head).getByRole('button', { name: /^Open week/ }));
-    expect(screen.getByRole('button', { name: /^Calendar view: Week\./ })).toBeTruthy();
+    expect(currentView()).toBe('Week');
     expect(rec.writes()).toEqual([]);
   });
 
-  it('cycles grid modes and returns from separate Agenda without advancing or saving', async () => {
+  it('switches layouts from the segmented nav, keeps the shown day through Agenda, and never writes', async () => {
     const user = userEvent.setup();
     const { container, rec, store, unmount } = await setup({ view: 'calendar' });
     fireEvent.doubleClick(container.querySelector('[data-day="2026-10-30"] .wv-day-head')!);
     await selectView(user, 'Month');
     expect(screen.queryByRole('menu')).toBeNull();
-    const cycle = screen.getByRole('button', { name: /^Calendar view:/ });
-    cycle.focus();
-    await user.keyboard('{Enter}');
-    expect(cycle.textContent).toBe('Week');
-    await user.keyboard(' ');
-    expect(cycle.textContent).toBe('Day');
-    await user.click(screen.getByRole('button', { name: 'Agenda' }));
-    expect(cycle.getAttribute('aria-pressed')).toBe('false');
-    await user.click(cycle);
-    expect(cycle.textContent).toBe('Day');
-    expect(cycle.getAttribute('aria-pressed')).toBe('true');
+    expect(currentView()).toBe('Month');
+    await selectView(user, 'Week');
+    expect(currentView()).toBe('Week');
+    await selectView(user, 'Day');
+    expect(currentView()).toBe('Day');
+    await selectView(user, 'Agenda');
+    expect(currentView()).toBe('Agenda');
+    await selectView(user, 'Day');
+    expect(currentView()).toBe('Day');
     expect(container.querySelector('[data-time-day="2026-10-30"]')).toBeTruthy();
     await selectView(user, 'Agenda');
     expect(screen.getByRole('heading', { level: 2, name: /October/ })).toBeTruthy();
     await selectView(user, 'Day');
     unmount();
     const restored = render(<PlanningViews store={store} view="calendar" now={() => new Date(VIEW_NOW)} pollMs={3_600_000} />);
-    expect(screen.getByRole('button', { name: /^Calendar view: Day\./ })).toBeTruthy();
+    expect(currentView()).toBe('Day');
     expect(restored.container.querySelector('[data-time-day="2026-10-30"]')).toBeTruthy();
     expect(rec.writes()).toEqual([]);
   });

@@ -1,9 +1,12 @@
 import { useEffect, useId, useMemo, useState } from 'react';
+import { Button, useReducedMotion, useToast } from '@hq/ui';
 import type { ClockPort, ComponentSource, Easing, MotionStudy, RenderInput } from '../src/contract.ts';
-import { EASING_PRESETS, easingCurve, easingToCss, parseEasing, progressAt, totalDuration, withSegmentEasing } from '../src/model/motion.ts';
+import { EASING_PRESETS, easingCurve, easingToCss, parseEasing, progressAt, sampleStudy, totalDuration, withSegmentEasing } from '../src/model/motion.ts';
 import { INITIAL_PLAYER, currentTime, frameAt, pause, play, replay, scrub, setLoop, tick } from '../src/model/player.ts';
 import type { PlayerState } from '../src/model/player.ts';
+import { snapToSampleFrames } from '../src/model/proxy-frames.ts';
 import { ComponentSurface } from './ComponentSurface.tsx';
+import { MotionProxy } from './MotionProxy.tsx';
 import type { ComponentRunnerPort } from '../src/runner.ts';
 
 export interface MotionPlayerProps {
@@ -12,8 +15,8 @@ export interface MotionPlayerProps {
   /** Exact component revision the study animates, if available. */
   readonly target: { readonly source: ComponentSource; readonly input: RenderInput } | null;
   readonly clock: ClockPort;
-  /** Saves the edited draft as a new revision. Earlier revisions stay unchanged. */
-  readonly onSaveDraft?: (draft: MotionStudy) => Promise<void>;
+  /** Saves the edited draft as a new revision and returns it. Earlier revisions stay unchanged. */
+  readonly onSaveDraft?: (draft: MotionStudy) => Promise<MotionStudy | void>;
 }
 
 const DEFAULT_SEGMENT: Readonly<Record<Easing['kind'], Easing>> = {
@@ -23,7 +26,8 @@ const DEFAULT_SEGMENT: Readonly<Record<Easing['kind'], Easing>> = {
   spring: { kind: 'spring', stiffness: 170, damping: 26, mass: 1 },
 };
 
-function CurvePreview({ easing, segmentMs }: { readonly easing: Easing; readonly segmentMs: number }) {
+/** The curve draws in (token-timed CSS) when `drawKey` changes, for example a new segment or easing kind. */
+function CurvePreview({ easing, segmentMs, drawKey }: { readonly easing: Easing; readonly segmentMs: number; readonly drawKey: string }) {
   const points = easingCurve(easing, 64, segmentMs);
   const ys = points.map((point) => point.y);
   const low = Math.min(0, ...ys);
@@ -31,7 +35,7 @@ function CurvePreview({ easing, segmentMs }: { readonly easing: Easing; readonly
   const map = (point: { x: number; y: number }) => `${(point.x * 100).toFixed(2)},${(100 - ((point.y - low) / (high - low)) * 100).toFixed(2)}`;
   return <svg className="hqc-curve" viewBox="-4 -4 108 108" role="img" aria-label={`Easing curve ${easingToCss(easing, segmentMs)}`}>
     <rect x="0" y="0" width="100" height="100" className="hqc-curve-frame" />
-    <polyline points={points.map(map).join(' ')} className="hqc-curve-line" />
+    <polyline key={drawKey} points={points.map(map).join(' ')} pathLength={1} className="hqc-curve-line" />
   </svg>;
 }
 
@@ -47,7 +51,9 @@ function NumberField({ label, value, min, max, step, onChange }: {
   </span>;
 }
 
-function EasingEditor({ easing, segmentMs, onChange }: { readonly easing: Easing; readonly segmentMs: number; readonly onChange: (easing: Easing) => void }) {
+function EasingEditor({ easing, segmentMs, segmentKey, onChange }: {
+  readonly easing: Easing; readonly segmentMs: number; readonly segmentKey: string; readonly onChange: (easing: Easing) => void;
+}) {
   const kindId = useId();
   const apply = (candidate: unknown) => {
     try {
@@ -68,7 +74,7 @@ function EasingEditor({ easing, segmentMs, onChange }: { readonly easing: Easing
     </span>
     {easing.kind === 'cubic-bezier' ? <>
       <span className="hqc-presets" role="group" aria-label="Presets">
-        {Object.entries(EASING_PRESETS).map(([name, preset]) => <button key={name} type="button" onClick={() => onChange(preset)}>{name}</button>)}
+        {Object.entries(EASING_PRESETS).map(([name, preset]) => <Button key={name} size="sm" onClick={() => onChange(preset)}>{name}</Button>)}
       </span>
       <NumberField label="x1" value={easing.x1} min={0} max={1} step={0.01} onChange={(x1) => apply({ ...easing, x1 })} />
       <NumberField label="y1" value={easing.y1} min={-5} max={5} step={0.01} onChange={(y1) => apply({ ...easing, y1 })} />
@@ -89,7 +95,7 @@ function EasingEditor({ easing, segmentMs, onChange }: { readonly easing: Easing
       <NumberField label="damping" value={easing.damping} min={0.1} max={500} step={0.5} onChange={(damping) => apply({ ...easing, damping })} />
       <NumberField label="mass" value={easing.mass} min={0.1} max={100} step={0.1} onChange={(mass) => apply({ ...easing, mass })} />
     </> : null}
-    <CurvePreview easing={easing} segmentMs={segmentMs} />
+    <CurvePreview easing={easing} segmentMs={segmentMs} drawKey={`${segmentKey}:${easing.kind}`} />
     <code className="hqc-mono">{easingToCss(easing, segmentMs)}</code>
   </div>;
 }
@@ -105,6 +111,8 @@ export function MotionPlayer({ study, target, clock, onSaveDraft, runner }: Moti
   const [segment, setSegment] = useState<{ trackId: string; index: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const scrubId = useId();
+  const toast = useToast();
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     setDraft(study);
@@ -134,6 +142,21 @@ export function MotionPlayer({ study, target, clock, onSaveDraft, runner }: Moti
   const selectedFrame = segment === null ? undefined : selectedTrack?.keyframes[segment.index];
   const nextFrame = segment === null ? undefined : selectedTrack?.keyframes[segment.index + 1];
   const motion = useMemo(() => ({ study: draft, time: t }), [draft, t]);
+  // Reduced motion: playback and the readouts keep exact time, but the proxy jumps between a few sampled frames.
+  const proxyFrame = useMemo(() => (reduced ? sampleStudy(draft, snapToSampleFrames(t, total)) : frame), [reduced, draft, t, total, frame]);
+
+  const save = async () => {
+    if (onSaveDraft === undefined) return;
+    setSaving(true);
+    try {
+      const saved = await onSaveDraft(draft);
+      toast.success(`Saved “${draft.title}”${saved ? ` as r${saved.revision}` : ' as a new revision'}`, { meta: 'Earlier revisions are unchanged' });
+    } catch {
+      toast.error('Could not save the motion study', { description: 'Your draft is kept here, unsaved.' });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const toggle = () => {
     const reading = clock.now();
@@ -145,24 +168,26 @@ export function MotionPlayer({ study, target, clock, onSaveDraft, runner }: Moti
     <header className="hqc-motion-head">
       <h2>{draft.title} <span className="hqc-mono">r{study.revision}</span></h2>
       {dirty ? <span className="hqc-badge">Unsaved draft</span> : null}
-      {onSaveDraft === undefined ? null : <button type="button" disabled={!dirty || saving} onClick={() => {
-        setSaving(true);
-        void onSaveDraft(draft).finally(() => setSaving(false));
-      }}>Save as new revision</button>}
+      {onSaveDraft === undefined ? null : <Button size="sm" variant="primary" disabled={!dirty} busy={saving} busyLabel="Saving" onClick={() => void save()}>
+        Save as new revision
+      </Button>}
     </header>
 
     <div className="hqc-motion-stage">
-      {target === null ? <p className="hqc-note">This study has no bound component revision.</p>
-        : <ComponentSurface source={target.source} input={target.input} motion={motion} runner={runner} />}
+      {target === null ? <>
+        <div className="hqc-frame" data-backdrop="grid"><MotionProxy study={draft} frame={proxyFrame} reduced={reduced} /></div>
+        <p className="hqc-note">This study has no bound component revision.</p>
+      </> : <ComponentSurface source={target.source} input={target.input} motion={motion} runner={runner}
+        held={<MotionProxy study={draft} frame={proxyFrame} reduced={reduced} />} />}
     </div>
 
     <div className="hqc-transport" role="group" aria-label="Playback">
-      <button type="button" onClick={toggle} aria-pressed={player.status === 'playing'}>{player.status === 'playing' ? 'Pause' : 'Play'}</button>
-      <button type="button" onClick={() => {
+      <Button size="sm" onClick={toggle} aria-pressed={player.status === 'playing'}>{player.status === 'playing' ? 'Pause' : 'Play'}</Button>
+      <Button size="sm" onClick={() => {
         const reading = clock.now();
         setNow(reading);
         setPlayer((state) => replay(draft, state, reading));
-      }}>Replay</button>
+      }}>Replay</Button>
       <label className="hqc-radio">
         <input type="checkbox" checked={player.loop} onChange={(event) => {
           const reading = clock.now();
@@ -206,6 +231,7 @@ export function MotionPlayer({ study, target, clock, onSaveDraft, runner }: Moti
       <EasingEditor
         easing={selectedFrame.easing}
         segmentMs={(nextFrame.offset - selectedFrame.offset) * draft.duration}
+        segmentKey={`${segment.trackId}:${segment.index}`}
         onChange={(easing) => setDraft((current) => withSegmentEasing(current, segment.trackId, segment.index, easing))}
       />
     </div> : <p className="hqc-note">Select a keyframe to edit the easing of the segment it starts.</p>}
