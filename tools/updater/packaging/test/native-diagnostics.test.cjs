@@ -329,3 +329,98 @@ test('real fresh helper gate, singleton and writer refusals remain distinct befo
     assert.equal(fs.existsSync(path.join(f.record.stateRoot, 'gate')), false);
   });
 });
+
+test('installer fixtures retain exact stage ordering and preserve original failures', async t => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../fixtures/native-install.cjs'), 'utf8');
+  const stages = ['entered', 'setup', 'read', 'input-read', 'validate', 'input-validated',
+    'prepare-started', 'prepare', 'prepared', 'activation-started', 'activate', 'activated'];
+  const cases = [
+    { name: 'success' },
+    { name: 'setup refusal', stopsAt: 'setup', errorStage: 'setup-error' },
+    { name: 'input read refusal', stopsAt: 'read', errorStage: 'input-error' },
+    { name: 'non-synthetic input refusal', stopsAt: 'validate', errorStage: 'input-error' },
+    { name: 'preparation refusal', stopsAt: 'prepare', errorStage: 'prepare-error' },
+    { name: 'activation refusal', stopsAt: 'activate', errorStage: 'activation-error' },
+    { name: 'report collision preserves original failure', stopsAt: 'prepare', errorStage: 'prepare-error', collision: true },
+  ];
+  for (const testCase of cases) await t.test(testCase.name, () =>
+    withOwnedDirectory(scratch, 'installer-diagnostic-', async root => {
+      const output = path.join(root, 'output');
+      const runRoot = path.join(root, 'run'), stateRoot = path.join(runRoot, 'lifecycle/state');
+      const directory = path.join(root, 'fixture'), inputFile = path.join(root, sentinel);
+      fs.mkdirSync(output);
+      fs.mkdirSync(stateRoot, { recursive: true });
+      write(path.join(directory, 'diagnostic-binding.json'), { runRoot, stateRoot, buildSequence: 1 });
+
+      const trace = [], written = [];
+      const original = Object.assign(new Error(sentinel), {
+        code: 'busy', refusal: { guard: 'writer-inventory', arbitrary: sentinel },
+      });
+      const incoming = { synthetic: testCase.stopsAt !== 'validate' };
+      const candidate = {}, preparedRecord = {};
+      const reach = name => {
+        trace.push(name);
+        if (testCase.stopsAt === name && name !== 'validate') throw original;
+      };
+      const persist = diagnostics.fixtureReporter(directory, 'installer');
+      if (testCase.collision) assert.equal(persist('prepare-error', { code: 'incompatible' }), true);
+      const exit = await new Promise(resolve => {
+        runInNewContext(source, {
+          __dirname: directory,
+          process: {
+            argv: ['synthetic-runtime', 'native-install.cjs', inputFile],
+            stderr: { write: bytes => written.push(bytes) },
+            set exitCode(code) { resolve(code); },
+          },
+          require: name => {
+            if (name === './native-diagnostics.cjs') return { fixtureReporter: (dir, role) => {
+              assert.equal(dir, directory);
+              assert.equal(role, 'installer');
+              return (stage, error) => {
+                trace.push(stage);
+                return persist(stage, error);
+              };
+            } };
+            if (name === '../tools/updater/contract.cjs') return {
+              ensure(condition) { if (!condition) throw original; },
+              async readJson(file) { assert.equal(file, inputFile); reach('read'); return { record: incoming, candidate }; },
+              validateInstallation(record) { assert.equal(record, incoming); reach('validate'); return incoming; },
+            };
+            assert.equal(name, '../tools/updater/installer.cjs');
+            reach('setup');
+            return {
+              async prepareInstallation(options) {
+                assert.equal(options.record, incoming);
+                assert.equal(options.candidate, candidate);
+                assert.equal(options.mode, 'fresh');
+                reach('prepare');
+                return { record: preparedRecord };
+              },
+              async activatePrepared(record) { assert.equal(record, preparedRecord); reach('activate'); },
+            };
+          },
+        });
+      });
+      const expected = testCase.stopsAt ? [...stages.slice(0, stages.indexOf(testCase.stopsAt) + 1), testCase.errorStage] : stages;
+      assert.deepEqual(trace, expected);
+      assert.equal(exit, testCase.stopsAt ? 1 : 0);
+      assert.deepEqual(written, testCase.stopsAt ? [original.stack + '\n'] : []);
+
+      const snapshot = diagnostics.captureFailure({ output, root: runRoot, production, archive,
+        active: { scenario: 'lifecycle', journey: 'fresh', buildSequence: 1, stateRoot } });
+      for (const stage of diagnostics.STAGES.installer) {
+        const milestone = snapshot.milestones['installer:' + stage];
+        if (!expected.includes(stage)) {
+          assert.deepEqual(milestone, { status: 'unavailable', reason: 'missing' });
+        } else {
+          assert.equal(milestone.stage, stage);
+          assert.equal(milestone.category, stage === testCase.errorStage ? (testCase.collision ? 'incompatible' : 'busy') : null);
+          assert.equal(milestone.refusal?.guard, stage === testCase.errorStage && !testCase.collision ? 'writer-inventory' : undefined);
+        }
+      }
+      const raw = fs.readFileSync(path.join(output, 'native-smoke-primary-failure.json'), 'utf8');
+      assert.ok(Buffer.byteLength(raw) <= 32768);
+      assert.equal(raw.includes(sentinel), false);
+      assert.equal(raw.includes(root), false);
+    }));
+});
