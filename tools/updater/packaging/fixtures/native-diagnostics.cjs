@@ -10,6 +10,8 @@ const STAGES = Object.freeze({
   helper: ['entered', 'completed', 'error'],
   bootstrap: ['entered', 'import-main', 'completed', 'error'],
   main: ['entered', 'main-ready', 'renderer-ready', 'renderer-error', 'healthy', 'failed-health', 'watchdog', 'error'],
+  installer: ['entered', 'input-read', 'input-validated', 'prepare-started', 'prepared',
+    'activation-started', 'activated', 'setup-error', 'input-error', 'prepare-error', 'activation-error'],
 });
 const CATEGORIES = ['wait-timeout', 'subprocess-exit', 'assertion', 'invalid', 'unavailable', 'incompatible', 'recovery-required', 'busy', 'stale-candidate', 'other-error'];
 const GUARDS = ['gate-reconciliation-present', 'installation-gate-owner', 'gate-reconciliation-contended', 'gate-owner-changed', 'gate-owner-liveness', 'gate-acquisition-race', 'profile-singleton', 'session-claim', 'writer-inventory', 'writer-process', 'writer-session'];
