@@ -29,6 +29,11 @@ on:
         options: [adhoc-development, developer-id]
         default: adhoc-development
         required: true
+      arm64_preflight:
+        description: Run only Apple Silicon for a manual ad-hoc preflight
+        type: boolean
+        required: false
+        default: false
 
 env:
   HQ_SIGNED_RELEASES_ENABLED: ${{ vars.HQ_SIGNED_RELEASES_ENABLED }}
@@ -46,11 +51,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-          - runner: macos-15-intel
-            arch: x64
+        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.signing == 'adhoc-development' && inputs.arm64_preflight) && '[{"runner":"macos-15","arch":"arm64"}]' || '[{"runner":"macos-15","arch":"arm64"},{"runner":"macos-15-intel","arch":"x64"}]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     env:

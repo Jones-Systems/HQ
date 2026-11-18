@@ -401,3 +401,50 @@ test('production publication binds both signed archives and manifests, creates o
     assert.throws(() => verifyReleaseFiles(root, 'arm64', productionContext()), /artifact identity/);
   });
 });
+
+
+test('manual arm64 preflight input is a default-off typed boolean', () => {
+  const workflow = fs.readFileSync(path.resolve(__dirname, '../../../../.github/workflows/hq-desktop-package.yml'), 'utf8');
+  const declaration = workflow.match(/^      arm64_preflight:\n([\s\S]*?)(?=^\S|^      \S)/m)?.[1];
+  assert.equal(declaration, '        description: Run only Apple Silicon for a manual ad-hoc preflight\n        type: boolean\n        required: false\n        default: false\n\n');
+});
+
+test('only manual ad-hoc typed opt-in selects the single Apple Silicon package row', () => {
+  const { runInNewContext } = require('node:vm');
+  const workflow = fs.readFileSync(path.resolve(__dirname, '../../../../.github/workflows/hq-desktop-package.yml'), 'utf8');
+  const packageJob = workflow.slice(workflow.indexOf('  package:'), workflow.indexOf('  developer-id:'));
+  const expression = packageJob.match(/^        include: \$\{\{ (.+) \}\}$/m)?.[1];
+  assert.ok(expression, 'package matrix must use the closed preflight selector');
+  assert.doesNotMatch(expression, /github\.event\.inputs/);
+  const rows = [{ runner: 'macos-15', arch: 'arm64' }, { runner: 'macos-15-intel', arch: 'x64' }];
+  function select(event, signing, optIn, ref = 'refs/heads/work/hq-daily-arm64-selector-20261118') {
+    return runInNewContext(expression, {
+      github: { event_name: event, ref },
+      inputs: { signing, ...(optIn === undefined ? {} : { arm64_preflight: optIn }) },
+      fromJSON: JSON.parse,
+    });
+  }
+  assert.deepEqual(select('workflow_dispatch', 'adhoc-development', true), [rows[0]]);
+  for (const optIn of [false, undefined]) {
+    assert.deepEqual(select('workflow_dispatch', 'adhoc-development', optIn), rows);
+  }
+  assert.deepEqual(select('workflow_dispatch', 'developer-id', true), rows);
+  for (const [event, ref] of [
+    ['schedule', 'refs/heads/main'],
+    ['push', 'refs/heads/main'],
+    ['push', 'refs/tags/hq-desktop-test'],
+    ['pull_request', 'refs/pull/1/merge'],
+  ]) {
+    assert.deepEqual(select(event, 'adhoc-development', true, ref), rows);
+  }
+});
+
+test('production and attestation matrix bytes remain unchanged by the preflight selector', () => {
+  const workflow = fs.readFileSync(path.resolve(__dirname, '../../../../.github/workflows/hq-desktop-package.yml'), 'utf8');
+  function matrix(job, next) {
+    const block = workflow.slice(workflow.indexOf(`  ${job}:`), workflow.indexOf(`  ${next}:`));
+    return block.match(/^    strategy:\n([\s\S]*?)(?=^    runs-on:)/m)?.[1];
+  }
+  assert.equal(matrix('developer-id', 'attest'), '      fail-fast: false\n      matrix:\n        include:\n          - runner: macos-15\n            arch: arm64\n          - runner: macos-15-intel\n            arch: x64\n');
+  assert.equal(matrix('attest', 'publish'), '      matrix:\n        arch: [arm64, x64]\n');
+});
