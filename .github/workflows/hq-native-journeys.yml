@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '17 9 * * *'
   workflow_dispatch:
+    inputs:
+      namespace_probe_only:
+        description: 'Run only Linux namespace capability screening; no app install, build or journeys'
+        type: boolean
+        required: false
+        default: false
   pull_request:
     types: [labeled, synchronize, reopened, ready_for_review]
 
@@ -16,7 +22,7 @@ concurrency:
 
 jobs:
   native:
-    name: Four critical Linux native journeys
+    name: ${{ (github.event_name == 'workflow_dispatch' && inputs.namespace_probe_only) && 'Linux namespace capability screen only (no install, build or journeys)' || 'Four critical Linux native journeys' }}
     # No base-branch filter: a labeled integration child tests its actual base.
     if: >-
       github.event_name != 'pull_request' ||
@@ -39,6 +45,15 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24.19.0'
+      - name: Provide bubblewrap on a disposable hosted runner
+        if: github.repository == 'Jones-Systems/HQ' && runner.environment == 'github-hosted' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v bwrap; then exit 0; fi
+          sudo -n apt-get update
+          sudo -n apt-get install -y --no-install-recommends bubblewrap
+          command -v bwrap
       - name: Require existing Linux capabilities
         shell: bash
         run: |
@@ -53,7 +68,40 @@ jobs:
           [[ "$available" =~ ^[0-9]+$ ]]
           echo "Workspace available=$available peak=$HQ_NATIVE_PEAK_BYTES reserve=$HQ_NATIVE_RESERVE_BYTES bytes"
           (( available >= HQ_NATIVE_PEAK_BYTES + HQ_NATIVE_RESERVE_BYTES ))
+      - name: Screen outer and nested namespace capabilities (not Chromium proof)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          probe_root=''
+          cleanup() {
+            status=$?
+            trap - EXIT INT TERM
+            if [ -n "$probe_root" ]; then
+              case "$probe_root" in "$GITHUB_WORKSPACE"/.hq-namespace-probe.*) ;; *) if [ "$status" -eq 0 ]; then status=1; fi; exit "$status" ;; esac
+              if ! timeout --signal=TERM --kill-after=2s 5s rm -rf -- "$probe_root"; then
+                if [ "$status" -eq 0 ]; then status=1; fi
+              fi
+              if [ -e "$probe_root" ] || [ -L "$probe_root" ]; then
+                if [ "$status" -eq 0 ]; then status=1; fi
+              fi
+            fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          test -x /usr/bin/unshare
+          probe_root=$(mktemp -d "$GITHUB_WORKSPACE/.hq-namespace-probe.XXXXXX")
+          mkdir "$probe_root/tmp"
+          printf '%s\n' 'Capability screen only; no Chromium or journey proof.'
+          timeout --signal=TERM --kill-after=2s 10s bwrap --die-with-parent --unshare-user --unshare-pid --bind / / --bind "$probe_root/tmp" /tmp --bind "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE" --proc /proc --dev /dev /bin/sh -ec '
+            printf "%s\n" "Outer user/PID namespace and disposable tmp/repo binds entered."
+            exec /usr/bin/unshare --user --map-root-user --pid --net --fork --kill-child=KILL /usr/bin/true
+          '
+          printf '%s\n' 'Nested user/PID/network capability screen passed; Chromium and journeys remain unproved.'
       - name: Allocate owned install scratch
+        if: github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only
         shell: bash
         run: |
           set -euo pipefail
@@ -64,18 +112,22 @@ jobs:
           echo "npm_config_cache=$scratch/npm" >> "$GITHUB_ENV"
           echo "electron_config_cache=$scratch/electron" >> "$GITHUB_ENV"
       - name: Install locked dependencies and pinned Electron
+        if: github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           node node_modules/electron/install.js
       - name: Build the exact candidate
+        if: github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only
         run: npm run build
       - name: Check portable fixture and cleanup boundaries serially (B)
+        if: github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only
         run: node --test --test-concurrency=1 tests/acceptance/build-inventory.test.mjs tests/acceptance/fixtures/fixtures.test.mjs tests/acceptance/fixtures/scenarios.test.mjs tests/acceptance/fixtures/host-gallery.test.mjs tests/acceptance/cleanup.test.mjs
       - name: Run four native journeys serially (N)
+        if: github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only
         timeout-minutes: 6
         run: timeout --signal=TERM --kill-after=30s 5m node tests/acceptance/run.mjs --routine
       - name: Preserve native reports, ledgers and first-failure screenshots
-        if: always()
+        if: always() && (github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hq-native-${{ github.run_id }}-${{ github.run_attempt }}
@@ -84,7 +136,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
       - name: Remove exact install scratch
-        if: always()
+        if: always() && (github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only)
         shell: bash
         run: |
           set -euo pipefail
