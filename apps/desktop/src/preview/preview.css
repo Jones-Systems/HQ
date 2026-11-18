@@ -1,0 +1,19 @@
+#preview-chrome {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 10000;
+  max-width: min(360px, calc(100vw - 24px));
+  color: #f5f5f5;
+  background: #202124;
+  border: 1px solid #73767c;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px #0004;
+  font: 12px/1.5 system-ui, sans-serif;
+}
+#preview-chrome aside { padding: 10px 12px; }
+#preview-chrome button { display: block; margin: 6px 0; color: #202124; background: #fff; padding: 4px 8px; border: 1px solid #aaa; border-radius: 4px; cursor: pointer; }
+#preview-chrome summary { cursor: pointer; }
+#preview-chrome :focus-visible { outline: 2px solid #8cc7ff; outline-offset: 3px; }
+#preview-chrome details[open] { max-height: min(50vh, 400px); overflow: auto; overflow-wrap: anywhere; }
+#preview-chrome ul { padding-left: 20px; margin: 4px 0 8px; }

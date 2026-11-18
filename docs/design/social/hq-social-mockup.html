@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HQ Social — desktop mockup (fictional fixtures)</title>
+<!--
+  Preliminary design mockup for HQ Social. Everything here is fictional fixture
+  data held in page memory. No network requests, accounts, collection or posting.
+  Token names are provisional semantic roles until the HQ visual system lands.
+  Spec: hq-social-design.md in this directory.
+-->
+<style>
+:root{
+  --hq-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,"Liberation Sans",sans-serif;
+  --hq-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --hq-radius:8px;--hq-radius-sm:5px;
+  /* Light chrome roles (provisional) */
+  --hq-surface-base:#f6f6f3;--hq-surface-raised:#ffffff;--hq-surface-sunken:#ecece7;--hq-surface-rail:#e7e7e1;
+  --hq-text-primary:#1b1d20;--hq-text-muted:#596069;--hq-border:#d9d9d2;--hq-border-strong:#bdbdb4;
+  --hq-accent:#2d5bc9;--hq-accent-text:#ffffff;--hq-accent-soft:#e3eafb;--hq-accent-ink:#1f469f;
+  --hq-focus:#1f5fff;--hq-success:#1d7347;--hq-success-soft:#e1f2e8;--hq-warning:#8a5a00;--hq-warning-soft:#fbefd5;
+  --hq-danger:#b42318;--hq-danger-soft:#fbe4e1;--hq-info-soft:#e6eef8;--hq-shadow:0 1px 2px rgba(20,20,20,.06),0 4px 16px rgba(20,20,20,.06);
+  /* Social-specific role */
+  --social-future:#6b5aa6;--social-future-soft:#ece8f7;
+}
+:root[data-resolved="dark"]{
+  --hq-surface-base:#131417;--hq-surface-raised:#1b1d21;--hq-surface-sunken:#0f1012;--hq-surface-rail:#0c0d0f;
+  --hq-text-primary:#eceef0;--hq-text-muted:#a3a9b1;--hq-border:#2c2f35;--hq-border-strong:#40444c;
+  --hq-accent:#8eb0ff;--hq-accent-text:#0b1530;--hq-accent-soft:#1d2a47;--hq-accent-ink:#b5caff;
+  --hq-focus:#9fbcff;--hq-success:#6fd19b;--hq-success-soft:#15301f;--hq-warning:#f0c066;--hq-warning-soft:#33280f;
+  --hq-danger:#ff8f84;--hq-danger-soft:#3a1714;--hq-info-soft:#172235;--hq-shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.35);
+  --social-future:#b9a8f2;--social-future-soft:#262040;
+}
+*{box-sizing:border-box}
+:root{color-scheme:light}
+:root[data-resolved="dark"]{color-scheme:dark}
+html,body{margin:0;height:100%}
+body{font:14px/1.45 var(--hq-font);background:var(--hq-surface-base);color:var(--hq-text-primary);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--hq-focus);outline-offset:2px;border-radius:4px}
+.skip{position:absolute;left:-9999px;top:8px;z-index:50;background:var(--hq-surface-raised);padding:8px 12px;border-radius:6px}
+.skip:focus{left:8px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.app{display:grid;grid-template-columns:64px 236px minmax(0,1fr);height:100vh}
+/* HQ rail (shell-owned; shown for context only) */
+.rail{background:var(--hq-surface-rail);border-right:1px solid var(--hq-border);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:6px}
+.rail .mark{width:36px;height:36px;border-radius:9px;background:var(--hq-text-primary);color:var(--hq-surface-base);display:grid;place-items:center;font-weight:700;font-size:13px;margin-bottom:10px;letter-spacing:.02em}
+.rail-btn{width:52px;border:0;background:none;border-radius:8px;padding:7px 0 5px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:var(--hq-text-muted);font-size:11px}
+.rail-btn svg{width:20px;height:20px}
+.rail-btn:hover{background:var(--hq-surface-sunken);color:var(--hq-text-primary)}
+.rail-btn[aria-current="true"]{background:var(--hq-surface-raised);color:var(--hq-text-primary);box-shadow:inset 3px 0 0 var(--hq-accent)}
+.rail-spacer{flex:1}
+.appearance{position:relative}
+.appearance-menu{position:absolute;left:58px;bottom:0;background:var(--hq-surface-raised);border:1px solid var(--hq-border);border-radius:var(--hq-radius);box-shadow:var(--hq-shadow);padding:10px;width:200px;z-index:30}
+.appearance-menu legend{font-size:12px;color:var(--hq-text-muted);padding:0 0 6px}
+.appearance-menu fieldset{border:0;margin:0;padding:0}
+.appearance-menu label{display:flex;gap:8px;align-items:center;padding:5px 4px;border-radius:5px;cursor:pointer}
+.appearance-menu label:hover{background:var(--hq-surface-sunken)}
+.appearance-menu small{display:block;color:var(--hq-text-muted);margin-top:6px;font-size:11.5px}
+/* Social domain navigation */
+.dnav{background:var(--hq-surface-raised);border-right:1px solid var(--hq-border);display:flex;flex-direction:column;min-height:0}
+.dnav-head{padding:16px 14px 10px;border-bottom:1px solid var(--hq-border)}
+.domain-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--hq-text-muted);font-weight:600}
+.brand-select{margin-top:8px;display:flex;align-items:center;gap:8px}
+.brand-chip{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;font-weight:700;font-size:11px;background:var(--hq-accent-soft);color:var(--hq-accent-ink);flex:none}
+.brand-select select{flex:1;min-width:0;border:1px solid var(--hq-border);background:var(--hq-surface-raised);border-radius:6px;padding:5px 6px;font-weight:600}
+.brand-link{font-size:11.5px;color:var(--hq-text-muted);margin-top:6px}
+.dnav nav{padding:10px 8px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.dnav nav .group{font-size:11px;color:var(--hq-text-muted);padding:12px 8px 4px;letter-spacing:.06em;text-transform:uppercase}
+.dnav a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--hq-text-primary);text-decoration:none}
+.dnav a:hover{background:var(--hq-surface-sunken)}
+.dnav a[aria-current="page"]{background:var(--hq-accent-soft);color:var(--hq-accent-ink);font-weight:600}
+.dnav a .count{margin-left:auto;font-size:11.5px;color:var(--hq-text-muted);font-weight:500}
+.dnav a .ico{width:16px;height:16px;flex:none;opacity:.85}
+.dnav-foot{margin-top:auto;padding:12px 14px;border-top:1px solid var(--hq-border);font-size:12px;color:var(--hq-text-muted)}
+.dnav-foot strong{color:var(--hq-text-primary);font-weight:600;display:block;margin-bottom:2px}
+/* Main column */
+.col{display:flex;flex-direction:column;min-width:0;min-height:0}
+.topbar{display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid var(--hq-border);background:var(--hq-surface-raised);min-height:52px}
+.crumb{font-size:13px;color:var(--hq-text-muted)}
+.crumb strong{color:var(--hq-text-primary)}
+.topbar .grow{flex:1}
+.ctx{display:flex;align-items:center;gap:6px;border:1px solid var(--hq-border);border-radius:999px;padding:3px 10px 3px 6px;font-size:12.5px;background:var(--hq-surface-base)}
+.ctx .dot{width:8px;height:8px;border-radius:50%;background:var(--hq-success)}
+.ctx.down .dot{background:var(--hq-danger)}
+.ctx-label{color:var(--hq-text-muted)}
+main{flex:1;overflow:auto;padding:20px 24px 96px;min-height:0}
+main:focus{outline:none}
+h1{font-size:21px;margin:0 0 2px;letter-spacing:-.01em}
+h2{font-size:15px;margin:0 0 10px}
+h3{font-size:13.5px;margin:0 0 6px}
+.sub{color:var(--hq-text-muted);margin:0 0 16px;max-width:760px}
+.page-head{display:flex;align-items:flex-end;gap:16px;margin-bottom:16px}
+.page-head>div:first-child{flex:1}
+.page-head .sub{margin:2px 0 0}
+/* Controls */
+.btn{border:1px solid var(--hq-border-strong);background:var(--hq-surface-raised);border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:550;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--hq-surface-sunken)}
+.btn.primary{background:var(--hq-accent);color:var(--hq-accent-text);border-color:var(--hq-accent)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.ghost{border-color:transparent;background:none}
+.btn.ghost:hover{background:var(--hq-surface-sunken)}
+.btn.sm{padding:3px 8px;font-size:12.5px}
+.btn.danger{color:var(--hq-danger)}
+.btn[disabled],.btn[aria-disabled="true"]{opacity:.55;cursor:not-allowed;filter:none}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field>span{font-weight:600;font-size:12.5px}
+.field .hint{font-weight:400;color:var(--hq-text-muted);font-size:12px}
+.field input,.field select,.field textarea,.input{border:1px solid var(--hq-border-strong);background:var(--hq-surface-raised);border-radius:6px;padding:7px 9px;width:100%}
+.field textarea{resize:vertical;min-height:72px;line-height:1.5}
+.field input[aria-invalid="true"],.field textarea[aria-invalid="true"],.field select[aria-invalid="true"]{border-color:var(--hq-danger);box-shadow:0 0 0 1px var(--hq-danger)}
+.err{color:var(--hq-danger);font-size:12.5px}
+.row{display:flex;gap:12px;align-items:center}
+.row.wrap{flex-wrap:wrap}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.card{background:var(--hq-surface-raised);border:1px solid var(--hq-border);border-radius:var(--hq-radius);padding:14px 16px}
+.card.flush{padding:0;overflow:hidden}
+.card-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.card-head h2{margin:0;flex:1}
+.muted{color:var(--hq-text-muted)}
+.small{font-size:12.5px}
+.mono{font-family:var(--hq-mono);font-size:12px}
+.tag{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:600;border:1px solid var(--hq-border);background:var(--hq-surface-base);color:var(--hq-text-muted);white-space:nowrap}
+.tag.ok{background:var(--hq-success-soft);color:var(--hq-success);border-color:transparent}
+.tag.warn{background:var(--hq-warning-soft);color:var(--hq-warning);border-color:transparent}
+.tag.bad{background:var(--hq-danger-soft);color:var(--hq-danger);border-color:transparent}
+.tag.info{background:var(--hq-accent-soft);color:var(--hq-accent-ink);border-color:transparent}
+.tag.future{background:var(--social-future-soft);color:var(--social-future);border-color:transparent}
+.tag.example{border-style:dashed}
+.ch{display:inline-grid;place-items:center;min-width:24px;height:18px;padding:0 4px;border-radius:4px;font-size:10.5px;font-weight:700;border:1px solid var(--hq-border-strong);color:var(--hq-text-muted);background:var(--hq-surface-raised)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+ul.plain{list-style:none;margin:0;padding:0}
+.list-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--hq-border)}
+.list-row:first-child{border-top:0}
+.list-row .grow{flex:1;min-width:0}
+.trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--hq-border);vertical-align:top}
+th{font-size:12px;color:var(--hq-text-muted);font-weight:600;background:var(--hq-surface-base);position:sticky;top:0}
+tbody tr:hover{background:var(--hq-surface-base)}
+tr.sel{background:var(--hq-accent-soft)!important}
+td button.linkish,.linkish{background:none;border:0;padding:0;color:var(--hq-accent-ink);font-weight:600;cursor:pointer;text-align:left}
+.linkish:hover{text-decoration:underline}
+.banner{display:flex;gap:10px;align-items:flex-start;border-radius:var(--hq-radius);padding:10px 14px;margin-bottom:14px;border:1px solid transparent}
+.banner.info{background:var(--hq-info-soft);border-color:var(--hq-border)}
+.banner.warn{background:var(--hq-warning-soft)}
+.banner.bad{background:var(--hq-danger-soft)}
+.banner .grow{flex:1}
+.banner strong{display:block}
+.capstrip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.cap{border:1px solid var(--hq-border);border-radius:var(--hq-radius);padding:10px 12px;background:var(--hq-surface-raised)}
+.cap .k{font-size:12px;color:var(--hq-text-muted)}
+.cap .v{font-weight:650;margin-top:2px;display:flex;gap:6px;align-items:center}
+.empty{border:1px dashed var(--hq-border-strong);border-radius:var(--hq-radius);padding:36px 24px;text-align:center;background:var(--hq-surface-raised)}
+.empty h2{margin-bottom:4px}
+.empty p{color:var(--hq-text-muted);margin:0 auto 14px;max-width:460px}
+.skel{background:linear-gradient(90deg,var(--hq-surface-sunken),var(--hq-surface-raised),var(--hq-surface-sunken));background-size:200% 100%;animation:sk 1.4s infinite;border-radius:6px}
+@keyframes sk{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.skel{animation:none}}
+/* Two-pane layouts */
+.split{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+.lib{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;align-items:start}
+.wb{display:grid;grid-template-columns:240px minmax(0,1fr);gap:16px;align-items:start}
+.side-list{background:var(--hq-surface-raised);border:1px solid var(--hq-border);border-radius:var(--hq-radius);overflow:hidden}
+.side-list .filters{padding:10px;border-bottom:1px solid var(--hq-border);display:flex;flex-direction:column;gap:8px;background:var(--hq-surface-base)}
+.side-list button.item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--hq-border);background:none;padding:10px 12px;cursor:pointer}
+.side-list button.item:hover{background:var(--hq-surface-base)}
+.side-list button.item[aria-current="true"]{background:var(--hq-accent-soft);box-shadow:inset 3px 0 0 var(--hq-accent)}
+.side-list .item-title{font-weight:600;display:flex;gap:6px;align-items:center}
+.side-list .item-meta{font-size:12px;color:var(--hq-text-muted);display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:wrap}
+.unsaved-dot{width:7px;height:7px;border-radius:50%;background:var(--hq-warning);display:inline-block}
+.wb-group{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--hq-text-muted);padding:10px 12px 4px;background:var(--hq-surface-base);border-bottom:1px solid var(--hq-border)}
+.tool-mark{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;font-size:10.5px;font-weight:700;background:var(--hq-surface-sunken);color:var(--hq-text-primary);flex:none}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--hq-border);margin-bottom:14px}
+.tabs button{border:0;background:none;padding:8px 12px;cursor:pointer;color:var(--hq-text-muted);font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;gap:6px;align-items:center}
+.tabs button[aria-selected="true"]{color:var(--hq-text-primary);border-bottom-color:var(--hq-accent)}
+.stepper{display:flex;gap:6px;align-items:center;font-size:12.5px;margin:6px 0 12px}
+.stepper .s{padding:2px 8px;border-radius:999px;border:1px solid var(--hq-border);color:var(--hq-text-muted)}
+.stepper .s.on{background:var(--hq-accent-soft);color:var(--hq-accent-ink);border-color:transparent;font-weight:650}
+.stepper .s.done{color:var(--hq-success);border-color:transparent;background:var(--hq-success-soft)}
+.stepper .s.bad{color:var(--hq-danger);background:var(--hq-danger-soft);border-color:transparent}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;font-size:13px}
+.kv dt{color:var(--hq-text-muted)}
+.kv dd{margin:0}
+/* Composer */
+.composer{background:var(--hq-surface-raised);border:1px solid var(--hq-border);border-radius:var(--hq-radius)}
+.composer-head{padding:12px 16px;border-bottom:1px solid var(--hq-border);display:flex;gap:10px;align-items:center}
+.composer-head input.title{flex:1;font-size:17px;font-weight:650;border:1px solid transparent;background:none;padding:4px 6px;border-radius:6px}
+.composer-head input.title:hover,.composer-head input.title:focus{border-color:var(--hq-border-strong)}
+.composer-body{display:grid;grid-template-columns:minmax(0,1fr) 290px}
+.composer-main{padding:14px 16px;border-right:1px solid var(--hq-border);min-width:0}
+.composer-side{padding:14px 16px;display:flex;flex-direction:column;gap:16px}
+.counter{font-size:12px;color:var(--hq-text-muted);text-align:right;margin-top:-6px;margin-bottom:8px}
+.counter.over{color:var(--hq-danger);font-weight:650}
+.checks li{display:flex;gap:8px;align-items:flex-start;padding:3px 0;font-size:12.5px}
+.savebar{position:sticky;bottom:0;z-index:5;display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid var(--hq-border);background:var(--hq-surface-base);border-radius:0 0 var(--hq-radius) var(--hq-radius)}
+.savebar .grow{flex:1}
+.save-state{font-size:12.5px;display:flex;gap:6px;align-items:center}
+.artwork{border-radius:6px;overflow:hidden;border:1px solid var(--hq-border);display:block}
+.ref{border:1px solid var(--hq-border);border-radius:6px;padding:8px 10px;font-size:12.5px;background:var(--hq-surface-base)}
+.ref .t{font-weight:600}
+.ref .m{color:var(--hq-text-muted);font-size:12px;margin-top:2px}
+/* Calendar */
+.cal{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;align-items:start}
+.month{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--hq-border);border-radius:var(--hq-radius);overflow:hidden;background:var(--hq-border);gap:1px}
+.month .dow{background:var(--hq-surface-base);font-size:11.5px;color:var(--hq-text-muted);padding:6px 8px;font-weight:600}
+.day{background:var(--hq-surface-raised);min-height:104px;padding:5px 6px;display:flex;flex-direction:column;gap:4px}
+.day.out{background:var(--hq-surface-base)}
+.day.out .dn{opacity:.5}
+.day .dn{font-size:12px;font-weight:600;color:var(--hq-text-muted)}
+.day.today .dn{color:var(--hq-accent-text);background:var(--hq-accent);border-radius:999px;padding:0 6px;align-self:flex-start}
+.day.drop{outline:2px dashed var(--hq-accent);outline-offset:-3px}
+.evt{display:flex;gap:5px;align-items:center;width:100%;border:1px solid var(--hq-border);border-left:3px solid var(--hq-accent);background:var(--hq-surface-base);border-radius:5px;padding:3px 5px;font-size:12px;cursor:grab;text-align:left}
+.evt.ready{border-left-color:var(--hq-success)}
+.evt.idea{border-left-color:var(--hq-border-strong)}
+.evt .trunc{flex:1;min-width:0}
+.day .evt{align-items:flex-start}
+.day .evt .trunc{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.3}
+.tray{background:var(--hq-surface-raised);border:1px solid var(--hq-border);border-radius:var(--hq-radius);padding:12px;display:flex;flex-direction:column;gap:6px}
+.tray.drop{outline:2px dashed var(--hq-accent)}
+/* Channels */
+.chan{display:flex;flex-direction:column;gap:8px}
+.chan ul li{display:flex;gap:8px;justify-content:space-between;padding:4px 0;border-top:1px solid var(--hq-border);font-size:12.5px}
+/* Other domains placeholder */
+.placeholder{max-width:620px;margin:48px auto;text-align:center}
+/* Toast, dialogs, mock controls */
+#toast{position:fixed;left:50%;bottom:62px;transform:translateX(-50%);background:var(--hq-text-primary);color:var(--hq-surface-base);padding:9px 14px;border-radius:8px;display:flex;gap:12px;align-items:center;box-shadow:var(--hq-shadow);z-index:40;font-size:13px}
+#toast[hidden]{display:none}
+#toast button{background:none;border:0;color:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
+dialog{border:1px solid var(--hq-border);border-radius:10px;background:var(--hq-surface-raised);color:var(--hq-text-primary);padding:0;width:min(560px,92vw);box-shadow:var(--hq-shadow)}
+dialog::backdrop{background:rgba(10,12,16,.45)}
+.dlg-head{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--hq-border);gap:8px}
+.dlg-head h2{margin:0;flex:1}
+.dlg-body{padding:16px}
+.dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--hq-border);background:var(--hq-surface-base);border-radius:0 0 10px 10px}
+.mock{position:fixed;right:14px;bottom:12px;z-index:35;background:var(--hq-surface-raised);border:1px dashed var(--hq-border-strong);border-radius:10px;box-shadow:var(--hq-shadow);padding:6px 10px;font-size:12px}
+.mock .lbl{font-weight:700;color:var(--social-future);letter-spacing:.04em;text-transform:uppercase;font-size:10.5px;cursor:pointer}
+.mock-body{display:flex;gap:10px;align-items:center;margin-top:6px}
+.mock select{border:1px solid var(--hq-border);border-radius:5px;padding:2px 4px;background:var(--hq-surface-raised);font-size:12px}
+.mock label{display:flex;gap:4px;align-items:center;color:var(--hq-text-muted)}
+pre.json{background:var(--hq-surface-sunken);border-radius:6px;padding:10px;overflow:auto;max-height:260px;font:12px/1.5 var(--hq-mono);margin:0}
+.gi{width:11px;height:11px;flex:none}
+.kbd{font-family:var(--hq-mono);font-size:11.5px;border:1px solid var(--hq-border-strong);border-bottom-width:2px;border-radius:4px;padding:0 5px;background:var(--hq-surface-base)}
+.score{font-variant-numeric:tabular-nums;font-weight:650}
+.bar{height:6px;border-radius:3px;background:var(--hq-surface-sunken);overflow:hidden;width:70px;display:inline-block;vertical-align:middle;margin-left:6px}
+.bar i{display:block;height:100%;background:var(--hq-accent)}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="app">
+  <nav class="rail" aria-label="HQ domains">
+    <div class="mark" aria-hidden="true">HQ</div>
+    <button class="rail-btn" data-action="domain" data-domain="design" aria-current="false" title="Design (Ctrl+1)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16l-1 4z"/><path d="M14 6l3 3"/></svg>Design</button>
+    <button class="rail-btn" data-action="domain" data-domain="social" aria-current="true" title="Social (Ctrl+2)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg>Social</button>
+    <button class="rail-btn" data-action="domain" data-domain="work" aria-current="false" title="Work (Ctrl+3)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3.5" y="4" width="5" height="15" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="16.5" y="4" width="4" height="7" rx="1"/></svg>Work</button>
+    <div class="rail-spacer"></div>
+    <div class="appearance">
+      <button class="rail-btn" id="appearance-btn" data-action="toggle-appearance" aria-expanded="false" aria-controls="appearance-menu" title="Appearance">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 000 16z" fill="currentColor"/></svg>Theme</button>
+      <div class="appearance-menu" id="appearance-menu" hidden>
+        <fieldset><legend>Appearance (HQ shell setting)</legend>
+          <label><input type="radio" name="appearance" value="light"> Light</label>
+          <label><input type="radio" name="appearance" value="dark"> Dark</label>
+          <label><input type="radio" name="appearance" value="system" checked> System</label>
+        </fieldset>
+        <small>Changes HQ chrome only. Artwork, attachments and previews keep their own colors.</small>
+      </div>
+    </div>
+  </nav>
+  <aside class="dnav" id="dnav" aria-label="Social"></aside>
+  <div class="col">
+    <header class="topbar" id="topbar"></header>
+    <main id="main" tabindex="-1"></main>
+  </div>
+</div>
+
+<details class="mock" aria-label="Mockup controls, not part of HQ">
+  <summary class="lbl">Mockup controls</summary>
+  <div class="mock-body">
+  <label>Page state <select id="mock-state"><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Load error</option></select></label>
+  <label>Service <select id="mock-service"><option value="up">Reachable</option><option value="down">Unreachable</option></select></label>
+  <label><input type="checkbox" id="mock-conflict"> Next save conflicts</label>
+  <button class="btn sm ghost" data-action="shortcuts">Shortcuts <span class="kbd">?</span></button>
+  </div>
+</details>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="dlg" aria-labelledby="dlg-title"></dialog>
+
+<script>
+'use strict';
+/* ---------- Fixture clock and data (all fictional) ---------- */
+const TODAY = '2026-10-20';
+const NOW_LABEL = '10:42';
+const BRANDS = {
+  fernhill: { id: 'fernhill', name: 'Fernhill Seed Library', short: 'FS',
+    project: { id: 'prj-fernhill', name: 'Fernhill Seed Library' },
+    profile: {
+      audience: 'Home gardeners and allotment holders within cycling distance of the library.',
+      positioning: 'A free, volunteer-run seed library that teaches people to save and share seed.',
+      voice: 'Warm and practical. Plain words, short sentences. Never promise germination results.',
+      topics: ['Seed saving', 'Seed swaps', 'Labeling packets', 'Germination logs'],
+      avoid: ['Germination or yield guarantees', 'Health or nutrition claims'],
+      channels: ['X', 'Instagram', 'LinkedIn', 'Reddit', 'Article'] } },
+  lantern: { id: 'lantern', name: 'Lantern Cycle Co-op', short: 'LC',
+    project: { id: 'prj-lantern', name: 'Lantern Cycle Co-op' },
+    profile: {
+      audience: 'City commuters learning to maintain their own bikes.',
+      positioning: 'A members’ workshop with shared tools and free repair evenings.',
+      voice: 'Encouraging and hands-on. Explains the why behind each step.',
+      topics: ['Repair evenings', 'Winter commuting', 'Tool library'],
+      avoid: ['Safety guarantees'],
+      channels: ['Instagram', 'TikTok', 'X'] } },
+};
+const KINDS = {
+  tiktok: 'TikTok post snapshots', feed: 'Feed items', reddit: 'Reddit corpus', creators: 'Creator import',
+  seo: 'Article packets', search: 'Answer-search observations',
+};
+const TOOLS = [
+  { id: 'tiktok-intelligence', name: 'TikTok signals', cat: 'Discover', mark: 'TK', kind: 'tiktok',
+    desc: 'Compares post snapshot batches you supply to surface rising formats, sounds and creators.' },
+  { id: 'x-intelligence', name: 'Signal inbox', cat: 'Discover', mark: 'XI', kind: 'feed',
+    desc: 'Sorts supplied feed items into topics, keeping each item traceable to its source.' },
+  { id: 'reddit-opportunities', name: 'Reddit opportunities', cat: 'Discover', mark: 'RE', kind: 'reddit',
+    desc: 'Ranks conversations in a supplied corpus by how well they match your topics.' },
+  { id: 'x-studio', name: 'Writing studio', cat: 'Create', mark: 'XS', kind: null,
+    desc: 'Turns your rough notes into a local first draft of a post, thread or article.' },
+  { id: 'seo-studio', name: 'SEO workbench', cat: 'Create', mark: 'SE', kind: 'seo',
+    desc: 'Checks source-backed article packets for editorial readiness.' },
+  { id: 'search-visibility', name: 'Search visibility', cat: 'Measure', mark: 'SV', kind: 'search',
+    desc: 'Measures how often supplied answer-search results mention and cite you.' },
+  { id: 'social-publisher', name: 'Channel preview', cat: 'Plan', mark: 'CP', kind: null,
+    desc: 'Checks text against five channel profiles. Never publishes.' },
+  { id: 'creator-relationships', name: 'Creator fit', cat: 'Connect', mark: 'CR', kind: 'creators',
+    desc: 'Ranks supplied creators with explicit fit reasons and missing evidence.' },
+];
+const CHANNELS = ['General', 'X', 'LinkedIn', 'TikTok', 'Instagram', 'Facebook', 'Reddit', 'Article'];
+const CH_SHORT = { General: 'GEN', X: 'X', LinkedIn: 'in', TikTok: 'TT', Instagram: 'IG', Facebook: 'FB', Reddit: 'RD', Article: 'ART' };
+/* Illustrative limits only; authoritative values belong to the Channel preview profiles. */
+const LIMITS = { X: 280, LinkedIn: 3000, Instagram: 2200, TikTok: 2200, Facebook: 2200, Reddit: 40000 };
+const STATES = { idea: 'Idea', drafting: 'Drafting', ready: 'Ready for review', archived: 'Archived' };
+
+function seed() {
+  return {
+    sources: [
+      { id: 'src-reddit-sept', brand: 'fernhill', name: 'Gardening forum corpus, September export', kind: 'reddit', records: 214, asOf: '2026-09-30', imported: '2026-10-02 09:14', file: 'forum-corpus-sept.json', digest: '3f9a0c…e21b', status: 'valid' },
+      { id: 'src-tiktok-b12', brand: 'fernhill', name: 'Seed-swap post snapshots, batches 1–2', kind: 'tiktok', records: 86, asOf: '2026-09-23', imported: '2026-09-24 18:40', file: 'snapshots-b1-b2.json', digest: '9b17d2…40aa', status: 'valid' },
+      { id: 'src-feed-oct', brand: 'fernhill', name: 'Community newsletter feed items', kind: 'feed', records: 41, asOf: '2026-10-14', imported: '2026-10-14 20:03', file: 'newsletter-items.json', digest: 'c04e55…9d10', status: 'valid' },
+      { id: 'src-creators', brand: 'fernhill', name: 'Creator shortlist', kind: 'creators', records: 18, asOf: '2026-09-30', imported: '2026-10-01 11:20', file: 'creator-shortlist.json', digest: '71aa3e…0c5f', status: 'valid' },
+      { id: 'src-search-a', brand: 'fernhill', name: 'Answer-search observations, panel A', kind: 'search', records: 120, asOf: '2026-09-28', imported: '2026-10-01 11:32', file: 'panel-a.jsonl', digest: 'e5d901…77b2', status: 'stale' },
+      { id: 'src-seo-autumn', brand: 'fernhill', name: 'Autumn sowing guide packets', kind: 'seo', records: 3, asOf: '2026-09-30', imported: '2026-10-03 08:05', file: 'autumn-packets.json', digest: '2b6c4f…a913', status: 'valid' },
+      { id: 'src-lantern-tt', brand: 'lantern', name: 'Repair-tip post snapshots', kind: 'tiktok', records: 52, asOf: '2026-10-12', imported: '2026-10-13 19:10', file: 'repair-tips.json', digest: '5a5e02…11c8', status: 'valid' },
+    ],
+    runs: [
+      { id: 'run-7c1e', brand: 'fernhill', tool: 'reddit-opportunities', status: 'succeeded', source: 'src-reddit-sept', created: '2026-10-19 16:02', finished: '2026-10-19 16:02', example: false },
+      { id: 'run-6b0a', brand: 'fernhill', tool: 'social-publisher', status: 'succeeded', source: null, created: '2026-10-19 15:40', finished: '2026-10-19 15:40', example: false },
+      { id: 'run-5f93', brand: 'fernhill', tool: 'search-visibility', status: 'failed', source: 'src-search-a', created: '2026-10-18 10:11', finished: '2026-10-18 10:11', example: false, error: 'Input field “answers” has 0 rows. Import observations before running.' },
+      { id: 'run-4d22', brand: 'fernhill', tool: 'tiktok-intelligence', status: 'interrupted', source: 'src-tiktok-b12', created: '2026-10-17 21:30', finished: '2026-10-17 21:31', example: false, error: 'The service restarted before this run finished. Run it again explicitly.' },
+      { id: 'run-3a18', brand: 'fernhill', tool: 'x-studio', status: 'succeeded', source: null, created: '2026-10-16 09:12', finished: '2026-10-16 09:12', example: true },
+      { id: 'run-2e07', brand: 'fernhill', tool: 'creator-relationships', status: 'succeeded', source: 'src-creators', created: '2026-10-02 12:00', finished: '2026-10-02 12:00', example: false },
+      { id: 'run-19c4', brand: 'fernhill', tool: 'seo-studio', status: 'succeeded', source: 'src-seo-autumn', created: '2026-10-03 08:20', finished: '2026-10-03 08:20', example: false },
+      { id: 'run-0f61', brand: 'lantern', tool: 'tiktok-intelligence', status: 'succeeded', source: 'src-lantern-tt', created: '2026-10-13 19:30', finished: '2026-10-13 19:30', example: false },
+    ],
+    drafts: [
+      { id: 'd-swap', brand: 'fernhill', title: 'Saturday seed swap invite', state: 'ready', planned: '2026-10-24', version: 4, updated: 'Yesterday 16:20',
+        base: 'Our autumn seed swap is this Saturday, 10:00–13:00 at the library. Bring saved seed in labeled packets, or come empty-handed and take some home. Volunteers will be at the labeling table all morning.',
+        variants: {
+          X: 'Seed swap this Saturday, 10–1 at Fernhill Seed Library. Bring labeled packets of seed you saved, or come empty-handed and take some home. Labeling table open all morning.',
+          Instagram: 'Autumn seed swap 🌱 This Saturday, 10:00–13:00.\n\nBring seed you saved this year in labeled packets — or come empty-handed and leave with something to sow. Our volunteers will be at the labeling table all morning to help.\n\n#seedswap #seedsaving',
+          LinkedIn: 'This Saturday our volunteers are running the autumn seed swap at Fernhill Seed Library. It’s free, and you don’t need to bring anything to take part. If you work with community gardens, we’d love to compare notes on running swaps.' },
+        citations: [{ run: 'run-7c1e', label: '“Anyone running a seed swap this autumn?” — matched topic “seed swaps”', asOf: '2026-09-30' }],
+        design: { title: 'Seed swap poster', where: 'Design · Board “Autumn swap”', rev: 'rev 3', status: 'available', checked: NOW_LABEL },
+        work: { title: 'Run autumn seed swap', status: 'Active', horizon: 'Now', checked: NOW_LABEL } },
+      { id: 'd-label', brand: 'fernhill', title: 'How we label saved seed', state: 'drafting', planned: '2026-10-28', version: 2, updated: 'Oct 18',
+        base: 'A thread on the four things every packet in our library has written on it, and why.', variants: { X: '1/ Every packet in our library has four things on it. Here’s what they are and why they matter.' },
+        citations: [], design: null, work: null },
+      { id: 'd-sorters', brand: 'fernhill', title: 'Volunteer spotlight: the Tuesday sorters', state: 'idea', planned: '', version: 1, updated: 'Oct 15',
+        base: 'Short profile of the Tuesday evening sorting group.', variants: { Instagram: '' }, citations: [], design: null, work: null },
+      { id: 'd-guide', brand: 'fernhill', title: 'Autumn sowing guide', state: 'drafting', planned: '2026-11-04', version: 3, updated: 'Oct 12',
+        base: 'Long-form guide built from the SEO workbench packet.', variants: { Article: '' },
+        citations: [{ run: 'run-19c4', label: 'Packet “Autumn sowing guide” — ready, 6 sources', asOf: '2026-09-30' }], design: null, work: null },
+      { id: 'd-germ', brand: 'fernhill', title: 'Germination log Q&A', state: 'idea', planned: '', version: 1, updated: 'Oct 9',
+        base: 'Answer common questions from the forum corpus.', variants: { Reddit: '' }, citations: [], design: null, work: null },
+      { id: 'd-recap', brand: 'fernhill', title: 'Summer swap recap', state: 'archived', planned: '2026-08-30', version: 6, updated: 'Aug 31',
+        base: 'Thanks to everyone who came.', variants: { X: 'Thanks to everyone who came to the summer swap!' }, citations: [], design: null, work: null },
+      { id: 'd-winter', brand: 'lantern', title: 'Winter commuting checklist', state: 'ready', planned: '2026-10-27', version: 2, updated: 'Oct 19',
+        base: 'Five checks before your first dark commute.', variants: { Instagram: 'Five checks before your first dark commute: lights, brakes, tyres, chain, mudguards.' }, citations: [], design: null, work: null },
+      { id: 'd-brakes', brand: 'lantern', title: 'Repair evening: brakes', state: 'idea', planned: '', version: 1, updated: 'Oct 16',
+        base: '', variants: { TikTok: '' }, citations: [], design: null, work: null },
+    ],
+  };
+}
+const RESULTS = {
+  'reddit-opportunities': { summary: [['Conversations scanned', '214'], ['Ranked matches', '12'], ['Corpus as of', '30 Sep 2026']],
+    cols: ['Fit', 'Conversation', 'Community', 'Why it matched', 'Check before replying'],
+    rows: [
+      [0.86, 'Anyone running a seed swap this autumn?', 'seed-savers', 'Asks for local swap events; mentions labeling', 'Community self-promotion rules unknown'],
+      [0.79, 'How do you label saved tomato seed?', 'home-growers', 'Direct how-to question on “labeling packets”', '—'],
+      [0.64, 'Germination test results, year two', 'allotment-notes', 'Matches “germination logs”; data-rich thread', 'Don’t present their numbers as ours'],
+      [0.41, 'Best seed catalog for beginners?', 'gardening-chat', 'Weak match: shopping intent', 'Low fit'] ], draftable: true },
+  'tiktok-intelligence': { summary: [['Posts compared', '86'], ['Batches', '2 (16 → 23 Sep)'], ['Rising formats', '3']],
+    cols: ['Signal', 'Batch 1', 'Batch 2', 'Change', 'Evidence'],
+    rows: [
+      ['#seedswap event clips', '14 posts', '23 posts', '+64%', '9 posts with captions'],
+      ['Labeling-tip voiceovers', '6 posts', '11 posts', '+83%', '4 creators'],
+      ['Germination timelapses', '19 posts', '17 posts', '−11%', 'Mostly repeat creators'] ], draftable: true },
+  'x-intelligence': { summary: [['Items', '41'], ['Topics', '4'], ['Newest item', '14 Oct 2026']],
+    cols: ['Topic', 'Items', 'Newest', 'Example item'],
+    rows: [
+      ['Community seed libraries', '9', '14 Oct', 'item-12 “Library opens second branch”'],
+      ['Autumn sowing', '7', '12 Oct', 'item-31 “What to sow before frost”'],
+      ['Volunteer recruitment', '4', '9 Oct', 'item-07 “Saturday helpers wanted”'],
+      ['Unsorted', '21', '14 Oct', '—'] ], draftable: true },
+  'x-studio': { summary: [['Format', 'Short post'], ['Voice', 'DEMO plain analyst (example)'], ['Segments used', '3 of 5']],
+    output: 'Seed swap this Saturday, 10–1. Bring labeled packets of seed you saved, or come empty-handed. Volunteers will help you label at the door.',
+    cols: ['Segment from your notes', 'Used', 'Reason'],
+    rows: [
+      ['Seed swap this Saturday, 10–1', 'Yes', 'Core fact'],
+      ['Bring labeled packets of seed you saved', 'Yes', 'Call to action'],
+      ['or come empty-handed', 'Yes', 'Lowers barrier'],
+      ['We had 40 people last year', 'No', 'Over short-post budget'],
+      ['Parking is limited', 'No', 'Lower priority'] ], draftable: true },
+  'seo-studio': { summary: [['Packets', '3'], ['Ready', '1'], ['Blocked', '1']],
+    cols: ['Packet', 'Sources', 'Readiness', 'Issue'],
+    rows: [
+      ['Autumn sowing guide', '6', 'Ready', '—'],
+      ['Saving bean seed', '2', 'Needs sources', 'Claim in section 2 has no source'],
+      ['Swap etiquette', '4', 'Blocked', 'One source has no “as of” date'] ], draftable: true },
+  'search-visibility': { summary: [['Answers observed', '120'], ['Mentioned you', '18'], ['Cited you', '7']],
+    cols: ['Query group', 'Answers', 'Mentioned', 'Cited', 'Coverage'],
+    rows: [
+      ['seed library near me', '40', '11', '5', 0.13],
+      ['how to save seed', '50', '5', '2', 0.04],
+      ['seed swap events', '30', '2', '0', 0.0] ], draftable: false },
+  'social-publisher': { summary: [['Profiles checked', '5'], ['Pass', '2'], ['Needs attention', '3']],
+    cols: ['Channel profile', 'Limit (illustrative)', 'Length', 'Result', 'Note'],
+    rows: [
+      ['X', '280', '172', 'Pass', '—'],
+      ['LinkedIn', '3,000', '172', 'Pass', '—'],
+      ['Instagram Reels', '2,200', '172', 'Needs media', 'Reels need a video'],
+      ['TikTok', '2,200', '172', 'Needs media', 'Needs a video'],
+      ['Facebook Page Reels', '2,200', '172', 'Needs media', 'Needs a video'] ], draftable: false },
+  'creator-relationships': { summary: [['Creators', '18'], ['Strong fit', '3'], ['Missing evidence', '7']],
+    cols: ['Creator', 'Fit', 'Why', 'Missing evidence'],
+    rows: [
+      ['Plot Nine Diaries', 0.82, 'Topic overlap: seed saving, swaps', 'No audience location data'],
+      ['Windowsill Grower', 0.71, 'Labeling tutorials; similar tone', 'Last post date unknown'],
+      ['Big Veg Energy', 0.38, 'Large reach, off-topic (giant veg)', '—'] ], draftable: false },
+};
+const RESULT_TAG = { Pass: 'ok', Ready: 'ok', Yes: 'ok', No: '', 'Needs media': 'warn', 'Needs sources': 'warn', Blocked: 'bad' };
+const FIELDS = {
+  'tiktok-intelligence': [{ k: 'source', label: 'Snapshot batches', type: 'source', req: true }, { k: 'niche', label: 'Niche label', type: 'text', req: true, ph: 'e.g. seed saving' }, { k: 'as_of', label: 'Analysis date', type: 'date', req: true }],
+  'x-intelligence': [{ k: 'source', label: 'Feed items', type: 'source', req: true }, { k: 'topic', label: 'Topic to organize under', type: 'text', req: true, ph: 'e.g. Community projects' }, { k: 'terms', label: 'Key terms', type: 'text', hint: 'Comma separated', ph: 'seed, library, swap' }],
+  'reddit-opportunities': [{ k: 'source', label: 'Conversation corpus', type: 'source', req: true }, { k: 'topics', label: 'Topics to look for', type: 'text', req: true, hint: 'Comma separated. Prefilled from brand profile.', prefill: 'p.topics' }, { k: 'exclude', label: 'Skip communities', type: 'text', hint: 'Optional', ph: 'e.g. gardening-chat' }, { k: 'as_of', label: 'Corpus date', type: 'date', req: true }],
+  'x-studio': [{ k: 'notes', label: 'Your notes', type: 'textarea', req: true, ph: 'Rough notes, facts and quotes you want to use…' }, { k: 'format', label: 'Format', type: 'select', opts: ['Short post', 'Thread', 'Article'] }, { k: 'audience', label: 'Audience', type: 'text', prefill: 'p.audience' }, { k: 'voice', label: 'Voice', type: 'select', opts: ['DEMO plain analyst (example voice)', 'DEMO warm guide (example voice)'], hint: 'Brand voices from your profile are planned, not available yet.' }],
+  'seo-studio': [{ k: 'source', label: 'Article packets', type: 'source', req: true }, { k: 'as_of', label: 'Check as of', type: 'date', req: true }],
+  'search-visibility': [{ k: 'source', label: 'Observation panel', type: 'source', req: true }, { k: 'entities', label: 'Names to look for', type: 'text', req: true, prefill: 'brand' }, { k: 'as_of', label: 'Observed as of', type: 'date', req: true }],
+  'social-publisher': [{ k: 'caption', label: 'Text to check', type: 'textarea', req: true, ph: 'Paste a caption or post…' }, { k: 'format', label: 'Format', type: 'select', opts: ['Text only', 'Image + caption', 'Video + caption'] }],
+  'creator-relationships': [{ k: 'source', label: 'Creator import', type: 'source', req: true }, { k: 'niche', label: 'Niche topics', type: 'text', req: true, prefill: 'p.topics' }, { k: 'as_of', label: 'Evidence as of', type: 'date', req: true }],
+};
+
+/* ---------- State ---------- */
+const S = {
+  domain: 'social', last: { design: 'Board “Autumn swap”', social: 'overview', work: 'Board' },
+  page: 'overview', brand: 'fernhill', hqProject: 'prj-fernhill', appearance: 'system',
+  view: 'populated', service: 'up', conflictNext: false,
+  data: seed(), buffers: {}, draftId: 'd-swap', variant: 'X', saveState: {}, libFilter: { state: 'active', q: '' },
+  tool: 'reddit-opportunities', wbMode: 'form', wbForm: {}, wbErrors: {}, wbRun: null,
+  srcSel: 'src-reddit-sept', runSel: 'run-7c1e', calMonth: [2026, 9], calView: 'month', newSeq: 1,
+};
+
+/* ---------- Helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const brand = () => BRANDS[S.brand];
+const tool = (id) => TOOLS.find((t) => t.id === id);
+const empty = () => S.view === 'empty';
+const sources = () => empty() ? [] : S.data.sources.filter((s) => s.brand === S.brand);
+const runs = () => empty() ? [] : S.data.runs.filter((r) => r.brand === S.brand);
+const drafts = () => empty() ? [] : S.data.drafts.filter((d) => d.brand === S.brand);
+const draft = (id) => S.data.drafts.find((d) => d.id === id);
+const fmtDate = (iso) => { if (!iso) return 'No date'; const d = new Date(iso + 'T12:00:00Z'); return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }); };
+const ch = (c) => `<span class="ch" title="${esc(c)}">${esc(CH_SHORT[c] || c)}</span>`;
+const statusTag = (s) => ({ succeeded: `<span class="tag ok">${gi('ok')} Succeeded</span>`, failed: `<span class="tag bad">${gi('bad')} Failed</span>`, interrupted: `<span class="tag warn">${gi('warn')} Interrupted</span>`, queued: `<span class="tag">${gi('queued')} Queued</span>`, running: `<span class="tag info">${gi('running')} Running</span>`, unknown: `<span class="tag warn">${gi('unknown')} Unknown</span>` })[s] || esc(s);
+const stateTag = (s) => `<span class="tag ${s === 'ready' ? 'ok' : s === 'archived' ? '' : s === 'drafting' ? 'info' : ''}">${esc(STATES[s])}</span>`;
+const srcTag = (s) => s.status === 'stale' ? '<span class="tag warn" title="Older than 14 days">Stale · 22 days</span>' : s.status === 'invalid' ? '<span class="tag bad">Invalid</span>' : '<span class="tag ok">Valid</span>';
+const G = { ok: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', bad: '<path d="M7 7l10 10M17 7L7 17"/>', warn: '<path d="M12 5.5v8M12 18.5v.01"/>', queued: '<circle cx="12" cy="12" r="6"/>', running: '<path d="M12 5a7 7 0 1 1-7 7"/>', unknown: '<path d="M9.2 9.2a3 3 0 1 1 4.2 2.7c-.8.4-1.4 1-1.4 1.9M12 18.5v.01"/>' };
+const gi = (k) => `<svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${G[k]}</svg>`;
+const icon = (p) => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">${p}</svg>`;
+function toast(msg, undo) {
+  const t = $('#toast'); t.innerHTML = `<span>${esc(msg)}</span>` + (undo ? '<button data-action="undo">Undo</button>' : '');
+  t.hidden = false; S.undo = undo || null; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; S.undo = null; }, undo ? 7000 : 3200);
+}
+function buf(id) {
+  if (!S.buffers[id]) { const d = draft(id); S.buffers[id] = JSON.parse(JSON.stringify({ title: d.title, state: d.state, planned: d.planned, base: d.base, variants: d.variants, channel: Object.keys(d.variants)[0] || 'General' })); }
+  return S.buffers[id];
+}
+function dirty(id) {
+  const b = S.buffers[id], d = draft(id); if (!b || !d) return false;
+  return b.title !== d.title || b.state !== d.state || b.planned !== d.planned || b.base !== d.base || JSON.stringify(b.variants) !== JSON.stringify(d.variants);
+}
+
+/* ---------- Appearance (stand-in for the HQ shell preference) ---------- */
+const mq = matchMedia('(prefers-color-scheme: dark)');
+function applyAppearance() {
+  const resolved = S.appearance === 'system' ? (mq.matches ? 'dark' : 'light') : S.appearance;
+  document.documentElement.dataset.theme = S.appearance; document.documentElement.dataset.resolved = resolved;
+}
+mq.addEventListener('change', applyAppearance);
+
+/* ---------- Shell chrome ---------- */
+const NAV = [
+  ['overview', 'Overview', '<path d="M4 11l8-6 8 6v8H4z"/>'],
+  ['sources', 'Sources', '<ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-6"/>'],
+  ['workbenches', 'Workbenches', '<path d="M14 6l4 4-8 8H6v-4z"/><path d="M4 20h16"/>'],
+  ['library', 'Library', '<path d="M5 4h10l4 4v12H5z"/><path d="M9 12h6M9 16h6"/>'],
+  ['calendar', 'Calendar', '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>'],
+  ['runs', 'Run history', '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>'],
+];
+function renderNav() {
+  const counts = { sources: sources().length, library: drafts().filter((d) => d.state !== 'archived').length, runs: runs().length };
+  $('#dnav').innerHTML = `
+    <div class="dnav-head">
+      <div class="domain-label">Social</div>
+      <div class="brand-select">
+        <span class="brand-chip" aria-hidden="true">${esc(brand().short)}</span>
+        <label class="sr" for="brand-pick">Brand</label>
+        <select id="brand-pick">${Object.values(BRANDS).map((b) => `<option value="${b.id}" ${b.id === S.brand ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
+      </div>
+      <div class="brand-link">Linked HQ project: ${esc(brand().project.name)}</div>
+    </div>
+    <nav aria-label="Social pages">
+      ${NAV.map(([id, label, p]) => `<a href="#/social/${id}" data-page="${id}" ${S.page === id ? 'aria-current="page"' : ''}>${icon(p)}<span>${label}</span>${counts[id] != null && S.view !== 'loading' ? `<span class="count">${counts[id]}</span>` : ''}</a>`).join('')}
+      <div class="group">Later</div>
+      <a href="#/social/channels" data-page="channels" ${S.page === 'channels' ? 'aria-current="page"' : ''}>${icon('<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 11l7.6-3.8M8.2 13l7.6 3.8"/>')}<span>Channels &amp; accounts</span><span class="count" title="No accounts connected">Off</span></a>
+    </nav>
+    <div class="dnav-foot"><strong>Account-free workspace</strong>Analysis runs on data you supply. Nothing is collected or posted automatically.</div>`;
+}
+const PAGE_LABEL = { overview: 'Overview', sources: 'Sources', workbenches: 'Workbenches', library: 'Library', calendar: 'Calendar', runs: 'Run history', channels: 'Channels & accounts' };
+function renderTop() {
+  const label = PAGE_LABEL[S.page];
+  const proj = Object.values(BRANDS).find((b) => b.project.id === S.hqProject).project;
+  $('#topbar').innerHTML = `
+    <div class="crumb">Social / <strong>${esc(label)}</strong></div>
+    <div class="grow"></div>
+    <div class="ctx" title="HQ project context (shell-owned)"><span class="brand-chip" style="width:20px;height:20px;font-size:9px">${esc(BRANDS[proj.id.replace('prj-', '')].short)}</span><span class="ctx-label">Project</span> <strong>${esc(proj.name)}</strong></div>
+    <div class="ctx ${S.service === 'down' ? 'down' : ''}" title="Social service status"><span class="dot" aria-hidden="true"></span>${S.service === 'down' ? `Social service unreachable · last synced ${NOW_LABEL}` : 'Social service connected'}</div>
+    <button class="btn primary" data-action="new-draft">+ New draft</button>`;
+}
+function projectMismatch() {
+  if (brand().project.id === S.hqProject) return '';
+  const cur = Object.values(BRANDS).find((b) => b.project.id === S.hqProject).project.name;
+  return `<div class="banner info" role="note"><div class="grow"><strong>${esc(brand().name)} belongs to project “${esc(brand().project.name)}”.</strong>HQ is still showing project “${esc(cur)}”. Nothing changes project silently.</div><button class="btn sm" data-action="switch-project">Switch HQ project</button></div>`;
+}
+function serviceBanner() {
+  if (S.service !== 'down') return '';
+  return `<div class="banner bad" role="alert"><div class="grow"><strong>Can’t reach the Social service.</strong>Showing data as last loaded at ${NOW_LABEL}. Saving and new runs are paused. Runs that were in progress may still finish; their status is unknown until the service answers.</div><button class="btn sm" data-action="recheck">Check again</button></div>`;
+}
+
+/* ---------- Page: shared states ---------- */
+function loading() {
+  return `<div aria-busy="true" aria-label="Loading"><div class="skel" style="height:26px;width:240px;margin-bottom:10px"></div><div class="skel" style="height:14px;width:420px;margin-bottom:22px"></div>
+  <div class="grid3">${'<div class="card"><div class="skel" style="height:14px;width:50%;margin-bottom:12px"></div><div class="skel" style="height:12px;margin-bottom:8px"></div><div class="skel" style="height:12px;width:80%;margin-bottom:8px"></div><div class="skel" style="height:12px;width:60%"></div></div>'.repeat(3)}</div></div>`;
+}
+function loadError(what) {
+  return `<div class="empty" role="alert"><h2>Couldn’t load ${esc(what)}</h2><p>The Social service returned an error (fixture: <span class="mono">HTTP 503</span>). Unsaved draft text on this device is kept and will not be lost.</p><button class="btn primary" data-action="retry">Try again</button></div>`;
+}
+function emptyState(title, body, action, label) {
+  return `<div class="empty"><h2>${esc(title)}</h2><p>${esc(body)}</p>${action ? `<button class="btn primary" data-action="${action}">${esc(label)}</button>` : ''}</div>`;
+}
+
+/* ---------- Page: Overview / brand context ---------- */
+function pageOverview() {
+  const b = brand(), p = b.profile;
+  const upcoming = drafts().filter((d) => d.planned && d.planned >= TODAY && d.state !== 'archived').sort((a, c) => a.planned.localeCompare(c.planned)).slice(0, 4);
+  const attention = [];
+  sources().filter((s) => s.status === 'stale').forEach((s) => attention.push(['warn', `Source “${s.name}” is 22 days old`, 'Import a newer export before relying on visibility numbers.', 'sources', s.id]));
+  runs().filter((r) => r.status === 'failed' || r.status === 'interrupted').forEach((r) => attention.push([r.status === 'failed' ? 'bad' : 'warn', `${tool(r.tool).name} run ${r.status}`, r.error, 'runs', r.id]));
+  const swap = drafts().find((d) => d.design || d.work);
+  return `
+  <div class="page-head"><div><h1>${esc(b.name)}</h1><p class="sub">Brand context for everything in Social: who you’re talking to, how you sound, and what’s coming up.</p></div>
+    <button class="btn" data-action="edit-profile">Edit brand profile</button></div>
+  <div class="capstrip" aria-label="What this workspace can do">
+    <div class="cap"><div class="k">Analysis</div><div class="v"><span class="tag ok">Available</span> on data you supply</div></div>
+    <div class="cap"><div class="k">Drafts &amp; calendar</div><div class="v"><span class="tag ok">Available</span> saved locally</div></div>
+    <div class="cap"><div class="k">Live collection</div><div class="v"><span class="tag future">Not available</span></div></div>
+    <div class="cap"><div class="k">Accounts &amp; posting</div><div class="v"><span class="tag future">Not available</span></div></div>
+  </div>
+  <div class="grid3" style="grid-template-columns:1.25fr 1fr 1fr">
+    <section class="card" aria-labelledby="h-profile">
+      <div class="card-head"><h2 id="h-profile">Brand profile</h2><span class="tag future" title="Today a brand is only a name. These fields are a proposed extension.">Proposed fields</span></div>
+      <dl class="kv"><dt>Audience</dt><dd>${esc(p.audience)}</dd><dt>Positioning</dt><dd>${esc(p.positioning)}</dd><dt>Voice notes</dt><dd>${esc(p.voice)}</dd>
+      <dt>Topics</dt><dd><div class="chips">${p.topics.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div></dd>
+      <dt>Avoid</dt><dd><div class="chips">${p.avoid.map((t) => `<span class="tag bad">${esc(t)}</span>`).join('')}</div></dd>
+      <dt>Channels</dt><dd><div class="chips">${p.channels.map(ch).join(' ')}</div></dd></dl>
+      <p class="small muted" style="margin:12px 0 0">Writing studio still uses example voices. Using this profile as a voice is planned.</p>
+    </section>
+    <section class="card" aria-labelledby="h-up">
+      <div class="card-head"><h2 id="h-up">Coming up</h2><a class="linkish small" href="#/social/calendar">Calendar →</a></div>
+      ${upcoming.length ? `<ul class="plain">${upcoming.map((d) => `<li class="list-row"><div class="grow"><button class="linkish trunc" data-action="open-draft" data-id="${d.id}">${esc(d.title)}</button><div class="small muted">${fmtDate(d.planned)} · ${Object.keys(d.variants).map(ch).join(' ')}</div></div>${stateTag(d.state)}</li>`).join('')}</ul>` : '<p class="muted small">No planned drafts after today. Give a draft a planned date to see it here.</p>'}
+    </section>
+    <section class="card" aria-labelledby="h-att">
+      <div class="card-head"><h2 id="h-att">Needs attention</h2></div>
+      ${attention.length ? `<ul class="plain">${attention.map(([k, t, m, page, id]) => `<li class="list-row"><span class="tag ${k}">${gi(k)}<span class="sr">${k === 'bad' ? 'Error' : 'Warning'}</span></span><div class="grow"><button class="linkish" data-action="goto" data-page="${page}" data-id="${id}">${esc(t)}</button><div class="small muted">${esc(m)}</div></div></li>`).join('')}</ul>` : '<p class="muted small">Nothing needs attention.</p>'}
+    </section>
+  </div>
+  <div class="grid2" style="margin-top:14px">
+    <section class="card" aria-labelledby="h-recent">
+      <div class="card-head"><h2 id="h-recent">Recent research</h2><a class="linkish small" href="#/social/runs">All runs →</a></div>
+      ${runs().length ? `<ul class="plain">${runs().slice(0, 4).map((r) => `<li class="list-row"><span class="tool-mark">${tool(r.tool).mark}</span><div class="grow"><button class="linkish" data-action="goto" data-page="runs" data-id="${r.id}">${esc(tool(r.tool).name)}</button>${r.example ? ' <span class="tag example">Example data</span>' : ''}<div class="small muted">${esc(r.created)}${r.source ? ' · ' + esc(S.data.sources.find((s) => s.id === r.source).name) : ''}</div></div>${statusTag(r.status)}</li>`).join('')}</ul>` : '<p class="muted small">No runs yet. Import data in Sources, then open a workbench.</p>'}
+    </section>
+    <section class="card" aria-labelledby="h-linked">
+      <div class="card-head"><h2 id="h-linked">Linked across HQ</h2><span class="small muted">References, not copies</span></div>
+      ${swap ? `<ul class="plain">
+        <li class="list-row"><span class="ch">DES</span><div class="grow"><div><strong>${esc(swap.design.title)}</strong> · ${esc(swap.design.rev)}</div><div class="small muted">${esc(swap.design.where)} · available · checked ${esc(swap.design.checked)}</div></div><button class="btn sm" data-action="domain" data-domain="design">Open in Design</button></li>
+        <li class="list-row"><span class="ch">WRK</span><div class="grow"><div><strong>${esc(swap.work.title)}</strong></div><div class="small muted">Work card · status ${esc(swap.work.status)} · horizon ${esc(swap.work.horizon)} · checked ${esc(swap.work.checked)}</div></div><button class="btn sm" data-action="domain" data-domain="work">Open in Work</button></li>
+        <li class="list-row"><span class="ch">DES</span><div class="grow"><div><strong>Spring logo refresh</strong> · rev 1</div><div class="small muted">Design · unavailable when last checked ${NOW_LABEL}. Reference kept as written.</div></div><span class="tag warn">Unavailable</span></li>
+      </ul><p class="small muted" style="margin:10px 0 0">Opening a reference only navigates. It never starts Design or Work activity.</p>` : '<p class="muted small">No linked Design or Work items yet.</p>'}
+    </section>
+  </div>`;
+}
+
+/* ---------- Page: Sources ---------- */
+function pageSources() {
+  const list = sources();
+  if (!list.length) return head('Sources', 'Data you supply for analysis. Each import keeps its file, date and digest so results stay traceable.', '<button class="btn primary" data-action="import">Import data</button>') + emptyState('No data imported for this brand', 'Workbenches analyze exports and files you provide. Import a JSON file, or start with a clearly labeled fictional example.', 'import', 'Import data') + collectionNote();
+  const sel = list.find((s) => s.id === S.srcSel) || list[0]; S.srcSel = sel.id;
+  const usedBy = S.data.runs.filter((r) => r.source === sel.id);
+  const feeds = TOOLS.filter((t) => t.kind === sel.kind);
+  return head('Sources', 'Data you supply for analysis. Each import keeps its file, date and digest so results stay traceable.', '<button class="btn primary" data-action="import">Import data</button>') + `
+  <div class="split">
+    <div class="card flush"><table aria-label="Imported sources"><thead><tr><th scope="col">Source</th><th scope="col">Kind</th><th scope="col">Records</th><th scope="col">As of</th><th scope="col">Status</th></tr></thead><tbody>
+      ${list.map((s) => `<tr class="${s.id === sel.id ? 'sel' : ''}"><td><button class="linkish" data-action="sel-src" data-id="${s.id}" aria-pressed="${s.id === sel.id}">${esc(s.name)}</button><div class="small muted mono">${esc(s.file)}</div></td><td>${esc(KINDS[s.kind])}</td><td>${s.records}</td><td>${fmtDate(s.asOf)}</td><td>${srcTag(s)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <aside class="card" aria-labelledby="h-src">
+      <h2 id="h-src">${esc(sel.name)}</h2>
+      ${sel.status === 'stale' ? '<div class="banner warn small"><div>This export is 22 days old. Visibility results may no longer reflect what people see.</div></div>' : ''}
+      <dl class="kv"><dt>Kind</dt><dd>${esc(KINDS[sel.kind])}</dd><dt>Records</dt><dd>${sel.records}</dd><dt>Data as of</dt><dd>${fmtDate(sel.asOf)}</dd><dt>Imported</dt><dd>${esc(sel.imported)}</dd><dt>File</dt><dd class="mono">${esc(sel.file)}</dd><dt>SHA-256</dt><dd class="mono">${esc(sel.digest)}</dd><dt>Origin</dt><dd>Supplied by you · not collected by HQ</dd></dl>
+      <h3 style="margin-top:14px">Feeds</h3><div class="chips">${feeds.map((t) => `<button class="btn sm" data-action="open-tool" data-id="${t.id}" data-src="${sel.id}">${esc(t.name)} →</button>`).join('')}</div>
+      <h3 style="margin-top:14px">Used by runs</h3>${usedBy.length ? `<ul class="plain">${usedBy.map((r) => `<li class="list-row small"><button class="linkish" data-action="goto" data-page="runs" data-id="${r.id}">${esc(r.id)}</button><span class="grow muted">${esc(r.created)}</span>${statusTag(r.status)}</li>`).join('')}</ul>` : '<p class="small muted">Not used yet.</p>'}
+      <div class="row" style="margin-top:14px"><button class="btn sm" data-action="import">Replace with newer export</button><button class="btn sm ghost danger" data-action="remove-src" data-id="${sel.id}">Remove from brand</button></div>
+    </aside>
+  </div>${collectionNote()}`;
+}
+function collectionNote() {
+  return `<section class="card" style="margin-top:16px;border-style:dashed" aria-labelledby="h-coll"><div class="card-head"><h2 id="h-coll">Collection</h2><span class="tag future">Not available</span></div>
+  <p class="small muted" style="margin:0">HQ doesn’t fetch posts, feeds or comments from any platform. A separate listening tool that imports authorized exports exists outside this workspace and isn’t connected here. Bringing it in is planned. Any live collection would need account access approved separately.</p></section>`;
+}
+function head(title, sub, actions = '') { return `<div class="page-head"><div><h1>${esc(title)}</h1><p class="sub">${esc(sub)}</p></div>${actions}</div>`; }
+
+/* ---------- Page: Workbenches ---------- */
+function pageWorkbenches() {
+  const t = tool(S.tool); const cats = ['Discover', 'Create', 'Measure', 'Plan', 'Connect'];
+  const side = `<div class="side-list" role="navigation" aria-label="Workbenches">${cats.map((c) => `<div class="wb-group">${c}</div>${TOOLS.filter((x) => x.cat === c).map((x) => `<button class="item" data-action="pick-tool" data-id="${x.id}" aria-current="${x.id === t.id}"><div class="item-title"><span class="tool-mark">${x.mark}</span>${esc(x.name)}</div></button>`).join('')}`).join('')}</div>`;
+  const tabs = [['form', 'Guided form', '<span class="tag future">Proposed</span>'], ['file', 'Import file', ''], ['json', 'JSON', '<span class="tag">Advanced</span>']];
+  const needs = t.kind ? `Needs: ${KINDS[t.kind]}` : 'Needs: text you write';
+  return head('Workbenches', 'Eight analysis and writing tools. They run on this machine’s Social service, against data you supply.') + `
+  <div class="wb">${side}
+    <section class="card" aria-labelledby="h-tool">
+      <div class="row" style="margin-bottom:6px"><span class="tool-mark" style="width:34px;height:34px;font-size:12px">${t.mark}</span><div class="grow"><h2 id="h-tool" style="margin:0">${esc(t.name)}</h2><div class="small muted">${esc(t.desc)}</div></div><span class="tag">${esc(needs)}</span></div>
+      <div class="tabs" role="tablist" aria-label="Input mode">${tabs.map(([id, l, x]) => `<button role="tab" aria-selected="${S.wbMode === id}" data-action="wb-mode" data-id="${id}">${l} ${x}</button>`).join('')}</div>
+      <div role="tabpanel">${S.wbMode === 'form' ? wbForm(t) : S.wbMode === 'file' ? wbFile(t) : wbJson(t)}</div>
+      ${wbRunPanel(t)}
+    </section>
+  </div>`;
+}
+function fieldValue(t, f) {
+  const form = S.wbForm[t.id] || (S.wbForm[t.id] = {});
+  if (form[f.k] !== undefined) return form[f.k];
+  let v = '';
+  if (f.prefill === 'p.topics') v = brand().profile.topics.join(', ');
+  else if (f.prefill === 'p.audience') v = brand().profile.audience;
+  else if (f.prefill === 'brand') v = brand().name;
+  else if (f.type === 'source') v = (sources().find((s) => s.kind === t.kind) || {}).id || '';
+  else if (f.type === 'date') { const s = sources().find((x) => x.id === fieldValue(t, { k: 'source', type: 'source' })); v = s ? s.asOf : ''; }
+  else if (f.type === 'select') v = f.opts[0];
+  form[f.k] = v; return v;
+}
+function wbForm(t) {
+  const errs = S.wbErrors[t.id] || {}; const fields = FIELDS[t.id];
+  const avail = t.kind ? sources().filter((s) => s.kind === t.kind) : [];
+  if (t.kind && !avail.length) return `<div class="empty" style="padding:22px"><h2>No ${esc(KINDS[t.kind].toLowerCase())} imported</h2><p>This workbench needs ${esc(KINDS[t.kind].toLowerCase())} for ${esc(brand().name)}. Import a file, or run the labeled fictional example.</p><div class="row" style="justify-content:center"><button class="btn primary" data-action="import">Import data</button><button class="btn" data-action="run-example">Run fictional example</button></div></div>`;
+  return `<form id="wb-form" novalidate data-tool="${t.id}">
+    ${Object.keys(errs).length ? `<div class="banner bad small" role="alert" id="wb-errsum"><div><strong>Fix ${Object.keys(errs).length} field${Object.keys(errs).length > 1 ? 's' : ''} before running</strong>${Object.values(errs).map(esc).join(' · ')}</div></div>` : ''}
+    <div class="grid2">${fields.map((f) => {
+      const v = fieldValue(t, f), id = `f-${t.id}-${f.k}`, e = errs[f.k];
+      const aria = `id="${id}" name="${f.k}" ${e ? `aria-invalid="true" aria-describedby="${id}-e"` : ''} ${f.req ? 'aria-required="true"' : ''}`;
+      let input;
+      if (f.type === 'source') input = `<select ${aria}>${avail.map((s) => `<option value="${s.id}" ${s.id === v ? 'selected' : ''}>${esc(s.name)} · ${s.records} records · as of ${esc(s.asOf)}</option>`).join('')}</select>`;
+      else if (f.type === 'select') input = `<select ${aria}>${f.opts.map((o) => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+      else if (f.type === 'textarea') input = `<textarea ${aria} rows="4" placeholder="${esc(f.ph || '')}">${esc(v)}</textarea>`;
+      else input = `<input ${aria} type="${f.type === 'date' ? 'date' : 'text'}" value="${esc(v)}" placeholder="${esc(f.ph || '')}">`;
+      return `<label class="field" style="${f.type === 'textarea' ? 'grid-column:1/-1' : ''}" for="${id}"><span>${esc(f.label)}${f.req ? ' <span class="muted">· required</span>' : ''}</span>${input}${f.hint ? `<span class="hint">${esc(f.hint)}</span>` : ''}${e ? `<span class="err" id="${id}-e">${esc(e)}</span>` : ''}</label>`;
+    }).join('')}</div>
+    <div class="row"><button class="btn primary" type="submit" ${S.service === 'down' ? 'disabled aria-describedby="wb-down"' : ''}>Run analysis</button><button class="btn" type="button" data-action="run-example" ${S.service === 'down' ? 'disabled' : ''}>Run fictional example</button><span class="grow"></span><span class="small muted" id="wb-down">${S.service === 'down' ? 'Runs are paused while the service is unreachable.' : 'Runs locally in a sandbox. Nothing leaves this machine.'}</span></div>
+  </form>`;
+}
+function wbFile(t) {
+  return `<div class="empty" style="padding:22px;text-align:left"><h2>Import a file for ${esc(t.name)}</h2><p style="margin:0 0 12px">Choose a JSON or JSONL export under 2 MB. HQ validates it, shows what it found, and saves it as a source for ${esc(brand().name)} before anything runs.</p>
+  <label class="field" style="max-width:420px"><span>File</span><input type="file" accept=".json,.jsonl,application/json" data-action="pick-file"></label>
+  <p class="small muted" style="margin:0">The file is read in this window only. Nothing is uploaded anywhere.</p><div id="file-result" aria-live="polite" style="margin-top:10px"></div></div>`;
+}
+function wbJson(t) {
+  const fields = FIELDS[t.id]; const obj = {}; fields.forEach((f) => { obj[f.k] = fieldValue(t, f); });
+  const text = (S.wbJsonText && S.wbJsonText[t.id]) ?? JSON.stringify(obj, null, 2);
+  return `<label class="field" for="wb-json"><span>Input object <span class="hint">· the same shape the existing dashboard accepts</span></span><textarea id="wb-json" rows="10" class="mono" spellcheck="false" ${S.wbJsonErr ? 'aria-invalid="true" aria-describedby="wb-json-e"' : ''}>${esc(text)}</textarea>${S.wbJsonErr ? `<span class="err" id="wb-json-e">${esc(S.wbJsonErr)}</span>` : ''}</label>
+  <div class="row"><button class="btn primary" data-action="run-json" ${S.service === 'down' ? 'disabled' : ''}>Run with this JSON</button><button class="btn" data-action="json-reset">Rebuild from form</button></div>`;
+}
+function wbRunPanel(t) {
+  const r = S.wbRun && S.wbRun.tool === t.id ? S.wbRun : null;
+  if (!r) return `<div style="margin-top:18px;border-top:1px solid var(--hq-border);padding-top:14px"><h3>Results</h3><p class="small muted" style="margin:0">Run this workbench to see results here. Every run gets a receipt in Run history.</p></div>`;
+  const steps = ['queued', 'running', r.status === 'failed' ? 'failed' : 'succeeded'];
+  const idx = { queued: 0, running: 1, succeeded: 2, failed: 2 }[r.status];
+  const R = RESULTS[t.id];
+  let body = '';
+  if (r.status === 'failed') body = `<div class="banner bad"><div><strong>Run failed</strong>${esc(r.error)}</div></div>`;
+  else if (r.status === 'succeeded') body = `
+    <div class="capstrip" style="grid-template-columns:repeat(3,1fr)">${R.summary.map(([k, v]) => `<div class="cap"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join('')}</div>
+    ${R.output ? `<div class="card" style="background:var(--hq-surface-base);margin-bottom:12px"><h3>First draft</h3><p style="margin:0">${esc(R.output)}</p></div>` : ''}
+    <div class="card flush"><table><thead><tr>${R.cols.map((c) => `<th scope="col">${esc(c)}</th>`).join('')}${R.draftable ? '<th scope="col"><span class="sr">Actions</span></th>' : ''}</tr></thead><tbody>
+      ${R.rows.map((row, i) => `<tr>${row.map((c) => `<td>${typeof c === 'number' ? `<span class="score">${Math.round(c * 100)}%</span><span class="bar" aria-hidden="true"><i style="width:${Math.round(c * 100)}%"></i></span>` : RESULT_TAG[c] ? `<span class="tag ${RESULT_TAG[c]}">${esc(c)}</span>` : esc(c)}</td>`).join('')}${R.draftable ? `<td><button class="btn sm" data-action="draft-from" data-i="${i}">Start draft</button></td>` : ''}</tr>`).join('')}
+    </tbody></table></div>
+    <p class="small muted" style="margin:8px 0 0">${r.example ? 'Results from fictional example data. Not about your brand.' : 'Results describe the supplied data only, as of its date. They are not live platform measurements.'}</p>`;
+  else body = `<div class="skel" style="height:90px"></div>`;
+  return `<div style="margin-top:18px;border-top:1px solid var(--hq-border);padding-top:14px" aria-live="polite">
+    <div class="row"><h3 style="margin:0" class="grow">Results ${r.example ? '<span class="tag example">Example data</span>' : ''}</h3><span class="small muted mono">Receipt ${esc(r.id)}</span><button class="btn sm ghost" data-action="goto" data-page="runs" data-id="${r.id}">View receipt</button></div>
+    <div class="stepper">${steps.map((s, i) => `<span class="s ${i < idx ? 'done' : i === idx ? (s === 'failed' ? 'bad' : r.status === 'succeeded' ? 'done' : 'on') : ''}">${s[0].toUpperCase() + s.slice(1)}</span>${i < 2 ? '<span class="muted">→</span>' : ''}`).join('')}</div>${body}</div>`;
+}
+function startRun(t, example, inputErr) {
+  const id = 'run-' + Math.random().toString(16).slice(2, 6);
+  const run = { id, brand: S.brand, tool: t.id, status: 'queued', source: example ? null : (S.wbForm[t.id] || {}).source || null, created: '2026-10-20 ' + NOW_LABEL, finished: null, example };
+  S.data.runs.unshift(run); S.wbRun = run; render();
+  setTimeout(() => { run.status = 'running'; if (S.page === 'workbenches') render(); }, 650);
+  setTimeout(() => {
+    if (inputErr) { run.status = 'failed'; run.error = inputErr; } else run.status = 'succeeded';
+    run.finished = '2026-10-20 ' + NOW_LABEL; if (S.page === 'workbenches' || S.page === 'runs') render();
+    toast(run.status === 'succeeded' ? 'Run finished. Receipt saved.' : 'Run finished with an input error.');
+  }, 1600);
+}
+
+/* ---------- Page: Library + composer ---------- */
+function pageLibrary() {
+  const all = drafts(); const f = S.libFilter;
+  const list = all.filter((d) => (f.state === 'active' ? d.state !== 'archived' : f.state === 'all' ? true : d.state === f.state) && (!f.q || d.title.toLowerCase().includes(f.q.toLowerCase())));
+  if (!all.length) return head('Library', 'Drafts and their channel variants for ' + brand().name + '.') + emptyState('No drafts yet', 'Start from a rough idea, or create one from a workbench result so its source stays attached.', 'new-draft', 'New draft');
+  if (!draft(S.draftId) || draft(S.draftId).brand !== S.brand) S.draftId = (list[0] || all[0]).id;
+  const side = `<div class="side-list">
+    <div class="filters"><label class="sr" for="lib-q">Search drafts</label><input id="lib-q" class="input" type="search" placeholder="Search drafts" value="${esc(f.q)}">
+      <label class="sr" for="lib-state">Filter by state</label><select id="lib-state" class="input">${[['active', 'Active drafts'], ['idea', 'Ideas'], ['drafting', 'Drafting'], ['ready', 'Ready for review'], ['archived', 'Archived'], ['all', 'All']].map(([v, l]) => `<option value="${v}" ${f.state === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    ${list.length ? list.map((d) => `<button class="item" data-action="open-draft" data-id="${d.id}" aria-current="${d.id === S.draftId}"><div class="item-title">${dirty(d.id) ? '<span class="unsaved-dot" title="Unsaved changes"></span><span class="sr">Unsaved changes.</span>' : ''}<span class="trunc">${esc(S.buffers[d.id] ? S.buffers[d.id].title || 'Untitled' : d.title)}</span></div><div class="item-meta">${stateTag(d.state)} ${Object.keys(d.variants).map(ch).join(' ')} <span>${d.planned ? fmtDate(d.planned) : 'No date'}</span></div></button>`).join('') : '<p class="small muted" style="padding:12px">No drafts match.</p>'}
+  </div>`;
+  return head('Library', 'Drafts and their channel variants for ' + brand().name + '. Saving never publishes or schedules anything.') + `<div class="lib">${side}${composer(draft(S.draftId))}</div>`;
+}
+function composer(d) {
+  const b = buf(d.id); const vks = Object.keys(b.variants); if (!vks.includes(S.variant)) S.variant = vks[0] || null;
+  const v = S.variant; const text = v ? b.variants[v] : ''; const lim = LIMITS[v]; const len = [...(text || '')].length;
+  const ss = S.saveState[d.id] || (dirty(d.id) ? 'dirty' : 'saved');
+  const saveLabel = { saved: `<span class="tag ok">${gi('ok')} Saved</span> v${d.version} · ${esc(d.updated)}`, dirty: '<span class="unsaved-dot"></span> Unsaved changes', saving: '<span class="tag info">Saving…</span>', conflict: '<span class="tag bad">Conflict</span> Changed in another window since you opened it', error: '<span class="tag bad">Not saved</span> Service unreachable. Your text is kept on this device.' }[ss];
+  const checks = v ? [
+    lim ? [len <= lim, len <= lim ? `Within ${lim.toLocaleString()} characters (illustrative limit)` : `${(len - lim).toLocaleString()} characters over the illustrative ${lim.toLocaleString()} limit`] : [true, 'No length limit for this channel'],
+    [!/guarantee/i.test(text), /guarantee/i.test(text) ? 'Mentions a guarantee. Your brand profile says to avoid this.' : 'No phrases from your “avoid” list'],
+    [text.trim().length > 0, text.trim().length ? 'Has text' : 'Variant is empty'] ] : [];
+  return `<section class="composer" aria-labelledby="c-title">
+    <div class="composer-head"><label class="sr" for="c-title">Draft title</label><input id="c-title" class="title" value="${esc(b.title)}" data-bind="title" maxlength="200">
+      <label class="sr" for="c-state">Draft state</label><select id="c-state" class="input" style="width:auto" data-bind="state">${Object.entries(STATES).map(([k, l]) => `<option value="${k}" ${b.state === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div class="composer-body">
+      <div class="composer-main">
+        <label class="field" for="c-base"><span>Core message <span class="hint">· what every variant should say</span></span><textarea id="c-base" rows="3" data-bind="base">${esc(b.base)}</textarea></label>
+        <div class="tabs" role="tablist" aria-label="Channel variants">${vks.map((k) => `<button role="tab" aria-selected="${k === v}" data-action="variant" data-id="${k}">${ch(k)} ${esc(k)}</button>`).join('')}<button class="btn sm ghost" style="margin:4px 0 4px 6px" data-action="add-variant">+ Variant</button></div>
+        ${v ? `<label class="field" for="c-var"><span>${esc(v)} variant</span><textarea id="c-var" rows="7" data-bind="variant" aria-describedby="c-count">${esc(text)}</textarea></label>
+        <div class="counter ${lim && len > lim ? 'over' : ''}" id="c-count">${len.toLocaleString()}${lim ? ' / ' + lim.toLocaleString() : ''} characters</div>
+        <ul class="plain checks" aria-label="Checks">${checks.map(([ok, m]) => `<li><span class="tag ${ok ? 'ok' : 'warn'}">${gi(ok ? 'ok' : 'warn')}<span class="sr">${ok ? 'Pass' : 'Check'}</span></span>${esc(m)}</li>`).join('')}</ul>
+        <div class="row" style="margin-top:8px"><button class="btn sm" data-action="channel-check">Check in Channel preview</button><button class="btn sm ghost" data-action="copy">Copy text</button></div>` : '<p class="muted">Add a variant for a channel.</p>'}
+      </div>
+      <div class="composer-side">
+        <div><label class="field" for="c-date" style="margin-bottom:4px"><span>Planned date</span><input id="c-date" type="date" value="${esc(b.planned)}" data-bind="planned"></label><div class="small muted">For editorial planning only. Setting a date never schedules or posts.</div></div>
+        <div><h3>Sources &amp; citations</h3>${d.citations.length ? d.citations.map((c) => `<div class="ref"><div class="t">${esc(c.label)}</div><div class="m">${esc(tool(S.data.runs.find((r) => r.id === c.run)?.tool || 'reddit-opportunities').name)} · <button class="linkish" data-action="goto" data-page="runs" data-id="${c.run}">${esc(c.run)}</button> · data as of ${esc(c.asOf)}</div></div>`).join('') : '<p class="small muted" style="margin:0">None attached. Start a draft from a workbench result to keep its evidence.</p>'}</div>
+        <div><h3>Design asset</h3>${d.design ? `<div class="ref">${artwork()}<div class="t" style="margin-top:8px">${esc(d.design.title)} · ${esc(d.design.rev)}</div><div class="m">${esc(d.design.where)} · checked ${esc(d.design.checked)}</div><div class="m">Artwork keeps its own colors in light and dark.</div><button class="btn sm" style="margin-top:6px" data-action="domain" data-domain="design">Open in Design</button></div>` : '<button class="btn sm" data-action="link-design">Link a Design asset…</button>'}</div>
+        <div><h3>Planning card</h3>${d.work ? `<div class="ref"><div class="t">${esc(d.work.title)}</div><div class="m">Work · ${esc(d.work.status)} · ${esc(d.work.horizon)} · checked ${esc(d.work.checked)}</div><button class="btn sm" style="margin-top:6px" data-action="domain" data-domain="work">Open in Work</button></div>` : '<button class="btn sm" data-action="link-work">Link a Work card…</button>'}</div>
+        <div><h3>Publishing</h3><div class="ref" style="border-style:dashed"><span class="tag future">Not available</span><div class="m" style="margin-top:4px">HQ doesn’t connect accounts or post. Copy the text, or see Channels &amp; accounts for what’s planned.</div></div></div>
+      </div>
+    </div>
+    <div class="savebar"><div class="save-state" aria-live="polite">${saveLabel}</div><div class="grow"></div>
+      ${ss === 'conflict' ? '<button class="btn sm" data-action="conflict-theirs">Load their version</button><button class="btn sm" data-action="conflict-copy">Save mine as a copy</button>' : ''}
+      ${d.state !== 'archived' ? '<button class="btn ghost" data-action="archive">Archive</button>' : '<button class="btn ghost" data-action="unarchive">Restore</button>'}
+      <button class="btn primary" data-action="save" ${ss === 'saving' ? 'disabled' : ''}>Save draft <span class="kbd" style="background:transparent;color:inherit;border-color:currentColor;opacity:.7">Ctrl S</span></button></div>
+  </section>`;
+}
+function artwork() {
+  // Fixed-color artwork stand-in: intentionally does not use HQ chrome tokens.
+  return `<svg class="artwork" viewBox="0 0 240 135" width="100%" role="img" aria-label="Seed swap poster artwork, revision 3"><rect width="240" height="135" fill="#F3E7CF"/><circle cx="196" cy="34" r="22" fill="#E59A3A"/><path d="M0 108 Q60 86 120 104 T240 98 V135 H0z" fill="#5E8C4A"/><path d="M40 108 v-26 M40 86 q-12 -6 -14 -18 q12 2 14 18 q2 -16 14 -18 q-2 12 -14 18" stroke="#2F5130" stroke-width="3" fill="#7FB061"/><text x="18" y="32" font-family="Georgia,serif" font-size="20" fill="#2F2A1F" font-weight="700">Seed swap</text><text x="18" y="52" font-family="Georgia,serif" font-size="12" fill="#2F2A1F">Saturday 10–1</text></svg>`;
+}
+function saveDraft(id) {
+  const d = draft(id), b = buf(id);
+  if (!b.title.trim()) { toast('Give the draft a title before saving.'); $('#c-title')?.focus(); return; }
+  if (S.service === 'down') { S.saveState[id] = 'error'; render(); return; }
+  if (S.conflictNext) { S.conflictNext = false; $('#mock-conflict').checked = false; S.saveState[id] = 'conflict'; render(); return; }
+  S.saveState[id] = 'saving'; render();
+  setTimeout(() => { Object.assign(d, JSON.parse(JSON.stringify({ title: b.title.trim(), state: b.state, planned: b.planned, base: b.base, variants: b.variants }))); d.version += 1; d.updated = 'Just now'; delete S.buffers[id]; delete S.saveState[id]; render(); toast(`Saved “${d.title}” · v${d.version}`); }, 550);
+}
+function newDraft(extra = {}) {
+  const id = 'd-new' + S.newSeq++; const ch0 = brand().profile.channels[0];
+  S.data.drafts.unshift({ id, brand: S.brand, title: '', state: 'idea', planned: '', version: 0, updated: 'Not saved yet', base: '', variants: { [ch0]: '' }, citations: [], design: null, work: null, ...extra });
+  const d = draft(id); S.buffers[id] = { title: extra.title || 'Untitled draft', state: 'idea', planned: '', base: extra.base || '', variants: JSON.parse(JSON.stringify(d.variants)) };
+  d.title = ''; S.draftId = id; S.libFilter = { state: 'active', q: '' }; S.variant = ch0; S.view = 'populated'; $('#mock-state').value = 'populated';
+  go('library'); setTimeout(() => $('#c-title')?.select(), 30);
+}
+
+/* ---------- Page: Calendar ---------- */
+function pageCalendar() {
+  const [y, m] = S.calMonth; const first = new Date(Date.UTC(y, m, 1)); const offset = (first.getUTCDay() + 6) % 7;
+  const start = new Date(Date.UTC(y, m, 1 - offset)); const monthName = first.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const list = drafts().filter((d) => d.state !== 'archived'); const unscheduled = list.filter((d) => !d.planned);
+  const days = []; for (let i = 0; i < 42; i++) { const d = new Date(start); d.setUTCDate(start.getUTCDate() + i); days.push(d.toISOString().slice(0, 10)); }
+  const evt = (d, compact) => { const cs = Object.keys(d.variants); return `<button class="evt ${d.state}" draggable="true" data-drag="${d.id}" data-action="evt" data-id="${d.id}" aria-label="${esc(d.title)}, ${esc(STATES[d.state])}, ${cs.join(', ')}, ${d.planned ? fmtDate(d.planned) : 'no date'}. Press to open or move."><span class="trunc">${esc(d.title)}</span>${compact ? `<span class="small muted">${cs.length > 1 ? cs.length + ' ch' : esc(CH_SHORT[cs[0]] || '')}</span>` : cs.map(ch).join('')}</button>`; };
+  return head('Calendar', 'Editorial plan for ' + brand().name + '. Drag a draft to a day, or select it to move with the keyboard.', `<div class="row"><button class="btn" data-action="cal-prev" aria-label="Previous month">‹</button><strong style="min-width:130px;text-align:center" aria-live="polite">${monthName}</strong><button class="btn" data-action="cal-next" aria-label="Next month">›</button><button class="btn" data-action="cal-today">Today</button><div class="tabs" style="margin:0 0 0 8px;border:0" role="tablist" aria-label="Calendar view"><button role="tab" aria-selected="${S.calView === 'month'}" data-action="cal-view" data-id="month">Month</button><button role="tab" aria-selected="${S.calView === 'agenda'}" data-action="cal-view" data-id="agenda">Agenda</button></div></div>`) + `
+  <div class="banner info small" role="note"><div class="grow">Planned dates are editorial intent. Nothing on this calendar is scheduled or posted. Work’s planning dates stay in Work and aren’t copied here.</div></div>
+  <div class="cal">
+    ${S.calView === 'month' ? `<div class="month" role="grid" aria-label="${monthName}">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<div class="dow" role="columnheader">${d}</div>`).join('')}
+      ${days.map((iso) => `<div class="day ${iso.slice(5, 7) != String(m + 1).padStart(2, '0') ? 'out' : ''} ${iso === TODAY ? 'today' : ''}" role="gridcell" data-drop="${iso}" aria-label="${fmtDate(iso)}"><span class="dn">${Number(iso.slice(8))}</span>${list.filter((d) => d.planned === iso).map((d) => evt(d, true)).join('')}</div>`).join('')}</div>`
+      : `<div class="card flush"><table><thead><tr><th>Date</th><th>Draft</th><th>Channels</th><th>State</th></tr></thead><tbody>${list.filter((d) => d.planned).sort((a, b) => a.planned.localeCompare(b.planned)).map((d) => `<tr><td>${fmtDate(d.planned)}</td><td><button class="linkish" data-action="evt" data-id="${d.id}">${esc(d.title)}</button></td><td>${Object.keys(d.variants).map(ch).join(' ')}</td><td>${stateTag(d.state)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No planned drafts.</td></tr>'}</tbody></table></div>`}
+    <aside class="tray" data-drop="" aria-labelledby="h-tray"><h2 id="h-tray" style="margin:0">No date yet</h2><p class="small muted" style="margin:0 0 6px">Drag here to clear a date.</p>${unscheduled.length ? unscheduled.map((d) => evt(d)).join('') : '<p class="small muted">Every active draft has a date.</p>'}${!list.length ? '<button class="btn primary" data-action="new-draft">New draft</button>' : ''}</aside>
+  </div>`;
+}
+function moveDraft(id, iso) {
+  const d = draft(id); if (!d || d.planned === iso) return;
+  if (S.service === 'down') { toast('Can’t move while the Social service is unreachable.'); return; }
+  const prev = d.planned; d.planned = iso; d.version += 1; d.updated = 'Just now'; if (S.buffers[id]) S.buffers[id].planned = iso;
+  render(); toast(iso ? `Planned “${d.title}” for ${fmtDate(iso)}` : `Cleared the date on “${d.title}”`, () => { d.planned = prev; d.version += 1; if (S.buffers[id]) S.buffers[id].planned = prev; render(); toast('Move undone'); });
+}
+
+/* ---------- Page: Run history ---------- */
+function pageRuns() {
+  const list = runs();
+  if (!list.length) return head('Run history', 'Every workbench run with its input, status and receipt.') + emptyState('No runs yet', 'Runs appear here when you run a workbench. Each one keeps its input and results.', 'goto-wb', 'Open workbenches');
+  const sel = list.find((r) => r.id === S.runSel) || list[0]; S.runSel = sel.id; const t = tool(sel.tool);
+  const shown = (r) => S.service === 'down' && (r.status === 'running' || r.status === 'queued') ? 'unknown' : r.status;
+  return head('Run history', 'Every workbench run with its input, status and receipt. Failed or interrupted runs are never retried automatically.') + `
+  <div class="split"><div class="card flush"><table aria-label="Runs"><thead><tr><th scope="col">Workbench</th><th scope="col">Input</th><th scope="col">Started</th><th scope="col">Status</th></tr></thead><tbody>
+    ${list.map((r) => `<tr class="${r.id === sel.id ? 'sel' : ''}"><td><div class="row" style="gap:8px"><span class="tool-mark">${tool(r.tool).mark}</span><button class="linkish" data-action="sel-run" data-id="${r.id}" aria-pressed="${r.id === sel.id}">${esc(tool(r.tool).name)}</button></div></td><td class="small">${r.example ? '<span class="tag example">Example data</span>' : r.source ? esc(S.data.sources.find((s) => s.id === r.source)?.name) : 'Text you wrote'}</td><td class="small">${esc(r.created)}</td><td>${statusTag(shown(r))}</td></tr>`).join('')}
+  </tbody></table></div>
+  <aside class="card" aria-labelledby="h-run"><h2 id="h-run">Receipt <span class="mono muted">${esc(sel.id)}</span></h2>
+    ${shown(sel) === 'unknown' ? '<div class="banner warn small"><div>Last seen running. The service can’t be reached, so we don’t know if it finished. Don’t start it again until the status is known.</div></div>' : ''}
+    ${sel.error ? `<div class="banner ${sel.status === 'failed' ? 'bad' : 'warn'} small"><div>${esc(sel.error)}</div></div>` : ''}
+    <dl class="kv"><dt>Workbench</dt><dd>${esc(t.name)}</dd><dt>Status</dt><dd>${statusTag(shown(sel))}</dd><dt>Started</dt><dd>${esc(sel.created)}</dd><dt>Finished</dt><dd>${esc(sel.finished || '—')}</dd><dt>Input</dt><dd>${sel.example ? 'Fictional example (labeled)' : sel.source ? esc(S.data.sources.find((s) => s.id === sel.source)?.name) + ' · as of ' + esc(S.data.sources.find((s) => s.id === sel.source)?.asOf) : 'Text you wrote'}</dd><dt>Input digest</dt><dd class="mono">a41c…${esc(sel.id.slice(-4))}</dd><dt>Ran on</dt><dd>Local Social service · network off</dd></dl>
+    <div class="row wrap" style="margin-top:14px">${sel.status === 'succeeded' ? `<button class="btn sm" data-action="open-result" data-id="${sel.id}">Open results</button>` : ''}<button class="btn sm" data-action="rerun" data-id="${sel.id}" ${S.service === 'down' ? 'disabled' : ''}>Run again with same input</button><button class="btn sm ghost" data-action="export-receipt">Download receipt JSON</button></div>
+  </aside></div>`;
+}
+
+/* ---------- Page: Channels & accounts (future, honest) ---------- */
+function pageChannels() {
+  const rows = [['X', 'Text checks in Channel preview'], ['LinkedIn', 'Text checks in Channel preview'], ['Instagram', 'Reels checks in Channel preview'], ['TikTok', 'Caption checks in Channel preview'], ['Facebook', 'Page Reels checks in Channel preview'], ['Reddit', 'Conversation analysis from supplied corpus']];
+  return head('Channels & accounts', 'What HQ Social can and can’t do with each platform today.') + `
+  <div class="banner info"><div class="grow"><strong>No accounts are connected, and HQ can’t post.</strong>Account connection, collection and publishing are planned, but each needs its own approval: what HQ may access, where credentials live, and a confirmation step for every post. Nothing on this page changes any account.</div></div>
+  <div class="grid3">${rows.map(([c, avail]) => `<section class="card chan" aria-labelledby="h-${c}"><div class="row">${ch(c)}<h2 id="h-${c}" style="margin:0" class="grow">${c}</h2><span class="tag future">Not connected</span></div>
+    <ul class="plain"><li><span>${esc(avail)}</span><span class="tag ok">Available</span></li><li><span>Account connection</span><span class="tag future">Planned</span></li><li><span>Collect posts or comments</span><span class="tag future">Planned</span></li><li><span>Publish or schedule</span><span class="tag future">Planned</span></li></ul>
+    <button class="btn sm" aria-disabled="true" data-action="connect-unavailable" data-id="${c}">Connect account…</button></section>`).join('')}</div>
+  <section class="card" style="margin-top:14px" aria-labelledby="h-path"><h2 id="h-path">What publishing would need</h2>
+    <ol class="small" style="margin:0;padding-left:18px;line-height:1.7"><li>An approved account connection per channel, with credentials held outside the HQ window.</li><li>Explicit approval of the exact text and media for each post, recorded with a receipt.</li><li>Publishing status read back from the platform, shown as unknown if it can’t be confirmed.</li><li>Planned dates stay editorial unless you choose to schedule a specific approved post.</li></ol></section>`;
+}
+
+/* ---------- Other domains (owned elsewhere) ---------- */
+function pageOther(domain) {
+  const name = domain === 'design' ? 'Design' : 'Work';
+  const sd = S.draftId && dirty(S.draftId) ? `Your unsaved changes to “${esc(buf(S.draftId).title)}” are kept.` : '';
+  return `<div class="placeholder"><div class="domain-label">${name}</div><h1 style="margin:6px 0 8px">${name} isn’t part of this mockup</h1><p class="sub" style="margin:0 auto 18px">${name} has its own navigation and owner. Switching domains never submits drafts or starts runs. Social will reopen where you left it: <strong>${esc(PAGE_LABEL[S.last.social])}</strong>. ${sd}</p><button class="btn primary" data-action="domain" data-domain="social">Back to Social</button></div>`;
+}
+
+/* ---------- Render + routing ---------- */
+const PAGES = { overview: [pageOverview, 'the overview'], sources: [pageSources, 'sources'], workbenches: [pageWorkbenches, 'workbenches'], library: [pageLibrary, 'the library'], calendar: [pageCalendar, 'the calendar'], runs: [pageRuns, 'run history'], channels: [pageChannels, 'channels'] };
+function render() {
+  applyAppearance();
+  document.querySelectorAll('.rail-btn[data-domain]').forEach((b) => b.setAttribute('aria-current', String(b.dataset.domain === S.domain)));
+  const social = S.domain === 'social';
+  $('#dnav').hidden = !social; document.querySelector('.app').style.gridTemplateColumns = social ? '' : '64px minmax(0,1fr)';
+  if (!social) { $('#topbar').innerHTML = `<div class="crumb"><strong>${S.domain === 'design' ? 'Design' : 'Work'}</strong></div>`; $('#main').innerHTML = pageOther(S.domain); return; }
+  renderNav(); renderTop();
+  const [fn, what] = PAGES[S.page];
+  const keep = document.activeElement && document.activeElement.id; const sel = keep && document.activeElement.selectionStart;
+  $('#main').innerHTML = serviceBanner() + projectMismatch() + (S.view === 'loading' ? loading() : S.view === 'error' && S.page !== 'channels' ? loadError(what) : fn());
+  if (keep && document.getElementById(keep) && keep !== 'main') { const el = document.getElementById(keep); el.focus(); try { if (sel != null) el.setSelectionRange(sel, sel); } catch (e) { /* not a text input */ } }
+}
+function go(page, focus = true) {
+  S.page = page; S.last.social = page; if (location.hash !== '#/social/' + page) history.replaceState(null, '', '#/social/' + page);
+  render(); if (focus) $('#main').focus({ preventScroll: true }); $('#main').scrollTop = 0;
+}
+function fromHash() { const m = location.hash.match(/^#\/social\/(\w+)/); if (m && PAGES[m[1]]) { S.domain = 'social'; S.page = m[1]; S.last.social = m[1]; } }
+window.addEventListener('hashchange', () => { const before = S.page; fromHash(); render(); if (S.page !== before) $('#main').scrollTop = 0; });
+
+/* ---------- Events ---------- */
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('[data-action]');
+  const navLink = e.target.closest('a[href^="#/social/"]');
+  if (navLink && !a) { e.preventDefault(); go(navLink.getAttribute('href').split('/')[2]); return; }
+  if (!a) { if (!e.target.closest('.appearance')) $('#appearance-menu').hidden = true; return; }
+  const id = a.dataset.id, act = a.dataset.action;
+  switch (act) {
+    case 'domain': {
+      const dmn = a.dataset.domain; S.domain = dmn; render();
+      history.replaceState(null, '', dmn === 'social' ? '#/social/' + S.page : '#/' + dmn);
+      if (dmn === 'social') $('#main').focus();
+      break; }
+    case 'toggle-appearance': { const m = $('#appearance-menu'); m.hidden = !m.hidden; a.setAttribute('aria-expanded', String(!m.hidden)); if (!m.hidden) m.querySelector('input:checked').focus(); break; }
+    case 'goto': if (a.dataset.page === 'runs') S.runSel = id; if (a.dataset.page === 'sources') S.srcSel = id; go(a.dataset.page); break;
+    case 'goto-wb': go('workbenches'); break;
+    case 'new-draft': newDraft(); break;
+    case 'open-draft': S.draftId = id; S.variant = Object.keys(buf(id).variants)[0]; if (S.page !== 'library') go('library'); else render(); break;
+    case 'switch-project': S.hqProject = brand().project.id; render(); toast(`HQ project switched to ${brand().project.name}`); break;
+    case 'recheck': toast('Still can’t reach the Social service. Nothing was retried.'); break;
+    case 'retry': S.view = 'populated'; $('#mock-state').value = 'populated'; render(); break;
+    case 'edit-profile': openProfile(); break;
+    case 'sel-src': S.srcSel = id; render(); break;
+    case 'remove-src': { const s = S.data.sources.find((x) => x.id === id); const i = S.data.sources.indexOf(s); S.data.sources.splice(i, 1); render(); toast(`Removed “${s.name}” from this brand. Past run receipts keep their record.`, () => { S.data.sources.splice(i, 0, s); render(); }); break; }
+    case 'import': openImport(); break;
+    case 'open-tool': S.tool = id; (S.wbForm[id] || (S.wbForm[id] = {})).source = a.dataset.src; delete S.wbForm[id].as_of; S.wbMode = 'form'; go('workbenches'); break;
+    case 'pick-tool': S.tool = id; S.wbMode = 'form'; render(); break;
+    case 'wb-mode': S.wbMode = id; S.wbJsonErr = null; render(); break;
+    case 'run-example': startRun(tool(S.tool), true); break;
+    case 'run-json': { const tx = $('#wb-json').value; (S.wbJsonText || (S.wbJsonText = {}))[S.tool] = tx; try { const o = JSON.parse(tx); if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('The input must be a JSON object, not a list or value.'); S.wbJsonErr = null; startRun(tool(S.tool), false); } catch (err) { S.wbJsonErr = err.message.startsWith('The input') ? err.message : 'This isn’t valid JSON: ' + err.message; render(); $('#wb-json').focus(); } break; }
+    case 'json-reset': if (S.wbJsonText) delete S.wbJsonText[S.tool]; S.wbJsonErr = null; render(); break;
+    case 'draft-from': { const R = RESULTS[S.tool]; const row = R.rows[a.dataset.i]; const t = tool(S.tool); const title = typeof row[0] === 'number' ? row[1] : row[0];
+      newDraft({ citations: [{ run: S.wbRun.id, label: `“${title}” — ${t.name}`, asOf: S.wbRun.example ? 'example data' : (S.data.sources.find((s) => s.id === S.wbRun.source)?.asOf || TODAY) }], title: `Reply idea: ${title}`, base: R.output || '' });
+      toast('New draft created with its source attached. Save it to keep it.'); break; }
+    case 'variant': S.variant = id; render(); break;
+    case 'add-variant': openAddVariant(); break;
+    case 'channel-check': S.tool = 'social-publisher'; (S.wbForm['social-publisher'] = S.wbForm['social-publisher'] || {}).caption = buf(S.draftId).variants[S.variant]; S.wbMode = 'form'; go('workbenches'); toast('Text copied into Channel preview. Run it to check.'); break;
+    case 'copy': toast('Copied to clipboard (mockup: nothing copied)'); break;
+    case 'save': saveDraft(S.draftId); break;
+    case 'archive': case 'unarchive': { const d = draft(S.draftId); const prev = d.state; if (S.service === 'down') { S.saveState[d.id] = 'error'; render(); break; } d.state = act === 'archive' ? 'archived' : 'drafting'; d.version++; if (S.buffers[d.id]) S.buffers[d.id].state = d.state; render(); toast(act === 'archive' ? `Archived “${d.title}”` : 'Restored', () => { d.state = prev; d.version++; if (S.buffers[d.id]) S.buffers[d.id].state = prev; render(); }); break; }
+    case 'conflict-theirs': delete S.buffers[S.draftId]; delete S.saveState[S.draftId]; draft(S.draftId).version++; draft(S.draftId).updated = 'Other window, 1 min ago'; render(); toast('Loaded the newer saved version. Your edits were discarded.'); break;
+    case 'conflict-copy': { const b = buf(S.draftId); delete S.saveState[S.draftId]; const old = S.draftId; newDraft({ citations: draft(old).citations }); const nb = buf(S.draftId); Object.assign(nb, JSON.parse(JSON.stringify(b)), { title: b.title + ' (my copy)' }); delete S.buffers[old]; render(); toast('Your version is now a separate unsaved copy.'); break; }
+    case 'link-design': case 'link-work': toast('Mockup: would open a picker owned by ' + (act === 'link-design' ? 'Design' : 'Work') + '. Linking stores a reference only.'); break;
+    case 'evt': openEvent(id); break;
+    case 'cal-prev': S.calMonth = S.calMonth[1] === 0 ? [S.calMonth[0] - 1, 11] : [S.calMonth[0], S.calMonth[1] - 1]; render(); break;
+    case 'cal-next': S.calMonth = S.calMonth[1] === 11 ? [S.calMonth[0] + 1, 0] : [S.calMonth[0], S.calMonth[1] + 1]; render(); break;
+    case 'cal-today': S.calMonth = [2026, 9]; render(); break;
+    case 'cal-view': S.calView = id; render(); break;
+    case 'sel-run': S.runSel = id; render(); break;
+    case 'open-result': { const r = S.data.runs.find((x) => x.id === id); S.tool = r.tool; S.wbRun = r; S.wbMode = 'form'; go('workbenches'); break; }
+    case 'rerun': { const r = S.data.runs.find((x) => x.id === id); S.tool = r.tool; S.wbMode = 'form'; go('workbenches'); startRun(tool(r.tool), r.example, r.tool === 'search-visibility' && r.status === 'failed' ? r.error : null); break; }
+    case 'export-receipt': toast('Mockup: would save the receipt JSON to a file you choose.'); break;
+    case 'connect-unavailable': toast(`Connecting ${id} isn’t available. Nothing was changed.`); break;
+    case 'shortcuts': openShortcuts(); break;
+    case 'undo': if (S.undo) { const u = S.undo; S.undo = null; $('#toast').hidden = true; u(); } break;
+    case 'close': $('#dlg').close(); break;
+  }
+});
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if (t.name === 'appearance') { S.appearance = t.value; applyAppearance(); return; }
+  if (t.id === 'brand-pick') { S.brand = t.value; S.wbRun = null; render(); toast(`Showing ${brand().name}`); return; }
+  if (t.id === 'mock-state') { S.view = t.value; render(); return; }
+  if (t.id === 'mock-service') { S.service = t.value; render(); return; }
+  if (t.id === 'mock-conflict') { S.conflictNext = t.checked; return; }
+  if (t.id === 'lib-state') { S.libFilter.state = t.value; render(); return; }
+  if (t.closest('#wb-form')) { const f = S.wbForm[S.tool] || (S.wbForm[S.tool] = {}); f[t.name] = t.value; if (t.name === 'source') { delete f.as_of; render(); } return; }
+  if (t.dataset.bind === 'state' || t.dataset.bind === 'planned') { buf(S.draftId)[t.dataset.bind] = t.value; delete S.saveState[S.draftId]; render(); return; }
+  if (t.dataset.action === 'pick-file') readFile(t.files[0]);
+});
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (t.id === 'lib-q') { S.libFilter.q = t.value; render(); return; }
+  if (t.closest('#wb-form') && t.name) { (S.wbForm[S.tool] || (S.wbForm[S.tool] = {}))[t.name] = t.value; return; }
+  const bind = t.dataset.bind; if (!bind || bind === 'state' || bind === 'planned') return;
+  const b = buf(S.draftId); if (bind === 'variant') b.variants[S.variant] = t.value; else b[bind] = t.value;
+  delete S.saveState[S.draftId]; render();
+});
+document.addEventListener('submit', (e) => {
+  if (e.target.id !== 'wb-form') return; e.preventDefault();
+  const t = tool(S.tool); const errs = {};
+  FIELDS[t.id].forEach((f) => { const v = String(fieldValue(t, f) || '').trim(); if (f.req && !v) errs[f.k] = `${f.label} is required.`; });
+  const f = S.wbForm[t.id]; if (f.as_of && f.as_of > TODAY) errs.as_of = 'Date can’t be in the future.';
+  S.wbErrors[t.id] = errs; if (Object.keys(errs).length) { render(); $('#wb-errsum')?.setAttribute('tabindex', '-1'); $('#wb-errsum')?.focus(); return; }
+  const src = S.data.sources.find((s) => s.id === f.source);
+  startRun(t, false, t.id === 'search-visibility' ? 'Input field “answers” has 0 rows for this panel. Import observations before running.' : null);
+  if (src && src.status === 'stale') toast('Running on a stale source. Results will say so.');
+});
+document.addEventListener('dragstart', (e) => { const el = e.target.closest('[data-drag]'); if (el) { e.dataTransfer.setData('text/plain', el.dataset.drag); e.dataTransfer.effectAllowed = 'move'; } });
+document.addEventListener('dragover', (e) => { const z = e.target.closest('[data-drop]'); if (z) { e.preventDefault(); document.querySelectorAll('.drop').forEach((x) => x !== z && x.classList.remove('drop')); z.classList.add('drop'); } });
+document.addEventListener('dragleave', (e) => { const z = e.target.closest('[data-drop]'); if (z && !z.contains(e.relatedTarget)) z.classList.remove('drop'); });
+document.addEventListener('drop', (e) => { const z = e.target.closest('[data-drop]'); if (!z) return; e.preventDefault(); z.classList.remove('drop'); moveDraft(e.dataTransfer.getData('text/plain'), z.dataset.drop); });
+document.addEventListener('keydown', (e) => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && S.domain === 'social' && S.page === 'library') { e.preventDefault(); saveDraft(S.draftId); return; }
+  if ((e.ctrlKey || e.metaKey) && ['1', '2', '3'].includes(e.key)) { e.preventDefault(); S.domain = ['design', 'social', 'work'][e.key - 1]; render(); return; }
+  if (e.key === 'Escape' && !$('#appearance-menu').hidden) { $('#appearance-menu').hidden = true; $('#appearance-btn').focus(); return; }
+  if (!typing && e.key === '?') { openShortcuts(); return; }
+  if (!typing && e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey && S.domain === 'social' && !$('#dlg').open) { e.preventDefault(); newDraft(); }
+});
+
+/* ---------- Dialogs ---------- */
+function dialog(title, body, foot) { const d = $('#dlg'); d.innerHTML = `<div class="dlg-head"><h2 id="dlg-title">${esc(title)}</h2><button class="btn sm ghost" data-action="close" aria-label="Close">${gi('bad')}</button></div><div class="dlg-body">${body}</div>${foot ? `<div class="dlg-foot">${foot}</div>` : ''}`; d.showModal(); return d; }
+function openEvent(id) {
+  const d = draft(id);
+  const dl = dialog(d.title, `<p class="muted small" style="margin-top:0">${stateTag(d.state)} ${Object.keys(d.variants).map(ch).join(' ')} · ${d.planned ? 'Planned for ' + fmtDate(d.planned) : 'No date'}</p>
+    <label class="field" for="mv-date"><span>Move to date</span><input id="mv-date" type="date" value="${esc(d.planned)}"></label><p class="small muted" style="margin:0">Changes the editorial planned date only.</p>`,
+    `${d.planned ? '<button class="btn ghost" id="mv-clear">Clear date</button>' : ''}<button class="btn" id="mv-open">Open draft</button><button class="btn primary" id="mv-go">Move</button>`);
+  dl.querySelector('#mv-date').focus();
+  dl.querySelector('#mv-go').onclick = () => { const v = dl.querySelector('#mv-date').value; dl.close(); moveDraft(id, v); };
+  dl.querySelector('#mv-open').onclick = () => { dl.close(); S.draftId = id; S.variant = Object.keys(buf(id).variants)[0]; go('library'); };
+  const c = dl.querySelector('#mv-clear'); if (c) c.onclick = () => { dl.close(); moveDraft(id, ''); };
+}
+function openAddVariant() {
+  const have = Object.keys(buf(S.draftId).variants);
+  const dl = dialog('Add a channel variant', `<label class="field" for="av-ch"><span>Channel</span><select id="av-ch">${CHANNELS.filter((c) => !have.includes(c)).map((c) => `<option>${c}</option>`).join('')}</select></label><label class="row small"><input type="checkbox" id="av-copy" checked> Start from the core message</label>`, '<button class="btn" data-action="close">Cancel</button><button class="btn primary" id="av-go">Add variant</button>');
+  dl.querySelector('#av-go').onclick = () => { const c = dl.querySelector('#av-ch').value; const b = buf(S.draftId); b.variants[c] = dl.querySelector('#av-copy').checked ? b.base : ''; S.variant = c; dl.close(); render(); $('#c-var')?.focus(); };
+}
+function openProfile() {
+  const p = brand().profile;
+  const dl = dialog('Brand profile · ' + brand().name, `<p class="small muted" style="margin-top:0">Proposed fields. Today a brand only has a name. These would feed workbench defaults and, later, a brand voice.</p>
+    <label class="field"><span>Audience</span><textarea rows="2" id="pf-aud">${esc(p.audience)}</textarea></label><label class="field"><span>Voice notes</span><textarea rows="2" id="pf-voice">${esc(p.voice)}</textarea></label><label class="field"><span>Topics <span class="hint">· comma separated</span></span><input id="pf-top" value="${esc(p.topics.join(', '))}"></label>`, '<button class="btn" data-action="close">Cancel</button><button class="btn primary" id="pf-save">Save profile</button>');
+  dl.querySelector('#pf-save').onclick = () => { p.audience = dl.querySelector('#pf-aud').value; p.voice = dl.querySelector('#pf-voice').value; p.topics = dl.querySelector('#pf-top').value.split(',').map((x) => x.trim()).filter(Boolean); dl.close(); render(); toast('Brand profile saved'); };
+}
+function openImport() {
+  const dl = dialog('Import data', `<label class="field" for="im-kind"><span>What is it?</span><select id="im-kind">${Object.entries(KINDS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+    <label class="field" for="im-file"><span>File <span class="hint">· JSON or JSONL, under 2 MB</span></span><input id="im-file" type="file" accept=".json,.jsonl,application/json"></label>
+    <div class="row small"><span class="muted">No file handy?</span><button class="btn sm" id="im-example">Use fictional example</button><button class="btn sm ghost" id="im-bad">Try a broken file</button></div>
+    <div id="im-result" aria-live="polite" style="margin-top:12px"></div>`, '<button class="btn" data-action="close">Cancel</button><button class="btn primary" id="im-save" disabled>Save as source</button>');
+  let pending = null;
+  const show = (ok, msg, rec) => { dl.querySelector('#im-result').innerHTML = ok ? `<div class="banner info small"><div><strong>Looks good</strong>${esc(msg)}</div></div>` : `<div class="banner bad small" role="alert"><div><strong>Can’t import this file</strong>${esc(msg)}</div></div>`; dl.querySelector('#im-save').disabled = !ok; pending = ok ? rec : null; };
+  dl.querySelector('#im-example').onclick = () => show(true, '24 records · as of 2026-10-15 · fictional example (will be labeled)', { name: 'Fictional example: ' + KINDS[dl.querySelector('#im-kind').value].toLowerCase(), records: 24, asOf: '2026-10-15', file: 'example.json', example: true });
+  dl.querySelector('#im-bad').onclick = () => show(false, 'Line 14, column 3: expected “,” or “}”. Nothing was saved.');
+  dl.querySelector('#im-file').onchange = async (ev) => { const f = ev.target.files[0]; if (!f) return; if (f.size > 2e6) return show(false, 'File is larger than 2 MB.'); try { const tx = await f.text(); const v = f.name.endsWith('.jsonl') ? tx.split('\n').filter(Boolean).map((l) => JSON.parse(l)) : JSON.parse(tx); const n = Array.isArray(v) ? v.length : Object.keys(v).length; show(true, `${n} top-level records in ${f.name}. Read in this window only.`, { name: f.name.replace(/\.\w+$/, ''), records: n, asOf: TODAY, file: f.name }); } catch (err) { show(false, err.message); } };
+  dl.querySelector('#im-save').onclick = () => { if (!pending) return; if (S.service === 'down') { show(false, 'The Social service is unreachable, so the source wasn’t saved. Try again when it’s back.'); return; } const s = { id: 'src-' + Math.random().toString(16).slice(2, 6), brand: S.brand, kind: dl.querySelector('#im-kind').value, imported: '2026-10-20 ' + NOW_LABEL, digest: '0d4b7e…' + Math.random().toString(16).slice(2, 6), status: 'valid', ...pending }; S.data.sources.unshift(s); S.srcSel = s.id; S.view = 'populated'; $('#mock-state').value = 'populated'; dl.close(); go('sources'); toast('Source saved'); };
+}
+function readFile(f) {
+  const out = $('#file-result'); if (!f) return;
+  f.text().then((tx) => { JSON.parse(tx); out.innerHTML = `<div class="banner info small"><div><strong>${esc(f.name)} is valid JSON.</strong>Save it as a source to use it in the form.</div></div><button class="btn primary sm" data-action="import">Save as source…</button>`; })
+    .catch((err) => { out.innerHTML = `<div class="banner bad small" role="alert"><div><strong>Can’t read ${esc(f.name)}</strong>${esc(err.message)}</div></div>`; });
+}
+function openShortcuts() {
+  dialog('Keyboard shortcuts', `<table><tbody>${[['Ctrl/⌘ 1 · 2 · 3', 'Switch to Design, Social, Work (HQ shell)'], ['N', 'New draft'], ['Ctrl/⌘ S', 'Save draft (Library)'], ['Tab / Shift Tab', 'Move between controls'], ['Enter on a calendar draft', 'Open, or move to another date'], ['Esc', 'Close dialog or menu'], ['?', 'This list']].map(([k, v]) => `<tr><td><span class="kbd">${esc(k)}</span></td><td>${esc(v)}</td></tr>`).join('')}</tbody></table>`);
+}
+
+/* ---------- Boot ---------- */
+fromHash();
+document.querySelectorAll('input[name="appearance"]').forEach((r) => { r.checked = r.value === S.appearance; });
+render();
+</script>
+</body>
+</html>

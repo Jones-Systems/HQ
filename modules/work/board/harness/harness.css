@@ -1,0 +1,24 @@
+/* Layout for the evidence harness only; the Work surfaces style themselves under .work-ui. */
+html, body { margin: 0; height: 100%; }
+body { background: var(--hq-canvas); color: var(--hq-text); font: var(--hq-type-body); }
+#root { height: 100%; }
+.harness { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+.harness-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm); padding: var(--hq-space-xs) var(--hq-space-lg);
+  border-bottom: 1px dashed var(--hq-border-strong); background: var(--hq-surface-sunken); font: var(--hq-type-small);
+}
+.harness-note { color: var(--hq-text-muted); margin-right: auto; }
+.harness-group { display: inline-flex; gap: 2px; }
+.harness-bar button {
+  min-height: 28px; padding: 0 var(--hq-space-sm); border: 0; border-radius: var(--hq-radius-sm); background: var(--hq-surface);
+  color: var(--hq-text); box-shadow: inset 0 0 0 1px var(--hq-border); font: var(--hq-type-small); cursor: pointer;
+}
+.harness-bar button[aria-pressed='true'] { box-shadow: inset 0 0 0 2px var(--hq-accent); font-weight: 600; }
+.harness-main { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; }
+.harness-main--detail { grid-template-columns: minmax(0, 1fr) auto; }
+.harness-board { min-width: 0; min-height: 0; overflow: auto; padding: var(--hq-space-lg); display: grid; align-content: start; gap: var(--hq-space-md); }
+.harness-log { padding: var(--hq-space-2xs) var(--hq-space-lg); border-top: 1px dashed var(--hq-border-strong); background: var(--hq-surface-sunken); color: var(--hq-text-muted); font: var(--hq-type-meta); }
+@media (max-width: 1000px) {
+  .harness-main--detail { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  .harness-main--detail .work-detail { width: 100%; }
+}

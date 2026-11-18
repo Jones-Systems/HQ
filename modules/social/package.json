@@ -1,0 +1,12 @@
+{
+  "name": "@hq/social",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./index.tsx" },
+  "dependencies": {
+    "@hq/contracts": "0.1.0",
+    "@hq/ui": "0.1.0",
+    "react": "19.3.1"
+  }
+}

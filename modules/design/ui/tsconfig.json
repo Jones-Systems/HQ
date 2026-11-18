@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "noEmit": true,
+    "moduleResolution": "Bundler",
+    "types": ["vite/client", "node"]
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["test/vite/scratch/**"]
+}

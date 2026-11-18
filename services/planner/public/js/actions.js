@@ -6,7 +6,7 @@ import { ApiError, NetworkError } from './api.js';
 import { announce } from './dom.js';
 import { STATUS_LABEL } from './model.js';
 import { anchorsToRestore, sortByPosition } from './ordering.js';
-import { OfflineError, getItem, mutate, projectBoardMove, projectPatch, state } from './state.js';
+import { INDETERMINATE_MESSAGE, OfflineError, getItem, mutate, projectBoardMove, projectPatch, state } from './state.js';
 import { toast } from './ui.js';
 
 const undoStack = [];
@@ -37,8 +37,18 @@ function undoAction(entry) {
   };
 }
 
-function remember(label, run, message) {
-  const entry = { label, run };
+/** An undo for item `id`: says so plainly when the item has since gone. */
+function remember(label, run, message, id = null) {
+  const entry = {
+    label,
+    run: async () => {
+      if (id && !getItem(id)) {
+        toast('Nothing to undo: that item no longer exists.', { timeout: 3000 });
+        return;
+      }
+      await run();
+    },
+  };
   undoStack.push(entry);
   if (undoStack.length > MAX_UNDO) undoStack.shift();
   toast(message, { kind: 'success', action: undoAction(entry) });
@@ -53,6 +63,8 @@ export function reportError(err, what) {
       timeout: 12000,
       detail: 'The server did not answer. The change is marked unconfirmed and will be re-sent safely when the connection returns.',
     });
+  } else if (err instanceof ApiError && err.code === 'replay_indeterminate') {
+    toast(`${what}: outcome unknown`, { kind: 'error', timeout: 12000, detail: INDETERMINATE_MESSAGE });
   } else if (err instanceof ApiError && err.code === 'revision_conflict') {
     toast(`${what}: changed elsewhere`, {
       kind: 'error', detail: 'This item was edited on another device or tab. The latest version is now shown; please try again.',
@@ -104,7 +116,7 @@ export async function patchItem(item, patch, { label = 'Change', message = null,
         } catch {
           /* reported by patchItem */
         }
-      }, message || `${label} saved.`);
+      }, message || `${label} saved.`, base.id);
     }
     return result.item;
   } catch (err) {
@@ -132,16 +144,14 @@ export async function moveItem(item, status, anchors, { undo = true, label = nul
       announce(msg);
       if (undo) {
         remember(what, async () => {
-          const latest = getItem(base.id);
-          if (!latest) return;
           try {
-            await moveItem(latest, oldStatus, restore, { undo: false, label: 'Undo move' });
+            await moveItem(getItem(base.id), oldStatus, restore, { undo: false, label: 'Undo move' });
           } catch (err) {
             if (err instanceof ApiError && err.code === 'order_conflict') {
               await moveItem(getItem(base.id), oldStatus, { place: 'top' }, { undo: false, label: 'Undo move' });
             }
           }
-        }, msg);
+        }, msg, base.id);
       }
     }
     return result.item;
@@ -167,7 +177,7 @@ export async function setArchived(item, archived, { undo = true } = {}) {
         try {
           await setArchived(getItem(base.id), !archived, { undo: false });
         } catch { /* reported */ }
-      }, msg);
+      }, msg, base.id);
     } else {
       toast(msg, { kind: 'success', timeout: 3000 });
     }

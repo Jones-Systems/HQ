@@ -1,0 +1,4 @@
+{
+  "extends": "../../requests/tsconfig.json",
+  "include": ["requests", "runs", "references", "test", "vitest.config.ts"]
+}

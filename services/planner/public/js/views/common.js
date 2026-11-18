@@ -78,7 +78,7 @@ export function itemCard(item, ctx, { draggable = true, compact = false, showSta
     h('h4', { class: 'card-title', text: item.title }));
   const menuBtn = h('button', {
     type: 'button', class: 'card-menu btn btn-icon btn-ghost', 'aria-label': `Actions for ${item.title}`,
-    'aria-haspopup': 'menu', title: 'Move to… (M)', dataset: { cardMenu: item.id },
+    'aria-haspopup': 'menu', title: 'Move to… (M)', dataset: { cardMenu: item.id, focusKey: `card-menu:${item.id}` },
   }, icon('more', { size: 18 }));
   head.append(menuBtn);
   card.append(head);
@@ -123,10 +123,14 @@ function cardLabel(item, today) {
   return parts.filter(Boolean).join(', ');
 }
 
-/** A one-line row used in glance and review lists. */
-export function itemRow(item, ctx, { trailing = null, sub = null } = {}) {
+/**
+ * A one-line row used in glance and review lists. `scope` keeps focus keys
+ * unique when the same item appears in more than one list on a screen.
+ */
+export function itemRow(item, ctx, { trailing = null, sub = null, scope = '' } = {}) {
   const row = h('button', {
-    type: 'button', class: ['row', item.is_example && 'is-example'], dataset: { focusKey: `row:${item.id}` },
+    type: 'button', class: ['row', item.is_example && 'is-example'],
+    dataset: { focusKey: scope ? `row:${scope}:${item.id}` : `row:${item.id}` },
     on: { click: () => ctx.openItem(item.id) },
   }, kindIcon(item.kind, 15), h('span', { class: 'row-title', text: item.title }));
   if (sub) row.append(h('span', { class: 'row-sub', text: sub }));

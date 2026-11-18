@@ -7,10 +7,14 @@ Items cannot start, queue or launch work anywhere else.
 
 - **Frontend:** plain HTML, CSS and ES modules in `public/`. It has no build
   step and loads no external fonts, CDNs or analytics. Icons are inline SVG.
-- **Backend:** Python 3 standard library only (`http.server` + `sqlite3`) in
-  `planning/`.
+- **Backend:** Python 3 standard library only (`http.server`, `sqlite3` and
+  `zoneinfo`) in `planning/`. `zoneinfo` needs Python 3.9 or newer and the
+  host's IANA time-zone database. These checks were last run on Python 3.13
+  and Node 24.
 - **Data:** one SQLite file at a path you choose. Safety backups are written
-  into a folder next to it. Neither is ever served over HTTP.
+  into a folder next to it. Neither is ever served over HTTP. New store and
+  backup files are created owner-only (mode 0600); existing files keep their
+  mode.
 
 Selected source extraction and licensing are recorded in [PROVENANCE.md](PROVENANCE.md),
 with original file hashes in [import-manifest.json](import-manifest.json). The
@@ -32,7 +36,7 @@ python3 -m planning --data ~/planning-data/planning.sqlite3 --port 8765
 | Option | Meaning |
 | --- | --- |
 | `--data PATH` | Required. The SQLite store. Use an existing directory outside the HQ repository. The server rejects `public/` and warns for other paths inside this service’s source tree; keeping data outside the whole repository is the caller’s responsibility. Backups go to `<name>-backups/` beside it. |
-| `--host` | Loopback only: `127.0.0.1` (default), `::1` or `localhost`. Any other address is refused. |
+| `--host` | Loopback only: `127.0.0.1` (default), another 127.x address, `::1` or `localhost`. A non-loopback address is refused with exit status 2. The bound address is accepted as a `Host`. |
 | `--port` | Default `8765`. `0` selects an available port; the startup line prints the actual bound port. |
 | `--allowed-host HOST[:PORT]` | Accept an extra `Host` header, for when a separately authorized private proxy sits in front of loopback. Repeat it for more than one host. |
 
@@ -46,9 +50,16 @@ step.
 From this directory, after checking host capacity, run one process at a time:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -t tests   # store, HTTP boundary, CLI guards
-node --test --test-concurrency=1 'tests/*.test.mjs'                        # client date/order logic, render and app smoke
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -t tests   # store, HTTP boundary, CLI guards, HQ references, contract drift
+node --test --test-concurrency=1 'tests/*.test.mjs'                        # client date/order logic, render and app smoke, HQ reference rendering
 ```
+
+The `planner-service` group in `tests/check-groups.json` records these two
+commands plus `PYTHONDONTWRITEBYTECODE=1 python3 contract/generate.py --check`,
+and names `tests/test_contract.py` as the contract drift check. The
+`planner-cross` group runs the CLI's real-service E2E from `tools/hq-cli`
+(`HQ_CLI_E2E=1 node --test --test-concurrency=1 test/e2e/planner.test.mjs`);
+run it after any change under `planning/` or `contract/`.
 
 The Python tests put their scratch under `tests/.scratch/`, one
 `TemporaryDirectory` per test. The context manager removes it whether a test
@@ -65,7 +76,7 @@ real-browser checks** of layout, drag and touch.
 | Area | Interactions |
 | --- | --- |
 | **Glance** (home) | A greeting with a one-line summary: active items, overdue items, upcoming dates and Inbox count. Status counts link to the Board. Panels show **Now** (Active or horizon Now, with the next step), the **next 21 days** (overdue deadlines first, then each day, then this month and quarter with no set day), **Inbox**, **Worth a look** and **Recently changed**. |
-| **Board** | Seven manual statuses: Inbox, Considering, Next, Active, On hold, Done and Dropped. You can **drag a card across columns or reorder it within one**. While you drag, a placeholder opens where the card will land and a badge names the destination. Columns can be collapsed (Dropped starts collapsed) and still accept drops. Each card's **⋯ Move to…** menu covers every status plus up, down, top and bottom. From the keyboard: Alt+←/→ changes status, Alt+↑/↓ reorders, M opens the menu, and the arrow keys move focus. On a phone the board shows one column at a time with status tabs. Long-press a card to drag it, or drop it onto a tab. |
+| **Board** | Seven manual statuses: Inbox, Considering, Next, Active, On hold, Done and Dropped. You can **drag a card across columns or reorder it within one**. While you drag, a placeholder opens where the card will land and a badge names the destination. Columns can be collapsed (Dropped starts collapsed) and still accept drops. Each card's **⋯ Move to…** menu covers every status plus up, down, top and bottom. From the keyboard: Alt+←/→ changes status, Alt+↑/↓ reorders, M opens the menu, and the arrow keys move focus. On a phone the board shows one column at a time with status tabs; collapsed columns, including Dropped, open from their tab. Long-press a card to drag it, or drop it onto a tab. |
 | **List** | A sortable table with inline **Status** and **Horizon** selects. On a phone the rows stack. |
 | **Calendar** | A month grid or an agenda (agenda is the default on narrow screens). A **period band** holds month, quarter and year dates and never pins them to a day. Week dates appear in their week row. The **Unscheduled** tray lists items with no dates; drag one onto a day and choose Target, Deadline, Start or Event (Target is the default). You can **drag a dated chip to another day**: kind, time, zone and note are kept. Dragging a chip to the tray removes that date. Every chip has a menu: open, edit date and time, ±1 day, +1 week, remove. From the keyboard, Alt+arrows shift a focused chip by a day or a week, and PageUp/PageDown changes month. The **Outside this month** list shows earlier open dates and later ones. There are kind filters and a “show done & dropped” toggle. |
 | **Timeline** | Horizon lanes (Now, Soon, Later, Someday, none) across the next eight quarters, with a line for today. Day dates are markers. Month, quarter and year dates are dashed bands covering exactly that period. A bar is drawn only from a start date to a **later** target or deadline that you set. Dates outside the range show as edge chips. **Drag a row to another lane** to change its horizon; its menu and Alt+↑/↓ do the same. On a phone it becomes a lane list with the dates written out. |
@@ -118,10 +129,11 @@ Ctrl/⌘+Z undoes the last change. Press `?` to see all shortcuts.
   what you typed and offer **Keep mine** or **Use theirs**, and they re-apply
   automatically when only a different field changed. Every change carries a
   request id. If the response is lost, the change is marked **unconfirmed**
-  and re-sent with the same id when the server is reachable again. The
-  server answers a retained repeated id from its record instead of applying
-  the change twice. Records are bounded; see the Planner API replay rules
-  before retrying an unknown outcome after retention may have expired.
+  and re-sent through `POST /api/requests/replay` when the server is
+  reachable again (imports, restores and examples keep the same-id resend).
+  The server answers a retained repeated id from its record instead of
+  applying the change twice. Records are bounded; see the Planner API replay
+  rules before retrying an unknown outcome after retention may have expired.
 - **Offline is shown, not hidden.** A banner says the server can't be
   reached, shows when data was last loaded, and pauses changes. While
   offline, new captures can be kept as **device drafts**, clearly labelled
@@ -185,7 +197,9 @@ This guarantee assumes one server process owns the store. A late original
 request is deduplicated while its record remains retained. The floor only
 increases; opening an older store at the retention cap initializes it to the
 current version conservatively. Import and backup restore preserve request
-records and the monotonically increasing state version.
+records and the monotonically increasing state version. Items that already
+exist move one revision forward on replace import or backup restore, so an
+older open copy is refused rather than overwriting it.
 
 ### HQ references
 
@@ -219,6 +233,10 @@ readable but reject resaving them; reconcile such data before a runtime rollback
   `Sec-Fetch-Site` must be same-origin or absent. Bodies are capped at
   256 KiB (352 KiB for replay envelopes, 8 MiB for import), and chunked
   bodies are refused.
+- Request framing is strict: one `Host`, one plain-digits `Content-Length`,
+  and the full declared body. Malformed framing is refused with 400.
+  Connections idle or stalled for 30 s are closed. Protocol errors are JSON
+  with the same security headers.
 - Static files come only from `public/`, with an extension allow-list.
   Dotfiles, `..` paths and backslashes are rejected, and the store and
   backups are never served.
@@ -247,8 +265,9 @@ readable but reject resaving them; reconcile such data before a runtime rollback
 - **Calendar drag works on day-precision dates only.** Coarse dates are
   edited in the date dialog, so a quarter is never turned into a day by
   accident.
-- **History** keeps the last 200 entries per item. Imports are limited to
-  5,000 items or 8 MB. The design targets hundreds to a few thousand items,
+- **History** keeps the last 200 entries per item; the history endpoint
+  returns the newest 100. Imports are limited to
+  5,000 items or 8 MiB. The design targets hundreds to a few thousand items,
   loaded in one request. Rendering at that size hasn't been measured.
 - **Touch drag uses a long press (≈0.3 s).** It is implemented with Pointer
   Events and a non-passive `touchmove` guard. It has not yet been tested on

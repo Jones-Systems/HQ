@@ -1,0 +1,228 @@
+{
+  "schema": "hq.planner.exchange/v1",
+  "request": {
+    "method": "GET",
+    "path": "/api/state",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json"
+    },
+    "body_utf8": ""
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Length": "3316"
+    },
+    "body": {
+      "items": [
+        {
+          "id": "0000000000000002",
+          "revision": 1,
+          "title": "Batch B",
+          "kind": "idea",
+          "status": "next",
+          "motivation": null,
+          "horizon": null,
+          "priority": null,
+          "area": null,
+          "notes": "",
+          "next_steps": [],
+          "references": [],
+          "dates": [],
+          "position": 0,
+          "is_example": false,
+          "created_at": "2026-01-15T12:00:00Z",
+          "updated_at": "2026-01-15T12:00:00Z",
+          "archived_at": null,
+          "reviewed_at": null
+        },
+        {
+          "id": "0000000000000004",
+          "revision": 1,
+          "title": "Contract example",
+          "kind": "idea",
+          "status": "inbox",
+          "motivation": null,
+          "horizon": null,
+          "priority": null,
+          "area": null,
+          "notes": "",
+          "next_steps": [],
+          "references": [
+            {
+              "id": "ref001",
+              "kind": "hq",
+              "label": "Example design",
+              "target": {
+                "version": 1,
+                "domain": "design",
+                "projectId": "project-example",
+                "kind": "artifact",
+                "entityId": "artifact-example",
+                "title": "Example design",
+                "returnDestination": {
+                  "domain": "design",
+                  "destination": "artifact/example"
+                }
+              }
+            }
+          ],
+          "dates": [
+            {
+              "id": "date001",
+              "kind": "target",
+              "precision": "quarter",
+              "value": "2027-Q2",
+              "time": null,
+              "end_time": null,
+              "tz": null,
+              "note": ""
+            },
+            {
+              "id": "date002",
+              "kind": "deadline",
+              "precision": "day",
+              "value": "2027-06-30",
+              "time": null,
+              "end_time": null,
+              "tz": null,
+              "note": ""
+            }
+          ],
+          "position": 0,
+          "is_example": false,
+          "created_at": "2026-01-15T12:00:00Z",
+          "updated_at": "2026-01-15T12:00:00Z",
+          "archived_at": null,
+          "reviewed_at": null
+        },
+        {
+          "id": "0000000000000001",
+          "revision": 6,
+          "title": "Contract example",
+          "kind": "idea",
+          "status": "next",
+          "motivation": null,
+          "horizon": null,
+          "priority": null,
+          "area": null,
+          "notes": "Synthetic note",
+          "next_steps": [],
+          "references": [
+            {
+              "id": "ref001",
+              "kind": "hq",
+              "label": "Example design",
+              "target": {
+                "version": 1,
+                "domain": "design",
+                "projectId": "project-example",
+                "kind": "artifact",
+                "entityId": "artifact-example",
+                "title": "Example design",
+                "returnDestination": {
+                  "domain": "design",
+                  "destination": "artifact/example"
+                }
+              }
+            }
+          ],
+          "dates": [
+            {
+              "id": "date001",
+              "kind": "target",
+              "precision": "quarter",
+              "value": "2027-Q2",
+              "time": null,
+              "end_time": null,
+              "tz": null,
+              "note": ""
+            },
+            {
+              "id": "date002",
+              "kind": "deadline",
+              "precision": "day",
+              "value": "2027-06-30",
+              "time": null,
+              "end_time": null,
+              "tz": null,
+              "note": ""
+            }
+          ],
+          "position": 1024,
+          "is_example": false,
+          "created_at": "2026-01-15T12:00:00Z",
+          "updated_at": "2026-01-15T12:00:00Z",
+          "archived_at": null,
+          "reviewed_at": "2026-01-15T12:00:00Z"
+        },
+        {
+          "id": "0000000000000003",
+          "revision": 1,
+          "title": "Batch A",
+          "kind": "idea",
+          "status": "inbox",
+          "motivation": null,
+          "horizon": null,
+          "priority": null,
+          "area": null,
+          "notes": "",
+          "next_steps": [],
+          "references": [
+            {
+              "id": "ref001",
+              "kind": "hq",
+              "label": "Example design",
+              "target": {
+                "version": 1,
+                "domain": "design",
+                "projectId": "project-example",
+                "kind": "artifact",
+                "entityId": "artifact-example",
+                "title": "Example design",
+                "returnDestination": {
+                  "domain": "design",
+                  "destination": "artifact/example"
+                }
+              }
+            }
+          ],
+          "dates": [],
+          "position": 1024,
+          "is_example": false,
+          "created_at": "2026-01-15T12:00:00Z",
+          "updated_at": "2026-01-15T12:00:00Z",
+          "archived_at": null,
+          "reviewed_at": null
+        }
+      ],
+      "settings": {
+        "default_tz": "America/New_York",
+        "week_start": "mon",
+        "stale_days": 21
+      },
+      "state_version": 9,
+      "server_time": "2026-01-15T12:00:00Z",
+      "api": 2,
+      "features": [
+        "items.batch_create",
+        "requests.replay",
+        "hq-references-v1"
+      ],
+      "request_retention": {
+        "max": 2000,
+        "evicted_through_version": 0
+      }
+    }
+  }
+}

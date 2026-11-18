@@ -1,0 +1,16 @@
+{
+  "status": "PROJECTION",
+  "authority_effect": "none",
+  "canonical_adoption": false,
+  "source_revision": "9cecb338a2158b47c3ebc5d3238dca5e3dfc8d69",
+  "source_path": "tests/check-groups.toml",
+  "source_sha256": "8edcf011d387e30475a7b8f39b9903b0606704b8676aeb21e284f1f06a3f41ec",
+  "projection_path": "docs/planning-evidence/hq-expansion/check-groups.projection.toml",
+  "projection_sha256": "23a0265fec8c818fa3ebc81552c33ef30aa93f42ddd5f4d25af8c34bff10192d",
+  "added_groups": [
+    "wiki-contract",
+    "wiki-core",
+    "wiki-ui"
+  ],
+  "binding_note": "Helper binding manifest_path is fixed to tests/check-groups.toml. For this PROJECTION its SHA/groups are loaded from the named committed projection bytes; evidence_ref identifies this record. Canonical catalog is unchanged."
+}

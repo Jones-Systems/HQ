@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import socket
 import sys
 from pathlib import Path
@@ -11,12 +12,28 @@ from .server import PUBLIC_DIR, PlanningApp, ThreadingHTTPServer, is_loopback_ho
 from .store import Store
 
 
+def port_number(value: str) -> int:
+    port = int(value)
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError("must be between 0 and 65535")
+    return port
+
+
+def host_header(host: str, port: int) -> str:
+    """The Host header a browser sends for ``host:port`` (IPv6 compressed and bracketed)."""
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return f"{host.lower()}:{port}"
+    return f"[{address.compressed}]:{port}" if address.version == 6 else f"{address}:{port}"
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="planning", description="Manual planning hub (loopback only).")
     parser.add_argument("--data", required=True,
                         help="SQLite store path. Must be outside the public/ directory; backups go beside it.")
     parser.add_argument("--host", default="127.0.0.1", help="Loopback address to bind (default 127.0.0.1).")
-    parser.add_argument("--port", type=int, default=8765, help="Port (default 8765).")
+    parser.add_argument("--port", type=port_number, default=8765, help="Port (default 8765).")
     parser.add_argument("--allowed-host", action="append", default=[], metavar="HOST[:PORT]",
                         help="Extra Host header value to accept, e.g. when a private proxy fronts loopback.")
     return parser.parse_args(argv)
@@ -44,10 +61,10 @@ def main(argv: list[str] | None = None) -> int:
         server_class = type("ThreadingHTTPServerV6", (ThreadingHTTPServer,), {"address_family": socket.AF_INET6})
     server = server_class((args.host, args.port), None)
     port = server.server_address[1]
-    app = PlanningApp(store, port=port, extra_hosts=tuple(args.allowed_host))
+    bound = host_header(args.host, port)
+    app = PlanningApp(store, port=port, extra_hosts=(bound, *args.allowed_host))
     server.RequestHandlerClass = make_handler(app)
-    shown = f"[{args.host}]" if ":" in args.host else args.host
-    print(f"Planning hub on http://{shown}:{port}/  (data: {data})", flush=True)
+    print(f"Planning hub on http://{bound}/  (data: {data})", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

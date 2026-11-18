@@ -1,0 +1,27 @@
+{
+  "schema": "hq.social.exchange/v1",
+  "request": {
+    "method": "GET",
+    "path": "/api/workspace",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json",
+      "Origin": "https://evil.example"
+    },
+    "body_utf8": ""
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "Content-Length": "40"
+    },
+    "body": {
+      "error": "Cross-origin request refused"
+    }
+  }
+}

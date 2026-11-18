@@ -33,10 +33,11 @@ export function toast(message, { kind = 'info', action = null, timeout = TOAST_M
   host.append(el);
   while (host.children.length > 4) host.firstChild.remove();
   if (timeout) {
-    const arm = () => { timer = setTimeout(close, timeout); };
+    const arm = () => { clearTimeout(timer); timer = setTimeout(close, timeout); };
     el.addEventListener('pointerenter', () => clearTimeout(timer));
     el.addEventListener('pointerleave', arm);
     el.addEventListener('focusin', () => clearTimeout(timer));
+    el.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) arm(); });
     arm();
   }
   if (kind !== 'error') announce(message);
@@ -257,6 +258,8 @@ export function segmented({ name, options, value, onChange, allowNone = false, l
   const group = h('div', { class: ['segmented', compact && 'segmented-compact'], role: 'radiogroup', 'aria-label': label });
   const buttons = [];
   const all = allowNone ? [{ id: '', label: 'None' }, ...options] : options;
+  // Keep one option tabbable even when the value matches none of them.
+  const hasSelected = all.some((opt) => (value || '') === opt.id);
   for (const opt of all) {
     const selected = (value || '') === opt.id;
     const b = h('button', {
@@ -264,7 +267,7 @@ export function segmented({ name, options, value, onChange, allowNone = false, l
       role: 'radio',
       class: ['seg', selected && 'is-selected', opt.id && `seg-${name}-${opt.id}`],
       'aria-checked': String(selected),
-      tabindex: selected || (!value && opt === all[0]) ? '0' : '-1',
+      tabindex: selected || (!hasSelected && opt === all[0]) ? '0' : '-1',
       title: opt.hint || null,
       dataset: { value: opt.id },
     });

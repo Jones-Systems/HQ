@@ -1,0 +1,34 @@
+{
+  "schema": "hq.planner.exchange/v1",
+  "request": {
+    "method": "POST",
+    "path": "/api/items/0000000000000001/move",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-Planning-Request": "1",
+      "X-Request-Id": "contract-order"
+    },
+    "body_utf8": "{\"revision\":2,\"status\":\"next\",\"after_id\":\"missing001\"}"
+  },
+  "response": {
+    "status": 409,
+    "headers": {
+      "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Length": "103"
+    },
+    "body": {
+      "error": "order_conflict",
+      "message": "The board changed since it was loaded. Refresh and try again."
+    }
+  }
+}

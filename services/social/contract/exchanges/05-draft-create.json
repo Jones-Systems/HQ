@@ -1,0 +1,55 @@
+{
+  "schema": "hq.social.exchange/v1",
+  "request": {
+    "method": "POST",
+    "path": "/api/content",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-Workspace-Token": "synthetic-workspace-token"
+    },
+    "body_utf8": "{\"title\":\"Cupping hour invite\",\"body\":\"Free tasting on Saturday.\",\"brand_id\":\"00000000000000000000000000000001\",\"channel\":\"X\",\"planned_date\":\"2026-10-22\",\"archived\":0,\"links\":[{\"version\":1,\"domain\":\"work\",\"projectId\":\"project-1\",\"kind\":\"item\",\"entityId\":\"item-1\",\"title\":\"Plan the cupping hour\",\"returnDestination\":{\"domain\":\"social\",\"destination\":\"library\"}}],\"planning_slot\":{\"start\":\"09:15\",\"duration_minutes\":30,\"timezone\":\"America/New_York\"}}"
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "Content-Length": "540"
+    },
+    "body": {
+      "id": "00000000000000000000000000000002",
+      "title": "Cupping hour invite",
+      "body": "Free tasting on Saturday.",
+      "brand_id": "00000000000000000000000000000001",
+      "channel": "X",
+      "planned_date": "2026-10-22",
+      "planning_slot": {
+        "start": "09:15",
+        "duration_minutes": 30,
+        "timezone": "America/New_York"
+      },
+      "archived": 0,
+      "version": 1,
+      "updated_at": "2026-01-15T12:00:01+00:00",
+      "links": [
+        {
+          "version": 1,
+          "domain": "work",
+          "projectId": "project-1",
+          "kind": "item",
+          "entityId": "item-1",
+          "title": "Plan the cupping hour",
+          "returnDestination": {
+            "domain": "social",
+            "destination": "library"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -70,7 +70,7 @@ export function renderList(root, ctx) {
     headRow.append(h('th', {
       scope: 'col', class: `col-${col.key}`, 'aria-sort': active ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none',
     }, h('button', {
-      type: 'button', class: 'th-sort', on: {
+      type: 'button', class: 'th-sort', dataset: { focusKey: `sort:${col.key}` }, on: {
         click: () => {
           if (sort.key === col.key) sort.dir *= -1;
           else { sort.key = col.key; sort.dir = 1; }
@@ -89,7 +89,8 @@ export function renderList(root, ctx) {
 
     const status = selectControl(STATUSES.map((s) => ({ id: s.id, label: s.label })), item.status);
     status.setAttribute('aria-label', `Status of ${item.title}`);
-    status.classList.add('select-inline', `st-${item.status}`);
+    status.dataset.focusKey = `list-status:${item.id}`;
+    status.classList.add('select-inline');
     status.addEventListener('change', async () => {
       try { await moveItem(item, status.value, { place: 'top' }); } catch { status.value = item.status; }
     });
@@ -98,6 +99,7 @@ export function renderList(root, ctx) {
 
     const horizon = selectControl(HORIZONS.map((x) => ({ id: x.id, label: x.label })), item.horizon, { allowNone: true, noneLabel: '—' });
     horizon.setAttribute('aria-label', `Horizon of ${item.title}`);
+    horizon.dataset.focusKey = `list-horizon:${item.id}`;
     horizon.classList.add('select-inline');
     horizon.addEventListener('change', async () => {
       try { await patchItem(item, { horizon: horizon.value || null }, { label: 'Horizon' }); } catch { horizon.value = item.horizon || ''; }

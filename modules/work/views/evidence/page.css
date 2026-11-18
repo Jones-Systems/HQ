@@ -1,0 +1,13 @@
+/* Layout for the evidence page only; the views style nothing outside .wv-* and the kit's .hq-* classes. */
+html, body { margin: 0; }
+body { background: var(--hq-canvas); color: var(--hq-text); font: var(--hq-type-body); }
+.ev-page { padding: var(--hq-space-xl) var(--hq-space-2xl) 96px; display: grid; gap: var(--hq-space-lg); }
+.ev-head { display: flex; align-items: baseline; gap: var(--hq-space-md); flex-wrap: wrap; }
+.ev-title { margin: 0; font: var(--hq-type-title); }
+.ev-meta { font: var(--hq-type-meta); color: var(--hq-text-subtle); }
+.ev-states { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--hq-space-lg); }
+.ev-state { display: grid; gap: var(--hq-space-xs); align-content: start; padding: var(--hq-space-md); border-radius: var(--hq-radius-lg); background: var(--hq-surface); box-shadow: inset 0 0 0 1px var(--hq-border); }
+.ev-state-label { margin: 0; font: var(--hq-type-eyebrow); letter-spacing: var(--hq-type-eyebrow-tracking); text-transform: uppercase; color: var(--hq-text-subtle); }
+.ev-state .hq-toast-region { position: static; }
+
+.ev-domain { height: 100dvh; min-height: 0; overflow: auto; }

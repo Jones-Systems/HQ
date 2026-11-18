@@ -1,0 +1,432 @@
+{
+  "schema": "hq-reference-ui-browser/v1",
+  "sourceCommit": "3e2bffbd1ecc65836f27b127c50b720921a23640",
+  "comparisonCommit": "d9f9682d43cc36b234248c7375018d067bbd3ca5",
+  "comparisonBuilt": false,
+  "route": "Jones Code collaborative Browser, static Vite preview",
+  "fixture": "Synthetic reference envelopes and callback-only in-memory source records; no live services",
+  "viewport": {
+    "width": 1280,
+    "height": 1500,
+    "devicePixelRatio": 2,
+    "capturePixelWidth": 1280,
+    "capturePixelHeight": 1500
+  },
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "interactionMethod": "preview_press keyboard events; preview_evaluate readbacks only",
+  "steps": [
+    {
+      "step": "light: Tab to Link to, Enter opens focused combobox, ArrowDown selects first option",
+      "theme": "light",
+      "focus": "",
+      "role": "combobox",
+      "count": "8 linked references",
+      "mutations": "0",
+      "dialog": true,
+      "notice": "",
+      "activeOption": "Launch identity · Design notesdesign · document · new-design · Project demo-projectSnapshot · Not resolved",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "light: Escape closes and restores Link to focus",
+      "theme": "light",
+      "focus": "Link to…",
+      "role": null,
+      "count": "8 linked references",
+      "mutations": "0",
+      "dialog": false,
+      "notice": "",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "light: keyboard Unlink removes first reference and focuses Undo",
+      "theme": "light",
+      "focus": "Undo",
+      "role": null,
+      "count": "7 linked references",
+      "mutations": "1",
+      "dialog": false,
+      "notice": "Unlinked “Available · Autumn campaign brief”Undo",
+      "titles": [
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "light: Undo restores eight references and focuses summary",
+      "theme": "light",
+      "focus": "8 linked references",
+      "role": null,
+      "count": "8 linked references",
+      "mutations": "2",
+      "dialog": false,
+      "notice": "",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "light: keyboard Update snapshot changes only selected snapshot and focuses Undo",
+      "theme": "light",
+      "focus": "Undo",
+      "role": null,
+      "count": "8 linked references",
+      "mutations": "3",
+      "dialog": false,
+      "notice": "Updated snapshot “Changed · Autumn campaign brief”Undo",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Autumn campaign brief — approved",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "light: Undo restores original r1 snapshot",
+      "theme": "light",
+      "focus": "8 linked references",
+      "role": null,
+      "count": "8 linked references",
+      "mutations": "4",
+      "dialog": false,
+      "notice": "",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "dark: keyboard picker opens, ArrowDown twice selects second option",
+      "theme": "dark",
+      "focus": "",
+      "role": "combobox",
+      "count": "8 linked references",
+      "mutations": "4",
+      "dialog": true,
+      "notice": "",
+      "activeOption": "Launch announcement · Social draftsocial · document · draft · Project demo-projectSnapshot · Not resolved",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "dark: Shift+Tab wraps to Cancel",
+      "theme": "dark",
+      "focus": "Cancel",
+      "role": null,
+      "count": "8 linked references",
+      "mutations": "4",
+      "dialog": true,
+      "notice": "",
+      "activeOption": "Launch announcement · Social draftsocial · document · draft · Project demo-projectSnapshot · Not resolved",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "dark: Tab wraps to search",
+      "theme": "dark",
+      "focus": "",
+      "role": "combobox",
+      "count": "8 linked references",
+      "mutations": "4",
+      "dialog": true,
+      "notice": "",
+      "activeOption": "Launch announcement · Social draftsocial · document · draft · Project demo-projectSnapshot · Not resolved",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "dark: Escape restores Link to",
+      "theme": "dark",
+      "focus": "Link to…",
+      "role": null,
+      "count": "8 linked references",
+      "mutations": "4",
+      "dialog": false,
+      "notice": "",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "dark: Unlink reduces count and focuses Undo",
+      "theme": "dark",
+      "focus": "Undo",
+      "role": null,
+      "count": "7 linked references",
+      "mutations": "5",
+      "dialog": false,
+      "notice": "Unlinked “Available · Autumn campaign brief”Undo",
+      "titles": [
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "dark: Undo restores count",
+      "theme": "dark",
+      "focus": "8 linked references",
+      "role": null,
+      "count": "8 linked references",
+      "mutations": "6",
+      "dialog": false,
+      "notice": "",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "dark: Update snapshot uses explicit callback",
+      "theme": "dark",
+      "focus": "Undo",
+      "role": null,
+      "count": "8 linked references",
+      "mutations": "7",
+      "dialog": false,
+      "notice": "Updated snapshot “Changed · Autumn campaign brief”Undo",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Autumn campaign brief — approved",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "dark: Undo restores snapshot",
+      "theme": "dark",
+      "focus": "8 linked references",
+      "role": null,
+      "count": "8 linked references",
+      "mutations": "8",
+      "dialog": false,
+      "notice": "",
+      "titles": [
+        "Available · Autumn campaign brief",
+        "Changed · Autumn campaign brief",
+        "Archived · Autumn campaign brief",
+        "Missing · Autumn campaign brief",
+        "Moved · Autumn campaign brief",
+        "Forbidden · Autumn campaign brief",
+        "Unavailable · Autumn campaign brief",
+        "Unknown · Autumn campaign brief"
+      ],
+      "inlineStyles": 0,
+      "viewport": [
+        1280,
+        1500
+      ],
+      "scale": 2
+    },
+    {
+      "step": "dark: Enter on picker result adds a source-owned link",
+      "theme": "dark",
+      "count": "9 linked references",
+      "focus": "Link to…",
+      "mutations": "9",
+      "linked": "Linked referenceUndo link"
+    },
+    {
+      "step": "dark: keyboard Undo link removes the selected link",
+      "count": "8 linked references",
+      "mutations": "10",
+      "containsNew": false
+    }
+  ],
+  "diagnostics": {
+    "consoleEntries": [],
+    "networkEntries": [
+      {
+        "asset": "",
+        "method": "GET",
+        "status": 200,
+        "failed": false
+      },
+      {
+        "asset": "index-CoH9lPTb.css",
+        "method": "GET",
+        "status": 200,
+        "failed": false
+      },
+      {
+        "asset": "index-bjCZd-ku.js",
+        "method": "GET",
+        "status": 200,
+        "failed": false
+      }
+    ]
+  },
+  "coverageLimits": [
+    "No screen-reader or forced-colours assessment",
+    "No Electron/macOS/native installation qualification",
+    "No live source persistence or cross-domain shell integration",
+    "Execution counter in preview is explanatory fixture text; zero-execution assertions are in DOM tests and the narrow port/callback surface",
+    "Captures show one source revision; no before/after source comparison"
+  ]
+}

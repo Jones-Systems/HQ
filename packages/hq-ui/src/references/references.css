@@ -1,0 +1,20 @@
+.hq-reference, .hq-link-list, .hq-link-picker { color: var(--hq-text); font: var(--hq-type-body); }
+.hq-reference-heading, .hq-reference-actions, .hq-reference-notice { display: flex; align-items: center; flex-wrap: wrap; gap: var(--hq-space-sm); }
+.hq-reference-heading { justify-content: space-between; }
+.hq-reference-title { font: var(--hq-type-heading); overflow-wrap: anywhere; }
+.hq-reference-provenance, .hq-reference-freshness { color: var(--hq-text-muted); font: var(--hq-type-small); overflow-wrap: anywhere; margin: var(--hq-space-xs) 0; }
+.hq-reference-latest, .hq-reference-context { margin: var(--hq-space-sm) 0; overflow-wrap: anywhere; }
+.hq-reference-items, .hq-reference-results { list-style: none; margin: 0; padding: 0; }
+.hq-reference-items { display: grid; gap: var(--hq-space-md); }
+.hq-reference-item { padding: var(--hq-space-lg); background: var(--hq-surface); border: 1px solid var(--hq-border); border-radius: var(--hq-radius-md); min-width: 0; }
+.hq-reference-actions { margin-top: var(--hq-space-md); }
+.hq-reference-notice { margin-top: var(--hq-space-md); }
+.hq-reference-summary:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 3px; }
+.hq-reference-search-label { display: block; font: var(--hq-type-label); margin-bottom: var(--hq-space-xs); }
+.hq-reference-search { box-sizing: border-box; width: 100%; padding: var(--hq-space-sm) var(--hq-space-md); color: var(--hq-text); background: var(--hq-surface-raised); border: 1px solid var(--hq-border-control); border-radius: var(--hq-radius-md); font: var(--hq-type-body); }
+.hq-reference-search:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 2px; }
+.hq-reference-results { max-height: 45vh; overflow: auto; }
+.hq-reference-option { display: grid; gap: var(--hq-space-2xs); padding: var(--hq-space-md); border: 2px solid transparent; border-radius: var(--hq-radius-md); cursor: pointer; }
+.hq-reference-option[aria-selected="true"] { background: var(--hq-surface-selected); border-color: var(--hq-focus); }
+.hq-reference-option[aria-disabled="true"] { cursor: default; }
+.hq-reference-option:hover { background: var(--hq-surface-hover); }

@@ -1,0 +1,38 @@
+{
+  "schema": "hq.planner.exchange/v1",
+  "request": {
+    "method": "PUT",
+    "path": "/api/settings",
+    "headers": {
+      "Host": "localhost",
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-Planning-Request": "1",
+      "X-Request-Id": "contract-settings"
+    },
+    "body_utf8": "{\"settings\":{\"week_start\":\"mon\"}}"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Length": "107"
+    },
+    "body": {
+      "settings": {
+        "default_tz": "America/New_York",
+        "week_start": "mon",
+        "stale_days": 21
+      },
+      "state_version": 7
+    }
+  }
+}

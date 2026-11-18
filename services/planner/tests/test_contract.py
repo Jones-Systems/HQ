@@ -2,7 +2,6 @@
 import hashlib
 import importlib.util
 import socket
-import json
 import unittest
 
 from support import ROOT
@@ -17,8 +16,8 @@ def module(name):
 
 class ContractDrift(unittest.TestCase):
     def test_reference_vector_generation_has_no_drift(self):
-        self.assertEqual(module("build_vectors").vectors(),
-                         json.loads((ROOT / "contract/reference-vectors.json").read_text()))
+        # Byte-exact: tools/hq-cli pins this file's SHA-256.
+        self.assertEqual(module("build_vectors").rendered(), (ROOT / "contract/reference-vectors.json").read_text())
 
     def test_real_http_exchanges_have_no_drift(self):
         generator = module("generate")
@@ -28,13 +27,15 @@ class ContractDrift(unittest.TestCase):
 
     def test_manifest_pins_every_shared_json_file(self):
         folder = ROOT / "contract"
-        expected = {str(path.relative_to(folder)): hashlib.sha256(path.read_bytes()).hexdigest()
-                    for path in [folder / "reference-vectors.json", *sorted((folder / "exchanges").glob("*.json"))]}
-        actual = {}
+        expected = [(str(path.relative_to(folder)), hashlib.sha256(path.read_bytes()).hexdigest())
+                    for path in [folder / "reference-vectors.json", *sorted((folder / "exchanges").glob("*.json"))]]
+        actual = []
         for line in (folder / "SHA256SUMS").read_text().splitlines():
             digest, path = line.split("  ", 1)
-            actual[path] = digest
+            actual.append((path, digest))
         self.assertEqual(actual, expected)
+        files = {path.name: path.read_text() for path in (folder / "exchanges").glob("*.json")}
+        self.assertEqual(module("generate").manifest(files), (folder / "SHA256SUMS").read_text())
 
     def test_disposable_service_cleanup_on_failure_and_interrupt(self):
         generator = module("generate")

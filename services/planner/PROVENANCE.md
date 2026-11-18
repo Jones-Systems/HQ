@@ -22,6 +22,16 @@ was adapted: HQ identity and launch paths, external data ownership, public
 provenance links, and the separate deployment boundary. LICENSE, this document,
 the manifest and the service index are additions, not imported app files.
 
+The “Verbatim” treatment below describes the import, not the current tree.
+Later HQ commits changed some imported files, starting with the HQ references
+change `67594ad`, which modified `planning/store.py`, `planning/validation.py`,
+`public/js/detail.js` and `tests/test_server.py`. They also added HQ-authored
+files that the manifest does not list, such as `contract/`,
+`tests/check-groups.json`, `tests/test_contract.py`, `tests/test_references.py`
+and `tests/hq_references.test.mjs`. Run
+`git diff 2148cbe57b579cc92675e5f161c887f83798f761 -- services/planner` to see
+every change since the import.
+
 ## Selected files
 
 | Source path | HQ destination | Extraction treatment |

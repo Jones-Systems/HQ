@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import base64
 from contextlib import contextmanager
+import hashlib
 import http.client
 import itertools
 import json
@@ -64,7 +65,10 @@ def service():
                     selector.register(process.stdout, selectors.EVENT_READ)
                     if not selector.select(timeout=10):
                         raise RuntimeError("Disposable service did not bind within ten seconds")
-                    port = int(process.stdout.readline())
+                    line = process.stdout.readline()
+                    if not line.strip().isdigit():
+                        raise RuntimeError(f"Disposable service exited before binding (code {process.poll()})")
+                    port = int(line)
                 yield port
             finally:
                 process.terminate()
@@ -155,6 +159,14 @@ def rendered(exchanges):
     return {name: json.dumps(data, indent=2, ensure_ascii=True) + "\n" for name, data in exchanges.items()}
 
 
+def manifest(files):
+    """SHA256SUMS text for reference vectors followed by exchanges in name order."""
+    names = ["reference-vectors.json", *(f"exchanges/{name}" for name in sorted(files))]
+    contents = {"reference-vectors.json": (CONTRACT / "reference-vectors.json").read_bytes(),
+                **{f"exchanges/{name}": text.encode() for name, text in files.items()}}
+    return "".join(f"{hashlib.sha256(contents[name]).hexdigest()}  {name}\n" for name in names)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--serve", metavar="DATABASE", help=argparse.SUPPRESS)
@@ -168,17 +180,29 @@ def main():
     signal.signal(signal.SIGTERM, cancel)
     output = rendered(capture())
     folder = CONTRACT / "exchanges"
+    sums = CONTRACT / "SHA256SUMS"
     if args.check:
         actual = {path.name: path.read_text() for path in folder.glob("*.json")}
         if output != actual:
+            for label, names in (("drifted", [n for n in output if n in actual and output[n] != actual[n]]),
+                                 ("missing", [n for n in output if n not in actual]),
+                                 ("unexpected", [n for n in actual if n not in output])):
+                if names:
+                    print(f"{label}: {', '.join(sorted(names))}", file=sys.stderr)
             print("Planner golden exchanges drifted; inspect the changes before regenerating.", file=sys.stderr)
             return 1
-        print(f"Verified {len(output)} real HTTP exchanges.")
+        if not sums.exists() or sums.read_text() != manifest(output):
+            print("SHA256SUMS does not match the contract files.", file=sys.stderr)
+            return 1
+        print(f"Verified {len(output)} real HTTP exchanges and SHA256SUMS.")
     else:
         folder.mkdir(exist_ok=True)
+        for stale in set(path.name for path in folder.glob("*.json")) - set(output):
+            (folder / stale).unlink()
         for name, content in output.items():
-            (folder / name).write_text(content)
-        print(f"Captured {len(output)} real HTTP exchanges.")
+            (folder / name).write_bytes(content.encode())
+        sums.write_bytes(manifest(output).encode())
+        print(f"Captured {len(output)} real HTTP exchanges and refreshed SHA256SUMS.")
     return 0
 
 

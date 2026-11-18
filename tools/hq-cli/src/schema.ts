@@ -20,11 +20,12 @@ export const PRECISIONS = ['day', 'week', 'month', 'quarter', 'year'] as const;
 export const itemId: Schema = { type: 'string', pattern: '^[A-Za-z0-9_-]{6,40}$' };
 export const day: Schema = { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' };
 export const timestamp: Schema = { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$' };
+export const wallTime: Schema = { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' };
+export const globalInput = { planner_url: { ...text, description: 'Optional explicit service origin; CLI --planner-url overrides HQ_PLANNER_URL. HTTPS or loopback HTTP only.' }, timeout_ms: { type: 'integer', minimum: 1, maximum: 60000, description: 'Per-request timeout in milliseconds; --timeout-ms, default 10000.' } } satisfies Record<string, Schema>;
 export const settings = object({ default_tz: { type: 'string', minLength: 1, maxLength: 64 }, week_start: enumeration(['sun', 'mon']), stale_days: { type: 'integer', minimum: 1, maximum: 365 } });
 const dateBase = {
   id: itemId, kind: enumeration(DATE_KINDS), precision: enumeration(PRECISIONS), value: text,
-  time: nullable({ type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }),
-  end_time: nullable({ type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }),
+  time: nullable(wallTime), end_time: nullable(wallTime),
   tz: nullable(text), note: { type: 'string', maxLength: 120 }, instant: timestamp, end_instant: timestamp, tz_abbr: text,
 };
 export const planningDate = object(dateBase, ['id', 'kind', 'precision', 'value', 'time', 'end_time', 'tz', 'note']);
@@ -81,6 +82,25 @@ export function conforms(schema: Schema, value: unknown, allowExtras = false, ro
     return Object.entries(record).every(([key, v]) => Object.hasOwn(schema.properties ?? {}, key) ? conforms(schema.properties![key], v, allowExtras, root) : allowExtras || schema.additionalProperties === true || (typeof schema.additionalProperties === 'object' && conforms(schema.additionalProperties, v, allowExtras, root)));
   }
   return true;
+}
+
+// Names the first failing path for agent-facing usage errors; conforms stays the validator.
+export function mismatch(schema: Schema, value: unknown, path = ''): string | undefined {
+  if (conforms(schema, value)) return undefined;
+  const at = (key: string | number) => typeof key === 'number' ? `${path}[${key}]` : path ? `${path}.${key}` : key;
+  if (schema.type === 'object' && value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    const missing = schema.required?.find(key => !Object.hasOwn(record, key));
+    if (missing !== undefined) return at(missing);
+    for (const [key, v] of Object.entries(record)) {
+      const child = Object.hasOwn(schema.properties ?? {}, key) ? schema.properties![key] : schema.additionalProperties;
+      if (typeof child !== 'object') { if (child !== true) return at(key); continue; }
+      const found = mismatch(child, v, at(key));
+      if (found !== undefined) return found;
+    }
+  }
+  if (schema.type === 'array' && Array.isArray(value)) for (const [index, v] of value.entries()) { const found = mismatch(schema.items!, v, at(index)); if (found !== undefined) return found; }
+  return path;
 }
 
 export function project(schema: Schema, value: any, root = schema): any {

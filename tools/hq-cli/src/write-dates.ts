@@ -38,14 +38,15 @@ export function resolveDates(raw: any[], tz: string, now: Date): { dates: any[];
     const precision = entry.precision ?? (/^\d{4}-\d{2}-\d{2}$/.test(value) ? 'day' : /^\d{4}-W\d{2}$/.test(value) ? 'week' : /^\d{4}-\d{2}$/.test(value) ? 'month' : /^\d{4}-Q[1-4]$/.test(value) ? 'quarter' : /^\d{4}$/.test(value) ? 'year' : undefined);
     if (!precision) throw usage('Use a calendar date, today, tomorrow or +Nd. Resolve weekday names with hq planner now.', 'dates');
     try { periodBounds(precision, value); } catch { throw usage('Invalid calendar date or precision.', 'dates'); }
-    const time = entry.time ?? null;
-    const end = entry.end_time ?? null;
-    const zone = time ? requireTimezone(entry.tz ?? tz) : null;
+    // Like the service, empty strings mean absent; a zone without a time is dropped.
+    const time = entry.time || null;
+    const end = entry.end_time || null;
+    const zone = time ? requireTimezone(entry.tz || tz) : null;
     if (time !== null) {
       if (precision !== 'day' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time) || !wallExists(value, time, zone!)) throw usage('Timed dates require a real day and a wall time that exists in the timezone.', 'dates');
       if (end !== null && (!/^([01]\d|2[0-3]):[0-5]\d$/.test(end) || end <= time || !wallExists(value, end, zone!))) throw usage('End time must exist and follow the start on the same day.', 'dates');
     } else if (end !== null) throw usage('End time requires a start time.', 'dates');
-    resolutions.push({ input, resolved: value, tz: zone ?? tz, today });
+    resolutions.push({ input, resolved: value, tz, today });
     return { ...(entry.id ? { id: entry.id } : {}), kind: entry.kind, precision, value, time, end_time: end, tz: zone, note: entry.note ?? '' };
   });
   return { dates, resolutions };

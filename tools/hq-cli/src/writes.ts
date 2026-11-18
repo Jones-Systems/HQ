@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { conforms, project, object, enumeration, state, version, settings } from './schema.ts';
+import { conforms, mismatch, object, enumeration, itemId, state, version, settings } from './schema.ts';
 import type { Schema } from './schema.ts';
 import type { Dependencies, Invocation } from './cli.ts';
 import { CliError, PlannerClient, isWriteRoute, plannerURL, usage } from './transport.ts';
@@ -17,7 +17,10 @@ function uncertain(code: string, message: string): CliError { const e = new CliE
 const bytes = (body: any) => { const text = JSON.stringify(body); if (Buffer.byteLength(text) > 256 * 1024) throw usage('Request body exceeds 256 KiB.'); return text; };
 const withoutKey = (item: any) => Object.fromEntries(Object.entries(item).filter(([key]) => key !== 'client_key'));
 function validateFields(raw: any, creating: boolean): void {
-  if (!conforms(fieldsShape, raw) || (creating && !Object.hasOwn(raw, 'title')) || (!creating && Object.keys(raw).length === 0)) throw usage('Fields do not match the editable-fields schema; create needs title and update needs a nonempty patch.', 'fields');
+  const field = mismatch(fieldsShape, raw);
+  if (field !== undefined) throw usage(`${field ? `Field ${field}` : 'Fields'} does not match the editable-fields schema; see hq schema.`, field || 'fields');
+  if (creating && !Object.hasOwn(raw, 'title')) throw usage('Create needs a title.', 'title');
+  if (!creating && Object.keys(raw).length === 0) throw usage('Update needs a nonempty patch.', 'fields');
   const targets = new Set<string>();
   for (const ref of raw.references ?? []) if (ref.kind === 'hq') {
     const key = `${ref.target.domain}/${ref.target.kind}/${ref.target.entityId}`;
@@ -27,7 +30,8 @@ function validateFields(raw: any, creating: boolean): void {
   if (raw.title !== undefined && !raw.title.trim()) throw usage('Title must not be blank.', 'title');
 }
 function validateBatch(raw: any): void {
-  if (!conforms(batchSpec, raw)) throw usage('Batch spec requires schema hq.planner.batch-create/v1, board planner:main, and 1..50 items.', 'spec_file');
+  const field = mismatch(batchSpec, raw);
+  if (field !== undefined) throw usage(`Batch spec ${field ? `field ${field} is invalid` : 'is invalid'}; it requires schema hq.planner.batch-create/v1, board planner:main, and 1..50 titled items.`, field || 'spec_file');
   const keys = new Set();
   for (const entry of raw.items) { validateFields(withoutKey(entry), true); if (entry.client_key) { if (keys.has(entry.client_key)) throw usage('Batch client_key values must be unique.'); keys.add(entry.client_key); } }
 }
@@ -62,7 +66,7 @@ function validateReplay(raw: any): Replay {
     if (!Number.isSafeInteger(body.revision) || body.revision < 1) throw usage('Replay requires an explicit positive item revision.');
     if (raw.method === 'PATCH') { if (Object.keys(body).some(k => !['revision', 'patch'].includes(k))) throw usage('Invalid update replay body.'); validateFields(body.patch, false); }
     else if (raw.path.endsWith('/move')) {
-      if (!conforms(object({ revision: { type: 'integer', minimum: 1 }, status: fieldsShape.properties!.status, after_id: { type: 'string', pattern: '^[A-Za-z0-9_-]{6,40}$' }, before_id: { type: 'string', pattern: '^[A-Za-z0-9_-]{6,40}$' }, place: enumeration(['top', 'bottom']) }, ['revision', 'status']), body) || body.after_id && body.before_id) throw usage('Invalid move replay body.');
+      if (!conforms(object({ revision: { type: 'integer', minimum: 1 }, status: fieldsShape.properties!.status, after_id: itemId, before_id: itemId, place: enumeration(['top', 'bottom']) }, ['revision', 'status']), body) || body.after_id && body.before_id) throw usage('Invalid move replay body.');
     } else if (Object.keys(body).join() !== 'revision') throw usage('Invalid item action replay body.');
   }
   const inputItems = raw.path === '/api/items/batch' ? body.items : [body.fields ?? body.patch ?? {}];
@@ -118,7 +122,7 @@ function finishIntent(path: string | undefined, output: Result): Result {
   catch { const message = 'Outcome is shown here, but updating the intent file failed. Preserve this result before continuing.'; if (output.result.ok) output.result.data.intent_file_error = message; else output.result.error.details.intent_file_error = message; }
   return output;
 }
-async function resolveFields(raw: any, input: any, client: PlannerClient, deps: Dependencies, now: Date): Promise<{ fields: any; resolutions: any[] }> {
+async function resolveFields(raw: any, input: any, client: PlannerClient, now: Date): Promise<{ fields: any; resolutions: any[] }> {
   if (raw.dates === undefined || raw.dates.length === 0) return { fields: raw, resolutions: [] };
   let tz = input.tz;
   if (!tz) { const snapshot = await client.read({ kind: 'state' }, state); tz = snapshot.settings.default_tz; }
@@ -268,7 +272,7 @@ export async function executeWrite(invocation: Invocation, deps: Dependencies): 
     } else {
       path = `/api/items/${input.item_id}/${command.words.at(-1)}`; body = { revision: input.revision };
       if (command.id.endsWith('.move')) {
-        if (input.before_id && input.after_id) throw usage('Choose only one before/after anchor.');
+        if ([input.before_id, input.after_id, input.place].filter(v => v !== undefined).length > 1) throw usage('Choose at most one of --before-id, --after-id or --place.');
         body.status = input.status;
         for (const key of ['before_id', 'after_id', 'place']) if (input[key] !== undefined) body[key] = input[key];
       }
@@ -278,7 +282,7 @@ export async function executeWrite(invocation: Invocation, deps: Dependencies): 
     requireReferences(info, [raw]);
     let resolutions: any[] = [];
     if (raw) {
-      const resolved = await resolveFields(raw, input, client, deps, now); resolutions = resolved.resolutions;
+      const resolved = await resolveFields(raw, input, client, now); resolutions = resolved.resolutions;
       if (command.id.endsWith('.update')) { method = 'PATCH'; path = `/api/items/${input.item_id}`; body = { revision: input.revision, patch: resolved.fields }; }
       else body = { fields: resolved.fields };
     }

@@ -1,0 +1,9 @@
+{
+  "schema": "hq.updater.check-reference/v1",
+  "canonicalManifest": "tests/check-groups.toml",
+  "group": "hq-updates-transaction",
+  "nodeEngines": "^22.22.2 || ^24.15.0 || >=26",
+  "command": "node --test --test-concurrency=1 tools/updater/test/contract.test.cjs tools/updater/test/transaction.test.cjs tools/updater/test/bootstrap.test.cjs tools/updater/test/installer.test.cjs tools/updater/test/helper.test.cjs tools/updater/test/native.test.cjs",
+  "environment": "Synthetic fixtures and injected native/process adapters; no network, apps, credentials or real profile access. Not macOS qualification.",
+  "scratch": "Unique tools/updater/.test-scratch/case-* roots; node:test teardown and SIGINT/SIGTERM handlers own exact cleanup."
+}

@@ -1,0 +1,97 @@
+name: HQ native journeys
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hq-native-journeys-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Four critical Linux native journeys
+    # No base-branch filter: a labeled integration child tests its actual base.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (!github.event.pull_request.draft &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.pull_request.labels.*.name, 'hq-native-journeys'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # Conservative additional peak for dependencies, binary, build and caches.
+      HQ_NATIVE_PEAK_BYTES: '8589934592'
+      HQ_NATIVE_RESERVE_BYTES: '2147483648'
+    steps:
+      - name: Check out exact candidate (PR merge against its declared base)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Use Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+      - name: Require existing Linux capabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          for tool in Xvfb bwrap python3 git fc-match; do command -v "$tool"; done
+          test -f "$(fc-match --format '%{file}' sans)"
+      - name: Admit workspace storage before install and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          available=$(df -PB1 "$GITHUB_WORKSPACE" | awk 'NR == 2 {print $4}')
+          [[ "$available" =~ ^[0-9]+$ ]]
+          echo "Workspace available=$available peak=$HQ_NATIVE_PEAK_BYTES reserve=$HQ_NATIVE_RESERVE_BYTES bytes"
+          (( available >= HQ_NATIVE_PEAK_BYTES + HQ_NATIVE_RESERVE_BYTES ))
+      - name: Allocate owned install scratch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/.t3"
+          scratch=$(mktemp -d "$GITHUB_WORKSPACE/.t3/native-ci.XXXXXX")
+          echo "HQ_NATIVE_SCRATCH=$scratch" >> "$GITHUB_ENV"
+          echo "TMPDIR=$scratch" >> "$GITHUB_ENV"
+          echo "npm_config_cache=$scratch/npm" >> "$GITHUB_ENV"
+          echo "electron_config_cache=$scratch/electron" >> "$GITHUB_ENV"
+      - name: Install locked dependencies and pinned Electron
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node node_modules/electron/install.js
+      - name: Build the exact candidate
+        run: npm run build
+      - name: Check portable fixture and cleanup boundaries serially (B)
+        run: node --test --test-concurrency=1 tests/acceptance/build-inventory.test.mjs tests/acceptance/fixtures/fixtures.test.mjs tests/acceptance/fixtures/scenarios.test.mjs tests/acceptance/fixtures/host-gallery.test.mjs tests/acceptance/cleanup.test.mjs
+      - name: Run four native journeys serially (N)
+        timeout-minutes: 6
+        run: timeout --signal=TERM --kill-after=30s 5m node tests/acceptance/run.mjs --routine
+      - name: Preserve native reports, ledgers and first-failure screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hq-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .t3/acceptance-evidence/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove exact install scratch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${HQ_NATIVE_SCRATCH:-}" ] || exit 0
+          case "$HQ_NATIVE_SCRATCH" in
+            "$GITHUB_WORKSPACE"/.t3/native-ci.*) ;;
+            *) echo "::error::unexpected scratch path"; exit 1 ;;
+          esac
+          rm -rf -- "$HQ_NATIVE_SCRATCH"
+          test ! -e "$HQ_NATIVE_SCRATCH"

@@ -43,12 +43,12 @@ export function renderBoard(root, ctx) {
   const filtered = live.filter((it) => matchesFilters(it, ctx.filters));
   const isFiltered = filtered.length !== live.length;
 
-  const tabs = h('div', { class: 'status-tabs', role: 'tablist', 'aria-label': 'Board column' });
+  const tabs = h('div', { class: 'status-tabs', role: 'group', 'aria-label': 'Board column', dataset: { scrollKey: 'status-tabs' } });
   for (const s of STATUSES) {
     const count = filtered.filter((it) => it.status === s.id).length;
     const tab = h('button', {
-      type: 'button', role: 'tab', class: ['status-tab', `st-${s.id}`, mobileColumn === s.id && 'is-selected'],
-      'aria-selected': String(mobileColumn === s.id),
+      type: 'button', class: ['status-tab', `st-${s.id}`, mobileColumn === s.id && 'is-selected'],
+      'aria-pressed': String(mobileColumn === s.id),
       dataset: { drop: 'status-chip', status: s.id, focusKey: `tab:${s.id}` },
       on: {
         click: () => {
@@ -72,7 +72,7 @@ export function renderBoard(root, ctx) {
     });
     const head = h('header', { class: 'col-head' });
     const toggle = h('button', {
-      type: 'button', class: 'col-toggle', 'aria-expanded': String(!isCollapsed),
+      type: 'button', class: 'col-toggle', 'aria-expanded': String(!isCollapsed), dataset: { focusKey: `col-toggle:${s.id}` },
       title: isCollapsed ? `Expand ${s.label}` : `Collapse ${s.label}`,
       on: {
         click: () => {
@@ -91,18 +91,17 @@ export function renderBoard(root, ctx) {
       }, icon('plus', { size: 16 })));
     }
     col.append(head);
-    if (!isCollapsed) {
-      const list = h('div', { class: 'col-list', dataset: { colList: s.id, scrollKey: `col:${s.id}` } });
-      for (const item of items) list.append(itemCard(item, ctx));
-      if (!items.length) {
-        list.append(h('div', { class: 'col-empty' },
-          h('span', { text: isFiltered && total ? 'No matches here' : s.hint }),
-          h('span', { class: 'col-empty-hint', text: 'Drop cards here' })));
-      }
-      col.append(list);
-    } else {
-      col.append(h('div', { class: 'col-collapsed-hint', text: 'Drop here' }));
+    // A collapsed column keeps its list (hidden by CSS on desktop) so the
+    // one-column phone layout can still show it; its header is hidden there.
+    const list = h('div', { class: 'col-list', dataset: { colList: s.id, scrollKey: `col:${s.id}` } });
+    for (const item of items) list.append(itemCard(item, ctx));
+    if (!items.length) {
+      list.append(h('div', { class: 'col-empty' },
+        h('span', { text: isFiltered && total ? 'No matches here' : s.hint }),
+        h('span', { class: 'col-empty-hint', text: 'Drop cards here' })));
     }
+    col.append(list);
+    if (isCollapsed) col.append(h('div', { class: 'col-collapsed-hint', text: 'Drop here' }));
     board.append(col);
   }
 
@@ -213,7 +212,9 @@ registerDragType('card', {
     if (chip) return { kind: 'chip', status: chip.dataset.status, el: chip };
     const col = el.closest('[data-drop="board-col"]');
     if (!col) return null;
-    const list = col.querySelector('[data-col-list]');
+    // A hidden list (collapsed column on desktop) has no positions: drop at the top.
+    const shown = col.querySelector('[data-col-list]');
+    const list = shown && shown.getClientRects().length ? shown : null;
     if (!list) return { kind: 'col', status: col.dataset.status, col, list: null, index: 0, ids: [] };
     const cards = [...list.querySelectorAll('.card:not(.drag-source)')];
     let index = cards.findIndex((c) => {

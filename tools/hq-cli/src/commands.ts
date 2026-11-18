@@ -1,11 +1,10 @@
 import { writeCommands } from './write-commands.ts';
 import { writeEnvelope } from './write-schema.ts';
-import { array, bool, day, enumeration, errorSchema, failure, HORIZONS, integer, item, itemId, KINDS, object, resultSchema, settings, STATUSES, text, timestamp, DATE_KINDS, historyEntry, jsonValue } from './schema.ts';
+import { array, bool, day, enumeration, errorSchema, failure, HORIZONS, integer, item, itemId, KINDS, object, resultSchema, settings, STATUSES, text, timestamp, DATE_KINDS, historyEntry, jsonValue, globalInput } from './schema.ts';
 import type { Schema } from './schema.ts';
 import { WEEKDAYS } from './dates.ts';
 export type Command = { id: string; words: string[]; description: string; positional?: string; input: Schema; data: Schema; write?: boolean; files?: Record<string, Schema> };
-const globals = { planner_url: { ...text, description: 'Optional explicit service origin; CLI --planner-url overrides HQ_PLANNER_URL. HTTPS or loopback HTTP only.' }, timeout_ms: { type: 'integer', minimum: 1, maximum: 60000, description: 'Per-read timeout in milliseconds; --timeout-ms, default 10000.' } } satisfies Record<string, Schema>;
-const input = (properties: Record<string, Schema> = {}, required: string[] = []) => object({ ...globals, ...properties }, required);
+const input = (properties: Record<string, Schema> = {}, required: string[] = []) => object({ ...globalInput, ...properties }, required);
 export const filters = {
   board: { const: 'planner:main', description: '--board; only one board exists.' },
   status: enumeration(STATUSES), area: { type: 'string', maxLength: 40 }, kind: enumeration(KINDS), horizon: enumeration(HORIZONS),

@@ -7,10 +7,12 @@ decides what the store accepts.
 from __future__ import annotations
 
 import datetime as _dt
+import ipaddress
 import re
-from urllib.parse import urlsplit
+import unicodedata
+from urllib.parse import unquote_to_bytes, urlsplit
 
-from .dates import DateError, is_valid_timezone, new_id, normalize_date
+from .dates import ID_RE, DateError, is_valid_timezone, new_id, normalize_date, shown_key, unsafe_text
 
 STATUSES = ("inbox", "considering", "next", "active", "on_hold", "done", "dropped")
 KINDS = ("project", "idea", "goal", "chore")
@@ -40,8 +42,7 @@ DEFAULT_SETTINGS = {
     "stale_days": 21,
 }
 
-_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,40}$")
-_ISO_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$")
+_ISO_TS_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z\Z")
 
 
 class ValidationError(ValueError):
@@ -61,7 +62,7 @@ def _single_line(value: object, field: str, limit: int, errors: list, *, require
         errors.append({"field": field, "message": "Must be text."})
         return None
     text = " ".join(value.split())
-    if any(ord(ch) < 32 or ord(ch) == 127 for ch in text):
+    if unsafe_text(text):
         errors.append({"field": field, "message": "Contains unsupported control characters."})
         return None
     if required and not text:
@@ -83,7 +84,7 @@ def _multiline(value: object, field: str, limit: int, errors: list) -> str | Non
     if len(text) > limit:
         errors.append({"field": field, "message": f"Limited to {limit} characters."})
         return None
-    if any(ord(ch) < 32 and ch not in "\n\t" for ch in text):
+    if unsafe_text(text, "\n\t"):
         errors.append({"field": field, "message": "Contains unsupported control characters."})
         return None
     return text
@@ -105,7 +106,7 @@ def _entry_id(raw: dict) -> str | None:
     entry_id = raw.get("id")
     if entry_id in (None, ""):
         return new_id()
-    if isinstance(entry_id, str) and _ID_RE.match(entry_id):
+    if isinstance(entry_id, str) and ID_RE.match(entry_id):
         return entry_id
     return None
 
@@ -137,14 +138,91 @@ def _steps(value: object, errors: list) -> list | None:
     return out
 
 
+# Host checks follow the WHATWG URL host parser, so every accepted link also
+# parses with the browser's new URL() instead of breaking the item's detail view.
+_FORBIDDEN_HOST = frozenset("\t\n\r #%/:<>?@[\\]^|")
+_IPV4_PART = {16: re.compile(r"[0-9A-Fa-f]*"), 8: re.compile(r"[0-7]*"), 10: re.compile(r"[0-9]+")}
+
+
+def _ipv4_number(part: str) -> int | None:
+    if part[:2] in ("0x", "0X"):
+        digits, base = part[2:], 16
+    elif len(part) > 1 and part[0] == "0":
+        digits, base = part[1:], 8
+    else:
+        digits, base = part, 10
+    if not _IPV4_PART[base].fullmatch(digits):
+        return None
+    return int(digits, base) if digits else 0
+
+
+def _idn_label(label: str, *, decoded: bool) -> bool:
+    # Browsers map and check international labels with UTS #46, which the
+    # standard library does not implement. Accept only plain left-to-right
+    # letters that it treats the same way; a decoded xn-- label must already be
+    # in its mapped (case-folded NFKC) form.
+    if not label or label.isascii():
+        return False
+    if decoded and unicodedata.normalize("NFKC", unicodedata.normalize("NFKC", label).casefold()) != label:
+        return False
+    return all((ch.isascii() and (ch.isalnum() or ch == "-")) or (
+        unicodedata.category(ch) in (("Ll",) if decoded else ("Ll", "Lu", "Lt"))
+        and unicodedata.name(ch, "").startswith(("LATIN ", "GREEK ", "CYRILLIC "))) for ch in label)
+
+
+def _ascii_host(host: str) -> bool:
+    labels = host.split(".")
+    if labels[-1] == "" and len(labels) > 1:
+        labels.pop()
+    last = labels[-1]
+    if last and (last.isdigit() or _ipv4_number(last) is not None):
+        # A host ending in a number must be a whole IPv4 address.
+        numbers = [_ipv4_number(label) if label else None for label in labels]
+        return (len(labels) <= 4 and None not in numbers and all(n <= 255 for n in numbers[:-1])
+                and numbers[-1] < 256 ** (5 - len(labels)))
+    for label in labels:
+        if label.lower().startswith("xn--"):
+            try:
+                decoded = label[4:].lower().encode("ascii").decode("punycode")
+            except (UnicodeError, ValueError):
+                return False
+            if not _idn_label(decoded, decoded=True):
+                return False
+    return True
+
+
+def _valid_host(parts) -> bool:
+    host = parts.hostname
+    if not host:
+        return False
+    if "[" in parts.netloc.rpartition("@")[2]:
+        try:
+            ipaddress.IPv6Address(host)
+        except ValueError:
+            return False
+        return "%" not in host
+    try:
+        host = unquote_to_bytes(host).decode("utf-8")
+        if not host.isascii():
+            if not all(label.isascii() or _idn_label(label, decoded=False) for label in host.split(".")):
+                return False
+            host = host.encode("idna").decode("ascii")
+    except UnicodeError:
+        return False
+    if not host or unsafe_text(host) or _FORBIDDEN_HOST.intersection(host):
+        return False
+    return _ascii_host(host)
+
+
 def _safe_url(url: str) -> bool:
+    if " " in url or unsafe_text(url):
+        return False
     try:
         parts = urlsplit(url)
+        parts.port  # noqa: B018 - raises for a non-numeric or out-of-range port
     except ValueError:
         return False
-    return parts.scheme in ("http", "https") and bool(parts.netloc) and not any(
-        ord(ch) < 33 for ch in url
-    )
+    return parts.scheme in ("http", "https") and _valid_host(parts)
 
 
 # ReferenceEnvelope text follows ECMAScript trim and UTF-16 length, unlike
@@ -156,7 +234,7 @@ _HQ_DOMAINS = ("design", "social", "work")
 def _hq_text(value: object, limit: int = 160) -> bool:
     return (isinstance(value, str) and bool(value) and value.strip(_JS_SPACE) == value
             and len(value.encode("utf-16-le", errors="surrogatepass")) // 2 <= limit
-            and not any(ord(ch) < 32 or ord(ch) == 127 for ch in value))
+            and not unsafe_text(value))
 
 
 def _hq_target(value: object) -> dict | None:
@@ -238,7 +316,9 @@ def _references(value: object, errors: list) -> list | None:
             errors.append({"field": "references", "message": f"Reference {i + 1} is malformed."})
             return None
         ref_id = _entry_id(raw)
-        kind = raw.get("kind") or "url"
+        kind = raw.get("kind")
+        if kind in (None, ""):
+            kind = "url"
         if kind not in REFERENCE_KINDS:
             errors.append({"field": "references", "message": f"Reference {i + 1} has an unknown kind."})
             return None
@@ -246,7 +326,7 @@ def _references(value: object, errors: list) -> list | None:
         label = "" if raw_label is None else _single_line(raw_label, "references", MAX_REF_LABEL, errors)
         if label is None:
             return None
-        url = raw.get("url") or ""
+        url = "" if raw.get("url") is None else raw["url"]
         if not isinstance(url, str) or len(url) > MAX_REF_URL:
             errors.append({"field": "references", "message": f"Reference {i + 1} link is too long or invalid."})
             return None
@@ -280,7 +360,8 @@ def _dates(value: object, errors: list) -> list | None:
         try:
             entry = normalize_date(raw, i)
         except DateError as exc:
-            errors.append({"field": f"dates.{exc.field}", "message": exc.message})
+            field = "dates" if exc.field == "dates" else f"dates.{exc.field}"
+            errors.append({"field": field, "message": exc.message})
             return None
         if entry["id"] in seen:
             errors.append({"field": "dates", "message": "Duplicate date id."})
@@ -297,7 +378,8 @@ def normalize_fields(raw: object, *, creating: bool) -> dict:
     errors: list[dict] = []
     unknown = set(raw) - set(EDITABLE_FIELDS)
     if unknown:
-        errors.append({"field": "body", "message": f"Unknown field(s): {', '.join(sorted(unknown))}."})
+        names = ", ".join(shown_key(name) for name in sorted(unknown))
+        errors.append({"field": "body", "message": f"Unknown field(s): {names}."})
     if not creating and not raw:
         errors.append({"field": "body", "message": "Nothing to change."})
 
@@ -401,4 +483,4 @@ def is_timestamp(value: object) -> bool:
 
 
 def is_item_id(value: object) -> bool:
-    return isinstance(value, str) and bool(_ID_RE.match(value))
+    return isinstance(value, str) and bool(ID_RE.match(value))

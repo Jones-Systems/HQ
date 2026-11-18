@@ -1,0 +1,1711 @@
+{
+  "schema": "hq.planner.reference-vectors/v1",
+  "feature": "hq-references-v1",
+  "generated_entry_id": "generated001",
+  "cases": [
+    {
+      "id": "minimal-hq",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "domain-social",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "social",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "social",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "social",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "social",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "domain-work",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "work",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "work",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "work",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "work",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "optional-provenance",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            },
+            "sourceRevision": "revision-1",
+            "workspaceId": "workspace-example"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            },
+            "sourceRevision": "revision-1",
+            "workspaceId": "workspace-example"
+          }
+        }
+      ]
+    },
+    {
+      "id": "label-default",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "label-normalized",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "  Example\t design  ",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "legacy-url",
+      "input": [
+        {
+          "id": "url001",
+          "kind": "url",
+          "url": "https://example.com/"
+        }
+      ],
+      "expected": [
+        {
+          "id": "url001",
+          "kind": "url",
+          "label": "https://example.com/",
+          "url": "https://example.com/"
+        }
+      ]
+    },
+    {
+      "id": "bool-version",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": true,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "wrong-version",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 2,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "unknown-domain",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "unknown",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "extra-key",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            },
+            "extra": "x"
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "null-optional",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            },
+            "sourceRevision": null
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "empty-optional",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            },
+            "workspaceId": ""
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "trim-space",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": " x",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "trim-bom",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "\ufeffx",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "control",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "a\u007fb",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "utf16-overflow",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "title-overflow",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "source-revision-overflow",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            },
+            "sourceRevision": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "workspace-overflow",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            },
+            "workspaceId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "missing-version",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "missing-domain",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "missing-projectId",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "missing-kind",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "missing-entityId",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "missing-title",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "missing-returnDestination",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design"
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "scheme",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "https:example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "scheme-case",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "JaVaScRiPt:x"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "scheme-unicode-fold",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "\u212acheme:x"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "scheme-long-s-fold",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "\u017fcheme:x"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "slashes",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "//example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "backslashes",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "\\\\example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "mixed-slashes",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "/\\example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "mixed-backslashes",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "\\/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "route-overflow",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "destination-extra",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example",
+              "extra": true
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "destination-domain",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "unknown",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 has an invalid HQ target."
+        }
+      ]
+    },
+    {
+      "id": "utf16-boundary",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "non-js-whitespace",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "\u0085identity\u0085",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "\u0085identity\u0085",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "title-boundary",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "optional-boundaries",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            },
+            "sourceRevision": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "workspaceId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            },
+            "sourceRevision": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "workspaceId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          }
+        }
+      ]
+    },
+    {
+      "id": "destination-boundary",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "label-code-points",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "label-overflow",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Limited to 200 characters."
+        }
+      ]
+    },
+    {
+      "id": "default-label-overflow",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Limited to 200 characters."
+        }
+      ]
+    },
+    {
+      "id": "hq-forbids-url",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          },
+          "url": ""
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 is malformed."
+        }
+      ]
+    },
+    {
+      "id": "hq-forbids-extra",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          },
+          "extra": ""
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 1 is malformed."
+        }
+      ]
+    },
+    {
+      "id": "duplicate-across-projects",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        },
+        {
+          "id": "ref002",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "other-project",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 2 duplicates another HQ link."
+        }
+      ]
+    },
+    {
+      "id": "slash-identity-collision",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "a/b",
+            "entityId": "c",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        },
+        {
+          "id": "ref002",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "a",
+            "entityId": "b/c",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 2 duplicates another HQ link."
+        }
+      ]
+    },
+    {
+      "id": "duplicate-entry-id",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        },
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "distinct",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "errors": [
+        {
+          "field": "references",
+          "message": "Reference 2 is malformed."
+        }
+      ]
+    },
+    {
+      "id": "distinct-targets",
+      "input": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        },
+        {
+          "id": "ref002",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "distinct",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "ref001",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "artifact-example",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        },
+        {
+          "id": "ref002",
+          "kind": "hq",
+          "label": "Example design",
+          "target": {
+            "version": 1,
+            "domain": "design",
+            "projectId": "project-example",
+            "kind": "artifact",
+            "entityId": "distinct",
+            "title": "Example design",
+            "returnDestination": {
+              "domain": "design",
+              "destination": "artifact/example"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

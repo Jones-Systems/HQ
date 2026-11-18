@@ -106,5 +106,9 @@ def vectors():
             "generated_entry_id": "generated001", "cases": cases}
 
 
+def rendered():
+    return json.dumps(vectors(), indent=2, ensure_ascii=True) + "\n"
+
+
 if __name__ == "__main__":
-    Path(__file__).with_name("reference-vectors.json").write_text(json.dumps(vectors(), indent=2, ensure_ascii=True) + "\n")
+    Path(__file__).with_name("reference-vectors.json").write_bytes(rendered().encode())

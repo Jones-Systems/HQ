@@ -30,7 +30,7 @@ export function renderReview(root, ctx) {
       for (const m of MOTIVATIONS) {
         why.append(h('button', {
           type: 'button', class: ['seg', `seg-motivation-${m.id}`, item.motivation === m.id && 'is-selected'],
-          'aria-pressed': String(item.motivation === m.id), text: m.label,
+          'aria-pressed': String(item.motivation === m.id), text: m.label, dataset: { focusKey: `inbox-why:${item.id}:${m.id}` },
           on: { click: () => patch(item, { motivation: item.motivation === m.id ? null : m.id }, 'Why') },
         }));
       }
@@ -38,12 +38,12 @@ export function renderReview(root, ctx) {
       for (const x of HORIZONS) {
         hz.append(h('button', {
           type: 'button', class: ['seg', item.horizon === x.id && 'is-selected'], 'aria-pressed': String(item.horizon === x.id),
-          text: x.label, on: { click: () => patch(item, { horizon: item.horizon === x.id ? null : x.id }, 'Horizon') },
+          text: x.label, dataset: { focusKey: `inbox-hz:${item.id}:${x.id}` }, on: { click: () => patch(item, { horizon: item.horizon === x.id ? null : x.id }, 'Horizon') },
         }));
       }
       actions.append(why, hz,
-        h('button', { type: 'button', class: 'btn btn-subtle btn-xs', on: { click: (e) => ctx.openMoveMenu(getItem(item.id), e.currentTarget) } }, 'Move to…'));
-      sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx), actions));
+        h('button', { type: 'button', class: 'btn btn-subtle btn-xs', 'aria-haspopup': 'menu', on: { click: (e) => ctx.openMoveMenu(getItem(item.id), e.currentTarget) } }, 'Move to…'));
+      sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx, { scope: 'inbox' }), actions));
     }
     root.append(sec);
   }
@@ -51,7 +51,7 @@ export function renderReview(root, ctx) {
   if (b.overdue.length) {
     const sec = section('Overdue deadlines', 'deadline', b.overdue.length, 'Deadlines are the only dates that can be overdue.', 'is-alert');
     for (const { item, entry } of b.overdue) {
-      sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx, { trailing: dateChip(entry, 'overdue', today) }),
+      sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx, { trailing: dateChip(entry, 'overdue', today), scope: `overdue:${entry.id}` }),
         h('div', { class: 'review-actions' },
           h('button', { type: 'button', class: 'btn btn-subtle btn-xs', text: 'Reschedule', on: { click: () => openDateEditor({ item: getItem(item.id), entry, title: 'Reschedule' }) } }),
           h('button', { type: 'button', class: 'btn btn-subtle btn-xs', text: 'Mark done', on: { click: () => move(item, 'done') } }))));
@@ -62,7 +62,7 @@ export function renderReview(root, ctx) {
   if (b.passedTargets.length) {
     const sec = section('Targets that have passed', 'target', b.passedTargets.length, 'A passed target is a hint, not a failure.');
     for (const { item, entry } of b.passedTargets) {
-      sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx, { trailing: dateChip(entry, 'passed', today) }),
+      sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx, { trailing: dateChip(entry, 'passed', today), scope: `passed:${entry.id}` }),
         h('div', { class: 'review-actions' },
           h('button', { type: 'button', class: 'btn btn-subtle btn-xs', text: 'New target', on: { click: () => openDateEditor({ item: getItem(item.id), entry, title: 'Set a new target' }) } }))));
     }
@@ -72,7 +72,7 @@ export function renderReview(root, ctx) {
   const staleControl = h('label', { class: 'inline-setting' }, 'Quiet after ',
     h('input', {
       type: 'number', class: 'input input-xs', min: '1', max: '365', value: String(state.settings.stale_days),
-      'aria-label': 'Days before an active item counts as quiet',
+      'aria-label': 'Days before an active item counts as quiet', dataset: { focusKey: 'stale-days' },
       on: {
         change: async (e) => {
           const n = Number(e.target.value);
@@ -85,10 +85,10 @@ export function renderReview(root, ctx) {
   if (b.stale.length) {
     const sec = section('Active but quiet', 'clock', b.stale.length, 'Active items you have not touched for a while.', '', staleControl);
     for (const item of b.stale) {
-      sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx, { sub: `untouched ${untouchedDays(item, today, displayZone())} days` }),
+      sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx, { sub: `untouched ${untouchedDays(item, today, displayZone())} days`, scope: 'stale' }),
         h('div', { class: 'review-actions' },
           h('button', { type: 'button', class: 'btn btn-subtle btn-xs', text: 'Still active', on: { click: () => markReviewed(getItem(item.id)).catch(() => {}) } }),
-          h('button', { type: 'button', class: 'btn btn-subtle btn-xs', text: 'Move to…', on: { click: (e) => ctx.openMoveMenu(getItem(item.id), e.currentTarget) } }))));
+          h('button', { type: 'button', class: 'btn btn-subtle btn-xs', text: 'Move to…', 'aria-haspopup': 'menu', on: { click: (e) => ctx.openMoveMenu(getItem(item.id), e.currentTarget) } }))));
     }
     root.append(sec);
   } else {
@@ -97,7 +97,7 @@ export function renderReview(root, ctx) {
 
   if (b.mismatched.length) {
     const sec = section('Horizon and date disagree', 'alert', b.mismatched.length, 'Both are valid; this is just a second look.');
-    for (const { item, reason } of b.mismatched) sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx, { sub: reason })));
+    for (const { item, reason } of b.mismatched) sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx, { sub: reason, scope: 'mismatch' })));
     root.append(sec);
   }
 
@@ -108,7 +108,7 @@ export function renderReview(root, ctx) {
       for (const m of MOTIVATIONS) {
         why.append(h('button', { type: 'button', class: ['seg', `seg-motivation-${m.id}`], text: m.label, on: { click: () => patch(item, { motivation: m.id }, 'Why') } }));
       }
-      sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx), h('div', { class: 'review-actions' }, why)));
+      sec.append(h('div', { class: 'review-row' }, itemRow(item, ctx, { scope: 'unsorted' }), h('div', { class: 'review-actions' }, why)));
     }
     root.append(sec);
   }

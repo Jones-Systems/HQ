@@ -1,7 +1,11 @@
 // DOM helpers. Owner text is only ever inserted as text nodes or attribute
-// values; nothing in this app assigns innerHTML from data.
+// values; nothing in this app assigns innerHTML from data. Links are also
+// refused a script-running scheme, whatever the stored data says.
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+// Browsers ignore ASCII whitespace and control characters inside a scheme.
+const UNSAFE_URL = /^(javascript|data|vbscript):/i;
+const isUnsafeUrl = (value) => UNSAFE_URL.test(String(value).replace(/[\u0000-\u0020]/g, ''));
 
 export function h(tag, props = null, ...children) {
   const el = document.createElement(tag);
@@ -13,6 +17,7 @@ export function h(tag, props = null, ...children) {
 function applyProps(el, props) {
   for (const [key, value] of Object.entries(props)) {
     if (value === undefined || value === null || value === false) continue;
+    if ((key === 'href' || key === 'src') && isUnsafeUrl(value)) continue;
     if (key === 'class') el.className = Array.isArray(value) ? value.filter(Boolean).join(' ') : value;
     else if (key === 'text') el.textContent = value;
     else if (key === 'dataset') Object.assign(el.dataset, value);
@@ -144,10 +149,6 @@ export function button(label, { icon: iconName = null, onClick = null, kind = ''
   if (iconName) btn.append(icon(iconName));
   if (!iconOnly) btn.append(h('span', { text: label }));
   return btn;
-}
-
-export function prefersReducedMotion() {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 export function uid() {

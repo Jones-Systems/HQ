@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HQ visual system — preserved artwork across chrome themes</title>
+  <link rel="stylesheet" href="_mockup.css">
+  <link rel="stylesheet" href="../tokens/hq-tokens.css">
+  <link rel="stylesheet" href="../components/hq-components.css">
+  <style>
+    /* 1:1 display from the capture's top-left corner: no resampling, so pixels can be compared with the source. */
+    .hq-well > [data-hq-content].at-1x > img { width: 100%; height: 100%; max-width: none; object-fit: none; object-position: 0 0; }
+  </style>
+</head>
+<!-- Evidence page: identical artwork inside light and dark chrome. Landing captures are shown 1:1 (no resampling) so
+     their pixels can also be compared with the source PNG; the mark is scaled. tools/compare_regions.py crops each
+     [data-evidence] box (inset past its rounded corners) from the screenshot and requires identical pixels. -->
+<body class="sheet-page">
+<div class="sheet-pair" style="grid-template-columns: repeat(2, 720px)">
+  <div class="sheet-side" data-theme="light" data-side="light"></div>
+  <div class="sheet-side" data-theme="dark" data-side="dark"></div>
+</div>
+<template id="wells">
+  <header class="sheet-section">
+    <span class="hq-eyebrow" data-mode-label></span>
+    <h1 class="hq-title">Preserved content keeps its own colours</h1>
+    <p class="hq-muted" style="margin:0">Chrome follows Light/Dark/System. Captures, exports and artwork sit on a fixed matte and are never filtered, blended or re-themed.</p>
+  </header>
+  <figure class="hq-well">
+    <div data-hq-content="captured" data-evidence="well-light" class="at-1x" style="--hq-content-scheme: light; height: 420px"><img src="assets/larkspur-landing-light.png" alt="Fictional landing page, light capture, shown at 1:1 from its top-left corner" width="1440" height="900"></div>
+    <figcaption><span class="hq-heading">Landing — hero</span><span class="hq-chip">LIGHT</span><span class="hq-chip">1:1</span><span class="hq-meta">rev 7c41e2a</span></figcaption>
+  </figure>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <figure class="hq-well">
+      <div data-hq-content="captured" data-evidence="well-dark" class="at-1x" style="--hq-content-scheme: dark; height: 205px"><img src="assets/larkspur-landing-dark.png" alt="Fictional landing page, dark capture, shown at 1:1 from its top-left corner" width="1440" height="900"></div>
+      <figcaption><span class="hq-heading">Dark variant</span><span class="hq-chip">DARK</span><span class="hq-chip">1:1</span></figcaption>
+    </figure>
+    <figure class="hq-well">
+      <div data-hq-content="captured" data-hq-matte="checker" data-evidence="well-mark" style="aspect-ratio: 16/10"><img src="assets/larkspur-mark.png" alt="Fictional leaf mark with transparency" width="512" height="512" style="width:46%"></div>
+      <figcaption><span class="hq-heading">Mark</span><span class="hq-chip">ALPHA</span></figcaption>
+    </figure>
+  </div>
+</template>
+<script>
+  const tpl = document.getElementById('wells');
+  document.querySelectorAll('.sheet-side').forEach((side) => {
+    side.append(tpl.content.cloneNode(true));
+    side.querySelector('[data-mode-label]').textContent = `${side.dataset.theme} chrome`;
+    side.querySelectorAll('[data-evidence]').forEach((el) => { el.dataset.evidence = `${side.dataset.side}:${el.dataset.evidence}`; });
+  });
+  document.fonts.ready.then(() => setTimeout(() => {
+    const rects = {};
+    document.querySelectorAll('[data-evidence]').forEach((el) => { const r = el.getBoundingClientRect(); rects[el.dataset.evidence] = [r.x, r.y, r.width, r.height]; });
+    document.title = JSON.stringify({ hqEvidence: 1, fonts: document.fonts.check('13px "IBM Plex Sans"'), height: document.documentElement.scrollHeight, rects });
+  }, 50));
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+#!/bin/bash
+# c <label> <route> [json-body]
+port=$(cat /tmp/hq-f7-eval/$1.port)
+curl -s -X POST "http://127.0.0.1:$port/$2" -H 'content-type: application/json' -d "${3:-{\}}"
+echo
