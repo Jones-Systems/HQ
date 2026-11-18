@@ -409,7 +409,7 @@ test('manual arm64 preflight input is a default-off typed boolean', () => {
   assert.equal(declaration, '        description: Run only Apple Silicon for a manual ad-hoc preflight\n        type: boolean\n        required: false\n        default: false\n\n');
 });
 
-test('only manual ad-hoc typed opt-in selects the single Apple Silicon package row', () => {
+test('schedule and manual ad-hoc typed opt-in select the single Apple Silicon package row', () => {
   const { runInNewContext } = require('node:vm');
   const workflow = fs.readFileSync(path.resolve(__dirname, '../../../../.github/workflows/hq-desktop-package.yml'), 'utf8');
   const packageJob = workflow.slice(workflow.indexOf('  package:'), workflow.indexOf('  developer-id:'));
@@ -429,8 +429,15 @@ test('only manual ad-hoc typed opt-in selects the single Apple Silicon package r
     assert.deepEqual(select('workflow_dispatch', 'adhoc-development', optIn), rows);
   }
   assert.deepEqual(select('workflow_dispatch', 'developer-id', true), rows);
+  for (const optIn of [true, false, undefined]) {
+    assert.deepEqual(select('schedule', 'adhoc-development', optIn, 'refs/heads/main'), [rows[0]]);
+  }
+  assert.deepEqual(runInNewContext(expression, {
+    github: { event_name: 'schedule', ref: 'refs/heads/main' },
+    inputs: {},
+    fromJSON: JSON.parse,
+  }), [rows[0]]);
   for (const [event, ref] of [
-    ['schedule', 'refs/heads/main'],
     ['push', 'refs/heads/main'],
     ['push', 'refs/tags/hq-desktop-test'],
     ['pull_request', 'refs/pull/1/merge'],

@@ -51,7 +51,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.signing == 'adhoc-development' && inputs.arm64_preflight) && '[{"runner":"macos-15","arch":"arm64"}]' || '[{"runner":"macos-15","arch":"arm64"},{"runner":"macos-15-intel","arch":"x64"}]') }}
+        include: ${{ fromJSON((github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.signing == 'adhoc-development' && inputs.arm64_preflight)) && '[{"runner":"macos-15","arch":"arm64"}]' || '[{"runner":"macos-15","arch":"arm64"},{"runner":"macos-15-intel","arch":"x64"}]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     env:
