@@ -16,7 +16,8 @@ import './taste.css';
 
 export interface TastePanelProps {
   readonly client: TasteClientPort;
-  readonly subject: TasteSubject;
+  /** The subject being rated, or `null` for a queue-only panel that shows just the waiting-to-rate deck. */
+  readonly subject: TasteSubject | null;
   readonly projectId: ProjectId | null;
   readonly projectName?: string;
   readonly flags?: TasteFeatureFlags;
@@ -34,7 +35,7 @@ export function TastePanel(props: TastePanelProps) {
     return null;
   }
   // Unmount all drafts, exports and pending reads when the selection or adapter changes.
-  return <TastePanelSession key={JSON.stringify([binding.generation, props.projectId, props.subject.id])} {...props} />;
+  return <TastePanelSession key={JSON.stringify([binding.generation, props.projectId, props.subject?.id ?? null])} {...props} />;
 }
 
 function TastePanelSession({
@@ -94,7 +95,7 @@ function TastePanelSession({
   const scope = scopeFor(scopeKind, projectId);
   const header = <header className="taste-header">
     <span className="eyebrow">Taste</span>
-    <h2 id={titleId}>{subject.label}</h2>
+    <h2 id={titleId}>{subject ? subject.label : 'Queued items'}</h2>
     {snapshot && <JournalBadge status={snapshot.journal} />}
   </header>;
 
@@ -105,12 +106,8 @@ function TastePanelSession({
   }
 
   const readOnly = snapshot.journal.state !== 'open' || busy;
-  const slots = ratingSlots(snapshot, scope, subject, aspects);
-  const profile = scope.kind === 'project' ? snapshot.project : snapshot.general;
-  const examples = snapshot.examples.filter((item) => item.subject.id === subject.id);
 
-  return <section className="taste" aria-labelledby={titleId}>
-    {header}
+  const scopeControls = <>
     <div className="taste-scope" role="radiogroup" aria-label="Rating scope">
       <ScopeOption name={`${titleId}-scope`} value="general" checked={scopeKind === 'general'} onSelect={setScopeKind}
         label="General taste" />
@@ -125,7 +122,20 @@ function TastePanelSession({
       <InlineNotice tone="danger" variant="bar" title="Couldn't refresh taste"
         actions={[{ label: 'Retry', onAction: () => { void reload(); } }]}>Showing what loaded. Nothing was changed.</InlineNotice>
     </Presence>
-    <QuickRateDeck client={client} scope={scope} snapshot={snapshot} newId={newId} disabled={readOnly} onSaved={() => { void reload(); }} />
+    <QuickRateDeck client={client} scope={scope} snapshot={snapshot} projectId={projectId} newId={newId} disabled={readOnly}
+      onSaved={() => { void reload(); }} />
+  </>;
+
+  // Queue-only: no subject is chosen, so only the header, journal badge, scope and the waiting-to-rate deck show.
+  if (subject === null) return <section className="taste" aria-labelledby={titleId}>{header}{scopeControls}</section>;
+
+  const slots = ratingSlots(snapshot, scope, subject, aspects);
+  const profile = scope.kind === 'project' ? snapshot.project : snapshot.general;
+  const examples = snapshot.examples.filter((item) => item.subject.id === subject.id);
+
+  return <section className="taste" aria-labelledby={titleId}>
+    {header}
+    {scopeControls}
 
     <div className="taste-body">
       <div className="taste-ratings">

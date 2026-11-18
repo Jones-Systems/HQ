@@ -1,9 +1,14 @@
+// Supplemental observations retain the original reserved rows and subset meanings.
+export const NATIVE_RESTART_SCENARIOS = Object.freeze([
+  'work-unconfirmed-native-restart', 'work-queued-native-restart', 'work-draft-native-restart',
+]);
 export const SCENARIOS = Object.freeze([
   'work-service-replay', 'work-restart-without-intent', 'social-save-and-unknown',
   'reference-round-trips', 'wiki-committed-corpus', 'unavailable-service-ui',
   'import-export', 'capability-closure', 'preview-qualification', 'component-containment',
   'new-thread-qualification', 'integrated-scenario-catalog',
   'local-folder-source', 'remote-gallery-source', 'remote-gallery-distinct-host',
+  ...NATIVE_RESTART_SCENARIOS,
 ]);
 export const SELECTED_SCENARIOS = Object.freeze(['work-service-replay', 'work-restart-without-intent', 'local-folder-source', 'remote-gallery-source']);
 // Four routine journeys: shell launch/domain/restart plus these three stateful rows.
@@ -20,7 +25,7 @@ export function scenarioGaps() {
     ? row(id, 'held', [{ id: 'actual-distinct-host-process-and-forward', status: 'held' }], ['HQ-09H: no distinct-host binding supplied for this invocation.'])
     : id === 'local-folder-source'
       ? row(id, 'held', [{ id: 'rendered-thumbnail-binding', status: 'held' }], ['HQ-07: displayed image and native chooser remain release obligations; catalog.preview bytes alone cannot pass this row.'])
-    : SELECTED_SCENARIOS.includes(id)
+    : (SELECTED_SCENARIOS.includes(id) || NATIVE_RESTART_SCENARIOS.includes(id))
       ? row(id, 'unmeasured', [{ id: 'selected-native-execution', status: 'unmeasured' }], ['Scenario source exists; this invocation has not measured it.'])
       : row(id, 'gap', [{ id: 'integrated-scenario-implementation-and-binding', status: 'gap' }],
         ['Outside the selected HQ-02/03/07/09 catalog; integrated acceptance remains open.']));
@@ -54,4 +59,10 @@ export const RECOVERY_SCENARIOS = Object.freeze([
 ]);
 export function recoveryOutcome(rows) {
   return subsetOutcome(rows, [...SHELL_ROWS, ...RECOVERY_SCENARIOS], 'recovery-passed');
+}
+
+// AC2 restart qualification is additional to existing selected/routine outcomes.
+export function nativeRestartOutcome(rows) {
+  return subsetOutcome(rows, [...SHELL_ROWS, 'work-service-replay', 'work-restart-without-intent',
+    ...NATIVE_RESTART_SCENARIOS], 'native-restart-passed');
 }

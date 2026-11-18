@@ -9,6 +9,7 @@ import type { DesignRuntimePorts } from './runtime-ports.ts';
 import { createInteractiveWorkspace } from './interactive-workspace.ts';
 import * as fake from './fake-workspace.ts';
 import { createBridgedWorkspace } from './bridged-workspace.ts';
+import { autoRefreshedDiscovery } from './discovery-auto-refresh.ts';
 import { createProjectContentEvents } from './content-events.ts';
 import { createActiveProjectStore } from './active-project.ts';
 export * from './fake-workspace.ts';
@@ -39,6 +40,8 @@ export function createDesignWorkspace(documents: WorkspaceRecords | null, ports:
     return { ...fake, ...memory, closure, interactive, contentEvents, activeProject, retry: (_projectId: string): void => {}, readContent: freshContent(memory.contentFor), bridged: false as const, storageTag: fakeStorageTag };
   }
   const bridged = createBridgedWorkspace(documents, { contentEvents });
-  return { ...bridged, closure, interactive, activeProject, readContent: freshContent(bridged.contentFor) };
+  // Enrolled folders are re-read in the background; the example workspace above is never scheduled.
+  const discoveryEnv = autoRefreshedDiscovery(bridged.discoveryEnv);
+  return { ...bridged, discoveryEnv, closure, interactive, activeProject, readContent: freshContent(bridged.contentFor) };
 }
 export type DesignWorkspace = ReturnType<typeof createDesignWorkspace>;
