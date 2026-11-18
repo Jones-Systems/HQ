@@ -36,7 +36,7 @@
         "modules/wiki/core/src",
         "modules/wiki/contract/src"
       ],
-      "sha256": "631af6bf1c4715f43d4a08a70cbd392054f4166fa88bf0465e28b96b31c2a87e"
+      "sha256": "2488e0476a9f1d7df2236483ac0db377c7e7465beac0a3b4019702a6600dbdb7"
     },
     {
       "id": "sources-catalog",
@@ -45,7 +45,7 @@
         "apps/desktop/electron/sources",
         "packages/contracts/src/catalog.ts"
       ],
-      "sha256": "4b605375f3656bc342b89f9495eb3da0897f512db30c941acd724e1ede8ca04b"
+      "sha256": "f63df77eab0e0c6c58247b966e2cfc59f3781711128971f028d7b73db0ac781b"
     },
     {
       "id": "design-store-compare",
@@ -55,7 +55,7 @@
         "modules/design/app/storage",
         "modules/design/compare/src"
       ],
-      "sha256": "ea99444848ec38843bd479d87c7ef7a67d1bc9269b298d87f83c873ea4a57696"
+      "sha256": "db6327fc3adc68afb605919780f52486688dbc0739cc83dd9cea60754b25ea43"
     },
     {
       "id": "jones-profiles-credentials",
@@ -71,12 +71,13 @@
         "apps/desktop/electron/service-config.ts",
         "packages/contracts/src/services.ts"
       ],
-      "sha256": "4c3c00a55eaa66e272e36a976cc1df3f3afcaf16bc54a63379f60a8195bd51e9"
+      "sha256": "f74056a2c633f6b0a97397e1b652b3ce270db258ee90aac2565d17aae82d3784"
     },
     {
       "id": "renderer-storage",
       "roots": [
         "apps/desktop/src/App.tsx",
+        "apps/desktop/src/PresentationShell.tsx",
         "modules/design/app/compose/preview-navigation.ts",
         "modules/design/app/compose/session.ts",
         "modules/design/app/index.ts",
@@ -87,7 +88,7 @@
         "modules/social/workbench/ToolWorkbench.tsx",
         "modules/wiki/ui/src/view.ts"
       ],
-      "sha256": "1fc92e128687497b9984e91df8ae0cc4332e44d2324a9ffe39e87145aa49db85"
+      "sha256": "5f49a0b85f6fc17a720ab2741845063c95022dc0fe03aeedf1f5cbad51ae672f"
     }
   ],
   "nonProfileSources": [
@@ -140,6 +141,16 @@
       ],
       "reason": "Downloads, extraction and updater records live outside userData/sessionData; no profile migration authority.",
       "sha256": "7dcc0e25518f3eadc115d77c59a665746db1bc23461b3f64c3db00b7d780b2c3"
+    },
+    {
+      "id": "desktop-browser-preview",
+      "roots": [
+        "apps/desktop/scripts/build-browser-preview.mjs",
+        "apps/desktop/src/preview/environment.ts",
+        "apps/desktop/src/preview/mount.tsx"
+      ],
+      "reason": "The browser-only preview replaces localStorage/sessionStorage with in-memory storage before mounting; its build script writes an explicit preview artifact directory, not an installed Electron profile.",
+      "sha256": "415777500d92d7472c4dffd782efbc17dc0b2e3d31a161e16146250afca0989b"
     }
   ]
 }
