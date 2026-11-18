@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '17 9 * * *'
   workflow_dispatch:
+    inputs:
+      namespace_probe_only:
+        description: 'Run only Linux namespace capability screening; no app install, build or journeys'
+        type: boolean
+        required: false
+        default: false
   pull_request:
     types: [labeled, synchronize, reopened, ready_for_review]
 
@@ -16,7 +22,7 @@ concurrency:
 
 jobs:
   native:
-    name: Four critical Linux native journeys
+    name: ${{ (github.event_name == 'workflow_dispatch' && inputs.namespace_probe_only) && 'Linux namespace capability screen only (no install, build or journeys)' || 'Four critical Linux native journeys' }}
     # No base-branch filter: a labeled integration child tests its actual base.
     if: >-
       github.event_name != 'pull_request' ||
@@ -95,6 +101,7 @@ jobs:
           '
           printf '%s\n' 'Nested user/PID/network capability screen passed; Chromium and journeys remain unproved.'
       - name: Allocate owned install scratch
+        if: github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only
         shell: bash
         run: |
           set -euo pipefail
@@ -105,18 +112,22 @@ jobs:
           echo "npm_config_cache=$scratch/npm" >> "$GITHUB_ENV"
           echo "electron_config_cache=$scratch/electron" >> "$GITHUB_ENV"
       - name: Install locked dependencies and pinned Electron
+        if: github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           node node_modules/electron/install.js
       - name: Build the exact candidate
+        if: github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only
         run: npm run build
       - name: Check portable fixture and cleanup boundaries serially (B)
+        if: github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only
         run: node --test --test-concurrency=1 tests/acceptance/build-inventory.test.mjs tests/acceptance/fixtures/fixtures.test.mjs tests/acceptance/fixtures/scenarios.test.mjs tests/acceptance/fixtures/host-gallery.test.mjs tests/acceptance/cleanup.test.mjs
       - name: Run four native journeys serially (N)
+        if: github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only
         timeout-minutes: 6
         run: timeout --signal=TERM --kill-after=30s 5m node tests/acceptance/run.mjs --routine
       - name: Preserve native reports, ledgers and first-failure screenshots
-        if: always()
+        if: always() && (github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hq-native-${{ github.run_id }}-${{ github.run_attempt }}
@@ -125,7 +136,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
       - name: Remove exact install scratch
-        if: always()
+        if: always() && (github.event_name != 'workflow_dispatch' || !inputs.namespace_probe_only)
         shell: bash
         run: |
           set -euo pipefail
