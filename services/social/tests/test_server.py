@@ -1,17 +1,20 @@
 """The HTTP surface against a real loopback server: guards in order, routes and the error envelope."""
 
 import contextlib
+import http.client
 import io
 import json
 import re
 import socket
+import threading
 import unittest
 from unittest import mock
 
-from support import ServiceTestCase, raw_exchange
+from support import ScratchTestCase, ServiceTestCase, raw_exchange, read_reply
 
 from social_service import server as server_module
 from social_service import timebox, tools
+from social_service.service import SocialService
 
 HEX32 = re.compile('[0-9a-f]{32}')
 UNRECOGNIZED = 'Unrecognized host'
@@ -24,6 +27,38 @@ SECURITY = {
     'referrer-policy': 'no-referrer',
     'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
 }
+
+
+class ListenerBurst(ScratchTestCase):
+    def test_twenty_connections_wait_for_accept_then_all_receive_responses(self):
+        service = SocialService(self.new_directory(), start_runs=False)
+        self.addCleanup(service.close)
+        server = server_module.create_server(service, '127.0.0.1', 0)
+        self.addCleanup(server.server_close)
+        port = server.server_address[1]
+
+        with contextlib.ExitStack() as cleanup:
+            connections = []
+            # Do not accept until the entire burst is queued in the real listener.
+            for _ in range(20):
+                connection = http.client.HTTPConnection('127.0.0.1', port, timeout=2)
+                cleanup.callback(connection.close)
+                connection.connect()
+                connections.append(connection)
+
+            thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True)
+            thread.start()
+            try:
+                for connection in connections:
+                    connection.request('GET', '/api/workspace', headers={'Connection': 'close'})
+                replies = [read_reply(connection) for connection in connections]
+                self.assertEqual(len(replies), 20)
+                self.assertEqual([reply.status for reply in replies], [200] * 20)
+                self.assertTrue(all(reply.json['csrf'] == service.token for reply in replies))
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+            self.assertFalse(thread.is_alive(), 'The burst listener must stop before cleanup')
 
 
 class Endpoint(ServiceTestCase):
