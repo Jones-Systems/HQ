@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createSourceHost } from './host';
@@ -13,7 +13,7 @@ import type { FetchPort } from '../jones-code/wire.js';
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
 async function fixture() {
-  const userData = await mkdtemp(join(tmpdir(), 'hq-sources-')); roots.push(userData);
+  const userData = await mkdtemp(join(await realpath(tmpdir()), 'hq-sources-')); roots.push(userData);
   const jones = { environment: vi.fn(async () => ({ hostId: 'jones-one', fingerprint: 'fp' })), projects: vi.fn(async () => ({ projects: [], nextCursor: null })) };
   const mapper = vi.fn(async (_input: unknown, context: unknown) => ({ ...(context as object), complete: true, entries: [] }) as CatalogSnapshot);
   const catalog = { call: vi.fn(async () => ({ ok: true as const, value: [] })) };

@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FetchPort } from '../../jones-code/wire.js';
@@ -58,7 +58,7 @@ function publisher(initial = vector()) {
   return { remote, fetcher };
 }
 async function fixture(initial = vector()) {
-  const root = await mkdtemp(join(tmpdir(), 'hq-generation-consumer-')); roots.push(root);
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'hq-generation-consumer-')); roots.push(root);
   const { remote, fetcher } = publisher(initial);
   const consumer = createGenerationConsumer({ storeRoot: root, binding, fetch: fetcher });
   return { root, remote, fetcher, consumer, pointer: join(root, 'roots', binding.rootId + '.json') };

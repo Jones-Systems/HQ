@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest';
-import { chmod, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, realpath, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { canonicalJson, sha256 } from './canonical-json.js';
@@ -12,7 +12,7 @@ afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, {
 const binding: GenerationBinding = { origin: 'http://127.0.0.1:43210', publisherId: 'store-publisher', hostId: 'store-host',
   rootId: 'store-root', bindingRevision: 'binding-one', scopeDigest: 'a'.repeat(64), consistencyMode: 'observed-files-v1' };
 async function fixture(hooks: StoreHooks = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'hq-generation-store-')); roots.push(root);
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'hq-generation-store-')); roots.push(root);
   return { root, store: new GenerationStore(root, hooks) };
 }
 function vector(sequence = '1') {
