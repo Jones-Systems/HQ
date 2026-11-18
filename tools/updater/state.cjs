@@ -5,6 +5,50 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { UpdateError, ensure, object, validateProcess, sameProcess, digest, inside, readJson, optionalJson, atomicWrite, syncDirectory, assertNoSymlink, transactionPaths, MAX_RETAINED_OPERATIONS } = require('./contract.cjs');
 
+function annotateRefusal(error, project) {
+  // Diagnostic failure must leave the original safety refusal authoritative.
+  try { error.refusal = Object.freeze(project()); } catch {}
+  return error;
+}
+function ensureRefusal(condition, message, code, project) {
+  try { ensure(condition, message, code); }
+  catch (error) { throw annotateRefusal(error, project); }
+}
+function relation(subject, identity) { return identity ? (sameProcess(subject, identity) ? 'self' : 'other') : 'unknown'; }
+function observed(value) { return ['live', 'dead', 'stale'].includes(value) ? value : 'unknown'; }
+
+function writerEvidence(subject, table, roots, record, journal, allowed) {
+  try {
+    if (table.processes.length > 32768 || roots.length > 6 + 4 * MAX_RETAINED_OPERATIONS) throw new Error('Diagnostic bound');
+    const reference = value => { try { return validateProcess(value); } catch { return null; } };
+    // Every current production caller supplies self first, or an empty allowed list.
+    const references = { self: reference(allowed[0]), helper: reference(journal?.helper), initiating: reference(journal?.initiating) };
+    const compare = (row, identity) => ({
+      pidEqual: row && identity ? row.pid === identity.pid : null,
+      identityEqual: row && identity ? sameProcess(row, identity) : null,
+    });
+    const classify = row => {
+      if (!row) return { executableClass: 'unknown', rootClass: 'unknown' };
+      const matches = [...new Set(roots.filter(root => inside(root, row.executable)))].sort((a, b) => b.length - a.length);
+      const root = matches[0];
+      if (!root) return { executableClass: 'other', rootClass: 'other' };
+      const rootClass = root === record.targetPath ? 'target-bundle' : root === record.stateRoot ? 'state-root'
+        : journal && [journal.stagePath, journal.priorPath, journal.failedPath, journal.candidate.bundlePath].includes(root) ? 'transaction-bundle' : 'retained-bundle';
+      // Path classes describe this scan only; they never exempt a process from exclusion.
+      const executableClass = rootClass === 'state-root' ? 'other'
+        : row.executable === path.join(root, 'Contents/Resources/app/tools/updater/process-inventory') ? 'inventory'
+          : row.executable === path.join(root, 'Contents/MacOS', record.appName) ? 'bundle-main'
+            : inside(path.join(root, 'Contents/Frameworks'), row.executable) ? 'framework-child' : 'other';
+      return { executableClass, rootClass };
+    };
+    const project = row => ({ ...classify(row), ...Object.fromEntries(Object.entries(references).map(([key, identity]) => [key, compare(row, identity)])) });
+    const parents = Number.isSafeInteger(subject.ppid) && subject.ppid > 0 ? table.processes.filter(row => row.pid === subject.ppid) : [];
+    // A unique same-scan row is neither durable parentage nor a new liveness observation.
+    const parent = parents.length === 1 ? parents[0] : null;
+    return { status: 'available', ...project(subject), parent: { match: parent ? 'unique' : 'unknown', ...project(parent) } };
+  } catch { return { status: 'unavailable', reason: 'classification-failed' }; }
+}
+
 function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)) }) {
   const json = filename => readJson(filename, { fs: io });
   const optional = filename => optionalJson(filename, { fs: io });
@@ -30,23 +74,23 @@ function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep =
     const lease = { schemaVersion: 1, installationId: record.installationId, nonce: crypto.randomBytes(16).toString('hex'), process: identity };
     let reaping = false;
     try {
-      try { await io.lstat(reaper); throw new UpdateError('recovery-required', 'Gate reconciliation requires inspection.'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      try { await io.lstat(reaper); throw annotateRefusal(new UpdateError('recovery-required', 'Gate reconciliation requires inspection.'), () => ({ guard: 'gate-reconciliation-present' })); } catch (error) { if (error.code !== 'ENOENT') throw error; }
       try { await io.mkdir(directory, { mode: 0o700 }); } catch (error) {
         if (error.code !== 'EEXIST') throw error;
         await assertNoSymlink(directory, { fs: io });
         const previous = validateLease(await json(ownerFile), record);
         const evidence = await native.observe(previous.process);
-        ensure(evidence === 'dead' || evidence === 'stale', 'Another process owns the installation gate.', evidence === 'live' ? 'busy' : 'recovery-required');
-        try { await io.mkdir(reaper, { mode: 0o700 }); } catch (failure) { if (failure.code === 'EEXIST') throw new UpdateError('busy', 'Gate reconciliation is already running.'); throw failure; }
+        ensureRefusal(evidence === 'dead' || evidence === 'stale', 'Another process owns the installation gate.', evidence === 'live' ? 'busy' : 'recovery-required', () => ({ guard: 'installation-gate-owner', ownerRelation: relation(previous.process, identity), helperRelation: 'unknown', liveness: observed(evidence) }));
+        try { await io.mkdir(reaper, { mode: 0o700 }); } catch (failure) { if (failure.code === 'EEXIST') throw annotateRefusal(new UpdateError('busy', 'Gate reconciliation is already running.'), () => ({ guard: 'gate-reconciliation-contended' })); throw failure; }
         reaping = true;
         await write(path.join(reaper, 'owner.json'), lease);
-        ensure(digest(await json(ownerFile)) === digest(previous), 'Gate ownership changed.', 'busy');
+        ensureRefusal(digest(await json(ownerFile)) === digest(previous), 'Gate ownership changed.', 'busy', () => ({ guard: 'gate-owner-changed' }));
         const evidenceAgain = await native.observe(previous.process);
-        ensure(evidenceAgain === 'dead' || evidenceAgain === 'stale', 'Gate ownership cannot be proved stale.', 'recovery-required');
+        ensureRefusal(evidenceAgain === 'dead' || evidenceAgain === 'stale', 'Gate ownership cannot be proved stale.', 'recovery-required', () => ({ guard: 'gate-owner-liveness', ownerRelation: relation(previous.process, identity), helperRelation: 'unknown', liveness: observed(evidenceAgain) }));
         const archive = path.join(record.stateRoot, `abandoned-gate-${previous.nonce}`);
         await io.rename(directory, archive);
         await syncDirectory(record.stateRoot, { fs: io });
-        try { await io.mkdir(directory, { mode: 0o700 }); } catch (failure) { if (failure.code === 'EEXIST') throw new UpdateError('busy', 'Another bootstrap acquired the gate.'); throw failure; }
+        try { await io.mkdir(directory, { mode: 0o700 }); } catch (failure) { if (failure.code === 'EEXIST') throw annotateRefusal(new UpdateError('busy', 'Another bootstrap acquired the gate.'), () => ({ guard: 'gate-acquisition-race' })); throw failure; }
       }
       await write(ownerFile, lease);
       await syncDirectory(record.stateRoot, { fs: io });
@@ -91,7 +135,7 @@ function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep =
     const previous = await session(record);
     if (previous !== null && !sameProcess(previous.process, identity)) {
       const evidence = await native.observe(previous.process);
-      ensure(evidence === 'dead' || evidence === 'stale', 'The existing HQ session has not exited.', evidence === 'live' ? 'busy' : 'recovery-required');
+      ensureRefusal(evidence === 'dead' || evidence === 'stale', 'The existing HQ session has not exited.', evidence === 'live' ? 'busy' : 'recovery-required', () => ({ guard: 'session-claim', ownerRelation: relation(previous.process, identity), helperRelation: 'unknown', liveness: observed(evidence), writerRelation: 'session' }));
     }
     const lease = { schemaVersion: 1, installationId: record.installationId, nonce: crypto.randomBytes(16).toString('hex'), process: identity };
     await write(path.join(record.stateRoot, 'session.json'), lease);
@@ -106,7 +150,7 @@ function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep =
   }
   async function excludeWriters(record, journal, allowed = []) {
     const table = await native.processTable();
-    ensure(table?.complete === true && typeof table.boot === 'string' && Array.isArray(table.processes), 'Process exclusion evidence is unavailable.', 'recovery-required');
+    ensureRefusal(table?.complete === true && typeof table.boot === 'string' && Array.isArray(table.processes), 'Process exclusion evidence is unavailable.', 'recovery-required', () => ({ guard: 'writer-inventory' }));
     const roots = [record.targetPath, record.stateRoot];
     const history = path.join(record.stateRoot, 'history');
     let names;
@@ -131,13 +175,18 @@ function createState({ fs: io = fs, native, checkpoint = async () => {}, sleep =
       changed = false;
       for (const process of table.processes) if (descendants.has(process.ppid) && !descendants.has(process.pid)) { descendants.add(process.pid); changed = true; }
     }
-    for (const process of table.processes) if (descendants.has(process.pid)) ensure(allowed.some(identity => sameProcess(identity, process)), 'A live HQ app or helper blocks replacement.', 'busy');
+    for (const process of table.processes) if (descendants.has(process.pid)) ensureRefusal(allowed.some(identity => sameProcess(identity, process)), 'A live HQ app or helper blocks replacement.', 'busy', () => ({
+      guard: 'writer-process', ownerRelation: allowed.length ? 'other' : 'unknown',
+      helperRelation: journal?.helper ? (sameProcess(process, journal.helper) ? 'helper' : 'other') : 'unknown',
+      liveness: 'live', writerRelation: roots.some(root => inside(root, process.executable)) ? 'owned-root' : sessionLease && sameProcess(sessionLease.process, process) ? 'session' : 'descendant',
+      writerEvidence: writerEvidence(process, table, roots, record, journal, allowed),
+    }));
     if (sessionLease && !allowed.some(identity => sameProcess(identity, sessionLease.process))) {
       const evidence = await native.observe(sessionLease.process);
-      ensure(evidence === 'dead' || evidence === 'stale', 'A session lease cannot be proved inactive.', evidence === 'live' ? 'busy' : 'recovery-required');
+      ensureRefusal(evidence === 'dead' || evidence === 'stale', 'A session lease cannot be proved inactive.', evidence === 'live' ? 'busy' : 'recovery-required', () => ({ guard: 'writer-session', ownerRelation: allowed.length ? 'other' : 'unknown', helperRelation: journal?.helper ? (sameProcess(sessionLease.process, journal.helper) ? 'helper' : 'other') : 'unknown', liveness: observed(evidence), writerRelation: 'session' }));
     }
     return table;
   }
   return { fs: io, initialize, json, optional, write, acquireGate, withGate, session, claimSession, releaseSession, excludeWriters };
 }
-module.exports = { createState };
+module.exports = { createState, annotateRefusal, ensureRefusal };

@@ -40,3 +40,5 @@ jobs:
         run: npm test --workspace @hq/wiki
       - name: Test portable acceptance fixtures and storage lifecycle
         run: node --test --test-concurrency=1 'tests/acceptance/**/*.test.mjs' 'tools/storage/test/**/*.test.mjs'
+      - name: Test portable updater and package contracts
+        run: node --test --test-concurrency=1 tools/updater/test/*.test.cjs tools/updater/packaging/test/*.test.cjs
