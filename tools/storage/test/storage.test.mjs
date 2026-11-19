@@ -510,26 +510,64 @@ test('caller mutation cannot change the declaration after lock planning', async 
   assert.equal(result.code, 0);
 });
 
-test('one total deadline covers all locks and cancellation preserves another owner', async t => {
+test('one total deadline covers all locks and cancellation preserves another owner', { concurrency: false }, async t => {
   const { plan, evidence, worktree } = await fixture(t);
+  plan.roots.push({ kind: 'evidence', path: evidence });
   const firstLock = path.join(evidence, LOCK_NAME);
-  const finalLock = path.join(worktree, LOCK_NAME);
-  await fs.writeFile(firstLock, 'fixture-owner', { mode: 0o600 });
-  await fs.writeFile(finalLock, 'other-owner', { mode: 0o600 });
-  const timer = setTimeout(() => fs.unlink(firstLock), 65);
-  const start = performance.now();
-  try {
-    await assert.rejects(withStorageInvocation({ ...plan, roots: [...plan.roots, { kind: 'evidence', path: evidence }] }, ok, { testContext: deadlineContext }), /Lock deadline/);
-  } finally { clearTimeout(timer); }
-  assert.ok(performance.now() - start < 155, 'the second lock must not get a fresh timeout');
-  await assert.rejects(fs.stat(firstLock), { code: 'ENOENT' });
-  assert.equal(await fs.readFile(finalLock, 'utf8'), 'other-owner');
+  const secondLock = path.join(worktree, LOCK_NAME);
+  await fs.writeFile(secondLock, 'other-owner', { mode: 0o600 });
+
+  const { default: filePromises } = await import('node:fs/promises');
+  const { syncBuiltinESMExports } = await import('node:module');
+  const { performance } = await import('node:perf_hooks');
   const controller = new AbortController();
-  const cancel = setTimeout(() => controller.abort(), 20);
-  const result = await withStorageInvocation(plan, () => assert.fail('cancelled before producer'), { testContext: deadlineContext, signal: controller.signal });
-  clearTimeout(cancel);
-  assert.equal(result.signal, 'SIGTERM');
-  assert.equal(await fs.readFile(finalLock, 'utf8'), 'other-owner');
+  let now = 0;
+  let cancelOnContention = false;
+  const realOpen = fs.open;
+  const clock = t.mock.method(performance, 'now', () => now);
+  const open = t.mock.method(filePromises, 'open', async (filename, ...args) => {
+    if (filename === firstLock) {
+      const handle = await realOpen(filename, ...args);
+      // Charge the first acquisition 65 ms of the shared 100 ms.
+      now = 65;
+      return handle;
+    }
+    if (filename !== secondLock) return realOpen(filename, ...args);
+
+    assert.ok(now <= 100, 'second lock was retried after the shared deadline');
+    assert.equal(JSON.parse(await fs.readFile(firstLock, 'utf8')).pid, process.pid);
+    try {
+      return await realOpen(filename, ...args);
+    } catch (error) {
+      if (error.code === 'EEXIST') {
+        if (cancelOnContention) controller.abort();
+        else now = 101;
+      }
+      throw error;
+    }
+  });
+  syncBuiltinESMExports();
+  try {
+    const unexpected = () => assert.fail('contention must prevent the callback');
+    await assert.rejects(withStorageInvocation(plan, unexpected, { testContext: deadlineContext }), {
+      message: `Lock deadline; existing owner requires disposition: ${secondLock}`,
+    });
+    assert.equal(now, 101, 'the second lock was contended');
+    await assert.rejects(fs.stat(firstLock), { code: 'ENOENT' });
+    assert.equal(await fs.readFile(secondLock, 'utf8'), 'other-owner');
+
+    now = 0;
+    cancelOnContention = true;
+    const result = await withStorageInvocation(plan, unexpected, { testContext: deadlineContext, signal: controller.signal });
+    assert.equal(result.signal, 'SIGTERM');
+    assert.equal(controller.signal.aborted, true);
+    await assert.rejects(fs.stat(firstLock), { code: 'ENOENT' });
+    assert.equal(await fs.readFile(secondLock, 'utf8'), 'other-owner');
+  } finally {
+    open.mock.restore();
+    syncBuiltinESMExports();
+    clock.mock.restore();
+  }
 });
 
 test('spawn errors, child signals and cancellation retain outcomes and clean scratch', SPAWN, async t => {
